@@ -3,13 +3,13 @@ KALI TERMINAL — Run these 2 commands:
 
 sudo service apache2 start
 
-cd ~ && pkill -f uvicorn; uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cd ~/Cyber-project && pkill -f uvicorn; uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 Wait until you see Uvicorn running on http://0.0.0.0:8000 — leave terminal open.
 
 WINDOWS CMD — Run this 1 command:
 
 
-cd "C:\Users\vijay\OneDrive\Desktop\kali\oscp-dashboard" && npm start
+cd "C:\Users\vijay\OneDrive\Desktop\kali\Cyber-project" && npm.cmd start
 Browser opens automatically at http://localhost:3000
 
 LOGIN:
