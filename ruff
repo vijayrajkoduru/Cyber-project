@@ -1,0 +1,27 @@
+KALI TERMINAL — Run these 2 commands:
+
+
+sudo service apache2 start
+
+cd ~ && pkill -f uvicorn; uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+Wait until you see Uvicorn running on http://0.0.0.0:8000 — leave terminal open.
+
+WINDOWS CMD — Run this 1 command:
+
+
+cd "C:\Users\vijay\OneDrive\Desktop\kali\oscp-dashboard" && npm start
+Browser opens automatically at http://localhost:3000
+
+LOGIN:
+
+
+Username: admin
+Password: admin123
+SCAN:
+
+
+1. Click Web App Pentesting
+2. Target: http://192.168.56.102/DVWA
+3. Click Start Full Pentest
+4. Wait ~5 minutes
+5. Click PDF Report
