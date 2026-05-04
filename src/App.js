@@ -2584,7 +2584,7 @@ const pdfSafe = s => stripAsciiArt(s||"")
 function generateShellReport({title, icon, target, attacks, results}) {
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const W=210, M=15; let y=20;
-  const SC = s=>s==="CRITICAL"?[239,68,68]:s==="HIGH"?[249,115,22]:s==="MEDIUM"?[234,179,8]:s==="LOW"?[34,197,94]:[100,116,139];
+  const SC = s=>s==="CRITICAL"?[200,20,20]:s==="HIGH"?[220,38,38]:s==="MEDIUM"?[217,119,6]:s==="LOW"?[21,128,61]:[71,85,105];
   const chk=(n=20)=>{if(y+n>280){doc.addPage();y=20;}};
   const sHead=(txt,accent)=>{
     chk(12); const [r,g,b]=accent||[30,64,175];
@@ -2668,12 +2668,12 @@ function generateShellReport({title, icon, target, attacks, results}) {
               ["MEDIUM",C.MEDIUM,[234,179,8]],["LOW",C.LOW,[34,197,94]]];
   const maxC=Math.max(...bars.map(b=>b[1]),1);
   bars.forEach(([lbl,cnt,clr])=>{
-    chk(9); const bw=cnt>0?Math.max(4,(cnt/maxC)*(W-2*M-50)):3;
+    chk(9); const bw=cnt>0?Math.max(10,(cnt/maxC)*(W-2*M-60)):10;
     doc.setFillColor(...clr); doc.rect(M,y,bw,6,"F");
-    doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","bold");
-    doc.text(lbl,M+bw+3,y+4.5);
-    doc.setTextColor(241,245,249); doc.setFont("helvetica","normal");
-    doc.text(String(cnt),M+bw+35,y+4.5); y+=9;
+    doc.setFontSize(8); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
+    doc.text(lbl,M+bw+4,y+4.5);
+    doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
+    doc.text(String(cnt),M+bw+40,y+4.5); y+=9;
   });
   y+=6;
 
@@ -2685,21 +2685,20 @@ function generateShellReport({title, icon, target, attacks, results}) {
     const fcount=(res?.findings||[]).filter(f=>["CRITICAL","HIGH","MEDIUM"].includes(f.severity)).length;
     doc.setFillColor(i%2===0?235:245,i%2===0?240:247,i%2===0?250:252);
     doc.rect(M,y,W-2*M,8,"F");
-    doc.setFontSize(8); doc.setTextColor(17,24,39); doc.setFont("helvetica","bold");
+    doc.setFontSize(8); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
     doc.text(`${pdfSafe(atk.label)}`,M+3,y+5.5);
-    doc.setFont("helvetica","normal"); doc.setTextColor(55,65,81);
+    doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
     doc.text(pdfSafe(atk.desc).slice(0,55),M+65,y+5.5);
     const status=!ran2?"NOT RUN":fcount>0?`${fcount} FINDING(S)`:"CLEAN";
-    const [sr,sg,sb]=!ran2?[107,114,128]:fcount>0?[185,28,28]:[21,128,61];
+    const [sr,sg,sb]=!ran2?[80,80,80]:fcount>0?[200,20,20]:[21,128,61];
     doc.setTextColor(sr,sg,sb); doc.setFont("helvetica","bold");
     doc.text(status,W-M-28,y+5.5); y+=9;
-    // Vulnerabilities tested + target type
     if(atk.vulns && atk.vulns.length>0){
-      chk(6); doc.setFontSize(7); doc.setTextColor(100,116,139); doc.setFont("helvetica","italic");
+      chk(6); doc.setFontSize(7); doc.setTextColor(50,50,50); doc.setFont("helvetica","italic");
       doc.text("  Detects: "+atk.vulns.slice(0,3).join(", "),M+3,y+4); y+=5;
     }
     if(atk.target_type){
-      chk(5); doc.setFontSize(7); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
+      chk(5); doc.setFontSize(7); doc.setTextColor(50,50,50); doc.setFont("helvetica","normal");
       doc.text("  Target: "+atk.target_type.slice(0,80),M+3,y+3); y+=5;
     }
   });
@@ -2709,31 +2708,32 @@ function generateShellReport({title, icon, target, attacks, results}) {
   sHead("Setup Instructions — How to Run Each Attack",[30,64,175]);
   attacks.forEach(atk=>{
     chk(20);
-    doc.setFillColor(15,23,42); doc.rect(M,y,W-2*M,7,"F");
-    doc.setFontSize(8); doc.setTextColor(96,165,250); doc.setFont("helvetica","bold");
-    doc.text(`${pdfSafe(atk.icon)} ${pdfSafe(atk.label)}`,M+3,y+4.8); y+=9;
+    doc.setFillColor(30,64,175); doc.rect(M,y,4,7,"F");
+    doc.setFillColor(240,245,255); doc.rect(M+4,y,W-2*M-4,7,"F");
+    doc.setFontSize(9); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
+    doc.text(pdfSafe(atk.label),M+8,y+4.8); y+=9;
     if(atk.target_type){
-      chk(5); doc.setFontSize(7); doc.setTextColor(251,191,36); doc.setFont("helvetica","bold");
+      chk(5); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
       doc.text("Target: ",M+4,y);
-      doc.setFont("helvetica","normal"); doc.setTextColor(203,213,225);
-      doc.text(atk.target_type.slice(0,75),M+19,y); y+=5;
+      doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
+      doc.text(atk.target_type.slice(0,75),M+20,y); y+=5;
     }
     if(atk.howto){
-      chk(7); doc.setFontSize(7.5); doc.setTextColor(203,213,225); doc.setFont("helvetica","normal");
+      chk(7); doc.setFontSize(8); doc.setTextColor(20,20,20); doc.setFont("helvetica","normal");
       const lines=doc.splitTextToSize(atk.howto,W-2*M-6);
-      lines.slice(0,3).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
+      lines.slice(0,4).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
     }
     if(atk.requires){
-      chk(6); doc.setFontSize(7); doc.setTextColor(234,179,8); doc.setFont("helvetica","bold");
+      chk(6); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
       doc.text("Requires: ",M+4,y);
-      doc.setFont("helvetica","normal"); doc.setTextColor(203,213,225);
-      doc.text(atk.requires.slice(0,72),M+22,y); y+=5;
+      doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
+      doc.text(atk.requires.slice(0,72),M+24,y); y+=5;
     }
     if(atk.vulns && atk.vulns.length>0){
-      chk(5); doc.setFontSize(7); doc.setTextColor(34,197,94); doc.setFont("helvetica","bold");
+      chk(5); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
       doc.text("Detects: ",M+4,y);
-      doc.setFont("helvetica","normal"); doc.setTextColor(148,163,184);
-      doc.text(atk.vulns.slice(0,3).join(" | ").slice(0,80),M+20,y); y+=5;
+      doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
+      doc.text(atk.vulns.slice(0,3).join(" | ").slice(0,80),M+22,y); y+=5;
     }
     y+=3;
   });
@@ -2745,10 +2745,11 @@ function generateShellReport({title, icon, target, attacks, results}) {
     attacks.forEach(atk=>{
       if(!atk.hackerImpact) return;
       chk(20);
-      doc.setFillColor(40,10,10); doc.rect(M,y,W-2*M,7,"F");
-      doc.setFontSize(8); doc.setTextColor(248,113,113); doc.setFont("helvetica","bold");
-      doc.text(`${pdfSafe(atk.icon)} ${pdfSafe(atk.label)} — Real World Attack Scenario`,M+3,y+4.8); y+=9;
-      doc.setFontSize(7.5); doc.setTextColor(203,213,225); doc.setFont("helvetica","normal");
+      doc.setFillColor(220,38,38); doc.rect(M,y,4,7,"F");
+      doc.setFillColor(255,242,242); doc.rect(M+4,y,W-2*M-4,7,"F");
+      doc.setFontSize(9); doc.setTextColor(180,0,0); doc.setFont("helvetica","bold");
+      doc.text(pdfSafe(atk.label)+" — Real World Attack Scenario",M+8,y+4.8); y+=9;
+      doc.setFontSize(8); doc.setTextColor(0,0,0); doc.setFont("helvetica","normal");
       const impLines=doc.splitTextToSize(atk.hackerImpact,W-2*M-6);
       impLines.slice(0,4).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
       y+=4;
@@ -2763,49 +2764,57 @@ function generateShellReport({title, icon, target, attacks, results}) {
     const findings=(res.findings||[]).filter(f=>f.severity!=="INFO"||res.findings.length===1);
     if(!findings.length && !res.message) return;
     foundAny=true; chk(14);
-    doc.setFillColor(20,30,55); doc.rect(M,y,W-2*M,8,"F");
-    doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","bold");
-    doc.text(`${pdfSafe(atk.icon)} ${pdfSafe(atk.label)}`,M+3,y+5.5);
+    doc.setFillColor(30,64,175); doc.rect(M,y,W-2*M,8,"F");
+    doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+    doc.text(pdfSafe(atk.label),M+3,y+5.5);
     if(res.message){
       const msgClean=res.message.replace(/[❌✅⚠]/g,"").trim();
-      doc.setTextColor(...(res.message.includes("❌")?[239,68,68]:[34,197,94]));
+      doc.setTextColor(res.message.includes("❌")?255:180,res.message.includes("❌")?200:255,180);
       doc.setFontSize(7); doc.setFont("helvetica","italic");
       doc.text(msgClean.slice(0,60),W-M-62,y+5.5);
     }
     y+=10;
     if(!findings.length){
-      chk(6); doc.setFontSize(7); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
+      chk(6); doc.setFontSize(8); doc.setTextColor(0,0,0); doc.setFont("helvetica","normal");
       doc.text("No actionable findings — target clean or tool not applicable",M+4,y); y+=8;
     } else {
       findings.slice(0,20).forEach(f=>{
-        chk(12); const [fr,fg,fb]=SC(f.severity);
-        doc.setFillColor(fr,fg,fb); doc.rect(M,y,22,6,"F");
-        doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-        doc.text((f.severity||"INFO").slice(0,8),M+1,y+4.2);
-        doc.setTextColor(17,24,39); doc.setFont("helvetica","bold");
-        doc.text(pdfSafe(f.title||"").slice(0,50),M+25,y+4.2);
+        chk(16); const [fr,fg,fb]=SC(f.severity);
+        // Severity badge
+        doc.setFillColor(fr,fg,fb); doc.rect(M,y,24,7,"F");
+        doc.setFontSize(7.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+        doc.text((f.severity||"INFO").slice(0,8),M+1,y+4.8);
+        // Finding title — BOLD BLACK
+        doc.setTextColor(0,0,0); doc.setFont("helvetica","bold"); doc.setFontSize(9);
+        doc.text(pdfSafe(f.title||"").slice(0,55),M+27,y+4.8);
+        y+=8;
         if(f.detail){
-          chk(7);
-          doc.setFont("helvetica","normal"); doc.setTextColor(55,65,81);
-          const dlines=doc.splitTextToSize(pdfSafe(String(f.detail)),W-2*M-28);
-          dlines.slice(0,3).forEach(dl=>{chk(5);doc.text(dl,M+25,y+9);y+=4.5;});
-          y+=2;
+          chk(8);
+          doc.setFont("helvetica","normal"); doc.setTextColor(0,0,0); doc.setFontSize(8.5);
+          const dlines=doc.splitTextToSize(pdfSafe(String(f.detail)),W-2*M-10);
+          dlines.slice(0,4).forEach(dl=>{chk(5);doc.text(dl,M+4,y);y+=5;});
         }
-        y+=7;
+        // Thin separator line
+        doc.setDrawColor(220,220,220); doc.setLineWidth(0.2);
+        doc.line(M,y+1,W-M,y+1); y+=4;
       });
     }
     if(res.commands && Object.keys(res.commands).length>0){
-      chk(8); doc.setFontSize(7); doc.setTextColor(74,222,128); doc.setFont("courier","bold");
-      doc.text("Generated Commands:",M+4,y); y+=5;
+      chk(8); doc.setFontSize(8); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
+      doc.text("Generated Commands:",M+4,y); y+=6;
       Object.entries(res.commands).slice(0,4).forEach(([k,v])=>{
-        chk(6); doc.setTextColor(100,116,139); doc.text(`${k}: `,M+6,y);
-        doc.setTextColor(74,222,128); doc.text(String(v).slice(0,80),M+30,y); y+=5;
+        chk(7);
+        doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
+        doc.text(`${k}:`,M+4,y);
+        doc.setFillColor(240,240,240); doc.rect(M+4,y+1,W-2*M-4,6,"F");
+        doc.setFont("courier","normal"); doc.setTextColor(0,80,0);
+        doc.text(String(v).slice(0,90),M+6,y+5.5); y+=8;
       });
     }
     y+=4;
   });
   if(!foundAny){
-    chk(10); doc.setFontSize(9); doc.setTextColor(71,85,105); doc.setFont("helvetica","italic");
+    chk(10); doc.setFontSize(9); doc.setTextColor(0,0,0); doc.setFont("helvetica","italic");
     doc.text("No tests run yet. Enter a target and click Run on each attack.",M+4,y); y+=12;
   }
 
@@ -2816,14 +2825,15 @@ function generateShellReport({title, icon, target, attacks, results}) {
     critFinds.slice(0,10).forEach((f,i)=>{
       chk(14); row(f.title||`Finding ${i+1}`,f.severity,i);
       if(f.detail){
-        chk(6); doc.setFontSize(7); doc.setTextColor(100,116,139);
-        doc.text("Detail: "+String(f.detail).slice(0,90),M+4,y); y+=5;
+        chk(7); doc.setFontSize(8); doc.setTextColor(0,0,0); doc.setFont("helvetica","normal");
+        const dls=doc.splitTextToSize("Detail: "+String(f.detail),W-2*M-8);
+        dls.slice(0,3).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
       }
       const remap={"SUID":"Remove SUID bit or restrict execution","Hash":"Force password reset, enable MFA",
         "Shell":"Patch vulnerability, review firewall rules","Crack":"Use longer passwords (12+ chars), MFA",
         "Key":"Rotate credentials immediately","Permission":"Restrict file permissions to minimum required"};
       const rem=Object.entries(remap).find(([k])=>f.title&&f.title.includes(k));
-      if(rem){chk(5);doc.setTextColor(34,197,94);doc.text("Fix: "+rem[1],M+4,y);y+=5;}
+      if(rem){chk(5);doc.setFontSize(8);doc.setTextColor(0,100,0);doc.setFont("helvetica","bold");doc.text("Fix: "+rem[1],M+4,y);y+=5;}
       y+=3;
     });
   }
@@ -2832,8 +2842,8 @@ function generateShellReport({title, icon, target, attacks, results}) {
   const pages=doc.getNumberOfPages();
   for(let i=1;i<=pages;i++){
     doc.setPage(i);
-    doc.setFillColor(10,15,30); doc.rect(0,288,W,9,"F");
-    doc.setFontSize(6); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
+    doc.setFillColor(30,64,175); doc.rect(0,288,W,9,"F");
+    doc.setFontSize(6.5); doc.setTextColor(255,255,255); doc.setFont("helvetica","normal");
     doc.text(`OSCP Dashboard — ${pdfSafe(title)} — Target: ${pdfSafe(target||"—")} — CONFIDENTIAL`,M,293);
     doc.text(`Page ${i}/${pages}`,W-M-12,293);
   }
