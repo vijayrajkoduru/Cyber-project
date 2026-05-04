@@ -5226,43 +5226,99 @@ async def osint_spiderfoot(req: ScanRequest, token: str = Depends(verify_token))
 @app.post("/api/osint/recon_ng")
 async def osint_recon_ng(req: ScanRequest, token: str = Depends(verify_token)):
     scan_id = str(_uuid.uuid4())
-    result = await run_tool(
-        ["recon-cli", "-w", "oscp_ws",
-         "-m", "recon/domains-hosts/google_site_web",
-         "-o", f"SOURCE={req.target}", "-x"],
-        timeout=60
-    )
-    raw = result["output"] + result.get("error","")
+    host = _recon_host(req.target) if req.target else req.target
     findings = []
-    for line in raw.splitlines():
-        if re.search(r'\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b', line.lower()):
-            host = re.search(r'\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b', line.lower()).group()
-            if req.target.split("/")[-1] in host:
-                findings.append({"severity": "MEDIUM", "title": "Host Discovered", "detail": host})
+    raw_parts = []
+
+    # DNS standard enumeration (A, MX, NS, TXT, SOA)
+    r1 = await run_tool(["dnsrecon", "-d", host, "-t", "std"], timeout=60)
+    raw1 = r1["output"] + r1.get("error", "")
+    raw_parts.append(raw1)
+    for line in raw1.splitlines():
+        line = line.strip()
+        if re.search(r'\[\+\]|\[\*\]', line):
+            m = re.search(r'\b(A|MX|NS|TXT|SOA|CNAME)\b.*?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[\w\.-]+\.\w{2,})', line)
+            if m:
+                rec_type = m.group(1)
+                detail = line.replace("[+]","").replace("[*]","").strip()
+                sev = "HIGH" if rec_type == "MX" else "MEDIUM" if rec_type in ("A","NS") else "INFO"
+                findings.append({"severity": sev, "title": f"DNS {rec_type} Record", "detail": detail[:120]})
+
+    # WHOIS lookup
+    r2 = await run_tool(["whois", host], timeout=30)
+    raw2 = r2["output"] + r2.get("error","")
+    raw_parts.append(raw2)
+    for line in raw2.splitlines():
+        l = line.lower()
+        if any(k in l for k in ["registrar:", "creation date:", "expiry date:", "name server:", "registrant"]):
+            val = line.strip()
+            if len(val) > 5:
+                title = line.split(":")[0].strip().title()
+                findings.append({"severity": "INFO", "title": f"WHOIS: {title}", "detail": val[:120]})
+
+    # Subdomain cert transparency via crt.sh
+    r3 = await run_tool(
+        ["curl", "-s", f"https://crt.sh/?q=%25.{host}&output=json"],
+        timeout=30
+    )
+    raw3 = r3["output"]
+    if raw3 and "[" in raw3:
+        try:
+            import json as _json
+            certs = _json.loads(raw3)
+            seen = set()
+            for c in certs[:30]:
+                name = c.get("name_value","").replace("*.","").strip()
+                for n in name.split("\n"):
+                    n = n.strip()
+                    if n and host in n and n not in seen:
+                        seen.add(n)
+                        findings.append({"severity": "MEDIUM", "title": "Subdomain (cert transparency)", "detail": n})
+        except Exception:
+            pass
+
+    raw = "\n".join(raw_parts)
     if not findings:
-        findings.append({"severity": "INFO", "title": "Recon-ng output", "detail": raw[:400]})
-    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+        findings.append({"severity": "INFO", "title": "No hosts found", "detail": "No DNS records or subdomains discovered for this target."})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw[:800],
             "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} host(s) found"}
 
 
 @app.post("/api/osint/email_osint")
 async def osint_email_osint(req: ScanRequest, token: str = Depends(verify_token)):
     scan_id = str(_uuid.uuid4())
+    # Only use FREE sources — no API keys required
     result = await run_tool(
-        ["theHarvester", "-d", req.target, "-b", "google,bing,linkedin,hunter", "-l", "100"],
-        timeout=60
+        ["theHarvester", "-d", req.target, "-b",
+         "crtsh,dnsdumpster,hackertarget,anubis,certspotter,rapiddns,otx,urlscan",
+         "-l", "200"],
+        timeout=120
     )
     raw = result["output"] + result.get("error","")
     findings = []
+    seen = set()
     for line in raw.splitlines():
-        if re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', line.strip()):
-            findings.append({"severity": "MEDIUM", "title": "Email Found", "detail": line.strip()})
+        line = line.strip()
+        if not line or line in seen: continue
+        seen.add(line)
+        # Email addresses
+        if re.match(r'^[\w\.\+\-]+@[\w\.-]+\.\w{2,}$', line):
+            findings.append({"severity": "HIGH", "title": "Email Address Found", "detail": line})
+        # LinkedIn profiles
         elif "linkedin.com/in/" in line.lower():
-            findings.append({"severity": "INFO", "title": "LinkedIn Profile", "detail": line.strip()})
-        elif re.match(r'^\d{1,3}(\.\d{1,3}){3}$', line.strip()):
-            findings.append({"severity": "INFO", "title": "IP Found", "detail": line.strip()})
+            findings.append({"severity": "MEDIUM", "title": "LinkedIn Profile", "detail": line})
+        # IPs
+        elif re.match(r'^\d{1,3}(\.\d{1,3}){3}$', line):
+            findings.append({"severity": "MEDIUM", "title": "IP Address Found", "detail": line})
+        # Subdomains (contain dots, look like hostnames)
+        elif re.match(r'^[\w\-]+\.[\w\.-]+\.[a-z]{2,}$', line) and req.target.split("/")[-1].split(".")[-2] in line:
+            findings.append({"severity": "MEDIUM", "title": "Subdomain Found", "detail": line})
+        # Interesting lines from output (Interesting URLs, APIs, etc.)
+        elif line.startswith("[*]") and any(k in line.lower() for k in ["found","discovered","email","host","ip"]):
+            findings.append({"severity": "INFO", "title": "theHarvester", "detail": line.replace("[*]","").strip()[:120]})
     if not findings:
-        findings.append({"severity": "INFO", "title": "theHarvester output", "detail": raw[:400]})
+        findings.append({"severity": "INFO", "title": "No OSINT data found",
+                         "detail": f"theHarvester found no emails, IPs or subdomains for {req.target} using free sources."})
     return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
             "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} OSINT item(s)"}
 
