@@ -85,7 +85,7 @@ ADMIN_PASS   = os.getenv("OSCP_PASS",  "C@b3rS3cur!ty#2026$X")
 
 # ── USER DATABASE ─────────────────────────────────────────────
 _DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.db")
-_sessions: dict = {}   # token → user_id
+_sessions: dict = {}   # in-memory cache: token → user_id (backed by DB)
 
 def _db():
     c = _sq.connect(_DB); c.row_factory = _sq.Row; return c
@@ -115,6 +115,11 @@ def _init_db():
             is_admin      INTEGER DEFAULT 0,
             created_at    TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS sessions (
+            token      TEXT PRIMARY KEY,
+            user_id    INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""")
         try:
             exp = (datetime.datetime.utcnow() + datetime.timedelta(days=3650)).isoformat()
             c.execute("INSERT OR IGNORE INTO users (email,username,password_hash,plan,trial_expires,is_admin) VALUES (?,?,?,?,?,?)",
@@ -122,8 +127,29 @@ def _init_db():
         except: pass
 _init_db()
 
+def _session_set(tok: str, uid: int):
+    _sessions[tok] = uid
+    with _db() as c:
+        c.execute("INSERT OR REPLACE INTO sessions (token,user_id) VALUES (?,?)", (tok, uid))
+
+def _session_get(tok: str):
+    if tok in _sessions:
+        return _sessions[tok]
+    with _db() as c:
+        row = c.execute("SELECT user_id FROM sessions WHERE token=?", (tok,)).fetchone()
+    if row:
+        _sessions[tok] = row["user_id"]
+        return row["user_id"]
+    return None
+
+def _session_del(tok: str):
+    _sessions.pop(tok, None)
+    with _db() as c:
+        c.execute("DELETE FROM sessions WHERE token=?", (tok,))
+
 _PLAN_ORDER = ["trial", "pro", "enterprise"]
-def _plan_ok(user_plan: str, required: str) -> bool:
+def _plan_ok(user_plan: str, required: str, is_admin: bool = False) -> bool:
+    if is_admin: return True
     try: return _PLAN_ORDER.index(user_plan) >= _PLAN_ORDER.index(required)
     except: return False
 
@@ -134,7 +160,7 @@ def _trial_active(row: dict) -> bool:
     return datetime.datetime.utcnow().isoformat() < exp
 
 def _check_limit(user: dict):
-    if user.get("id") == 0 or user.get("plan") in ("pro","enterprise"): return
+    if user.get("id") == 0 or user.get("is_admin") or user.get("plan") in ("pro","enterprise"): return
     if not _trial_active(user):
         raise HTTPException(status_code=403, detail="Trial expired. Please upgrade your plan.")
     today = datetime.date.today().isoformat()
@@ -157,9 +183,12 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
     if tok == SECRET_TOKEN:
         return {"id": 0, "username": ADMIN_USER, "email": f"{ADMIN_USER}@oscp.local",
                 "plan": "enterprise", "is_admin": 1, "trial_expires": None, "scans_today": 0}
-    uid = _sessions.get(tok)
+    uid = _session_get(tok)
     if uid is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if uid == 0:
+        return {"id": 0, "username": ADMIN_USER, "email": f"{ADMIN_USER}@oscp.local",
+                "plan": "enterprise", "is_admin": 1, "trial_expires": None, "scans_today": 0}
     with _db() as c:
         row = c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     if not row:
@@ -228,7 +257,7 @@ async def register(req: RegisterRequest):
         if "email" in msg: raise HTTPException(status_code=400, detail="Email already registered")
         raise HTTPException(status_code=400, detail="Username already taken")
     tok = _sec.token_urlsafe(32)
-    _sessions[tok] = uid
+    _session_set(tok, uid)
     return {"access_token": tok, "role": "trial", "username": req.username.strip(),
             "plan": "trial", "trial_expires": trial_expires, "message": "Account created — 7-day free trial started"}
 
@@ -236,7 +265,7 @@ async def register(req: RegisterRequest):
 async def login(req: LoginRequest):
     if req.username == ADMIN_USER and req.password == ADMIN_PASS:
         tok = _sec.token_urlsafe(32)
-        _sessions[tok] = 0
+        _session_set(tok, 0)
         return {"access_token": tok, "role": "admin", "username": ADMIN_USER,
                 "plan": "enterprise", "is_admin": True}
     with _db() as c:
@@ -246,7 +275,7 @@ async def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     user = dict(row)
     tok = _sec.token_urlsafe(32)
-    _sessions[tok] = user["id"]
+    _session_set(tok, user["id"])
     plan = user["plan"]
     if plan == "trial" and not _trial_active(user):
         plan = "expired"
@@ -271,7 +300,9 @@ async def get_me(user=Depends(verify_token)):
             "scans_today": user.get("scans_today",0)}
 
 @app.post("/api/auth/logout")
-async def logout(user=Depends(verify_token)):
+async def logout(credentials: HTTPAuthorizationCredentials = Depends(security), user=Depends(verify_token)):
+    if credentials:
+        _session_del(credentials.credentials)
     return {"message": "Logged out"}
 
 # ── ADMIN ENDPOINTS ───────────────────────────────────────────

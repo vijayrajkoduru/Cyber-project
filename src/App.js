@@ -8,7 +8,7 @@ const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABOYAAATmCAIAAAAKnjl9
 
 const PLAN_ORDER = ["trial","pro","enterprise"];
 // eslint-disable-next-line no-unused-vars
-const planOk = (userPlan, req) => (PLAN_ORDER.indexOf(userPlan||"trial")) >= (PLAN_ORDER.indexOf(req||"trial"));
+const planOk = (userPlan, req, isAdmin) => isAdmin || (PLAN_ORDER.indexOf(userPlan||"trial")) >= (PLAN_ORDER.indexOf(req||"trial"));
 
 const MODULES = [
   // ── Phase 0: Home ─────────────────────────────────────────
@@ -76,6 +76,8 @@ const CSS = `
   .tool-card{transition:all .2s;}
 `;
 
+let _onSessionExpired = null;
+
 async function api(path, method, body, token) {
   method = method || "GET";
   const headers = { "Content-Type":"application/json" };
@@ -87,6 +89,7 @@ async function api(path, method, body, token) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
+    if (res.status === 401 && _onSessionExpired) _onSessionExpired();
     throw new Error(err.detail || res.statusText);
   }
   return res.json();
@@ -2554,7 +2557,28 @@ function ComingSoon(props) {
 }
 
 // eslint-disable-next-line no-control-regex
-const pdfSafe = s => (s||"").replace(/[^\x00-\xFF]/g,"").replace(/\s+/g," ").trim();
+const stripAsciiArt = s => (s||"")
+  .split("\n")
+  .filter(l => {
+    const t = l.trim();
+    if(!t) return false;
+    // Remove lines that are mostly non-alphanumeric (ASCII art, banners, dividers)
+    const alphanum = (t.match(/[a-zA-Z0-9]/g)||[]).length;
+    const total = t.replace(/\s/g,"").length;
+    if(total > 8 && alphanum/total < 0.25) return false;
+    // Remove theHarvester banner lines with lots of * and _
+    if((t.match(/\*/g)||[]).length > 5) return false;
+    if((t.match(/_/g)||[]).length > 8 && alphanum < 4) return false;
+    return true;
+  })
+  .join(" ");
+
+const pdfSafe = s => stripAsciiArt(s||"")
+  .replace(/\x1B\[[0-9;]*[mGKHFABCDJsu]/g,"")   // ANSI escape codes with ESC char
+  .replace(/\[\d+[a-zA-Z]/g,"")                   // bare [32m style codes
+  .replace(/[^\x20-\x7E\xA0-\xFF]/g," ")          // non-printable chars → space
+  .replace(/[→←↑↓•·▪▸►]/g,">")                   // unicode symbols → ASCII
+  .replace(/\s+/g," ").trim();
 
 // ── COMPREHENSIVE PDF REPORT FOR ALL MODULE SHELL MODULES ─────
 function generateShellReport({title, icon, target, attacks, results}) {
@@ -2569,35 +2593,59 @@ function generateShellReport({title, icon, target, attacks, results}) {
     doc.text(txt.toUpperCase(),M+3,y+4.8); y+=11;
   };
   const row=(k,v,i)=>{
-    chk(6); doc.setFillColor(i%2===0?13:18,i%2===0?20:26,i%2===0?42:52);
-    doc.rect(M,y,W-2*M,6,"F");
-    doc.setFontSize(8); doc.setTextColor(148,163,184); doc.setFont("helvetica","bold");
-    doc.text(String(k),M+3,y+4);
-    doc.setTextColor(241,245,249); doc.setFont("helvetica","normal");
-    doc.text(String(v).slice(0,90),M+65,y+4); y+=6;
+    chk(7); doc.setFillColor(i%2===0?235:245,i%2===0?240:247,i%2===0?250:252);
+    doc.rect(M,y,W-2*M,7,"F");
+    doc.setFontSize(8.5); doc.setTextColor(55,65,81); doc.setFont("helvetica","bold");
+    doc.text(pdfSafe(String(k)),M+3,y+5);
+    doc.setTextColor(17,24,39); doc.setFont("helvetica","normal");
+    doc.text(pdfSafe(String(v)).slice(0,90),M+65,y+5); y+=7;
   };
 
   // ── Cover Page ────────────────────────────────────────────
-  doc.setFillColor(5,8,20); doc.rect(0,0,W,297,"F");
-  doc.setFillColor(30,64,175); doc.rect(0,0,W,4,"F");
-  doc.setFontSize(28); doc.setTextColor(241,245,249); doc.setFont("helvetica","bold");
-  doc.text("PENETRATION TEST", M, 60);
-  doc.text("REPORT", M, 75);
-  doc.setFontSize(16); doc.setTextColor(96,165,250);
-  doc.text(`${pdfSafe(icon)}  ${pdfSafe(title)}`, M, 95);
-  doc.setFillColor(30,41,59); doc.rect(M,108,W-2*M,45,"F");
-  doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
+  // Background
+  doc.setFillColor(6,9,26); doc.rect(0,0,W,297,"F");
+  // Top accent bar
+  doc.setFillColor(30,64,175); doc.rect(0,0,W,6,"F");
+  // Bottom accent bar
+  doc.setFillColor(30,64,175); doc.rect(0,291,W,6,"F");
+
+  // Centered title block
+  doc.setFontSize(36); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+  doc.text("PENETRATION TEST", W/2, 80, {align:"center"});
+  doc.text("REPORT", W/2, 100, {align:"center"});
+
+  // Blue divider line
+  doc.setDrawColor(30,64,175); doc.setLineWidth(0.8);
+  doc.line(M, 108, W-M, 108);
+
+  // Module subtitle centered
+  doc.setFontSize(14); doc.setTextColor(96,165,250); doc.setFont("helvetica","bold");
+  doc.text(pdfSafe(title), W/2, 120, {align:"center"});
+
+  // Info table — centered card
   const coverInfo=[["Target",target||"—"],["Date",new Date().toLocaleDateString()],
     ["Time",new Date().toLocaleTimeString()],["Tester","OSCP Dashboard"],
     ["Classification","CONFIDENTIAL"],["Report Type","Security Assessment"]];
+  const tX=M+10, tW=W-2*M-20, keyW=50;
+  doc.setFillColor(20,30,60); doc.rect(tX,132,tW,coverInfo.length*10+4,"F");
+  doc.setDrawColor(30,64,175); doc.setLineWidth(0.3); doc.rect(tX,132,tW,coverInfo.length*10+4,"S");
   coverInfo.forEach(([k,v],i)=>{
-    doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
-    doc.text(k+":",M+4,118+i*7);
-    doc.setTextColor(241,245,249); doc.setFont("helvetica","normal");
-    doc.text(String(v),M+40,118+i*7);
+    const ry=142+i*10;
+    if(i%2===0){ doc.setFillColor(25,36,70); doc.rect(tX,ry-7,tW,10,"F"); }
+    doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","bold");
+    doc.text(k,tX+4,ry);
+    doc.setTextColor(255,255,255); doc.setFont("helvetica","normal");
+    doc.text(pdfSafe(String(v)),tX+keyW,ry);
   });
+
+  // Footer
+  doc.setFontSize(7); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
+  doc.text("Generated by OSCP Dashboard  —  For authorized security testing only",W/2,285,{align:"center"});
+  // Page footer line
   doc.setFontSize(7); doc.setTextColor(51,65,85);
-  doc.text("Generated by OSCP Dashboard — For authorized security testing only",M,280);
+  doc.text(`OSCP Dashboard — ${pdfSafe(title)} — Target: ${pdfSafe(target||"—")} — CONFIDENTIAL`,M,292);
+  doc.text("Page 1",W-M,292,{align:"right"});
+
   doc.addPage(); y=20;
 
   // ── Executive Summary ─────────────────────────────────────
@@ -2635,14 +2683,14 @@ function generateShellReport({title, icon, target, attacks, results}) {
     chk(10);
     const res=results[atk.id]; const ran2=!!res;
     const fcount=(res?.findings||[]).filter(f=>["CRITICAL","HIGH","MEDIUM"].includes(f.severity)).length;
-    doc.setFillColor(i%2===0?13:18,i%2===0?20:26,i%2===0?42:52);
+    doc.setFillColor(i%2===0?235:245,i%2===0?240:247,i%2===0?250:252);
     doc.rect(M,y,W-2*M,8,"F");
-    doc.setFontSize(8); doc.setTextColor(241,245,249); doc.setFont("helvetica","bold");
-    doc.text(`${pdfSafe(atk.icon)} ${pdfSafe(atk.label)}`,M+3,y+5.5);
-    doc.setFont("helvetica","normal"); doc.setTextColor(148,163,184);
-    doc.text(atk.desc.slice(0,55),M+65,y+5.5);
+    doc.setFontSize(8); doc.setTextColor(17,24,39); doc.setFont("helvetica","bold");
+    doc.text(`${pdfSafe(atk.label)}`,M+3,y+5.5);
+    doc.setFont("helvetica","normal"); doc.setTextColor(55,65,81);
+    doc.text(pdfSafe(atk.desc).slice(0,55),M+65,y+5.5);
     const status=!ran2?"NOT RUN":fcount>0?`${fcount} FINDING(S)`:"CLEAN";
-    const [sr,sg,sb]=!ran2?[71,85,105]:fcount>0?[239,68,68]:[34,197,94];
+    const [sr,sg,sb]=!ran2?[107,114,128]:fcount>0?[185,28,28]:[21,128,61];
     doc.setTextColor(sr,sg,sb); doc.setFont("helvetica","bold");
     doc.text(status,W-M-28,y+5.5); y+=9;
     // Vulnerabilities tested + target type
@@ -2730,15 +2778,18 @@ function generateShellReport({title, icon, target, attacks, results}) {
       doc.text("No actionable findings — target clean or tool not applicable",M+4,y); y+=8;
     } else {
       findings.slice(0,20).forEach(f=>{
-        chk(8); const [fr,fg,fb]=SC(f.severity);
-        doc.setFillColor(fr,fg,fb); doc.rect(M,y,20,5.5,"F");
+        chk(12); const [fr,fg,fb]=SC(f.severity);
+        doc.setFillColor(fr,fg,fb); doc.rect(M,y,22,6,"F");
         doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-        doc.text((f.severity||"INFO").slice(0,8),M+1,y+4);
-        doc.setTextColor(241,245,249); doc.setFont("helvetica","bold");
-        doc.text((f.title||"").slice(0,40),M+22,y+4);
+        doc.text((f.severity||"INFO").slice(0,8),M+1,y+4.2);
+        doc.setTextColor(17,24,39); doc.setFont("helvetica","bold");
+        doc.text(pdfSafe(f.title||"").slice(0,50),M+25,y+4.2);
         if(f.detail){
-          doc.setFont("helvetica","normal"); doc.setTextColor(148,163,184);
-          doc.text(String(f.detail).slice(0,60),M+22,y+9); y+=5;
+          chk(7);
+          doc.setFont("helvetica","normal"); doc.setTextColor(55,65,81);
+          const dlines=doc.splitTextToSize(pdfSafe(String(f.detail)),W-2*M-28);
+          dlines.slice(0,3).forEach(dl=>{chk(5);doc.text(dl,M+25,y+9);y+=4.5;});
+          y+=2;
         }
         y+=7;
       });
@@ -7499,9 +7550,9 @@ function SettingsModule() {
 // eslint-disable-next-line no-unused-vars
 function UpgradeModal({onClose, plan}) {
   const plans = [
-    { name:"Free Trial", price:"$0", period:"7 days", color:"#64748b", features:["Information Gathering","OSINT & Threat Intel","Network Scanning","Report Writing","Run Guide"], locked:["Vulnerability Scanning","Web App Testing","Exploitation","Metasploit","Buffer Overflow","Post Exploitation","and 20+ more modules"] },
-    { name:"Pro", price:"$29", period:"/month", color:"#3b82f6", current:plan==="pro", features:["All 30+ modules unlocked","Unlimited scans/day","PDF reports on every module","Vulnerable Lab (Docker)","Embedded terminals","Priority support"], locked:["Active Directory Attacks","Supply Chain Security"] },
-    { name:"Enterprise", price:"$99", period:"/month", color:"#a855f7", current:plan==="enterprise", features:["Everything in Pro","Active Directory Attacks","Supply Chain Security","Admin panel — manage users","Up to 10 team members","White-label PDF reports","Dedicated support"] },
+    { name:"Free Trial", price:"₹0", period:"7 days", color:"#64748b", features:["Information Gathering","OSINT & Threat Intel","Network Scanning","Report Writing","Run Guide"], locked:["Vulnerability Scanning","Web App Testing","Exploitation","Metasploit","Buffer Overflow","Post Exploitation","and 20+ more modules"] },
+    { name:"Pro", price:"₹1,499", period:"/month", color:"#3b82f6", current:plan==="pro", features:["All 30+ modules unlocked","Unlimited scans/day","PDF reports on every module","Vulnerable Lab (Docker)","Embedded terminals","Priority support"], locked:["Active Directory Attacks","Supply Chain Security"] },
+    { name:"Enterprise", price:"₹4,999", period:"/month", color:"#a855f7", current:plan==="enterprise", features:["Everything in Pro","Active Directory Attacks","Supply Chain Security","Admin panel — manage users","Up to 10 team members","White-label PDF reports","Dedicated support"] },
   ];
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(2,6,23,0.92)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={onClose}>
@@ -7678,10 +7729,10 @@ function LoginPage({onLogin}) {
       if (tab === "signup") {
         const d = await api("/api/auth/register","POST",{email:email.trim(),username:u.trim(),password:p});
         setOk("Account created! Starting your 7-day free trial...");
-        setTimeout(() => onLogin(d.access_token, d.username || u.trim()), 900);
+        setTimeout(() => onLogin(d.access_token, d.username || u.trim(), d.plan || "trial", false), 900);
       } else {
         const d = await api("/api/auth/login","POST",{username:u.trim(),password:p});
-        onLogin(d.access_token, d.username || u.trim());
+        onLogin(d.access_token, d.username || u.trim(), d.plan || d.role || "trial", d.is_admin || d.role === "admin");
       }
     } catch(ex) { setErr(ex.message || "Something went wrong. Please try again."); }
     setBusy(false);
@@ -7867,6 +7918,8 @@ function LoginPage({onLogin}) {
 export default function App() {
   const [token,setToken]     = useState(null);
   const [username,setUser]   = useState("");
+  const [plan,setPlan]       = useState("trial");
+  const [isAdmin,setIsAdmin] = useState(false);
   const [active,setActive]   = useState("dashboard");
   const [backendOk,setBE]    = useState(null);
   const [time,setTime]       = useState(new Date().toLocaleTimeString());
@@ -7875,20 +7928,51 @@ export default function App() {
   const [exploitRunning,setExploitRunning] = useState(false);
 
   useEffect(() => {
+    _onSessionExpired = () => { setToken(null); setUser(""); setPlan("trial"); setIsAdmin(false); };
     api("/api/health").then(() => setBE(true)).catch(() => setBE(false));
     const t = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(t);
   }, []);
 
   if (!token) {
-    return <LoginPage onLogin={(t, u) => { setToken(t); setUser(u); }}/>;
+    return <LoginPage onLogin={(t, u, p, admin) => { setToken(t); setUser(u); setPlan(p||"trial"); setIsAdmin(!!admin); }}/>;
   }
 
   const navigate = (id) => setActive(id);
 
   const topic = MODULES.find(m => m.id === active);
 
+  const UpgradeWall = ({mod}) => {
+    const reqLabel = mod.adminOnly ? "Admin" : mod.minPlan==="enterprise" ? "Enterprise ₹4,999/mo" : "Pro ₹1,499/mo";
+    const reqColor = mod.adminOnly ? "#22c55e" : mod.minPlan==="enterprise" ? "#a855f7" : "#3b82f6";
+    return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",background:"#020617",padding:40}}>
+        <div style={{fontSize:52,marginBottom:16}}>🔒</div>
+        <div style={{fontSize:20,fontWeight:800,color:"#f1f5f9",marginBottom:8}}>{mod.label}</div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:24,textAlign:"center",maxWidth:360}}>
+          This module requires the <span style={{color:reqColor,fontWeight:700}}>{reqLabel}</span> plan.
+          Upgrade to unlock all {mod.minPlan==="enterprise"?"enterprise":"pro"} features.
+        </div>
+        <div style={{display:"flex",gap:12}}>
+          <div style={{background:"rgba(59,130,246,0.08)",border:"1px solid rgba(59,130,246,0.2)",borderRadius:10,padding:"14px 24px",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:4,fontWeight:700,letterSpacing:1}}>PRO</div>
+            <div style={{fontSize:22,fontWeight:900,color:"#3b82f6"}}>₹1,499<span style={{fontSize:11,color:"#64748b"}}>/mo</span></div>
+            <div style={{fontSize:10,color:"#475569",marginTop:4}}>All 30+ modules · Unlimited scans</div>
+          </div>
+          <div style={{background:"rgba(168,85,247,0.08)",border:"1px solid rgba(168,85,247,0.2)",borderRadius:10,padding:"14px 24px",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:4,fontWeight:700,letterSpacing:1}}>ENTERPRISE</div>
+            <div style={{fontSize:22,fontWeight:900,color:"#a855f7"}}>₹4,999<span style={{fontSize:11,color:"#64748b"}}>/mo</span></div>
+            <div style={{fontSize:10,color:"#475569",marginTop:4}}>AD · Supply Chain · Team access</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderContent = () => {
+    if (topic && !planOk(plan, topic.minPlan, isAdmin) && !(topic.adminOnly && isAdmin)) {
+      return <UpgradeWall mod={topic}/>;
+    }
     return (
       <>
         {/* Always-mounted modules — scan survives tab switches */}
@@ -8003,20 +8087,30 @@ export default function App() {
                     <div style={{flex:1,height:1,background:color+"33"}}/>
                   </div>
                 )}
-                {items.map(m=>(
-                  <button key={m.id} onClick={()=>navigate(m.id)}
-                    style={{width:"calc(100% - 12px)",background:active===m.id?bg:"transparent",
-                      border:active===m.id?`1px solid ${color}33`:"1px solid transparent",
-                      borderRadius:6,padding:"8px 10px",display:"flex",alignItems:"center",
-                      gap:8,cursor:"pointer",textAlign:"left",margin:"1px 6px",transition:"all 0.15s"}}>
-                    <span style={{fontSize:15,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-                    <span style={{fontSize:12,color:active===m.id?color:"#94a3b8",fontWeight:active===m.id?700:400,lineHeight:1.3,flex:1}}>{m.label}</span>
-                    {m.featured && <span style={{background:"#22c55e22",color:"#22c55e",fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,flexShrink:0}}>LIVE</span>}
-                    {m.id==="webapp"  && waptRunning    && active!=="webapp"   && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
-                    {m.id==="recon"   && reconRunning   && active!=="recon"    && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
-                    {m.id==="exploit" && exploitRunning && active!=="exploit"  && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
-                  </button>
-                ))}
+                {items.map(m=>{
+                  const allowed = (m.adminOnly ? isAdmin : planOk(plan, m.minPlan, isAdmin));
+                  const locked  = !allowed;
+                  const reqLabel = m.adminOnly ? "Admin" : m.minPlan==="enterprise" ? "Enterprise" : "Pro";
+                  return (
+                    <button key={m.id}
+                      onClick={()=>{ if(!locked) navigate(m.id); }}
+                      title={locked ? `Requires ${reqLabel} plan` : m.label}
+                      style={{width:"calc(100% - 12px)",
+                        background:locked?"transparent":active===m.id?bg:"transparent",
+                        border:active===m.id&&!locked?`1px solid ${color}33`:"1px solid transparent",
+                        borderRadius:6,padding:"8px 10px",display:"flex",alignItems:"center",
+                        gap:8,cursor:locked?"not-allowed":"pointer",textAlign:"left",margin:"1px 6px",
+                        transition:"all 0.15s",opacity:locked?0.38:1}}>
+                      <span style={{fontSize:15,width:22,textAlign:"center",flexShrink:0}}>{locked?"🔒":m.icon}</span>
+                      <span style={{fontSize:12,color:locked?"#334155":active===m.id?color:"#94a3b8",fontWeight:active===m.id&&!locked?700:400,lineHeight:1.3,flex:1}}>{m.label}</span>
+                      {locked && <span style={{background:"#1e293b",color:"#475569",fontSize:7,fontWeight:800,padding:"1px 5px",borderRadius:3,flexShrink:0,letterSpacing:1}}>{reqLabel.toUpperCase()}</span>}
+                      {!locked && m.featured && <span style={{background:"#22c55e22",color:"#22c55e",fontSize:8,fontWeight:800,padding:"1px 5px",borderRadius:3,flexShrink:0}}>LIVE</span>}
+                      {!locked && m.id==="webapp"  && waptRunning    && active!=="webapp"   && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
+                      {!locked && m.id==="recon"   && reconRunning   && active!=="recon"    && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
+                      {!locked && m.id==="exploit" && exploitRunning && active!=="exploit"  && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
+                    </button>
+                  );
+                })}
               </div>
             );
           })}
@@ -8039,7 +8133,7 @@ export default function App() {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
             <div style={{fontSize:11,color:"#475569",fontFamily:"JetBrains Mono,monospace"}}>{username}</div>
             <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"2px 8px",fontSize:9,color:"#22c55e",fontWeight:800}}>OWNER</div>
+              <div style={{background:isAdmin?"#052e16":plan==="enterprise"?"#1a0a3d":plan==="pro"?"#0e1a3a":"#1a1000",border:`1px solid ${isAdmin?"#166534":plan==="enterprise"?"#7c3aed":plan==="pro"?"#3b82f6":"#92400e"}`,borderRadius:4,padding:"2px 8px",fontSize:9,color:isAdmin?"#22c55e":plan==="enterprise"?"#a855f7":plan==="pro"?"#3b82f6":"#f59e0b",fontWeight:800}}>{isAdmin?"ADMIN":plan.toUpperCase()}</div>
               <button onClick={()=>setToken(null)} style={{background:"none",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#475569",fontSize:9,cursor:"pointer"}}>Sign out</button>
             </div>
           </div>
