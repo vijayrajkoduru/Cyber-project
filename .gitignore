@@ -42,3 +42,8 @@ react-server.err.log
 backend_missing.py
 backend_recon_missing.py
 backend_p345.py
+
+# Credentials / local notes
+ruff
+.env
+*.env
