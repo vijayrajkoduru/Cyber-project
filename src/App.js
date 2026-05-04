@@ -2693,68 +2693,8 @@ function generateShellReport({title, icon, target, attacks, results}) {
     const [sr,sg,sb]=!ran2?[80,80,80]:fcount>0?[200,20,20]:[21,128,61];
     doc.setTextColor(sr,sg,sb); doc.setFont("helvetica","bold");
     doc.text(status,W-M-28,y+5.5); y+=9;
-    if(atk.vulns && atk.vulns.length>0){
-      chk(6); doc.setFontSize(7); doc.setTextColor(50,50,50); doc.setFont("helvetica","italic");
-      doc.text("  Detects: "+atk.vulns.slice(0,3).join(", "),M+3,y+4); y+=5;
-    }
-    if(atk.target_type){
-      chk(5); doc.setFontSize(7); doc.setTextColor(50,50,50); doc.setFont("helvetica","normal");
-      doc.text("  Target: "+atk.target_type.slice(0,80),M+3,y+3); y+=5;
-    }
   });
   y+=6;
-
-  // ── How To Use Each Attack ────────────────────────────────
-  sHead("Setup Instructions — How to Run Each Attack",[30,64,175]);
-  attacks.forEach(atk=>{
-    chk(20);
-    doc.setFillColor(30,64,175); doc.rect(M,y,4,7,"F");
-    doc.setFillColor(240,245,255); doc.rect(M+4,y,W-2*M-4,7,"F");
-    doc.setFontSize(9); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
-    doc.text(pdfSafe(atk.label),M+8,y+4.8); y+=9;
-    if(atk.target_type){
-      chk(5); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
-      doc.text("Target: ",M+4,y);
-      doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
-      doc.text(atk.target_type.slice(0,75),M+20,y); y+=5;
-    }
-    if(atk.howto){
-      chk(7); doc.setFontSize(8); doc.setTextColor(20,20,20); doc.setFont("helvetica","normal");
-      const lines=doc.splitTextToSize(atk.howto,W-2*M-6);
-      lines.slice(0,4).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
-    }
-    if(atk.requires){
-      chk(6); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
-      doc.text("Requires: ",M+4,y);
-      doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
-      doc.text(atk.requires.slice(0,72),M+24,y); y+=5;
-    }
-    if(atk.vulns && atk.vulns.length>0){
-      chk(5); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.setFont("helvetica","bold");
-      doc.text("Detects: ",M+4,y);
-      doc.setFont("helvetica","normal"); doc.setTextColor(30,30,30);
-      doc.text(atk.vulns.slice(0,3).join(" | ").slice(0,80),M+22,y); y+=5;
-    }
-    y+=3;
-  });
-
-  // ── Hacker Impact Analysis ────────────────────────────────
-  const hasImpact = attacks.some(a=>a.hackerImpact);
-  if(hasImpact){
-    sHead("How Hackers Exploit These Findings — Impact Analysis",[127,29,29]);
-    attacks.forEach(atk=>{
-      if(!atk.hackerImpact) return;
-      chk(20);
-      doc.setFillColor(220,38,38); doc.rect(M,y,4,7,"F");
-      doc.setFillColor(255,242,242); doc.rect(M+4,y,W-2*M-4,7,"F");
-      doc.setFontSize(9); doc.setTextColor(180,0,0); doc.setFont("helvetica","bold");
-      doc.text(pdfSafe(atk.label)+" — Real World Attack Scenario",M+8,y+4.8); y+=9;
-      doc.setFontSize(8); doc.setTextColor(0,0,0); doc.setFont("helvetica","normal");
-      const impLines=doc.splitTextToSize(atk.hackerImpact,W-2*M-6);
-      impLines.slice(0,4).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
-      y+=4;
-    });
-  }
 
   // ── Detailed Findings ─────────────────────────────────────
   sHead("Detailed Findings",[30,64,175]);
