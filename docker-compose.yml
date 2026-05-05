@@ -1,0 +1,85 @@
+version: "3.8"
+
+# OSCP Dashboard — Full Stack
+# Customer runs: docker compose up -d
+# Then open: http://localhost
+
+services:
+
+  # ── Backend: Kali Linux + all scanning tools + FastAPI ─────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oscp_backend
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    privileged: true          # needed for nmap, tcpdump, masscan raw sockets
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env                  # optional: SHODAN_KEY, VIRUSTOTAL_KEY, etc.
+    volumes:
+      - scan_data:/app/data   # persist scan results + user DB
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+  # ── Frontend: React dashboard served by nginx ──────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: oscp_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+  # ── Vulnerable Lab Targets (built-in, no external VM needed) ───
+  dvwa:
+    image: vulnerables/web-dvwa
+    container_name: lab_dvwa
+    ports:
+      - "8001:80"
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+  webgoat:
+    image: webgoat/webgoat
+    container_name: lab_webgoat
+    ports:
+      - "8002:8080"
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+  juiceshop:
+    image: bkimminich/juice-shop
+    container_name: lab_juiceshop
+    ports:
+      - "8003:3000"
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+  mutillidae:
+    image: webpwnized/mutillidae
+    container_name: lab_mutillidae
+    ports:
+      - "8004:80"
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+networks:
+  oscp_net:
+    driver: bridge
+
+volumes:
+  scan_data:
