@@ -322,7 +322,7 @@ function TestTargets({targets, onSelect}) {
     if (navigator.clipboard) navigator.clipboard.writeText(val).catch(()=>{});
     onSelect(val);
     setCopied(i);
-    setTimeout(()=>setCopied(null),1500);
+    setTimeout(()=>{ setCopied(null); setOpen(false); },800);
   };
   return (
     <div style={{marginBottom:10}}>
