@@ -2368,7 +2368,7 @@ journalctl -u uvicorn -n 50
             <div style={{display:"flex", gap:24}}>
               <div><span style={{color:DIM, fontSize:12}}>Username: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin</code></div>
               <div><span style={{color:DIM, fontSize:12}}>Password: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin123</code></div>
-              <div><span style={{color:DIM, fontSize:12}}>API URL: </span><code style={{color:G, fontSize:13}}>http://192.168.56.102:8000</code></div>
+              <div><span style={{color:DIM, fontSize:12}}>API URL: </span><code style={{color:G, fontSize:13}}>{(window.location.port===""||window.location.port==="80")?window.location.origin+"/api":"http://192.168.56.102:8000"}</code></div>
             </div>
           </div>
         </div>
@@ -2431,7 +2431,7 @@ journalctl -u uvicorn -n 50
             { step:"04", title:"Kill port 8000",         detail:"sudo fuser -k 8000/tcp", code:true },
             { step:"05", title:"Start backend",          detail:"cd ~/Cyber-project && uvicorn main:app --host 0.0.0.0 --port 8000 --reload", code:true },
             { step:"06", title:"Start frontend (Windows)", detail:'cd "C:\\Users\\vijay\\OneDrive\\Desktop\\kali\\Cyber-project" && npm.cmd start', code:true },
-            { step:"07", title:"Verify backend alive",   detail:"Open http://192.168.56.102:8000/docs — should show FastAPI UI", ok:true },
+            { step:"07", title:"Verify backend alive",   detail:"Open http://YOUR-VPS-IP:8000/docs (or http://localhost:8000/docs) — should show FastAPI UI", ok:true },
             { step:"08", title:"Login",                   detail:"http://localhost:3000 → admin / admin123", ok:true },
             { step:"09", title:"Set target",              detail:"Paste target URL e.g. http://172.20.0.10/dvwa (DVWA Docker)", ok:true },
             { step:"10", title:"Run Full Scan (25 phases)", detail:"Click Web App Pentesting → Run Full Scan → Wait ~5 min", ok:true },
@@ -2711,7 +2711,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
 
 // ── SHARED MODULE SHELL ──────────────────────────────────────
 function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn}) {
-  const API = apiUrl || (window._cyberApi||"http://192.168.56.102:8000");
+  const API = apiUrl || (window._cyberApi||((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000"));
   const tok = token || localStorage.getItem("cyberToken")||"oscp-dashboard-token";
   const [target, setTarget] = useState("");
   const [opts,   setOpts]   = useState({});
@@ -3655,7 +3655,7 @@ function ToolManagerModule({token}) {
   const [log,    setLog]    = useState([]);
   const [running,setRunning]= useState(false);
   const [status, setStatus] = useState({});
-  const apiUrl = localStorage.getItem("cyberApiUrl") || "http://192.168.56.102:8000";
+  const apiUrl = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
 
   const TOOLS = [
     {cat:"System Update",    tools:["kali-update","apt-upgrade"]},
@@ -5088,7 +5088,7 @@ function generateExploitReport({target, port, service, cve, msfModule, msfPayloa
 
 function ExploitModule({token, onRunningChange}) {
   const _notify = onRunningChange || (()=>{});
-  const apiUrl  = localStorage.getItem("cyberApiUrl") || "http://192.168.56.102:8000";
+  const apiUrl  = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
 
   // Target config
   const [targetIP,     setTargetIP]    = useState(()=>localStorage.getItem("exp_targetIP")||"");
@@ -5096,7 +5096,7 @@ function ExploitModule({token, onRunningChange}) {
   const [lhost,        setLhost]       = useState(()=>{
     const saved = localStorage.getItem("exp_lhost");
     if(saved) return saved;
-    const url = localStorage.getItem("cyberApiUrl")||"http://192.168.56.102:8000";
+    const url = localStorage.getItem("cyberApiUrl")||((window.location.port===""||window.location.port==="80")?window.location.origin:"http://192.168.56.102:8000");
     const m = url.match(/https?:\/\/([^:/]+)/);
     return m ? m[1] : "";
   });
@@ -5851,7 +5851,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
 }
 
 function BufferOverflowModule({token}) {
-  const apiUrl = localStorage.getItem("cyberApiUrl") || "http://192.168.56.102:8000";
+  const apiUrl = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
   const [phase,      setPhase]      = useState(1);
   const [log,        setLog]        = useState([]);
   const [running,    setRunning]    = useState(false);
@@ -7012,7 +7012,7 @@ function MetasploitModule(props) {
 //  SETTINGS MODULE
 // ═══════════════════════════════════════════════════════════════
 function SettingsModule() {
-  const [apiUrl,     setApiUrl]     = useState(localStorage.getItem("cyberApiUrl")    || "http://192.168.56.102:8000");
+  const [apiUrl,     setApiUrl]     = useState(localStorage.getItem("cyberApiUrl")    || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000"));
   const [shodanKey,  setShodanKey]  = useState(localStorage.getItem("shodanApiKey")   || "");
   const [vtKey,      setVtKey]      = useState(localStorage.getItem("vtApiKey")        || "");
   const [saved, setSaved] = useState(false);
@@ -7027,7 +7027,7 @@ function SettingsModule() {
 
   const reset = () => {
     localStorage.removeItem("cyberApiUrl");
-    setApiUrl("http://192.168.56.102:8000");
+    setApiUrl((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
   };
 
   return (
