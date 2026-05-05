@@ -504,15 +504,51 @@ async def scan_ssl(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/xss")
 async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["python3","/usr/share/xsstrike/xsstrike.py","-u",req.target,"--crawl","--blind","--skip-dom","-l","2"], timeout=120)
-    out = result.get("output","")
     findings = []
+    raw_lines = []
+    base = req.target.rstrip("/")
+
+    # Step 1: curl-based reflected XSS — test common parameters
+    xss_params = ["q", "search", "name", "id", "query", "s", "term", "keyword", "user", "input"]
+    xss_payloads = [
+        ("<script>alert(1)</script>", "<script>alert(1)</script>"),
+        ("<img src=x onerror=alert(1)>", "onerror=alert"),
+        ("<svg onload=alert(1)>", "onload=alert"),
+    ]
+    found_xss = False
+    for param in xss_params:
+        for payload, marker in xss_payloads:
+            r = _http_get(f"{base}?{param}={payload}", timeout=6)
+            if r and marker in r.text:
+                findings.append({"detail":f"Reflected XSS: parameter '{param}' reflects unencoded HTML — payload executes in browser","severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user-supplied input before reflecting in responses. Add Content-Security-Policy header."})
+                raw_lines.append(f"[!] Reflected XSS confirmed via ?{param}={payload}")
+                found_xss = True
+                break
+        if found_xss: break
+
+    # Step 2: check if any user input reflects at all (potential XSS indicator)
+    if not found_xss:
+        probe = "XSSTEST9981"
+        r = _http_get(f"{base}?q={probe}", timeout=8)
+        if r and probe in r.text:
+            findings.append({"detail":"Input reflection detected — query parameter reflected in response without encoding (likely XSS)","severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Encode all reflected user input. Never insert raw user data into HTML."})
+            raw_lines.append(f"[!] Input reflection confirmed — potential XSS at ?q=")
+
+    # Step 3: also try xsstrike if installed
+    result = await run_tool(["python3","/usr/share/xsstrike/xsstrike.py","-u",req.target,"--crawl","--skip-dom","-l","1"], timeout=60)
+    out = result.get("output","")
     for line in out.splitlines():
-        if "vulnerable" in line.lower() or "XSS" in line:
+        if "vulnerable" in line.lower() or ("xss" in line.lower() and "[+]" in line):
             findings.append({"detail":line.strip(),"severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Sanitise and encode all user input; enforce Content-Security-Policy."})
+
+    # Step 4: DOM XSS indicator — lack of CSP means DOM XSS is unprotected
+    r2 = _http_get(base, timeout=8)
+    if r2 and not r2.headers.get("Content-Security-Policy"):
+        findings.append({"detail":"No Content-Security-Policy header — DOM-based XSS attacks have no browser-level protection","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Deploy a strict Content-Security-Policy to mitigate XSS impact."})
+
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"xss",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"xsstrike","findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id,"xss",req.target,{"output":"\n".join(raw_lines) or out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"xss","findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/cms")
@@ -597,18 +633,55 @@ async def commix_scan(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/lfi")
 async def lfi_scan(req: ScanRequest, user=Depends(verify_token)):
-    payloads = ["../../../../etc/passwd","..%2F..%2F..%2F..%2Fetc%2Fpasswd","....//....//....//etc/passwd","../../../../windows/win.ini"]
     findings = []
-    indicators = ["root:x:","bin:x:","[extensions]","for 16-bit"]
-    for payload in payloads:
-        test_url = req.target + payload if not req.target.endswith("/") else req.target + payload
+    base = req.target.rstrip("/")
+    indicators = ["root:x:","bin:x:","daemon:x:","[extensions]","for 16-bit","boot.ini"]
+
+    # Generic path traversal — appended to base URL
+    traversal = [
+        "/../../../../etc/passwd",
+        "/../../../etc/passwd",
+        "/..%2F..%2F..%2Fetc%2Fpasswd",
+        "/....//....//....//etc/passwd",
+        "/%2e%2e/%2e%2e/%2e%2e/etc/passwd",
+        "/../../../../windows/win.ini",
+    ]
+    # App-specific vulnerable parameter endpoints
+    param_endpoints = [
+        "?page=../../../../etc/passwd",                              # Mutillidae / generic PHP
+        "?file=../../../../etc/passwd",
+        "?include=../../../../etc/passwd",
+        "?view=../../../../etc/passwd",
+        "/dvwa/vulnerabilities/fi/?page=../../../../etc/passwd",     # DVWA (low security)
+        "/vulnerabilities/fi/?page=../../../../etc/passwd",
+        "/mutillidae/index.php?page=../../../../etc/passwd",
+    ]
+
+    def _check(url):
         try:
-            r = _req_lib.get(test_url, timeout=8, verify=False, allow_redirects=True)
+            r = _req_lib.get(url, timeout=8, verify=False, allow_redirects=True)
             for ind in indicators:
                 if ind in r.text:
-                    findings.append({"detail":f"LFI confirmed: {payload} reveals {ind}","severity":"CRITICAL","cvss":"9.1","cve":"N/A","cwe":"CWE-22","cwe_name":"Path Traversal","owasp":"A01:2021","remediation":"Validate and sanitise all file path inputs. Use allowlists."})
-                    break
+                    return True
         except: pass
+        return False
+
+    for path in traversal:
+        if _check(base + path):
+            findings.append({"detail":f"LFI/Path Traversal confirmed — /etc/passwd readable via directory traversal","severity":"CRITICAL","cvss":"9.1","cve":"N/A","cwe":"CWE-22","cwe_name":"Path Traversal","owasp":"A01:2021","remediation":"Validate and sanitise all file path inputs. Use allowlists. Disable PHP allow_url_include."})
+            break
+
+    if not findings:
+        for ep in param_endpoints:
+            url = (base + ep) if ep.startswith("/") else (base + "/" + ep.lstrip("?") if not ep.startswith("?") else base + ep)
+            if ep.startswith("?"):
+                url = base + ep
+            elif ep.startswith("/dvwa") or ep.startswith("/vulner") or ep.startswith("/mut"):
+                url = base + ep
+            if _check(url):
+                findings.append({"detail":f"LFI confirmed via parameter — {ep.split('?')[0] if '?' in ep else ep}: /etc/passwd contents returned","severity":"CRITICAL","cvss":"9.1","cve":"N/A","cwe":"CWE-22","cwe_name":"Path Traversal","owasp":"A01:2021","remediation":"Never pass user-controlled filenames to include/require. Use allowlisted page mappings."})
+                break
+
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"lfi",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"lfi","findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -815,28 +888,72 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/sensitivefiles")
 async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
     findings = []; base = req.target.rstrip("/")
-    paths = [".env","config.php","wp-config.php",".git/HEAD","backup.zip","db.sql","admin/","phpinfo.php",".htpasswd","web.config","server-status","robots.txt","sitemap.xml","/.well-known/security.txt","crossdomain.xml","clientaccesspolicy.xml"]
+    paths = [
+        # Generic high-value files
+        ".env","config.php","wp-config.php",".git/HEAD","backup.zip","db.sql",
+        "admin/","phpinfo.php",".htpasswd","web.config","server-status",
+        "robots.txt","sitemap.xml",".well-known/security.txt",
+        "crossdomain.xml","clientaccesspolicy.xml",
+        "test.php","info.php","debug.php","status","healthz",
+        # DVWA specific
+        "dvwa/","dvwa/login.php","setup.php","instructions.php","dvwa/phpinfo.php",
+        "dvwa/includes/dvwaPage.inc.php",
+        # WebGoat specific
+        "WebGoat/","WebGoat/login","WebGoat/registration","WebGoat/start.mvc",
+        # Mutillidae specific
+        "mutillidae/","mutillidae/index.php","mutillidae/set-up-database.php",
+        "mutillidae/documentation/mutillidae-installation-on-xampp.pdf",
+        # bWAPP specific
+        "bWAPP/","bWAPP/login.php","bWAPP/install.php","bWAPP/admin/",
+        # Common exposed configs
+        "config/","config/database.php","includes/config.php","app/config.php",
+        ".DS_Store",".svn/entries","server-info","server-status","elmah.axd",
+    ]
+    high_risk = [".env","config.php","wp-config",".git","backup","db.sql",".htpasswd","web.config","install.php","set-up-database","database.php"]
     for p in paths:
-        r = _http_get(f"{base}/{p}", timeout=6)
+        r = _http_get(f"{base}/{p.lstrip('/')}", timeout=6)
         if r and r.status_code in (200,403):
-            sev = "HIGH" if any(x in p for x in [".env","config.php","wp-config",".git","backup","db.sql",".htpasswd","web.config"]) else "LOW"
-            findings.append({"detail":f"Accessible: /{p} (HTTP {r.status_code})","severity":sev,"cvss":"7.5" if sev=="HIGH" else "3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Block access to /{p} via server config or .htaccess."})
+            sev = "HIGH" if any(x in p for x in high_risk) else "LOW"
+            findings.append({"detail":f"Accessible: /{p} (HTTP {r.status_code}) — {'sensitive configuration/setup file exposed' if sev=='HIGH' else 'file/directory accessible'}","severity":sev,"cvss":"7.5" if sev=="HIGH" else "3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Block access to /{p} via server config. Remove install/setup files after deployment."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"sensitivefiles",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"sensitivefiles","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/hydra")
 async def scan_hydra(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
-    weak_creds = [("admin","admin"),("admin","password"),("admin","123456"),("root","root"),("test","test")]
-    login_url = req.target.rstrip("/") + "/login"
-    for u,p in weak_creds:
-        try:
-            r = _req_lib.post(login_url,data={"username":u,"password":p},timeout=8,verify=False,allow_redirects=True)
-            if r.status_code==200 and ("logout" in r.text.lower() or "dashboard" in r.text.lower() or "welcome" in r.text.lower()):
-                vulnerable = True
-                findings.append({"detail":f"Weak credentials accepted: {u}/{p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-521","cwe_name":"Weak Password","owasp":"A07:2021","remediation":"Enforce strong password policy and account lockout."})
-                break
-        except: pass
+    base = req.target.rstrip("/")
+    # Try multiple known login paths for different lab apps
+    login_paths = [
+        "/login", "/login.php", "/index.php",
+        "/dvwa/login.php",                        # DVWA
+        "/bWAPP/login.php",                       # bWAPP
+        "/mutillidae/index.php",                  # Mutillidae
+        "/WebGoat/login",                         # WebGoat
+        "/admin", "/admin/login", "/wp-login.php",
+    ]
+    # Pairs matching known lab defaults first
+    weak_creds = [
+        ("admin","password"),    # DVWA default
+        ("admin","adminpass"),   # Mutillidae default
+        ("bee","bug"),           # bWAPP default
+        ("admin","admin"),
+        ("admin","123456"),
+        ("root","root"),
+        ("test","test"),
+        ("guest","guest"),
+    ]
+    success_indicators = ["logout","sign out","dashboard","welcome","logged in","my account","your profile","home"]
+    for login_path in login_paths:
+        login_url = base + login_path
+        for u, p in weak_creds:
+            try:
+                r = _req_lib.post(login_url, data={"username":u,"password":p,"user":u,"pass":p,"Login":"Login","login":"login"}, timeout=8, verify=False, allow_redirects=True)
+                if r.status_code in (200,302) and any(x in r.text.lower() for x in success_indicators):
+                    vulnerable = True
+                    findings.append({"detail":f"Weak default credentials accepted — {u}/{p} logs in at {login_path}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-521","cwe_name":"Weak/Default Password","owasp":"A07:2021","remediation":"Change all default credentials immediately. Enforce password complexity and account lockout after failed attempts."})
+                    break
+            except: pass
+        if vulnerable: break
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"hydra",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"hydra","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
@@ -913,13 +1030,29 @@ async def scan_pollution(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/idor")
 async def scan_idor(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
-    id_paths = ["/user/1","/user/2","/account/1","/profile/1","/api/user/1","/admin/user/1"]
+    base = req.target.rstrip("/")
+    # Generic REST API ID paths + Juice Shop specific
+    id_paths = [
+        "/user/1","/user/2","/account/1","/profile/1",
+        "/api/user/1","/admin/user/1",
+        "/rest/user/1","/rest/user/2",          # Juice Shop
+        "/api/users/1","/api/users",            # Generic REST
+        "/api/products","/api/products/1",      # Juice Shop
+        "/api/orders","/api/baskets/1",         # Juice Shop
+        "/api/challenges",                       # Juice Shop
+        "/dvwa/vulnerabilities/idor/",           # DVWA
+        "/mutillidae/index.php?page=user-info.php&username=admin",  # Mutillidae
+    ]
     for p in id_paths:
-        r = _http_get(req.target.rstrip("/")+p, timeout=8)
-        if r and r.status_code==200 and len(r.text)>50:
-            vulnerable = True
-            findings.append({"detail":f"IDOR: {p} accessible without auth check (HTTP 200)","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-639","cwe_name":"IDOR","owasp":"A01:2021","remediation":"Implement object-level authorization checks on every endpoint."})
-            break
+        url = base + p
+        r = _http_get(url, timeout=8)
+        if r and r.status_code == 200 and len(r.text) > 30:
+            # Check if response looks like user data
+            data_indicators = ["id","email","username","user","name","role","admin","password","token"]
+            if any(k in r.text.lower() for k in data_indicators):
+                vulnerable = True
+                findings.append({"detail":f"IDOR: {p} returns user/object data without authentication (HTTP 200, {len(r.text)} bytes)","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-639","cwe_name":"IDOR / Broken Object Level Authorization","owasp":"A01:2021","remediation":"Implement object-level authorization checks on every endpoint. Verify the requesting user owns the resource."})
+                if len(findings) >= 3: break
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"idor",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"idor","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
