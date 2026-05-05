@@ -386,10 +386,10 @@ async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
     for line in out.splitlines():
         line = line.strip()
         if not line.startswith("+ "): continue
-        if any(s in line for s in ["Target IP","Target Hostname","Target Port","Start Time","End Time","host(s) tested","Nikto v","requests:","No CGI Directories"]): continue
+        if any(s in line for s in ["Target IP","Target Hostname","Target Port","Start Time","End Time","host(s) tested","Nikto v","requests:","No CGI Directories","out of date","OSVDB","Unable to connect","FAIL","Error","could not","timed out"]): continue
         detail = re.sub(r"^\+\s*\[\d+\]\s*","",line).strip().lstrip("+ ").strip()
         detail = re.sub(r"\s*See:\s*https?://\S+","",detail,flags=re.IGNORECASE).strip()
-        if not detail or len(detail)<10: continue
+        if not detail or len(detail)<15: continue
         findings.append({"detail":detail,"severity":_sev(detail),"cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Web Vulnerability","owasp":"A05:2021","remediation":_rem(detail)})
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"nikto",req.target,result)
