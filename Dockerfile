@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 # Install all scanning tools + Python in one layer
 RUN apt-get update -q && apt-get install -y -q --no-install-recommends \
-    python3 python3-pip \
+    python3 python3-pip python3-venv \
     nmap masscan \
     nikto gobuster dirb \
     hydra sqlmap \
