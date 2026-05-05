@@ -198,7 +198,7 @@ async def recon_whois(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/nmap")
 async def recon_nmap(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["nmap", "-sV", "-sC", "-T4", "--open", "-p-", host], timeout=300)
+    result = await run_tool(["nmap", "-sV", "-sC", "-T4", "--open", "--top-ports", "1000", host], timeout=180)
     out = result.get("output","")
     ports = []
     for line in out.splitlines():
@@ -294,8 +294,11 @@ async def recon_theharvester(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
     result = await run_tool(["theHarvester", "-d", host, "-b", "bing,crtsh,dnsdumpster", "-l", "100"], timeout=120)
     out = result.get("output","")
-    emails = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", out)))
+    FALSE_POSITIVE_DOMAINS = ["edge-security.com","github.com","python.org","kali.org"]
+    emails_raw = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", out)))
+    emails = [e for e in emails_raw if not any(e.endswith("@"+d) for d in FALSE_POSITIVE_DOMAINS)]
     hosts  = list(dict.fromkeys(re.findall(r"(?:\d{1,3}\.){3}\d{1,3}", out)))
+    hosts  = [h for h in hosts if not h.startswith("127.") and not h.startswith("0.")]
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, "theharvester", req.target, result)
     return {

@@ -4041,6 +4041,14 @@ function generateReconReport({target, allResults, date}) {
 
   // ── Ports ──────────────────────────────────────────────────
   const allPorts=[...new Map([...(r.masscan?.ports||[]).map(p=>({...p,src:"masscan"})),...(r.nmap?.ports||[]).map(p=>({...p,src:"nmap"})),...(r.services?.ports||[]).map(p=>({...p,src:"services"}))].map(p=>[p.port,p])).values()];
+  // Fallback: parse raw nmap output if structured ports are empty
+  if(allPorts.length===0 && r.nmap?.raw_output){
+    const raw = r.nmap.raw_output;
+    raw.split("\n").forEach(line=>{
+      const m = line.trim().match(/^(\d+)\/(tcp|udp)\s+open\s+(\S+)\s*(.*)/);
+      if(m) allPorts.push({port:parseInt(m[1]),proto:m[2],state:"open",service:m[3],version:m[4].trim(),src:"nmap-raw"});
+    });
+  }
   if(allPorts.length>0){ chk(30); y = sHead("Open Ports & Services",y);
     y = tHead(["PORT","PROTO","STATE","SERVICE","VERSION"],[20,18,18,45,79],y);
     allPorts.forEach((p,i)=>{
