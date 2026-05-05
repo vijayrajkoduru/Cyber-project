@@ -316,22 +316,31 @@ function Terminal(props) {
 
 // ── Reusable test-target picker ──────────────────────────────
 function TestTargets({targets, onSelect}) {
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(null);
+  const [open,    setOpen]    = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [copied,  setCopied]  = useState(null);
+
+  const close = () => {
+    setClosing(true);
+    setTimeout(()=>{ setOpen(false); setClosing(false); }, 300);
+  };
+
   const copy = (val,i) => {
     if (navigator.clipboard) navigator.clipboard.writeText(val).catch(()=>{});
     onSelect(val);
     setCopied(i);
-    setTimeout(()=>{ setCopied(null); setOpen(false); },800);
+    setTimeout(()=>{ setCopied(null); close(); }, 600);
   };
+
   return (
     <div style={{marginBottom:10}}>
-      <button onClick={()=>setOpen(o=>!o)}
+      <button onClick={()=>open ? close() : setOpen(true)}
         style={{background:"none",border:"1px solid #1e3a8a",borderRadius:5,padding:"4px 12px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
         🎯 Test Targets {open?"▲":"▼"}
       </button>
       {open&&(
-        <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,marginTop:6,overflow:"hidden"}}>
+        <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,marginTop:6,overflow:"hidden",
+          animation: closing ? "fadeOut .3s ease forwards" : "fadeIn .2s ease"}}>
           <div style={{background:"#0f172a",padding:"6px 12px",borderBottom:"1px solid #1e293b",fontSize:10,color:"#475569",fontWeight:600,letterSpacing:1}}>
             INTENTIONALLY VULNERABLE — LEGAL TO TEST
           </div>
@@ -346,7 +355,7 @@ function TestTargets({targets, onSelect}) {
                 <div style={{fontSize:10,color:"#475569",fontFamily:"JetBrains Mono,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
                 {t.desc&&<div style={{fontSize:9,color:"#334155",marginTop:1}}>{t.desc}</div>}
               </div>
-              <span style={{fontSize:10,color:copied===i?"#4ade80":"#334155",fontWeight:700,flexShrink:0}}>{copied===i?"✓ Copied":"Click"}</span>
+              <span style={{fontSize:10,color:copied===i?"#4ade80":"#334155",fontWeight:700,flexShrink:0}}>{copied===i?"✓ Selected":"Click"}</span>
             </div>
           ))}
         </div>
