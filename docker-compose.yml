@@ -51,11 +51,10 @@ services:
       - oscp_net
 
   webgoat:
-    image: webgoat/goat-and-wolf:latest
+    image: webgoat/webgoat:latest
     container_name: lab_webgoat
     ports:
       - "8002:8080"
-      - "9090:9090"
     restart: unless-stopped
     networks:
       - oscp_net
