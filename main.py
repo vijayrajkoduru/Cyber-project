@@ -355,10 +355,10 @@ import urllib.request as _ureq, ssl as _ssl
 
 def _sev(text):
     t = text.lower()
-    if any(k in t for k in ["sql injection","remote code","command injection","rce","shell","arbitrary file","traversal","authentication bypass"]): return "CRITICAL"
-    if any(k in t for k in ["xss","cross-site script","csrf","open redirect","admin","backup","config","password","credentials","privilege"]): return "HIGH"
-    if any(k in t for k in ["header missing","content-security","x-frame","referrer","hsts","strict-transport","deprecated","information disclosure","version"]): return "MEDIUM"
-    if any(k in t for k in ["clickjack","cookie","cache","options","banner","server","mime"]): return "LOW"
+    if any(k in t for k in ["sql injection","remote code","command injection","rce","arbitrary file","traversal","authentication bypass","shell upload"]): return "CRITICAL"
+    if any(k in t for k in ["xss","cross-site script","csrf","open redirect","credentials","privilege escalation"]): return "HIGH"
+    if any(k in t for k in ["header missing","content-security","x-frame","referrer","hsts","strict-transport","deprecated","information disclosure","version disclosure","cors"]): return "MEDIUM"
+    if any(k in t for k in ["clickjack","cookie","cache","banner","mime","server info"]): return "LOW"
     return "MEDIUM"
 
 def _rem(text):
@@ -372,25 +372,77 @@ def _rem(text):
     if "sql" in t: return "Use parameterised queries / prepared statements"
     if "xss" in t: return "Sanitise and encode all user input; enforce CSP"
     if "csrf" in t: return "Implement CSRF tokens on all state-changing requests"
-    if "admin" in t: return "Restrict admin paths by IP or require strong authentication"
-    if "backup" in t or "config" in t: return "Remove backup/config files from web root"
     if "cookie" in t: return "Set Secure, HttpOnly, SameSite flags on cookies"
+    if "cors" in t: return "Restrict CORS to trusted origins only"
     return "Review and remediate according to OWASP guidelines"
+
+def _detect_spa(url: str) -> bool:
+    """Returns True if target is a Single Page App (returns HTML for all routes)."""
+    try:
+        r = _req_lib.get(url, timeout=8, verify=False, allow_redirects=True)
+        body = r.text[:3000].lower()
+        return any(m in body for m in [
+            "ng-version", "<app-root", "data-reactroot", "__next", "vue.min.js",
+            "__angular", "window.__nuxt", "ember.js", "svelte", "ng-app",
+            "react.development", "react.production"
+        ])
+    except: return False
+
+def _path_is_real(base_url: str, path: str) -> bool:
+    """Returns True only if the path returns non-HTML content (a real file, not SPA routing)."""
+    try:
+        r = _req_lib.get(base_url.rstrip("/") + "/" + path.lstrip("/"), timeout=6, verify=False, allow_redirects=True)
+        if r.status_code == 403: return True   # access denied = file likely exists
+        if r.status_code != 200: return False
+        ct = r.headers.get("Content-Type","").lower()
+        if "text/html" in ct: return False     # SPA or 404 page returned HTML
+        return True
+    except: return False
 
 
 @app.post("/api/scan/nikto")
 async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
     result = await run_tool(["nikto", "-h", req.target, "-nointeractive"], timeout=120)
     out = result.get("output","")
+    is_spa = _detect_spa(req.target)
+
+    # Paths that nikto probes but are almost always false positives (especially on SPAs)
+    FP_PATH_KEYWORDS = [
+        ".bash_history",".sh_history",".mysql_history",".psql_history",".sqlite_history",".zsh_history",
+        "JAMonAdmin.jsp","PasswordsData.json","login.json","master.json","masters.json",
+        "conndb.json","conn.json","connection.json","connections.json","accounts.json",
+        "userdata.json","users.json","connstring","elmah.axd","trace.axd",
+    ]
+
     findings = []
     for line in out.splitlines():
         line = line.strip()
         if not line.startswith("+ "): continue
-        if any(s in line for s in ["Target IP","Target Hostname","Target Port","Start Time","End Time","host(s) tested","Nikto v","requests:","No CGI Directories","out of date","OSVDB","Unable to connect","FAIL","Error","could not","timed out"]): continue
+        if any(s in line for s in ["Target IP","Target Hostname","Target Port","Start Time","End Time",
+                                    "host(s) tested","Nikto v","requests:","No CGI Directories",
+                                    "out of date","OSVDB","Unable to connect","FAIL","Error",
+                                    "could not","timed out","Scan terminated"]): continue
         detail = re.sub(r"^\+\s*\[\d+\]\s*","",line).strip().lstrip("+ ").strip()
         detail = re.sub(r"\s*See:\s*https?://\S+","",detail,flags=re.IGNORECASE).strip()
         if not detail or len(detail)<15: continue
-        findings.append({"detail":detail,"severity":_sev(detail),"cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Web Vulnerability","owasp":"A05:2021","remediation":_rem(detail)})
+
+        detail_lower = detail.lower()
+
+        # Drop known false-positive probe paths
+        if any(fp in detail_lower for fp in FP_PATH_KEYWORDS): continue
+
+        # Drop generic "might be interesting" lines on SPAs — SPA returns 200 for everything
+        if is_spa and "might be interesting" in detail_lower: continue
+
+        # For any file-existence claim: verify the path actually returns non-HTML content
+        if "might be interesting" in detail_lower or "contains authorization" in detail_lower:
+            path_m = re.search(r"^(/[^\s:,]+)", detail)
+            if path_m and not _path_is_real(req.target, path_m.group(1)):
+                continue  # Path returns HTML — SPA false positive
+
+        findings.append({"detail":detail,"severity":_sev(detail),"cvss":"0.0","cve":"N/A",
+                         "cwe":"N/A","cwe_name":"Web Vulnerability","owasp":"A05:2021","remediation":_rem(detail)})
+
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"nikto",req.target,result)
     return {"scan_id":scan_id,"target":req.target,"tool":"nikto","findings":findings,"total":len(findings),"raw_output":out,"command":result.get("cmd",""),"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -837,11 +889,18 @@ async def scan_deserial(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/smuggling")
 async def scan_smuggling(req: ScanRequest, user=Depends(verify_token)):
     findings = []
-    result = await run_tool(["curl","-s","-I","--http1.1","-H","Transfer-Encoding: chunked","-H","Content-Length: 4",req.target], timeout=15)
-    out = result.get("output","")
-    if "400" not in out and "501" not in out and out.strip():
-        findings.append({"detail":"Server may accept conflicting Transfer-Encoding/Content-Length headers","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-444","cwe_name":"HTTP Request Smuggling","owasp":"A02:2021","remediation":"Use HTTP/2 end-to-end. Ensure consistent TE handling."})
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"smuggling",req.target,{"output":out})
+    # Send TE.CL ambiguous request and look for server confusion (501/400 NOT present = server accepts both headers)
+    # Also check if server responds with different status when TE conflicts
+    result1 = await run_tool(["curl","-s","-I","--http1.1","-H","Transfer-Encoding: chunked","-H","Content-Length: 6","--max-time","8",req.target], timeout=15)
+    result2 = await run_tool(["curl","-s","-I","--http1.1","--max-time","8",req.target], timeout=15)
+    out1 = result1.get("output",""); out2 = result2.get("output","")
+    def _status(out): m=re.search(r"HTTP/[\d.]+ (\d+)",out); return m.group(1) if m else "0"
+    s1,s2 = _status(out1), _status(out2)
+    # Only report if the ambiguous request causes a materially different response (e.g. 200 vs 400/500)
+    if s1 and s2 and s1!=s2 and s1 not in ("0","") and s2 not in ("0",""):
+        if (s1.startswith("4") or s1.startswith("5")) and s2=="200":
+            findings.append({"detail":f"HTTP Request Smuggling: server responds differently to TE+CL conflict ({s2} normal vs {s1} with conflicting headers)","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-444","cwe_name":"HTTP Request Smuggling","owasp":"A02:2021","remediation":"Enforce HTTP/2 end-to-end. Configure server to reject requests with both Transfer-Encoding and Content-Length headers."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"smuggling",req.target,{"output":out1})
     return {"scan_id":scan_id,"target":req.target,"tool":"smuggling","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/responsesplitting")
@@ -888,33 +947,35 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/sensitivefiles")
 async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
     findings = []; base = req.target.rstrip("/")
+    is_spa = _detect_spa(req.target)
     paths = [
-        # Generic high-value files
         ".env","config.php","wp-config.php",".git/HEAD","backup.zip","db.sql",
         "admin/","phpinfo.php",".htpasswd","web.config","server-status",
         "robots.txt","sitemap.xml",".well-known/security.txt",
-        "crossdomain.xml","clientaccesspolicy.xml",
-        "test.php","info.php","debug.php","status","healthz",
-        # DVWA specific
+        "crossdomain.xml","test.php","info.php","debug.php","status","healthz",
         "dvwa/","dvwa/login.php","setup.php","instructions.php","dvwa/phpinfo.php",
-        "dvwa/includes/dvwaPage.inc.php",
-        # WebGoat specific
-        "WebGoat/","WebGoat/login","WebGoat/registration","WebGoat/start.mvc",
-        # Mutillidae specific
+        "WebGoat/","WebGoat/login","WebGoat/registration",
         "mutillidae/","mutillidae/index.php","mutillidae/set-up-database.php",
-        "mutillidae/documentation/mutillidae-installation-on-xampp.pdf",
-        # bWAPP specific
         "bWAPP/","bWAPP/login.php","bWAPP/install.php","bWAPP/admin/",
-        # Common exposed configs
-        "config/","config/database.php","includes/config.php","app/config.php",
-        ".DS_Store",".svn/entries","server-info","server-status","elmah.axd",
+        "config/database.php","includes/config.php",".DS_Store",".svn/entries",
+        "ftp/","backup/","old/","temp/","tmp/",
     ]
-    high_risk = [".env","config.php","wp-config",".git","backup","db.sql",".htpasswd","web.config","install.php","set-up-database","database.php"]
+    high_risk = [".env","config.php","wp-config",".git","backup","db.sql",".htpasswd","web.config","install.php","set-up-database","database.php","phpinfo"]
     for p in paths:
         r = _http_get(f"{base}/{p.lstrip('/')}", timeout=6)
-        if r and r.status_code in (200,403):
+        if not r: continue
+        if r.status_code == 403:
+            # 403 = access denied = resource exists — always a real finding
+            sev = "HIGH" if any(x in p for x in high_risk) else "MEDIUM"
+            findings.append({"detail":f"/{p} exists but access is denied (HTTP 403) — resource is present on server","severity":sev,"cvss":"5.3","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Remove /{p} from the web root entirely."})
+        elif r.status_code == 200:
+            ct = r.headers.get("Content-Type","").lower()
+            # Skip if SPA returned its own HTML index page for this path
+            if is_spa and "text/html" in ct: continue
+            # Skip if the response is just a redirect/login page (very short HTML)
+            if "text/html" in ct and len(r.text) < 200 and p not in ("robots.txt","sitemap.xml"): continue
             sev = "HIGH" if any(x in p for x in high_risk) else "LOW"
-            findings.append({"detail":f"Accessible: /{p} (HTTP {r.status_code}) — {'sensitive configuration/setup file exposed' if sev=='HIGH' else 'file/directory accessible'}","severity":sev,"cvss":"7.5" if sev=="HIGH" else "3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Block access to /{p} via server config. Remove install/setup files after deployment."})
+            findings.append({"detail":f"Accessible: /{p} (HTTP 200, {len(r.content)} bytes) — {'sensitive file/configuration exposed' if sev=='HIGH' else 'file or directory is publicly accessible'}","severity":sev,"cvss":"7.5" if sev=="HIGH" else "3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Block public access to /{p}. Remove install/setup/backup files after deployment."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"sensitivefiles",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"sensitivefiles","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
@@ -1020,9 +1081,10 @@ async def scan_pollution(req: ScanRequest, user=Depends(verify_token)):
     try:
         r1 = _req_lib.get(req.target+"?id=1",timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
         r2 = _req_lib.get(req.target+"?id=1&id=2",timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
-        if r1 and r2 and r1.text != r2.text:
+        # Only flag if the response difference is substantial (>100 chars) — not just timestamps/session IDs
+        if r1 and r2 and abs(len(r1.text)-len(r2.text)) > 100:
             vulnerable = True
-            findings.append({"detail":"HTTP Parameter Pollution: duplicate param changes response","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-235","cwe_name":"Parameter Pollution","owasp":"A03:2021","remediation":"Validate and deduplicate all query parameters server-side."})
+            findings.append({"detail":"HTTP Parameter Pollution: duplicate 'id' parameter produces significantly different response (>100 byte difference)","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-235","cwe_name":"Parameter Pollution","owasp":"A03:2021","remediation":"Validate and deduplicate all query parameters server-side. Use the first or last value consistently."})
     except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"pollution",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"pollution","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -1112,11 +1174,15 @@ async def scan_racecondition(req: ScanRequest, user=Depends(verify_token)):
             except: return 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
             responses = list(ex.map(_fetch, range(10)))
-        unique = set(responses) - {0}
-        if len(unique) > 1:
-            findings.append({"detail":f"Race condition: inconsistent responses {unique} across 10 concurrent requests","severity":"MEDIUM","cvss":"6.8","cve":"N/A","cwe":"CWE-362","cwe_name":"Race Condition","owasp":"A04:2021","remediation":"Implement proper locking and atomic transactions for shared resources."})
-    except Exception as e:
-        findings.append({"detail":f"Race condition test error: {e}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target."})
+        codes = [c for c in responses if c != 0]
+        unique = set(codes)
+        # Only flag if there is a mix of success (2xx) and error (5xx) codes — real race condition indicator
+        has_success = any(200<=c<300 for c in codes)
+        has_server_error = any(500<=c<600 for c in codes)
+        if has_success and has_server_error:
+            vulnerable = True
+            findings.append({"detail":f"Possible race condition: concurrent requests produce both 2xx and 5xx responses {unique} — server may not handle concurrent access safely","severity":"MEDIUM","cvss":"6.8","cve":"N/A","cwe":"CWE-362","cwe_name":"Race Condition","owasp":"A04:2021","remediation":"Implement proper locking and atomic transactions. Use database-level constraints for shared resources."})
+    except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"racecondition",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"racecondition","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
