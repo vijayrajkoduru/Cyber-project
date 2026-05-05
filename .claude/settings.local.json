@@ -6,7 +6,35 @@
       "Bash(mkdir -p \"c:\\\\Users\\\\vijay\\\\OneDrive\\\\Desktop\\\\kali\\\\oscp-dashboard\\\\vulnerable-lab\\\\unrealircd\")",
       "Bash(mkdir -p \"c:\\\\Users\\\\vijay\\\\OneDrive\\\\Desktop\\\\kali\\\\oscp-dashboard\\\\vulnerable-lab\\\\proftpd\")",
       "Bash(mkdir -p \"c:\\\\Users\\\\vijay\\\\OneDrive\\\\Desktop\\\\kali\\\\oscp-dashboard\\\\vulnerable-lab\\\\sambacry\")",
-      "Bash(mkdir -p \"c:\\\\Users\\\\vijay\\\\OneDrive\\\\Desktop\\\\kali\\\\oscp-dashboard\\\\vulnerable-lab\\\\shellshock\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\vijay\\\\OneDrive\\\\Desktop\\\\kali\\\\oscp-dashboard\\\\vulnerable-lab\\\\shellshock\")",
+      "Bash(python -c ' *)",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000,8000 -ErrorAction SilentlyContinue)",
+      "Bash(python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(echo \"Backend PID: $!\")",
+      "Bash(taskkill /F /PID 19352)",
+      "Bash(npm start *)",
+      "PowerShell(Stop-Process -Id 19352 -Force -ErrorAction SilentlyContinue)",
+      "Bash(echo \"Started PID: $!\")",
+      "Bash(grep -n \"setResults\\(prev=>\\({...prev,\\\\[atk.id\\\\]:await\" \"c:/Users/vijay/OneDrive/Desktop/kali/Cyber-project/src/App.js\")",
+      "Bash(git rm *)",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\('main.py'\\).read\\(\\)\\); print\\(f'main.py OK — lines: {len\\(open\\(\\\\\"main.py\\\\\"\\).readlines\\(\\)\\)}'\\)\")",
+      "Bash(python -c \"import ast; content=open\\('main.py',encoding='utf-8',errors='replace'\\).read\\(\\); ast.parse\\(content\\); lines=content.count\\('\\\\n'\\)+1; print\\(f'main.py OK — lines: {lines}'\\)\")",
+      "Bash(Start-Process python *)",
+      "Bash(python -m http.server 8080)",
+      "Bash(python -c \"import ast; content=open\\('main.py',encoding='utf-8',errors='replace'\\).read\\(\\); ast.parse\\(content\\); print\\(f'OK — {content.count\\(chr\\(10\\)\\)+1} lines'\\)\")",
+      "Bash(python -c \"import ast; c=open\\('main.py',encoding='utf-8',errors='replace'\\).read\\(\\); ast.parse\\(c\\); print\\('main.py OK —', c.count\\(chr\\(10\\)\\)+1, 'lines'\\)\")",
+      "Bash(node -e \"require\\('fs'\\).readFileSync\\('src/App.js','utf8'\\); console.log\\('App.js readable OK'\\)\")",
+      "Bash(Test-Path \"C:\\\\Users\\\\vijay\\\\OneDrive\\\\Desktop\\\\kali\\\\Cyber-project\\\\backend_remaining.py\")",
+      "Bash(npm.cmd start *)",
+      "Bash(node -e \"try{require\\('fs'\\).readFileSync\\('src/App.js','utf8'\\);console.log\\('App.js readable OK, size:'+ require\\('fs'\\).statSync\\('src/App.js'\\).size+' bytes'\\)}catch\\(e\\){console.log\\('Error:',e.message\\)}\")",
+      "Bash(node -e \"const s=require\\('fs'\\).statSync\\('src/App.js'\\);console.log\\('App.js size:',Math.round\\(s.size/1024\\),'KB, modified:',s.mtime\\)\")",
+      "Bash(npm.cmd install *)",
+      "Bash(node -e \"require\\('jspdf'\\); console.log\\('jsPDF OK version:', require\\('jspdf/package.json'\\).version\\)\")",
+      "Bash(node -e \"const s=require\\('fs'\\).statSync\\('src/App.js'\\);console.log\\('Size:',Math.round\\(s.size/1024\\),'KB'\\)\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\vijay\\OneDrive\\Desktop\\kali\\Cyber-project\\src\\.git"
     ]
   }
 }

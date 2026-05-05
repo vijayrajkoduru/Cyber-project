@@ -9,6 +9,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List
 import subprocess, asyncio, re, json, uuid, datetime, os, hashlib, sqlite3 as _sq
+import urllib.request, urllib.parse, ssl as _ssl
 import secrets as _sec
 from urllib.parse import urlparse
 
@@ -82,6 +83,13 @@ security    = HTTPBearer(auto_error=False)
 SECRET_TOKEN = os.getenv("OSCP_TOKEN", "cybertoken2026")
 ADMIN_USER   = os.getenv("OSCP_USER",  "cyberadmin")
 ADMIN_PASS   = os.getenv("OSCP_PASS",  "C@b3rS3cur!ty#2026$X")
+
+# ── API KEYS (set in environment or .env file) ─────────────────
+SHODAN_KEY      = os.getenv("SHODAN_KEY", "")
+HUNTER_KEY      = os.getenv("HUNTER_KEY", "")
+VIRUSTOTAL_KEY  = os.getenv("VIRUSTOTAL_KEY", "")
+HIBP_KEY        = os.getenv("HIBP_KEY", "")       # haveibeenpwned.com
+SECTRAILS_KEY   = os.getenv("SECTRAILS_KEY", "")  # securitytrails.com
 
 # ── USER DATABASE ─────────────────────────────────────────────
 _DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.db")
@@ -402,6 +410,45 @@ async def health():
 @app.get("/api/history")
 async def get_history(user=Depends(verify_token)):
     return {"history": list(reversed(SCAN_HISTORY))}
+
+@app.get("/api/osint/api_keys_status")
+async def api_keys_status(user=Depends(verify_token)):
+    """Return which API keys are configured (masked)."""
+    def mask(k): return "✅ Configured" if k else "❌ Not set"
+    return {
+        "shodan":        {"status": mask(SHODAN_KEY),     "url": "https://account.shodan.io/"},
+        "hunter":        {"status": mask(HUNTER_KEY),     "url": "https://hunter.io/api-keys"},
+        "virustotal":    {"status": mask(VIRUSTOTAL_KEY), "url": "https://www.virustotal.com/gui/my-apikey"},
+        "hibp":          {"status": mask(HIBP_KEY),       "url": "https://haveibeenpwned.com/API/Key"},
+        "securitytrails":{"status": mask(SECTRAILS_KEY),  "url": "https://securitytrails.com/app/account/credentials"},
+    }
+
+class ApiKeysRequest(BaseModel):
+    shodan: Optional[str] = ""
+    hunter: Optional[str] = ""
+    virustotal: Optional[str] = ""
+    hibp: Optional[str] = ""
+    securitytrails: Optional[str] = ""
+
+@app.post("/api/osint/save_api_keys")
+async def save_api_keys(req: ApiKeysRequest, user=Depends(verify_token)):
+    """Save API keys to .env file and update runtime globals."""
+    global SHODAN_KEY, HUNTER_KEY, VIRUSTOTAL_KEY, HIBP_KEY, SECTRAILS_KEY
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            lines = [l for l in f.read().splitlines()
+                     if not any(l.startswith(k) for k in
+                                ["SHODAN_KEY","HUNTER_KEY","VIRUSTOTAL_KEY","HIBP_KEY","SECTRAILS_KEY"])]
+    if req.shodan:        lines.append(f"SHODAN_KEY={req.shodan}");       SHODAN_KEY = req.shodan
+    if req.hunter:        lines.append(f"HUNTER_KEY={req.hunter}");       HUNTER_KEY = req.hunter
+    if req.virustotal:    lines.append(f"VIRUSTOTAL_KEY={req.virustotal}"); VIRUSTOTAL_KEY = req.virustotal
+    if req.hibp:          lines.append(f"HIBP_KEY={req.hibp}");           HIBP_KEY = req.hibp
+    if req.securitytrails: lines.append(f"SECTRAILS_KEY={req.securitytrails}"); SECTRAILS_KEY = req.securitytrails
+    with open(env_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return {"message": "API keys saved — active immediately, will persist on next restart."}
 
 
 # ── PASSWORD ATTACKS — HYDRA ──────────────────────────────────
@@ -5284,42 +5331,126 @@ async def osint_recon_ng(req: ScanRequest, token: str = Depends(verify_token)):
             "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} host(s) found"}
 
 
+def _api_get(url, headers=None, timeout=15):
+    """Simple HTTPS GET → parsed JSON or None."""
+    try:
+        ctx = _ssl.create_default_context()
+        req2 = urllib.request.Request(url, headers=headers or {"User-Agent":"OSCP-Dashboard/1.0"})
+        with urllib.request.urlopen(req2, timeout=timeout, context=ctx) as r:
+            return json.loads(r.read().decode())
+    except Exception:
+        return None
+
 @app.post("/api/osint/email_osint")
 async def osint_email_osint(req: ScanRequest, token: str = Depends(verify_token)):
     scan_id = str(_uuid.uuid4())
-    # Only use FREE sources — no API keys required
-    result = await run_tool(
-        ["theHarvester", "-d", req.target, "-b",
-         "crtsh,dnsdumpster,hackertarget,anubis,certspotter,rapiddns,otx,urlscan",
-         "-l", "200"],
-        timeout=120
-    )
-    raw = result["output"] + result.get("error","")
+    domain = _recon_host(req.target) if req.target else req.target
     findings = []
     seen = set()
+
+    def add(sev, title, detail):
+        key = f"{title}:{detail}"
+        if key not in seen:
+            seen.add(key)
+            findings.append({"severity": sev, "title": title, "detail": str(detail)[:200]})
+
+    # ── 1. theHarvester (free sources only) ──────────────────────
+    result = await run_tool(
+        ["theHarvester", "-d", domain, "-b",
+         "crtsh,dnsdumpster,hackertarget,anubis,certspotter,rapiddns,otx,urlscan",
+         "-l", "200"], timeout=120)
+    raw = result["output"] + result.get("error","")
     for line in raw.splitlines():
         line = line.strip()
-        if not line or line in seen: continue
-        seen.add(line)
-        # Email addresses
         if re.match(r'^[\w\.\+\-]+@[\w\.-]+\.\w{2,}$', line):
-            findings.append({"severity": "HIGH", "title": "Email Address Found", "detail": line})
-        # LinkedIn profiles
+            add("HIGH", "Email Found", line)
         elif "linkedin.com/in/" in line.lower():
-            findings.append({"severity": "MEDIUM", "title": "LinkedIn Profile", "detail": line})
-        # IPs
+            add("MEDIUM", "LinkedIn Profile", line)
         elif re.match(r'^\d{1,3}(\.\d{1,3}){3}$', line):
-            findings.append({"severity": "MEDIUM", "title": "IP Address Found", "detail": line})
-        # Subdomains (contain dots, look like hostnames)
-        elif re.match(r'^[\w\-]+\.[\w\.-]+\.[a-z]{2,}$', line) and req.target.split("/")[-1].split(".")[-2] in line:
-            findings.append({"severity": "MEDIUM", "title": "Subdomain Found", "detail": line})
-        # Interesting lines from output (Interesting URLs, APIs, etc.)
-        elif line.startswith("[*]") and any(k in line.lower() for k in ["found","discovered","email","host","ip"]):
-            findings.append({"severity": "INFO", "title": "theHarvester", "detail": line.replace("[*]","").strip()[:120]})
+            add("MEDIUM", "IP Address", line)
+        elif re.match(r'^[\w\-]+\.[\w\.-]+\.[a-z]{2,}$', line) and domain.split(".")[-2] in line:
+            add("MEDIUM", "Subdomain", line)
+
+    # ── 2. Hunter.io — email finder ───────────────────────────────
+    if HUNTER_KEY:
+        data = _api_get(f"https://api.hunter.io/v2/domain-search?domain={domain}&api_key={HUNTER_KEY}&limit=20")
+        if data and data.get("data"):
+            org = data["data"].get("organization","")
+            if org: add("INFO", "Organisation", org)
+            for e in data["data"].get("emails",[]):
+                add("HIGH", "Email Found (Hunter.io)", e.get("value",""))
+                if e.get("first_name") or e.get("last_name"):
+                    add("INFO", "Person", f"{e.get('first_name','')} {e.get('last_name','')} — {e.get('position','')}")
+
+    # ── 3. Shodan — open ports / banner grabbing ──────────────────
+    if SHODAN_KEY:
+        data = _api_get(f"https://api.shodan.io/dns/resolve?hostnames={domain}&key={SHODAN_KEY}")
+        ip = data.get(domain) if data else None
+        if ip:
+            add("MEDIUM", "IP (Shodan DNS)", ip)
+            host_data = _api_get(f"https://api.shodan.io/shodan/host/{ip}?key={SHODAN_KEY}")
+            if host_data:
+                org = host_data.get("org","")
+                isp = host_data.get("isp","")
+                country = host_data.get("country_name","")
+                if org: add("INFO", "Organisation (Shodan)", f"{org} — ISP: {isp} — {country}")
+                for s in host_data.get("data",[])[:10]:
+                    port = s.get("port","")
+                    prod = s.get("product","") or s.get("transport","")
+                    banner = s.get("data","")[:80]
+                    sev = "HIGH" if port in (21,22,23,3306,5432,6379,27017) else "MEDIUM"
+                    add(sev, f"Open Port {port}/{prod}", banner.strip())
+                vulns = host_data.get("vulns",{})
+                for cve in list(vulns.keys())[:5]:
+                    add("CRITICAL", f"CVE: {cve}", f"Shodan confirmed vulnerability on {domain}")
+
+    # ── 4. VirusTotal — passive DNS + reputation ─────────────────
+    if VIRUSTOTAL_KEY:
+        data = _api_get(f"https://www.virustotal.com/api/v3/domains/{domain}",
+                        headers={"x-apikey": VIRUSTOTAL_KEY, "User-Agent":"OSCP-Dashboard/1.0"})
+        if data and data.get("data"):
+            attrs = data["data"].get("attributes",{})
+            rep = attrs.get("reputation", 0)
+            cats = attrs.get("categories",{})
+            malicious = attrs.get("last_analysis_stats",{}).get("malicious",0)
+            if malicious > 0:
+                add("HIGH", "Malicious (VirusTotal)", f"{malicious} engines flagged {domain} as malicious")
+            elif rep < -10:
+                add("MEDIUM", "Low Reputation (VirusTotal)", f"Reputation score: {rep}")
+            else:
+                add("INFO", "VirusTotal Reputation", f"Score: {rep} | Categories: {', '.join(set(cats.values()))[:80]}")
+            for rec in attrs.get("last_dns_records",[])[:8]:
+                add("INFO", f"DNS {rec.get('type','')} Record", rec.get("value","")[:100])
+
+    # ── 5. SecurityTrails — subdomains ────────────────────────────
+    if SECTRAILS_KEY:
+        data = _api_get(f"https://api.securitytrails.com/v1/domain/{domain}/subdomains",
+                        headers={"apikey": SECTRAILS_KEY, "User-Agent":"OSCP-Dashboard/1.0"})
+        if data and data.get("subdomains"):
+            for sub in data["subdomains"][:20]:
+                add("MEDIUM", "Subdomain (SecurityTrails)", f"{sub}.{domain}")
+
+    # ── 6. HaveIBeenPwned — breach check ─────────────────────────
+    if HIBP_KEY:
+        data = _api_get(f"https://haveibeenpwned.com/api/v3/breacheddomain/{domain}",
+                        headers={"hibp-api-key": HIBP_KEY, "User-Agent":"OSCP-Dashboard/1.0"})
+        if data:
+            for email, breaches in (data.items() if isinstance(data, dict) else []):
+                add("CRITICAL", "Breached Email (HIBP)", f"{email} found in: {', '.join(breaches[:3])}")
+
+    # ── 7. crt.sh subdomains (always free) ───────────────────────
+    data = _api_get(f"https://crt.sh/?q=%25.{domain}&output=json")
+    if data and isinstance(data, list):
+        for c in data[:40]:
+            for n in c.get("name_value","").split("\n"):
+                n = n.replace("*.","").strip()
+                if n and domain in n:
+                    add("MEDIUM", "Subdomain (crt.sh)", n)
+
     if not findings:
         findings.append({"severity": "INFO", "title": "No OSINT data found",
-                         "detail": f"theHarvester found no emails, IPs or subdomains for {req.target} using free sources."})
-    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw,
+                         "detail": "Add API keys (Shodan, Hunter.io, VirusTotal) in Settings for deeper results."})
+    return {"scan_id": scan_id, "target": req.target, "findings": findings, "raw_output": raw[:600],
             "timestamp": datetime.datetime.utcnow().isoformat(), "message": f"{len(findings)} OSINT item(s)"}
 
 

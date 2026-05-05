@@ -7409,88 +7409,123 @@ function MetasploitModule(props) {
 //  SETTINGS MODULE
 // ═══════════════════════════════════════════════════════════════
 function SettingsModule() {
-  const [apiUrl,     setApiUrl]     = useState(localStorage.getItem("cyberApiUrl")    || "http://192.168.56.102:8000");
-  const [shodanKey,  setShodanKey]  = useState(localStorage.getItem("shodanApiKey")   || "");
-  const [vtKey,      setVtKey]      = useState(localStorage.getItem("vtApiKey")        || "");
-  const [saved, setSaved] = useState(false);
+  const tok = localStorage.getItem("cyberToken");
+  const [apiUrl,    setApiUrl]    = useState(localStorage.getItem("cyberApiUrl") || "http://192.168.56.102:8000");
+  const [shodan,    setShodan]    = useState("");
+  const [hunter,    setHunter]    = useState("");
+  const [vt,        setVt]        = useState("");
+  const [hibp,      setHibp]      = useState("");
+  const [sectrails, setSectrails] = useState("");
+  const [keyStatus, setKeyStatus] = useState(null);
+  const [saved,     setSaved]     = useState("");
+  const [saving,    setSaving]    = useState(false);
 
-  const save = () => {
-    localStorage.setItem("cyberApiUrl",  apiUrl.trim());
-    localStorage.setItem("shodanApiKey", shodanKey.trim());
-    localStorage.setItem("vtApiKey",     vtKey.trim());
-    setSaved(true);
-    setTimeout(() => { setSaved(false); window.location.reload(); }, 1200);
+  useEffect(() => {
+    api("/api/osint/api_keys_status","GET",null,tok).then(setKeyStatus).catch(()=>{});
+  }, [tok]);
+
+  const saveUrl = () => {
+    localStorage.setItem("cyberApiUrl", apiUrl.trim());
+    setSaved("url");
+    setTimeout(()=>{setSaved(""); window.location.reload();},1200);
   };
 
-  const reset = () => {
-    localStorage.removeItem("cyberApiUrl");
-    setApiUrl("http://192.168.56.102:8000");
+  const saveKeys = async () => {
+    setSaving(true);
+    try {
+      const body = {};
+      if(shodan)    body.shodan    = shodan;
+      if(hunter)    body.hunter    = hunter;
+      if(vt)        body.virustotal = vt;
+      if(hibp)      body.hibp      = hibp;
+      if(sectrails) body.securitytrails = sectrails;
+      await api("/api/osint/save_api_keys","POST",body,tok);
+      setSaved("keys");
+      const status = await api("/api/osint/api_keys_status","GET",null,tok);
+      setKeyStatus(status);
+      setShodan(""); setHunter(""); setVt(""); setHibp(""); setSectrails("");
+    } catch(e){ setSaved("err"); }
+    setSaving(false);
+    setTimeout(()=>setSaved(""),3000);
   };
+
+  const API_KEYS = [
+    {id:"shodan",    label:"Shodan",          val:shodan,    set:setShodan,    placeholder:"Paste Shodan API key",    free:"Free tier: 100 queries/month",  url:"https://account.shodan.io/",                   what:"Open ports, banners, CVEs on any IP"},
+    {id:"hunter",    label:"Hunter.io",       val:hunter,    set:setHunter,    placeholder:"Paste Hunter.io API key", free:"Free tier: 25 searches/month",  url:"https://hunter.io/api-keys",                   what:"Email addresses for any domain"},
+    {id:"vt",        label:"VirusTotal",      val:vt,        set:setVt,        placeholder:"Paste VirusTotal key",    free:"Free tier: 4 req/min",          url:"https://www.virustotal.com/gui/my-apikey",      what:"Domain reputation, passive DNS, malware"},
+    {id:"hibp",      label:"HaveIBeenPwned",  val:hibp,      set:setHibp,      placeholder:"Paste HIBP API key",      free:"Paid: £3.50/month",             url:"https://haveibeenpwned.com/API/Key",            what:"Breached emails for the domain"},
+    {id:"sectrails", label:"SecurityTrails",  val:sectrails, set:setSectrails, placeholder:"Paste SecurityTrails key",free:"Free tier: 50 req/month",       url:"https://securitytrails.com/app/account/credentials", what:"Subdomains, DNS history"},
+  ];
 
   return (
-    <div className="fade" style={{maxWidth:680,margin:"0 auto",padding:24}}>
-      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:28,marginBottom:16}}>
-        <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>⚙ Settings & Configuration</h2>
-        <p style={{fontSize:12,color:"#94a3b8",marginBottom:24}}>Configure your CyberSecurity Platform backend connection.</p>
+    <div className="fade" style={{maxWidth:700,margin:"0 auto",padding:24}}>
 
-        <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>
-            Kali Backend API URL
-          </label>
-          <div style={{display:"flex",gap:8}}>
-            <input
-              value={apiUrl}
-              onChange={e => setApiUrl(e.target.value)}
-              placeholder="http://192.168.1.x:8000"
-              style={{flex:1,background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}
-            />
-            <button onClick={save}
-              style={{background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              {saved ? "Saved ✓" : "Save & Reload"}
-            </button>
-          </div>
-          <div style={{fontSize:11,color:"#cbd5e1",marginTop:6}}>
-            This is the IP:port of your Kali Linux machine running the backend API.
-          </div>
-        </div>
-
-        {/* API Keys */}
-        <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Shodan API Key <span style={{color:"#cbd5e1",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
-          <input value={shodanKey} onChange={e=>setShodanKey(e.target.value)}
-            placeholder="Paste your Shodan API key — get free key at shodan.io"
-            style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-        <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>VirusTotal API Key <span style={{color:"#cbd5e1",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
-          <input value={vtKey} onChange={e=>setVtKey(e.target.value)}
-            placeholder="Paste your VirusTotal API key — get free key at virustotal.com"
-            style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-
-        <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:8,padding:16,marginBottom:16}}>
-          <div style={{fontSize:12,fontWeight:600,color:"#94a3b8",marginBottom:10}}>Current Connection</div>
-          <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
-            <div><div style={{fontSize:10,color:"#cbd5e1",marginBottom:3}}>API URL</div><div style={{fontSize:12,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{apiUrl}</div></div>
-            <div><div style={{fontSize:10,color:"#cbd5e1",marginBottom:3}}>Status</div><div style={{fontSize:12,color:"#22c55e",fontFamily:"JetBrains Mono,monospace"}}>Configured</div></div>
-          </div>
-        </div>
-
-        <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:8,padding:14}}>
-          <div style={{fontSize:11,color:"#d97706",fontWeight:700,marginBottom:6}}>⚠ Important</div>
-          <ul style={{fontSize:11,color:"#94a3b8",lineHeight:2,paddingLeft:16}}>
-            <li>Only scan systems you own or have written permission to test.</li>
-            <li>The backend must be running on your Kali machine: <code style={{color:"#60a5fa"}}>uvicorn main:app --host 0.0.0.0 --port 8000</code></li>
-            <li>All scan results are real — generated by actual security tools installed on Kali.</li>
-            <li>Change is applied immediately after save & reload.</li>
-          </ul>
-        </div>
-
-        <div style={{marginTop:16,textAlign:"right"}}>
-          <button onClick={reset} style={{background:"none",border:"1px solid #334155",borderRadius:6,padding:"8px 16px",color:"#94a3b8",fontSize:12,cursor:"pointer"}}>
-            Reset to Default
+      {/* Backend URL */}
+      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:24,marginBottom:16}}>
+        <h2 style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>⚙ Backend Connection</h2>
+        <p style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>IP:port of your Kali Linux machine running the backend.</p>
+        <div style={{display:"flex",gap:8}}>
+          <input value={apiUrl} onChange={e=>setApiUrl(e.target.value)}
+            placeholder="http://192.168.1.x:8000"
+            style={{flex:1,background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"monospace",fontSize:13,outline:"none"}}/>
+          <button onClick={saveUrl}
+            style={{background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            {saved==="url"?"Saved ✓":"Save & Reload"}
           </button>
         </div>
+      </div>
+
+      {/* API Keys */}
+      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:24,marginBottom:16}}>
+        <h2 style={{fontSize:15,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>🔑 OSINT API Keys</h2>
+        <p style={{fontSize:11,color:"#94a3b8",marginBottom:20}}>
+          Without API keys, OSINT scans only use free sources (crt.sh, dnsdumpster) which may return no data for test domains.
+          Add keys below to unlock <strong style={{color:"#60a5fa"}}>emails, breaches, open ports, CVEs, subdomains.</strong>
+        </p>
+
+        {/* Current status */}
+        {keyStatus && (
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:20}}>
+            {Object.entries(keyStatus).map(([k,v])=>(
+              <div key={k} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"8px 12px"}}>
+                <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",marginBottom:2}}>{k}</div>
+                <div style={{fontSize:11,color:v.status.includes("✅")?"#22c55e":"#ef4444",fontWeight:600}}>{v.status}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {API_KEYS.map(k=>(
+          <div key={k.id} style={{marginBottom:16,padding:14,background:"#020617",border:"1px solid #1e293b",borderRadius:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <div>
+                <span style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>{k.label}</span>
+                <span style={{fontSize:10,color:"#94a3b8",marginLeft:8}}>{k.free}</span>
+              </div>
+              <a href={k.url} target="_blank" rel="noreferrer"
+                style={{fontSize:10,color:"#3b82f6",textDecoration:"none",fontWeight:600}}>Get Free Key →</a>
+            </div>
+            <div style={{fontSize:10,color:"#94a3b8",marginBottom:6}}>Unlocks: {k.what}</div>
+            <input value={k.val} onChange={e=>k.set(e.target.value)} type="password"
+              placeholder={k.placeholder}
+              style={{width:"100%",background:"#0f172a",border:"1px solid #1e293b",borderRadius:5,padding:"8px 12px",color:"#e2e8f0",fontFamily:"monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+        ))}
+
+        <button onClick={saveKeys} disabled={saving||(!shodan&&!hunter&&!vt&&!hibp&&!sectrails)}
+          style={{background:saving?"#1e293b":"linear-gradient(135deg,#7c3aed,#a855f7)",border:"none",borderRadius:8,padding:"12px 28px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",opacity:(!shodan&&!hunter&&!vt&&!hibp&&!sectrails)?0.4:1}}>
+          {saving?"Saving...":saved==="keys"?"✅ Keys Saved — OSINT now active!":saved==="err"?"❌ Error saving":"Save API Keys to Backend"}
+        </button>
+        {saved==="keys" && <div style={{fontSize:11,color:"#22c55e",marginTop:8}}>Keys are saved to Kali backend and active immediately. Re-run OSINT scans to get real findings.</div>}
+      </div>
+
+      <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:8,padding:14}}>
+        <div style={{fontSize:11,color:"#d97706",fontWeight:700,marginBottom:6}}>⚠ Important</div>
+        <ul style={{fontSize:11,color:"#94a3b8",lineHeight:2,paddingLeft:16}}>
+          <li>Only scan systems you own or have written permission to test.</li>
+          <li>API keys are saved on your Kali backend in a local <code style={{color:"#60a5fa"}}>.env</code> file — never sent to any third party.</li>
+          <li>All scan results are real — generated by actual security tools on Kali.</li>
+        </ul>
       </div>
     </div>
   );
