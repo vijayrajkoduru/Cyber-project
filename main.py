@@ -75,7 +75,19 @@ async def login(req: LoginRequest):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "timestamp": datetime.datetime.utcnow().isoformat()}
+    tools = ["nmap","masscan","nikto","gobuster","dirb","hydra","sqlmap",
+             "wafw00f","whatweb","dnsrecon","whois","amass","theharvester",
+             "tcpdump","hping3","commix","curl","wget","dnschef"]
+    free_tools = {}
+    for tool in tools:
+        result = await run_tool(["which", tool], timeout=5)
+        free_tools[tool] = {"available": bool(result.get("output","").strip()), "cost": "FREE"}
+    return {
+        "status": "ok",
+        "version": "2.0.0",
+        "free_tools": free_tools,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
 
 @app.post("/api/tools/status")
 @app.get("/api/tools/status")
