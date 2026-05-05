@@ -77,6 +77,18 @@ async def login(req: LoginRequest):
 async def health():
     return {"status": "ok", "timestamp": datetime.datetime.utcnow().isoformat()}
 
+@app.post("/api/tools/status")
+@app.get("/api/tools/status")
+async def tools_status(user=Depends(verify_token)):
+    tools = ["nmap","masscan","nikto","gobuster","dirb","hydra","sqlmap",
+             "wafw00f","whatweb","dnsrecon","whois","amass","theharvester",
+             "tcpdump","hping3","commix","curl","wget"]
+    status = {}
+    for tool in tools:
+        result = await run_tool(["which", tool], timeout=5)
+        status[tool] = "installed" if result.get("output","").strip() else "missing"
+    return {"status": status, "timestamp": datetime.datetime.utcnow().isoformat()}
+
 @app.get("/api/history")
 async def get_history(user=Depends(verify_token)):
     return {"history": list(reversed(SCAN_HISTORY))}
