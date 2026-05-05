@@ -50,7 +50,42 @@ services:
     networks:
       - oscp_net
 
+  webgoat:
+    image: webgoat/goat-and-wolf:latest
+    container_name: lab_webgoat
+    ports:
+      - "8002:8080"
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - oscp_net
 
+  juiceshop:
+    image: bkimminich/juice-shop:latest
+    container_name: lab_juiceshop
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+  mutillidae:
+    image: citizenstig/nowasp
+    container_name: lab_mutillidae
+    ports:
+      - "8003:80"
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
+  bwapp:
+    image: raesene/bwapp
+    container_name: lab_bwapp
+    ports:
+      - "8004:80"
+    restart: unless-stopped
+    networks:
+      - oscp_net
 
 networks:
   oscp_net:
