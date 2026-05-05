@@ -1633,10 +1633,30 @@ async def recon_os(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
     result = await run_tool(["nmap", "-O", "--osscan-guess", "-T4", host], timeout=120)
     out = result.get("output","")
-    os_match = next((l.split(":",1)[-1].strip() for l in out.splitlines() if "OS details:" in l or "Aggressive OS guesses:" in l), None)
+    os_line = next((l for l in out.splitlines() if "OS details:" in l or "Aggressive OS guesses:" in l), None)
+    os_name = None; accuracy = None; matches = []
+    if os_line:
+        raw = os_line.split(":",1)[-1].strip()
+        for entry in [e.strip() for e in raw.split(",")]:
+            m = re.match(r"(.+?)\s*\((\d+)%\)", entry)
+            if m: matches.append({"name": m.group(1).strip(), "accuracy": int(m.group(2))})
+            elif entry: matches.append({"name": entry, "accuracy": None})
+        if matches:
+            os_name = matches[0]["name"]
+            accuracy = matches[0]["accuracy"]
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, "os", req.target, result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"os","os":os_match,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"os","os":os_name,"accuracy":accuracy,"matches":matches,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+def _clean_banner(raw: str) -> str:
+    """Strip binary/non-printable bytes from nmap banner output."""
+    cleaned = re.sub(r'\\x[0-9a-fA-F]{2}', '', raw)
+    cleaned = re.sub(r'[^\x20-\x7E]', ' ', cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    # If mostly garbage remains (< 4 printable words), use a generic label
+    if len(cleaned) < 8:
+        return "(binary handshake — see raw output)"
+    return cleaned[:200]
 
 @app.post("/api/recon/banner")
 async def recon_banner(req: ScanRequest, user=Depends(verify_token)):
@@ -1649,7 +1669,7 @@ async def recon_banner(req: ScanRequest, user=Depends(verify_token)):
         pm = re.match(r"(\d+)/tcp", line.strip())
         if pm: cur = pm.group(1)
         bm = re.match(r"\|\s+banner:\s*(.*)", line.strip())
-        if bm and cur: banners[cur] = bm.group(1).strip()
+        if bm and cur: banners[cur] = _clean_banner(bm.group(1).strip())
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, "banner", req.target, result)
     return {"scan_id":scan_id,"target":req.target,"tool":"banner","banners":banners,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}

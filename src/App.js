@@ -4078,11 +4078,29 @@ function generateReconReport({target, allResults, date}) {
     y+=6; }
 
   // ── OS ─────────────────────────────────────────────────────
-  if(r.os && r.os.os){ chk(30); y = sHead("OS Fingerprinting",y);
-    fillR(margin,y,contentW,10,LIGHT); txt("Detected OS:",margin+4,y+7,9,GRAY,true); txt(r.os.os,margin+36,y+7,9,BLUE,true); if(r.os.accuracy) txt("("+r.os.accuracy+"% confidence)",margin+36+doc.getTextWidth(r.os.os)+4,y+7,8,GRAY); y+=14;
-    if(r.os.matches&&r.os.matches.length>0){
+  if(r.os && r.os.os){
+    chk(30); y = sHead("OS Fingerprinting",y);
+    const osLabel = r.os.accuracy ? `${r.os.os}  (${r.os.accuracy}% confidence)` : r.os.os;
+    const osLines = doc.splitTextToSize(osLabel, contentW - 42);
+    const osRowH  = Math.max(10, osLines.length * 5 + 4);
+    chk(osRowH + 2);
+    fillR(margin,y,contentW,osRowH,LIGHT);
+    txt("Detected OS:",margin+4,y+7,9,GRAY,true);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
+    doc.text(osLines, margin+36, y+7);
+    y += osRowH + 4;
+    if(r.os.matches && r.os.matches.length>0){
       chk(20); y=sHead("OS Match Candidates",y);
-      r.os.matches.slice(0,5).forEach((m,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(m.name||"",margin+4,y+5,8,DARK); txt(m.accuracy?m.accuracy+"%":"",margin+140,y+5,8,BLUE,true); y+=7; });
+      r.os.matches.slice(0,5).forEach((m,i)=>{
+        chk(8);
+        const mLines = doc.splitTextToSize(m.name||"", contentW - 40);
+        const mH = Math.max(8, mLines.length * 4.5 + 3);
+        fillR(margin,y,contentW,mH,i%2===0?LIGHT:WHITE);
+        doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+        doc.text(mLines, margin+4, y+5.5);
+        txt(m.accuracy?m.accuracy+"%":"",margin+contentW-8,y+5.5,8,BLUE,true,"right");
+        y+=mH;
+      });
       y+=4;
     }
   }
@@ -4092,16 +4110,18 @@ function generateReconReport({target, allResults, date}) {
   const bannerEntries = Object.entries(bannerMap);
   if(bannerEntries.length>0){
     chk(30); y = sHead("Service Banner Grabbing",y);
-    const bCols=["PORT","BANNER"]; const bWidths=[30,150];
+    const bCols=["PORT","BANNER"]; const bWidths=[25,contentW-25];
     y = tHead(bCols,bWidths,y);
     bannerEntries.forEach(([port,banner],i)=>{
-      const lines = doc.splitTextToSize(String(banner).substring(0,300),145);
-      const rh = Math.max(8, lines.length*4.5+3);
+      // Strip any remaining non-printable chars client-side too
+      const cleanB = String(banner).replace(/[^\x20-\x7E]/g," ").replace(/\s+/g," ").trim().substring(0,250);
+      const lines = doc.splitTextToSize(cleanB || "(binary handshake)", contentW - 30);
+      const rh = Math.max(8, lines.length*4.5+4);
       chk(rh+2);
       fillR(margin,y,contentW,rh,i%2===0?LIGHT:WHITE);
       txt(port,margin+3,y+5.5,8,BLUE,true);
       doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
-      doc.text(lines,margin+33,y+5.5);
+      doc.text(lines,margin+28,y+5.5);
       y+=rh;
     });
     y+=4;
