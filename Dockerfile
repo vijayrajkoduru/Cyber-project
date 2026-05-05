@@ -27,9 +27,10 @@ RUN setcap cap_net_raw,cap_net_admin+eip /usr/bin/nmap 2>/dev/null || true
 
 WORKDIR /app
 
-# Python dependencies
+# Python dependencies in a venv to avoid system package conflicts
+RUN python3 -m venv /venv
 COPY requirements.txt .
-RUN pip3 install --break-system-packages -r requirements.txt
+RUN /venv/bin/pip install --upgrade pip && /venv/bin/pip install -r requirements.txt
 
 # Backend code
 COPY main.py .
@@ -39,4 +40,4 @@ COPY .env* ./
 
 EXPOSE 8000
 
-CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["/venv/bin/uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
