@@ -1617,9 +1617,9 @@ function WebAppModule(props) {
           {finished && <Badge label="DONE" color="green"/>}
         </div>
         <TestTargets onSelect={t => setTarget(t)} targets={[
-          {label:"DVWA",        value:"http://172.20.0.10",               color:"#dc2626"},
-          {label:"WebGoat",     value:"http://172.20.0.11:8080/WebGoat",   color:"#ea580c"},
-          {label:"Juice Shop",  value:"http://172.20.0.12:3000",           color:"#16a34a"},
+          {label:"DVWA",        value:"http://lab_dvwa",               color:"#dc2626"},
+          {label:"WebGoat",     value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c"},
+          {label:"Juice Shop",  value:"http://lab_juiceshop:3000",           color:"#16a34a"},
           {label:"Mutillidae",  value:"http://172.20.0.13",                color:"#a855f7"},
           {label:"bWAPP",       value:"http://172.20.0.14/bWAPP/login.php",color:"#ca8a04"},
         ]}/>
@@ -2342,9 +2342,9 @@ journalctl -u uvicorn -n 50
 # Or check terminal where uvicorn is running`;
 
   const labs = [
-    { name:"DVWA",                   url:"http://172.20.0.10",                    type:"🟢 LIVE", desc:"Damn Vulnerable Web App — login admin/password. SQLi, XSS, CSRF, File Upload, LFI.", color:"#22c55e" },
-    { name:"WebGoat",               url:"http://172.20.0.11:8080/WebGoat",       type:"🟢 LIVE", desc:"OWASP WebGoat — guided lessons for all OWASP Top 10 vulnerabilities.", color:"#22c55e" },
-    { name:"Juice Shop",            url:"http://172.20.0.12:3000",               type:"🟢 LIVE", desc:"OWASP Juice Shop — 100+ challenges: JWT, SQLi, IDOR, XSS, SSRF. Login admin@juice-sh.op/admin123.", color:"#22c55e" },
+    { name:"DVWA",                   url:"http://lab_dvwa",                    type:"🟢 LIVE", desc:"Damn Vulnerable Web App — login admin/password. SQLi, XSS, CSRF, File Upload, LFI.", color:"#22c55e" },
+    { name:"WebGoat",               url:"http://lab_webgoat:8080/WebGoat",       type:"🟢 LIVE", desc:"OWASP WebGoat — guided lessons for all OWASP Top 10 vulnerabilities.", color:"#22c55e" },
+    { name:"Juice Shop",            url:"http://lab_juiceshop:3000",               type:"🟢 LIVE", desc:"OWASP Juice Shop — 100+ challenges: JWT, SQLi, IDOR, XSS, SSRF. Login admin@juice-sh.op/admin123.", color:"#22c55e" },
     { name:"Mutillidae II",         url:"http://172.20.0.13",                    type:"🟢 LIVE", desc:"OWASP Mutillidae — SQLi, XXE, CSRF, Clickjacking. Login admin/adminpass.", color:"#22c55e" },
     { name:"bWAPP",                 url:"http://172.20.0.14/bWAPP/login.php",    type:"🟢 LIVE", desc:"Buggy Web App — 100+ web vulnerabilities. Login bee/bug.", color:"#22c55e" },
     { name:"HackTheBox",             url:"https://www.hackthebox.com",                    type:"ONLINE",   desc:"Professional CTF platform. Real-world machines. Highly recommended for OSCP prep.", color:"#a855f7" },
@@ -2453,7 +2453,7 @@ journalctl -u uvicorn -n 50
             { step:"06", title:"Start frontend (Windows)", detail:'cd "C:\\Users\\vijay\\OneDrive\\Desktop\\kali\\Cyber-project" && npm.cmd start', code:true },
             { step:"07", title:"Verify backend alive",   detail:"Open http://YOUR-VPS-IP:8000/docs (or http://localhost:8000/docs) — should show FastAPI UI", ok:true },
             { step:"08", title:"Login",                   detail:"http://localhost:3000 → admin / admin123", ok:true },
-            { step:"09", title:"Set target",              detail:"Paste target URL e.g. http://172.20.0.10/dvwa (DVWA Docker)", ok:true },
+            { step:"09", title:"Set target",              detail:"Paste target URL e.g. http://lab_dvwa/dvwa (DVWA Docker)", ok:true },
             { step:"10", title:"Run Full Scan (25 phases)", detail:"Click Web App Pentesting → Run Full Scan → Wait ~5 min", ok:true },
             { step:"11", title:"Generate PDF",            detail:"Click Generate PDF Report after scan completes", ok:true },
           ].map(({step, title, detail, code}) => (
@@ -4480,9 +4480,9 @@ function ReconModule({token, onRunningChange}) {
 
         {/* Target + controls */}
         <TestTargets onSelect={setTarget} targets={[
-          {icon:"🔴",label:"DVWA",                      value:"172.20.0.10",                  desc:"🟢 Live Docker — Damn Vulnerable Web App"},
-          {icon:"🐐",label:"WebGoat",                   value:"172.20.0.11",                  desc:"🟢 Live Docker — OWASP WebGoat (port 8080)"},
-          {icon:"🧃",label:"Juice Shop",                value:"172.20.0.12",                  desc:"🟢 Live Docker — OWASP Juice Shop (port 3000)"},
+          {icon:"🔴",label:"DVWA",                      value:"lab_dvwa",                  desc:"🟢 Live Docker — Damn Vulnerable Web App"},
+          {icon:"🐐",label:"WebGoat",                   value:"lab_webgoat",                  desc:"🟢 Live Docker — OWASP WebGoat (port 8080)"},
+          {icon:"🧃",label:"Juice Shop",                value:"lab_juiceshop",                  desc:"🟢 Live Docker — OWASP Juice Shop (port 3000)"},
           {icon:"🧩",label:"Mutillidae",                value:"172.20.0.13",                  desc:"🟢 Live Docker — Mutillidae II (port 80)"},
           {icon:"🐛",label:"bWAPP",                     value:"172.20.0.14",                  desc:"🟢 Live Docker — Buggy Web App (port 80)"},
           {icon:"📡",label:"Scanme (nmap official)",    value:"scanme.nmap.org",              desc:"nmap's official test server — safe to scan"},
@@ -4629,9 +4629,9 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
 
         {/* Controls */}
         <TestTargets onSelect={setTarget} targets={[
-          {icon:"🔴",label:"DVWA",          value:"http://172.20.0.10",                    desc:"🟢 Live Docker — SQLi, XSS, CSRF, File Upload, LFI. Login: admin/password"},
-          {icon:"🐐",label:"WebGoat",        value:"http://172.20.0.11:8080/WebGoat",       desc:"🟢 Live Docker — OWASP WebGoat guided lessons"},
-          {icon:"🧃",label:"Juice Shop",     value:"http://172.20.0.12:3000",               desc:"🟢 Live Docker — 100+ challenges. Login: admin@juice-sh.op/admin123"},
+          {icon:"🔴",label:"DVWA",          value:"http://lab_dvwa",                    desc:"🟢 Live Docker — SQLi, XSS, CSRF, File Upload, LFI. Login: admin/password"},
+          {icon:"🐐",label:"WebGoat",        value:"http://lab_webgoat:8080/WebGoat",       desc:"🟢 Live Docker — OWASP WebGoat guided lessons"},
+          {icon:"🧃",label:"Juice Shop",     value:"http://lab_juiceshop:3000",               desc:"🟢 Live Docker — 100+ challenges. Login: admin@juice-sh.op/admin123"},
           {icon:"🧩",label:"Mutillidae",     value:"http://172.20.0.13",                    desc:"🟢 Live Docker — SQLi, XXE, CSRF. Login: admin/adminpass"},
           {icon:"🐛",label:"bWAPP",          value:"http://172.20.0.14/bWAPP/login.php",    desc:"🟢 Live Docker — 100+ bugs. Login: bee/bug"},
           {icon:"🌐",label:"Acunetix TestPHP",value:"http://testphp.vulnweb.com",           desc:"Public test site — safe to scan"},
@@ -4877,9 +4877,9 @@ const BOF_PHASES = [
 // ── Live Docker lab targets (running on Kali server 192.168.56.102) ──
 const EXPLOIT_TARGETS = [
   // ── Web App Targets ──────────────────────────────────────────────────────────────────────────────
-  { label:"DVWA",                os:"🐧", ip:"172.20.0.10", port:80,   service:"Apache/PHP/MySQL",     cve:"Multiple",      msf:"exploit/unix/webapp/php_include",               payload:"php/reverse_php",               fmt:"php", search:"dvwa php injection",    desc:"🟢 LIVE Docker — SQLi, XSS, RFI, Command Injection, File Upload" },
-  { label:"WebGoat",             os:"🐧", ip:"172.20.0.11", port:8080, service:"Java/Tomcat",          cve:"Multiple",      msf:"",                                              payload:"java/shell_reverse_tcp",        fmt:"jar", search:"webgoat java",          desc:"🟢 LIVE Docker — OWASP Top 10 guided lessons" },
-  { label:"Juice Shop",          os:"🐧", ip:"172.20.0.12", port:3000, service:"Node.js",              cve:"Multiple",      msf:"",                                              payload:"nodejs/shell_reverse_tcp",      fmt:"js",  search:"juice shop nodejs",      desc:"🟢 LIVE Docker — 100+ challenges: JWT, SQLi, IDOR, XSS" },
+  { label:"DVWA",                os:"🐧", ip:"lab_dvwa", port:80,   service:"Apache/PHP/MySQL",     cve:"Multiple",      msf:"exploit/unix/webapp/php_include",               payload:"php/reverse_php",               fmt:"php", search:"dvwa php injection",    desc:"🟢 LIVE Docker — SQLi, XSS, RFI, Command Injection, File Upload" },
+  { label:"WebGoat",             os:"🐧", ip:"lab_webgoat", port:8080, service:"Java/Tomcat",          cve:"Multiple",      msf:"",                                              payload:"java/shell_reverse_tcp",        fmt:"jar", search:"webgoat java",          desc:"🟢 LIVE Docker — OWASP Top 10 guided lessons" },
+  { label:"Juice Shop",          os:"🐧", ip:"lab_juiceshop", port:3000, service:"Node.js",              cve:"Multiple",      msf:"",                                              payload:"nodejs/shell_reverse_tcp",      fmt:"js",  search:"juice shop nodejs",      desc:"🟢 LIVE Docker — 100+ challenges: JWT, SQLi, IDOR, XSS" },
   { label:"Mutillidae II",       os:"🐧", ip:"172.20.0.13", port:80,   service:"Apache/PHP",           cve:"Multiple",      msf:"",                                              payload:"php/reverse_php",               fmt:"php", search:"mutillidae sqli",        desc:"🟢 LIVE Docker — SQLi, XXE, CSRF, Clickjacking" },
   // ── Exploit / Service Targets ────────────────────────────────────────────────────────────────────
   { label:"vsftpd 2.3.4",        os:"🐧", ip:"172.20.0.20", port:21,   service:"vsftpd 2.3.4",        cve:"CVE-2011-2523", msf:"exploit/unix/ftp/vsftpd_234_backdoor",          payload:"cmd/unix/interact",             fmt:"elf", search:"vsftpd 2.3.4",          desc:"🟢 LIVE Docker — FTP backdoor: username with :) opens root shell on port 6200" },
@@ -6336,9 +6336,9 @@ function VulnModule(props) {
           <span style={{background:"#1e3a8a",color:"#93c5fd",fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:4}}>{VULN_PHASES.length} SCANS</span>
         </div>
         <TestTargets onSelect={setTarget} targets={[
-          {icon:"🏠",label:"DVWA",             value:"http://172.20.0.10/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)"},
-          {icon:"🐐",label:"WebGoat",          value:"http://172.20.0.11:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)"},
-          {icon:"🧃",label:"Juice Shop",       value:"http://172.20.0.12:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)"},
+          {icon:"🏠",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)"},
+          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)"},
+          {icon:"🧃",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)"},
           {icon:"🐙",label:"Mutillidae II",    value:"http://172.20.0.13",                desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)"},
           {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)"},
         ]}/>
