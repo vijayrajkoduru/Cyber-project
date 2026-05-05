@@ -1059,7 +1059,11 @@ async def recon_dnsrecon(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
     result = await run_tool(["dnsrecon", "-d", host, "-t", "std"], timeout=60)
     out = result.get("output","")
-    records = [l.strip() for l in out.splitlines() if l.strip()]
+    records = []
+    for line in out.splitlines():
+        m = re.match(r'\[\*\]\s+(A|AAAA|NS|MX|TXT|CNAME|SOA|PTR|SRV)\s+(\S+)\s+(.*)', line.strip())
+        if m:
+            records.append({"type": m.group(1), "name": m.group(2), "address": m.group(3).strip()})
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, "dnsrecon", req.target, result)
     return {"scan_id":scan_id,"target":req.target,"tool":"dnsrecon","records":records,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
