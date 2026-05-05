@@ -70,7 +70,7 @@ class LoginRequest(BaseModel):
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
     if req.username == "admin" and req.password == "admin":
-        return {"access_token": "oscp-dashboard-token", "role": "admin", "username": req.username}
+        return {"access_token": "oscp-dashboard-token", "role": "admin", "username": req.username, "plan": "pro"}
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.get("/api/health")

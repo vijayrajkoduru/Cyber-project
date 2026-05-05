@@ -7,34 +7,45 @@ const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABOYAAATmCAIAAAAKnjl9
 
 
 const MODULES = [
-  { id:"dashboard",num:"00", icon:"🏠", label:"Dashboard",                         cat:"core" },
-  { id:"recon",    num:"01", icon:"🔍", label:"Information Gathering & Recon",      cat:"core" },
-  { id:"vuln",     num:"02", icon:"🛡️", label:"Vulnerability Scanning",              cat:"core" },
-  { id:"webapp",   num:"03", icon:"🌐", label:"Web Application Penetration Testing", cat:"core", featured:true },
-  { id:"buffer",   num:"04", icon:"💾", label:"Buffer Overflow",                     cat:"core" },
-  { id:"exploit",  num:"05", icon:"💥", label:"Exploitation Techniques",             cat:"core" },
-  { id:"client",   num:"06", icon:"🎯", label:"Client-Side Attacks",                 cat:"core" },
-  { id:"privesc",  num:"07", icon:"⬆️", label:"Privilege Escalation",                cat:"core" },
-  { id:"password", num:"08", icon:"🔑", label:"Password Attacks",                    cat:"core" },
-  { id:"auth",     num:"08", icon:"🛂", label:"Authentication Attacks",               cat:"core" },
-  { id:"network",  num:"09", icon:"🌐", label:"Network Attacks",                      cat:"core" },
-  { id:"sysexploit",num:"10",icon:"⚙️", label:"System Exploitation",                 cat:"core" },
-  { id:"cloud",    num:"11", icon:"☁️", label:"Cloud Attacks",                        cat:"advanced" },
-  { id:"tunnel",   num:"09", icon:"🔗", label:"Port Redirection & Tunneling",        cat:"core" },
-  { id:"ad",       num:"10", icon:"🏢", label:"Active Directory Attacks",            cat:"advanced" },
-  { id:"msf",      num:"11", icon:"🧰", label:"Metasploit Framework",                cat:"core" },
-  { id:"av",       num:"12", icon:"🥷", label:"Antivirus Evasion",                   cat:"advanced" },
-  { id:"post",     num:"13", icon:"🕵️", label:"Post Exploitation",                   cat:"advanced" },
-  { id:"pivot",    num:"14", icon:"🔄", label:"Pivoting & Lateral Movement",         cat:"advanced" },
-  { id:"report",   num:"16", icon:"📄", label:"Report Writing",                      cat:"core" },
-  { id:"cloud",    num:"16", icon:"☁️", label:"Cloud Security",                      cat:"advanced" },
-  { id:"mobile",   num:"17", icon:"📱", label:"Mobile Application Testing",          cat:"advanced" },
-  { id:"api",      num:"18", icon:"⚙️", label:"API Security Testing",                cat:"advanced" },
-  { id:"wireless", num:"19", icon:"📶", label:"Wireless Network Attacks",            cat:"advanced" },
-  { id:"osint",    num:"20", icon:"🌍", label:"Advanced OSINT & Threat Intel",       cat:"advanced" },
-  { id:"tools",    num:"98", icon:"🛠️", label:"Tool Manager & Updater",            cat:"system" },
-  { id:"guide",    num:"00", icon:"📖", label:"Run Guide & Lab Targets",           cat:"core" },
-  { id:"settings", num:"99", icon:"⚙", label:"Settings & Configuration",          cat:"system" },
+  // ── FREE (trial access) ─────────────────────────────────────
+  { id:"dashboard", icon:"🏠", label:"Dashboard",                          cat:"core",    free:true  },
+  { id:"recon",     icon:"🔍", label:"Information Gathering & Recon",      cat:"recon",   free:true  },
+  { id:"guide",     icon:"📖", label:"Run Guide & Lab Targets",            cat:"tools",   free:true  },
+  { id:"report",    icon:"📄", label:"Report Writing",                     cat:"tools",   free:true  },
+
+  // ── SCANNING ────────────────────────────────────────────────
+  { id:"vuln",      icon:"🛡️", label:"Vulnerability Scanning",             cat:"scan",    free:false },
+  { id:"webapp",    icon:"🌐", label:"Web Application Pentesting",         cat:"scan",    free:false, featured:true },
+  { id:"osint",     icon:"🌍", label:"Advanced OSINT & Threat Intel",      cat:"scan",    free:false },
+
+  // ── EXPLOITATION ─────────────────────────────────────────────
+  { id:"exploit",   icon:"💥", label:"Exploitation Techniques",            cat:"exploit", free:false },
+  { id:"buffer",    icon:"💾", label:"Buffer Overflow",                    cat:"exploit", free:false },
+  { id:"client",    icon:"🎯", label:"Client-Side Attacks",                cat:"exploit", free:false },
+  { id:"sysexploit",icon:"⚙️", label:"System Exploitation",               cat:"exploit", free:false },
+  { id:"msf",       icon:"🧰", label:"Metasploit Framework",               cat:"exploit", free:false },
+
+  // ── POST-EXPLOITATION ────────────────────────────────────────
+  { id:"privesc",   icon:"⬆️", label:"Privilege Escalation",               cat:"post",    free:false },
+  { id:"post",      icon:"🕵️", label:"Post Exploitation",                  cat:"post",    free:false },
+  { id:"pivot",     icon:"🔄", label:"Pivoting & Lateral Movement",        cat:"post",    free:false },
+
+  // ── NETWORK & INFRA ──────────────────────────────────────────
+  { id:"network",   icon:"🌐", label:"Network Attacks",                    cat:"network", free:false },
+  { id:"tunnel",    icon:"🔗", label:"Port Redirection & Tunneling",       cat:"network", free:false },
+  { id:"password",  icon:"🔑", label:"Password Attacks",                   cat:"network", free:false },
+  { id:"auth",      icon:"🛂", label:"Authentication Attacks",             cat:"network", free:false },
+  { id:"wireless",  icon:"📶", label:"Wireless Network Attacks",           cat:"network", free:false },
+
+  // ── ADVANCED ─────────────────────────────────────────────────
+  { id:"ad",        icon:"🏢", label:"Active Directory Attacks",           cat:"advanced",free:false },
+  { id:"av",        icon:"🥷", label:"Antivirus Evasion",                  cat:"advanced",free:false },
+  { id:"cloud",     icon:"☁️", label:"Cloud Security Testing",             cat:"advanced",free:false },
+  { id:"mobile",    icon:"📱", label:"Mobile Application Testing",         cat:"advanced",free:false },
+  { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false },
+
+  // ── TOOLS ────────────────────────────────────────────────────
+  { id:"tools",     icon:"🛠️", label:"Tool Manager & Updater",            cat:"tools",   free:false },
 ];
 
 const CSS = `
@@ -127,7 +138,7 @@ function Login(props) {
     setL(true); setErr("");
     try {
       const data = await api("/api/auth/login","POST",{username:u,password:p});
-      onLogin(data.access_token, data.role, data.username);
+      onLogin(data.access_token, data.role, data.username, data.plan||"trial");
     } catch(e2) { setErr(e2.message); }
     setL(false);
   };
@@ -7112,7 +7123,9 @@ export default function App() {
   const [token,setToken]       = useState(null);
   const [role,setRole]         = useState("");
   const [username,setUsername] = useState("");
+  const [plan,setPlan]         = useState("trial");
   const [active,setActive]     = useState("dashboard");
+  const [upgModal,setUpgModal] = useState(false);
   const [backendOk,setBE]      = useState(null);
   const [time,setTime]         = useState(new Date().toLocaleTimeString());
   const [waptRunning,setWaptRunning]       = useState(false);
@@ -7127,12 +7140,26 @@ export default function App() {
   }, []);
 
   if (!token) {
-    return <Login onLogin={(t,r,u) => { setToken(t); setRole(r); setUsername(u); }}/>;
+    return <Login onLogin={(t,r,u,p) => { setToken(t); setRole(r); setUsername(u); setPlan(p); }}/>;
   }
 
-  const topic       = MODULES.find(m => m.id === active);
-  const coreModules = MODULES.filter(m => m.cat === "core");
-  const advModules  = MODULES.filter(m => m.cat === "advanced");
+  const isPro = plan === "pro" || role === "admin";
+  const topic = MODULES.find(m => m.id === active);
+
+  const SECTIONS = [
+    { key:"recon",    label:"RECONNAISSANCE",    color:"#06b6d4" },
+    { key:"scan",     label:"SCANNING",          color:"#3b82f6" },
+    { key:"exploit",  label:"EXPLOITATION",      color:"#ef4444" },
+    { key:"post",     label:"POST-EXPLOITATION", color:"#f59e0b" },
+    { key:"network",  label:"NETWORK & INFRA",   color:"#22c55e" },
+    { key:"advanced", label:"ADVANCED",          color:"#a855f7" },
+    { key:"tools",    label:"TOOLS & REPORTS",   color:"#64748b" },
+  ];
+
+  const handleNavClick = (m) => {
+    if (!m.free && !isPro) { setUpgModal(true); return; }
+    setActive(m.id);
+  };
 
   const renderContent = () => {
     return (
@@ -7228,57 +7255,92 @@ export default function App() {
         </div>
 
         <div style={{flex:1,overflowY:"auto"}}>
-        <div style={{padding:"10px 8px 4px"}}>
-          <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Core Modules</span>
-        </div>
-        {coreModules.map(m => (
-          <button key={m.id} className="nav-btn" onClick={() => setActive(m.id)}
-            style={{width:"calc(100% - 16px)",background:active===m.id?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
-            <span style={{fontSize:18,width:26,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-            <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:400,lineHeight:1.4,flex:1}}>{m.label}</span>
-            {m.featured && <Badge label="LIVE" color="green" size="xs"/>}
-            {m.id==="webapp"    && waptRunning  && active!=="webapp"    && (
-              <span style={{width:7,height:7,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>
-            )}
-            {m.id==="recon"     && reconRunning && active!=="recon"     && (
-              <span style={{width:7,height:7,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>
-            )}
-            {m.id==="vuln"      && vulnRunning    && active!=="vuln"      && (
-              <span style={{width:7,height:7,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>
-            )}
-            {m.id==="exploit"   && exploitRunning && active!=="exploit"   && (
-              <span style={{width:7,height:7,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>
-            )}
-          </button>
-        ))}
 
-        <div style={{padding:"12px 8px 4px"}}>
-          <span style={{fontSize:11,color:"#7c3aed",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Advanced</span>
-        </div>
-        {advModules.map(m => (
-          <button key={m.id} className="nav-btn" onClick={() => setActive(m.id)}
-            style={{width:"calc(100% - 16px)",background:active===m.id?"#1a0a3d":"transparent",border:"none",borderRadius:6,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
-            <span style={{fontSize:18,width:26,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-            <span style={{fontSize:13,color:active===m.id?"#c4b5fd":"#94a3b8",fontWeight:active===m.id?600:400,lineHeight:1.4}}>{m.label}</span>
-          </button>
-        ))}
+          {/* Dashboard — always free */}
+          <div style={{padding:"8px 8px 2px"}}>
+            <span style={{fontSize:10,color:"#334155",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Overview</span>
+          </div>
+          {MODULES.filter(m=>m.id==="dashboard").map(m=>(
+            <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
+              style={{width:"calc(100% - 16px)",background:active===m.id?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
+              <span style={{fontSize:17,width:24,textAlign:"center",flexShrink:0}}>{m.icon}</span>
+              <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:400,flex:1}}>{m.label}</span>
+            </button>
+          ))}
 
-        <div style={{padding:"12px 8px 4px"}}>
-          <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>System</span>
-        </div>
-        {[
-          {id:"health",  icon:"💊", label:"System Health"},
-          {id:"history", icon:"📋", label:"Scan History"},
-          {id:"settings",icon:"⚙",  label:"Settings"},
-        ].map(m => (
-          <button key={m.id} className="nav-btn" onClick={() => setActive(m.id)}
-            style={{width:"calc(100% - 16px)",background:active===m.id?"#1e293b":"transparent",border:"none",borderRadius:6,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
-            <span style={{fontSize:15,width:22,textAlign:"center"}}>{m.icon}</span>
-            <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8"}}>{m.label}</span>
-          </button>
-        ))}
+          {/* Dynamic sections */}
+          {SECTIONS.map(sec => {
+            const mods = MODULES.filter(m => m.cat === sec.key);
+            if (!mods.length) return null;
+            return (
+              <div key={sec.key}>
+                <div style={{padding:"10px 8px 3px",display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:3,height:12,borderRadius:2,background:sec.color,flexShrink:0}}/>
+                  <span style={{fontSize:10,color:sec.color,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
+                </div>
+                {mods.map(m => {
+                  const locked = !m.free && !isPro;
+                  const isActive = active === m.id;
+                  return (
+                    <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
+                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
+                      <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
+                      <span style={{fontSize:12,color:isActive?"#f1f5f9":locked?"#4b5563":"#94a3b8",fontWeight:isActive?600:400,flex:1,lineHeight:1.35}}>{m.label}</span>
+                      {m.featured && !locked && <Badge label="LIVE" color="green" size="xs"/>}
+                      {locked && <span style={{fontSize:10}}>🔒</span>}
+                      {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                      {!locked && m.id==="recon"   && reconRunning  && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                      {!locked && m.id==="vuln"    && vulnRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                      {!locked && m.id==="exploit" && exploitRunning&& !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          {/* System — always accessible */}
+          <div style={{padding:"10px 8px 3px",display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:3,height:12,borderRadius:2,background:"#475569",flexShrink:0}}/>
+            <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>System</span>
+          </div>
+          {[
+            {id:"health",  icon:"💊", label:"System Health"},
+            {id:"history", icon:"📋", label:"Scan History"},
+            {id:"settings",icon:"⚙",  label:"Settings"},
+          ].map(m => (
+            <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
+              style={{width:"calc(100% - 16px)",background:active===m.id?"#1e293b":"transparent",border:"none",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
+              <span style={{fontSize:14,width:22,textAlign:"center"}}>{m.icon}</span>
+              <span style={{fontSize:12,color:active===m.id?"#f1f5f9":"#94a3b8"}}>{m.label}</span>
+            </button>
+          ))}
 
         </div>
+
+        {/* Upgrade modal */}
+        {upgModal && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}
+            onClick={()=>setUpgModal(false)}>
+            <div style={{background:"#0f172a",border:"1px solid #3b82f6",borderRadius:12,padding:32,maxWidth:380,width:"90%",textAlign:"center"}}
+              onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+              <div style={{fontSize:18,fontWeight:700,color:"#f1f5f9",marginBottom:8}}>Pro Feature</div>
+              <div style={{fontSize:13,color:"#94a3b8",marginBottom:24,lineHeight:1.6}}>
+                This module is available on the <strong style={{color:"#3b82f6"}}>Pro plan</strong>.<br/>
+                Upgrade to unlock all {MODULES.filter(m=>!m.free).length} advanced modules.
+              </div>
+              <a href="mailto:awsvijju5@gmail.com?subject=CyberSecurity Dashboard Pro License"
+                style={{display:"block",background:"#2563eb",color:"#fff",padding:"10px 24px",borderRadius:8,fontWeight:600,fontSize:14,textDecoration:"none",marginBottom:10}}>
+                Contact for Pro Access
+              </a>
+              <button onClick={()=>setUpgModal(false)}
+                style={{background:"none",border:"none",color:"#475569",fontSize:13,cursor:"pointer"}}>
+                Maybe later
+              </button>
+            </div>
+          </div>
+        )}
         <div style={{padding:"10px 12px",borderTop:"1px solid #1e293b",flexShrink:0}}>
           <div style={{background:"#1c1000",border:"1px solid #78350f",borderRadius:5,padding:"8px 10px",marginBottom:8}}>
 
