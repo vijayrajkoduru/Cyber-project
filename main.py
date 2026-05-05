@@ -105,6 +105,11 @@ async def tools_status(user=Depends(verify_token)):
 async def get_history(user=Depends(verify_token)):
     return {"history": list(reversed(SCAN_HISTORY))}
 
+@app.get("/api/scans")
+async def get_scans(user=Depends(verify_token)):
+    scans = list(reversed(SCAN_HISTORY))
+    return {"scans": scans, "total": len(scans)}
+
 
 # ── PASSWORD ATTACKS — HYDRA ──────────────────────────────────
 class HydraRequest(BaseModel):
