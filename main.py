@@ -134,13 +134,13 @@ async def password_hydra(req: HydraRequest, user=Depends(verify_token)):
     cmd += ["-P", req.passlist]
     if req.port:
         cmd += ["-s", req.port]
-    cmd += ["-t", "4", "-f", "-V"]
+    cmd += ["-t", "4", "-f", "-V", "-w", "5", "-W", "3"]
     if req.extra:
         cmd += req.extra.split()
     parsed = urlparse(req.target if req.target.startswith("http") else "http://"+req.target)
     host = parsed.hostname or req.target
     cmd += [host, req.service]
-    result = await run_tool(cmd, timeout=300)
+    result = await run_tool(cmd, timeout=60)
     out = result.get("output","")
     found = []
     for line in out.splitlines():
@@ -793,7 +793,7 @@ async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/whatweb")
 async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["whatweb","--color=never","--log-verbose=-",_web_url(req.target)], timeout=60)
+    result = await run_tool(["whatweb","--color=never","--no-errors","--open-timeout","10","--read-timeout","10",_web_url(req.target)], timeout=30)
     out = result.get("output","")
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"whatweb",req.target,result)
     return {"scan_id":scan_id,"target":req.target,"tool":"whatweb","output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -801,7 +801,10 @@ async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/nmap")
 async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
     host = req.target.replace("http://","").replace("https://","").split("/")[0]
-    result = await run_tool(["nmap","-sV","-T4","--open","--top-ports","100",host], timeout=120)
+    is_external = not any(x in host for x in ["lab_","localhost","127.","192.168.","10.","172."])
+    timing = "-T2" if is_external else "-T4"
+    ports  = "50"  if is_external else "100"
+    result = await run_tool(["nmap","-sV",timing,"--open","--top-ports",ports,host], timeout=120)
     out = result.get("output","")
     ports = []
     for line in out.splitlines():
@@ -1037,29 +1040,23 @@ async def scan_hydra(req: ScanRequest, user=Depends(verify_token)):
 async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
-    # All common SSRF parameter names used in real apps
-    params = ["url","target","fetch","proxy","redirect","path","host","src","uri",
-              "endpoint","dest","destination","source","data","ref","reference",
-              "load","page","file","link","href","return","returnUrl","callback",
-              "next","continue","to","out","view","site","domain","feed","img"]
+    # Top SSRF parameter names (most commonly exploited)
+    params = ["url","redirect","proxy","fetch","dest","src","host","endpoint","callback","next",
+              "target","path","uri","return","returnUrl","load","page","link","ref","img"]
     # Internal/cloud metadata targets
     internal_targets = [
         ("http://169.254.169.254/latest/meta-data/",          ["ami-id","instance-id","local-ipv4","security-credentials"], "AWS EC2 metadata"),
-        ("http://169.254.169.254/latest/meta-data/iam/",      ["security-credentials","info"],                              "AWS IAM metadata"),
         ("http://metadata.google.internal/computeMetadata/v1/",["project-id","instance","serviceAccounts"],                 "GCP metadata"),
         ("http://169.254.169.254/metadata/instance",          ["compute","network","subscriptionId"],                       "Azure metadata"),
         ("http://127.0.0.1/",                                 ["html","body","localhost","apache","nginx","iis"],            "Localhost access"),
         ("http://localhost:8080/",                             ["html","body","tomcat","jetty","spring"],                    "Internal service :8080"),
-        ("http://192.168.0.1/",                               ["router","gateway","login","admin"],                         "Internal gateway"),
-        ("http://10.0.0.1/",                                  ["html","body","admin","router"],                             "Private network 10.x"),
-        ("http://0.0.0.0/",                                   ["html","body"],                                              "Loopback via 0.0.0.0"),
     ]
     headers = {"User-Agent":"Mozilla/5.0","X-Forwarded-For":"127.0.0.1"}
     for param in params:
         for (internal_url, indicators, label) in internal_targets:
             test_url = f"{base}?{param}={internal_url}"
             try:
-                r = _req_lib.get(test_url, timeout=6, verify=False, headers=headers, allow_redirects=True)
+                r = _req_lib.get(test_url, timeout=3, verify=False, headers=headers, allow_redirects=True)
                 if r.status_code == 200 and any(ind.lower() in r.text.lower() for ind in indicators):
                     vulnerable = True
                     findings.append({
@@ -1076,7 +1073,7 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
     for param in ["url","redirect","next","return","callback"]:
         test_url = f"{base}?{param}=http://169.254.169.254/"
         try:
-            r = _req_lib.get(test_url, timeout=6, verify=False, headers=headers, allow_redirects=False)
+            r = _req_lib.get(test_url, timeout=3, verify=False, headers=headers, allow_redirects=False)
             loc = r.headers.get("Location","")
             if "169.254" in loc or "127.0.0.1" in loc or "localhost" in loc:
                 findings.append({

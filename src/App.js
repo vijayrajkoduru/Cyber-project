@@ -1438,6 +1438,7 @@ function WebAppModule(props) {
   const [curPhase,setCurPhase] = useState(-1);
   const [done,setDone]         = useState([]);
   const [failed,setFailed]     = useState([]);
+  const [skipped,setSkipped]   = useState([]);
   const [allResults,setAll]    = useState({});
   const [finished,setFinished] = useState(false);
   const [lines,setLines]       = useState(["Ready — enter target URL and click Start"]);
@@ -1470,9 +1471,10 @@ function WebAppModule(props) {
     const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)(target.trim());
     if (normTarget !== target) setTarget(normTarget);
     stopRef.current = false; setStopped(false);
-    setRunningState(true); setDone([]); setFailed([]); setAll({}); setFinished(false);
+    setRunningState(true); setDone([]); setFailed([]); setSkipped([]); setAll({}); setFinished(false);
     const activePhases = PHASES.map((ph,i)=>({ph,i})).filter(({i})=>selectedPhases.has(i));
-    setLines(["[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)"]);
+    const isExternal = !normTarget.includes("lab_") && !normTarget.includes("localhost") && !normTarget.match(/https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
+    setLines(["[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "")]);
     const results = {};
     for (let idx = 0; idx < activePhases.length; idx++) {
       if (stopRef.current) {
@@ -1512,8 +1514,16 @@ function WebAppModule(props) {
         const msg = e.message||"unknown error";
         const hint = msg.includes("404") ? " (endpoint missing — add to main.py)" : msg.includes("Failed to fetch")||msg.includes("NetworkError") ? " (backend offline)" : "";
         add("✗ " + ph.name + " failed: " + msg + hint);
-        setFailed(p => [...p, i]);
+        if (ph.tool === "hydra") {
+          add("💡 Tip: Use the Password Attacks module for targeted brute force with custom wordlists and protocols.");
+          setSkipped(p => [...p, i]);
+        } else {
+          setFailed(p => [...p, i]);
+        }
         setDone(p => [...p, i]);
+      }
+      if (isExternal && idx < activePhases.length - 1) {
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
     if (!stopRef.current) add("✓ Pentest complete — " + activePhases.length + " phases done");
@@ -1748,22 +1758,23 @@ function WebAppModule(props) {
           </div>
         )}
         {PHASES.map((ph,i) => {
-          const isActive  = curPhase === i;
-          const isDone    = done.includes(i);
-          const isFailed  = failed.includes(i);
-          const res       = allResults[ph.tool];
-          const isSQLi    = ph.tool === "sqlmap" && res && res.vulnerable;
-          const isVuln    = res && res.vulnerable && !isSQLi;
-          const leftCol   = isActive?"#3b82f6":isDone?(isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):"#1e293b";
-          const borderCol = isActive?"#1e3a8a":isDone?(isFailed?"#450a0a":isSQLi||isVuln?"#431407":"#052e16"):"#1e293b";
-          const circBg    = isDone?(isFailed?"#1c0505":isSQLi?"#1c0a0a":"#052e16"):isActive?"#0c1a3d":"#020617";
-          const circBord  = isDone?(isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):isActive?"#3b82f6":"#1e293b";
+          const isActive   = curPhase === i;
+          const isDone     = done.includes(i);
+          const isSkipped  = skipped.includes(i);
+          const isFailed   = failed.includes(i) && !isSkipped;
+          const res        = allResults[ph.tool];
+          const isSQLi     = ph.tool === "sqlmap" && res && res.vulnerable;
+          const isVuln     = res && res.vulnerable && !isSQLi;
+          const leftCol    = isActive?"#3b82f6":isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):"#1e293b";
+          const borderCol  = isActive?"#1e3a8a":isDone?(isSkipped?"#451a03":isFailed?"#450a0a":isSQLi||isVuln?"#431407":"#052e16"):"#1e293b";
+          const circBg     = isDone?(isSkipped?"#1c1000":isFailed?"#1c0505":isSQLi?"#1c0a0a":"#052e16"):isActive?"#0c1a3d":"#020617";
+          const circBord   = isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):isActive?"#3b82f6":"#1e293b";
           const isSelected = selectedPhases.has(i);
           return (
             <div key={i} onClick={()=>{ if(running) return; setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; }); }}
               style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`3px solid ${leftCol}`,borderRadius:8,padding:"12px 18px",display:"flex",alignItems:"center",gap:14,cursor:running?"default":"pointer",opacity:isSelected?1:0.35,transition:"all 0.2s"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:circBg,border:"2px solid "+circBord,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>
-                {isDone ? (isFailed?"✗":isSQLi?"✗":"✓") : isActive ? (
+                {isDone ? (isSkipped?"⚠":isFailed?"✗":isSQLi?"✗":"✓") : isActive ? (
                   <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
                 ) : (
                   <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{String(i+1).padStart(2,"0")}</span>
@@ -1772,10 +1783,11 @@ function WebAppModule(props) {
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
                   <span style={{fontSize:13,fontWeight:600,color:isDone?"#f1f5f9":isActive?"#93c5fd":"#475569"}}>{ph.name}</span>
-                  {isActive  && <Badge label="RUNNING"  color="blue" size="xs"/>}
-                  {isDone && !isFailed && !isSQLi && !isVuln && <Badge label="COMPLETE" color="green" size="xs"/>}
-                  {isDone && !isFailed && (isSQLi||isVuln) && <Badge label="VULNERABLE" color="red" size="xs"/>}
-                  {isDone && isFailed  && <Badge label="FAILED — endpoint missing" color="red" size="xs"/>}
+                  {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
+                  {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="COMPLETE"  color="green"  size="xs"/>}
+                  {isDone && !isFailed && !isSkipped && (isSQLi||isVuln)   && <Badge label="VULNERABLE" color="red"   size="xs"/>}
+                  {isDone && isFailed  && <Badge label="FAILED"    color="red"    size="xs"/>}
+                  {isDone && isSkipped && <Badge label="SKIPPED"   color="orange" size="xs"/>}
                 </div>
                 <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"1px 6px"}}>{ph.tool}</span>
               </div>
