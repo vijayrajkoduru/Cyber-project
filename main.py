@@ -3408,6 +3408,262 @@ async def exploit_shell_stop(lid: str, user=Depends(verify_token)):
 
 
 # ═══════════════════════════════════════════════════════════════
+#  NEW SCANNERS: NoSQL, OAuth, Host Header, WebSocket, Takeover, OTP
+# ═══════════════════════════════════════════════════════════════
+
+@app.post("/api/scan/nosql")
+async def scan_nosql(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; base = _web_url(req.target)
+    login_paths = ["/login", "/api/login", "/api/users", "/api/auth", "/signin", "/api/signin"]
+    payloads_get = [
+        ("?username[$ne]=invalid&password[$ne]=invalid", "MongoDB $ne operator injection via GET"),
+        ("?username[$gt]=&password[$gt]=",               "MongoDB $gt operator injection via GET"),
+        ("?user[$regex]=.*&pass[$regex]=.*",             "MongoDB $regex injection via GET"),
+    ]
+    payloads_post = [
+        ({"username": {"$ne": "invalid"}, "password": {"$ne": "invalid"}}, "MongoDB $ne operator via JSON POST"),
+        ({"username": {"$gt": ""},        "password": {"$gt": ""}},        "MongoDB $gt operator via JSON POST"),
+        ({"username": "admin",            "password": {"$regex": ".*"}},   "MongoDB $regex password bypass"),
+    ]
+    for path in login_paths:
+        url = base.rstrip("/") + path
+        try:
+            baseline = _req_lib.get(url, timeout=6, verify=False, headers=_BROWSER_HEADERS)
+            b_status = baseline.status_code; b_len = len(baseline.content)
+        except: continue
+        for qs, desc in payloads_get:
+            try:
+                r = _req_lib.get(url + qs, timeout=6, verify=False, headers=_BROWSER_HEADERS)
+                if r.status_code in (200, 302) and (r.status_code != b_status or len(r.content) > b_len * 1.2):
+                    findings.append({"detail": f"NoSQL Injection: {desc} at {path}", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-943", "cwe_name": "NoSQL Injection", "owasp": "A03:2021 - Injection", "remediation": "Validate and sanitize all input. Never pass user input directly as MongoDB query operators. Use allowlisted fields."})
+                    break
+            except: pass
+        for payload, desc in payloads_post:
+            try:
+                r = _req_lib.post(url, json=payload, timeout=6, verify=False, headers=_BROWSER_HEADERS)
+                if r.status_code in (200, 302) and r.status_code != b_status:
+                    if any(x in r.text.lower() for x in ["token", "dashboard", "welcome", "success", "redirect"]):
+                        findings.append({"detail": f"NoSQL Injection: {desc} at {path} — login bypassed (HTTP {r.status_code})", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-943", "cwe_name": "NoSQL Injection", "owasp": "A03:2021 - Injection", "remediation": "Use parameterized queries or an ODM (Mongoose) with strict schema validation."})
+                        break
+            except: pass
+    for path in ["/search", "/api/search", "/api/users", "/api/products"]:
+        url = base.rstrip("/") + path
+        try:
+            r = _req_lib.get(url + "?q[$regex]=.*", timeout=6, verify=False, headers=_BROWSER_HEADERS)
+            if r and any(x in r.text.lower() for x in ["mongodb", "casterror", "bsontype", "mongoose", "$regex", "$ne"]):
+                findings.append({"detail": f"NoSQL error disclosure at {path}?q[$regex]=.* — MongoDB internals leaked in response", "severity": "HIGH", "cvss": "7.5", "cve": "N/A", "cwe": "CWE-943", "cwe_name": "NoSQL Injection", "owasp": "A03:2021 - Injection", "remediation": "Suppress MongoDB error messages in production. Validate input types before querying."})
+        except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "nosql", req.target, {"output": str(findings)})
+    return {"scan_id": scan_id, "target": req.target, "tool": "nosql", "vulnerable": bool(findings), "findings": findings, "total": len(findings), "timestamp": datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/oauth")
+async def scan_oauth(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; base = _web_url(req.target)
+    oauth_paths = ["/.well-known/openid-configuration", "/.well-known/oauth-authorization-server",
+                   "/oauth/authorize", "/oauth/token", "/api/oauth", "/connect/authorize",
+                   "/auth/oauth", "/oauth2/authorize", "/oauth2/token"]
+    saml_paths  = ["/saml/sso", "/saml/consume", "/saml/metadata", "/Shibboleth.sso/SAML2/POST"]
+    discovered = []
+    for path in oauth_paths + saml_paths:
+        r = _http_get(base.rstrip("/") + path, timeout=6)
+        if r and r.status_code in (200, 302, 400, 405):
+            discovered.append(path)
+    if not discovered:
+        scan_id = str(uuid.uuid4()); save_scan(scan_id, "oauth", req.target, {"output": "no oauth endpoints"})
+        return {"scan_id": scan_id, "target": req.target, "tool": "oauth", "vulnerable": False, "findings": [], "total": 0, "endpoints": [], "timestamp": datetime.datetime.utcnow().isoformat()}
+    findings.append({"detail": f"OAuth/SSO endpoints discovered: {', '.join(discovered)}", "severity": "INFO", "cvss": "0.0", "cve": "N/A", "cwe": "N/A", "cwe_name": "Discovery", "owasp": "A01:2021", "remediation": "Ensure all OAuth endpoints are properly secured."})
+    for path in [p for p in discovered if "authorize" in p]:
+        url = base.rstrip("/") + path
+        try:
+            r = _req_lib.get(url + "?client_id=test&response_type=code&redirect_uri=https://evil.com&scope=openid",
+                             timeout=6, verify=False, headers=_BROWSER_HEADERS, allow_redirects=False)
+            loc = r.headers.get("Location", "")
+            if "evil.com" in loc:
+                findings.append({"detail": f"OAuth redirect_uri manipulation accepted at {path} — server redirected to evil.com", "severity": "CRITICAL", "cvss": "9.3", "cve": "N/A", "cwe": "CWE-601", "cwe_name": "OAuth redirect_uri Manipulation", "owasp": "A01:2021 - Broken Access Control", "remediation": "Strictly whitelist allowed redirect_uri values. Reject any URI not pre-registered."})
+        except: pass
+        try:
+            r = _req_lib.get(url + "?client_id=test&response_type=code&redirect_uri=" + base,
+                             timeout=6, verify=False, headers=_BROWSER_HEADERS, allow_redirects=False)
+            if r.status_code in (200, 302) and "state" not in r.text.lower() and "csrf" not in r.text.lower():
+                findings.append({"detail": f"OAuth {path} may not enforce state parameter — CSRF on OAuth flow possible", "severity": "MEDIUM", "cvss": "6.1", "cve": "N/A", "cwe": "CWE-352", "cwe_name": "CSRF on OAuth Flow", "owasp": "A01:2021", "remediation": "Always validate the state parameter to prevent CSRF attacks on the OAuth flow."})
+        except: pass
+    for path in [p for p in discovered if "saml" in p.lower()]:
+        r = _http_get(base.rstrip("/") + path, timeout=6)
+        if r and r.status_code == 200 and any(x in r.text.lower() for x in ["samlp:", "ds:signature", "samlresponse"]):
+            findings.append({"detail": f"SAML endpoint at {path} — check for signature wrapping and XXE attacks", "severity": "HIGH", "cvss": "8.8", "cve": "N/A", "cwe": "CWE-347", "cwe_name": "Improper Cryptographic Signature Verification", "owasp": "A02:2021", "remediation": "Validate SAML signatures strictly. Disable DTD parsing to prevent XXE in SAML assertions."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "oauth", req.target, {"output": str(findings)})
+    vuln = bool([f for f in findings if f["severity"] != "INFO"])
+    return {"scan_id": scan_id, "target": req.target, "tool": "oauth", "vulnerable": vuln, "findings": findings, "total": len(findings), "endpoints": discovered, "timestamp": datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/hostheader")
+async def scan_hostheader(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; base = _web_url(req.target)
+    parsed = urlparse(base); real_host = parsed.netloc or parsed.path; evil_host = "evil-attacker.com"
+    host_tests = [
+        ({"Host": evil_host},                                   "Host header"),
+        ({"Host": real_host, "X-Forwarded-Host": evil_host},   "X-Forwarded-Host header"),
+        ({"Host": real_host, "X-Host": evil_host},             "X-Host header"),
+        ({"Host": real_host, "X-Forwarded-Server": evil_host}, "X-Forwarded-Server header"),
+        ({"Host": real_host, "X-HTTP-Host-Override": evil_host},"X-HTTP-Host-Override header"),
+    ]
+    for extra_hdrs, desc in host_tests:
+        try:
+            r = _req_lib.get(base, headers={**_BROWSER_HEADERS, **extra_hdrs}, timeout=8, verify=False, allow_redirects=False)
+            body = r.text.lower()
+            loc  = r.headers.get("Location", "")
+            if evil_host in loc:
+                findings.append({"detail": f"Host Header Injection via {desc} — redirect to '{evil_host}' (cache poisoning / open redirect)", "severity": "CRITICAL", "cvss": "9.1", "cve": "N/A", "cwe": "CWE-644", "cwe_name": "Host Header Injection / Cache Poisoning", "owasp": "A03:2021 - Injection", "remediation": "Strictly validate Host header. Never redirect based on its value."})
+            elif evil_host in body:
+                ctx = body[max(0, body.find(evil_host)-40):body.find(evil_host)+60]
+                sev = "HIGH" if any(w in ctx for w in ["href", "src", "action", "canonical", "url", "link"]) else "MEDIUM"
+                findings.append({"detail": f"Host Header Injection via {desc} — '{evil_host}' reflected in response (password reset poisoning risk)", "severity": sev, "cvss": "7.5" if sev == "HIGH" else "5.4", "cve": "N/A", "cwe": "CWE-644", "cwe_name": "Host Header Injection", "owasp": "A03:2021 - Injection", "remediation": "Never use the Host header to build URLs. Use a hardcoded trusted hostname."})
+        except: pass
+    for path in ["/forgot-password", "/reset-password", "/account/recover", "/password-reset"]:
+        url = base.rstrip("/") + path
+        try:
+            r = _req_lib.get(url, headers={**_BROWSER_HEADERS, "Host": evil_host, "X-Forwarded-Host": evil_host},
+                             timeout=6, verify=False, allow_redirects=False)
+            if r.status_code in (200, 302) and evil_host in r.text:
+                findings.append({"detail": f"Password Reset Poisoning at {path} — reset email could contain attacker-controlled link", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-640", "cwe_name": "Weak Password Recovery Mechanism", "owasp": "A07:2021 - Identification and Authentication Failures", "remediation": "Use a hardcoded base URL for reset emails. Never derive it from the Host header."})
+        except: pass
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "hostheader", req.target, {"output": str(findings)})
+    return {"scan_id": scan_id, "target": req.target, "tool": "hostheader", "vulnerable": bool(findings), "findings": findings, "total": len(findings), "timestamp": datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/websocket")
+async def scan_websocket(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; base = _web_url(req.target)
+    parsed = urlparse(base); host = parsed.netloc or parsed.path
+    ws_paths = ["/ws", "/websocket", "/socket.io", "/socket", "/chat", "/live", "/api/ws", "/api/socket", "/realtime"]
+    discovered_ws = []
+    for path in ws_paths:
+        url = base.rstrip("/") + path
+        ws_hdrs = {"Upgrade": "websocket", "Connection": "Upgrade",
+                   "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+                   "Sec-WebSocket-Version": "13", "Host": host}
+        try:
+            r = _req_lib.get(url, headers=ws_hdrs, timeout=6, verify=False, allow_redirects=False)
+            if r.status_code == 101 or "websocket" in r.headers.get("Upgrade", "").lower():
+                if path not in discovered_ws: discovered_ws.append(path)
+        except: pass
+        r2 = _http_get(url, timeout=5)
+        if r2 and r2.status_code == 200 and any(x in r2.text.lower() for x in ["socket.io", "websocket", '"type":"connect"']):
+            if path not in discovered_ws: discovered_ws.append(path)
+    for path in discovered_ws:
+        url = base.rstrip("/") + path
+        try:
+            r = _req_lib.get(url, headers={"Upgrade": "websocket", "Connection": "Upgrade",
+                                           "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+                                           "Sec-WebSocket-Version": "13",
+                                           "Origin": "https://evil-attacker.com", "Host": host},
+                             timeout=6, verify=False, allow_redirects=False)
+            if r.status_code == 101:
+                findings.append({"detail": f"WebSocket at {path} accepts arbitrary origins — missing Origin validation", "severity": "HIGH", "cvss": "8.1", "cve": "N/A", "cwe": "CWE-346", "cwe_name": "Origin Validation Error", "owasp": "A01:2021 - Broken Access Control", "remediation": "Validate the Origin header on WebSocket handshake. Only accept connections from trusted origins."})
+        except: pass
+        if base.startswith("http://"):
+            findings.append({"detail": f"Unencrypted WebSocket (ws://) at {path} — data transmitted in plaintext", "severity": "MEDIUM", "cvss": "5.9", "cve": "N/A", "cwe": "CWE-319", "cwe_name": "Cleartext Transmission of Sensitive Information", "owasp": "A02:2021 - Cryptographic Failures", "remediation": "Use wss:// (WebSocket Secure) instead of ws://."})
+    if discovered_ws:
+        findings.insert(0, {"detail": f"WebSocket endpoints discovered: {', '.join(discovered_ws)}", "severity": "INFO", "cvss": "0.0", "cve": "N/A", "cwe": "N/A", "cwe_name": "Discovery", "owasp": "N/A", "remediation": "Review WebSocket security configuration."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "websocket", req.target, {"output": str(findings)})
+    vuln = bool([f for f in findings if f["severity"] != "INFO"])
+    return {"scan_id": scan_id, "target": req.target, "tool": "websocket", "vulnerable": vuln, "findings": findings, "total": len(findings), "endpoints": discovered_ws, "timestamp": datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/takeover")
+async def scan_takeover(req: ScanRequest, user=Depends(verify_token)):
+    import dns.resolver, dns.exception
+    findings = []; base = _web_url(req.target)
+    parsed = urlparse(base); apex_domain = parsed.hostname or ""
+    if not apex_domain:
+        scan_id = str(uuid.uuid4())
+        return {"scan_id": scan_id, "target": req.target, "tool": "takeover", "vulnerable": False, "findings": [], "total": 0, "timestamp": datetime.datetime.utcnow().isoformat()}
+    common_subs = ["www","mail","remote","blog","webmail","server","ns1","ns2","smtp","secure","vpn","m",
+                   "shop","ftp","api","dev","staging","test","portal","admin","app","cdn","static","assets"]
+    takeover_fingerprints = {
+        "github.io":          ["there isn't a github pages site here", "404 - file or directory not found"],
+        "amazonaws.com":      ["nosuchbucket", "the specified bucket does not exist"],
+        "s3-website":         ["nosuchbucket", "no such bucket"],
+        "herokuapp.com":      ["no such app", "heroku | no such app"],
+        "azurewebsites.net":  ["404 web site not found"],
+        "fastly.net":         ["fastly error: unknown domain"],
+        "netlify.app":        ["not found - request id"],
+        "myshopify.com":      ["sorry, this shop is currently unavailable"],
+        "zendesk.com":        ["this is your help center"],
+        "surge.sh":           ["project not found"],
+        "bitbucket.io":       ["repository not found"],
+        "pantheonsite.io":    ["the site you were looking for couldn't be found"],
+    }
+    subdomains_to_check = [f"{s}.{apex_domain}" for s in common_subs]
+    subdomains_to_check.insert(0, apex_domain)
+    for subdomain in subdomains_to_check[:20]:
+        try:
+            try:
+                answers = dns.resolver.resolve(subdomain, "CNAME")
+                cname_target = str(answers[0].target).lower().rstrip(".")
+            except Exception:
+                cname_target = None
+            if not cname_target: continue
+            for svc, fingerprints in takeover_fingerprints.items():
+                if svc in cname_target:
+                    r = _http_get(f"http://{subdomain}", timeout=8)
+                    if r:
+                        body = r.text.lower()
+                        for fp in fingerprints:
+                            if fp.lower() in body:
+                                findings.append({"detail": f"Subdomain Takeover: {subdomain} → CNAME {cname_target} ({svc}) shows '{fp}'", "severity": "CRITICAL", "cvss": "9.3", "cve": "N/A", "cwe": "CWE-923", "cwe_name": "Subdomain Takeover", "owasp": "A05:2021 - Security Misconfiguration", "remediation": f"Remove the DNS CNAME for {subdomain} or claim the resource at {cname_target}."})
+                                break
+                    else:
+                        findings.append({"detail": f"Potential Subdomain Takeover: {subdomain} → CNAME {cname_target} ({svc}) — service not responding", "severity": "HIGH", "cvss": "8.1", "cve": "N/A", "cwe": "CWE-923", "cwe_name": "Subdomain Takeover", "owasp": "A05:2021", "remediation": f"Remove CNAME for {subdomain} or claim the {svc} resource."})
+                    break
+        except Exception: continue
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "takeover", req.target, {"output": str(findings)})
+    return {"scan_id": scan_id, "target": req.target, "tool": "takeover", "vulnerable": bool(findings), "findings": findings, "total": len(findings), "timestamp": datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/otp")
+async def scan_otp(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; base = _web_url(req.target)
+    otp_paths = ["/otp", "/verify", "/2fa", "/mfa", "/totp", "/api/otp", "/api/verify",
+                 "/api/2fa", "/api/mfa", "/auth/otp", "/auth/2fa", "/verify-otp", "/confirm"]
+    discovered_otp = []
+    for path in otp_paths:
+        r = _http_get(base.rstrip("/") + path, timeout=5)
+        if r and r.status_code in (200, 302, 400, 405, 422):
+            discovered_otp.append(path)
+    for path in discovered_otp:
+        url = base.rstrip("/") + path
+        statuses = []
+        for otp_val in ["000000", "111111", "222222", "333333", "444444"]:
+            try:
+                r = _req_lib.post(url, json={"otp": otp_val, "code": otp_val, "token": otp_val},
+                                  timeout=5, verify=False, headers=_BROWSER_HEADERS)
+                statuses.append(r.status_code)
+            except: statuses.append(0)
+        rate_limited = any(s in (429, 423, 503) for s in statuses)
+        if not rate_limited and statuses.count(200) >= 3:
+            findings.append({"detail": f"OTP endpoint {path} has no rate limiting — brute force possible ({statuses.count(200)}/5 attempts returned 200)", "severity": "HIGH", "cvss": "7.5", "cve": "N/A", "cwe": "CWE-307", "cwe_name": "Improper Restriction of Excessive Authentication Attempts", "owasp": "A07:2021 - Identification and Authentication Failures", "remediation": "Implement rate limiting (max 5 attempts). Lock out after failures. Use TOTP (RFC 6238)."})
+        try:
+            r1 = _req_lib.post(url, json={"otp": "123456", "code": "123456"}, timeout=5, verify=False, headers=_BROWSER_HEADERS)
+            r2 = _req_lib.post(url, json={"otp": "123456", "code": "123456"}, timeout=5, verify=False, headers=_BROWSER_HEADERS)
+            if r1.status_code == r2.status_code == 200 and r1.text == r2.text:
+                findings.append({"detail": f"OTP reuse possible at {path} — same OTP accepted twice (no single-use enforcement)", "severity": "MEDIUM", "cvss": "6.5", "cve": "N/A", "cwe": "CWE-294", "cwe_name": "Authentication Bypass by Capture-Replay", "owasp": "A07:2021", "remediation": "Invalidate OTP immediately after first use. Store used OTPs until expiry window passes."})
+        except: pass
+        try:
+            r = _req_lib.post(url, json={"otp": "000000"}, timeout=5, verify=False, headers=_BROWSER_HEADERS)
+            if '"success":false' in r.text or '"valid":false' in r.text:
+                findings.append({"detail": f"OTP endpoint {path} returns JSON boolean in response — potential response manipulation attack", "severity": "MEDIUM", "cvss": "5.9", "cve": "N/A", "cwe": "CWE-807", "cwe_name": "Reliance on Untrusted Inputs in a Security Decision", "owasp": "A07:2021", "remediation": "Validate OTP server-side only. Do not rely on client-side response parsing for access control."})
+        except: pass
+    for path in ["/backup-codes", "/recovery-codes", "/api/backup-codes", "/account/backup-codes"]:
+        r = _http_get(base.rstrip("/") + path, timeout=5)
+        if r and r.status_code == 200:
+            findings.append({"detail": f"Backup/recovery codes endpoint at {path} accessible without apparent authentication", "severity": "HIGH", "cvss": "7.5", "cve": "N/A", "cwe": "CWE-288", "cwe_name": "Authentication Bypass Using Alternate Path", "owasp": "A07:2021", "remediation": "Require authentication and re-authentication before exposing backup codes."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "otp", req.target, {"output": str(findings)})
+    return {"scan_id": scan_id, "target": req.target, "tool": "otp", "vulnerable": bool(findings), "findings": findings, "total": len(findings), "endpoints": discovered_otp, "timestamp": datetime.datetime.utcnow().isoformat()}
+
+
+# ═══════════════════════════════════════════════════════════════
 #  BROWSER TERMINAL  (bash session per user)
 # ═══════════════════════════════════════════════════════════════
 _TERM_SESSIONS: dict = {}

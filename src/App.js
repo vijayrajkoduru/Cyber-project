@@ -1437,6 +1437,12 @@ const PHASES = [
   {name:"PHP Type Juggling",      tool:"typejuggling",  endpoint:"/api/scan/typejuggling",    icon:"🔢"},
   {name:"JWT Attacks",            tool:"jwt",           endpoint:"/api/scan/jwt",              icon:"🎟"},
   {name:"GraphQL Security",       tool:"graphql",       endpoint:"/api/scan/graphql",          icon:"◈"},
+  {name:"NoSQL Injection",        tool:"nosql",         endpoint:"/api/scan/nosql",            icon:"🍃"},
+  {name:"OAuth / SAML Attacks",   tool:"oauth",         endpoint:"/api/scan/oauth",            icon:"🔐"},
+  {name:"Host Header Injection",  tool:"hostheader",    endpoint:"/api/scan/hostheader",       icon:"🏠"},
+  {name:"WebSocket Security",     tool:"websocket",     endpoint:"/api/scan/websocket",        icon:"🔌"},
+  {name:"Subdomain Takeover",     tool:"takeover",      endpoint:"/api/scan/takeover",         icon:"🎯"},
+  {name:"2FA / OTP Bypass",       tool:"otp",           endpoint:"/api/scan/otp",              icon:"🔢"},
 ];
 
 function WebAppModule(props) {
@@ -1538,6 +1544,28 @@ function WebAppModule(props) {
     }
     if (!stopRef.current) add("✓ Pentest complete — " + activePhases.length + " phases done");
     setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
+  };
+
+  const runSingle = async (ph, i) => {
+    if (running) return;
+    const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)(target.trim());
+    if (!normTarget.trim()) return;
+    setRunningState(true); setCurPhase(i);
+    setFailed(p => p.filter(x => x !== i));
+    setDone(p => p.filter(x => x !== i));
+    add("[*] Re-running: " + ph.name + " on " + normTarget);
+    try {
+      const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {});
+      const data = await api(ph.endpoint, "POST", body, token);
+      setAll(prev => ({...prev, [ph.tool]: data}));
+      setDone(p => [...p.filter(x => x !== i), i]);
+      add("✓ " + ph.name + " complete");
+    } catch(e) {
+      setFailed(p => [...p.filter(x => x !== i), i]);
+      setDone(p => [...p.filter(x => x !== i), i]);
+      add("✗ " + ph.name + " failed: " + (e.message || "unknown error"));
+    }
+    setCurPhase(-1); setRunningState(false);
   };
 
   // PDF + CSV export
@@ -1758,7 +1786,7 @@ function WebAppModule(props) {
             {[
               {label:"Quick (Recon)",  phases:[0,1,2,3,4,5,6,7,8,9,13]},
               {label:"Web Attacks",    phases:[10,11,12,14,15,16,17,18,20,21,22]},
-              {label:"Full (All 29)",  phases:PHASES.map((_,i)=>i)},
+              {label:`Full (All ${PHASES.length})`,  phases:PHASES.map((_,i)=>i)},
             ].map(preset=>(
               <button key={preset.label} onClick={()=>setSelectedPhases(new Set(preset.phases))}
                 style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 12px",color:"#93c5fd",fontSize:11,fontWeight:600,cursor:"pointer"}}>
@@ -1808,6 +1836,12 @@ function WebAppModule(props) {
                   {res.total !== undefined && <div style={{fontSize:11,color:"#a78bfa",fontFamily:"JetBrains Mono,monospace"}}>{res.total} paths</div>}
                   {res.vulnerable !== undefined && <div style={{fontSize:11,color:res.vulnerable?"#f87171":"#4ade80",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>{res.vulnerable?"VULNERABLE":"SAFE"}</div>}
                 </div>
+              )}
+              {!running && target && (
+                <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
+                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 10px",color:"#60a5fa",fontSize:10,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+                  {isDone?"Re-run":"Run"}
+                </button>
               )}
             </div>
           );
