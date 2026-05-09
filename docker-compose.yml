@@ -22,6 +22,9 @@ services:
       - .env                  # optional: SHODAN_KEY, VIRUSTOTAL_KEY, etc.
     volumes:
       - scan_data:/app/data   # persist scan results + user DB
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     restart: unless-stopped
     networks:
       - oscp_net

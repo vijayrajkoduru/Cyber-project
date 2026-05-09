@@ -12,9 +12,12 @@ RUN apt-get update -q && apt-get install -y -q --no-install-recommends \
     wafw00f whatweb \
     dnsrecon whois \
     theharvester amass \
+    dnstwist sherlock recon-ng \
     tcpdump hping3 \
     dnschef \
     seclists wordlists \
+    exploitdb \
+    metasploit-framework \
     curl wget netcat-openbsd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
