@@ -10,6 +10,9 @@ RUN apt-get update -q && apt-get install -y -q --no-install-recommends \
     nikto gobuster dirb \
     hydra sqlmap \
     wafw00f whatweb \
+    sslscan \
+    ffuf \
+    commix \
     dnsrecon whois \
     theharvester amass \
     dnstwist sherlock recon-ng \
@@ -20,6 +23,10 @@ RUN apt-get update -q && apt-get install -y -q --no-install-recommends \
     metasploit-framework \
     curl wget netcat-openbsd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install XSStrike (Python XSS scanner)
+RUN git clone https://github.com/s0md3v/XSStrike /usr/share/xsstrike 2>/dev/null || true \
+    && pip3 install -r /usr/share/xsstrike/requirements.txt 2>/dev/null || true
 
 # Decompress rockyou wordlist
 RUN gzip -d /usr/share/wordlists/rockyou.txt.gz 2>/dev/null || true
