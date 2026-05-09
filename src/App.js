@@ -1428,6 +1428,11 @@ const PHASES = [
   {name:"File Upload Testing",    tool:"fileupload",    endpoint:"/api/scan/fileupload",     icon:"📤"},
   {name:"Data Exfiltration Check",tool:"dataexfil",    endpoint:"/api/scan/dataexfil",      icon:"📤"},
   {name:"Race Condition Test",    tool:"racecondition", endpoint:"/api/scan/racecondition",  icon:"⚡"},
+  {name:"SMB Enumeration",        tool:"smb",           endpoint:"/api/scan/smb",            icon:"🗂"},
+  {name:"FTP Enumeration",        tool:"ftp",           endpoint:"/api/scan/ftp",            icon:"📁"},
+  {name:"SMTP User Enum",         tool:"smtp",          endpoint:"/api/scan/smtp",           icon:"📧"},
+  {name:"SNMP Scanner",           tool:"snmp",          endpoint:"/api/scan/snmp",           icon:"📡"},
+  {name:"Exploit Search",         tool:"exploitsearch", endpoint:"/api/scan/exploitsearch",  icon:"🔍"},
 ];
 
 function WebAppModule(props) {

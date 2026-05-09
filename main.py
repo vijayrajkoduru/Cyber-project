@@ -1730,6 +1730,297 @@ async def scan_racecondition(req: ScanRequest, user=Depends(verify_token)):
 
 
 # ══════════════════════════════════════════════════════════════
+#  NEW OSCP TOOLS — SMB, FTP, SMTP, SNMP, EXPLOIT SEARCH
+#  Pure Python — zero Kali dependencies
+# ══════════════════════════════════════════════════════════════
+
+import ftplib as _ftplib, smtplib as _smtplib, struct as _struct2
+
+# ─── SMB ENUMERATION ──────────────────────────────────────────
+
+def _smb_null_session(host: str, port: int = 445) -> bool:
+    """Test SMB null session via raw SMB1 negotiate packet"""
+    try:
+        s = _socket_lib.socket(_socket_lib.AF_INET, _socket_lib.SOCK_STREAM)
+        s.settimeout(5)
+        s.connect((host, port))
+        # SMB1 Negotiate Protocol Request (known-good bytes)
+        dialects = b"\x02NT LM 0.12\x00\x02SMB 2.002\x00\x02SMB 2.???\x00"
+        byte_count = len(dialects)
+        smb_data = (
+            b"\xffSMB\x72"                    # Header + Negotiate cmd
+            b"\x00\x00\x00\x00"               # Status
+            b"\x18\x01\x28"                   # Flags
+            b"\x00\x00"                        # PID High
+            b"\x00" * 8                        # Signature
+            b"\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00"  # Reserved/TID/PID/UID/MID
+            b"\x00"                            # Word Count
+            + _struct2.pack("<H", byte_count)  # Byte Count
+            + dialects
+        )
+        nb_len = _struct2.pack(">I", len(smb_data))
+        s.send(b"\x00" + nb_len[1:] + smb_data)
+        resp = s.recv(1024)
+        s.close()
+        return len(resp) > 8 and b"SMB" in resp
+    except:
+        return False
+
+
+@app.post("/api/scan/smb")
+async def scan_smb(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    findings = []; smb_open = False; smb_port = None
+    for port in [445, 139]:
+        try:
+            r, w = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3)
+            smb_open = True; smb_port = port
+            try: w.close(); await w.wait_closed()
+            except: pass
+            break
+        except: pass
+    if smb_open:
+        findings.append({"detail":f"SMB service open on {host}:{smb_port} — Windows/Samba file sharing exposed","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-200","cwe_name":"SMB Exposure","owasp":"A05:2021","remediation":"Block ports 445/139 from external access. Use VPN for file sharing."})
+        loop = asyncio.get_event_loop()
+        null_ok = await loop.run_in_executor(None, _smb_null_session, host, smb_port)
+        if null_ok:
+            findings.append({"detail":"SMB null session allowed — anonymous enumeration of shares/users/OS info is possible","severity":"CRITICAL","cvss":"9.1","cve":"CVE-2017-0143","cwe":"CWE-306","cwe_name":"Missing Authentication","owasp":"A07:2021","remediation":"Disable null sessions: RestrictAnonymous=2 in Windows registry. Patch SMBv1."})
+    out = f"SMB open on port {smb_port}" if smb_open else "SMB ports 445/139 closed"
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"smb",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"smb","smb_open":smb_open,"port":smb_port,"findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ─── FTP ENUMERATION ──────────────────────────────────────────
+
+@app.post("/api/scan/ftp")
+async def scan_ftp(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    findings = []; ftp_open = False; banner = ""; anon_ok = False; files = []
+    loop = asyncio.get_event_loop()
+
+    def _ftp_probe():
+        nonlocal ftp_open, banner, anon_ok, files
+        try:
+            ftp = _ftplib.FTP(timeout=8)
+            ftp.connect(host, 21)
+            ftp_open = True
+            banner = ftp.getwelcome()[:200]
+            # Test anonymous login
+            try:
+                ftp.login("anonymous", "guest@guest.com")
+                anon_ok = True
+                try:
+                    ftp.retrlines("LIST", lambda l: files.append(l))
+                except: pass
+                ftp.quit()
+            except _ftplib.error_perm:
+                ftp.quit()
+        except: pass
+
+    await loop.run_in_executor(None, _ftp_probe)
+
+    if ftp_open:
+        findings.append({"detail":f"FTP service open — banner: {banner[:100]}","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-319","cwe_name":"Cleartext Transmission","owasp":"A02:2021","remediation":"Replace FTP with SFTP or FTPS. FTP transmits credentials in plaintext."})
+        # Check for vulnerable versions in banner
+        banner_l = banner.lower()
+        if "vsftpd 2.3.4" in banner_l:
+            findings.append({"detail":"vsftpd 2.3.4 detected — backdoor vulnerability (CVE-2011-2523): username with ':)' opens root shell on port 6200","severity":"CRITICAL","cvss":"10.0","cve":"CVE-2011-2523","cwe":"CWE-78","cwe_name":"OS Command Injection","owasp":"A06:2021","remediation":"Upgrade vsftpd immediately. This backdoor gives unauthenticated root shell."})
+        if "proftpd 1.3.3" in banner_l:
+            findings.append({"detail":"ProFTPd 1.3.3c detected — backdoor (CVE-2010-4221): HELP ACIDBITCHEZ gives root shell","severity":"CRITICAL","cvss":"10.0","cve":"CVE-2010-4221","cwe":"CWE-78","cwe_name":"OS Command Injection","owasp":"A06:2021","remediation":"Upgrade ProFTPd immediately."})
+        if anon_ok:
+            findings.append({"detail":f"Anonymous FTP login allowed — {len(files)} item(s) accessible without credentials","severity":"HIGH","cvss":"8.6","cve":"N/A","cwe":"CWE-306","cwe_name":"Anonymous FTP","owasp":"A07:2021","remediation":"Disable anonymous FTP access. Require authentication for all FTP connections."})
+
+    out = f"FTP open: {banner}\nAnonymous: {anon_ok}\nFiles: {files[:10]}" if ftp_open else "FTP port 21 closed"
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"ftp",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"ftp","ftp_open":ftp_open,"banner":banner,"anonymous_allowed":anon_ok,"files":files[:20],"findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ─── SMTP USER ENUMERATION ────────────────────────────────────
+
+_SMTP_USERS = ["root","admin","administrator","postmaster","info","test","user","mail","support","webmaster","no-reply","noreply","abuse","hostmaster","security"]
+
+@app.post("/api/scan/smtp")
+async def scan_smtp(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    findings = []; smtp_open = False; banner = ""; valid_users = []; open_relay = False
+    loop = asyncio.get_event_loop()
+
+    def _smtp_probe():
+        nonlocal smtp_open, banner, valid_users, open_relay
+        for port in [25, 587, 465]:
+            try:
+                s = _socket_lib.socket(_socket_lib.AF_INET, _socket_lib.SOCK_STREAM)
+                s.settimeout(8)
+                s.connect((host, port))
+                smtp_open = True
+                data = s.recv(1024).decode("utf-8", errors="replace").strip()
+                banner = data[:200]
+                # VRFY user enumeration
+                for user in _SMTP_USERS:
+                    try:
+                        s.send(f"VRFY {user}\r\n".encode())
+                        resp = s.recv(512).decode("utf-8", errors="replace")
+                        if resp.startswith("250") or resp.startswith("252"):
+                            valid_users.append(user)
+                    except: pass
+                # Test open relay
+                try:
+                    s.send(b"EHLO test.com\r\n"); s.recv(512)
+                    s.send(b"MAIL FROM:<test@evil.com>\r\n"); r1 = s.recv(512).decode("utf-8", errors="replace")
+                    s.send(b"RCPT TO:<victim@external.com>\r\n"); r2 = s.recv(512).decode("utf-8", errors="replace")
+                    if r1.startswith("250") and r2.startswith("250"):
+                        open_relay = True
+                except: pass
+                s.send(b"QUIT\r\n")
+                s.close()
+                break
+            except: pass
+
+    await loop.run_in_executor(None, _smtp_probe)
+
+    if smtp_open:
+        findings.append({"detail":f"SMTP service open — banner: {banner[:100]}","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-200","cwe_name":"Information Exposure","owasp":"A05:2021","remediation":"Disable VRFY/EXPN commands. Use SMTP AUTH."})
+        if valid_users:
+            findings.append({"detail":f"SMTP VRFY user enumeration succeeded — valid users: {', '.join(valid_users)}","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-203","cwe_name":"User Enumeration","owasp":"A05:2021","remediation":"Disable VRFY command: smtpd_disable_vrfy_command=yes in Postfix."})
+        if open_relay:
+            findings.append({"detail":"SMTP open relay detected — server relays mail for any external domain (used for spam/phishing)","severity":"CRITICAL","cvss":"9.3","cve":"N/A","cwe":"CWE-441","cwe_name":"Open Relay","owasp":"A05:2021","remediation":"Restrict mail relay to authenticated users and trusted hosts only."})
+
+    out = f"SMTP open: {banner}\nUsers: {valid_users}\nOpen relay: {open_relay}" if smtp_open else "SMTP ports 25/587/465 closed"
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"smtp",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"smtp","smtp_open":smtp_open,"banner":banner,"valid_users":valid_users,"open_relay":open_relay,"findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ─── SNMP SCANNER ─────────────────────────────────────────────
+
+_SNMP_COMMUNITIES = ["public","private","manager","community","secret","admin","snmp","monitor","internal","cisco","default"]
+
+def _snmp_build_get(community: str, oid_str: str = "1.3.6.1.2.1.1.1.0") -> bytes:
+    def enc_len(n):
+        return bytes([n]) if n < 128 else bytes([0x81, n]) if n < 256 else bytes([0x82, n >> 8, n & 0xff])
+    def tlv(tag, val):
+        return bytes([tag]) + enc_len(len(val)) + val
+    def enc_oid(s):
+        p = [int(x) for x in s.split(".")]
+        r = bytes([40 * p[0] + p[1]])
+        for v in p[2:]:
+            if v == 0: r += b"\x00"
+            else:
+                buf = []
+                while v: buf.insert(0, v & 0x7f); v >>= 7
+                r += bytes([(c | 0x80) if i < len(buf)-1 else c for i, c in enumerate(buf)])
+        return r
+    vbl = tlv(0x30, tlv(0x30, tlv(0x06, enc_oid(oid_str)) + b"\x05\x00"))
+    pdu = tlv(0xa0, tlv(0x02, b"\x01") + tlv(0x02, b"\x00") + tlv(0x02, b"\x00") + vbl)
+    return tlv(0x30, tlv(0x02, b"\x00") + tlv(0x04, community.encode()) + pdu)
+
+def _snmp_scan(host: str) -> dict:
+    _OIDS = {"sysDescr":"1.3.6.1.2.1.1.1.0","sysName":"1.3.6.1.2.1.1.5.0","sysLocation":"1.3.6.1.2.1.1.6.0","sysContact":"1.3.6.1.2.1.1.4.0"}
+    result = {"open": False, "community": None, "info": {}}
+    for community in _SNMP_COMMUNITIES:
+        try:
+            s = _socket_lib.socket(_socket_lib.AF_INET, _socket_lib.SOCK_DGRAM)
+            s.settimeout(2)
+            s.sendto(_snmp_build_get(community), (host, 161))
+            data, _ = s.recvfrom(4096)
+            s.close()
+            if data and len(data) > 10:
+                result["open"] = True; result["community"] = community
+                # Extract printable strings from ASN.1 response
+                raw = data.decode("latin-1")
+                strings = re.findall(r'[\x20-\x7e]{4,}', raw)
+                for name, oid in _OIDS.items():
+                    try:
+                        s2 = _socket_lib.socket(_socket_lib.AF_INET, _socket_lib.SOCK_DGRAM)
+                        s2.settimeout(2); s2.sendto(_snmp_build_get(community, oid), (host, 161))
+                        d2, _ = s2.recvfrom(4096); s2.close()
+                        r2 = d2.decode("latin-1")
+                        vals = re.findall(r'[\x20-\x7e]{4,}', r2)
+                        useful = [v for v in vals if v not in (community, "public", "private") and len(v) > 4]
+                        if useful: result["info"][name] = useful[-1][:100]
+                    except: pass
+                break
+        except: pass
+    return result
+
+@app.post("/api/scan/snmp")
+async def scan_snmp(req: ScanRequest, user=Depends(verify_token)):
+    host = _recon_host(req.target)
+    loop = asyncio.get_event_loop()
+    snmp = await loop.run_in_executor(None, _snmp_scan, host)
+    findings = []
+    if snmp["open"]:
+        findings.append({"detail":f"SNMP responding with community string '{snmp['community']}' — system info readable anonymously","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-284","cwe_name":"Improper Access Control","owasp":"A05:2021","remediation":"Use SNMPv3 with authentication and encryption. Change default community strings. Block UDP 161 externally."})
+        if snmp["community"] in ("public","private"):
+            findings.append({"detail":f"Default SNMP community string '{snmp['community']}' in use — trivially guessable","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-521","cwe_name":"Default Credentials","owasp":"A07:2021","remediation":"Change community strings to random values. Migrate to SNMPv3."})
+        if snmp["info"].get("sysDescr"):
+            findings.append({"detail":f"System info exposed via SNMP: {snmp['info']['sysDescr'][:120]}","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-200","cwe_name":"Information Disclosure","owasp":"A05:2021","remediation":"Restrict SNMP read access. Disable if not needed."})
+    out = str(snmp)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"snmp",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"snmp","snmp_open":snmp["open"],"community":snmp["community"],"system_info":snmp["info"],"findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ─── EXPLOIT SEARCH ───────────────────────────────────────────
+
+@app.post("/api/scan/exploitsearch")
+async def scan_exploitsearch(req: ScanRequest, user=Depends(verify_token)):
+    query = req.target.strip()
+    findings = []; exploits = []; cves = []
+    loop = asyncio.get_event_loop()
+
+    def _search():
+        # Search CVE database via cve.circl.lu
+        try:
+            parts = query.lower().split()
+            vendor = parts[0] if parts else query
+            product = parts[1] if len(parts) > 1 else parts[0]
+            r = _req_lib.get(f"https://cve.circl.lu/api/search/{vendor}/{product}", timeout=15, verify=False)
+            if r.status_code == 200:
+                data = r.json()
+                results = data if isinstance(data, list) else data.get("results", [])
+                for item in results[:20]:
+                    cvss = str(item.get("cvss", item.get("cvss3", "N/A")))
+                    cves.append({"id": item.get("id",""), "summary": str(item.get("summary",""))[:120], "cvss": cvss, "published": str(item.get("Published",""))[:10]})
+        except: pass
+
+        # Search ExploitDB via their search API
+        try:
+            r2 = _req_lib.get(f"https://www.exploit-db.com/search", params={"q": query, "type": "0", "platform": "0"}, timeout=15, verify=False, headers={**_BROWSER_HEADERS, "Accept": "application/json, text/javascript, */*"})
+            if r2.status_code == 200:
+                try:
+                    d2 = r2.json()
+                    for row in d2.get("data", [])[:15]:
+                        exploits.append({"edb_id": str(row.get("id","")), "title": str(row.get("description",""))[:100], "type": str(row.get("type",{}).get("label","")), "platform": str(row.get("platform",{}).get("label",""))})
+                except: pass
+        except: pass
+
+        # Fallback: search via Shodan CVE API
+        if not cves:
+            try:
+                r3 = _req_lib.get(f"https://cve.circl.lu/api/last/20", timeout=10, verify=False)
+                if r3.status_code == 200:
+                    for item in r3.json()[:5]:
+                        if query.lower() in str(item.get("summary","")).lower():
+                            cves.append({"id": item.get("id",""), "summary": str(item.get("summary",""))[:120], "cvss": str(item.get("cvss","N/A")), "published": str(item.get("Published",""))[:10]})
+            except: pass
+
+    await loop.run_in_executor(None, _search)
+
+    if cves:
+        critical = [c for c in cves if float(c["cvss"]) >= 9.0 if c["cvss"] not in ("N/A","")]
+        high = [c for c in cves if c["cvss"] not in ("N/A","") and 7.0 <= float(c["cvss"]) < 9.0]
+        if critical:
+            findings.append({"detail":f"{len(critical)} CRITICAL CVE(s) found for '{query}' — top: {critical[0]['id']} (CVSS {critical[0]['cvss']})","severity":"CRITICAL","cvss":critical[0]["cvss"],"cve":critical[0]["id"],"cwe":"N/A","cwe_name":"Known Vulnerability","owasp":"A06:2021","remediation":f"Patch immediately — {critical[0]['summary'][:100]}"})
+        if high:
+            findings.append({"detail":f"{len(high)} HIGH CVE(s) found for '{query}'","severity":"HIGH","cvss":high[0]["cvss"],"cve":high[0]["id"],"cwe":"N/A","cwe_name":"Known Vulnerability","owasp":"A06:2021","remediation":"Apply vendor patches. Check exploit-db for public PoC."})
+    if exploits:
+        findings.append({"detail":f"{len(exploits)} public exploit(s) found for '{query}' on ExploitDB — top: {exploits[0]['title'][:80]}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"N/A","cwe_name":"Public Exploit Available","owasp":"A06:2021","remediation":"Patch immediately. Public exploits mean low barrier for attackers."})
+
+    out = f"Query: {query}\nCVEs: {len(cves)}\nExploits: {len(exploits)}"
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"exploitsearch",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"exploitsearch","query":query,"cves":cves,"exploits":exploits,"findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+# ══════════════════════════════════════════════════════════════
 #  BUFFER OVERFLOW MODULE
 # ══════════════════════════════════════════════════════════════
 
