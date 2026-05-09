@@ -842,11 +842,11 @@ async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
 async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
     host = req.target.replace("http://","").replace("https://","").split("/")[0]
     is_external = not any(x in host for x in ["lab_","localhost","127.","192.168.","10.","172."])
-    timing = "-T2" if is_external else "-T4"
+    timing = "-T3" if is_external else "-T4"
     ports  = "100" if is_external else "100"
-    # -Pn skips host discovery (ICMP ping) — required for external hosts that block ping
-    pn     = ["-Pn"] if is_external else []
-    result = await run_tool(["nmap","-sV",timing,"--open","--top-ports",ports] + pn + [host], timeout=150)
+    # External: -sT (TCP connect) bypasses firewall SYN-drop; -Pn skips ICMP ping
+    scan_type = ["-sT","-Pn"] if is_external else ["-sS"]
+    result = await run_tool(["nmap"] + scan_type + ["-sV",timing,"--open","--top-ports",ports,host], timeout=150)
     out = result.get("output","")
     ports = []
     for line in out.splitlines():
@@ -2515,3 +2515,68 @@ async def exploit_shell_stop(lid: str, user=Depends(verify_token)):
             if s.writer: s.writer.close()
         except: pass
     return {"stopped": True}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  BROWSER TERMINAL  (bash session per user)
+# ═══════════════════════════════════════════════════════════════
+_TERM_SESSIONS: dict = {}
+
+class _TermSession:
+    def __init__(self, sid):
+        self.sid  = sid
+        self.proc = None
+        self.buf  = []
+
+@app.post("/api/terminal/create")
+async def terminal_create(user=Depends(verify_token)):
+    sid = str(uuid.uuid4())
+    s = _TermSession(sid)
+    s.proc = await asyncio.create_subprocess_exec(
+        "/bin/bash", "--norc", "--noprofile",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        env={**os.environ, "TERM": "xterm-256color", "PS1": "kali$ "},
+    )
+    _TERM_SESSIONS[sid] = s
+    return {"session_id": sid, "ok": True}
+
+@app.post("/api/terminal/input")
+async def terminal_input(body: dict, user=Depends(verify_token)):
+    sid = body.get("session_id", "")
+    s   = _TERM_SESSIONS.get(sid)
+    if not s or not s.proc:
+        return {"error": "no session"}
+    try:
+        s.proc.stdin.write((body.get("input", "") + "\n").encode())
+        await s.proc.stdin.drain()
+        await asyncio.sleep(0.5)
+        try:
+            while True:
+                data = await asyncio.wait_for(s.proc.stdout.readline(), timeout=0.25)
+                if not data: break
+                s.buf.append(data.decode("utf-8", errors="replace"))
+        except asyncio.TimeoutError:
+            pass
+    except Exception as e:
+        return {"error": str(e)}
+    return {"ok": True}
+
+@app.post("/api/terminal/output")
+async def terminal_output(body: dict, user=Depends(verify_token)):
+    sid = body.get("session_id", "")
+    s   = _TERM_SESSIONS.get(sid)
+    if not s:
+        return {"output": "", "error": "no session"}
+    out = "".join(s.buf); s.buf = []
+    return {"output": out, "ok": True}
+
+@app.post("/api/terminal/close")
+async def terminal_close(body: dict, user=Depends(verify_token)):
+    sid = body.get("session_id", "")
+    s   = _TERM_SESSIONS.pop(sid, None)
+    if s:
+        try: s.proc.kill()
+        except: pass
+    return {"ok": True}
