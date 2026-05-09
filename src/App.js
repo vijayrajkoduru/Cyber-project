@@ -394,6 +394,8 @@ function generatePDF(reportData) {
   const { target, date, riskScore, riskLabel, summary, findings, ports, gobuster, ffuf, sqlmap, whatweb, toolsUsed, subdomains, dns, wafw00f, cms, ssl, cookies, cors, xss,
           commix, lfi, openredirect, sensitivefiles, hydra, ssrf, xxe, clickjacking, verbtamper, pollution,
           csrf, idor, ssti, fileupload,
+          deserial, protopollution, typejuggling, jwt, graphql, nosql, oauth, hostheader, websocket, takeover, otp,
+          rfi, smuggling, responsesplitting, sessionfixation, dataexfil, racecondition, smb, ftp, smtp, snmp,
           companyName, reporterName, reporterRole, customLogo, template } = reportData;
   // wasRun(key): returns true if tool was run or if toolsUsed is empty (show all)
   const _toolSet = new Set(toolsUsed||[]);
@@ -973,20 +975,40 @@ function generatePDF(reportData) {
     //  ADVANCED SECURITY TESTING (flows after previous section)
     // ════════════════════════════════════════════════════════════
     const advChecks = [
-      {label:"Command Injection",     res:commix,       owasp:"A03"},
-      {label:"Path Traversal / LFI",  res:lfi,          owasp:"A01"},
-      {label:"Open Redirect",         res:openredirect, owasp:"A01"},
-      {label:"Sensitive File Exposure",res:sensitivefiles,owasp:"A05"},
-      {label:"Auth Brute Force",      res:hydra,        owasp:"A07"},
-      {label:"SSRF Testing",          res:ssrf,         owasp:"A10"},
-      {label:"XXE Injection",         res:xxe,          owasp:"A03"},
-      {label:"Clickjacking",          res:clickjacking, owasp:"A05"},
-      {label:"HTTP Verb Tampering",   res:verbtamper,   owasp:"A05"},
-      {label:"Parameter Pollution",   res:pollution,    owasp:"A03"},
-      {label:"CSRF Testing",          res:csrf,         owasp:"A01"},
-      {label:"IDOR / Access Control", res:idor,         owasp:"A01"},
-      {label:"SSTI Testing",          res:ssti,         owasp:"A03"},
-      {label:"File Upload Testing",   res:fileupload,   owasp:"A05"},
+      {label:"Command Injection",       res:commix,           owasp:"A03"},
+      {label:"Path Traversal / LFI",    res:lfi,              owasp:"A01"},
+      {label:"Remote File Inclusion",   res:rfi,              owasp:"A03"},
+      {label:"Open Redirect",           res:openredirect,     owasp:"A01"},
+      {label:"Sensitive File Exposure", res:sensitivefiles,   owasp:"A05"},
+      {label:"Auth Brute Force",        res:hydra,            owasp:"A07"},
+      {label:"SSRF Testing",            res:ssrf,             owasp:"A10"},
+      {label:"XXE Injection",           res:xxe,              owasp:"A03"},
+      {label:"Clickjacking",            res:clickjacking,     owasp:"A05"},
+      {label:"HTTP Verb Tampering",     res:verbtamper,       owasp:"A05"},
+      {label:"Parameter Pollution",     res:pollution,        owasp:"A03"},
+      {label:"CSRF Testing",            res:csrf,             owasp:"A01"},
+      {label:"IDOR / Access Control",   res:idor,             owasp:"A01"},
+      {label:"SSTI Testing",            res:ssti,             owasp:"A03"},
+      {label:"File Upload Testing",     res:fileupload,       owasp:"A05"},
+      {label:"HTTP Request Smuggling",  res:smuggling,        owasp:"A02"},
+      {label:"Session Fixation",        res:sessionfixation,  owasp:"A07"},
+      {label:"Data Exfiltration",       res:dataexfil,        owasp:"A09"},
+      {label:"Race Condition",          res:racecondition,    owasp:"A04"},
+      {label:"Insecure Deserialization",res:deserial,         owasp:"A08"},
+      {label:"Prototype Pollution",     res:protopollution,   owasp:"A03"},
+      {label:"PHP Type Juggling",       res:typejuggling,     owasp:"A07"},
+      {label:"JWT Attacks",             res:jwt,              owasp:"A07"},
+      {label:"GraphQL Security",        res:graphql,          owasp:"A03"},
+      {label:"NoSQL Injection",         res:nosql,            owasp:"A03"},
+      {label:"OAuth / SAML Attacks",    res:oauth,            owasp:"A01"},
+      {label:"Host Header Injection",   res:hostheader,       owasp:"A03"},
+      {label:"WebSocket Security",      res:websocket,        owasp:"A01"},
+      {label:"Subdomain Takeover",      res:takeover,         owasp:"A05"},
+      {label:"2FA / OTP Bypass",        res:otp,              owasp:"A07"},
+      {label:"SMB Enumeration",         res:smb,              owasp:"A05"},
+      {label:"FTP Enumeration",         res:ftp,              owasp:"A05"},
+      {label:"SMTP User Enum",          res:smtp,             owasp:"A05"},
+      {label:"SNMP Scanner",            res:snmp,             owasp:"A05"},
     ];
     // Only show phases that were actually run
     const advRun    = advChecks.filter(c=>c.res);
@@ -1521,6 +1543,12 @@ function WebAppModule(props) {
     date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
     template:"standard", customLogo:null
   });
+  const [authCookie, setAuthCookie]         = useState("");
+  const [authBearer, setAuthBearer]         = useState("");
+  const [showAuthPanel, setShowAuthPanel]   = useState(false);
+  const [customWordlist, setCustomWordlist] = useState(null);
+  const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
+  const [showHistory, setShowHistory]       = useState(false);
 
   const add = l => setLines(p => [...p, l]);
 
@@ -1541,9 +1569,13 @@ function WebAppModule(props) {
     if (normTarget !== target) setTarget(normTarget);
     stopRef.current = false; setStopped(false);
     setRunningState(true); setDone([]); setFailed([]); setSkipped([]); setAll({}); setFinished(false);
+    // Save to target history
+    setTargetHistory(prev => { const updated = [normTarget, ...prev.filter(t=>t!==normTarget)].slice(0,10); localStorage.setItem("cyberTargetHistory", JSON.stringify(updated)); return updated; });
+    // Request notification permission
+    if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission();
     const activePhases = PHASES.map((ph,i)=>({ph,i})).filter(({i})=>selectedPhases.has(i));
     const isExternal = !normTarget.includes("lab_") && !normTarget.includes("localhost") && !normTarget.match(/https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
-    setLines(["[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "")]);
+    setLines(["[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "") + (authCookie||authBearer?" — authenticated":"") + (customWordlist?" — custom wordlist":"")]);
     const results = {};
     for (let idx = 0; idx < activePhases.length; idx++) {
       if (stopRef.current) {
@@ -1554,7 +1586,7 @@ function WebAppModule(props) {
       setCurPhase(i);
       add("[*] Phase " + (idx+1) + "/" + activePhases.length + ": Running " + ph.tool + "...");
       try {
-        const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {});
+        const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, authCookie?{auth_cookie:authCookie}:{}, authBearer?{auth_bearer:authBearer}:{}, customWordlist?{wordlist:customWordlist}:{});
         const data = await api(ph.endpoint, "POST", body, token);
         results[ph.tool] = data;
         if (ph.tool==="sqlmap"  && data.vulnerable)  add("✗ SQL INJECTION FOUND — CRITICAL!");
@@ -1596,7 +1628,12 @@ function WebAppModule(props) {
         await new Promise(r => setTimeout(r, 1500));
       }
     }
-    if (!stopRef.current) add("✓ Pentest complete — " + activePhases.length + " phases done");
+    if (!stopRef.current) {
+      add("✓ Pentest complete — " + activePhases.length + " phases done");
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification("Pentest Complete", { body: normTarget + " — " + activePhases.length + " phases done", icon: "" });
+      }
+    }
     setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
   };
 
@@ -1609,7 +1646,7 @@ function WebAppModule(props) {
     setDone(p => p.filter(x => x !== i));
     add("[*] Re-running: " + ph.name + " on " + normTarget);
     try {
-      const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {});
+      const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, authCookie?{auth_cookie:authCookie}:{}, authBearer?{auth_bearer:authBearer}:{}, customWordlist?{wordlist:customWordlist}:{});
       const data = await api(ph.endpoint, "POST", body, token);
       setAll(prev => ({...prev, [ph.tool]: data}));
       setDone(p => [...p.filter(x => x !== i), i]);
@@ -1625,12 +1662,10 @@ function WebAppModule(props) {
   // PDF + CSV export
   const dlPDF = (cfg = {}) => {
     const allFindings = [];
-    const phases = ["nikto","headers","ssl","cors","cookies","cms","xss","wafw00f",
-                    "commix","lfi","openredirect","sensitivefiles","hydra","ssrf","xxe","clickjacking","verbtamper","pollution",
-                    "csrf","idor","ssti","fileupload"];
-    phases.forEach(p => {
-      if (allResults[p] && allResults[p].findings) {
-        allResults[p].findings.forEach(f => { if(f.severity!=="INFO") allFindings.push(f); });
+    // Collect findings from ALL 51 scan tools automatically
+    PHASES.forEach(ph => {
+      if (allResults[ph.tool]?.findings) {
+        allResults[ph.tool].findings.forEach(f => { if(f.severity!=="INFO") allFindings.push(f); });
       }
     });
     // XSS — returns {vulnerable:true} not findings array
@@ -1697,14 +1732,41 @@ function WebAppModule(props) {
       hydra:        allResults["hydra"]        || null,
       ssrf:         allResults["ssrf"]         || null,
       xxe:          allResults["xxe"]          || null,
-      clickjacking: allResults["clickjacking"] || null,
-      verbtamper:   allResults["verbtamper"]   || null,
-      pollution:    allResults["pollution"]    || null,
-      csrf:         allResults["csrf"]         || null,
-      idor:         allResults["idor"]         || null,
-      ssti:         allResults["ssti"]         || null,
-      fileupload:   allResults["fileupload"]   || null,
+      clickjacking:     allResults["clickjacking"]     || null,
+      verbtamper:       allResults["verbtamper"]       || null,
+      pollution:        allResults["pollution"]        || null,
+      csrf:             allResults["csrf"]             || null,
+      idor:             allResults["idor"]             || null,
+      ssti:             allResults["ssti"]             || null,
+      fileupload:       allResults["fileupload"]       || null,
+      deserial:         allResults["deserial"]         || null,
+      protopollution:   allResults["protopollution"]   || null,
+      typejuggling:     allResults["typejuggling"]     || null,
+      jwt:              allResults["jwt"]              || null,
+      graphql:          allResults["graphql"]          || null,
+      nosql:            allResults["nosql"]            || null,
+      oauth:            allResults["oauth"]            || null,
+      hostheader:       allResults["hostheader"]       || null,
+      websocket:        allResults["websocket"]        || null,
+      takeover:         allResults["takeover"]         || null,
+      otp:              allResults["otp"]              || null,
+      rfi:              allResults["rfi"]              || null,
+      smuggling:        allResults["smuggling"]        || null,
+      responsesplitting:allResults["responsesplitting"]|| null,
+      sessionfixation:  allResults["sessionfixation"]  || null,
+      dataexfil:        allResults["dataexfil"]        || null,
+      racecondition:    allResults["racecondition"]    || null,
+      smb:              allResults["smb"]              || null,
+      ftp:              allResults["ftp"]              || null,
+      smtp:             allResults["smtp"]             || null,
+      snmp:             allResults["snmp"]             || null,
     });
+  };
+
+  const dlJSON = () => {
+    const blob = new Blob([JSON.stringify({target, scanDate: new Date().toISOString(), results: allResults}, null, 2)], {type:"application/json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "pentest_raw_" + Date.now() + ".json"; a.click();
   };
 
   const dlCSV = () => {
@@ -1764,9 +1826,44 @@ function WebAppModule(props) {
 
         {/* Target input row */}
         <div style={{marginTop:8}}>
-          <label style={{display:"block",fontSize:11,color:"#64748b",fontWeight:600,marginBottom:5,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+            <label style={{fontSize:11,color:"#64748b",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
+            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:10,cursor:"pointer"}}>🕐 History ({targetHistory.length})</button>}
+            <button onClick={()=>setShowAuthPanel(a=>!a)} style={{background:showAuthPanel||authCookie||authBearer?"#1e3a8a":"#1e293b",border:"1px solid "+(authCookie||authBearer?"#3b82f6":"#334155"),borderRadius:4,padding:"2px 8px",color:authCookie||authBearer?"#93c5fd":"#64748b",fontSize:10,cursor:"pointer"}}>🔑 Auth {authCookie||authBearer?"✓":""}</button>
+            <label style={{background:"#1e293b",border:"1px solid "+(customWordlist?"#22c55e":"#334155"),borderRadius:4,padding:"2px 8px",color:customWordlist?"#4ade80":"#64748b",fontSize:10,cursor:"pointer"}}>
+              📋 Wordlist {customWordlist?`(${customWordlist.length})`:""}
+              <input type="file" accept=".txt" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const lines=ev.target.result.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);setCustomWordlist(lines);};r.readAsText(f);}}/>
+            </label>
+            {customWordlist && <button onClick={()=>setCustomWordlist(null)} style={{background:"none",border:"none",color:"#ef4444",fontSize:10,cursor:"pointer"}}>✕ clear</button>}
+          </div>
+          {showHistory && targetHistory.length>0 && (
+            <div style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
+              {targetHistory.map((t,i)=>(
+                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid #1e293b":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#93c5fd",fontFamily:"JetBrains Mono,monospace"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <span style={{color:"#334155",fontSize:10}}>{i+1}</span>{t}
+                </div>
+              ))}
+            </div>
+          )}
+          {showAuthPanel && (
+            <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:6,padding:"12px",marginBottom:8,display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:2}}>AUTHENTICATED SCANNING — headers sent with every request</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Session Cookie</div>
+                  <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)} placeholder="PHPSESSID=abc123; token=xyz" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Bearer Token (JWT)</div>
+                  <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiJ9..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+              {(authCookie||authBearer) && <div style={{fontSize:10,color:"#22c55e"}}>✓ Auth active — all scan requests will include these credentials</div>}
+            </div>
+          )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            <input value={target} onChange={e=>setTarget(e.target.value)}
+            <input value={target} onChange={e=>setTarget(e.target.value)} onFocus={()=>setShowHistory(targetHistory.length>0)}
               placeholder="example.com  or  http://192.168.1.1:8080"
               style={{flex:3,minWidth:220,background:"#020617",border:"1px solid "+(running?"#3b82f6":"#1e3a8a"),borderRadius:6,padding:"11px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
             {!running ? (
@@ -1799,6 +1896,7 @@ function WebAppModule(props) {
                 <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>⚠ RISK: {lb} ({sc}/100)</div>
                 <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>📄 Report</button>
                 <button onClick={dlCSV} style={{background:"#166534",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>📊 CSV</button>
+                <button onClick={dlJSON} style={{background:"#1e3a8a",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>🗃 JSON</button>
               </>;
             })()}
           </div>

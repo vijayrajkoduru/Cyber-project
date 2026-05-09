@@ -32,6 +32,19 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
 class ScanRequest(BaseModel):
     target: str
     api_key: Optional[str] = None
+    auth_cookie: Optional[str] = None       # e.g. "PHPSESSID=abc123; token=xyz"
+    auth_bearer: Optional[str] = None       # e.g. "eyJhbGci..."
+    wordlist: Optional[List[str]] = None    # custom paths for gobuster/ffuf
+
+def _make_req_headers(req=None):
+    """Merge browser headers with optional auth from ScanRequest."""
+    h = dict(_BROWSER_HEADERS)
+    if req:
+        if getattr(req, 'auth_cookie', None):
+            h['Cookie'] = req.auth_cookie
+        if getattr(req, 'auth_bearer', None):
+            h['Authorization'] = f'Bearer {req.auth_bearer}'
+    return h
 
 SCAN_HISTORY = []
 
@@ -843,16 +856,19 @@ _FUZZ_PATHS = [
     "cgi-bin/test.cgi","dvwa","dvwa/login.php","WebGoat","mutillidae","bWAPP",
 ]
 
-async def _python_fuzz(base_url: str, concurrency: int=20) -> list:
+async def _python_fuzz(base_url: str, concurrency: int=20, custom_paths: list=None, extra_headers: dict=None) -> list:
     found = []
     base = _web_url(base_url).rstrip("/")
     sem = asyncio.Semaphore(concurrency)
     loop = asyncio.get_event_loop()
+    paths = custom_paths if custom_paths else _FUZZ_PATHS
+    hdrs = dict(_BROWSER_HEADERS)
+    if extra_headers: hdrs.update(extra_headers)
 
     def _sync_check(path):
         try:
             r = _req_lib.get(f"{base}/{path}", timeout=6, verify=False,
-                             headers=_BROWSER_HEADERS, allow_redirects=False)
+                             headers=hdrs, allow_redirects=False)
             if r.status_code in (200, 201, 301, 302, 403):
                 return {"path": f"/{path}", "status": r.status_code,
                         "size": len(r.content),
@@ -867,7 +883,7 @@ async def _python_fuzz(base_url: str, concurrency: int=20) -> list:
             if result:
                 found.append(result)
 
-    await asyncio.gather(*[_check(p) for p in _FUZZ_PATHS])
+    await asyncio.gather(*[_check(p) for p in paths])
     return sorted(found, key=lambda x: x["path"])
 
 
@@ -1237,7 +1253,7 @@ async def scan_cors(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/gobuster")
 async def scan_gobuster(req: ScanRequest, user=Depends(verify_token)):
-    items = await _python_fuzz(req.target)
+    items = await _python_fuzz(req.target, custom_paths=req.wordlist, extra_headers=_make_req_headers(req) if (req.auth_cookie or req.auth_bearer) else None)
     discovered = [item["path"] for item in items if item["status"]==200]
     out = "\n".join(f"/{item['status']} {item['path']}" for item in items)
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"gobuster",req.target,{"output":out})
@@ -1264,7 +1280,7 @@ async def scan_dns(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/ffuf")
 async def scan_ffuf(req: ScanRequest, user=Depends(verify_token)):
-    items = await _python_fuzz(req.target)
+    items = await _python_fuzz(req.target, custom_paths=req.wordlist, extra_headers=_make_req_headers(req) if (req.auth_cookie or req.auth_bearer) else None)
     discovered = [item["path"] for item in items]
     out = "\n".join(f"[{item['status']}] {item['path']} [{item['size']} bytes]" for item in items)
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"ffuf",req.target,{"output":out})
