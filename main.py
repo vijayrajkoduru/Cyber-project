@@ -2267,11 +2267,12 @@ async def exploit_search(req: ExploitRequest, user=Depends(verify_token)):
         data = _json.loads(out)
         for e in (data.get("RESULTS_EXPLOIT") or data.get("RESULTS_SHELLCODE") or []):
             exploits.append({
-                "title": e.get("Title",""),
-                "path":  e.get("Path",""),
-                "type":  e.get("Type",""),
-                "date":  e.get("Date",""),
-                "edb":   e.get("EDB-ID",""),
+                "title":    e.get("Title",""),
+                "path":     e.get("Path",""),
+                "type":     e.get("Type",""),
+                "date":     e.get("Date",""),
+                "edb_id":   e.get("EDB-ID",""),
+                "platform": e.get("Platform",""),
             })
     except Exception:
         for line in out.splitlines():
@@ -2371,14 +2372,18 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
         pass
     out = result.get("output", "")
     session_opened = "Meterpreter session" in out or "Command shell session" in out or "session 1 opened" in out.lower()
+    session_id_m = re.search(r'session (\d+) opened', out, re.IGNORECASE)
+    session_id = int(session_id_m.group(1)) if session_id_m else (1 if session_opened else None)
     error = None
     for line in out.splitlines():
         if "[-]" in line or "Error" in line or "failed" in line.lower():
             error = line.strip()
             break
+    message = "Session opened" if session_opened else (error or "No session — check module/payload/target compatibility")
     return {
         "target": req.target, "module": module, "payload": payload,
-        "session_opened": session_opened, "error": error,
+        "session_opened": session_opened, "session_id": session_id,
+        "error": error, "message": message,
         "raw_output": out
     }
 
@@ -2409,6 +2414,8 @@ async def exploit_payload(req: ExploitRequest, user=Depends(verify_token)):
         "payload": payload, "format": fmt,
         "lhost": req.lhost, "lport": req.lport,
         "size": size, "raw_output": out,
+        "output_file": out_file,
+        "listener_cmd": f"nc -lvnp {req.lport}",
         "message": f"Payload generated: {size} bytes ({fmt})" if size else out.strip()
     }
 

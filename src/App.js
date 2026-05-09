@@ -6086,7 +6086,7 @@ function ExploitModule({token, onRunningChange}) {
               {payloadResult && (
                 <div style={S.card}>
                   <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:8}}>💊 Payload — {payloadResult.payload} ({payloadResult.size} bytes)</div>
-                  <div style={{fontSize:10.5,color:"#64748b",marginBottom:6}}>Saved: <span style={{color:"#e2e8f0",fontFamily:"monospace"}}>{payloadResult.output_file}</span></div>
+                  <div style={{fontSize:10.5,color:"#64748b",marginBottom:6}}>Output: <span style={{color:"#e2e8f0",fontFamily:"monospace"}}>{payloadResult.output_file||"/tmp/payload."+payloadResult.format}</span></div>
                   {payloadResult.delivery && (
                     <div style={{background:"#020617",borderRadius:4,padding:8,fontFamily:"JetBrains Mono,monospace",fontSize:10,color:"#4ade80",whiteSpace:"pre-wrap"}}>
                       {payloadResult.delivery}
