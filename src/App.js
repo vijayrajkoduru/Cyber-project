@@ -1391,59 +1391,87 @@ function generateModuleReport(reportData) {
 // ReconModule is defined below (before ZAPModule)
 
 
+// ── Section 1: Reconnaissance & Fingerprinting (OSWA Phase 1) ──
+// ── Section 2: Discovery & Fuzzing ──────────────────────────────
+// ── Section 3: Injection Attacks (OSWA Core) ────────────────────
+// ── Section 4: Authentication & Session (OSWA + OSWE) ───────────
+// ── Section 5: File & Path Attacks (OSWA) ───────────────────────
+// ── Section 6: Network & Protocol Attacks (OSWA) ────────────────
+// ── Section 7: Modern Web Vulnerabilities (OSWE Focus) ──────────
+// ── Section 8: Infrastructure & Services (OSCP) ─────────────────
 const PHASES = [
-  {name:"WAF Detection",          tool:"wafw00f",    endpoint:"/api/scan/wafw00f",  icon:"🛡"},
-  {name:"Tech Fingerprinting",    tool:"whatweb",    endpoint:"/api/scan/whatweb",  icon:"🔍"},
-  {name:"CMS Detection",          tool:"cms",        endpoint:"/api/scan/cms",      icon:"📦"},
-  {name:"Port Scanning",          tool:"nmap",       endpoint:"/api/scan/nmap",     icon:"🔌", body:{scan_type:"quick"}},
-  {name:"SSL/TLS Analysis",       tool:"ssl",        endpoint:"/api/scan/ssl",      icon:"🔒"},
-  {name:"Header Security",        tool:"headers",    endpoint:"/api/scan/headers",  icon:"📋"},
-  {name:"Cookie Analysis",        tool:"cookies",    endpoint:"/api/scan/cookies",  icon:"🍪"},
-  {name:"CORS Testing",           tool:"cors",       endpoint:"/api/scan/cors",     icon:"🌐"},
-  {name:"Directory Enumeration",  tool:"gobuster",   endpoint:"/api/scan/gobuster", icon:"📁"},
-  {name:"Subdomain Discovery",    tool:"subdomains", endpoint:"/api/scan/subdomains",icon:"🌍"},
-  {name:"XSS Testing",           tool:"xss",        endpoint:"/api/scan/xss",      icon:"⚡"},
-  {name:"Vulnerability Scan",     tool:"nikto",      endpoint:"/api/scan/nikto",    icon:"🎯"},
-  {name:"SQL Injection Test",     tool:"sqlmap",     endpoint:"/api/scan/sqlmap",   icon:"💉"},
-  {name:"DNS Enumeration",        tool:"dig",        endpoint:"/api/scan/dns",      icon:"🔎"},
-  {name:"Web Fuzzing (ffuf)",     tool:"ffuf",          endpoint:"/api/scan/ffuf",          icon:"🧪", body:{options:{mode:"dirs"}}},
-  {name:"Command Injection",      tool:"commix",        endpoint:"/api/scan/commix",        icon:"💻"},
-  {name:"Path Traversal / LFI",   tool:"lfi",           endpoint:"/api/scan/lfi",           icon:"📂"},
-  {name:"Remote File Inclusion",  tool:"rfi",           endpoint:"/api/scan/rfi",           icon:"🌐"},
-  {name:"Insecure Deserialization",tool:"deserial",     endpoint:"/api/scan/deserial",      icon:"📦"},
-  {name:"HTTP Request Smuggling", tool:"smuggling",     endpoint:"/api/scan/smuggling",     icon:"🚚"},
+  // ── SECTION 1: Reconnaissance & Fingerprinting ──────────────
+  {name:"WAF Detection",          tool:"wafw00f",       endpoint:"/api/scan/wafw00f",           icon:"🛡"},
+  {name:"Tech Fingerprinting",    tool:"whatweb",       endpoint:"/api/scan/whatweb",           icon:"🔍"},
+  {name:"CMS Detection",          tool:"cms",           endpoint:"/api/scan/cms",               icon:"📦"},
+  {name:"Port Scanning",          tool:"nmap",          endpoint:"/api/scan/nmap",              icon:"🔌", body:{scan_type:"quick"}},
+  {name:"SSL/TLS Analysis",       tool:"ssl",           endpoint:"/api/scan/ssl",               icon:"🔒"},
+  {name:"DNS Enumeration",        tool:"dig",           endpoint:"/api/scan/dns",               icon:"🔎"},
+  {name:"Subdomain Discovery",    tool:"subdomains",    endpoint:"/api/scan/subdomains",        icon:"🌍"},
+  {name:"Subdomain Takeover",     tool:"takeover",      endpoint:"/api/scan/takeover",          icon:"🎯"},
+  {name:"Vulnerability Scan",     tool:"nikto",         endpoint:"/api/scan/nikto",             icon:"🎯"},
+  {name:"Sensitive File Exposure",tool:"sensitivefiles",endpoint:"/api/scan/sensitivefiles",    icon:"🗂"},
+  {name:"Exploit Search",         tool:"exploitsearch", endpoint:"/api/scan/exploitsearch",     icon:"🔍"},
+  // ── SECTION 2: Discovery & Fuzzing ──────────────────────────
+  {name:"Directory Enumeration",  tool:"gobuster",      endpoint:"/api/scan/gobuster",          icon:"📁"},
+  {name:"Web Fuzzing (ffuf)",     tool:"ffuf",          endpoint:"/api/scan/ffuf",              icon:"🧪", body:{options:{mode:"dirs"}}},
+  // ── SECTION 3: Injection Attacks ────────────────────────────
+  {name:"XSS Testing",            tool:"xss",           endpoint:"/api/scan/xss",               icon:"⚡"},
+  {name:"SQL Injection Test",     tool:"sqlmap",        endpoint:"/api/scan/sqlmap",            icon:"💉"},
+  {name:"NoSQL Injection",        tool:"nosql",         endpoint:"/api/scan/nosql",             icon:"🍃"},
+  {name:"Command Injection",      tool:"commix",        endpoint:"/api/scan/commix",            icon:"💻"},
+  {name:"XXE Injection",          tool:"xxe",           endpoint:"/api/scan/xxe",               icon:"📄"},
+  {name:"SSTI Testing",           tool:"ssti",          endpoint:"/api/scan/ssti",              icon:"📝"},
+  {name:"Host Header Injection",  tool:"hostheader",    endpoint:"/api/scan/hostheader",        icon:"🏠"},
+  // ── SECTION 4: Authentication & Session ─────────────────────
+  {name:"Header Security",        tool:"headers",       endpoint:"/api/scan/headers",           icon:"📋"},
+  {name:"Cookie Analysis",        tool:"cookies",       endpoint:"/api/scan/cookies",           icon:"🍪"},
+  {name:"Session Fixation",       tool:"sessionfixation",endpoint:"/api/scan/sessionfixation",  icon:"📌"},
+  {name:"Auth Brute Force",       tool:"hydra",         endpoint:"/api/scan/hydra",             icon:"🔑"},
+  {name:"CSRF Testing",           tool:"csrf",          endpoint:"/api/scan/csrf",              icon:"🛡"},
+  {name:"IDOR / Access Control",  tool:"idor",          endpoint:"/api/scan/idor",              icon:"🔓"},
+  {name:"JWT Attacks",            tool:"jwt",           endpoint:"/api/scan/jwt",               icon:"🎟"},
+  {name:"OAuth / SAML Attacks",   tool:"oauth",         endpoint:"/api/scan/oauth",             icon:"🔐"},
+  {name:"2FA / OTP Bypass",       tool:"otp",           endpoint:"/api/scan/otp",               icon:"🔢"},
+  // ── SECTION 5: File & Path Attacks ──────────────────────────
+  {name:"Path Traversal / LFI",   tool:"lfi",           endpoint:"/api/scan/lfi",               icon:"📂"},
+  {name:"Remote File Inclusion",  tool:"rfi",           endpoint:"/api/scan/rfi",               icon:"🌐"},
+  {name:"File Upload Testing",    tool:"fileupload",    endpoint:"/api/scan/fileupload",        icon:"📤"},
+  // ── SECTION 6: Network & Protocol Attacks ───────────────────
+  {name:"CORS Testing",           tool:"cors",          endpoint:"/api/scan/cors",              icon:"🌐"},
+  {name:"SSRF Testing",           tool:"ssrf",          endpoint:"/api/scan/ssrf",              icon:"🔄"},
+  {name:"HTTP Request Smuggling", tool:"smuggling",     endpoint:"/api/scan/smuggling",         icon:"🚚"},
   {name:"HTTP Response Splitting",tool:"responsesplitting",endpoint:"/api/scan/responsesplitting",icon:"✂"},
-  {name:"Session Fixation",       tool:"sessionfixation",endpoint:"/api/scan/sessionfixation",icon:"📌"},
-  {name:"Open Redirect",          tool:"openredirect",  endpoint:"/api/scan/openredirect",  icon:"↩"},
-  {name:"Sensitive File Exposure",tool:"sensitivefiles",endpoint:"/api/scan/sensitivefiles",icon:"🗂"},
-  {name:"Auth Brute Force",       tool:"hydra",         endpoint:"/api/scan/hydra",         icon:"🔑"},
-  {name:"SSRF Testing",           tool:"ssrf",          endpoint:"/api/scan/ssrf",          icon:"🔄"},
-  {name:"XXE Injection",          tool:"xxe",           endpoint:"/api/scan/xxe",           icon:"📄"},
-  {name:"Clickjacking",           tool:"clickjacking",  endpoint:"/api/scan/clickjacking",  icon:"🖱"},
-  {name:"HTTP Verb Tampering",    tool:"verbtamper",    endpoint:"/api/scan/verbtamper",    icon:"🔀"},
-  {name:"Parameter Pollution",    tool:"pollution",     endpoint:"/api/scan/pollution",     icon:"♾"},
-  {name:"CSRF Testing",           tool:"csrf",          endpoint:"/api/scan/csrf",           icon:"🛡"},
-  {name:"IDOR / Access Control",  tool:"idor",          endpoint:"/api/scan/idor",           icon:"🔓"},
-  {name:"SSTI Testing",           tool:"ssti",          endpoint:"/api/scan/ssti",           icon:"📝"},
-  {name:"File Upload Testing",    tool:"fileupload",    endpoint:"/api/scan/fileupload",     icon:"📤"},
-  {name:"Data Exfiltration Check",tool:"dataexfil",    endpoint:"/api/scan/dataexfil",      icon:"📤"},
-  {name:"Race Condition Test",    tool:"racecondition", endpoint:"/api/scan/racecondition",  icon:"⚡"},
-  {name:"SMB Enumeration",        tool:"smb",           endpoint:"/api/scan/smb",            icon:"🗂"},
-  {name:"FTP Enumeration",        tool:"ftp",           endpoint:"/api/scan/ftp",            icon:"📁"},
-  {name:"SMTP User Enum",         tool:"smtp",          endpoint:"/api/scan/smtp",           icon:"📧"},
-  {name:"SNMP Scanner",           tool:"snmp",          endpoint:"/api/scan/snmp",           icon:"📡"},
-  {name:"Exploit Search",         tool:"exploitsearch", endpoint:"/api/scan/exploitsearch",  icon:"🔍"},
-  {name:"Prototype Pollution",    tool:"protopollution",endpoint:"/api/scan/protopollution",  icon:"☣"},
-  {name:"PHP Type Juggling",      tool:"typejuggling",  endpoint:"/api/scan/typejuggling",    icon:"🔢"},
-  {name:"JWT Attacks",            tool:"jwt",           endpoint:"/api/scan/jwt",              icon:"🎟"},
-  {name:"GraphQL Security",       tool:"graphql",       endpoint:"/api/scan/graphql",          icon:"◈"},
-  {name:"NoSQL Injection",        tool:"nosql",         endpoint:"/api/scan/nosql",            icon:"🍃"},
-  {name:"OAuth / SAML Attacks",   tool:"oauth",         endpoint:"/api/scan/oauth",            icon:"🔐"},
-  {name:"Host Header Injection",  tool:"hostheader",    endpoint:"/api/scan/hostheader",       icon:"🏠"},
-  {name:"WebSocket Security",     tool:"websocket",     endpoint:"/api/scan/websocket",        icon:"🔌"},
-  {name:"Subdomain Takeover",     tool:"takeover",      endpoint:"/api/scan/takeover",         icon:"🎯"},
-  {name:"2FA / OTP Bypass",       tool:"otp",           endpoint:"/api/scan/otp",              icon:"🔢"},
+  {name:"HTTP Verb Tampering",    tool:"verbtamper",    endpoint:"/api/scan/verbtamper",        icon:"🔀"},
+  {name:"Parameter Pollution",    tool:"pollution",     endpoint:"/api/scan/pollution",         icon:"♾"},
+  {name:"Open Redirect",          tool:"openredirect",  endpoint:"/api/scan/openredirect",      icon:"↩"},
+  {name:"Clickjacking",           tool:"clickjacking",  endpoint:"/api/scan/clickjacking",      icon:"🖱"},
+  {name:"Data Exfiltration Check",tool:"dataexfil",     endpoint:"/api/scan/dataexfil",         icon:"📤"},
+  {name:"WebSocket Security",     tool:"websocket",     endpoint:"/api/scan/websocket",         icon:"🔌"},
+  // ── SECTION 7: Modern Web Vulnerabilities (OSWE) ────────────
+  {name:"Insecure Deserialization",tool:"deserial",     endpoint:"/api/scan/deserial",          icon:"📦"},
+  {name:"Prototype Pollution",    tool:"protopollution",endpoint:"/api/scan/protopollution",    icon:"☣"},
+  {name:"PHP Type Juggling",      tool:"typejuggling",  endpoint:"/api/scan/typejuggling",      icon:"🔢"},
+  {name:"GraphQL Security",       tool:"graphql",       endpoint:"/api/scan/graphql",           icon:"◈"},
+  {name:"Race Condition Test",    tool:"racecondition", endpoint:"/api/scan/racecondition",     icon:"⚡"},
+  // ── SECTION 8: Infrastructure & Services (OSCP) ─────────────
+  {name:"SMB Enumeration",        tool:"smb",           endpoint:"/api/scan/smb",               icon:"🗂"},
+  {name:"FTP Enumeration",        tool:"ftp",           endpoint:"/api/scan/ftp",               icon:"📁"},
+  {name:"SMTP User Enum",         tool:"smtp",          endpoint:"/api/scan/smtp",              icon:"📧"},
+  {name:"SNMP Scanner",           tool:"snmp",          endpoint:"/api/scan/snmp",              icon:"📡"},
 ];
+
+// Section header definitions — keyed by the first tool in each section
+const SECTION_HEADERS = {
+  "wafw00f":       {label:"Section 1 — Reconnaissance & Fingerprinting", sub:"OSWA Phase 1 • 11 scanners", color:"#3b82f6"},
+  "gobuster":      {label:"Section 2 — Discovery & Fuzzing",             sub:"OSWA Phase 2 • 2 scanners",  color:"#06b6d4"},
+  "xss":           {label:"Section 3 — Injection Attacks",               sub:"OSWA Core • 7 scanners",     color:"#ef4444"},
+  "headers":       {label:"Section 4 — Authentication & Session",        sub:"OSWA + OSWE • 9 scanners",   color:"#a855f7"},
+  "lfi":           {label:"Section 5 — File & Path Attacks",             sub:"OSWA • 3 scanners",          color:"#f97316"},
+  "cors":          {label:"Section 6 — Network & Protocol Attacks",      sub:"OSWA • 10 scanners",         color:"#0891b2"},
+  "deserial":      {label:"Section 7 — Modern Web Vulnerabilities",      sub:"OSWE Focus • 5 scanners",    color:"#22c55e"},
+  "smb":           {label:"Section 8 — Infrastructure & Services",       sub:"OSCP • 4 scanners",          color:"#eab308"},
+};
 
 function WebAppModule(props) {
   const token = props.token;
@@ -1808,7 +1836,18 @@ function WebAppModule(props) {
           const circBg     = isDone?(isSkipped?"#1c1000":isFailed?"#1c0505":isSQLi?"#1c0a0a":"#052e16"):isActive?"#0c1a3d":"#020617";
           const circBord   = isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):isActive?"#3b82f6":"#1e293b";
           const isSelected = selectedPhases.has(i);
+          const secHdr     = SECTION_HEADERS[ph.tool];
           return (
+            <React.Fragment key={i}>
+            {secHdr && (
+              <div style={{display:"flex",alignItems:"center",gap:10,marginTop:i===0?0:10,marginBottom:6,paddingLeft:4}}>
+                <div style={{width:3,height:32,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:secHdr.color,letterSpacing:"0.05em",textTransform:"uppercase"}}>{secHdr.label}</div>
+                  <div style={{fontSize:9,color:"#475569",fontFamily:"JetBrains Mono,monospace"}}>{secHdr.sub}</div>
+                </div>
+              </div>
+            )}
             <div key={i} onClick={()=>{ if(running) return; setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; }); }}
               style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`3px solid ${leftCol}`,borderRadius:8,padding:"12px 18px",display:"flex",alignItems:"center",gap:14,cursor:running?"default":"pointer",opacity:isSelected?1:0.35,transition:"all 0.2s"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:circBg,border:"2px solid "+circBord,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>
@@ -1844,6 +1883,7 @@ function WebAppModule(props) {
                 </button>
               )}
             </div>
+            </React.Fragment>
           );
         })}
       </div>
