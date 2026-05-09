@@ -764,8 +764,8 @@ function generatePDF(reportData) {
       fillR(margin,y,contentW,7,LIGHT);
       txt("SQL Injection (SQLMap)",margin+3,y+5,8.5,DARK,true);
       const vulnC = sqlmap&&sqlmap.vulnerable?RED:GREEN;
-      const vulnL = sqlmap&&sqlmap.vulnerable?"VULNERABLE":"NOT VULNERABLE";
-      const vulnW = sqlmap&&sqlmap.vulnerable?22:36;
+      const vulnL = sqlmap&&sqlmap.vulnerable?"VULNERABLE":"PASSED";
+      const vulnW = sqlmap&&sqlmap.vulnerable?22:18;
       rrect(margin+63,y+1.5,vulnW,4,1,sqlmap&&sqlmap.vulnerable?[254,226,226]:[220,252,231]);
       doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...vulnC);
       doc.text(vulnL,margin+65,y+5);
@@ -839,7 +839,7 @@ function generatePDF(reportData) {
       const corsVuln = cors && cors.vulnerable;
       rrect(margin+3,y+2,corsVuln?22:28,5,1,corsVuln?[254,226,226]:[220,252,231]);
       doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...(corsVuln?RED:GREEN));
-      doc.text(corsVuln?"VULNERABLE":"SECURE",margin+5,y+6);
+      doc.text(corsVuln?"VULNERABLE":"PASSED",margin+5,y+6);
       txt(corsVuln?"CORS misconfiguration detected — arbitrary origin allowed":"No CORS misconfiguration detected",margin+35,y+6,8,DARK);
       y+=10;
     }
@@ -901,7 +901,7 @@ function generatePDF(reportData) {
       const xssVuln = xss && xss.vulnerable;
       rrect(margin+3,y+2,xssVuln?22:28,5,1,xssVuln?[254,226,226]:[220,252,231]);
       doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...(xssVuln?RED:GREEN));
-      doc.text(xssVuln?"VULNERABLE":"SECURE",margin+5,y+6);
+      doc.text(xssVuln?"VULNERABLE":"PASSED",margin+5,y+6);
       txt(xssVuln?"XSS vulnerability detected — sanitize user input":"No XSS vulnerability detected",margin+35,y+6,8,DARK);
       y+=10;
     }
@@ -974,9 +974,9 @@ function generatePDF(reportData) {
         txt(c.label,margin+3,y+5,8,DARK,true);
         const isVuln = c.res && c.res.vulnerable === true;
         const hasRealFinds = c.res && Array.isArray(c.res.findings) && c.res.findings.some(f=>["CRITICAL","HIGH","MEDIUM"].includes(f.severity));
-        const status = isVuln || hasRealFinds ? "VULNERABLE" : "SECURE";
+        const status = isVuln || hasRealFinds ? "VULNERABLE" : "PASSED";
         const stColor = status==="VULNERABLE"?RED:GREEN;
-        rrect(margin+73,y+1.5,status==="VULNERABLE"?18:14,4,1,stColor);
+        rrect(margin+73,y+1.5,status==="VULNERABLE"?18:13,4,1,stColor);
         doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(...WHITE);
         doc.text(status,margin+75,y+5);
         txt(c.owasp,margin+96,y+5,7.5,GRAY);
