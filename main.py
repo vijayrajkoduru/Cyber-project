@@ -420,11 +420,10 @@ def _path_is_real(base_url: str, path: str) -> bool:
 
 @app.post("/api/scan/nikto")
 async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["nikto", "-h", _web_url(req.target), "-nointeractive"], timeout=120)
+    result = await run_tool(["nikto", "-h", _web_url(req.target), "-nointeractive", "-maxtime", "140"], timeout=150)
     out = result.get("output","")
     is_spa = _detect_spa(req.target)
 
-    # Paths that nikto probes but are almost always false positives (especially on SPAs)
     FP_PATH_KEYWORDS = [
         ".bash_history",".sh_history",".mysql_history",".psql_history",".sqlite_history",".zsh_history",
         "JAMonAdmin.jsp","PasswordsData.json","login.json","master.json","masters.json",
@@ -438,28 +437,26 @@ async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
         if not line.startswith("+ "): continue
         if any(s in line for s in ["Target IP","Target Hostname","Target Port","Start Time","End Time",
                                     "host(s) tested","Nikto v","requests:","No CGI Directories",
-                                    "out of date","OSVDB","Unable to connect","FAIL","Error",
-                                    "could not","timed out","Scan terminated"]): continue
-        detail = re.sub(r"^\+\s*\[\d+\]\s*","",line).strip().lstrip("+ ").strip()
+                                    "Unable to connect","FAIL","could not","timed out","Scan terminated"]): continue
+        # Strip OSVDB reference prefix (OSVDB entries ARE real findings)
+        detail = re.sub(r"^\+\s*OSVDB-\d+:\s*","",line).strip()
+        detail = re.sub(r"^\+\s*\[\d+\]\s*","",detail).strip().lstrip("+ ").strip()
         detail = re.sub(r"\s*See:\s*https?://\S+","",detail,flags=re.IGNORECASE).strip()
         if not detail or len(detail)<15: continue
 
         detail_lower = detail.lower()
-
-        # Drop known false-positive probe paths
         if any(fp in detail_lower for fp in FP_PATH_KEYWORDS): continue
-
-        # Drop generic "might be interesting" lines on SPAs — SPA returns 200 for everything
         if is_spa and "might be interesting" in detail_lower: continue
-
-        # For any file-existence claim: verify the path actually returns non-HTML content
         if "might be interesting" in detail_lower or "contains authorization" in detail_lower:
             path_m = re.search(r"^(/[^\s:,]+)", detail)
             if path_m and not _path_is_real(req.target, path_m.group(1)):
-                continue  # Path returns HTML — SPA false positive
+                continue
 
-        findings.append({"detail":detail,"severity":_sev(detail),"cvss":"0.0","cve":"N/A",
-                         "cwe":"N/A","cwe_name":"Web Vulnerability","owasp":"A05:2021","remediation":_rem(detail)})
+        sev  = _sev(detail)
+        cvss = "9.8" if sev=="CRITICAL" else "7.5" if sev=="HIGH" else "5.3" if sev=="MEDIUM" else "3.1"
+        cwe  = "CWE-89" if "sql" in detail_lower else "CWE-79" if "xss" in detail_lower else "CWE-200" if "disclosure" in detail_lower or "directory index" in detail_lower else "CWE-16"
+        findings.append({"detail":detail,"severity":sev,"cvss":cvss,"cve":"N/A",
+                         "cwe":cwe,"cwe_name":"Web Vulnerability","owasp":"A05:2021","remediation":_rem(detail)})
 
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"nikto",req.target,result)
@@ -495,9 +492,12 @@ async def scan_sqlmap(req: ScanRequest, user=Depends(verify_token)):
     vuln_params = re.findall(r"Parameter:\s*(.+?)\s+\(", out)
     for p in dict.fromkeys(vuln_params):
         findings.append({"detail":f"SQL Injection in parameter: {p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"SQL Injection","owasp":"A03:2021","remediation":"Use parameterised queries / prepared statements"})
+    # also catch "is vulnerable" phrasing from sqlmap output
+    if not findings and re.search(r"is vulnerable|injectable|sqlmap identified", out, re.IGNORECASE):
+        findings.append({"detail":"SQL Injection detected — see raw output for full details","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"SQL Injection","owasp":"A03:2021","remediation":"Use parameterised queries / prepared statements"})
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"sqlmap",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"sqlmap","findings":findings,"total":len(findings),"raw_output":out,"command":result.get("cmd",""),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"sqlmap","vulnerable":len(findings)>0,"findings":findings,"total":len(findings),"raw_output":out,"command":result.get("cmd",""),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/headers")
