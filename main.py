@@ -329,7 +329,7 @@ async def recon_theharvester(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/recon/dirb")
 async def recon_dirb(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["dirb", req.target, "/usr/share/wordlists/dirb/common.txt", "-S", "-r"], timeout=120)
+    result = await run_tool(["dirb", _web_url(req.target), "/usr/share/wordlists/dirb/common.txt", "-S", "-r"], timeout=120)
     out = result.get("output","")
     found = []
     for line in out.splitlines():
@@ -642,7 +642,7 @@ async def scan_cms(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/dirb")
 async def scan_dirb(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["dirb",req.target,"/usr/share/wordlists/dirb/common.txt","-S","-r"], timeout=120)
+    result = await run_tool(["dirb",_web_url(req.target),"/usr/share/wordlists/dirb/common.txt","-S","-r"], timeout=120)
     out = result.get("output","")
     found = []
     for line in out.splitlines():
@@ -658,8 +658,8 @@ async def scan_dirb(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/nuclei")
 async def nuclei_scan(req: ScanRequest, user=Depends(verify_token)):
-    cmd = ["nuclei","-u",req.target,"-severity","critical,high,medium,low","-c","25","-timeout","10","-no-color","-jsonl"]
-    result = await run_tool(cmd, timeout=300)
+    cmd = ["nuclei","-u",_web_url(req.target),"-severity","critical,high,medium,low","-c","10","-timeout","8","-no-color","-jsonl"]
+    result = await run_tool(cmd, timeout=240)
     findings = []
     CVSS_MAP = {"critical":"9.8","high":"7.5","medium":"5.3","low":"3.1"}
     for line in result["output"].split("\n"):
@@ -761,7 +761,7 @@ async def lfi_scan(req: ScanRequest, user=Depends(verify_token)):
 async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
     findings = []
     try:
-        r = _req_lib.get(req.target,timeout=10,verify=False,headers={"User-Agent":"Mozilla/5.0"},allow_redirects=True)
+        r = _req_lib.get(_web_url(req.target),timeout=15,verify=False,headers=_BROWSER_HEADERS,allow_redirects=True)
         forms = re.findall(r"<form[^>]*?>.*?</form>",r.text,re.DOTALL|re.IGNORECASE)
         csrf_patterns = ["csrf","_token","token","authenticity_token","__requestverificationtoken","xsrf","nonce"]
         for i,form in enumerate(forms):
@@ -786,7 +786,7 @@ async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
 # ══════════════════════════════════════════════════════════════
 
 def _http_get(url, timeout=10, headers=None):
-    h = {"User-Agent":"Mozilla/5.0"};
+    h = dict(_BROWSER_HEADERS)
     if headers: h.update(headers)
     try: return _req_lib.get(url,timeout=timeout,verify=False,headers=h,allow_redirects=True)
     except: return None
@@ -827,7 +827,7 @@ async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
 async def scan_cors(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
     try:
-        r = _req_lib.get(req.target,timeout=10,verify=False,headers={"User-Agent":"Mozilla/5.0","Origin":"https://evil.com"},allow_redirects=True)
+        r = _req_lib.get(_web_url(req.target),timeout=15,verify=False,headers={**_BROWSER_HEADERS,"Origin":"https://evil.com"},allow_redirects=True)
         acao = r.headers.get("Access-Control-Allow-Origin","")
         acac = r.headers.get("Access-Control-Allow-Credentials","")
         if acao in ("*","https://evil.com"):
@@ -955,7 +955,7 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
     payloads = ["?url=https://evil.com","?redirect=https://evil.com","?next=https://evil.com","?return=https://evil.com","?to=https://evil.com"]
     for p in payloads:
         try:
-            r = _req_lib.get(req.target+p,timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"},allow_redirects=False)
+            r = _req_lib.get(_web_url(req.target)+p,timeout=10,verify=False,headers=_BROWSER_HEADERS,allow_redirects=False)
             loc = r.headers.get("Location","")
             if "evil.com" in loc:
                 vulnerable = True
@@ -1306,7 +1306,7 @@ async def scan_fileupload(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/dataexfil")
 async def scan_dataexfil(req: ScanRequest, user=Depends(verify_token)):
     findings = []
-    r = _http_get(req.target, timeout=10)
+    r = _http_get(_web_url(req.target), timeout=15)
     if r:
         patterns = [(r"\b\d{16}\b","Credit card number pattern"),
                     (r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b","Email address exposed"),
@@ -1325,7 +1325,7 @@ async def scan_racecondition(req: ScanRequest, user=Depends(verify_token)):
         import concurrent.futures
         def _fetch(i):
             try:
-                r = _req_lib.get(req.target,timeout=5,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+                r = _req_lib.get(_web_url(req.target),timeout=5,verify=False,headers=_BROWSER_HEADERS)
                 return r.status_code
             except: return 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
