@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { jsPDF } from "jspdf";
 
 const API = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
