@@ -1497,6 +1497,7 @@ function WebAppModule(props) {
         else if (ph.tool==="lfi"           && data.vulnerable) add("✗ PATH TRAVERSAL/LFI FOUND — CRITICAL!");
         else if (ph.tool==="openredirect"  && data.vulnerable) add("✗ OPEN REDIRECT FOUND — " + data.total + " param(s)");
         else if (ph.tool==="sensitivefiles"&& data.total>0)    add("✗ SENSITIVE FILES EXPOSED: " + data.total + " found");
+        else if (ph.tool==="hydra" && data.skipped)    { add("⚠ Auth Brute Force skipped for external target — use Password Attacks module."); setSkipped(p=>[...p,i]); setDone(p=>[...p,i]); setAll(Object.assign({},results)); continue; }
         else if (ph.tool==="hydra"         && data.vulnerable) add("✗ WEAK CREDENTIALS FOUND — CRITICAL!");
         else if (ph.tool==="ssrf"          && data.vulnerable) add("✗ SSRF VULNERABILITY FOUND — HIGH!");
         else if (ph.tool==="xxe"           && data.vulnerable) add("✗ XXE INJECTION FOUND — CRITICAL!");

@@ -167,11 +167,21 @@ def _recon_host(target: str) -> str:
     return t.split("/")[0].strip()
 
 def _web_url(target: str) -> str:
-    """Normalize target to a full URL. Accepts domain, IP, or URL."""
     t = target.strip()
     if not t.startswith("http://") and not t.startswith("https://"):
         t = "http://" + t
     return t
+
+def _is_external(target: str) -> bool:
+    host = _recon_host(target)
+    return not any(x in host for x in ["lab_","localhost","127.","192.168.","10.","172.20.","0.0.0.0"])
+
+_BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Connection": "keep-alive",
+}
 
 
 @app.post("/api/recon/whois")
@@ -1000,6 +1010,9 @@ async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/hydra")
 async def scan_hydra(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
+    if _is_external(req.target):
+        scan_id = str(uuid.uuid4()); save_scan(scan_id,"hydra",req.target,{"output":"skipped-external"})
+        return {"scan_id":scan_id,"target":req.target,"tool":"hydra","vulnerable":False,"findings":[],"total":0,"skipped":True,"reason":"Use Password Attacks module for external targets","timestamp":datetime.datetime.utcnow().isoformat()}
     base = req.target.rstrip("/")
     # Try multiple known login paths for different lab apps
     login_paths = [
@@ -1051,12 +1064,12 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
         ("http://127.0.0.1/",                                 ["html","body","localhost","apache","nginx","iis"],            "Localhost access"),
         ("http://localhost:8080/",                             ["html","body","tomcat","jetty","spring"],                    "Internal service :8080"),
     ]
-    headers = {"User-Agent":"Mozilla/5.0","X-Forwarded-For":"127.0.0.1"}
+    ssrf_headers = {**_BROWSER_HEADERS, "X-Forwarded-For":"127.0.0.1"}
     for param in params:
         for (internal_url, indicators, label) in internal_targets:
             test_url = f"{base}?{param}={internal_url}"
             try:
-                r = _req_lib.get(test_url, timeout=3, verify=False, headers=headers, allow_redirects=True)
+                r = _req_lib.get(test_url, timeout=3, verify=False, headers=ssrf_headers, allow_redirects=True)
                 if r.status_code == 200 and any(ind.lower() in r.text.lower() for ind in indicators):
                     vulnerable = True
                     findings.append({
@@ -1073,7 +1086,7 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
     for param in ["url","redirect","next","return","callback"]:
         test_url = f"{base}?{param}=http://169.254.169.254/"
         try:
-            r = _req_lib.get(test_url, timeout=3, verify=False, headers=headers, allow_redirects=False)
+            r = _req_lib.get(test_url, timeout=3, verify=False, headers=ssrf_headers, allow_redirects=False)
             loc = r.headers.get("Location","")
             if "169.254" in loc or "127.0.0.1" in loc or "localhost" in loc:
                 findings.append({
@@ -1152,7 +1165,7 @@ async def scan_clickjacking(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
     url = _web_url(req.target)
     try:
-        r = _req_lib.get(url, timeout=10, verify=False, headers={"User-Agent":"Mozilla/5.0"})
+        r = _req_lib.get(url, timeout=15, verify=False, headers=_BROWSER_HEADERS)
     except:
         scan_id = str(uuid.uuid4()); save_scan(scan_id,"clickjacking",req.target,{"output":"unreachable"})
         return {"scan_id":scan_id,"target":req.target,"tool":"clickjacking","vulnerable":False,"findings":[],"total":0,"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -1196,7 +1209,7 @@ async def scan_clickjacking(req: ScanRequest, user=Depends(verify_token)):
 async def scan_verbtamper(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
     try:
-        r = _req_lib.options(req.target,timeout=10,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+        r = _req_lib.options(_web_url(req.target),timeout=15,verify=False,headers=_BROWSER_HEADERS)
         allow = r.headers.get("Allow","")
         dangerous = [m for m in ["PUT","DELETE","TRACE","CONNECT","PATCH"] if m in allow]
         if dangerous:
@@ -1210,8 +1223,8 @@ async def scan_verbtamper(req: ScanRequest, user=Depends(verify_token)):
 async def scan_pollution(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
     try:
-        r1 = _req_lib.get(req.target+"?id=1",timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
-        r2 = _req_lib.get(req.target+"?id=1&id=2",timeout=8,verify=False,headers={"User-Agent":"Mozilla/5.0"})
+        r1 = _req_lib.get(_web_url(req.target)+"?id=1",timeout=15,verify=False,headers=_BROWSER_HEADERS)
+        r2 = _req_lib.get(_web_url(req.target)+"?id=1&id=2",timeout=15,verify=False,headers=_BROWSER_HEADERS)
         # Only flag if the response difference is substantial (>100 chars) — not just timestamps/session IDs
         if r1 and r2 and abs(len(r1.text)-len(r2.text)) > 100:
             vulnerable = True
