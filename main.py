@@ -1789,14 +1789,14 @@ def _smb_null_session(host: str, port: int = 445) -> bool:
         dialects = b"\x02NT LM 0.12\x00\x02SMB 2.002\x00\x02SMB 2.???\x00"
         byte_count = len(dialects)
         smb_data = (
-            b"\xffSMB\x72"                    # Header + Negotiate cmd
-            b"\x00\x00\x00\x00"               # Status
-            b"\x18\x01\x28"                   # Flags
-            b"\x00\x00"                        # PID High
-            b"\x00" * 8                        # Signature
-            b"\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00"  # Reserved/TID/PID/UID/MID
-            b"\x00"                            # Word Count
-            + _struct2.pack("<H", byte_count)  # Byte Count
+            b"\xffSMB\x72"                              # Header + Negotiate cmd
+            b"\x00\x00\x00\x00"                         # Status
+            b"\x18\x01\x28"                             # Flags
+            b"\x00\x00"                                  # PID High
+            b"\x00\x00\x00\x00\x00\x00\x00\x00"        # Signature (8 bytes)
+            b"\x00\x00\xff\xff\xff\xff\x00\x00\x00\x00" # Reserved/TID/PID/UID/MID
+            b"\x00"                                      # Word Count
+            + _struct2.pack("<H", byte_count)            # Byte Count
             + dialects
         )
         nb_len = _struct2.pack(">I", len(smb_data))
