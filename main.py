@@ -426,8 +426,8 @@ async def scan_nikto_unused(req: ScanRequest, user=Depends(verify_token)):
                          "cwe":cwe,"cwe_name":"Web Vulnerability","owasp":"A05:2021","remediation":_rem(detail)})
 
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"nikto",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"nikto","findings":findings,"total":len(findings),"raw_output":out,"command":result.get("cmd",""),"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id,"nikto",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"nikto","findings":findings,"total":len(findings),"raw_output":out,"command":"","timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/nmap_vuln")
@@ -450,7 +450,7 @@ async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_token)):
     out = "\n".join(f"{p['port']}/tcp open {p['service']} {p['version']}" for p in open_ports)
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"nmap_vuln",req.target,{"output":out})
-    return {"scan_id":scan_id,"target":req.target,"tool":"nmap_vuln","findings":findings,"total":len(findings),"raw_output":out,"command":result.get("cmd",""),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"nmap_vuln","findings":findings,"total":len(findings),"raw_output":out,"command":"python _tcp_scan","timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/sqlmap")
@@ -793,21 +793,23 @@ _TOP_PORTS = [21,22,23,25,53,80,110,111,135,139,143,443,445,465,587,
               5985,6379,8080,8443,8888,9200,27017]
 
 
-async def _tcp_scan(host: str, ports=None, timeout: float=1.5) -> list:
+async def _tcp_scan(host: str, ports=None, timeout: float=2.5) -> list:
     if ports is None: ports = _TOP_PORTS
+    sem = asyncio.Semaphore(50)
     async def _probe(port):
-        try:
-            r, w = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
-            banner = ""
+        async with sem:
             try:
-                w.write(b"\r\n"); await w.drain()
-                d = await asyncio.wait_for(r.read(256), timeout=0.8)
-                banner = d.decode("utf-8", errors="replace").strip()[:80]
-            except: pass
-            try: w.close(); await w.wait_closed()
-            except: pass
-            return {"port":port,"proto":"tcp","state":"open","service":_SVC.get(port,"unknown"),"version":banner}
-        except: return None
+                r, w = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+                banner = ""
+                try:
+                    w.write(b"\r\n"); await w.drain()
+                    d = await asyncio.wait_for(r.read(256), timeout=1.0)
+                    banner = d.decode("utf-8", errors="replace").strip()[:80]
+                except: pass
+                try: w.close(); await w.wait_closed()
+                except: pass
+                return {"port":port,"proto":"tcp","state":"open","service":_SVC.get(port,"unknown"),"version":banner}
+            except: return None
     results = await asyncio.gather(*[_probe(p) for p in ports])
     return [r for r in results if r]
 
@@ -838,24 +840,31 @@ _FUZZ_PATHS = [
     "cgi-bin/test.cgi","dvwa","dvwa/login.php","WebGoat","mutillidae","bWAPP",
 ]
 
-async def _python_fuzz(base_url: str, concurrency: int=25) -> list:
+async def _python_fuzz(base_url: str, concurrency: int=20) -> list:
     found = []
     base = _web_url(base_url).rstrip("/")
-    connector = _aiohttp.TCPConnector(ssl=False, limit=concurrency)
-    to = _aiohttp.ClientTimeout(total=8, connect=4)
-    async with _aiohttp.ClientSession(connector=connector, timeout=to, headers=_BROWSER_HEADERS) as sess:
-        sem = asyncio.Semaphore(concurrency)
-        async def _check(path):
-            async with sem:
-                try:
-                    async with sess.get(f"{base}/{path}", allow_redirects=False) as r:
-                        if r.status in (200,201,301,302,403):
-                            found.append({"path":f"/{path}","status":r.status,
-                                "size":int(r.headers.get("content-length",0)),
-                                "content_type":r.headers.get("content-type","").split(";")[0].strip(),
-                                "redirect":r.headers.get("location","")})
-                except: pass
-        await asyncio.gather(*[_check(p) for p in _FUZZ_PATHS])
+    sem = asyncio.Semaphore(concurrency)
+    loop = asyncio.get_event_loop()
+
+    def _sync_check(path):
+        try:
+            r = _req_lib.get(f"{base}/{path}", timeout=6, verify=False,
+                             headers=_BROWSER_HEADERS, allow_redirects=False)
+            if r.status_code in (200, 201, 301, 302, 403):
+                return {"path": f"/{path}", "status": r.status_code,
+                        "size": len(r.content),
+                        "content_type": r.headers.get("content-type","").split(";")[0].strip(),
+                        "redirect": r.headers.get("location","")}
+        except: pass
+        return None
+
+    async def _check(path):
+        async with sem:
+            result = await loop.run_in_executor(None, _sync_check, path)
+            if result:
+                found.append(result)
+
+    await asyncio.gather(*[_check(p) for p in _FUZZ_PATHS])
     return sorted(found, key=lambda x: x["path"])
 
 
@@ -1186,7 +1195,7 @@ async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
     waf = await loop.run_in_executor(None, _detect_waf, _web_url(req.target))
     out = f"WAF detected: {waf}" if waf else "No WAF detected"
     findings = [{"detail":f"WAF detected: {waf}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"WAF","owasp":"N/A","remediation":"WAF is a defensive control."}] if waf else []
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"wafw00f",req.target,result)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"wafw00f",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"wafw00f","waf":waf,"detected":bool(waf),"findings":findings,"output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/whatweb")
