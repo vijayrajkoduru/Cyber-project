@@ -3,37 +3,18 @@ FROM kalilinux/kali-rolling
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# Install all scanning tools + Python in one layer
+# Only keep Kali tools we cannot replicate in Python:
+#   metasploit-framework  — live exploit execution (msfconsole/msfvenom)
+#   netcat-openbsd        — reverse shell listener for BOF module
+#   curl wget             — minimal HTTP utilities
+# Everything else (nmap, sqlmap, nikto, gobuster, dirb, ffuf, sslscan,
+# whois, dnsrecon, amass, sherlock, dnstwist, wafw00f, whatweb, hydra,
+# commix, theharvester, recon-ng, hping3, tcpdump) is now pure Python.
 RUN apt-get update -q && apt-get install -y -q --no-install-recommends \
     python3 python3-pip python3-venv \
-    nmap masscan \
-    nikto gobuster dirb \
-    hydra sqlmap \
-    wafw00f whatweb \
-    sslscan \
-    ffuf \
-    commix \
-    dnsrecon whois \
-    theharvester amass \
-    dnstwist sherlock recon-ng \
-    tcpdump hping3 \
-    dnschef \
-    seclists wordlists \
-    exploitdb \
     metasploit-framework \
-    curl wget netcat-openbsd \
+    netcat-openbsd curl wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Install XSStrike (Python XSS scanner)
-RUN git clone https://github.com/s0md3v/XSStrike /usr/share/xsstrike 2>/dev/null || true \
-    && pip3 install -r /usr/share/xsstrike/requirements.txt 2>/dev/null || true
-
-# Decompress rockyou wordlist
-RUN gzip -d /usr/share/wordlists/rockyou.txt.gz 2>/dev/null || true
-
-# Give masscan raw socket access without sudo inside container
-RUN setcap cap_net_raw,cap_net_admin+eip /usr/bin/masscan 2>/dev/null || true
-RUN setcap cap_net_raw,cap_net_admin+eip /usr/bin/nmap 2>/dev/null || true
 
 WORKDIR /app
 

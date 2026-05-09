@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List
-import subprocess, asyncio, re, json, uuid, datetime, os
+import subprocess, asyncio, re, json, uuid, datetime, os, ssl as _ssl_lib, socket as _socket_lib, time as _time, itertools as _itertools
 from urllib.parse import urlparse
 
 app = FastAPI(title="OSCP Dashboard API")
@@ -76,16 +76,17 @@ async def login(req: LoginRequest):
 
 @app.get("/api/health")
 async def health():
-    tools = ["nmap","masscan","nikto","gobuster","dirb","hydra","sqlmap",
-             "wafw00f","whatweb","dnsrecon","whois","amass","theharvester",
-             "tcpdump","hping3","commix","curl","wget","dnschef"]
-    free_tools = {}
-    for tool in tools:
-        result = await run_tool(["which", tool], timeout=5)
-        free_tools[tool] = {"available": bool(result.get("output","").strip()), "cost": "FREE"}
+    python_tools = ["port_scanner","web_fuzzer","sqli_engine","ssl_analyzer",
+                    "dns_enum","whois_lookup","waf_detector","cms_detector",
+                    "xss_scanner","subdomain_enum","username_osint","dnstwist"]
+    free_tools = {t: {"available": True, "cost": "FREE", "type": "python"} for t in python_tools}
+    msf = await run_tool(["which", "msfconsole"], timeout=5)
+    free_tools["metasploit"] = {"available": bool(msf.get("output","").strip()), "cost": "FREE", "type": "kali"}
+    free_tools["netcat"]     = {"available": True, "cost": "FREE", "type": "kali"}
     return {
         "status": "ok",
-        "version": "2.0.0",
+        "version": "3.0.0",
+        "architecture": "hybrid-python",
         "free_tools": free_tools,
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
@@ -93,13 +94,13 @@ async def health():
 @app.post("/api/tools/status")
 @app.get("/api/tools/status")
 async def tools_status(user=Depends(verify_token)):
-    tools = ["nmap","masscan","nikto","gobuster","dirb","hydra","sqlmap",
-             "wafw00f","whatweb","dnsrecon","whois","amass","theharvester",
-             "tcpdump","hping3","commix","curl","wget"]
-    status = {}
-    for tool in tools:
-        result = await run_tool(["which", tool], timeout=5)
-        status[tool] = "installed" if result.get("output","").strip() else "missing"
+    python_tools = ["port_scanner","web_fuzzer","sqli_engine","ssl_analyzer",
+                    "dns_enum","waf_detector","cms_detector","xss_scanner",
+                    "subdomain_enum","username_osint","dnstwist","nikto_equiv"]
+    status = {t: "python-native" for t in python_tools}
+    msf = await run_tool(["which", "msfconsole"], timeout=5)
+    status["metasploit"] = "installed" if msf.get("output","").strip() else "missing"
+    status["netcat"] = "installed"
     return {"status": status, "timestamp": datetime.datetime.utcnow().isoformat()}
 
 @app.get("/api/history")
@@ -187,28 +188,17 @@ _BROWSER_HEADERS = {
 @app.post("/api/recon/whois")
 async def recon_whois(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["whois", host], timeout=30)
-    out = result.get("output","")
-    def _get(patterns, text):
-        for p in patterns:
-            m = re.search(p, text, re.IGNORECASE | re.MULTILINE)
-            if m: return m.group(1).strip()
-        return None
-    registrar   = _get([r"Registrar:\s*(.+)", r"registrar:\s*(.+)"], out)
-    created     = _get([r"Creation Date:\s*(.+)", r"Created:\s*(.+)", r"created:\s*(.+)"], out)
-    expires     = _get([r"Expiry Date:\s*(.+)", r"Registry Expiry Date:\s*(.+)", r"expires:\s*(.+)"], out)
-    updated     = _get([r"Updated Date:\s*(.+)", r"last-modified:\s*(.+)"], out)
-    registrant  = _get([r"Registrant Name:\s*(.+)", r"Registrant Organization:\s*(.+)"], out)
-    country     = _get([r"Registrant Country:\s*(.+)", r"country:\s*(.+)"], out)
-    name_servers = re.findall(r"Name Server:\s*(.+)", out, re.IGNORECASE)
-    name_servers = [ns.strip().lower() for ns in name_servers[:6]]
+    loop = asyncio.get_event_loop()
+    w = await loop.run_in_executor(None, _whois_query, host)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "whois", req.target, result)
+    save_scan(scan_id, "whois", req.target, {"output": w.get("raw","")})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "whois",
-        "registrar": registrar, "created": created, "expires": expires,
-        "updated": updated, "registrant": registrant, "country": country,
-        "name_servers": name_servers, "raw_output": out,
+        "registrar": w.get("registrar"), "created": w.get("created"),
+        "expires": w.get("expires"), "updated": w.get("updated"),
+        "registrant": None, "country": None,
+        "name_servers": w.get("name_servers",[]),
+        "raw_output": w.get("raw",""),
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
 
@@ -216,30 +206,17 @@ async def recon_whois(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/nmap")
 async def recon_nmap(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["nmap", "-sV", "-sC", "-T4", "--open", "--top-ports", "1000", host], timeout=180)
-    out = result.get("output","")
-    ports = []
-    for line in out.splitlines():
-        m = re.match(r"(\d+)/(tcp|udp)\s+(\w+)\s+(.+)", line.strip())
-        if m:
-            port, proto, state, service = m.groups()
-            parts = service.split(None, 1)
-            svc_name = parts[0] if parts else service
-            version  = parts[1] if len(parts)>1 else ""
-            ports.append({"port":int(port),"proto":proto,"state":state,"service":svc_name,"version":version.strip()})
-    banner = None
-    bm = re.search(r"\|[_ ]\s*banner:\s*(.+)", out, re.IGNORECASE)
-    if bm: banner = bm.group(1).strip()
-    os_guess = None
-    om = re.search(r"OS details?:\s*(.+)", out, re.IGNORECASE)
-    if om: os_guess = om.group(1).strip()
+    ports = await _tcp_scan(host)
+    banners = await _banner_grab(host)
+    banner = next(iter(banners.values()), None)
+    out = "\n".join(f"{p['port']}/tcp open {p['service']} {p['version']}" for p in ports)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "nmap", req.target, result)
+    save_scan(scan_id, "nmap", req.target, {"output": out})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "nmap",
         "ports": ports, "total_open": len(ports),
-        "banner": banner, "os_guess": os_guess,
-        "raw_output": out, "command": result.get("cmd",""),
+        "banner": banner, "os_guess": None,
+        "raw_output": out, "command": "python _tcp_scan",
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
 
@@ -247,15 +224,11 @@ async def recon_nmap(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/masscan")
 async def recon_masscan(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["masscan", host, "-p1-65535", "--rate=1000", "--wait=2"], timeout=120)
-    out = result.get("output","")
-    ports = []
-    for line in out.splitlines():
-        m = re.search(r"Discovered open port (\d+)/(\w+) on (.+)", line)
-        if m:
-            ports.append({"port":int(m.group(1)),"proto":m.group(2),"host":m.group(3).strip()})
+    open_ports = await _tcp_scan(host)
+    ports = [{"port":p["port"],"proto":p["proto"],"host":host} for p in open_ports]
+    out = "\n".join(f"Discovered open port {p['port']}/tcp on {host}" for p in open_ports)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "masscan", req.target, result)
+    save_scan(scan_id, "masscan", req.target, {"output": out})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "masscan",
         "ports": sorted(ports, key=lambda x:x["port"]),
@@ -267,19 +240,11 @@ async def recon_masscan(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/dns")
 async def recon_dns(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["dnsrecon", "-d", host, "-t", "std"], timeout=60)
-    out = result.get("output","")
-    records = []
-    for line in out.splitlines():
-        line = line.strip()
-        for rtype in ["A","AAAA","MX","NS","TXT","SOA","CNAME","PTR","SRV"]:
-            pattern = rf"\[\*\]\s+{rtype}\s+(.+)"
-            m = re.match(pattern, line, re.IGNORECASE)
-            if m:
-                records.append({"type":rtype,"value":m.group(1).strip()})
-                break
+    loop = asyncio.get_event_loop()
+    records = await loop.run_in_executor(None, _dns_enum_records, host)
+    out = "\n".join(f"[*] {r['type']} {r['value']}" for r in records)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "dnsrecon", req.target, result)
+    save_scan(scan_id, "dnsrecon", req.target, {"output": out})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "dnsrecon",
         "records": records, "total": len(records), "raw_output": out,
@@ -290,16 +255,10 @@ async def recon_dns(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/subdomains")
 async def recon_subdomains(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["sublist3r", "-d", host, "-t", "5", "-o", "/dev/null"], timeout=120)
-    out = result.get("output","")
-    subdomains = []
-    for line in out.splitlines():
-        line = line.strip()
-        if line and host in line and not line.startswith("[") and not line.startswith("-"):
-            subdomains.append(line)
-    subdomains = list(dict.fromkeys(subdomains))
+    subdomains = await _enum_subdomains(host)
+    out = "\n".join(subdomains)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "sublist3r", req.target, result)
+    save_scan(scan_id, "sublist3r", req.target, {"output": out})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "sublist3r",
         "subdomains": subdomains, "total": len(subdomains), "raw_output": out,
@@ -310,35 +269,37 @@ async def recon_subdomains(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/theharvester")
 async def recon_theharvester(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["theHarvester", "-d", host, "-b", "bing,crtsh,dnsdumpster", "-l", "100"], timeout=120)
-    out = result.get("output","")
-    FALSE_POSITIVE_DOMAINS = ["edge-security.com","github.com","python.org","kali.org"]
-    emails_raw = list(dict.fromkeys(re.findall(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", out)))
-    emails = [e for e in emails_raw if not any(e.endswith("@"+d) for d in FALSE_POSITIVE_DOMAINS)]
-    hosts  = list(dict.fromkeys(re.findall(r"(?:\d{1,3}\.){3}\d{1,3}", out)))
-    hosts  = [h for h in hosts if not h.startswith("127.") and not h.startswith("0.")]
+    # crt.sh for email harvest + subdomains
+    emails = []; hosts_found = []
+    try:
+        r = _http_get(f"https://crt.sh/?q=%.{host}&output=json", timeout=20)
+        if r and r.status_code==200:
+            for entry in r.json():
+                for n in entry.get("name_value","").split("\n"):
+                    n = n.strip().lstrip("*.")
+                    if "@" in n: emails.append(n)
+                    elif n.endswith(host) and n!=host: hosts_found.append(n)
+    except: pass
+    emails = list(dict.fromkeys(emails))[:50]
+    hosts_found = list(dict.fromkeys(hosts_found))[:50]
+    out = f"Emails: {emails}\nHosts: {hosts_found}"
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "theharvester", req.target, result)
+    save_scan(scan_id, "theharvester", req.target, {"output": out})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "theHarvester",
-        "emails": emails, "hosts": hosts,
-        "total_emails": len(emails), "total_hosts": len(hosts),
+        "emails": emails, "hosts": hosts_found,
+        "total_emails": len(emails), "total_hosts": len(hosts_found),
         "raw_output": out, "timestamp": datetime.datetime.utcnow().isoformat()
     }
 
 
 @app.post("/api/recon/dirb")
 async def recon_dirb(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["dirb", _web_url(req.target), "/usr/share/wordlists/dirb/common.txt", "-S", "-r"], timeout=120)
-    out = result.get("output","")
-    found = []
-    for line in out.splitlines():
-        m = re.match(r"==> DIRECTORY:\s*(.+)|^\+\s+(https?://\S+)", line.strip())
-        if m:
-            url = (m.group(1) or m.group(2) or "").strip()
-            if url: found.append(url)
+    items = await _python_fuzz(req.target)
+    found = [f"{_web_url(req.target).rstrip('/')}{item['path']}" for item in items]
+    out = "\n".join(f"[{item['status']}] {item['path']}" for item in items)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "dirb", req.target, result)
+    save_scan(scan_id, "dirb", req.target, {"output": out})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "dirb",
         "found": found, "total": len(found), "raw_output": out,
@@ -420,8 +381,14 @@ def _path_is_real(base_url: str, path: str) -> bool:
 
 @app.post("/api/scan/nikto")
 async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["nikto", "-h", _web_url(req.target), "-nointeractive", "-maxtime", "140"], timeout=150)
-    out = result.get("output","")
+    findings = await _nikto_scan(req.target)
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id,"nikto",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"nikto","findings":findings,"total":len(findings),"raw_output":str(findings),"command":"python _nikto_scan","timestamp":datetime.datetime.utcnow().isoformat()}
+
+@app.post("/api/scan/nikto_OLD_UNUSED")
+async def scan_nikto_unused(req: ScanRequest, user=Depends(verify_token)):
+    out = ""
     is_spa = _detect_spa(req.target)
 
     FP_PATH_KEYWORDS = [
@@ -466,38 +433,33 @@ async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/nmap_vuln")
 async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["nmap","--script","vuln","-T4",host], timeout=180)
-    out = result.get("output","")
+    open_ports = await _tcp_scan(host)
     findings = []
-    current = None
-    for line in out.splitlines():
-        line = line.strip()
-        m = re.match(r"\|\s*(CVE-[\d-]+).*?([\d.]+)\s*(.+)?", line)
-        if m:
-            cve,cvss,desc = m.group(1),m.group(2),(m.group(3) or "").strip()
-            sev = "CRITICAL" if float(cvss)>=9 else "HIGH" if float(cvss)>=7 else "MEDIUM" if float(cvss)>=4 else "LOW"
-            findings.append({"detail":f"{cve}: {desc}" if desc else cve,"severity":sev,"cvss":cvss,"cve":cve,"cwe":"N/A","cwe_name":"Network Vulnerability","owasp":"A06:2021","remediation":"Apply vendor patch for "+cve})
-        elif "|_" in line and "VULNERABLE" in line.upper():
-            findings.append({"detail":line.replace("|_","").strip(),"severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"N/A","cwe_name":"Network Vulnerability","owasp":"A06:2021","remediation":"Patch the vulnerable service"})
+    for p in open_ports:
+        port, svc, ver = p["port"], p["service"], p["version"]
+        if svc in ("ftp",) and ver:
+            findings.append({"detail":f"FTP on port {port} — check for anonymous access: {ver}","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-306","cwe_name":"Anonymous FTP","owasp":"A07:2021","remediation":"Disable anonymous FTP. Require authentication."})
+        if svc=="telnet":
+            findings.append({"detail":f"Telnet service on port {port} — unencrypted protocol","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-319","cwe_name":"Cleartext Transmission","owasp":"A02:2021","remediation":"Replace Telnet with SSH."})
+        if port==3389:
+            findings.append({"detail":f"RDP exposed on port 3389 — high-value target for brute force","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-307","cwe_name":"Brute Force","owasp":"A07:2021","remediation":"Restrict RDP to VPN. Enable NLA. Use strong passwords."})
+        if port==6379 and svc=="redis":
+            findings.append({"detail":f"Redis on port 6379 — commonly misconfigured with no auth","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-306","cwe_name":"Missing Authentication","owasp":"A07:2021","remediation":"Enable Redis AUTH. Bind to 127.0.0.1 only."})
+        if port==27017 and svc=="mongodb":
+            findings.append({"detail":f"MongoDB on port 27017 — may have no authentication","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-306","cwe_name":"Missing Authentication","owasp":"A07:2021","remediation":"Enable MongoDB authentication. Bind to localhost."})
+    out = "\n".join(f"{p['port']}/tcp open {p['service']} {p['version']}" for p in open_ports)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"nmap_vuln",req.target,result)
+    save_scan(scan_id,"nmap_vuln",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"nmap_vuln","findings":findings,"total":len(findings),"raw_output":out,"command":result.get("cmd",""),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/sqlmap")
 async def scan_sqlmap(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["sqlmap","-u",_web_url(req.target),"--batch","--level=2","--risk=1","--output-dir=/tmp/sqlmap_out","--forms","--crawl=3","--threads=3","--time-sec=3","--random-agent"], timeout=240)
-    out = result.get("output","")
-    findings = []
-    vuln_params = re.findall(r"Parameter:\s*(.+?)\s+\(", out)
-    for p in dict.fromkeys(vuln_params):
-        findings.append({"detail":f"SQL Injection in parameter: {p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"SQL Injection","owasp":"A03:2021","remediation":"Use parameterised queries / prepared statements"})
-    # also catch "is vulnerable" phrasing from sqlmap output
-    if not findings and re.search(r"is vulnerable|injectable|sqlmap identified", out, re.IGNORECASE):
-        findings.append({"detail":"SQL Injection detected — see raw output for full details","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"SQL Injection","owasp":"A03:2021","remediation":"Use parameterised queries / prepared statements"})
+    findings = await _sqli_engine(_web_url(req.target))
+    out = str(findings) if findings else "No SQL injection found"
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"sqlmap",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"sqlmap","vulnerable":len(findings)>0,"findings":findings,"total":len(findings),"raw_output":out,"command":result.get("cmd",""),"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id,"sqlmap",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"sqlmap","vulnerable":len(findings)>0,"findings":findings,"total":len(findings),"raw_output":out,"command":"python _sqli_engine","timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/headers")
@@ -558,17 +520,11 @@ async def scan_cookies(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/ssl")
 async def scan_ssl(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["sslscan","--no-colour",host], timeout=60)
-    out = result.get("output","")
-    findings = []
-    if re.search(r"SSLv[23]|TLSv1\.0|TLSv1\.1",out,re.IGNORECASE):
-        findings.append({"detail":"Weak SSL/TLS protocol enabled (SSLv2/3 or TLS 1.0/1.1)","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-326","cwe_name":"Weak Cryptography","owasp":"A02:2021","remediation":"Disable SSLv2, SSLv3, TLS 1.0, TLS 1.1. Use TLS 1.2+ only."})
-    if re.search(r"RC4|DES|3DES|EXPORT|NULL|anon",out,re.IGNORECASE):
-        findings.append({"detail":"Weak cipher suite detected (RC4/DES/EXPORT/NULL)","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-327","cwe_name":"Broken Algorithm","owasp":"A02:2021","remediation":"Disable weak cipher suites. Use AES-GCM with perfect forward secrecy."})
-    if "self-signed" in out.lower() or "untrusted" in out.lower():
-        findings.append({"detail":"Self-signed or untrusted SSL certificate","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-295","cwe_name":"Certificate Validation","owasp":"A02:2021","remediation":"Use a certificate from a trusted CA."})
+    loop = asyncio.get_event_loop()
+    findings = await loop.run_in_executor(None, _ssl_analyze, host)
+    out = str(findings) if findings else "No SSL issues found"
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"ssl",req.target,result)
+    save_scan(scan_id,"ssl",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"sslscan","findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
@@ -653,36 +609,27 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/cms")
 async def scan_cms(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["whatweb","--color=never","--no-errors","-a","3",req.target], timeout=60)
-    out = result.get("output","")
+    loop = asyncio.get_event_loop()
+    detected = await loop.run_in_executor(None, _detect_tech, _web_url(req.target))
     findings = []
-    for kw,detail,sev in [
-        ("WordPress","WordPress CMS detected — check for outdated plugins","HIGH"),
-        ("Joomla","Joomla CMS detected — check for known CVEs","HIGH"),
-        ("Drupal","Drupal CMS detected — Drupalgeddon vulnerabilities may apply","HIGH"),
-        ("jQuery[1","Outdated jQuery version detected","MEDIUM"),
-        ("Bootstrap[2","Outdated Bootstrap version","LOW"),
-    ]:
-        if kw.lower() in out.lower():
-            findings.append({"detail":detail,"severity":sev,"cvss":"7.5" if sev=="HIGH" else "5.3","cve":"N/A","cwe":"CWE-1035","cwe_name":"Using Vulnerable Components","owasp":"A06:2021","remediation":"Update CMS and all plugins to latest versions."})
+    vuln_cms = {"WordPress":"Check for outdated plugins — many CVEs exist","Joomla":"Check for known CVEs — Joomla has frequent vulnerabilities","Drupal":"Drupalgeddon vulnerabilities may apply"}
+    for tech in detected:
+        if tech in vuln_cms:
+            findings.append({"detail":f"{tech} CMS detected — {vuln_cms[tech]}","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-1035","cwe_name":"Using Vulnerable Components","owasp":"A06:2021","remediation":"Keep CMS and all plugins updated to latest versions."})
+    out = ", ".join(detected) if detected else "No CMS/tech detected"
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"cms",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"whatweb","findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id,"cms",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"whatweb","detected":detected,"findings":findings,"total":len(findings),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/dirb")
 async def scan_dirb(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["dirb",_web_url(req.target),"/usr/share/wordlists/dirb/common.txt","-S","-r"], timeout=120)
-    out = result.get("output","")
-    found = []
-    for line in out.splitlines():
-        m = re.match(r"==> DIRECTORY:\s*(.+)|^\+\s+(https?://\S+)", line.strip())
-        if m:
-            url = (m.group(1) or m.group(2) or "").strip()
-            if url: found.append(url)
-    findings = [{"detail":f"Accessible path: {u}","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"File Exposure","owasp":"A01:2021","remediation":"Restrict access to sensitive directories"} for u in found]
+    items = await _python_fuzz(req.target)
+    found = [f"{_web_url(req.target).rstrip('/')}{item['path']}" for item in items]
+    findings = [{"detail":f"Accessible path: {item['path']} (HTTP {item['status']})","severity":"MEDIUM" if item["status"]==403 else "LOW","cvss":"5.3" if item["status"]==403 else "3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"File Exposure","owasp":"A01:2021","remediation":"Restrict access to sensitive directories"} for item in items]
+    out = "\n".join(f"{item['status']} {item['path']}" for item in items)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"dirb",req.target,result)
+    save_scan(scan_id,"dirb",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"dirb","findings":findings,"found":found,"total":len(found),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
@@ -821,38 +768,441 @@ def _http_get(url, timeout=10, headers=None):
     try: return _req_lib.get(url,timeout=timeout,verify=False,headers=h,allow_redirects=True)
     except: return None
 
+
+# ══════════════════════════════════════════════════════════════
+#  PYTHON NATIVE TOOL IMPLEMENTATIONS
+#  Replaces: nmap, sqlmap, nikto, gobuster, dirb, ffuf, sslscan,
+#             dnsrecon, whois, wafw00f, whatweb, amass, sublist3r,
+#             sherlock, dnstwist — pure Python, zero Kali deps
+# ══════════════════════════════════════════════════════════════
+
+import aiohttp as _aiohttp
+import dns.resolver as _dns_resolver
+import whois as _whois_lib
+
+_SVC = {21:"ftp",22:"ssh",23:"telnet",25:"smtp",53:"dns",80:"http",
+        110:"pop3",111:"rpc",135:"msrpc",139:"netbios-ssn",143:"imap",
+        443:"https",445:"smb",465:"smtps",587:"submission",993:"imaps",
+        995:"pop3s",1433:"mssql",1521:"oracle",1723:"pptp",2049:"nfs",
+        3306:"mysql",3389:"rdp",4443:"https-alt",5432:"postgresql",
+        5900:"vnc",5985:"winrm",6379:"redis",8080:"http-proxy",
+        8443:"https-alt",8888:"http-alt",9200:"elasticsearch",27017:"mongodb"}
+
+_TOP_PORTS = [21,22,23,25,53,80,110,111,135,139,143,443,445,465,587,
+              993,995,1433,1521,1723,2049,3306,3389,4443,5432,5900,
+              5985,6379,8080,8443,8888,9200,27017]
+
+
+async def _tcp_scan(host: str, ports=None, timeout: float=1.5) -> list:
+    if ports is None: ports = _TOP_PORTS
+    async def _probe(port):
+        try:
+            r, w = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+            banner = ""
+            try:
+                w.write(b"\r\n"); await w.drain()
+                d = await asyncio.wait_for(r.read(256), timeout=0.8)
+                banner = d.decode("utf-8", errors="replace").strip()[:80]
+            except: pass
+            try: w.close(); await w.wait_closed()
+            except: pass
+            return {"port":port,"proto":"tcp","state":"open","service":_SVC.get(port,"unknown"),"version":banner}
+        except: return None
+    results = await asyncio.gather(*[_probe(p) for p in ports])
+    return [r for r in results if r]
+
+
+async def _banner_grab(host: str, ports=None) -> dict:
+    open_ports = await _tcp_scan(host, ports or [21,22,25,80,443,8080,3306,3389], timeout=2.0)
+    return {str(p["port"]): p["version"] for p in open_ports if p["version"]}
+
+
+_FUZZ_PATHS = [
+    "admin","admin/","admin/login","administrator","login","login.php",
+    "wp-admin","wp-login.php","wp-config.php",".env","config.php",
+    "phpinfo.php","info.php","test.php","debug.php","status","health",
+    ".git/HEAD",".git/config",".svn/entries",".DS_Store",
+    "backup.zip","backup.sql","backup.tar.gz","db.sql","database.sql",
+    "robots.txt","sitemap.xml",".well-known/security.txt",
+    "web.config",".htaccess",".htpasswd","server-status","server-info",
+    "phpmyadmin","pma","adminer.php","adminer","console",
+    "api","api/v1","api/v2","swagger.json","swagger-ui.html",
+    "openapi.json","api-docs","graphql","graphiql",
+    "actuator","actuator/env","actuator/health","actuator/mappings",
+    "upload","uploads","files","images","include","includes","lib","vendor",
+    "install.php","setup.php","update.php","register.php",
+    "config.yml","config.yaml","config.json","settings.php",
+    "package.json","composer.json","Dockerfile","docker-compose.yml",
+    "old","backup","temp","tmp","cache","logs","log","error.log",
+    "manager","manager/html","webdav","xmlrpc.php","crossdomain.xml",
+    "cgi-bin/test.cgi","dvwa","dvwa/login.php","WebGoat","mutillidae","bWAPP",
+]
+
+async def _python_fuzz(base_url: str, concurrency: int=25) -> list:
+    found = []
+    base = _web_url(base_url).rstrip("/")
+    connector = _aiohttp.TCPConnector(ssl=False, limit=concurrency)
+    to = _aiohttp.ClientTimeout(total=8, connect=4)
+    async with _aiohttp.ClientSession(connector=connector, timeout=to, headers=_BROWSER_HEADERS) as sess:
+        sem = asyncio.Semaphore(concurrency)
+        async def _check(path):
+            async with sem:
+                try:
+                    async with sess.get(f"{base}/{path}", allow_redirects=False) as r:
+                        if r.status in (200,201,301,302,403):
+                            found.append({"path":f"/{path}","status":r.status,
+                                "size":int(r.headers.get("content-length",0)),
+                                "content_type":r.headers.get("content-type","").split(";")[0].strip(),
+                                "redirect":r.headers.get("location","")})
+                except: pass
+        await asyncio.gather(*[_check(p) for p in _FUZZ_PATHS])
+    return sorted(found, key=lambda x: x["path"])
+
+
+_SQL_ERRORS = [
+    "you have an error in your sql syntax","warning: mysql_","mysql_fetch",
+    "unclosed quotation mark","quoted string not properly terminated",
+    "pg_query(): query failed","pg_exec()","sqliteexception","sqlite3.operationalerror",
+    "ora-00933:","ora-01756:","ora-00907:","microsoft ole db provider",
+    "odbc microsoft access driver","sqlsyntaxerrorexception",
+    "invalid query","com.mysql.jdbc.exceptions","java.sql.sqlexception",
+]
+
+async def _sqli_engine(base_url: str) -> list:
+    findings = []; tested = set(); param_done = set()
+    base = _web_url(base_url).rstrip("/")
+    params = []
+    home = _http_get(base, timeout=10)
+    if home:
+        links = re.findall(r'href=["\']([^"\'#\s]+)["\']', home.text, re.IGNORECASE)
+        links.append(base)
+        for link in links[:30]:
+            if link.startswith("http"): full = link
+            elif link.startswith("/"): full = f"{urlparse(base).scheme}://{urlparse(base).netloc}{link}"
+            else: full = base+"/"+link
+            if "?" not in full: continue
+            up, _, qs = full.partition("?")
+            for pair in qs.split("&"):
+                if "=" not in pair: continue
+                pn, _, pv = pair.partition("=")
+                key = f"{up}::{pn}"
+                if key not in tested:
+                    tested.add(key); params.append((up, pn, pv or "1"))
+    for p in ["id","cat","page","item","product","user","search","q","s","view"]:
+        key = f"{base}::{p}"
+        if key not in tested:
+            tested.add(key); params.append((base.split("?")[0], p, "1"))
+    for url, param, _ in params[:25]:
+        if param in param_done: continue
+        for pl in ["'", "\"", "' OR '1'='1'--"]:
+            r = _http_get(f"{url}?{param}={pl}", timeout=8)
+            if r and any(e in r.text.lower() for e in _SQL_ERRORS):
+                findings.append({"detail":f"SQL Injection (error-based) in parameter '{param}'","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"SQL Injection","owasp":"A03:2021","remediation":"Use parameterised queries / prepared statements"})
+                param_done.add(param); break
+        if param in param_done: continue
+        r1 = _http_get(f"{url}?{param}=1 AND 1=1--", timeout=8)
+        r2 = _http_get(f"{url}?{param}=1 AND 1=2--", timeout=8)
+        if r1 and r2 and abs(len(r1.text)-len(r2.text)) > 100:
+            findings.append({"detail":f"SQL Injection (boolean-blind) in parameter '{param}' — page size differs for true/false conditions","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"SQL Injection","owasp":"A03:2021","remediation":"Use parameterised queries / prepared statements"})
+            param_done.add(param); continue
+        t0 = _time.monotonic()
+        _http_get(f"{url}?{param}=1 AND SLEEP(3)--", timeout=7)
+        if _time.monotonic()-t0 >= 2.5:
+            findings.append({"detail":f"SQL Injection (time-based blind) in parameter '{param}' — SLEEP(3) caused measurable delay","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"SQL Injection","owasp":"A03:2021","remediation":"Use parameterised queries / prepared statements"})
+            param_done.add(param)
+    return findings
+
+
+def _ssl_analyze(host: str, port: int=443) -> list:
+    findings = []
+    try:
+        ctx = _ssl_lib.create_default_context()
+        ctx.check_hostname = False; ctx.verify_mode = _ssl_lib.CERT_NONE
+        with _socket_lib.create_connection((host, port), timeout=10) as raw:
+            with ctx.wrap_socket(raw, server_hostname=host) as s:
+                proto = s.version(); cipher = s.cipher(); cert = s.getpeercert()
+                if proto in ("TLSv1","TLSv1.1","SSLv2","SSLv3"):
+                    findings.append({"detail":f"Weak TLS protocol in use: {proto} — vulnerable to POODLE/BEAST","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-326","cwe_name":"Weak Encryption","owasp":"A02:2021","remediation":"Disable TLS 1.0/1.1. Use TLS 1.2+ only."})
+                if cipher and any(w in cipher[0].upper() for w in ["RC4","DES","3DES","EXPORT","NULL","ANON"]):
+                    findings.append({"detail":f"Weak cipher suite: {cipher[0]}","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-327","cwe_name":"Broken Algorithm","owasp":"A02:2021","remediation":"Use AES-GCM or ChaCha20-Poly1305."})
+                if cert:
+                    na = cert.get("notAfter","")
+                    if na:
+                        exp = datetime.datetime.strptime(na, "%b %d %H:%M:%S %Y %Z")
+                        now = datetime.datetime.utcnow()
+                        if exp < now:
+                            findings.append({"detail":f"SSL certificate EXPIRED on {exp.date()}","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-295","cwe_name":"Certificate Expired","owasp":"A02:2021","remediation":"Renew SSL certificate immediately."})
+                        elif (exp-now).days < 30:
+                            findings.append({"detail":f"SSL certificate expires in {(exp-now).days} days ({exp.date()})","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-295","cwe_name":"Certificate Expiry","owasp":"A02:2021","remediation":"Renew SSL certificate before expiry."})
+                    subj = dict(x[0] for x in cert.get("subject",[]))
+                    issr = dict(x[0] for x in cert.get("issuer",[]))
+                    if subj == issr:
+                        findings.append({"detail":"Self-signed SSL certificate — browsers will show security warnings","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-295","cwe_name":"Self-Signed Certificate","owasp":"A02:2021","remediation":"Use a certificate from a trusted CA (Let's Encrypt is free)."})
+    except _ssl_lib.SSLError as e:
+        findings.append({"detail":f"SSL error: {e}","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-295","cwe_name":"SSL Error","owasp":"A02:2021","remediation":"Review SSL/TLS configuration."})
+    except Exception: pass
+    return findings
+
+
+def _dns_enum_records(host: str) -> list:
+    records = []
+    for rtype in ["A","AAAA","MX","NS","TXT","CNAME","SOA"]:
+        try:
+            for ans in _dns_resolver.resolve(host, rtype, lifetime=5):
+                records.append({"type":rtype,"value":str(ans)})
+        except: pass
+    return records
+
+
+def _whois_query(host: str) -> dict:
+    try:
+        w = _whois_lib.whois(host)
+        def _s(v): return str(v[0] if isinstance(v, list) else v or "")
+        return {"registrar":_s(w.registrar),"created":_s(w.creation_date),
+                "expires":_s(w.expiration_date),"updated":_s(w.updated_date),
+                "name_servers":list(w.name_servers or []),"status":_s(w.status),
+                "emails":list(w.emails or []),"raw":str(w.text or "")[:3000]}
+    except: return {}
+
+
+_WAF_SIGS = {
+    "Cloudflare":["cf-ray","cloudflare","__cfduid"],
+    "AWS WAF":["x-amzn-requestid","x-amz-cf-id"],
+    "Akamai":["akamaiedge","x-akamai-request-id"],
+    "Imperva/Incapsula":["x-iinfo","incapsula","visid_incap"],
+    "F5 BIG-IP":["bigipserver","x-waf-event-info"],
+    "Sucuri":["x-sucuri-id","sucuri"],
+    "ModSecurity":["mod_security","modsecurity"],
+    "Barracuda":["barra_counter_session","x-barracuda"],
+    "Wordfence":["wordfence"],
+    "Azure WAF":["x-azure-ref","x-ms-request-id"],
+}
+
+def _detect_waf(url: str):
+    try:
+        r1 = _req_lib.get(url, timeout=10, verify=False, headers=_BROWSER_HEADERS, allow_redirects=True)
+        r2 = _req_lib.get(url+"?q=<script>alert(1)</script>&id=1'", timeout=10, verify=False, headers=_BROWSER_HEADERS, allow_redirects=True)
+        hdrs = {k.lower():v.lower() for k,v in {**dict(r1.headers),**dict(r2.headers)}.items()}
+        body = (r1.text+r2.text).lower()[:5000]
+        for name, sigs in _WAF_SIGS.items():
+            for sig in sigs:
+                if sig in hdrs or any(sig in k for k in hdrs) or sig in body:
+                    return name
+        if r2.status_code in (403,406,429,503) and r1.status_code==200:
+            return "Unknown WAF"
+    except: pass
+    return None
+
+
+_TECH_SIGS = [
+    ("WordPress",["/wp-content/","/wp-includes/","wp-json","generator.*wordpress"]),
+    ("Joomla",["/components/com_","mosConfig_","joomla"]),
+    ("Drupal",["/sites/default/","drupal.js","Drupal.settings"]),
+    ("Shopify",["cdn.shopify.com","myshopify.com"]),
+    ("Django",["csrfmiddlewaretoken","django"]),
+    ("Laravel",["laravel_session","illuminate"]),
+    ("Rails",["authenticity_token","x-runtime"]),
+    ("ASP.NET",["__viewstate","asp.net_sessionid","x-aspnet-version"]),
+    ("React",["react.production.min.js","_next","data-reactroot"]),
+    ("Angular",["ng-version","angular.min.js","<app-root"]),
+    ("Vue",["vue.min.js","__vue__"]),
+]
+
+def _detect_tech(url: str) -> list:
+    detected = []
+    r = _http_get(url, timeout=10)
+    if not r: return detected
+    corpus = r.text.lower() + str({k.lower():v.lower() for k,v in r.headers.items()})
+    for name, pats in _TECH_SIGS:
+        if any(re.search(p, corpus, re.IGNORECASE) for p in pats):
+            detected.append(name)
+    hdrs = {k.lower():v for k,v in r.headers.items()}
+    if hdrs.get("server"): detected.append(f"Server: {hdrs['server']}")
+    if hdrs.get("x-powered-by"): detected.append(f"X-Powered-By: {hdrs['x-powered-by']}")
+    return detected
+
+
+async def _enum_subdomains(host: str) -> list:
+    subs = set()
+    try:
+        r = _http_get(f"https://crt.sh/?q=%.{host}&output=json", timeout=20)
+        if r and r.status_code==200:
+            for entry in r.json():
+                for n in entry.get("name_value","").split("\n"):
+                    n = n.strip().lstrip("*.")
+                    if n.endswith(host) and n!=host: subs.add(n)
+    except: pass
+    common = ["www","mail","ftp","smtp","api","dev","staging","test","beta","admin",
+              "portal","webmail","cdn","static","secure","app","docs","blog","shop","m"]
+    async def _resolve(sub):
+        loop = asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(None, lambda: _dns_resolver.resolve(f"{sub}.{host}","A",lifetime=3))
+            return f"{sub}.{host}"
+        except: return None
+    for r in await asyncio.gather(*[_resolve(s) for s in common]):
+        if r: subs.add(r)
+    return sorted(subs)
+
+
+async def _username_osint(username: str) -> list:
+    platforms = [
+        ("GitHub",f"https://github.com/{username}"),
+        ("Twitter/X",f"https://twitter.com/{username}"),
+        ("Instagram",f"https://www.instagram.com/{username}"),
+        ("Reddit",f"https://www.reddit.com/user/{username}"),
+        ("TikTok",f"https://www.tiktok.com/@{username}"),
+        ("YouTube",f"https://www.youtube.com/@{username}"),
+        ("Twitch",f"https://www.twitch.tv/{username}"),
+        ("Medium",f"https://medium.com/@{username}"),
+        ("GitLab",f"https://gitlab.com/{username}"),
+        ("HackerNews",f"https://news.ycombinator.com/user?id={username}"),
+        ("DEV.to",f"https://dev.to/{username}"),
+        ("Keybase",f"https://keybase.io/{username}"),
+        ("Pinterest",f"https://www.pinterest.com/{username}"),
+        ("Bitbucket",f"https://bitbucket.org/{username}"),
+    ]
+    found = []
+    connector = _aiohttp.TCPConnector(ssl=False, limit=10)
+    async with _aiohttp.ClientSession(connector=connector, timeout=_aiohttp.ClientTimeout(total=8), headers=_BROWSER_HEADERS) as sess:
+        sem = asyncio.Semaphore(8)
+        async def _chk(name, url):
+            async with sem:
+                try:
+                    async with sess.get(url, allow_redirects=True) as r:
+                        if r.status==200:
+                            found.append({"platform":name,"url":str(r.url),"status":"found"})
+                except: pass
+        await asyncio.gather(*[_chk(n,u) for n,u in platforms])
+    return found
+
+
+def _dnstwist_check(domain: str) -> list:
+    parts = domain.split(".",1)
+    if len(parts)<2: return []
+    base, tld = parts[0], parts[1]
+    perms = set()
+    for i in range(len(base)):
+        perms.add(base[:i]+base[i+1:]+"."+tld)
+        perms.add(base[:i]+base[i]+base[i:]+"."+tld)
+    for i in range(len(base)-1):
+        s=list(base); s[i],s[i+1]=s[i+1],s[i]; perms.add("".join(s)+"."+tld)
+    for alt in [".com",".net",".org",".info",".co",".io"]:
+        if "."+tld!=alt: perms.add(base+alt)
+    for k,v in {"o":"0","l":"1","i":"1","a":"@","s":"5"}.items():
+        if k in base: perms.add(base.replace(k,v,1)+"."+tld)
+    results = []
+    for perm in list(perms)[:60]:
+        try:
+            _dns_resolver.resolve(perm,"A",lifetime=2)
+            results.append({"domain":perm,"registered":True,"a_record":True})
+        except: pass
+    return results
+
+
+_VULN_PATHS = [
+    ("/.git/HEAD",200,"ref:","Git repository exposed — source code accessible","CRITICAL"),
+    ("/.git/config",200,"[core]","Git config file exposed","CRITICAL"),
+    ("/.env",200,None,".env file exposed — may contain API keys and credentials","CRITICAL"),
+    ("/wp-config.php",200,"DB_","WordPress config exposed — database credentials visible","CRITICAL"),
+    ("/phpinfo.php",200,"phpinfo","PHP info page exposed — reveals full PHP configuration","HIGH"),
+    ("/info.php",200,"phpinfo","PHP info page exposed","HIGH"),
+    ("/debug.php",200,None,"PHP debug file exposed","HIGH"),
+    ("/server-status",200,"Apache","Apache server-status page exposed","MEDIUM"),
+    ("/backup.zip",200,None,"Backup archive publicly accessible","CRITICAL"),
+    ("/backup.tar.gz",200,None,"Backup archive publicly accessible","CRITICAL"),
+    ("/backup.sql",200,None,"SQL backup file exposed","CRITICAL"),
+    ("/database.sql",200,None,"SQL database file exposed","CRITICAL"),
+    ("/.htpasswd",200,None,".htpasswd credential file exposed","CRITICAL"),
+    ("/web.config",200,"configuration","web.config exposed — reveals .NET configuration","HIGH"),
+    ("/phpmyadmin/",200,"phpMyAdmin","phpMyAdmin database admin panel exposed","CRITICAL"),
+    ("/pma/",200,"phpMyAdmin","phpMyAdmin accessible","CRITICAL"),
+    ("/adminer.php",200,"adminer","Adminer database UI exposed","CRITICAL"),
+    ("/install.php",200,None,"Install script accessible — may allow re-installation","HIGH"),
+    ("/setup.php",200,None,"Setup script accessible","HIGH"),
+    ("/xmlrpc.php",200,None,"XML-RPC enabled — brute force and DDoS amplification vector","MEDIUM"),
+    ("/swagger.json",200,"swagger","Swagger API docs exposed — reveals all endpoints","MEDIUM"),
+    ("/openapi.json",200,"openapi","OpenAPI spec exposed","MEDIUM"),
+    ("/graphql",200,None,"GraphQL endpoint exposed — check for introspection","MEDIUM"),
+    ("/actuator/env",200,None,"Spring Boot actuator /env exposed — reveals environment variables","CRITICAL"),
+    ("/actuator/health",200,None,"Spring Boot actuator /health exposed","LOW"),
+    ("/actuator/mappings",200,None,"Spring Boot actuator /mappings exposed — reveals all routes","MEDIUM"),
+    ("/.DS_Store",200,None,"Mac .DS_Store file exposed — reveals directory structure","LOW"),
+    ("/.svn/entries",200,None,"SVN repository metadata exposed","HIGH"),
+    ("/composer.json",200,"require","composer.json exposed — reveals PHP dependencies and versions","LOW"),
+    ("/package.json",200,"dependencies","package.json exposed — reveals Node.js dependencies","LOW"),
+    ("/Dockerfile",200,"FROM","Dockerfile exposed — reveals infrastructure details","MEDIUM"),
+    ("/docker-compose.yml",200,"services","docker-compose.yml exposed — reveals service configuration","HIGH"),
+    ("/config.json",200,None,"Config JSON file exposed","HIGH"),
+    ("/robots.txt",200,"Disallow","robots.txt exposes hidden paths (check Disallow entries)","LOW"),
+    ("/crossdomain.xml",200,None,"crossdomain.xml may allow cross-origin Flash access","MEDIUM"),
+]
+
+async def _nikto_scan(base_url: str) -> list:
+    findings = []
+    base = _web_url(base_url).rstrip("/")
+    bl_r = _http_get(base+"/", timeout=8)
+    bl_size = len(bl_r.content) if bl_r and bl_r.status_code==200 else None
+    if bl_r:
+        hdrs = {k.lower():v for k,v in bl_r.headers.items()}
+        srvr = hdrs.get("server","")
+        if re.search(r"apache/[\d.]+|nginx/[\d.]+|iis/[\d.]+", srvr, re.IGNORECASE):
+            findings.append({"detail":f"Server version disclosure: {srvr}","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-200","cwe_name":"Information Exposure","owasp":"A05:2021","remediation":"Remove version number from Server header."})
+        if hdrs.get("x-powered-by"):
+            findings.append({"detail":f"X-Powered-By reveals technology: {hdrs['x-powered-by']}","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-200","cwe_name":"Information Exposure","owasp":"A05:2021","remediation":"Remove the X-Powered-By header."})
+    connector = _aiohttp.TCPConnector(ssl=False, limit=20)
+    async with _aiohttp.ClientSession(connector=connector, timeout=_aiohttp.ClientTimeout(total=8, connect=4), headers=_BROWSER_HEADERS) as sess:
+        sem = asyncio.Semaphore(20)
+        async def _chk(path, exp, cmatch, detail, sev):
+            async with sem:
+                try:
+                    async with sess.get(f"{base}{path}", allow_redirects=False) as r:
+                        if r.status==403:
+                            findings.append({"detail":f"{path} present but access denied (403) — resource exists on server","severity":"MEDIUM" if sev not in ("CRITICAL",) else "HIGH","cvss":"5.3","cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Present","owasp":"A05:2021","remediation":f"Remove {path} from the web root."})
+                            return
+                        if r.status!=exp: return
+                        body = await r.text(errors="replace")
+                        if bl_size and len(body)==bl_size: return
+                        if cmatch and cmatch.lower() not in body.lower(): return
+                        cvss = "9.8" if sev=="CRITICAL" else "7.5" if sev=="HIGH" else "5.3" if sev=="MEDIUM" else "3.1"
+                        findings.append({"detail":detail,"severity":sev,"cvss":cvss,"cve":"N/A","cwe":"CWE-538","cwe_name":"Sensitive File Exposure","owasp":"A05:2021","remediation":f"Remove or restrict access to {path}."})
+                except: pass
+        await asyncio.gather(*[_chk(*c) for c in _VULN_PATHS])
+    return findings
+
+
+def _cyclic_pattern(size: int) -> str:
+    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    pat = ""
+    for i,j,k in _itertools.product(range(len(chars)), repeat=3):
+        pat += chars[i]+chars[j]+chars[k]
+        if len(pat) >= size: return pat[:size]
+    return pat[:size]
+
+
 @app.post("/api/scan/wafw00f")
 async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["wafw00f", _web_url(req.target), "-a"], timeout=60)
-    out = result.get("output","")
-    detected = re.findall(r"is behind (.+?)(?:\n|$|WAF)", out, re.IGNORECASE)
-    waf = detected[0].strip() if detected else None
+    loop = asyncio.get_event_loop()
+    waf = await loop.run_in_executor(None, _detect_waf, _web_url(req.target))
+    out = f"WAF detected: {waf}" if waf else "No WAF detected"
     findings = [{"detail":f"WAF detected: {waf}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"WAF","owasp":"N/A","remediation":"WAF is a defensive control."}] if waf else []
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"wafw00f",req.target,result)
     return {"scan_id":scan_id,"target":req.target,"tool":"wafw00f","waf":waf,"detected":bool(waf),"findings":findings,"output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/whatweb")
 async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["whatweb","--color=never","--no-errors","--open-timeout","10","--read-timeout","10",_web_url(req.target)], timeout=30)
-    out = result.get("output","")
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"whatweb",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"whatweb","output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+    loop = asyncio.get_event_loop()
+    detected = await loop.run_in_executor(None, _detect_tech, _web_url(req.target))
+    out = ", ".join(detected) if detected else "No technologies detected"
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"whatweb",req.target,{"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"whatweb","detected":detected,"output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/nmap")
 async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
-    host = req.target.replace("http://","").replace("https://","").split("/")[0]
-    is_external = not any(x in host for x in ["lab_","localhost","127.","192.168.","10.","172."])
-    timing = "-T3" if is_external else "-T4"
-    ports  = "100" if is_external else "100"
-    # External: -sT (TCP connect) bypasses firewall SYN-drop; -Pn skips ICMP ping
-    scan_type = ["-sT","-Pn"] if is_external else ["-sS"]
-    result = await run_tool(["nmap"] + scan_type + ["-sV",timing,"--open","--top-ports",ports,host], timeout=150)
-    out = result.get("output","")
-    ports = []
-    for line in out.splitlines():
-        m = re.match(r"(\d+)/(tcp|udp)\s+open\s+(\S+)\s*(.*)", line.strip())
-        if m: ports.append({"port":int(m.group(1)),"proto":m.group(2),"state":"open","service":m.group(3),"version":m.group(4).strip()})
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"nmap",req.target,result)
+    host = _recon_host(req.target)
+    ports = await _tcp_scan(host)
+    out = "\n".join(f"{p['port']}/tcp open {p['service']} {p['version']}" for p in ports)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"nmap",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"nmap","ports":ports,"total_open":len(ports),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/cors")
@@ -875,42 +1225,37 @@ async def scan_cors(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/gobuster")
 async def scan_gobuster(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["gobuster","dir","-u",_web_url(req.target),"-w","/usr/share/wordlists/dirb/common.txt","-t","20","--no-error","-q"], timeout=120)
-    out = result.get("output","")
-    discovered = [line.split()[0] for line in out.splitlines() if line.strip().startswith("/")]
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"gobuster",req.target,result)
+    items = await _python_fuzz(req.target)
+    discovered = [item["path"] for item in items if item["status"]==200]
+    out = "\n".join(f"/{item['status']} {item['path']}" for item in items)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"gobuster",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"gobuster","discovered":discovered,"total":len(discovered),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/subdomains")
 async def scan_subdomains(req: ScanRequest, user=Depends(verify_token)):
-    host = req.target.replace("http://","").replace("https://","").split("/")[0]
-    result = await run_tool(["amass","enum","-passive","-d",host,"-timeout","2"], timeout=120)
-    out = result.get("output","")
-    subdomains = list(set(re.findall(r"[\w\-\.]+\."+re.escape(host), out)))
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"subdomains",req.target,result)
+    host = _recon_host(req.target)
+    subdomains = await _enum_subdomains(host)
+    out = "\n".join(subdomains)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"subdomains",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"subdomains","subdomains":subdomains,"total":len(subdomains),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/dns")
 async def scan_dns(req: ScanRequest, user=Depends(verify_token)):
-    host = req.target.replace("http://","").replace("https://","").split("/")[0]
-    result = await run_tool(["dig","any",host,"+noall","+answer"], timeout=30)
-    out = result.get("output","")
+    host = _recon_host(req.target)
+    loop = asyncio.get_event_loop()
+    recs = await loop.run_in_executor(None, _dns_enum_records, host)
     records = {}
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts)>=5 and not line.startswith(";"):
-            rtype = parts[3]; val = " ".join(parts[4:])
-            records.setdefault(rtype,[]).append(val)
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"dns",req.target,result)
+    for r in recs: records.setdefault(r["type"],[]).append(r["value"])
+    out = "\n".join(f"{r['type']} {r['value']}" for r in recs)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"dns",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"dns","records":records,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/ffuf")
 async def scan_ffuf(req: ScanRequest, user=Depends(verify_token)):
-    url = _web_url(req.target).rstrip("/") + "/FUZZ"
-    result = await run_tool(["ffuf","-u",url,"-w","/usr/share/wordlists/dirb/common.txt","-mc","200,201,301,302,403","-t","20","-s"], timeout=120)
-    out = result.get("output","")
-    discovered = [line.strip() for line in out.splitlines() if line.strip() and not line.startswith("[")]
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"ffuf",req.target,result)
+    items = await _python_fuzz(req.target)
+    discovered = [item["path"] for item in items]
+    out = "\n".join(f"[{item['status']}] {item['path']} [{item['size']} bytes]" for item in items)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"ffuf",req.target,{"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"ffuf","discovered":discovered,"total":len(discovered),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/rfi")
@@ -1479,11 +1824,10 @@ async def bof_offset(req: BOFRequest, user=Depends(verify_token)):
     prefix = req.prefix.encode("latin-1") if req.prefix else b""
     size   = req.pattern_size or 500
 
-    # Generate pattern
-    result = await run_tool(["msf-pattern_create", "-l", str(size)], timeout=15)
-    pattern = result.get("output", "").strip()
+    # Generate pattern (pure Python — no msf-pattern_create needed)
+    pattern = _cyclic_pattern(size)
     if not pattern:
-        return {"error": "msf-pattern_create failed"}
+        return {"error": "Pattern generation failed"}
 
     binary = req.binary_path or "/home/kali/vulnserver"
     eip_value = req.eip_value.strip() if req.eip_value else None
@@ -1835,15 +2179,12 @@ async def bof_shell_stop(lid: str, user=Depends(verify_token)):
 @app.post("/api/recon/dnsrecon")
 async def recon_dnsrecon(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["dnsrecon", "-d", host, "-t", "std"], timeout=60)
-    out = result.get("output","")
-    records = []
-    for line in out.splitlines():
-        m = re.match(r'\[\*\]\s+(A|AAAA|NS|MX|TXT|CNAME|SOA|PTR|SRV)\s+(\S+)\s+(.*)', line.strip())
-        if m:
-            records.append({"type": m.group(1), "name": m.group(2), "address": m.group(3).strip()})
+    loop = asyncio.get_event_loop()
+    recs = await loop.run_in_executor(None, _dns_enum_records, host)
+    records = [{"type":r["type"],"name":host,"address":r["value"]} for r in recs]
+    out = "\n".join(f"[*] {r['type']} {r['name']} {r['address']}" for r in records)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "dnsrecon", req.target, result)
+    save_scan(scan_id, "dnsrecon", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"dnsrecon","records":records,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/recon/crtsh")
@@ -1867,11 +2208,10 @@ async def recon_crtsh(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/amass")
 async def recon_amass(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["amass", "enum", "-passive", "-d", host, "-timeout", "2"], timeout=150)
-    out = result.get("output","")
-    subdomains = list(dict.fromkeys([l.strip() for l in out.splitlines() if l.strip() and "." in l]))
+    subdomains = await _enum_subdomains(host)
+    out = "\n".join(subdomains)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "amass", req.target, result)
+    save_scan(scan_id, "amass", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"amass","subdomains":subdomains,"total":len(subdomains),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/recon/harvester")
@@ -1881,35 +2221,32 @@ async def recon_harvester(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/recon/services")
 async def recon_services(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["nmap", "-sV", "--version-intensity", "5", "--open", "-T4", host], timeout=180)
-    out = result.get("output","")
-    ports = []
-    for line in out.splitlines():
-        m = re.match(r"(\d+)/(tcp|udp)\s+open\s+(\S+)\s*(.*)", line.strip())
-        if m: ports.append({"port":int(m.group(1)),"proto":m.group(2),"service":m.group(3),"version":m.group(4).strip()})
+    ports = await _tcp_scan(host)
+    out = "\n".join(f"{p['port']}/tcp open {p['service']} {p['version']}" for p in ports)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "services", req.target, result)
+    save_scan(scan_id, "services", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"services","ports":ports,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/recon/os")
 async def recon_os(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["nmap", "-O", "--osscan-guess", "-T4", host], timeout=120)
-    out = result.get("output","")
-    os_line = next((l for l in out.splitlines() if "OS details:" in l or "Aggressive OS guesses:" in l), None)
-    os_name = None; accuracy = None; matches = []
-    if os_line:
-        raw = os_line.split(":",1)[-1].strip()
-        for entry in [e.strip() for e in raw.split(",")]:
-            m = re.match(r"(.+?)\s*\((\d+)%\)", entry)
-            if m: matches.append({"name": m.group(1).strip(), "accuracy": int(m.group(2))})
-            elif entry: matches.append({"name": entry, "accuracy": None})
-        if matches:
-            os_name = matches[0]["name"]
-            accuracy = matches[0]["accuracy"]
+    ports = await _tcp_scan(host, timeout=2.0)
+    banners = {str(p["port"]): p["version"] for p in ports if p["version"]}
+    os_name = None; matches = []
+    # Heuristic OS detection from open ports + banners
+    all_text = " ".join(banners.values()).lower()
+    if "windows" in all_text or 3389 in [p["port"] for p in ports] or 445 in [p["port"] for p in ports]:
+        os_name = "Windows (inferred from ports/banners)"; matches = [{"name":"Windows","accuracy":60}]
+    elif "ubuntu" in all_text or "debian" in all_text or "centos" in all_text or "linux" in all_text:
+        os_name = "Linux (inferred from banner)"; matches = [{"name":"Linux","accuracy":70}]
+    elif "freebsd" in all_text or "openbsd" in all_text:
+        os_name = "BSD (inferred from banner)"; matches = [{"name":"BSD","accuracy":65}]
+    elif ports:
+        os_name = "Linux/Unix (common default)"; matches = [{"name":"Linux/Unix","accuracy":40}]
+    out = f"OS guess: {os_name}\nOpen ports: {[p['port'] for p in ports]}"
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "os", req.target, result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"os","os":os_name,"accuracy":accuracy,"matches":matches,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id, "os", req.target, {"output":out})
+    return {"scan_id":scan_id,"target":req.target,"tool":"os","os":os_name,"accuracy":matches[0]["accuracy"] if matches else None,"matches":matches,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 def _clean_banner(raw: str) -> str:
     """Strip binary/non-printable bytes from nmap banner output."""
@@ -1924,17 +2261,10 @@ def _clean_banner(raw: str) -> str:
 @app.post("/api/recon/banner")
 async def recon_banner(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["nmap", "--script=banner", "-p", "21,22,25,80,443,8080,3306,3389", host], timeout=120)
-    out = result.get("output","")
-    banners = {}
-    cur = None
-    for line in out.splitlines():
-        pm = re.match(r"(\d+)/tcp", line.strip())
-        if pm: cur = pm.group(1)
-        bm = re.match(r"\|\s+banner:\s*(.*)", line.strip())
-        if bm and cur: banners[cur] = _clean_banner(bm.group(1).strip())
+    banners = await _banner_grab(host)
+    out = "\n".join(f"Port {port}: {_clean_banner(b)}" for port, b in banners.items())
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "banner", req.target, result)
+    save_scan(scan_id, "banner", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"banner","banners":banners,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
@@ -2150,13 +2480,12 @@ async def osint_sherlock(req: ScanRequest, user=Depends(verify_token)):
                 "error":"Sherlock requires a username — not an IP or domain",
                 "username":"","accounts_found":[],"total":0,
                 "timestamp":datetime.datetime.utcnow().isoformat()}
-    result = await run_tool(["sherlock", username, "--timeout", "5", "--print-found"], timeout=120)
-    out = result.get("output", "")
-    found = [line.split("[+]")[-1].strip() for line in out.splitlines() if "[+]" in line and "http" in line]
-    scan_id = str(uuid.uuid4()); save_scan(scan_id, "sherlock", req.target, result)
+    found = await _username_osint(username)
+    out = "\n".join(f"[+] {f['platform']}: {f['url']}" for f in found)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "sherlock", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"sherlock",
-            "username":username,"accounts_found":found[:50],"total":len(found),
-            "raw_output":out[:3000],"timestamp":datetime.datetime.utcnow().isoformat()}
+            "username":username,"accounts_found":[f["url"] for f in found],"total":len(found),
+            "raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/osint/hibp")
 async def osint_hibp(req: ScanRequest, user=Depends(verify_token)):
@@ -2188,33 +2517,11 @@ async def osint_hibp(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/osint/dnstwist")
 async def osint_dnstwist(req: ScanRequest, user=Depends(verify_token)):
     host = _recon_host(req.target)
-    result = await run_tool(["dnstwist", "--format", "json", "--registered", host], timeout=120)
-    out = result.get("output", "")
-    domains = []
-    try:
-        start = out.find("[")
-        if start != -1:
-            domains = json.loads(out[start:])
-    except:
-        pass
-    if not domains:
-        result2 = await run_tool(["dnstwist", "--format", "json", host], timeout=120)
-        out2 = result2.get("output", "")
-        try:
-            start = out2.find("[")
-            if start != -1:
-                raw = json.loads(out2[start:])
-                domains = [d for d in raw if d.get("dns-a") or d.get("dns_a")]
-        except:
-            pass
-    clean = []
-    for d in domains[:50]:
-        clean.append({
-            "domain": d.get("domain",""),
-            "fuzzer": d.get("fuzzer",""),
-            "dns_a":  d.get("dns-a", d.get("dns_a",[])),
-        })
-    scan_id = str(uuid.uuid4()); save_scan(scan_id, "dnstwist", req.target, result)
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, _dnstwist_check, host)
+    clean = [{"domain":d["domain"],"fuzzer":"python","dns_a":[d["domain"]]} for d in results]
+    out = "\n".join(d["domain"] for d in results)
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "dnstwist", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"dnstwist",
             "domains":clean,"total":len(clean),
             "raw_output":out[:2000],"timestamp":datetime.datetime.utcnow().isoformat()}
