@@ -489,7 +489,7 @@ async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/sqlmap")
 async def scan_sqlmap(req: ScanRequest, user=Depends(verify_token)):
-    result = await run_tool(["sqlmap","-u",_web_url(req.target),"--batch","--level=2","--risk=1","--output-dir=/tmp/sqlmap_out","--forms","--crawl=2"], timeout=180)
+    result = await run_tool(["sqlmap","-u",_web_url(req.target),"--batch","--level=2","--risk=1","--output-dir=/tmp/sqlmap_out","--forms","--crawl=3","--threads=3","--time-sec=3","--random-agent"], timeout=240)
     out = result.get("output","")
     findings = []
     vuln_params = re.findall(r"Parameter:\s*(.+?)\s+\(", out)
@@ -596,7 +596,37 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
                 break
         if found_xss: break
 
-    # Step 2: check if any user input reflects at all (potential XSS indicator)
+    # Step 2: crawl site links and test subpage parameters for XSS
+    if not found_xss:
+        home = _http_get(base, timeout=10)
+        if home:
+            links = re.findall(r'href=["\']([^"\'#\s]+)["\']', home.text, re.IGNORECASE)
+            target_host = _recon_host(req.target)
+            tested = set()
+            for link in links[:30]:
+                if link.startswith("http"):
+                    full = link
+                elif link.startswith("/"):
+                    full = base.rstrip("/") + link
+                else:
+                    full = base.rstrip("/") + "/" + link
+                if target_host not in full or "?" not in full or full in tested:
+                    continue
+                tested.add(full)
+                url_part, _, qs = full.partition("?")
+                for pair in qs.split("&"):
+                    pname = pair.split("=")[0]
+                    for pl, mk in xss_payloads[:2]:
+                        r = _http_get(f"{url_part}?{pname}={pl}", timeout=6)
+                        if r and mk in r.text:
+                            findings.append({"detail":f"Reflected XSS at {url_part} — parameter '{pname}' reflects unencoded payload","severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user-supplied input before reflecting in responses. Add Content-Security-Policy header."})
+                            raw_lines.append(f"[!] XSS confirmed at {url_part}?{pname}=")
+                            found_xss = True
+                            break
+                    if found_xss: break
+                if found_xss: break
+
+    # Step 3: probe base URL for plain input reflection
     if not found_xss:
         probe = "XSSTEST9981"
         r = _http_get(f"{base}?q={probe}", timeout=8)
@@ -604,7 +634,7 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
             findings.append({"detail":"Input reflection detected — query parameter reflected in response without encoding (likely XSS)","severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Encode all reflected user input. Never insert raw user data into HTML."})
             raw_lines.append(f"[!] Input reflection confirmed — potential XSS at ?q=")
 
-    # Step 3: also try xsstrike if installed
+    # Step 4: also try xsstrike if installed
     result = await run_tool(["python3","/usr/share/xsstrike/xsstrike.py","-u",req.target,"--crawl","--skip-dom","-l","1"], timeout=60)
     out = result.get("output","")
     for line in out.splitlines():
@@ -813,8 +843,10 @@ async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
     host = req.target.replace("http://","").replace("https://","").split("/")[0]
     is_external = not any(x in host for x in ["lab_","localhost","127.","192.168.","10.","172."])
     timing = "-T2" if is_external else "-T4"
-    ports  = "50"  if is_external else "100"
-    result = await run_tool(["nmap","-sV",timing,"--open","--top-ports",ports,host], timeout=120)
+    ports  = "100" if is_external else "100"
+    # -Pn skips host discovery (ICMP ping) — required for external hosts that block ping
+    pn     = ["-Pn"] if is_external else []
+    result = await run_tool(["nmap","-sV",timing,"--open","--top-ports",ports] + pn + [host], timeout=150)
     out = result.get("output","")
     ports = []
     for line in out.splitlines():
