@@ -535,7 +535,9 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
     base = req.target.rstrip("/")
 
     # Step 1: curl-based reflected XSS — test common parameters
-    xss_params = ["q", "search", "name", "id", "query", "s", "term", "keyword", "user", "input"]
+    xss_params = ["q", "search", "searchFor", "name", "id", "query", "s", "term", "keyword",
+                  "user", "input", "cat", "artist", "username", "text", "message", "comment",
+                  "content", "filter", "page", "lang", "return", "url", "next", "data", "value"]
     xss_payloads = [
         ("<script>alert(1)</script>", "<script>alert(1)</script>"),
         ("<img src=x onerror=alert(1)>", "onerror=alert"),
