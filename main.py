@@ -1469,15 +1469,18 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
             except: pass
             if vulnerable: break
         if vulnerable: break
-    # Blind SSRF: check for open redirect that reaches internal (response time / redirect location)
+    # Blind SSRF: check for open redirect that reaches internal (Location must START WITH the internal addr)
+    # Don't check "in loc" — sites often echo the test URL as a query param in Location, which is a false positive
+    _internal_prefixes = ("http://169.254","https://169.254","http://127.0.0.1","https://127.0.0.1",
+                          "http://localhost","https://localhost","//169.254","//127.0.0.1")
     for param in ["url","redirect","next","return","callback"]:
         test_url = f"{base}?{param}=http://169.254.169.254/"
         try:
             r = _req_lib.get(test_url, timeout=3, verify=False, headers=ssrf_headers, allow_redirects=False)
-            loc = r.headers.get("Location","")
-            if "169.254" in loc or "127.0.0.1" in loc or "localhost" in loc:
+            loc = r.headers.get("Location","").strip()
+            if any(loc.startswith(pfx) for pfx in _internal_prefixes):
                 findings.append({
-                    "detail": f"Blind SSRF / Open Redirect via '{param}' — redirects to internal address: {loc}",
+                    "detail": f"Blind SSRF / Open Redirect via '{param}' — server redirects directly to internal address: {loc}",
                     "severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-918",
                     "cwe_name":"Blind SSRF","owasp":"A10:2021",
                     "remediation":"Validate redirect destinations. Never follow redirects to private/internal IP ranges."
@@ -1664,12 +1667,32 @@ async def scan_idor(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/ssti")
 async def scan_ssti(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
-    payloads = [("?name={{7*7}}","49"),("?q={{7*7}}","49"),("?search=#{7*7}","49")]
-    for param,expected in payloads:
-        r = _http_get(req.target+param, timeout=8)
-        if r and expected in r.text:
+    base_url = _web_url(req.target).rstrip("/")
+    # Fetch baseline to filter out numbers already present on the page
+    baseline = _http_get(base_url, timeout=8)
+    baseline_text = baseline.text if baseline else ""
+    # Each tuple: (param, math_payload, expected_result, alt_payload, alt_expected)
+    # We confirm SSTI by verifying TWO different expressions both evaluate correctly
+    probe_sets = [
+        ("name",  "{{7*7}}",  "49", "{{13*37}}", "481"),
+        ("q",     "{{7*7}}",  "49", "{{13*37}}", "481"),
+        ("search","#{7*7}",   "49", "#{13*37}",  "481"),
+        ("input", "{{7*7}}",  "49", "{{13*37}}", "481"),
+    ]
+    for param, p1, e1, p2, e2 in probe_sets:
+        # Skip if expected output already exists in baseline (coincidental numbers)
+        if e1 in baseline_text or e2 in baseline_text:
+            continue
+        url1 = f"{base_url}?{param}={p1}"
+        r1 = _http_get(url1, timeout=8)
+        if not r1 or e1 not in r1.text:
+            continue
+        # Confirm with second expression to eliminate false positives
+        url2 = f"{base_url}?{param}={p2}"
+        r2 = _http_get(url2, timeout=8)
+        if r2 and e2 in r2.text:
             vulnerable = True
-            findings.append({"detail":f"SSTI: Template expression evaluated — {param} returned '{expected}'","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-1336","cwe_name":"SSTI","owasp":"A03:2021","remediation":"Never render user input as a template. Use safe output encoding."})
+            findings.append({"detail":f"SSTI confirmed: ?{param}={p1} → '{e1}' AND ?{param}={p2} → '{e2}' both evaluated — server-side template injection is real","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-1336","cwe_name":"SSTI","owasp":"A03:2021","remediation":"Never render user input as a template. Use safe output encoding and sandboxed template engines."})
             break
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"ssti",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"ssti","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
@@ -1677,14 +1700,30 @@ async def scan_ssti(req: ScanRequest, user=Depends(verify_token)):
 @app.post("/api/scan/fileupload")
 async def scan_fileupload(req: ScanRequest, user=Depends(verify_token)):
     findings = []; vulnerable = False
-    upload_paths = ["/upload","/file-upload","/upload.php","/api/upload","/admin/upload"]
+    base = req.target.rstrip("/")
+    upload_paths = ["/upload","/file-upload","/upload.php","/fileupload","/api/upload","/admin/upload","/media/upload"]
+    _unique_name = f"testfile_{uuid.uuid4().hex[:8]}.php"
+    _php_payload = b"<?php echo 'PWNED_' . md5('test'); ?>"
     for p in upload_paths:
         try:
-            url = req.target.rstrip("/")+p
-            r = _req_lib.post(url,files={"file":("shell.php",b"<?php echo 'test'; ?>","application/x-php")},timeout=8,verify=False)
-            if r.status_code in (200,201) and ("success" in r.text.lower() or "upload" in r.text.lower()):
+            url = base + p
+            # Check the endpoint exists first — skip 404s immediately
+            head = _req_lib.get(url, timeout=5, verify=False, allow_redirects=False)
+            if head.status_code == 404:
+                continue
+            r = _req_lib.post(url, files={"file": (_unique_name, _php_payload, "application/x-php")},
+                               timeout=10, verify=False)
+            body = r.text.lower()
+            # Only flag if the server echoes back our filename or a file URL, or explicit success JSON
+            # Reject: "upload" keyword alone (URL path echo), generic 200s, redirect responses
+            server_stored = (
+                _unique_name.lower() in body or
+                _unique_name[:8].lower() in body or
+                (r.status_code in (200,201) and re.search(r'"(url|path|file|location)"\s*:\s*"[^"]*\.php"', body))
+            )
+            if server_stored:
                 vulnerable = True
-                findings.append({"detail":f"File upload endpoint {p} accepts PHP files","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-434","cwe_name":"Unrestricted File Upload","owasp":"A04:2021","remediation":"Whitelist allowed file types. Store uploads outside webroot. Rename files."})
+                findings.append({"detail":f"Unrestricted file upload at {p}: server accepted PHP file and returned filename/URL in response (HTTP {r.status_code})","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-434","cwe_name":"Unrestricted File Upload","owasp":"A04:2021","remediation":"Whitelist allowed file types (images/docs only). Rename uploaded files server-side. Store uploads outside webroot."})
                 break
         except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"fileupload",req.target,{"output":str(findings)})
