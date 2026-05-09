@@ -1433,6 +1433,10 @@ const PHASES = [
   {name:"SMTP User Enum",         tool:"smtp",          endpoint:"/api/scan/smtp",           icon:"📧"},
   {name:"SNMP Scanner",           tool:"snmp",          endpoint:"/api/scan/snmp",           icon:"📡"},
   {name:"Exploit Search",         tool:"exploitsearch", endpoint:"/api/scan/exploitsearch",  icon:"🔍"},
+  {name:"Prototype Pollution",    tool:"protopollution",endpoint:"/api/scan/protopollution",  icon:"☣"},
+  {name:"PHP Type Juggling",      tool:"typejuggling",  endpoint:"/api/scan/typejuggling",    icon:"🔢"},
+  {name:"JWT Attacks",            tool:"jwt",           endpoint:"/api/scan/jwt",              icon:"🎟"},
+  {name:"GraphQL Security",       tool:"graphql",       endpoint:"/api/scan/graphql",          icon:"◈"},
 ];
 
 function WebAppModule(props) {

