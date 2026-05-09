@@ -1343,10 +1343,11 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
     for p in payloads:
         try:
             r = _req_lib.get(_web_url(req.target)+p,timeout=10,verify=False,headers=_BROWSER_HEADERS,allow_redirects=False)
-            loc = r.headers.get("Location","")
-            if "evil.com" in loc:
+            loc = r.headers.get("Location","").strip()
+            # Must redirect TO evil.com, not just echo it as a query parameter
+            if loc.startswith("https://evil.com") or loc.startswith("http://evil.com") or loc.startswith("//evil.com"):
                 vulnerable = True
-                findings.append({"detail":f"Open Redirect via {p} -> {loc}","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
+                findings.append({"detail":f"Open Redirect via {p} → {loc} (server redirects directly to attacker domain)","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
                 break
         except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"openredirect",req.target,{"output":str(findings)})
@@ -1448,8 +1449,8 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
         ("http://169.254.169.254/latest/meta-data/",          ["ami-id","instance-id","local-ipv4","security-credentials"], "AWS EC2 metadata"),
         ("http://metadata.google.internal/computeMetadata/v1/",["project-id","instance","serviceAccounts"],                 "GCP metadata"),
         ("http://169.254.169.254/metadata/instance",          ["compute","network","subscriptionId"],                       "Azure metadata"),
-        ("http://127.0.0.1/",                                 ["html","body","localhost","apache","nginx","iis"],            "Localhost access"),
-        ("http://localhost:8080/",                             ["html","body","tomcat","jetty","spring"],                    "Internal service :8080"),
+        ("http://127.0.0.1/",                                 ["server: apache","server: nginx","server: iis","x-powered-by","<title>apache","<title>nginx","welcome to nginx","it works","apache2 ubuntu default"], "Localhost access"),
+        ("http://localhost:8080/",                             ["tomcat","jetty","spring boot","whitelabel error","glassfish"], "Internal service :8080"),
     ]
     ssrf_headers = {**_BROWSER_HEADERS, "X-Forwarded-For":"127.0.0.1"}
     for param in params:
