@@ -7,7 +7,7 @@ const API = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||
 const _pdfFn = t => (t||"target").replace(/https?:\/\//,"").replace(/[^a-zA-Z0-9.\-]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"");
 const _pdfDt = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`; };
 
-const LOGO = "/logo.svg";
+const LOGO = "/logo.png";
 
 
 const MODULES = [
@@ -303,7 +303,7 @@ function Login(props) {
 
         {/* Logo */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
-          <img src={LOGO} alt="logo" style={{width:96,objectFit:"contain",mixBlendMode:"screen"}}/>
+          <img src={LOGO} alt="logo" style={{width:96,objectFit:"contain",mixBlendMode:"multiply"}}/>
         </div>
 
         {/* Brand */}
@@ -8461,7 +8461,7 @@ export default function App() {
         <div style={{padding:"8px 0 10px",borderBottom:"1px solid #1e293b",flexShrink:0,background:"#0a0f1e"}}>
           {/* Shield — black bg removed via screen blend */}
           <div style={{display:"flex",justifyContent:"center",marginBottom:0,background:"#0a0f1e"}}>
-            <img src={LOGO} alt="logo" style={{width:56,height:56,objectFit:"contain",mixBlendMode:"screen",display:"block",imageRendering:"crisp-edges"}}/>
+            <img src={LOGO} alt="logo" style={{width:56,height:56,objectFit:"contain",mixBlendMode:"multiply",display:"block",imageRendering:"crisp-edges"}}/>
           </div>
           {/* CYBERSECURITY */}
           <div style={{textAlign:"center",marginBottom:8}}>
