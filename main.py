@@ -63,22 +63,21 @@ def _init_db():
     try: con.execute("CREATE TABLE IF NOT EXISTS renewal_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, action TEXT NOT NULL, done_by TEXT NOT NULL, timestamp TEXT NOT NULL, note TEXT DEFAULT NULL)")
     except: pass
     con.commit()
+    now = datetime.datetime.utcnow().isoformat()
     row = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     if row == 0:
         admin_id = str(uuid.uuid4())
         pw_hash = _bcrypt.hashpw(b"admin123", _bcrypt.gensalt()).decode()
-        con.execute("INSERT INTO users VALUES (?,?,?,?,?,?)",
-            (admin_id, "admin", "admin@oscp.local", pw_hash, "pro",
-             datetime.datetime.utcnow().isoformat()))
+        con.execute("INSERT INTO users (id,username,email,password_hash,plan,created_at,status) VALUES (?,?,?,?,?,?,?)",
+            (admin_id, "admin", "admin@oscp.local", pw_hash, "pro", now, "active"))
         con.commit()
     # Always ensure ADMIN superuser exists
     existing = con.execute("SELECT id FROM users WHERE username='ADMIN'").fetchone()
     if not existing:
         superadmin_id = str(uuid.uuid4())
         pw_hash = _bcrypt.hashpw(b"CyberAdmin@2025", _bcrypt.gensalt()).decode()
-        con.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,?,?)",
-            (superadmin_id, "ADMIN", "admin@cyber.dev", pw_hash, "superadmin",
-             datetime.datetime.utcnow().isoformat()))
+        con.execute("INSERT INTO users (id,username,email,password_hash,plan,created_at,status) VALUES (?,?,?,?,?,?,?)",
+            (superadmin_id, "ADMIN", "admin@cyber.dev", pw_hash, "superadmin", now, "active"))
         con.commit()
     con.close()
 
