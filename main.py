@@ -33,7 +33,19 @@ def _init_db():
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             plan TEXT DEFAULT 'trial',
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            expires_at TEXT DEFAULT NULL,
+            status TEXT DEFAULT 'active',
+            phone TEXT DEFAULT NULL,
+            note TEXT DEFAULT NULL
+        );
+        CREATE TABLE IF NOT EXISTS renewal_log (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            done_by TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            note TEXT DEFAULT NULL
         );
         CREATE TABLE IF NOT EXISTS scans (
             id TEXT PRIMARY KEY,
@@ -44,6 +56,13 @@ def _init_db():
             timestamp TEXT
         );
     """)
+    # Migrate existing DBs — add new columns if missing
+    for col, defval in [("expires_at","NULL"),("status","'active'"),("phone","NULL"),("note","NULL")]:
+        try: con.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {defval}")
+        except: pass
+    try: con.execute("CREATE TABLE IF NOT EXISTS renewal_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, action TEXT NOT NULL, done_by TEXT NOT NULL, timestamp TEXT NOT NULL, note TEXT DEFAULT NULL)")
+    except: pass
+    con.commit()
     row = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     if row == 0:
         admin_id = str(uuid.uuid4())
@@ -82,8 +101,23 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         raise HTTPException(status_code=401, detail="No token provided")
     try:
         payload = _jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
-        _USER_CTX.set(payload.get("user_id", "anonymous"))
+        uid = payload.get("user_id", "anonymous")
+        # Check subscription status in DB
+        if payload.get("username") != "ADMIN":
+            con = _get_db()
+            row = con.execute("SELECT status, expires_at, plan FROM users WHERE id=?", (uid,)).fetchone()
+            con.close()
+            if row:
+                if row["status"] == "suspended":
+                    raise HTTPException(status_code=403, detail="Account suspended. Contact support.")
+                if row["expires_at"]:
+                    exp = datetime.datetime.fromisoformat(row["expires_at"])
+                    if datetime.datetime.utcnow() > exp and row["plan"] not in ("superadmin","pro_lifetime"):
+                        raise HTTPException(status_code=403, detail="Subscription expired. Please renew to continue.")
+        _USER_CTX.set(uid)
         return payload
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -307,25 +341,100 @@ async def get_scans(user=Depends(verify_token)):
         scans = list(reversed(SCAN_HISTORY)) if is_superadmin else [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
         return {"scans": scans, "total": len(scans)}
 
-@app.get("/api/admin/users")
-async def admin_get_users(user=Depends(verify_token)):
+def _admin_only(user):
     if user.get("username") != "ADMIN":
         raise HTTPException(status_code=403, detail="Superadmin only")
+
+@app.get("/api/admin/users")
+async def admin_get_users(user=Depends(verify_token)):
+    _admin_only(user)
     con = _get_db()
-    rows = con.execute("SELECT id, username, email, plan, created_at FROM users ORDER BY created_at DESC").fetchall()
+    rows = con.execute("""
+        SELECT u.id, u.username, u.email, u.plan, u.created_at, u.expires_at,
+               u.status, u.phone, u.note,
+               COUNT(s.id) as scan_count
+        FROM users u LEFT JOIN scans s ON s.user_id = u.id
+        GROUP BY u.id ORDER BY u.created_at DESC
+    """).fetchall()
     con.close()
-    return {"users": [dict(r) for r in rows], "total": len(rows)}
+    now = datetime.datetime.utcnow()
+    result = []
+    for r in rows:
+        d = dict(r)
+        if d["expires_at"]:
+            exp = datetime.datetime.fromisoformat(d["expires_at"])
+            days_left = (exp - now).days
+            d["days_left"] = days_left
+            d["expiry_status"] = "expired" if days_left < 0 else "expiring_soon" if days_left <= 7 else "active"
+        else:
+            d["days_left"] = None
+            d["expiry_status"] = "no_expiry"
+        result.append(d)
+    return {"users": result, "total": len(result)}
+
+@app.post("/api/admin/users/{username}/extend")
+async def admin_extend_subscription(username: str, body: dict, user=Depends(verify_token)):
+    _admin_only(user)
+    days = int(body.get("days", 30))
+    plan = body.get("plan", None)
+    note = body.get("note", "")
+    con = _get_db()
+    row = con.execute("SELECT id, expires_at, plan FROM users WHERE username=?", (username,)).fetchone()
+    if not row: raise HTTPException(status_code=404, detail="User not found")
+    now = datetime.datetime.utcnow()
+    base = max(now, datetime.datetime.fromisoformat(row["expires_at"])) if row["expires_at"] and datetime.datetime.fromisoformat(row["expires_at"]) > now else now
+    new_exp = (base + datetime.timedelta(days=days)).isoformat()
+    new_plan = plan or row["plan"]
+    con.execute("UPDATE users SET expires_at=?, status='active', plan=? WHERE username=?", (new_exp, new_plan, username))
+    log_id = str(uuid.uuid4())
+    con.execute("INSERT INTO renewal_log VALUES (?,?,?,?,?,?)",
+        (log_id, row["id"], f"Extended {days} days → {new_exp}", "ADMIN", now.isoformat(), note))
+    con.commit(); con.close()
+    return {"ok": True, "username": username, "expires_at": new_exp, "plan": new_plan}
+
+@app.post("/api/admin/users/{username}/plan")
+async def admin_change_plan(username: str, body: dict, user=Depends(verify_token)):
+    _admin_only(user)
+    plan = body.get("plan")
+    if not plan: raise HTTPException(status_code=400, detail="plan required")
+    con = _get_db()
+    con.execute("UPDATE users SET plan=? WHERE username=?", (plan, username))
+    con.commit(); con.close()
+    return {"ok": True, "username": username, "plan": plan}
+
+@app.post("/api/admin/users/{username}/suspend")
+async def admin_suspend_user(username: str, user=Depends(verify_token)):
+    _admin_only(user)
+    if username == "ADMIN": raise HTTPException(status_code=400, detail="Cannot suspend superadmin")
+    con = _get_db()
+    con.execute("UPDATE users SET status='suspended' WHERE username=?", (username,))
+    con.commit(); con.close()
+    return {"ok": True, "username": username, "status": "suspended"}
+
+@app.post("/api/admin/users/{username}/activate")
+async def admin_activate_user(username: str, user=Depends(verify_token)):
+    _admin_only(user)
+    con = _get_db()
+    con.execute("UPDATE users SET status='active' WHERE username=?", (username,))
+    con.commit(); con.close()
+    return {"ok": True, "username": username, "status": "active"}
 
 @app.delete("/api/admin/users/{username}")
 async def admin_delete_user(username: str, user=Depends(verify_token)):
-    if user.get("username") != "ADMIN":
-        raise HTTPException(status_code=403, detail="Superadmin only")
-    if username == "ADMIN":
-        raise HTTPException(status_code=400, detail="Cannot delete superadmin")
+    _admin_only(user)
+    if username == "ADMIN": raise HTTPException(status_code=400, detail="Cannot delete superadmin")
     con = _get_db()
     con.execute("DELETE FROM users WHERE username=?", (username,))
     con.commit(); con.close()
     return {"ok": True, "deleted": username}
+
+@app.get("/api/admin/renewals")
+async def admin_renewal_log(user=Depends(verify_token)):
+    _admin_only(user)
+    con = _get_db()
+    rows = con.execute("SELECT r.*, u.username FROM renewal_log r JOIN users u ON u.id=r.user_id ORDER BY r.timestamp DESC LIMIT 100").fetchall()
+    con.close()
+    return {"log": [dict(r) for r in rows]}
 
 
 # ── PASSWORD ATTACKS — HYDRA ──────────────────────────────────

@@ -8081,6 +8081,170 @@ function SettingsModule() {
   );
 }
 
+function AdminPanel({ token }) {
+  const [users, setUsers]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState("");
+  const [msg, setMsg]           = useState("");
+  const [extDays, setExtDays]   = useState(30);
+  const [selPlan, setSelPlan]   = useState("pro");
+
+  const load = async () => {
+    setLoading(true);
+    try { const d = await api("/api/admin/users","GET",null,token); setUsers(d.users||[]); }
+    catch(e) { setMsg("Error: "+e.message); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const act = async (url, method="POST", body=null) => {
+    try {
+      await api(url, method, body, token);
+      setMsg("Done!");
+      load();
+    } catch(e) { setMsg("Error: "+e.message); }
+    setTimeout(()=>setMsg(""),3000);
+  };
+
+  const statusColor = (u) => {
+    if (u.status === "suspended") return "#ef4444";
+    if (u.expiry_status === "expired") return "#ef4444";
+    if (u.expiry_status === "expiring_soon") return "#f59e0b";
+    return "#22c55e";
+  };
+
+  const statusLabel = (u) => {
+    if (u.status === "suspended") return "SUSPENDED";
+    if (u.expiry_status === "expired") return "EXPIRED";
+    if (u.expiry_status === "expiring_soon") return `EXPIRING IN ${u.days_left}d`;
+    if (u.days_left !== null) return `${u.days_left}d LEFT`;
+    return "ACTIVE";
+  };
+
+  const filtered = users.filter(u =>
+    u.username.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const stats = {
+    total: users.length,
+    active: users.filter(u => u.status==="active" && u.expiry_status !== "expired").length,
+    expiring: users.filter(u => u.expiry_status==="expiring_soon").length,
+    expired: users.filter(u => u.expiry_status==="expired" || u.status==="suspended").length,
+  };
+
+  return (
+    <div className="fade" style={{padding:24,fontFamily:"Inter,sans-serif"}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+        <span style={{fontSize:28}}>👑</span>
+        <div>
+          <h2 style={{fontSize:20,fontWeight:800,color:"#f1f5f9",margin:0}}>Admin Panel</h2>
+          <p style={{fontSize:12,color:"#64748b",margin:0}}>Manage users, subscriptions and access</p>
+        </div>
+        <button onClick={load} style={{marginLeft:"auto",background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>↻ Refresh</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+        {[
+          {label:"Total Users",   val:stats.total,    color:"#3b82f6"},
+          {label:"Active",        val:stats.active,   color:"#22c55e"},
+          {label:"Expiring Soon", val:stats.expiring, color:"#f59e0b"},
+          {label:"Expired",       val:stats.expired,  color:"#ef4444"},
+        ].map((s,i)=>(
+          <div key={i} style={{background:"#0f172a",border:`1px solid ${s.color}30`,borderTop:`3px solid ${s.color}`,borderRadius:10,padding:16}}>
+            <div style={{fontSize:28,fontWeight:800,color:s.color}}>{s.val}</div>
+            <div style={{fontSize:12,color:"#64748b",fontWeight:600,marginTop:4}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Message */}
+      {msg && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:8,padding:"10px 16px",color:"#4ade80",fontSize:13,marginBottom:16}}>{msg}</div>}
+
+      {/* Search */}
+      <input value={search} onChange={e=>setSearch(e.target.value)}
+        placeholder="Search by username or email..."
+        style={{width:"100%",background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:"10px 16px",color:"#e2e8f0",fontSize:13,outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
+
+      {/* Users Table */}
+      {loading ? <div style={{textAlign:"center",padding:40,color:"#475569"}}>Loading users...</div> : (
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {filtered.map(u=>(
+            <div key={u.id} style={{background:"#0a0f1e",border:`1px solid ${u.username==="ADMIN"?"#7c3aed30":"#1e293b"}`,borderLeft:`4px solid ${statusColor(u)}`,borderRadius:10,padding:"16px 20px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+
+                {/* User info */}
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <span style={{fontSize:15,fontWeight:700,color:"#f1f5f9"}}>{u.username}</span>
+                    {u.username==="ADMIN" && <span style={{fontSize:10,color:"#a78bfa",fontWeight:700,background:"#3b0764",padding:"2px 8px",borderRadius:4}}>SUPERADMIN</span>}
+                    <span style={{fontSize:10,color:"#64748b",background:"#1e293b",padding:"2px 8px",borderRadius:4,fontWeight:600}}>{u.plan?.toUpperCase()}</span>
+                    <span style={{fontSize:10,color:statusColor(u),fontWeight:700,background:statusColor(u)+"15",padding:"2px 8px",borderRadius:4}}>{statusLabel(u)}</span>
+                  </div>
+                  <div style={{fontSize:12,color:"#64748b"}}>{u.email}</div>
+                  <div style={{fontSize:11,color:"#334155",marginTop:2,fontFamily:"JetBrains Mono,monospace"}}>
+                    Joined: {u.created_at?.slice(0,10)} &nbsp;|&nbsp; Scans: {u.scan_count||0}
+                    {u.expires_at && <> &nbsp;|&nbsp; Expires: {u.expires_at?.slice(0,10)}</>}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {u.username !== "ADMIN" && (
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                    {/* Extend */}
+                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                      <select value={extDays} onChange={e=>setExtDays(Number(e.target.value))}
+                        style={{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
+                        {[7,14,30,60,90,180,365].map(d=><option key={d} value={d}>{d} days</option>)}
+                      </select>
+                      <button onClick={()=>act(`/api/admin/users/${u.username}/extend`,"POST",{days:extDays,plan:selPlan})}
+                        style={{background:"#166534",border:"none",color:"#4ade80",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                        + Extend
+                      </button>
+                    </div>
+
+                    {/* Plan */}
+                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                      <select value={selPlan} onChange={e=>setSelPlan(e.target.value)}
+                        style={{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
+                        {["trial","pro","enterprise","pro_lifetime"].map(p=><option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <button onClick={()=>act(`/api/admin/users/${u.username}/plan`,"POST",{plan:selPlan})}
+                        style={{background:"#1e3a8a",border:"none",color:"#60a5fa",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                        Set Plan
+                      </button>
+                    </div>
+
+                    {/* Suspend / Activate / Delete */}
+                    {u.status==="active"
+                      ? <button onClick={()=>act(`/api/admin/users/${u.username}/suspend`)}
+                          style={{background:"#451a03",border:"none",color:"#f97316",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                          Suspend
+                        </button>
+                      : <button onClick={()=>act(`/api/admin/users/${u.username}/activate`)}
+                          style={{background:"#052e16",border:"none",color:"#22c55e",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                          Activate
+                        </button>
+                    }
+                    <button onClick={()=>{ if(window.confirm(`Delete ${u.username}?`)) act(`/api/admin/users/${u.username}`,"DELETE"); }}
+                      style={{background:"#1c0000",border:"1px solid #7f1d1d",color:"#f87171",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {filtered.length===0 && <div style={{textAlign:"center",padding:40,color:"#475569"}}>No users found</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [token,setToken]       = useState(() => localStorage.getItem("cyberToken") || null);
   const [role,setRole]         = useState(() => localStorage.getItem("cyberRole") || "");
@@ -8244,6 +8408,9 @@ export default function App() {
         <div style={{display: active==="settings" ? "block" : "none"}}>
           <SettingsModule/>
         </div>
+        <div style={{display: active==="adminpanel" ? "block" : "none"}}>
+          <AdminPanel token={token}/>
+        </div>
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
@@ -8252,7 +8419,7 @@ export default function App() {
         {!["webapp","recon","vuln","password","auth","network","sysexploit","cloud","buffer","exploit",
             "osint","wireless","ad","privesc","tunnel","post","av","se","malware","supply","persist",
             "client","mobile","api","pivot","report","tools","history","settings",
-            "dashboard","health","msf","guide"].includes(active) && <ComingSoon topic={topic}/>}
+            "dashboard","health","msf","guide","adminpanel"].includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
   };
@@ -8338,9 +8505,10 @@ export default function App() {
             {id:"health",  icon:"💊", label:"System Health"},
             {id:"history", icon:"📋", label:"Scan History"},
             {id:"settings",icon:"⚙",  label:"Settings"},
+            ...(isSuperAdmin ? [{id:"adminpanel", icon:"👑", label:"Admin Panel"}] : []),
           ].map(m => (
             <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
-              style={{width:"calc(100% - 16px)",background:active===m.id?"#1e293b":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
+              style={{width:"calc(100% - 16px)",background:active===m.id?(m.id==="adminpanel"?"#3b0764":"#1e293b"):"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
               <span style={{fontSize:15,width:22,textAlign:"center"}}>{m.icon}</span>
               <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:500,letterSpacing:"0.1px"}}>{m.label}</span>
             </button>
