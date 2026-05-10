@@ -308,7 +308,7 @@ function Login(props) {
 
         {/* Brand */}
         <h1 style={{fontSize:26,fontWeight:900,letterSpacing:5,margin:"0 0 4px",textAlign:"center",lineHeight:1.1}}>
-          <span style={{color:"#f1f5f9"}}>CYBER</span><span style={{color:"#3b82f6"}}>SECURITY</span>
+          <span style={{color:"#f1f5f9"}}>VULNUS</span><span style={{color:"#3b82f6"}}>LAB</span>
         </h1>
         <div style={{marginBottom:28,textAlign:"center"}}><Tagline size={10}/></div>
 
@@ -643,7 +643,7 @@ function generatePDF(reportData) {
 
     // ─── PAGE HEADER (pages 2+) ──────────────────────────────────
     const drawHeader = () => {
-      txt((companyName||"CyberSecurity Platform")+" — Penetration Test Report",margin,10,7,GRAY);
+      txt((companyName||"VulnusLab")+" — Penetration Test Report",margin,10,7,GRAY);
       txt(date,pageW-margin,10,7,BLUE,false,"right");
     };
 
@@ -842,7 +842,7 @@ function generatePDF(reportData) {
     }
 
     // Footer cover
-    txt("CONFIDENTIAL — Authorized Use Only — "+(companyName||"CyberSecurity Platform"),pageW/2,290,7,GRAY,false,"center");
+    txt("CONFIDENTIAL — Authorized Use Only — "+(companyName||"VulnusLab"),pageW/2,290,7,GRAY,false,"center");
 
     // ════════════════════════════════════════════════════════════
     //  PAGE 2 — SCAN RESULTS
@@ -1379,7 +1379,7 @@ function generatePDF(reportData) {
       doc.setDrawColor(59,130,246); doc.setLineWidth(1.2);
       doc.rect(0,0,210,297,'S');
       if(i>=2){
-        txt((companyName||"CyberSecurity Platform")+" | CONFIDENTIAL",margin,290,6.5,GRAY);
+        txt((companyName||"VulnusLab")+" | CONFIDENTIAL",margin,290,6.5,GRAY);
         txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
       }
     }
@@ -1423,7 +1423,7 @@ function generateModuleReport(reportData) {
     };
     const BLUE = [59,130,246];
     const drawHeader = () => {
-      txt((companyName||"CyberSecurity Platform")+" — "+moduleName+" Report",margin,10,7,GRAY);
+      txt((companyName||"VulnusLab")+" — "+moduleName+" Report",margin,10,7,GRAY);
       txt(date||new Date().toLocaleDateString("en-GB"),pageW-margin,10,7,GREEN,false,"right");
     };
     const newPage = () => { doc.addPage(); y=18; drawHeader(); };
@@ -1446,7 +1446,7 @@ function generateModuleReport(reportData) {
     // Module name
     const cx=pageW/2;
     doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...GREEN);
-    doc.text((companyName||"CyberSecurity Platform").toUpperCase(),cx,42,{align:"center"});
+    doc.text((companyName||"VulnusLab").toUpperCase(),cx,42,{align:"center"});
     doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(...WHITE);
     doc.text(moduleName,cx,58,{align:"center"});
     doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(...GRAY);
@@ -1509,7 +1509,7 @@ function generateModuleReport(reportData) {
     }
 
     // Cover footer
-    txt("CONFIDENTIAL — Authorized Use Only — "+(companyName||"CyberSecurity Platform"),pageW/2,290,7,GRAY,false,"center");
+    txt("CONFIDENTIAL — Authorized Use Only — "+(companyName||"VulnusLab"),pageW/2,290,7,GRAY,false,"center");
 
     // ── PAGE 2 — FINDINGS ───────────────────────────────────────
     newPage();
@@ -1584,7 +1584,7 @@ function generateModuleReport(reportData) {
       doc.setDrawColor(59,130,246); doc.setLineWidth(1.2);
       doc.rect(0,0,210,297,'S');
       if(i>=2){
-        txt((companyName||"CyberSecurity Platform")+" | CONFIDENTIAL",margin,290,6.5,GRAY);
+        txt((companyName||"VulnusLab")+" | CONFIDENTIAL",margin,290,6.5,GRAY);
         txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
       }
     }
@@ -1701,7 +1701,7 @@ function WebAppModule(props) {
   const [selectedPhases, setSelectedPhases] = useState(() => new Set(PHASES.map((_,i)=>i)));
   const [showPDFModal, setShowPDFModal]     = useState(false);
   const [pdfConfig, setPDFConfig]           = useState({
-    companyName:"CyberSecurity Platform", reporterName:"Security Analyst", reporterRole:"Penetration Tester",
+    companyName:"VulnusLab", reporterName:"Security Analyst", reporterRole:"Penetration Tester",
     date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
     template:"standard", customLogo:null
   });
@@ -1868,7 +1868,7 @@ function WebAppModule(props) {
     const riskLabel = riskScore>=75?"CRITICAL":riskScore>=50?"HIGH":riskScore>=25?"MEDIUM":riskScore>0?"LOW":"SAFE";
     generatePDF({
       target, riskScore, riskLabel,
-      companyName:  cfg.companyName  || "CyberSecurity Platform",
+      companyName:  cfg.companyName  || "VulnusLab",
       reporterName: cfg.reporterName || "Security Analyst",
       reporterRole: cfg.reporterRole || "Penetration Tester",
       customLogo:   cfg.customLogo   || null,
@@ -3780,7 +3780,7 @@ function generateOsintPdf(results, target) {
   };
   const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
   const drawHeader=()=>{
-    txt("CyberSecurity Platform — OSINT & Threat Intel Report",margin,10,7,GRAY);
+    txt("VulnusLab — OSINT & Threat Intel Report",margin,10,7,GRAY);
     txt(date,pageW-margin,10,7,BLUE,false,"right");
   };
   const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
@@ -3994,7 +3994,7 @@ function generateOsintPdf(results, target) {
     doc.setPage(i);
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
     if(i>=2){
-      txt("CyberSecurity Platform | CONFIDENTIAL",margin,290,6.5,GRAY);
+      txt("VulnusLab | CONFIDENTIAL",margin,290,6.5,GRAY);
       txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
     }
   }
@@ -4792,7 +4792,7 @@ function Dashboard(props) {
       <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:10,padding:"20px 24px",marginBottom:20,display:"flex",alignItems:"center",gap:16}}>
         <div style={{fontSize:40}}>🛡️</div>
         <div>
-          <h1 style={{fontSize:20,fontWeight:700,color:"#f1f5f9",margin:"0 0 2px"}}>Welcome to CyberSecurity Platform v3.1</h1>
+          <h1 style={{fontSize:20,fontWeight:700,color:"#f1f5f9",margin:"0 0 2px"}}>Welcome to VulnusLab v3.1</h1>
           <p style={{fontSize:12,color:"#64748b",margin:0}}>Production Penetration Testing Suite — {new Date().toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</p>
         </div>
         <div style={{marginLeft:"auto",textAlign:"right"}}>
@@ -4892,7 +4892,7 @@ function generateReconReport({target, allResults, date}) {
   const chk    = n => { if(y+n>278){ doc.addPage(); y=18; drawHeader(); } };
   const sHead  = (title,yy) => { _secN++; fillR(margin,yy,contentW,9,LBLUE); txt(_secN+". "+title,margin+4,yy+6.2,10,BLUE,true); return yy+13; };
   const tHead  = (cols,widths,yy) => { fillR(margin,yy,contentW,8,DARK); let cx=margin+3; cols.forEach((c,i)=>{ txt(c,cx,yy+5.5,8,WHITE,true); cx+=widths[i]; }); return yy+8; };
-  const drawHeader = () => { txt("CyberSecurity Platform — Recon Report",margin,10,7,GRAY); txt(date,pageW-margin,10,7,BLUE,false,"right"); };
+  const drawHeader = () => { txt("VulnusLab — Recon Report",margin,10,7,GRAY); txt(date,pageW-margin,10,7,BLUE,false,"right"); };
 
   // ── COVER ──────────────────────────────────────────────────
   fillR(0,0,pageW,64,DARK);
@@ -5097,7 +5097,7 @@ function generateReconReport({target, allResults, date}) {
   for(let i=1;i<=total;i++){
     doc.setPage(i);
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
-    if(i>=2){ txt("CyberSecurity Platform | CONFIDENTIAL",margin,290,6.5,GRAY); txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right"); }
+    if(i>=2){ txt("VulnusLab | CONFIDENTIAL",margin,290,6.5,GRAY); txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right"); }
   }
   doc.save(`recon_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   }; // end _doGen
@@ -5712,7 +5712,7 @@ function generateVulnReport({target, allResults, date}) {
     const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
     const sHead=(title,yy)=>{_secN++;fillR(margin,yy,contentW,9,LBLUE);txt(_secN+". "+title,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
     const tHead=(cols,widths,yy)=>{fillR(margin,yy,contentW,8,DARK);let cx=margin+3;cols.forEach((c,i)=>{txt(c,cx,yy+5.5,8,WHITE,true);cx+=widths[i];});return yy+8;};
-    const drawHeader=()=>{txt("CyberSecurity Platform — Vulnerability Scan Report",margin,10,7,GRAY);txt(date,pageW-margin,10,7,BLUE,false,"right");};
+    const drawHeader=()=>{txt("VulnusLab — Vulnerability Scan Report",margin,10,7,GRAY);txt(date,pageW-margin,10,7,BLUE,false,"right");};
 
     // Cover
     fillR(0,0,pageW,64,[0,0,0]);
@@ -5814,7 +5814,7 @@ function generateVulnReport({target, allResults, date}) {
     for(let i=1;i<=total;i++){
       doc.setPage(i);
       doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
-      if(i>=2){txt("CyberSecurity Platform | CONFIDENTIAL",margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
+      if(i>=2){txt("VulnusLab | CONFIDENTIAL",margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
     }
     doc.save(`vuln_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   };
@@ -5905,7 +5905,7 @@ function generateExploitReport({target, port, service, cve, msfModule, msfPayloa
       return yy+12;
     };
     const drawHdr=()=>{
-      txt("CyberSecurity Platform — Exploitation Report",margin,10,7,GRAY);
+      txt("VulnusLab — Exploitation Report",margin,10,7,GRAY);
       txt(date,pageW-margin,10,7,BLUE,false,"right");
     };
 
@@ -6085,7 +6085,7 @@ function generateExploitReport({target, port, service, cve, msfModule, msfPayloa
       fillR(0,285,pageW,12,[15,23,42]);
       txt("CONFIDENTIAL — Authorised Penetration Test",margin,291,7,GRAY);
       txt(`Page ${p} of ${totalPages}`,pageW/2,291,7,GRAY,false,"center");
-      txt("CyberSecurity Platform",pageW-margin,291,7,BLUE,false,"right");
+      txt("VulnusLab",pageW-margin,291,7,BLUE,false,"right");
     }
     doc.save(`exploit_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   };
@@ -6619,7 +6619,7 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
     const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(String(t),x,yy,{align:align||"left"});};
     const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHdr();}};
     const sHead=(title,yy)=>{_sn++;fillR(margin,yy,contentW,9,LBLUE);txt(_sn+". "+title,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
-    const drawHdr=()=>{txt("CyberSecurity Platform — Buffer Overflow Report",margin,10,7,GRAY);txt(date,pageW-margin,10,7,BLUE,false,"right");};
+    const drawHdr=()=>{txt("VulnusLab — Buffer Overflow Report",margin,10,7,GRAY);txt(date,pageW-margin,10,7,BLUE,false,"right");};
     const CODE_BG=[232,240,255], CODE_FG=[15,30,80];
     const mono=(t,x,yy,sz)=>{doc.setFont("Courier","normal");doc.setFontSize(sz||7.5);doc.setTextColor(...CODE_FG);doc.text(String(t),x,yy);};
 
@@ -6740,7 +6740,7 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
     for(let i=1;i<=total;i++){
       doc.setPage(i);
       doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
-      if(i>=2){txt("CyberSecurity Platform | CONFIDENTIAL",margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
+      if(i>=2){txt("VulnusLab | CONFIDENTIAL",margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
     }
     doc.save(`bof_${_pdfFn(targetIP)}_${_pdfDt()}.pdf`);
   };
@@ -7416,7 +7416,7 @@ function PasswordModule(props) {
     findings: [],
     cracked: result ? result.cracked||[] : [],
     date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
-    companyName:"CyberSecurity Platform", reporterName:"Security Analyst",
+    companyName:"VulnusLab", reporterName:"Security Analyst",
     reporterRole:"Penetration Tester", template:"red",
   });
 
@@ -8037,7 +8037,7 @@ function SettingsModule() {
     <div className="fade" style={{maxWidth:680,margin:"0 auto",padding:24}}>
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:28,marginBottom:16}}>
         <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>⚙ Settings & Configuration</h2>
-        <p style={{fontSize:12,color:"#64748b",marginBottom:24}}>Configure your CyberSecurity Platform backend connection.</p>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:24}}>Configure your VulnusLab backend connection.</p>
 
         <div style={{marginBottom:20}}>
           <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>
@@ -8465,8 +8465,8 @@ export default function App() {
           </div>
           {/* CYBERSECURITY */}
           <div style={{textAlign:"center",marginBottom:8}}>
-            <span style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#ffffff"}}>CYBER</span>
-            <span style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#3b82f6"}}>SECURITY</span>
+            <span style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#ffffff"}}>VULNUS</span>
+            <span style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#3b82f6"}}>LAB</span>
           </div>
           {/* Tagline — one tab space below */}
           <div style={{marginBottom:4,paddingTop:0}}><Tagline size={9}/></div>

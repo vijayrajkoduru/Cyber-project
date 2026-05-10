@@ -109,7 +109,7 @@ function Nav() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/logo.png" alt="logo" style={{ width: 80, height: 80, objectFit: "contain", mixBlendMode: "screen" }} />
             <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: 0.5 }}>
-              <span style={{ color: "#fff" }}>CYBER</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>SECURITY</span>
+              <span style={{ color: "#fff" }}>VULNUS</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>LAB</span>
             </span>
           </div>
         </a>
@@ -206,7 +206,7 @@ function Hero() {
               {/* Window bar */}
               <div style={{ background: "#0f172a", padding: "12px 16px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}` }}>
                 {["#ef4444","#f59e0b","#22c55e"].map((c,i) => <div key={i} style={{ width: 11, height: 11, borderRadius: "50%", background: c }} />)}
-                <span style={{ fontSize: 12, color: C.muted, fontFamily: "JetBrains Mono,monospace", marginLeft: 8 }}>CyberSecurity Dashboard</span>
+                <span style={{ fontSize: 12, color: C.muted, fontFamily: "JetBrains Mono,monospace", marginLeft: 8 }}>VulnusLab</span>
                 <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, animation: "pulse 2s infinite" }} />
                   <span style={{ fontSize: 11, color: C.green, fontFamily: "JetBrains Mono,monospace" }}>Kali Online</span>
@@ -359,7 +359,7 @@ function Demo() {
               <div style={{ padding: "16px 12px", borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <img src="/logo.png" alt="logo" style={{ width: 60, height: 60, objectFit: "contain", mixBlendMode: "screen" }} />
-                  <span style={{ fontSize: 13, fontWeight: 900 }}><span style={{ color: "#fff" }}>CYBER</span><span style={{ color: C.blue }}>SEC</span></span>
+                  <span style={{ fontSize: 13, fontWeight: 900 }}><span style={{ color: "#fff" }}>VULNUS</span><span style={{ color: C.blue }}>LAB</span></span>
                 </div>
                 <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 5, padding: "6px 8px", display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, animation: "pulse 2s infinite" }} />
@@ -781,7 +781,7 @@ function Contact() {
   const inp = { width: "100%", background: "#0f172a", border: `1px solid ${C.border}`, borderRadius: 10, padding: "13px 16px", color: C.text, fontSize: 14, outline: "none", fontFamily: "Inter,sans-serif", boxSizing: "border-box", transition: "border-color 0.2s" };
   const submit = (e) => {
     e.preventDefault();
-    const subject = `[${form.plan.toUpperCase()}] CyberSecurity Dashboard Access — ${form.name}`;
+    const subject = `[${form.plan.toUpperCase()}] VulnusLab Access — ${form.name}`;
     const body = `Name: ${form.name}\nEmail: ${form.email}\nPhone: ${form.phone}\nCompany: ${form.company || "N/A"}\nPlan: ${form.plan}\n\nMessage:\n${form.message}`;
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setSent(true);
@@ -860,7 +860,7 @@ function Footer() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
               <img src="/logo.png" alt="logo" style={{ width: 60, height: 60, objectFit: "contain", mixBlendMode: "screen" }} />
-              <span style={{ fontSize: 18, fontWeight: 900 }}><span style={{ color: "#fff" }}>CYBER</span><span style={{ color: C.blue }}>SECURITY</span></span>
+              <span style={{ fontSize: 18, fontWeight: 900 }}><span style={{ color: "#fff" }}>VULNUS</span><span style={{ color: C.blue }}>LAB</span></span>
             </div>
             <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.8, maxWidth: 300 }}>Professional penetration testing platform powered by Kali Linux. 51 real security tools in one cloud dashboard.</p>
             <div style={{ marginTop: 20, fontSize: 12, color: "#334155", fontFamily: "JetBrains Mono,monospace", letterSpacing: 1 }}>PROTECT | DETECT | RESPOND</div>
@@ -884,7 +884,7 @@ function Footer() {
           </div>
         </div>
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-          <span style={{ fontSize: 13, color: "#334155" }}>© 2026 CyberSecurity Dashboard. All rights reserved.</span>
+          <span style={{ fontSize: 13, color: "#334155" }}>© 2026 VulnusLab. All rights reserved.</span>
           <span style={{ fontSize: 12, color: "#1e293b" }}>Built with Kali Linux • Powered by FastAPI & React</span>
         </div>
       </div>
