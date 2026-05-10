@@ -8586,7 +8586,7 @@ export default function App() {
               <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":trialInfo.days_left<=2?"#fb923c":"#4ade80"}}>
                 {trialInfo.scans_remaining===0
                   ? "Daily scan limit reached — upgrade to Pro for unlimited scans"
-                  : `Trial: ${trialInfo.days_left} day${trialInfo.days_left!==1?"s":""} left  •  ${trialInfo.scans_remaining} scan${trialInfo.scans_remaining!==1?"s":""} remaining today`}
+                  : `Trial: ${trialInfo.days_left} day${trialInfo.days_left!==1?"s":""} left  •  ${trialInfo.days_left > 0 ? "1 full scan session per day" : "Trial expired"}`}
               </span>
             </div>
             <div style={{display:"flex",gap:6}}>

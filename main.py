@@ -239,7 +239,7 @@ def _make_jwt(user_id: str, username: str, plan: str) -> str:
     return _jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 TRIAL_DAYS       = 7
-TRIAL_SCANS_DAY  = 5
+TRIAL_SCANS_DAY  = 50  # 50 tool calls = ~1 full scan session per day
 
 @app.post("/api/auth/register")
 async def register(req: RegisterRequest):
