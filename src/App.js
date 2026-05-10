@@ -2108,6 +2108,23 @@ function WebAppModule(props) {
       {/* PHASES TAB */}
       {tab==="phases" && (
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
+
+        {/* Badge Legend */}
+        <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
+          {[
+            {label:"SECURE",     color:"#4ade80", bg:"#052e16", desc:"No vulnerability found"},
+            {label:"VULNERABLE", color:"#f87171", bg:"#1c0000", desc:"Security issue detected"},
+            {label:"SKIPPED",    color:"#fb923c", bg:"#1c0a00", desc:"Not applicable for this target"},
+            {label:"ERROR",      color:"#f87171", bg:"#1c0000", desc:"Tool had a problem"},
+          ].map((b,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{background:b.bg,border:`1px solid ${b.color}50`,color:b.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4}}>{b.label}</span>
+              <span style={{fontSize:10,color:"#475569"}}>{b.desc}</span>
+            </div>
+          ))}
+        </div>
+
         {/* Phase selection controls */}
         {!running && (
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
@@ -2182,6 +2199,7 @@ function WebAppModule(props) {
                   {isDone && !isFailed && !isSkipped && (isSQLi||isVuln)   && <Badge label="VULNERABLE" color="red"   size="xs"/>}
                   {isDone && isFailed  && <Badge label="ERROR"     color="red"    size="xs"/>}
                   {isDone && isSkipped && <Badge label="SKIPPED"   color="orange" size="xs"/>}
+                  {isDone && isSkipped && <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic",marginLeft:4}}>Not applicable for this target</span>}
                 </div>
                 <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"1px 6px"}}>{ph.tool}</span>
               </div>
