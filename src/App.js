@@ -1543,8 +1543,8 @@ function WebAppModule(props) {
     date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
     template:"standard", customLogo:null
   });
-  const [authCookie, setAuthCookie]         = useState("");
-  const [authBearer, setAuthBearer]         = useState("");
+  const [authCookie, setAuthCookie]         = useState(() => localStorage.getItem("cyberAuthCookie")||"");
+  const [authBearer, setAuthBearer]         = useState(() => localStorage.getItem("cyberAuthBearer")||"");
   const [showAuthPanel, setShowAuthPanel]   = useState(false);
   const [customWordlist, setCustomWordlist] = useState(null);
   const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
@@ -1852,11 +1852,11 @@ function WebAppModule(props) {
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 <div style={{flex:1,minWidth:200}}>
                   <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Session Cookie</div>
-                  <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)} placeholder="PHPSESSID=abc123; token=xyz" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123; token=xyz" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
                 <div style={{flex:1,minWidth:200}}>
                   <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Bearer Token (JWT)</div>
-                  <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiJ9..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJIUzI1NiJ9..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               </div>
               {(authCookie||authBearer) && <div style={{fontSize:10,color:"#22c55e"}}>✓ Auth active — all scan requests will include these credentials</div>}
