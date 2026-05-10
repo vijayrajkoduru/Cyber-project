@@ -129,20 +129,34 @@ const Tagline = ({size=10}) => (
 );
 function Login(props) {
   const onLogin = props.onLogin;
+  const [mode,setMode]   = useState("login"); // "login" | "register"
   const [u,setU]         = useState("");
+  const [email,setEmail] = useState("");
   const [p,setP]         = useState("");
+  const [p2,setP2]       = useState("");
   const [err,setErr]     = useState("");
+  const [ok,setOk]       = useState("");
   const [loading,setL]   = useState(false);
   const [uFocus,setUF]   = useState(false);
+  const [eFocus,setEF]   = useState(false);
   const [pFocus,setPF]   = useState(false);
+  const [p2Focus,setP2F] = useState(false);
   const [showPw,setShow] = useState(false);
+
+  const switchMode = (m) => { setMode(m); setErr(""); setOk(""); };
 
   const submit = async(e) => {
     e.preventDefault();
-    setL(true); setErr("");
+    setL(true); setErr(""); setOk("");
     try {
-      const data = await api("/api/auth/login","POST",{username:u,password:p});
-      onLogin(data.access_token, data.role, data.username, data.plan||"trial");
+      if (mode === "register") {
+        if (p !== p2) { setErr("Passwords do not match"); setL(false); return; }
+        const data = await api("/api/auth/register","POST",{username:u,email,password:p});
+        onLogin(data.access_token, data.role, data.username, data.plan||"trial");
+      } else {
+        const data = await api("/api/auth/login","POST",{username:u,password:p});
+        onLogin(data.access_token, data.role, data.username, data.plan||"trial");
+      }
     } catch(e2) { setErr(e2.message); }
     setL(false);
   };
@@ -208,16 +222,21 @@ function Login(props) {
         </h1>
         <div style={{marginBottom:28,textAlign:"center"}}><Tagline size={10}/></div>
 
-        {/* Divider */}
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:28}}>
-          <div style={{flex:1,height:"1px",background:"linear-gradient(90deg,transparent,rgba(51,65,85,0.8))"}}/>
-          <span style={{fontSize:9,color:"#334155",letterSpacing:3,fontFamily:"monospace",fontWeight:700}}>SECURE ACCESS</span>
-          <div style={{flex:1,height:"1px",background:"linear-gradient(90deg,rgba(51,65,85,0.8),transparent)"}}/>
+        {/* Mode tabs */}
+        <div style={{display:"flex",gap:0,marginBottom:24,borderRadius:10,overflow:"hidden",border:"1px solid rgba(51,65,85,0.6)"}}>
+          {["login","register"].map(m=>(
+            <button key={m} onClick={()=>switchMode(m)} style={{
+              flex:1,padding:"10px",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,
+              letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",transition:"all 0.2s",
+              background: mode===m ? "linear-gradient(135deg,#1e40af,#3b82f6)" : "rgba(2,6,23,0.7)",
+              color: mode===m ? "#fff" : "#475569"
+            }}>{m==="login"?"Sign In":"Register"}</button>
+          ))}
         </div>
 
         {/* Username */}
-        <div style={{marginBottom:16}}>
-          <label style={{fontSize:10,color:uFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:8,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Username</label>
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:10,color:uFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Username</label>
           <div style={box(uFocus)}>
             <IconUser c={uFocus?"#3b82f6":"#334155"}/>
             <input value={u} onChange={e=>setU(e.target.value)}
@@ -229,16 +248,34 @@ function Login(props) {
           </div>
         </div>
 
+        {/* Email — register only */}
+        {mode==="register" && (
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:10,color:eFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Email</label>
+            <div style={box(eFocus)}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={eFocus?"#3b82f6":"#334155"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+              </svg>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+                onFocus={()=>setEF(true)} onBlur={()=>setEF(false)}
+                onKeyDown={e=>e.key==="Enter"&&submit(e)}
+                placeholder="Enter your email"
+                autoComplete="email"
+                style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
+            </div>
+          </div>
+        )}
+
         {/* Password */}
-        <div style={{marginBottom:28}}>
-          <label style={{fontSize:10,color:pFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:8,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Password</label>
+        <div style={{marginBottom:mode==="register"?14:24}}>
+          <label style={{fontSize:10,color:pFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Password</label>
           <div style={box(pFocus)}>
             <IconLock c={pFocus?"#3b82f6":"#334155"}/>
             <input type={showPw?"text":"password"} value={p} onChange={e=>setP(e.target.value)}
               onFocus={()=>setPF(true)} onBlur={()=>setPF(false)}
               onKeyDown={e=>e.key==="Enter"&&submit(e)}
-              placeholder="Enter your password"
-              autoComplete="current-password"
+              placeholder={mode==="register"?"Min 6 characters":"Enter your password"}
+              autoComplete={mode==="register"?"new-password":"current-password"}
               style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
             <button onClick={()=>setShow(!showPw)} style={{background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center",opacity:0.7}} tabIndex={-1}>
               {showPw ? <IconEyeOff/> : <IconEye/>}
@@ -246,9 +283,25 @@ function Login(props) {
           </div>
         </div>
 
+        {/* Confirm Password — register only */}
+        {mode==="register" && (
+          <div style={{marginBottom:24}}>
+            <label style={{fontSize:10,color:p2Focus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Confirm Password</label>
+            <div style={box(p2Focus)}>
+              <IconLock c={p2Focus?"#3b82f6":"#334155"}/>
+              <input type="password" value={p2} onChange={e=>setP2(e.target.value)}
+                onFocus={()=>setP2F(true)} onBlur={()=>setP2F(false)}
+                onKeyDown={e=>e.key==="Enter"&&submit(e)}
+                placeholder="Repeat your password"
+                autoComplete="new-password"
+                style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
+            </div>
+          </div>
+        )}
+
         {/* Error */}
         {err && (
-          <div style={{background:"rgba(127,29,29,0.25)",border:"1px solid rgba(239,68,68,0.35)",borderRadius:10,padding:"11px 14px",color:"#fca5a5",fontSize:12,marginBottom:20,display:"flex",alignItems:"center",gap:9}}>
+          <div style={{background:"rgba(127,29,29,0.25)",border:"1px solid rgba(239,68,68,0.35)",borderRadius:10,padding:"11px 14px",color:"#fca5a5",fontSize:12,marginBottom:16,display:"flex",alignItems:"center",gap:9}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
@@ -256,7 +309,7 @@ function Login(props) {
           </div>
         )}
 
-        {/* Sign In button */}
+        {/* Submit button */}
         <button onClick={submit} disabled={loading} style={{
           width:"100%", border:"none", borderRadius:12, padding:"15px",
           background: loading ? "#1e293b" : "linear-gradient(135deg,#1e40af,#3b82f6,#6366f1)",
@@ -265,22 +318,35 @@ function Login(props) {
           letterSpacing:3, textTransform:"uppercase",
           boxShadow: loading ? "none" : "0 4px 28px rgba(59,130,246,0.45), inset 0 1px 0 rgba(255,255,255,0.12)",
           display:"flex", alignItems:"center", justifyContent:"center", gap:10,
-          marginBottom:24, transition:"all 0.2s"
+          marginBottom:20, transition:"all 0.2s"
         }}>
           {loading ? (
             <>
               <div style={{width:13,height:13,border:"2px solid #334155",borderTopColor:"#64748b",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
-              Authenticating...
+              {mode==="register"?"Creating Account...":"Authenticating..."}
             </>
           ) : (
             <>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
               </svg>
-              Sign In
+              {mode==="register"?"Create Account":"Sign In"}
             </>
           )}
         </button>
+
+        {/* Switch mode link */}
+        <div style={{textAlign:"center",marginBottom:16}}>
+          {mode==="login" ? (
+            <span style={{fontSize:12,color:"#475569"}}>Don't have an account?{" "}
+              <button onClick={()=>switchMode("register")} style={{background:"none",border:"none",color:"#3b82f6",cursor:"pointer",fontSize:12,fontWeight:700,padding:0}}>Register</button>
+            </span>
+          ) : (
+            <span style={{fontSize:12,color:"#475569"}}>Already have an account?{" "}
+              <button onClick={()=>switchMode("login")} style={{background:"none",border:"none",color:"#3b82f6",cursor:"pointer",fontSize:12,fontWeight:700,padding:0}}>Sign In</button>
+            </span>
+          )}
+        </div>
 
         {/* Footer badge */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -7913,10 +7979,10 @@ function SettingsModule() {
 }
 
 export default function App() {
-  const [token,setToken]       = useState(null);
-  const [role,setRole]         = useState("");
-  const [username,setUsername] = useState("");
-  const [plan,setPlan]         = useState("trial");
+  const [token,setToken]       = useState(() => localStorage.getItem("cyberToken") || null);
+  const [role,setRole]         = useState(() => localStorage.getItem("cyberRole") || "");
+  const [username,setUsername] = useState(() => localStorage.getItem("cyberUser") || "");
+  const [plan,setPlan]         = useState(() => localStorage.getItem("cyberPlan") || "trial");
   const [active,setActive]     = useState("dashboard");
   const [upgModal,setUpgModal] = useState(false);
   const [backendOk,setBE]      = useState(null);
@@ -7926,6 +7992,22 @@ export default function App() {
   const [vulnRunning,setVulnRunning]       = useState(false);
   const [exploitRunning,setExploitRunning] = useState(false);
 
+  const handleLogin = (t, r, u, p) => {
+    setToken(t); setRole(r); setUsername(u); setPlan(p);
+    localStorage.setItem("cyberToken", t);
+    localStorage.setItem("cyberRole", r);
+    localStorage.setItem("cyberUser", u);
+    localStorage.setItem("cyberPlan", p);
+  };
+
+  const handleLogout = () => {
+    setToken(null); setRole(""); setUsername(""); setPlan("trial");
+    localStorage.removeItem("cyberToken");
+    localStorage.removeItem("cyberRole");
+    localStorage.removeItem("cyberUser");
+    localStorage.removeItem("cyberPlan");
+  };
+
   useEffect(() => {
     api("/api/health").then(() => setBE(true)).catch(() => setBE(false));
     const t = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
@@ -7933,7 +8015,7 @@ export default function App() {
   }, []);
 
   if (!token) {
-    return <Login onLogin={(t,r,u,p) => { setToken(t); setRole(r); setUsername(u); setPlan(p); }}/>;
+    return <Login onLogin={handleLogin}/>;
   }
 
   const isPro = plan === "pro" || role === "admin";
@@ -8175,8 +8257,8 @@ export default function App() {
         )}
         <div style={{padding:"10px 12px",borderTop:"1px solid #1e293b",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{fontSize:11,color:"#475569",fontFamily:"JetBrains Mono,monospace"}}>{username} · {role}</div>
-            <button onClick={() => setToken(null)} style={{background:"none",border:"none",color:"#475569",fontSize:10,cursor:"pointer"}}>Sign out</button>
+            <div style={{fontSize:11,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{username} <span style={{color:"#334155"}}>·</span> <span style={{color:plan==="pro"?"#f59e0b":"#475569"}}>{plan}</span></div>
+            <button onClick={handleLogout} style={{background:"none",border:"none",color:"#475569",fontSize:10,cursor:"pointer",letterSpacing:1}}>Sign out</button>
           </div>
           <div style={{textAlign:"center",fontSize:11,color:"#334155",fontFamily:"JetBrains Mono,monospace",marginTop:4}}>{time}</div>
         </div>

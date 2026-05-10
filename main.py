@@ -8,10 +8,53 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List
-import subprocess, asyncio, re, json, uuid, datetime, os, ssl as _ssl_lib, socket as _socket_lib, time as _time, itertools as _itertools
+import subprocess, asyncio, re, json, uuid, datetime, os, ssl as _ssl_lib, socket as _socket_lib, time as _time, itertools as _itertools, sqlite3
+import jwt as _jwt, bcrypt as _bcrypt
 from urllib.parse import urlparse
 from contextvars import ContextVar
 _AUTH_CTX: ContextVar = ContextVar('auth_req', default=None)
+_USER_CTX: ContextVar = ContextVar('user_id', default="anonymous")
+
+JWT_SECRET = os.getenv("JWT_SECRET", "oscp-jwt-secret-key-2024")
+DB_PATH = os.getenv("DB_PATH", "/app/data/users.db")
+
+def _get_db():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+def _init_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    con = _get_db()
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            plan TEXT DEFAULT 'trial',
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS scans (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            tool TEXT,
+            target TEXT,
+            summary TEXT,
+            timestamp TEXT
+        );
+    """)
+    row = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if row == 0:
+        admin_id = str(uuid.uuid4())
+        pw_hash = _bcrypt.hashpw(b"admin123", _bcrypt.gensalt()).decode()
+        con.execute("INSERT INTO users VALUES (?,?,?,?,?,?)",
+            (admin_id, "admin", "admin@oscp.local", pw_hash, "pro",
+             datetime.datetime.utcnow().isoformat()))
+        con.commit()
+    con.close()
+
+_init_db()
 
 app = FastAPI(title="OSCP Dashboard API")
 
@@ -24,12 +67,16 @@ app.add_middleware(
 )
 
 security = HTTPBearer(auto_error=False)
-SECRET_TOKEN = "oscp-dashboard-token"
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if not credentials or credentials.credentials != SECRET_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return credentials.credentials
+    if not credentials:
+        raise HTTPException(status_code=401, detail="No token provided")
+    try:
+        payload = _jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
+        _USER_CTX.set(payload.get("user_id", "anonymous"))
+        return payload
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 class ScanRequest(BaseModel):
     target: str
@@ -52,12 +99,18 @@ def _make_req_headers(req=None):
 SCAN_HISTORY = []
 
 def save_scan(scan_id, tool, target, result):
-    SCAN_HISTORY.append({
-        "id": scan_id, "tool": tool, "target": target,
-        "timestamp": datetime.datetime.utcnow().isoformat(),
-        "summary": result.get("output","")[:200]
-    })
-    if len(SCAN_HISTORY) > 200:
+    user_id = _USER_CTX.get()
+    ts = datetime.datetime.utcnow().isoformat()
+    summary = result.get("output","")[:200]
+    try:
+        con = _get_db()
+        con.execute("INSERT OR IGNORE INTO scans VALUES (?,?,?,?,?,?)",
+                    (scan_id, user_id, tool, target, summary, ts))
+        con.commit(); con.close()
+    except Exception:
+        pass
+    SCAN_HISTORY.append({"id":scan_id,"tool":tool,"target":target,"timestamp":ts,"summary":summary,"user_id":user_id})
+    if len(SCAN_HISTORY) > 500:
         SCAN_HISTORY.pop(0)
 
 async def run_tool(cmd, timeout=60):
@@ -79,16 +132,59 @@ async def run_tool(cmd, timeout=60):
         return {"output": "", "cmd": cmd_str, "error": str(e)}
 
 
-# ── HEALTH ───────────────────────────────────────────────────
+# ── AUTH ──────────────────────────────────────────────────────
 class LoginRequest(BaseModel):
     username: str
     password: str
 
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+def _make_jwt(user_id: str, username: str, plan: str) -> str:
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "plan": plan,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(days=30),
+    }
+    return _jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest):
+    if len(req.username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    user_id = str(uuid.uuid4())
+    pw_hash = _bcrypt.hashpw(req.password.encode(), _bcrypt.gensalt()).decode()
+    try:
+        con = _get_db()
+        con.execute("INSERT INTO users VALUES (?,?,?,?,?,?)",
+            (user_id, req.username, req.email, pw_hash, "trial",
+             datetime.datetime.utcnow().isoformat()))
+        con.commit(); con.close()
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Username or email already exists")
+    token = _make_jwt(user_id, req.username, "trial")
+    return {"access_token": token, "username": req.username, "plan": "trial", "role": "user"}
+
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
-    if req.username == "admin" and req.password == "admin":
-        return {"access_token": "oscp-dashboard-token", "role": "admin", "username": req.username, "plan": "pro"}
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+    con = _get_db()
+    row = con.execute("SELECT * FROM users WHERE username=?", (req.username,)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not _bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = _make_jwt(row["id"], row["username"], row["plan"])
+    return {"access_token": token, "username": row["username"], "plan": row["plan"], "role": "admin" if row["username"]=="admin" else "user"}
+
+@app.get("/api/auth/me")
+async def me(user=Depends(verify_token)):
+    return {"user_id": user["user_id"], "username": user["username"], "plan": user.get("plan","trial")}
 
 @app.post("/api/lab/autologin")
 async def lab_autologin(body: dict, user=Depends(verify_token)):
@@ -170,12 +266,28 @@ async def tools_status(user=Depends(verify_token)):
 
 @app.get("/api/history")
 async def get_history(user=Depends(verify_token)):
-    return {"history": list(reversed(SCAN_HISTORY))}
+    uid = user.get("user_id", "anonymous")
+    try:
+        con = _get_db()
+        rows = con.execute("SELECT * FROM scans WHERE user_id=? ORDER BY timestamp DESC LIMIT 100", (uid,)).fetchall()
+        con.close()
+        return {"history": [dict(r) for r in rows]}
+    except Exception:
+        history = [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
+        return {"history": history}
 
 @app.get("/api/scans")
 async def get_scans(user=Depends(verify_token)):
-    scans = list(reversed(SCAN_HISTORY))
-    return {"scans": scans, "total": len(scans)}
+    uid = user.get("user_id", "anonymous")
+    try:
+        con = _get_db()
+        rows = con.execute("SELECT * FROM scans WHERE user_id=? ORDER BY timestamp DESC LIMIT 100", (uid,)).fetchall()
+        con.close()
+        scans = [dict(r) for r in rows]
+        return {"scans": scans, "total": len(scans)}
+    except Exception:
+        scans = [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
+        return {"scans": scans, "total": len(scans)}
 
 
 # ── PASSWORD ATTACKS — HYDRA ──────────────────────────────────
