@@ -81,6 +81,23 @@ function FadeIn({ children, delay = 0, style = {} }) {
   );
 }
 
+function ShieldLogo({ size = 40 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: "drop-shadow(0 0 8px rgba(59,130,246,0.7))", flexShrink: 0 }}>
+      <defs>
+        <linearGradient id="sg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#1d4ed8"/><stop offset="100%" stopColor="#6366f1"/></linearGradient>
+        <linearGradient id="sg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#3b82f6"/><stop offset="100%" stopColor="#8b5cf6"/></linearGradient>
+      </defs>
+      <path d="M50 5 L90 20 L90 55 C90 76 70 90 50 95 C30 90 10 76 10 55 L10 20 Z" fill="url(#sg1)" stroke="#3b82f6" strokeWidth="2"/>
+      <path d="M50 16 L80 28 L80 54 C80 70 65 81 50 86 C35 81 20 70 20 54 L20 28 Z" fill="none" stroke="rgba(147,197,253,0.3)" strokeWidth="1.5"/>
+      <rect x="36" y="46" width="28" height="20" rx="3" fill="none" stroke="url(#sg2)" strokeWidth="2.5"/>
+      <path d="M43 46 L43 40 C43 34 57 34 57 40 L57 46" stroke="#93c5fd" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+      <circle cx="50" cy="56" r="2.5" fill="#93c5fd"/>
+      <line x1="50" y1="58.5" x2="50" y2="63" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 // ── NAV ──────────────────────────────────────────────────────────
 function Nav() {
   const [scrolled, setScrolled] = useState(false);
@@ -90,7 +107,7 @@ function Nav() {
       <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", height: 70 }}>
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/logo.png" alt="logo" style={{ width: 40, height: 40, objectFit: "contain", mixBlendMode: "screen", filter: "drop-shadow(0 0 6px rgba(59,130,246,0.4))", animation: "glow 3s ease-in-out infinite" }} />
+            <ShieldLogo size={40} />
             <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: 0.5 }}>
               <span style={{ color: "#fff" }}>CYBER</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>SECURITY</span>
             </span>
@@ -341,7 +358,7 @@ function Demo() {
               {/* Logo */}
               <div style={{ padding: "16px 12px", borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <img src="/logo.png" alt="logo" style={{ width: 26, height: 26, objectFit: "contain", mixBlendMode: "screen", filter: "drop-shadow(0 0 6px rgba(59,130,246,0.4))" }} />
+                  <ShieldLogo size={26} />
                   <span style={{ fontSize: 13, fontWeight: 900 }}><span style={{ color: "#fff" }}>CYBER</span><span style={{ color: C.blue }}>SEC</span></span>
                 </div>
                 <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 5, padding: "6px 8px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -842,7 +859,7 @@ function Footer() {
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 48, marginBottom: 48, flexWrap: "wrap" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <img src="/logo.png" alt="logo" style={{ width: 36, height: 36, objectFit: "contain", mixBlendMode: "screen", filter: "drop-shadow(0 0 6px rgba(59,130,246,0.4))" }} />
+              <ShieldLogo size={36} />
               <span style={{ fontSize: 18, fontWeight: 900 }}><span style={{ color: "#fff" }}>CYBER</span><span style={{ color: C.blue }}>SECURITY</span></span>
             </div>
             <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.8, maxWidth: 300 }}>Professional penetration testing platform powered by Kali Linux. 51 real security tools in one cloud dashboard.</p>
