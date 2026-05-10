@@ -8289,6 +8289,13 @@ export default function App() {
   const isPro        = isSuperAdmin || plan === "pro" || plan === "superadmin" || role === "admin";
   const isTrial      = !isPro;
 
+  const [trialInfo, setTrialInfo] = useState(null);
+  useEffect(() => {
+    if (isTrial && token) {
+      api("/api/trial/status","GET",null,token).then(d=>setTrialInfo(d)).catch(()=>{});
+    }
+  }, [isTrial, token]);
+
   const canAccess = (m) => {
     if (isSuperAdmin) return true;           // ADMIN sees everything
     if (m.free)       return true;           // free for everyone
@@ -8549,6 +8556,34 @@ export default function App() {
       </div>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+        {/* Trial Banner */}
+        {isTrial && trialInfo && (
+          <div style={{background: trialInfo.scans_remaining===0 ? "#1c0000" : trialInfo.days_left<=2 ? "#1c0a00" : "#0c1a0c",
+            borderBottom:`1px solid ${trialInfo.scans_remaining===0?"#7f1d1d":trialInfo.days_left<=2?"#78350f":"#166534"}`,
+            padding:"8px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
+            <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"🚫":trialInfo.days_left<=2?"⚠️":"🎯"}</span>
+            <div style={{flex:1}}>
+              <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":trialInfo.days_left<=2?"#fb923c":"#4ade80"}}>
+                {trialInfo.scans_remaining===0
+                  ? "Daily scan limit reached — upgrade to Pro for unlimited scans"
+                  : `Trial: ${trialInfo.days_left} day${trialInfo.days_left!==1?"s":""} left  •  ${trialInfo.scans_remaining} scan${trialInfo.scans_remaining!==1?"s":""} remaining today`}
+              </span>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              {[...Array(5)].map((_,i)=>(
+                <div key={i} style={{width:10,height:10,borderRadius:"50%",
+                  background:i<(5-trialInfo.scans_remaining)?"#1e293b":"#22c55e",
+                  border:"1px solid #334155"}}/>
+              ))}
+            </div>
+            <button style={{background:"linear-gradient(135deg,#1e40af,#3b82f6)",border:"none",color:"#fff",
+              padding:"5px 14px",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+              Upgrade to Pro
+            </button>
+          </div>
+        )}
+
         <div style={{background:"#0a0f1e",borderBottom:"1px solid #1e293b",padding:"0 24px",display:"flex",alignItems:"center",height:50,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontSize:12,color:"#475569",fontWeight:500}}>CyberSecurity</span>
