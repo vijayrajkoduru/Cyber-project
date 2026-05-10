@@ -2178,9 +2178,9 @@ function WebAppModule(props) {
                   <span style={{fontSize:13,fontWeight:600,color:toolLocked?"#64748b":isDone?"#f1f5f9":isActive?"#93c5fd":"#475569"}}>{ph.name}</span>
                   {toolLocked && <span style={{fontSize:10}}>🔒</span>}
                   {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
-                  {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="COMPLETE"  color="green"  size="xs"/>}
+                  {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="SECURE"     color="green"  size="xs"/>}
                   {isDone && !isFailed && !isSkipped && (isSQLi||isVuln)   && <Badge label="VULNERABLE" color="red"   size="xs"/>}
-                  {isDone && isFailed  && <Badge label="FAILED"    color="red"    size="xs"/>}
+                  {isDone && isFailed  && <Badge label="ERROR"     color="red"    size="xs"/>}
                   {isDone && isSkipped && <Badge label="SKIPPED"   color="orange" size="xs"/>}
                 </div>
                 <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"1px 6px"}}>{ph.tool}</span>
@@ -2190,7 +2190,7 @@ function WebAppModule(props) {
                   {res.total_open !== undefined && <div style={{fontSize:11,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{res.total_open} ports</div>}
                   {res.total_findings !== undefined && <div style={{fontSize:11,color:res.total_findings>0?"#f87171":"#4ade80",fontFamily:"JetBrains Mono,monospace"}}>{res.total_findings} findings</div>}
                   {res.total !== undefined && <div style={{fontSize:11,color:"#a78bfa",fontFamily:"JetBrains Mono,monospace"}}>{res.total} paths</div>}
-                  {res.vulnerable !== undefined && <div style={{fontSize:11,color:res.vulnerable?"#f87171":"#4ade80",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>{res.vulnerable?"VULNERABLE":"SAFE"}</div>}
+                  {res.vulnerable !== undefined && <div style={{fontSize:11,color:res.vulnerable?"#f87171":"#4ade80",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>{res.vulnerable?"VULNERABLE":"SECURE"}</div>}
                 </div>
               )}
               {!running && target && (
@@ -2848,7 +2848,7 @@ journalctl -u uvicorn -n 50
       {tab === "fix" && (
         <div>
           <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
-            🔧 If any scan phase shows FAILED — endpoint missing, use these commands on Kali.
+            🔧 If any scan phase shows ERROR — endpoint missing, use these commands on Kali.
           </div>
           <Block id="fix1" label="CHECK & FIX MISSING ENDPOINTS (KALI)" code={fixEndpoints} comment="Run on Kali. Checks what's in main.py then appends missing endpoints." />
           <div style={{background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"16px 18px", marginTop:8}}>
