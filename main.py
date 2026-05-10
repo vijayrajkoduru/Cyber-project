@@ -19,7 +19,8 @@ JWT_SECRET = os.getenv("JWT_SECRET", "oscp-jwt-secret-key-2024")
 DB_PATH = os.getenv("DB_PATH", "/app/data/users.db")
 
 def _get_db():
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=30)
+    con.execute("PRAGMA journal_mode=WAL")
     con.row_factory = sqlite3.Row
     return con
 
