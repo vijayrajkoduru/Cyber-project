@@ -1113,13 +1113,14 @@ function generatePDF(reportData) {
       let dnsIdx=0;
       Object.entries(dns).forEach(([type,vals])=>{
         (Array.isArray(vals)?vals:[vals]).forEach(v=>{
+          const vStr = typeof v==="object"&&v!==null ? (v.address||v.exchange||v.value||v.data||JSON.stringify(v)) : String(v||"");
           chk(7);
           fillR(margin,y,contentW,7,dnsIdx%2===0?LIGHT:WHITE);
           hline(margin,y,pageW-margin,y,BORDER,0.2);
           rrect(margin+3,y+1.5,18,4,1,[219,234,254]);
           doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(30,64,175);
           doc.text(type,margin+5,y+5);
-          txt(String(v),margin+28,y+5,8,DARK);
+          txt(vStr,margin+28,y+5,8,DARK);
           y+=7; dnsIdx++;
         });
       });
@@ -4941,7 +4942,9 @@ function generateReconReport({target, allResults, date}) {
     if(hasRecs){
       y = tHead(["TYPE","RECORD"],[25,155],y);
       Object.entries(dnsRecs).forEach(([type,vals])=>{
-        (Array.isArray(vals)?vals:[vals]).forEach((v,i)=>{ chk(7); fillR(margin,y,contentW,7,i===0?LIGHT:WHITE); rrect(margin+3,y+1.5,18,4,1,[219,234,254]); doc.setFont("Arial","bold");doc.setFontSize(7);doc.setTextColor(30,64,175);doc.text(type,margin+5,y+5); const vl=doc.splitTextToSize(String(v),148);doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);doc.text(vl[0],margin+28,y+5); y+=7; });
+        (Array.isArray(vals)?vals:[vals]).forEach((v,i)=>{
+          const vStr = typeof v==="object"&&v!==null ? (v.address||v.exchange||v.value||v.data||JSON.stringify(v)) : String(v||"");
+          chk(7); fillR(margin,y,contentW,7,i===0?LIGHT:WHITE); rrect(margin+3,y+1.5,18,4,1,[219,234,254]); doc.setFont("Arial","bold");doc.setFontSize(7);doc.setTextColor(30,64,175);doc.text(type,margin+5,y+5); const vl=doc.splitTextToSize(vStr,148);doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);doc.text(vl[0],margin+28,y+5); y+=7; });
       });
     } else {
       fillR(margin,y,contentW,8,LIGHT); txt("No DNS records found for this target (private/local IP).",margin+4,y+5.5,8.5,GRAY); y+=10;
