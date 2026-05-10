@@ -259,105 +259,196 @@ function TrustBar() {
 
 // ── DEMO VIDEO SECTION ────────────────────────────────────────────
 function Demo() {
-  const [step, setStep] = useState(0);
   const [running, setRunning] = useState(false);
-  const [lines, setLines] = useState([]);
+  const [done, setDone] = useState([]);
+  const [active, setActive] = useState(-1);
+  const [termLines, setTermLines] = useState([]);
+  const [finished, setFinished] = useState(false);
+  const [step, setStep] = useState(0);
 
-  const demoSteps = [
-    { label: "Enter Target", desc: "Type any website URL", icon: "🎯" },
-    { label: "Select Tools", desc: "Choose 51 scanners", icon: "🔧" },
-    { label: "Run Scan", desc: "One click to start", icon: "▶" },
-    { label: "Get Report", desc: "PDF in minutes", icon: "📄" },
-  ];
-
-  const scanLines = [
-    { t: 500,  text: "$ Starting scan on http://target.com...", color: C.blue },
-    { t: 1200, text: "✓ WAF Detection — No WAF detected (SECURE)", color: "#4ade80" },
-    { t: 2000, text: "✓ SSL/TLS — Grade A certificate", color: "#4ade80" },
-    { t: 2800, text: "✓ Port Scan — Ports 80, 443 open", color: "#4ade80" },
-    { t: 3600, text: "✗ XSS Detected — search.php?q= is vulnerable!", color: "#f87171" },
-    { t: 4400, text: "✗ SQL Injection — id= parameter exploitable!", color: "#f87171" },
-    { t: 5200, text: "✓ CSRF — Token validation present", color: "#4ade80" },
-    { t: 6000, text: "✗ Missing HSTS Header — HIGH severity", color: "#fb923c" },
-    { t: 6800, text: "→ Running 44 more security checks...", color: C.muted },
-    { t: 8000, text: "✓ SCAN COMPLETE — 3 Critical, 2 High, 4 Medium", color: "#22c55e" },
-    { t: 8500, text: "📄 PDF Report generated successfully!", color: C.blue },
+  const phases = [
+    { name: "WAF Detection",       tool: "wafw00f",  result: "secure",   badge: "SECURE",     color: "#22c55e", t: 800  },
+    { name: "Tech Fingerprinting", tool: "whatweb",  result: "info",     badge: "PHP/Apache",  color: "#3b82f6", t: 1600 },
+    { name: "Port Scanning",       tool: "nmap",     result: "secure",   badge: "SECURE",     color: "#22c55e", t: 2600 },
+    { name: "SSL/TLS Analysis",    tool: "ssl",      result: "secure",   badge: "Grade A",    color: "#22c55e", t: 3400 },
+    { name: "XSS Testing",         tool: "xss",      result: "vuln",     badge: "VULNERABLE", color: "#ef4444", t: 4400 },
+    { name: "SQL Injection",       tool: "sqlmap",   result: "vuln",     badge: "VULNERABLE", color: "#ef4444", t: 5400 },
+    { name: "Header Security",     tool: "headers",  result: "warn",     badge: "6 FINDINGS", color: "#f59e0b", t: 6200 },
+    { name: "CSRF Testing",        tool: "csrf",     result: "secure",   badge: "SECURE",     color: "#22c55e", t: 7000 },
   ];
 
   const startDemo = () => {
-    setRunning(true); setLines([]); setStep(0);
-    scanLines.forEach(({ t, text, color }) => {
-      setTimeout(() => setLines(p => [...p, { text, color }]), t);
+    setRunning(true); setDone([]); setActive(0); setTermLines([]); setFinished(false); setStep(1);
+    setTermLines([{ text: "$ Starting pentest on http://testphp.vulnweb.com (51 phases)", color: C.blue }]);
+    phases.forEach((ph, i) => {
+      setTimeout(() => {
+        setActive(i);
+        setTermLines(p => [...p, { text: `[*] Phase ${i+1}/8: Running ${ph.tool}...`, color: C.muted }]);
+      }, ph.t - 400);
+      setTimeout(() => {
+        setDone(p => [...p, i]);
+        setActive(i + 1);
+        const col = ph.result === "vuln" ? "#f87171" : ph.result === "warn" ? "#fb923c" : "#4ade80";
+        const sym = ph.result === "vuln" ? "✗" : "✓";
+        setTermLines(p => [...p, { text: `${sym} ${ph.name} — ${ph.badge}`, color: col }]);
+        if (ph.result === "vuln") setStep(2);
+      }, ph.t);
     });
-    setTimeout(() => { setRunning(false); setStep(3); }, 9000);
-    let s = 0;
-    [0, 2000, 4000, 8000].forEach((t, i) => setTimeout(() => setStep(i), t));
+    setTimeout(() => {
+      setActive(-1); setRunning(false); setFinished(true); setStep(3);
+      setTermLines(p => [...p, { text: "✓ Pentest complete — 2 CRITICAL, 1 HIGH, 0 MEDIUM", color: "#22c55e" }]);
+      setTermLines(p => [...p, { text: "📄 PDF Report generated!", color: C.blue }]);
+    }, 7800);
   };
+
+  const reset = () => { setRunning(false); setDone([]); setActive(-1); setTermLines([]); setFinished(false); setStep(0); };
+
+  const demoSteps = [
+    { n: "01", label: "Enter Target URL", icon: "🎯" },
+    { n: "02", label: "Run All 51 Tools", icon: "▶" },
+    { n: "03", label: "See Vulnerabilities", icon: "⚠" },
+    { n: "04", label: "Download PDF", icon: "📄" },
+  ];
 
   return (
     <section id="demo" style={{ padding: "100px 24px", background: C.card }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <FadeIn style={{ textAlign: "center", marginBottom: 60 }}>
-          <span style={{ background: "rgba(6,182,212,0.1)", border: "1px solid rgba(6,182,212,0.3)", color: C.cyan, fontSize: 13, fontWeight: 700, padding: "6px 16px", borderRadius: 20 }}>Live Demo</span>
-          <h2 style={{ fontSize: "clamp(28px,4vw,48px)", fontWeight: 800, marginTop: 16, marginBottom: 16 }}>See It In Action</h2>
-          <p style={{ fontSize: 17, color: C.muted }}>Click "Run Demo Scan" to see how our platform works in real time.</p>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <FadeIn style={{ textAlign: "center", marginBottom: 48 }}>
+          <span style={{ background: "rgba(6,182,212,0.1)", border: "1px solid rgba(6,182,212,0.3)", color: C.cyan, fontSize: 13, fontWeight: 700, padding: "6px 16px", borderRadius: 20 }}>Interactive Demo</span>
+          <h2 style={{ fontSize: "clamp(28px,4vw,48px)", fontWeight: 800, marginTop: 16, marginBottom: 16 }}>Watch The Real Dashboard</h2>
+          <p style={{ fontSize: 17, color: C.muted }}>This is exactly what you see after login. Click Run Demo to watch a live simulation.</p>
         </FadeIn>
 
-        {/* Steps */}
-        <div style={{ display: "flex", justifyContent: "center", gap: 0, marginBottom: 48, flexWrap: "wrap" }}>
+        {/* Step indicators */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 0, marginBottom: 40, flexWrap: "wrap" }}>
           {demoSteps.map((s, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center" }}>
-              <div style={{ textAlign: "center", padding: "0 24px" }}>
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: step >= i ? "linear-gradient(135deg,#1d4ed8,#3b82f6)" : C.card2, border: `2px solid ${step >= i ? C.blue : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, margin: "0 auto 10px", transition: "all 0.4s" }}>
-                  {s.icon}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: step >= i ? C.text : C.muted }}>{s.label}</div>
-                <div style={{ fontSize: 11, color: C.muted }}>{s.desc}</div>
+              <div style={{ textAlign: "center", padding: "0 20px" }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: step > i ? "linear-gradient(135deg,#1d4ed8,#3b82f6)" : step === i ? "rgba(59,130,246,0.2)" : C.card2, border: `2px solid ${step > i ? C.blue : step === i ? C.blue : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, margin: "0 auto 8px", transition: "all 0.5s" }}>{s.icon}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: step > i ? C.text : C.muted }}>{s.label}</div>
               </div>
-              {i < 3 && <div style={{ width: 60, height: 2, background: step > i ? C.blue : C.border, transition: "background 0.4s", flexShrink: 0 }} />}
+              {i < 3 && <div style={{ width: 50, height: 2, background: step > i ? C.blue : C.border, transition: "all 0.5s", flexShrink: 0 }} />}
             </div>
           ))}
         </div>
 
         <FadeIn>
-          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 0 60px rgba(0,0,0,0.5)" }}>
-            {/* Terminal bar */}
-            <div style={{ background: "#0f172a", padding: "12px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${C.border}` }}>
-              {["#ef4444","#f59e0b","#22c55e"].map((c,i) => <div key={i} style={{ width: 12, height: 12, borderRadius: "50%", background: c }} />)}
-              <span style={{ fontSize: 12, color: C.muted, fontFamily: "JetBrains Mono,monospace", marginLeft: 8 }}>terminal — kali@cybersecurity-dashboard</span>
-              {running && <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, animation: "pulse 1s infinite" }} />
-                <span style={{ fontSize: 11, color: C.green, fontFamily: "JetBrains Mono,monospace" }}>SCANNING...</span>
-              </div>}
-            </div>
+          {/* Full dashboard mockup */}
+          <div style={{ background: "#020617", border: `1px solid rgba(59,130,246,0.3)`, borderRadius: 16, overflow: "hidden", boxShadow: "0 0 80px rgba(59,130,246,0.1)", display: "flex", height: 580 }}>
 
-            {/* Target input */}
-            <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, alignItems: "center" }}>
-              <span style={{ fontSize: 13, color: C.muted, fontFamily: "JetBrains Mono,monospace", flexShrink: 0 }}>Target:</span>
-              <div style={{ flex: 1, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", fontFamily: "JetBrains Mono,monospace", fontSize: 13, color: C.blue }}>
-                http://testphp.vulnweb.com
+            {/* Sidebar */}
+            <div style={{ width: 220, background: "#0a0f1e", borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+              {/* Logo */}
+              <div style={{ padding: "16px 12px", borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#1d4ed8,#6366f1)", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 900 }}><span style={{ color: "#fff" }}>CYBER</span><span style={{ color: C.blue }}>SEC</span></span>
+                </div>
+                <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 5, padding: "6px 8px", display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, animation: "pulse 2s infinite" }} />
+                  <span style={{ fontSize: 11, color: C.green, fontWeight: 600 }}>Kali Online</span>
+                </div>
               </div>
-              <button onClick={startDemo} disabled={running} className="btn-primary"
-                style={{ background: running ? "#1e293b" : "linear-gradient(135deg,#1d4ed8,#3b82f6)", color: running ? C.muted : "#fff", border: "none", padding: "10px 24px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: running ? "not-allowed" : "pointer", whiteSpace: "nowrap", boxShadow: running ? "none" : "0 4px 20px rgba(59,130,246,0.4)" }}>
-                {running ? "⏳ Scanning..." : "▶ Run Demo Scan"}
-              </button>
+              {/* Nav items */}
+              <div style={{ padding: "8px 0", flex: 1, overflowY: "auto" }}>
+                {[
+                  { label: "Dashboard", icon: "🏠", active: false },
+                  { label: "Information Gathering", icon: "🔍", active: false },
+                  { label: "Vulnerability Scanning", icon: "🛡️", active: false, badge: "TRIAL" },
+                  { label: "Web App Pentesting", icon: "🌐", active: true, badge: "TRIAL" },
+                  { label: "Advanced OSINT", icon: "🌍", active: false, lock: true },
+                  { label: "Exploitation", icon: "💥", active: false, lock: true },
+                  { label: "Password Attacks", icon: "🔑", active: false, lock: true },
+                ].map((m, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", margin: "1px 6px", borderRadius: 6, background: m.active ? "#1e3a8a" : "transparent", opacity: m.lock ? 0.45 : 1 }}>
+                    <span style={{ fontSize: 14, width: 18, textAlign: "center" }}>{m.icon}</span>
+                    <span style={{ fontSize: 11, color: m.active ? "#f1f5f9" : "#94a3b8", fontWeight: m.active ? 600 : 400, flex: 1 }}>{m.label}</span>
+                    {m.badge && <span style={{ fontSize: 8, color: "#f59e0b", background: "rgba(245,158,11,0.1)", padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}>{m.badge}</span>}
+                    {m.lock && <span style={{ fontSize: 10 }}>🔒</span>}
+                  </div>
+                ))}
+              </div>
+              {/* User */}
+              <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}`, fontSize: 11, color: "#94a3b8", display: "flex", justifyContent: "space-between" }}>
+                <span>demo · <span style={{ color: "#f59e0b" }}>trial</span></span>
+                <span style={{ color: "#475569" }}>Sign out</span>
+              </div>
             </div>
 
-            {/* Terminal output */}
-            <div style={{ padding: 20, minHeight: 320, fontFamily: "JetBrains Mono,monospace", fontSize: 13, lineHeight: 2 }}>
-              {lines.length === 0 && !running && (
-                <div style={{ color: C.muted, textAlign: "center", paddingTop: 60 }}>
-                  Click "Run Demo Scan" to see the scanner in action →
+            {/* Main content */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              {/* Top bar */}
+              <div style={{ background: "#0a0f1e", borderBottom: `1px solid ${C.border}`, padding: "0 20px", height: 46, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>CyberSecurity / <span style={{ color: "#cbd5e1", fontWeight: 600 }}>Web Application Pentesting</span></span>
+                {running && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.blue, animation: "pulse 1s infinite" }} />
+                  <span style={{ fontSize: 11, color: C.blue, fontFamily: "JetBrains Mono,monospace" }}>LIVE SCAN</span>
+                </div>}
+                {finished && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: C.green, fontFamily: "JetBrains Mono,monospace" }}>✓ SCAN COMPLETE</span>
+                </div>}
+              </div>
+
+              <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+                {/* Scan phases */}
+                <div style={{ flex: 1, padding: 16, overflowY: "auto" }}>
+                  {/* Target bar */}
+                  <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
+                    <div style={{ flex: 1, background: "#0f172a", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 14px", fontFamily: "JetBrains Mono,monospace", fontSize: 12, color: C.blue }}>
+                      http://testphp.vulnweb.com
+                    </div>
+                    <button onClick={running ? null : finished ? reset : startDemo}
+                      style={{ background: running ? "#1e293b" : "linear-gradient(135deg,#1d4ed8,#3b82f6)", color: running ? C.muted : "#fff", border: "none", padding: "9px 18px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: running ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+                      {running ? "⏳ Scanning..." : finished ? "↺ Reset" : "▶ Run Demo"}
+                    </button>
+                  </div>
+
+                  {/* Phase cards */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {phases.map((ph, i) => {
+                      const isDone = done.includes(i);
+                      const isActive = active === i;
+                      const leftColor = isDone ? (ph.result === "vuln" ? "#ef4444" : ph.result === "warn" ? "#f59e0b" : "#22c55e") : isActive ? C.blue : "#1e293b";
+                      return (
+                        <div key={i} style={{ background: "#0f172a", border: `1px solid ${isActive ? C.blue : C.border}`, borderLeft: `3px solid ${leftColor}`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, transition: "all 0.3s" }}>
+                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: isDone ? `${ph.color}20` : isActive ? "rgba(59,130,246,0.15)" : "#0a0f1e", border: `2px solid ${isDone ? ph.color : isActive ? C.blue : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, fontWeight: 700, color: isDone ? ph.color : isActive ? C.blue : "#334155", fontFamily: "JetBrains Mono,monospace" }}>
+                            {isDone ? (ph.result === "vuln" ? "✗" : "✓") : isActive ? <div style={{ width: 10, height: 10, border: "2px solid #3b82f6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> : String(i+1).padStart(2,"0")}
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: isDone ? "#f1f5f9" : isActive ? "#93c5fd" : "#475569", flex: 1 }}>{ph.name}</span>
+                          <span style={{ fontSize: 10, color: "#334155", fontFamily: "JetBrains Mono,monospace", background: "#020617", border: `1px solid ${C.border}`, borderRadius: 3, padding: "1px 6px" }}>{ph.tool}</span>
+                          {isDone && <span style={{ fontSize: 10, background: `${ph.color}15`, color: ph.color, border: `1px solid ${ph.color}40`, borderRadius: 4, padding: "2px 8px", fontWeight: 700 }}>{ph.badge}</span>}
+                          {isActive && <span style={{ fontSize: 10, background: "rgba(59,130,246,0.1)", color: C.blue, border: "1px solid rgba(59,130,246,0.3)", borderRadius: 4, padding: "2px 8px", fontWeight: 700 }}>RUNNING</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
-              {lines.map((l, i) => (
-                <div key={i} style={{ color: l.color, animation: "fadeUp 0.3s ease both", display: "flex", gap: 10, alignItems: "center" }}>
-                  {l.text.includes("CRITICAL") || l.text.includes("vulnerable") ? <span style={{ background: "#1c0000", color: "#f87171", fontSize: 9, padding: "1px 5px", borderRadius: 3, fontWeight: 700, flexShrink: 0 }}>CRITICAL</span> : null}
-                  {l.text}
+
+                {/* Terminal */}
+                <div style={{ width: 280, borderLeft: `1px solid ${C.border}`, display: "flex", flexDirection: "column" }}>
+                  <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.border}`, fontSize: 11, color: C.muted, fontFamily: "JetBrains Mono,monospace", background: "#0f172a" }}>Terminal</div>
+                  <div style={{ flex: 1, padding: 12, overflowY: "auto", fontFamily: "JetBrains Mono,monospace", fontSize: 11, lineHeight: 1.8 }}>
+                    {termLines.length === 0 && <div style={{ color: "#334155", paddingTop: 20, textAlign: "center" }}>Click Run Demo →</div>}
+                    {termLines.map((l, i) => <div key={i} style={{ color: l.color, marginBottom: 3 }}>{l.text}</div>)}
+                  </div>
+                  {finished && (
+                    <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ background: "#1c0000", border: "1px solid #7f1d1d", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: "#f87171", fontWeight: 700, textAlign: "center" }}>⚠ 2 CRITICAL FOUND</div>
+                      <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: C.green, fontWeight: 700, textAlign: "center" }}>📄 PDF Ready</div>
+                    </div>
+                  )}
                 </div>
-              ))}
+              </div>
             </div>
           </div>
+        </FadeIn>
+
+        <FadeIn>
+          <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: C.muted }}>
+            This is the real dashboard interface. <a href="#contact" style={{ color: C.blue, fontWeight: 700, textDecoration: "none" }}>Start your free trial →</a>
+          </p>
         </FadeIn>
       </div>
     </section>
@@ -370,7 +461,7 @@ function Stats() {
     { n: 51, s: "+", label: "Security Tools", icon: "🛠", color: C.blue },
     { n: 8, s: "", label: "Attack Categories", icon: "🎯", color: C.purple },
     { n: 100, s: "%", label: "Cloud Based", icon: "☁️", color: C.cyan },
-    { n: 5, s, label: "Built-in Labs", icon: "🧪", color: C.green },
+    { n: 5, s: "", label: "Built-in Labs", icon: "🧪", color: C.green },
   ];
   return (
     <section style={{ padding: "80px 24px" }}>
