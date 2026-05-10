@@ -1589,8 +1589,13 @@ const SECTION_HEADERS = {
   "smb":           {label:"Section 8 — Infrastructure & Services",       sub:"OSCP • 4 scanners",          color:"#eab308"},
 };
 
+// Tools trial users can access in Web App Pentesting (Section 1 recon only)
+const TRIAL_TOOLS = new Set(["wafw00f","whatweb","cms","nmap","ssl"]);
+
 function WebAppModule(props) {
   const token = props.token;
+  const isTrial      = props.isTrial || false;
+  const isSuperAdmin = props.isSuperAdmin || false;
   const onRunningChange = props.onRunningChange || (() => {});
   const [target,setTarget]     = useState("");
   const [running,setRunning]   = useState(false);
@@ -1641,7 +1646,7 @@ function WebAppModule(props) {
     setTargetHistory(prev => { const updated = [normTarget, ...prev.filter(t=>t!==normTarget)].slice(0,10); localStorage.setItem("cyberTargetHistory", JSON.stringify(updated)); return updated; });
     // Request notification permission
     if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission();
-    const activePhases = PHASES.map((ph,i)=>({ph,i})).filter(({i})=>selectedPhases.has(i));
+    const activePhases = PHASES.map((ph,i)=>({ph,i})).filter(({i,ph})=>selectedPhases.has(i) && !(isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin));
     const isExternal = !normTarget.includes("lab_") && !normTarget.includes("localhost") && !normTarget.match(/https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
     const authRequiredLabs = ["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"];
     const needsAuth = authRequiredLabs.some(l => normTarget.includes(l));
@@ -2051,21 +2056,28 @@ function WebAppModule(props) {
           const borderCol  = isActive?"#1e3a8a":isDone?(isSkipped?"#451a03":isFailed?"#450a0a":isSQLi||isVuln?"#431407":"#052e16"):"#1e293b";
           const circBg     = isDone?(isSkipped?"#1c1000":isFailed?"#1c0505":isSQLi?"#1c0a0a":"#052e16"):isActive?"#0c1a3d":"#020617";
           const circBord   = isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):isActive?"#3b82f6":"#1e293b";
-          const isSelected = selectedPhases.has(i);
-          const secHdr     = SECTION_HEADERS[ph.tool];
+          const isSelected   = selectedPhases.has(i);
+          const toolLocked   = isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin;
+          const secHdr       = SECTION_HEADERS[ph.tool];
           return (
             <React.Fragment key={i}>
             {secHdr && (
               <div style={{display:"flex",alignItems:"center",gap:10,marginTop:i===0?0:10,marginBottom:6,paddingLeft:4}}>
                 <div style={{width:3,height:32,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
-                <div>
+                <div style={{flex:1}}>
                   <div style={{fontSize:11,fontWeight:700,color:secHdr.color,letterSpacing:"0.05em",textTransform:"uppercase"}}>{secHdr.label}</div>
                   <div style={{fontSize:9,color:"#475569",fontFamily:"JetBrains Mono,monospace"}}>{secHdr.sub}</div>
                 </div>
+                {isTrial && secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"2px 6px",borderRadius:3}}>TRIAL</span>}
+                {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#6b7280",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3}}>🔒 PRO</span>}
               </div>
             )}
-            <div key={i} onClick={()=>{ if(running) return; setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; }); }}
-              style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`3px solid ${leftCol}`,borderRadius:8,padding:"12px 18px",display:"flex",alignItems:"center",gap:14,cursor:running?"default":"pointer",opacity:isSelected?1:0.35,transition:"all 0.2s"}}>
+            <div key={i} onClick={()=>{
+                if(running) return;
+                if(toolLocked){ alert("Upgrade to Pro to access this scanner."); return; }
+                setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; });
+              }}
+              style={{background:toolLocked?"#080c18":"#0f172a",border:"1px solid "+(toolLocked?"#1e293b":borderCol),borderLeft:`3px solid ${toolLocked?"#1e293b":leftCol}`,borderRadius:8,padding:"12px 18px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.35:isSelected?1:0.35,transition:"all 0.2s"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:circBg,border:"2px solid "+circBord,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>
                 {isDone ? (isSkipped?"⚠":isFailed?"✗":isSQLi?"✗":"✓") : isActive ? (
                   <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
@@ -2075,7 +2087,8 @@ function WebAppModule(props) {
               </div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:13,fontWeight:600,color:isDone?"#f1f5f9":isActive?"#93c5fd":"#475569"}}>{ph.name}</span>
+                  <span style={{fontSize:13,fontWeight:600,color:toolLocked?"#374151":isDone?"#f1f5f9":isActive?"#93c5fd":"#475569"}}>{ph.name}</span>
+                  {toolLocked && <span style={{fontSize:10}}>🔒</span>}
                   {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
                   {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="COMPLETE"  color="green"  size="xs"/>}
                   {isDone && !isFailed && !isSkipped && (isSQLi||isVuln)   && <Badge label="VULNERABLE" color="red"   size="xs"/>}
@@ -8054,7 +8067,7 @@ export default function App() {
       <>
         {/* Always-mounted modules — scan survives tab switches */}
         <div style={{display: active==="webapp"   ? "block" : "none"}}>
-          <WebAppModule token={token} onRunningChange={setWaptRunning}/>
+          <WebAppModule token={token} onRunningChange={setWaptRunning} isTrial={isTrial} isSuperAdmin={isSuperAdmin}/>
         </div>
         <div style={{display: active==="recon"    ? "block" : "none"}}>
           <ReconModule token={token} onRunningChange={setReconRunning}/>
