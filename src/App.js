@@ -303,7 +303,7 @@ function Login(props) {
 
         {/* Logo */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
-          <img src={LOGO} alt="logo" style={{width:96,objectFit:"contain",mixBlendMode:"multiply"}}/>
+          <img src={LOGO} alt="logo" style={{width:80,height:80,objectFit:"contain",borderRadius:"50%",background:"#fff",padding:"4px"}}/>
         </div>
 
         {/* Brand */}
@@ -8461,7 +8461,7 @@ export default function App() {
         <div style={{padding:"8px 0 10px",borderBottom:"1px solid #1e293b",flexShrink:0,background:"#0a0f1e"}}>
           {/* Shield — black bg removed via screen blend */}
           <div style={{display:"flex",justifyContent:"center",marginBottom:0,background:"#0a0f1e"}}>
-            <img src={LOGO} alt="logo" style={{width:56,height:56,objectFit:"contain",mixBlendMode:"multiply",display:"block",imageRendering:"crisp-edges"}}/>
+            <img src={LOGO} alt="logo" style={{width:52,height:52,objectFit:"contain",borderRadius:"50%",background:"#fff",padding:"3px",display:"block"}}/>
           </div>
           {/* CYBERSECURITY */}
           <div style={{textAlign:"center",marginBottom:8}}>
