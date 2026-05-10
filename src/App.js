@@ -340,9 +340,9 @@ function TestTargets({targets, onSelect}) {
     setTimeout(()=>{ setOpen(false); setClosing(false); }, 300);
   };
 
-  const copy = (val,i) => {
+  const copy = (val,lab,i) => {
     if (navigator.clipboard) navigator.clipboard.writeText(val).catch(()=>{});
-    onSelect(val);
+    onSelect(val, lab);
     setCopied(i);
     setTimeout(()=>{ setCopied(null); close(); }, 600);
   };
@@ -360,7 +360,7 @@ function TestTargets({targets, onSelect}) {
             INTENTIONALLY VULNERABLE — LEGAL TO TEST
           </div>
           {targets.map((t,i)=>(
-            <div key={i} onClick={()=>copy(t.value,i)}
+            <div key={i} onClick={()=>copy(t.value,t.lab||null,i)}
               style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid #0f172a",cursor:"pointer",background:copied===i?"#1e3a5f":"transparent",transition:"background .15s"}}
               onMouseEnter={e=>e.currentTarget.style.background="#0f172a"}
               onMouseLeave={e=>e.currentTarget.style.background=copied===i?"#1e3a5f":"transparent"}>
@@ -1815,14 +1815,25 @@ function WebAppModule(props) {
           </div>
         )}
 
-        <TestTargets onSelect={t => setTarget(t)} targets={[
-          {label:"DVWA",        value:"http://lab_dvwa",                      color:"#dc2626"},
-          {label:"WebGoat",     value:"http://lab_webgoat:8080/WebGoat",      color:"#ea580c"},
-          {label:"Juice Shop",  value:"http://lab_juiceshop:3000",            color:"#16a34a"},
-          {label:"Mutillidae",  value:"http://lab_mutillidae",                color:"#a855f7"},
-          {label:"bWAPP",       value:"http://lab_bwapp/bWAPP/login.php",     color:"#ca8a04"},
-          {label:"testphp",     value:"http://testphp.vulnweb.com",           color:"#0ea5e9"},
-        ]}/>
+        <TestTargets targets={[
+          {label:"DVWA",       value:"http://lab_dvwa",                   color:"#dc2626", lab:"dvwa"},
+          {label:"WebGoat",    value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c", lab:"webgoat"},
+          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:null},
+          {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
+          {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
+          {label:"testphp",    value:"http://testphp.vulnweb.com",        color:"#0ea5e9", lab:null},
+        ]} onSelect={async (t, lab) => {
+          setTarget(t);
+          setShowHistory(false);
+          if (lab) {
+            try {
+              const d = await api("/api/lab/autologin","POST",{lab},token);
+              if (d.ok) { setAuthCookie(d.cookie); localStorage.setItem("cyberAuthCookie",d.cookie); }
+            } catch(e) {}
+          } else {
+            // External target — clear lab cookie but keep any manually entered one
+          }
+        }}/>
 
         {/* Target input row */}
         <div style={{marginTop:8}}>
@@ -1848,26 +1859,7 @@ function WebAppModule(props) {
           )}
           {showAuthPanel && (
             <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:6,padding:"12px",marginBottom:8,display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
-              <span style={{fontSize:10,color:"#60a5fa",fontWeight:700}}>AUTO-LOGIN — click to get cookie instantly:</span>
-              {[
-                {lab:"dvwa",      label:"DVWA",      color:"#dc2626"},
-                {lab:"bwapp",     label:"bWAPP",     color:"#ca8a04"},
-                {lab:"mutillidae",label:"Mutillidae", color:"#a855f7"},
-                {lab:"webgoat",   label:"WebGoat",   color:"#ea580c"},
-              ].map(({lab,label,color})=>(
-                <button key={lab} onClick={async()=>{
-                  try {
-                    const d = await api("/api/lab/autologin","POST",{lab},token);
-                    if(d.ok){setAuthCookie(d.cookie);localStorage.setItem("cyberAuthCookie",d.cookie);}
-                    else alert("Login failed: "+(d.error||"unknown"));
-                  } catch(e){alert("Error: "+e.message);}
-                }} style={{background:color+"22",border:"1px solid "+color,borderRadius:4,padding:"3px 10px",color,fontSize:10,fontWeight:700,cursor:"pointer"}}>
-                  ⚡ {label}
-                </button>
-              ))}
-            </div>
-            <div style={{fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:2}}>MANUAL — or paste cookie below:</div>
+              <div style={{fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:2}}>FOR EXTERNAL TARGETS — paste session cookie or JWT token:</div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 <div style={{flex:1,minWidth:200}}>
                   <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Session Cookie</div>
