@@ -563,18 +563,31 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
     raw_lines = []
     base = req.target.rstrip("/")
 
-    # Step 1: curl-based reflected XSS — test common parameters
-    xss_params = ["q", "search", "searchFor", "name", "id", "query", "s", "term",
-                  "cat", "artist", "username", "input", "text", "page", "lang"]
-    _xss_start = _time.time()
     xss_payloads = [
         ("<script>alert(1)</script>", "<script>alert(1)</script>"),
         ("<img src=x onerror=alert(1)>", "onerror=alert"),
         ("<svg onload=alert(1)>", "onload=alert"),
     ]
     found_xss = False
+
+    # Step 0: test known vulnerable endpoints for this target FIRST (no time budget wasted)
+    for url, param, method in _get_lab_targets(req.target):
+        if found_xss: break
+        for payload, marker in xss_payloads:
+            try:
+                r = _http_get(f"{url}?{param}={payload}", timeout=8) if method == "get" else None
+                if r and marker in r.text:
+                    findings.append({"detail":f"Reflected XSS at {url} — parameter '{param}' reflects unencoded payload","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user input before reflecting. Add Content-Security-Policy header."})
+                    raw_lines.append(f"[!] XSS confirmed at {url}?{param}=")
+                    found_xss = True; break
+            except: pass
+
+    # Step 1: curl-based reflected XSS — test common parameters
+    xss_params = ["q", "search", "searchFor", "name", "id", "query", "s", "term",
+                  "cat", "artist", "username", "input", "text", "page", "lang"]
+    _xss_start = _time.time()
     for param in xss_params:
-        if _time.time() - _xss_start > 60: break  # 60s total budget
+        if found_xss or _time.time() - _xss_start > 60: break  # 60s total budget
         for payload, marker in xss_payloads:
             r = _http_get(f"{base}?{param}={payload}", timeout=5)
             if r and marker in r.text:
@@ -635,17 +648,6 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
                             findings.append({"detail":f"Reflected XSS via form: {form_url} — input '{input_name}' reflects unencoded payload","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user input. Add Content-Security-Policy header."})
                             found_xss = True; break
                     except: pass
-
-    # Step 3c: test known lab-specific vulnerable endpoints
-    for url, param, method in _get_lab_targets(req.target):
-        if found_xss: break
-        for payload, marker in xss_payloads:
-            try:
-                r = _http_get(f"{url}?{param}={payload}", timeout=8) if method=="get" else None
-                if r and marker in r.text:
-                    findings.append({"detail":f"Reflected XSS at {url} — parameter '{param}' reflects unencoded payload","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user input before reflecting. Add Content-Security-Policy header."})
-                    found_xss = True; break
-            except: pass
 
     # Step 4: also try xsstrike if installed
     result = await run_tool(["python3","/usr/share/xsstrike/xsstrike.py","-u",req.target,"--crawl","--skip-dom","-l","1"], timeout=60)
