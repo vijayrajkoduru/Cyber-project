@@ -55,20 +55,108 @@ const MODULES = [
 ];
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'DM Sans',sans-serif;background:#020617;}
-  ::-webkit-scrollbar{width:4px;height:4px;}
-  ::-webkit-scrollbar-track{background:#020617;}
-  ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px;}
-  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  body{
+    font-family:'Inter',sans-serif;
+    background:#020617;
+    color:#e2e8f0;
+    font-size:14px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  /* Global text color improvements */
+  h1,h2,h3,h4,h5,h6 { color:#f1f5f9; font-weight:700; line-height:1.3; }
+  p { color:#cbd5e1; line-height:1.7; }
+  label { color:#94a3b8; font-size:13px; }
+  span { color:inherit; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{width:5px;height:5px;}
+  ::-webkit-scrollbar-track{background:#0a0f1e;}
+  ::-webkit-scrollbar-thumb{background:#334155;border-radius:6px;}
+  ::-webkit-scrollbar-thumb:hover{background:#475569;}
+
+  /* Animations */
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes glow{0%,100%{box-shadow:0 0 8px rgba(59,130,246,0.3)}50%{box-shadow:0 0 20px rgba(59,130,246,0.6)}}
+
   .fade{animation:fadeUp .3s ease;}
+
+  /* Sidebar nav */
   .nav-btn:hover{background:#1e293b!important;}
+  .nav-btn span{ font-size:13px !important; font-weight:500 !important; color:#94a3b8; letter-spacing:0.2px; }
+
+  /* Table rows */
   .row:hover{background:#0f172a!important;}
+
+  /* Tool cards */
   .tool-card:hover{border-color:#3b82f680!important;transform:translateY(-1px);}
   .tool-card{transition:all .2s;}
+
+  /* Global input styling */
+  input, textarea, select {
+    font-family:'Inter',sans-serif !important;
+    font-size:13px !important;
+    color:#e2e8f0 !important;
+    letter-spacing:0.2px;
+  }
+  input::placeholder, textarea::placeholder { color:#475569 !important; }
+
+  /* Section headers */
+  .section-label {
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:#64748b;
+  }
+
+  /* Monospace text */
+  .mono {
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    color:#94a3b8;
+    letter-spacing:0.3px;
+  }
+
+  /* Tool name text */
+  .tool-name {
+    font-size:13px;
+    font-weight:600;
+    color:#cbd5e1;
+    letter-spacing:0.1px;
+  }
+
+  /* Description text */
+  .desc-text {
+    font-size:12px;
+    color:#64748b;
+    line-height:1.5;
+  }
+
+  /* Status dot */
+  .status-dot {
+    width:7px; height:7px;
+    border-radius:50%;
+    display:inline-block;
+  }
+
+  /* Buttons */
+  button { font-family:'Inter',sans-serif !important; }
+
+  /* Terminal output */
+  .terminal {
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    line-height:1.7;
+    color:#94a3b8;
+  }
 `;
 
 async function api(path, method, body, token) {
@@ -8201,7 +8289,7 @@ export default function App() {
 
           {/* Dashboard — always free */}
           <div style={{padding:"8px 8px 2px"}}>
-            <span style={{fontSize:10,color:"#334155",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Overview</span>
+            <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Overview</span>
           </div>
           {MODULES.filter(m=>m.id==="dashboard").map(m=>(
             <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
@@ -8218,7 +8306,7 @@ export default function App() {
             return (
               <div key={sec.key}>
                 <div style={{padding:"10px 8px 3px"}}>
-                  <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
+                  <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
                 </div>
                 {mods.map(m => {
                   const locked = !canAccess(m);
@@ -8226,9 +8314,9 @@ export default function App() {
                   const isActive = active === m.id;
                   return (
                     <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
-                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.5:1}}>
+                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-                      <span style={{fontSize:12,color:isActive?"#f1f5f9":locked?"#4b5563":"#94a3b8",fontWeight:isActive?600:400,flex:1,lineHeight:1.35}}>{m.label}</span>
+                      <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
                       {locked   && <span style={{fontSize:10}}>🔒</span>}
                       {isTrial  && !locked && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
                       {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
@@ -8244,7 +8332,7 @@ export default function App() {
 
           {/* System — always accessible */}
           <div style={{padding:"10px 8px 3px"}}>
-            <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>System</span>
+            <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>System</span>
           </div>
           {[
             {id:"health",  icon:"💊", label:"System Health"},
@@ -8252,9 +8340,9 @@ export default function App() {
             {id:"settings",icon:"⚙",  label:"Settings"},
           ].map(m => (
             <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
-              style={{width:"calc(100% - 16px)",background:active===m.id?"#1e293b":"transparent",border:"none",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
-              <span style={{fontSize:14,width:22,textAlign:"center"}}>{m.icon}</span>
-              <span style={{fontSize:12,color:active===m.id?"#f1f5f9":"#94a3b8"}}>{m.label}</span>
+              style={{width:"calc(100% - 16px)",background:active===m.id?"#1e293b":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
+              <span style={{fontSize:15,width:22,textAlign:"center"}}>{m.icon}</span>
+              <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:500,letterSpacing:"0.1px"}}>{m.label}</span>
             </button>
           ))}
 
@@ -8294,12 +8382,14 @@ export default function App() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         <div style={{background:"#0a0f1e",borderBottom:"1px solid #1e293b",padding:"0 24px",display:"flex",alignItems:"center",height:50,flexShrink:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:11,color:"#334155"}}>CyberSecurity</span>
-            <span style={{color:"#1e293b"}}>/</span>
-            <span style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>{topic?topic.label:active}</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:12,color:"#475569",fontWeight:500}}>CyberSecurity</span>
+            <span style={{color:"#334155",fontSize:14}}>/</span>
+            <span style={{fontSize:13,color:"#cbd5e1",fontWeight:600,letterSpacing:"0.2px"}}>{topic?topic.label:active}</span>
           </div>
-          <div style={{marginLeft:"auto"}}></div>
+          <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:11,color:"#334155",fontFamily:"JetBrains Mono,monospace"}}>{new Date().toLocaleDateString()}</span>
+          </div>
         </div>
 
         <div style={{padding:"18px 24px 10px",borderBottom:"1px solid #1e293b",background:"#0a0f1e",flexShrink:0}}>
