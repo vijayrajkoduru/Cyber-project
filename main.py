@@ -622,7 +622,21 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
             findings.append({"detail":"Input reflection detected — query parameter reflected in response without encoding (likely XSS)","severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Encode all reflected user input. Never insert raw user data into HTML."})
             raw_lines.append(f"[!] Input reflection confirmed — potential XSS at ?q=")
 
-    # Step 3b: test known lab-specific vulnerable endpoints
+    # Step 3b: parse HTML forms and test their input parameters
+    if not found_xss and _time.time() - _xss_start < 50:
+        home2 = _http_get(base, timeout=8)
+        if home2:
+            for form_url, input_name in _parse_forms(home2.text, base)[:15]:
+                if found_xss or _time.time() - _xss_start > 55: break
+                for payload, marker in xss_payloads[:2]:
+                    try:
+                        r = _http_get(f"{form_url}?{input_name}={payload}", timeout=5)
+                        if r and marker in r.text:
+                            findings.append({"detail":f"Reflected XSS via form: {form_url} — input '{input_name}' reflects unencoded payload","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user input. Add Content-Security-Policy header."})
+                            found_xss = True; break
+                    except: pass
+
+    # Step 3c: test known lab-specific vulnerable endpoints
     for url, param, method in _get_lab_targets(req.target):
         if found_xss: break
         for payload, marker in xss_payloads:
@@ -950,7 +964,33 @@ _LAB_TARGETS = {
         ("rest/products/search", "q", "get"),
         ("rest/user/login",      "email", "post"),
     ],
+    "testphp.vulnweb.com": [
+        ("http://testphp.vulnweb.com/listproducts.php", "cat",      "get"),
+        ("http://testphp.vulnweb.com/artists.php",      "artist",   "get"),
+        ("http://testphp.vulnweb.com/search.php",       "searchFor","get"),
+        ("http://testphp.vulnweb.com/userinfo.php",     "username", "get"),
+        ("http://testphp.vulnweb.com/guestbook.php",    "name",     "get"),
+    ],
 }
+
+
+def _parse_forms(html: str, base: str) -> list:
+    """Extract (form_url, input_name) pairs from HTML forms."""
+    results = []
+    parsed_base = urlparse(base)
+    forms = re.findall(r'<form[^>]*>(.*?)</form>', html, re.IGNORECASE | re.DOTALL)
+    form_actions = re.findall(r'<form[^>]+action=["\']?([^"\'>\s]+)["\']?', html, re.IGNORECASE)
+    for idx, form_body in enumerate(forms):
+        action = form_actions[idx] if idx < len(form_actions) else ""
+        if not action or action == "#": action = base
+        if action.startswith("http"):   form_url = action
+        elif action.startswith("/"):    form_url = f"{parsed_base.scheme}://{parsed_base.netloc}{action}"
+        else:                           form_url = base.rstrip("/") + "/" + action
+        input_names = re.findall(r'<input[^>]+name=["\']([^"\']+)["\']', form_body, re.IGNORECASE)
+        input_names += re.findall(r'<select[^>]+name=["\']([^"\']+)["\']', form_body, re.IGNORECASE)
+        for name in input_names:
+            results.append((form_url, name))
+    return results
 
 def _get_lab_targets(base_url: str):
     """Return known vulnerable endpoints for this lab target."""
@@ -1013,6 +1053,11 @@ async def _sqli_engine(base_url: str) -> list:
                 tested.add(key); params.append((url, param, "1"))
     home = _http_get(base, timeout=10)
     if home:
+        # Also parse form actions for GET forms
+        for form_url, input_name in _parse_forms(home.text, base)[:10]:
+            key = f"{form_url}::{input_name}"
+            if key not in tested:
+                tested.add(key); params.append((form_url, input_name, "1"))
         links = re.findall(r'href=["\']([^"\'#\s]+)["\']', home.text, re.IGNORECASE)
         links.append(base)
         for link in links[:30]:
