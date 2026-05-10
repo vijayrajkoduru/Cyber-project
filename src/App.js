@@ -11,15 +11,17 @@ const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABOYAAATmCAIAAAAKnjl9
 
 
 const MODULES = [
-  // ── FREE (trial access) ─────────────────────────────────────
+  // ── FREE (everyone) ──────────────────────────────────────────
   { id:"dashboard", icon:"🏠", label:"Dashboard",                          cat:"core",    free:true  },
   { id:"recon",     icon:"🔍", label:"Information Gathering & Recon",      cat:"recon",   free:true  },
   { id:"guide",     icon:"📖", label:"Run Guide & Lab Targets",            cat:"tools",   free:true  },
   { id:"report",    icon:"📄", label:"Report Writing",                     cat:"tools",   free:true  },
 
+  // ── TRIAL ACCESS (free tier gets these) ─────────────────────
+  { id:"vuln",      icon:"🛡️", label:"Vulnerability Scanning",             cat:"scan",    free:false, trial:true },
+  { id:"webapp",    icon:"🌐", label:"Web Application Pentesting",         cat:"scan",    free:false, trial:true, featured:true },
+
   // ── SCANNING ────────────────────────────────────────────────
-  { id:"vuln",      icon:"🛡️", label:"Vulnerability Scanning",             cat:"scan",    free:false },
-  { id:"webapp",    icon:"🌐", label:"Web Application Pentesting",         cat:"scan",    free:false, featured:true },
   { id:"osint",     icon:"🌍", label:"Advanced OSINT & Threat Intel",      cat:"scan",    free:false },
 
   // ── EXPLOITATION ─────────────────────────────────────────────
@@ -8018,7 +8020,18 @@ export default function App() {
     return <Login onLogin={handleLogin}/>;
   }
 
-  const isPro = plan === "pro" || role === "admin";
+  const isSuperAdmin = role === "superadmin";
+  const isPro        = isSuperAdmin || plan === "pro" || plan === "superadmin" || role === "admin";
+  const isTrial      = !isPro;
+
+  const canAccess = (m) => {
+    if (isSuperAdmin) return true;           // ADMIN sees everything
+    if (m.free)       return true;           // free for everyone
+    if (m.trial && isTrial) return true;     // trial modules for trial users
+    if (isPro)        return true;           // pro users see everything
+    return false;
+  };
+
   const topic = MODULES.find(m => m.id === active);
 
   const SECTIONS = [
@@ -8032,7 +8045,7 @@ export default function App() {
   ];
 
   const handleNavClick = (m) => {
-    if (!m.free && !isPro) { setUpgModal(true); return; }
+    if (!canAccess(m)) { setUpgModal(true); return; }
     setActive(m.id);
   };
 
@@ -8195,14 +8208,16 @@ export default function App() {
                   <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
                 </div>
                 {mods.map(m => {
-                  const locked = !m.free && !isPro;
+                  const locked = !canAccess(m);
+                  const isTrial = m.trial && !isPro && !isSuperAdmin;
                   const isActive = active === m.id;
                   return (
                     <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
-                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
+                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.5:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
                       <span style={{fontSize:12,color:isActive?"#f1f5f9":locked?"#4b5563":"#94a3b8",fontWeight:isActive?600:400,flex:1,lineHeight:1.35}}>{m.label}</span>
-                      {locked && <span style={{fontSize:10}}>🔒</span>}
+                      {locked   && <span style={{fontSize:10}}>🔒</span>}
+                      {isTrial  && !locked && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
                       {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="recon"   && reconRunning  && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="vuln"    && vulnRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
