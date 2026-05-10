@@ -52,6 +52,15 @@ def _init_db():
             (admin_id, "admin", "admin@oscp.local", pw_hash, "pro",
              datetime.datetime.utcnow().isoformat()))
         con.commit()
+    # Always ensure ADMIN superuser exists
+    existing = con.execute("SELECT id FROM users WHERE username='ADMIN'").fetchone()
+    if not existing:
+        superadmin_id = str(uuid.uuid4())
+        pw_hash = _bcrypt.hashpw(b"CyberAdmin@2025", _bcrypt.gensalt()).decode()
+        con.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,?,?)",
+            (superadmin_id, "ADMIN", "admin@cyber.dev", pw_hash, "superadmin",
+             datetime.datetime.utcnow().isoformat()))
+        con.commit()
     con.close()
 
 _init_db()
@@ -179,8 +188,9 @@ async def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not _bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    role = "superadmin" if row["username"] == "ADMIN" else ("admin" if row["username"] == "admin" else "user")
     token = _make_jwt(row["id"], row["username"], row["plan"])
-    return {"access_token": token, "username": row["username"], "plan": row["plan"], "role": "admin" if row["username"]=="admin" else "user"}
+    return {"access_token": token, "username": row["username"], "plan": row["plan"], "role": role}
 
 @app.get("/api/auth/me")
 async def me(user=Depends(verify_token)):
@@ -267,27 +277,55 @@ async def tools_status(user=Depends(verify_token)):
 @app.get("/api/history")
 async def get_history(user=Depends(verify_token)):
     uid = user.get("user_id", "anonymous")
+    is_superadmin = user.get("username") == "ADMIN"
     try:
         con = _get_db()
-        rows = con.execute("SELECT * FROM scans WHERE user_id=? ORDER BY timestamp DESC LIMIT 100", (uid,)).fetchall()
+        if is_superadmin:
+            rows = con.execute("SELECT * FROM scans ORDER BY timestamp DESC LIMIT 500").fetchall()
+        else:
+            rows = con.execute("SELECT * FROM scans WHERE user_id=? ORDER BY timestamp DESC LIMIT 100", (uid,)).fetchall()
         con.close()
         return {"history": [dict(r) for r in rows]}
     except Exception:
-        history = [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
+        history = list(reversed(SCAN_HISTORY)) if is_superadmin else [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
         return {"history": history}
 
 @app.get("/api/scans")
 async def get_scans(user=Depends(verify_token)):
     uid = user.get("user_id", "anonymous")
+    is_superadmin = user.get("username") == "ADMIN"
     try:
         con = _get_db()
-        rows = con.execute("SELECT * FROM scans WHERE user_id=? ORDER BY timestamp DESC LIMIT 100", (uid,)).fetchall()
+        if is_superadmin:
+            rows = con.execute("SELECT * FROM scans ORDER BY timestamp DESC LIMIT 500").fetchall()
+        else:
+            rows = con.execute("SELECT * FROM scans WHERE user_id=? ORDER BY timestamp DESC LIMIT 100", (uid,)).fetchall()
         con.close()
         scans = [dict(r) for r in rows]
         return {"scans": scans, "total": len(scans)}
     except Exception:
-        scans = [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
+        scans = list(reversed(SCAN_HISTORY)) if is_superadmin else [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
         return {"scans": scans, "total": len(scans)}
+
+@app.get("/api/admin/users")
+async def admin_get_users(user=Depends(verify_token)):
+    if user.get("username") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Superadmin only")
+    con = _get_db()
+    rows = con.execute("SELECT id, username, email, plan, created_at FROM users ORDER BY created_at DESC").fetchall()
+    con.close()
+    return {"users": [dict(r) for r in rows], "total": len(rows)}
+
+@app.delete("/api/admin/users/{username}")
+async def admin_delete_user(username: str, user=Depends(verify_token)):
+    if user.get("username") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Superadmin only")
+    if username == "ADMIN":
+        raise HTTPException(status_code=400, detail="Cannot delete superadmin")
+    con = _get_db()
+    con.execute("DELETE FROM users WHERE username=?", (username,))
+    con.commit(); con.close()
+    return {"ok": True, "deleted": username}
 
 
 # ── PASSWORD ATTACKS — HYDRA ──────────────────────────────────
