@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-const DASHBOARD_URL = "http://YOUR_VPS_IP";
+const DASHBOARD_URL = "https://app.vulnuslab.com";
 const CONTACT_EMAIL = "vijayrajkoduruai@gmail.com";
 
 const C = {
