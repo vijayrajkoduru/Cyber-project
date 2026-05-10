@@ -1848,7 +1848,26 @@ function WebAppModule(props) {
           )}
           {showAuthPanel && (
             <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:6,padding:"12px",marginBottom:8,display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:2}}>AUTHENTICATED SCANNING — headers sent with every request</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+              <span style={{fontSize:10,color:"#60a5fa",fontWeight:700}}>AUTO-LOGIN — click to get cookie instantly:</span>
+              {[
+                {lab:"dvwa",      label:"DVWA",      color:"#dc2626"},
+                {lab:"bwapp",     label:"bWAPP",     color:"#ca8a04"},
+                {lab:"mutillidae",label:"Mutillidae", color:"#a855f7"},
+                {lab:"webgoat",   label:"WebGoat",   color:"#ea580c"},
+              ].map(({lab,label,color})=>(
+                <button key={lab} onClick={async()=>{
+                  try {
+                    const d = await api("/api/lab/autologin","POST",{lab},token);
+                    if(d.ok){setAuthCookie(d.cookie);localStorage.setItem("cyberAuthCookie",d.cookie);}
+                    else alert("Login failed: "+(d.error||"unknown"));
+                  } catch(e){alert("Error: "+e.message);}
+                }} style={{background:color+"22",border:"1px solid "+color,borderRadius:4,padding:"3px 10px",color,fontSize:10,fontWeight:700,cursor:"pointer"}}>
+                  ⚡ {label}
+                </button>
+              ))}
+            </div>
+            <div style={{fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:2}}>MANUAL — or paste cookie below:</div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 <div style={{flex:1,minWidth:200}}>
                   <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Session Cookie</div>

@@ -87,6 +87,55 @@ async def login(req: LoginRequest):
         return {"access_token": "oscp-dashboard-token", "role": "admin", "username": req.username, "plan": "pro"}
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
+@app.post("/api/lab/autologin")
+async def lab_autologin(body: dict, user=Depends(verify_token)):
+    lab = body.get("lab", "")
+    labs = {
+        "dvwa": {
+            "url":    "http://lab_dvwa/dvwa/login.php",
+            "data":   {"username":"admin","password":"password","Login":"Login"},
+            "extra":  "security=low",
+            "check":  "logout",
+        },
+        "bwapp": {
+            "url":    "http://lab_bwapp/bWAPP/login.php",
+            "data":   {"login":"bee","password":"bug","security_level":"0","form":"submit"},
+            "extra":  "security_level=0",
+            "check":  "logout",
+        },
+        "mutillidae": {
+            "url":    "http://lab_mutillidae/mutillidae/index.php?page=login.php",
+            "data":   {"username":"admin","password":"adminpass","login-php-submit-button":"Login"},
+            "extra":  "",
+            "check":  "logout",
+        },
+        "webgoat": {
+            "url":    "http://lab_webgoat:8080/WebGoat/login",
+            "data":   {"username":"guest","password":"guest"},
+            "extra":  "",
+            "check":  "WebGoat",
+        },
+    }
+    if lab not in labs:
+        raise HTTPException(status_code=400, detail=f"Unknown lab: {lab}")
+    cfg = labs[lab]
+    try:
+        s = _req_lib.Session()
+        r = s.post(cfg["url"], data=cfg["data"], timeout=10, verify=False, allow_redirects=True)
+        cookies = s.cookies.get_dict()
+        if not cookies:
+            cookies = {k: v for k, v in r.cookies.items()}
+        if not cookies:
+            return {"ok": False, "error": "No session cookie returned — login may have failed"}
+        cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+        if cfg["extra"]:
+            cookie_str += "; " + cfg["extra"]
+        logged_in = cfg["check"].lower() in r.text.lower() or r.status_code == 200
+        return {"ok": logged_in, "cookie": cookie_str, "lab": lab}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/health")
 async def health():
     python_tools = ["port_scanner","web_fuzzer","sqli_engine","ssl_analyzer",
