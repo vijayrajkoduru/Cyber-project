@@ -108,7 +108,7 @@ function Nav() {
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#020617", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-              <img src="/logo.png" alt="logo" style={{ width: 60, height: 60, objectFit: "contain" }} />
+              <img src="/logo.svg" alt="logo" style={{ width: 60, height: 60, objectFit: "contain" }} />
             </div>
             <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: 0.5 }}>
               <span style={{ color: "#fff" }}>CYBER</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>SECURITY</span>
