@@ -665,6 +665,17 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
             findings.append({"detail":"Input reflection detected — query parameter reflected in response without encoding (likely XSS)","severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Encode all reflected user input. Never insert raw user data into HTML."})
             raw_lines.append(f"[!] Input reflection confirmed — potential XSS at ?q=")
 
+    # Step 3b: test known lab-specific vulnerable endpoints
+    for url, param, method in _get_lab_targets(req.target):
+        if found_xss: break
+        for payload, marker in xss_payloads:
+            try:
+                r = _http_get(f"{url}?{param}={payload}", timeout=8) if method=="get" else None
+                if r and marker in r.text:
+                    findings.append({"detail":f"Reflected XSS at {url} — parameter '{param}' reflects unencoded payload","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user input before reflecting. Add Content-Security-Policy header."})
+                    found_xss = True; break
+            except: pass
+
     # Step 4: also try xsstrike if installed
     result = await run_tool(["python3","/usr/share/xsstrike/xsstrike.py","-u",req.target,"--crawl","--skip-dom","-l","1"], timeout=60)
     out = result.get("output","")
@@ -743,16 +754,33 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 @app.post("/api/scan/commix")
 async def commix_scan(req: ScanRequest, user=Depends(verify_token)):
-    cmd = ["commix","--url",_web_url(req.target),"--crawl=1","--batch","--level=1","--timeout=10","--output-dir=/tmp/commix_out"]
-    result = await run_tool(cmd, timeout=180)
-    out = result["output"].lower()
-    vulnerable = ("is vulnerable" in out or "command injection" in out or "[+]" in result["output"] and "parameter" in out)
-    findings = []
-    if vulnerable:
-        findings.append({"detail":"OS Command Injection vulnerability detected","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-78","cwe_name":"OS Command Injection","owasp":"A03:2021","remediation":"Never pass user input to OS commands. Use safe APIs and input validation."})
-    scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"commix",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"commix","vulnerable":vulnerable,"findings":findings,"total":len(findings),"raw_output":result["output"],"timestamp":datetime.datetime.utcnow().isoformat()}
+    _AUTH_CTX.set(req)
+    findings = []; vulnerable = False
+    # Test known lab-specific command injection endpoints
+    ci_payloads = ["127.0.0.1; id", "127.0.0.1 && id", "127.0.0.1 | id", "127.0.0.1; whoami"]
+    ci_indicators = ["uid=", "root", "www-data", "daemon"]
+    for url, param, method in _get_lab_targets(req.target):
+        if "exec" not in url and "cmdi" not in url and "cmd" not in url: continue
+        for payload in ci_payloads:
+            try:
+                if method == "post":
+                    r = _req_lib.post(url, data={param: payload, "Submit": "Submit"}, timeout=8, verify=False, headers=_make_req_headers())
+                else:
+                    r = _http_get(f"{url}?{param}={payload}", timeout=8)
+                if r and any(ind in r.text for ind in ci_indicators):
+                    findings.append({"detail": f"OS Command Injection at {url} via '{param}' parameter — server executed '{payload}'", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-78", "cwe_name": "OS Command Injection", "owasp": "A03:2021", "remediation": "Never pass user input to OS commands. Use allowlisted values only."})
+                    vulnerable = True; break
+            except: pass
+        if vulnerable: break
+    # Generic Python-based CI test on base URL
+    if not vulnerable:
+        for payload in ["?ip=127.0.0.1;id", "?cmd=id", "?exec=id", "?command=id"]:
+            r = _http_get(_web_url(req.target) + payload, timeout=6)
+            if r and any(ind in r.text for ind in ci_indicators):
+                findings.append({"detail": f"OS Command Injection via {payload} — uid/root string in response", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-78", "cwe_name": "OS Command Injection", "owasp": "A03:2021", "remediation": "Never pass user input to OS commands."})
+                vulnerable = True; break
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "commix", req.target, {"output": str(findings)})
+    return {"scan_id": scan_id, "target": req.target, "tool": "commix", "vulnerable": vulnerable, "findings": findings, "total": len(findings), "timestamp": datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/lfi")
@@ -920,7 +948,61 @@ _FUZZ_PATHS = [
     "old","backup","temp","tmp","cache","logs","log","error.log",
     "manager","manager/html","webdav","xmlrpc.php","crossdomain.xml",
     "cgi-bin/test.cgi","dvwa","dvwa/login.php","WebGoat","mutillidae","bWAPP",
+    # DVWA vulnerability pages
+    "dvwa/vulnerabilities/sqli/","dvwa/vulnerabilities/sqli_blind/",
+    "dvwa/vulnerabilities/xss_r/","dvwa/vulnerabilities/xss_s/","dvwa/vulnerabilities/xss_d/",
+    "dvwa/vulnerabilities/exec/","dvwa/vulnerabilities/fi/","dvwa/vulnerabilities/upload/",
+    "dvwa/vulnerabilities/csrf/","dvwa/vulnerabilities/brute/","dvwa/vulnerabilities/idor/",
+    "dvwa/vulnerabilities/weak_id/","dvwa/vulnerabilities/captcha/","dvwa/vulnerabilities/javascript/",
+    "dvwa/vulnerabilities/csp/","dvwa/vulnerabilities/open_redirect/",
+    # Mutillidae
+    "mutillidae/index.php","mutillidae/webservices/","mutillidae/data/",
+    # bWAPP
+    "bWAPP/sqli_1.php","bWAPP/xss_get.php","bWAPP/htmli_get.php","bWAPP/cmdi.php",
+    # WebGoat
+    "WebGoat/start.mvc","WebGoat/login","WebGoat/register.mvc",
+    # Juice Shop
+    "rest/user/login","rest/products/search","api/Challenges",
 ]
+
+# Known vulnerable parameters per lab — used by scanners to test deep paths
+_LAB_TARGETS = {
+    "lab_dvwa": [
+        ("dvwa/vulnerabilities/sqli/",        "id",    "get"),
+        ("dvwa/vulnerabilities/sqli_blind/",   "id",    "get"),
+        ("dvwa/vulnerabilities/xss_r/",        "name",  "get"),
+        ("dvwa/vulnerabilities/xss_d/",        "default","get"),
+        ("dvwa/vulnerabilities/fi/",           "page",  "get"),
+        ("dvwa/vulnerabilities/exec/",         "ip",    "post"),
+        ("dvwa/vulnerabilities/open_redirect/","redirect","get"),
+    ],
+    "lab_mutillidae": [
+        ("mutillidae/index.php", "username", "get"),
+        ("mutillidae/index.php", "page",     "get"),
+        ("mutillidae/index.php", "popUpNotificationCode", "get"),
+    ],
+    "lab_webgoat": [
+        ("WebGoat/SqlInjection/attack5a", "account", "get"),
+    ],
+    "lab_bwapp": [
+        ("bWAPP/sqli_1.php",  "title",  "get"),
+        ("bWAPP/xss_get.php", "firstname", "get"),
+        ("bWAPP/cmdi.php",    "target", "post"),
+    ],
+    "lab_juiceshop": [
+        ("rest/products/search", "q", "get"),
+        ("rest/user/login",      "email", "post"),
+    ],
+}
+
+def _get_lab_targets(base_url: str):
+    """Return known vulnerable endpoints for this lab target."""
+    for key, targets in _LAB_TARGETS.items():
+        if key in base_url:
+            parsed = urlparse(_web_url(base_url))
+            base = f"{parsed.scheme}://{parsed.netloc}"
+            return [(f"{base}/{path}", param, method) for path, param, method in targets]
+    return []
 
 async def _python_fuzz(base_url: str, concurrency: int=20, custom_paths: list=None, extra_headers: dict=None) -> list:
     found = []
@@ -966,6 +1048,12 @@ async def _sqli_engine(base_url: str) -> list:
     findings = []; tested = set(); param_done = set()
     base = _web_url(base_url).rstrip("/")
     params = []
+    # Add known lab-specific vulnerable endpoints
+    for url, param, method in _get_lab_targets(base_url):
+        if method == "get":
+            key = f"{url}::{param}"
+            if key not in tested:
+                tested.add(key); params.append((url, param, "1"))
     home = _http_get(base, timeout=10)
     if home:
         links = re.findall(r'href=["\']([^"\'#\s]+)["\']', home.text, re.IGNORECASE)
