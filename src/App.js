@@ -1575,7 +1575,15 @@ function WebAppModule(props) {
     if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission();
     const activePhases = PHASES.map((ph,i)=>({ph,i})).filter(({i})=>selectedPhases.has(i));
     const isExternal = !normTarget.includes("lab_") && !normTarget.includes("localhost") && !normTarget.match(/https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
-    setLines(["[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "") + (authCookie||authBearer?" — authenticated":"") + (customWordlist?" — custom wordlist":"")]);
+    const authRequiredLabs = ["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"];
+    const needsAuth = authRequiredLabs.some(l => normTarget.includes(l));
+    const hasAuth   = !!(authCookie || authBearer);
+    if (needsAuth && !hasAuth) {
+      add("⚠ WARNING: " + normTarget + " requires authentication for full scanning.");
+      add("💡 Click the target button again to auto-login, then restart the scan.");
+      add("   Without auth: only headers/SSL/recon will be tested. Injection vulns will be missed.");
+    }
+    setLines(p => [...p, "[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "") + (hasAuth?" — authenticated":"") + (customWordlist?" — custom wordlist":"")]);
     const results = {};
     for (let idx = 0; idx < activePhases.length; idx++) {
       if (stopRef.current) {
@@ -1877,6 +1885,11 @@ function WebAppModule(props) {
             <input value={target} onChange={e=>setTarget(e.target.value)} onFocus={()=>setShowHistory(targetHistory.length>0)}
               placeholder="example.com  or  http://192.168.1.1:8080"
               style={{flex:3,minWidth:220,background:"#020617",border:"1px solid "+(running?"#3b82f6":"#1e3a8a"),borderRadius:6,padding:"11px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
+            {(()=>{ const authReqd=["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)); const noAuth=!(authCookie||authBearer); return authReqd&&noAuth&&!running ? (
+              <div style={{background:"#451a03",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"#fb923c",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+                ⚠ Auth required — click the target button to auto-login first
+              </div>
+            ) : null; })()}
             {!running ? (
               <button onClick={run} disabled={!target.trim()}
                 style={{background:target.trim()?"linear-gradient(135deg,#3b82f6,#06b6d4)":"#1e293b",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"#475569",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
