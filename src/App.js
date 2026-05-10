@@ -8293,11 +8293,19 @@ export default function App() {
     localStorage.removeItem("cyberPlan");
   };
 
+  const [trialInfo, setTrialInfo] = useState(null);
+
   useEffect(() => {
     api("/api/health").then(() => setBE(true)).catch(() => setBE(false));
     const t = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    if (token && plan === "trial") {
+      api("/api/trial/status","GET",null,token).then(d=>setTrialInfo(d)).catch(()=>{});
+    }
+  }, [token, plan]);
 
   if (!token) {
     return <Login onLogin={handleLogin}/>;
@@ -8306,13 +8314,6 @@ export default function App() {
   const isSuperAdmin = role === "superadmin";
   const isPro        = isSuperAdmin || plan === "pro" || plan === "superadmin" || role === "admin";
   const isTrial      = !isPro;
-
-  const [trialInfo, setTrialInfo] = useState(null);
-  useEffect(() => {
-    if (isTrial && token) {
-      api("/api/trial/status","GET",null,token).then(d=>setTrialInfo(d)).catch(()=>{});
-    }
-  }, [isTrial, token]);
 
   const canAccess = (m) => {
     if (isSuperAdmin) return true;           // ADMIN sees everything
