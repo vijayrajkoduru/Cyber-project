@@ -1,5 +1,3 @@
-version: "3.8"
-
 # OSCP Dashboard — Full Stack
 # Customer runs: docker compose up -d
 # Then open: http://localhost

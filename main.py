@@ -452,50 +452,6 @@ async def scan_nikto(req: ScanRequest, user=Depends(verify_token)):
     save_scan(scan_id,"nikto",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"nikto","findings":findings,"total":len(findings),"raw_output":str(findings),"command":"python _nikto_scan","timestamp":datetime.datetime.utcnow().isoformat()}
 
-@app.post("/api/scan/nikto_OLD_UNUSED")
-async def scan_nikto_unused(req: ScanRequest, user=Depends(verify_token)):
-    _AUTH_CTX.set(req)
-    out = ""
-    is_spa = _detect_spa(req.target)
-
-    FP_PATH_KEYWORDS = [
-        ".bash_history",".sh_history",".mysql_history",".psql_history",".sqlite_history",".zsh_history",
-        "JAMonAdmin.jsp","PasswordsData.json","login.json","master.json","masters.json",
-        "conndb.json","conn.json","connection.json","connections.json","accounts.json",
-        "userdata.json","users.json","connstring","elmah.axd","trace.axd",
-    ]
-
-    findings = []
-    for line in out.splitlines():
-        line = line.strip()
-        if not line.startswith("+ "): continue
-        if any(s in line for s in ["Target IP","Target Hostname","Target Port","Start Time","End Time",
-                                    "host(s) tested","Nikto v","requests:","No CGI Directories",
-                                    "Unable to connect","FAIL","could not","timed out","Scan terminated"]): continue
-        # Strip OSVDB reference prefix (OSVDB entries ARE real findings)
-        detail = re.sub(r"^\+\s*OSVDB-\d+:\s*","",line).strip()
-        detail = re.sub(r"^\+\s*\[\d+\]\s*","",detail).strip().lstrip("+ ").strip()
-        detail = re.sub(r"\s*See:\s*https?://\S+","",detail,flags=re.IGNORECASE).strip()
-        if not detail or len(detail)<15: continue
-
-        detail_lower = detail.lower()
-        if any(fp in detail_lower for fp in FP_PATH_KEYWORDS): continue
-        if is_spa and "might be interesting" in detail_lower: continue
-        if "might be interesting" in detail_lower or "contains authorization" in detail_lower:
-            path_m = re.search(r"^(/[^\s:,]+)", detail)
-            if path_m and not _path_is_real(req.target, path_m.group(1)):
-                continue
-
-        sev  = _sev(detail)
-        cvss = "9.8" if sev=="CRITICAL" else "7.5" if sev=="HIGH" else "5.3" if sev=="MEDIUM" else "3.1"
-        cwe  = "CWE-89" if "sql" in detail_lower else "CWE-79" if "xss" in detail_lower else "CWE-200" if "disclosure" in detail_lower or "directory index" in detail_lower else "CWE-16"
-        findings.append({"detail":detail,"severity":sev,"cvss":cvss,"cve":"N/A",
-                         "cwe":cwe,"cwe_name":"Web Vulnerability","owasp":"A05:2021","remediation":_rem(detail)})
-
-    scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"nikto",req.target,{"output":out})
-    return {"scan_id":scan_id,"target":req.target,"tool":"nikto","findings":findings,"total":len(findings),"raw_output":out,"command":"","timestamp":datetime.datetime.utcnow().isoformat()}
-
 
 @app.post("/api/scan/nmap_vuln")
 async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_token)):
