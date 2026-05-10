@@ -608,9 +608,9 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
     base = req.target.rstrip("/")
 
     # Step 1: curl-based reflected XSS — test common parameters
-    xss_params = ["q", "search", "searchFor", "name", "id", "query", "s", "term", "keyword",
-                  "user", "input", "cat", "artist", "username", "text", "message", "comment",
-                  "content", "filter", "page", "lang", "return", "url", "next", "data", "value"]
+    xss_params = ["q", "search", "searchFor", "name", "id", "query", "s", "term",
+                  "cat", "artist", "username", "input", "text", "page", "lang"]
+    _xss_start = _time.time()
     xss_payloads = [
         ("<script>alert(1)</script>", "<script>alert(1)</script>"),
         ("<img src=x onerror=alert(1)>", "onerror=alert"),
@@ -618,8 +618,9 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_token)):
     ]
     found_xss = False
     for param in xss_params:
+        if _time.time() - _xss_start > 60: break  # 60s total budget
         for payload, marker in xss_payloads:
-            r = _http_get(f"{base}?{param}={payload}", timeout=6)
+            r = _http_get(f"{base}?{param}={payload}", timeout=5)
             if r and marker in r.text:
                 findings.append({"detail":f"Reflected XSS: parameter '{param}' reflects unencoded HTML — payload executes in browser","severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"HTML-encode all user-supplied input before reflecting in responses. Add Content-Security-Policy header."})
                 raw_lines.append(f"[!] Reflected XSS confirmed via ?{param}={payload}")
