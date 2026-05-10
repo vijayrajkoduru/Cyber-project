@@ -2077,7 +2077,7 @@ function WebAppModule(props) {
                 if(toolLocked){ alert("Upgrade to Pro to access this scanner."); return; }
                 setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; });
               }}
-              style={{background:toolLocked?"#080c18":"#0f172a",border:"1px solid "+(toolLocked?"#1e293b":borderCol),borderLeft:`3px solid ${toolLocked?"#1e293b":leftCol}`,borderRadius:8,padding:"12px 18px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.35:isSelected?1:0.35,transition:"all 0.2s"}}>
+              style={{background:toolLocked?"#0a0f1e":"#0f172a",border:"1px solid "+(toolLocked?"#1e293b":borderCol),borderLeft:`3px solid ${toolLocked?"#374151":leftCol}`,borderRadius:8,padding:"12px 18px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.75:isSelected?1:0.35,transition:"all 0.2s"}}>
               <div style={{width:32,height:32,borderRadius:"50%",background:circBg,border:"2px solid "+circBord,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>
                 {isDone ? (isSkipped?"⚠":isFailed?"✗":isSQLi?"✗":"✓") : isActive ? (
                   <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
@@ -2087,7 +2087,7 @@ function WebAppModule(props) {
               </div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:13,fontWeight:600,color:toolLocked?"#374151":isDone?"#f1f5f9":isActive?"#93c5fd":"#475569"}}>{ph.name}</span>
+                  <span style={{fontSize:13,fontWeight:600,color:toolLocked?"#64748b":isDone?"#f1f5f9":isActive?"#93c5fd":"#475569"}}>{ph.name}</span>
                   {toolLocked && <span style={{fontSize:10}}>🔒</span>}
                   {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
                   {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="COMPLETE"  color="green"  size="xs"/>}
