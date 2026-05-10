@@ -89,12 +89,14 @@ function Nav() {
     <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: scrolled ? "rgba(2,6,23,0.95)" : "transparent", backdropFilter: scrolled ? "blur(16px)" : "none", borderBottom: scrolled ? `1px solid ${C.border}` : "none", transition: "all 0.4s", padding: "0 32px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", height: 70 }}>
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
-          <div style={{ width: 38, height: 38, background: "linear-gradient(135deg,#1d4ed8,#6366f1)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", animation: "glow 3s ease-in-out infinite" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ background: "#000", border: "2px solid #3b82f6", borderRadius: 8, padding: "4px 8px", fontFamily: "JetBrains Mono,monospace", fontSize: 14, fontWeight: 700, color: "#3b82f6", letterSpacing: 1, animation: "glow 3s ease-in-out infinite", whiteSpace: "nowrap" }}>
+              [&gt;_]
+            </div>
+            <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: 0.5 }}>
+              <span style={{ color: "#fff" }}>CYBER</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>SECURITY</span>
+            </span>
           </div>
-          <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: 0.5 }}>
-            <span style={{ color: "#fff" }}>CYBER</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>SECURITY</span>
-          </span>
         </a>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 36, alignItems: "center", marginRight: 32 }}>
@@ -341,9 +343,7 @@ function Demo() {
               {/* Logo */}
               <div style={{ padding: "16px 12px", borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#1d4ed8,#6366f1)", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                  </div>
+                  <div style={{ background: "#000", border: "1.5px solid #3b82f6", borderRadius: 5, padding: "2px 6px", fontFamily: "JetBrains Mono,monospace", fontSize: 11, fontWeight: 700, color: "#3b82f6" }}>[&gt;_]</div>
                   <span style={{ fontSize: 13, fontWeight: 900 }}><span style={{ color: "#fff" }}>CYBER</span><span style={{ color: C.blue }}>SEC</span></span>
                 </div>
                 <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 5, padding: "6px 8px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -844,9 +844,7 @@ function Footer() {
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 48, marginBottom: 48, flexWrap: "wrap" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#1d4ed8,#6366f1)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              </div>
+              <div style={{ background: "#000", border: "2px solid #3b82f6", borderRadius: 7, padding: "4px 8px", fontFamily: "JetBrains Mono,monospace", fontSize: 13, fontWeight: 700, color: "#3b82f6" }}>[&gt;_]</div>
               <span style={{ fontSize: 18, fontWeight: 900 }}><span style={{ color: "#fff" }}>CYBER</span><span style={{ color: C.blue }}>SECURITY</span></span>
             </div>
             <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.8, maxWidth: 300 }}>Professional penetration testing platform powered by Kali Linux. 51 real security tools in one cloud dashboard.</p>
