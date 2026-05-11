@@ -8608,7 +8608,7 @@ export default function App() {
 
         <div style={{background:"#0a0f1e",borderBottom:"1px solid #1e293b",padding:"0 24px",display:"flex",alignItems:"center",height:50,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:12,color:"#475569",fontWeight:500}}>CyberSecurity</span>
+            <span style={{fontSize:12,color:"#475569",fontWeight:500}}>VulnusLab</span>
             <span style={{color:"#334155",fontSize:14}}>/</span>
             <span style={{fontSize:13,color:"#cbd5e1",fontWeight:600,letterSpacing:"0.2px"}}>{topic?topic.label:active}</span>
           </div>
