@@ -8272,6 +8272,10 @@ export default function App() {
   const [username,setUsername] = useState(() => localStorage.getItem("cyberUser") || "");
   const [plan,setPlan]         = useState(() => localStorage.getItem("cyberPlan") || "trial");
   const [active,setActive]     = useState("dashboard");
+  useEffect(() => {
+    const mod = MODULES.find(m => m.id === active);
+    document.title = `VulnusLab — ${mod ? mod.label : "Dashboard"}`;
+  }, [active]);
   const [upgModal,setUpgModal] = useState(false);
   const [backendOk,setBE]      = useState(null);
   const [time,setTime]         = useState(new Date().toLocaleTimeString());
