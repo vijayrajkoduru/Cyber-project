@@ -107,7 +107,7 @@ function Nav() {
       <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", height: 70 }}>
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/logo.png" alt="logo" style={{ width: 72, height: 72, objectFit: "contain", mixBlendMode: "screen" }} />
+            <img src="/logo.png" alt="logo" style={{ width: 60, height: 60, objectFit: "contain", borderRadius: 12, background: "#fff", padding: "4px" }} />
             <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: 0.5 }}>
               <span style={{ color: "#fff" }}>VULNUS</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>LAB</span>
             </span>
