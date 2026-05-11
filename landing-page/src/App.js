@@ -98,32 +98,48 @@ function ShieldLogo({ size = 40 }) {
   );
 }
 
+// ── RESPONSIVE HOOK ──────────────────────────────────────────────
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" && window.innerWidth < breakpoint
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 // ── NAV ──────────────────────────────────────────────────────────
 function Nav() {
+  const isMobile = useIsMobile();
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => { const fn = () => setScrolled(window.scrollY > 50); window.addEventListener("scroll", fn); return () => window.removeEventListener("scroll", fn); }, []);
   return (
-    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: scrolled ? "rgba(2,6,23,0.95)" : "transparent", backdropFilter: scrolled ? "blur(16px)" : "none", borderBottom: scrolled ? `1px solid ${C.border}` : "none", transition: "all 0.4s", padding: "0 32px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", height: 70 }}>
+    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: scrolled ? "rgba(2,6,23,0.95)" : "transparent", backdropFilter: scrolled ? "blur(16px)" : "none", borderBottom: scrolled ? `1px solid ${C.border}` : "none", transition: "all 0.4s", padding: isMobile ? "0 14px" : "0 32px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", height: isMobile ? 60 : 70 }}>
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/logo.svg" alt="logo" style={{ width: 44, height: 44, objectFit: "contain" }} />
-            <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: 0.5 }}>
+            <img src="/logo.svg" alt="logo" style={{ width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, objectFit: "contain" }} />
+            <span style={{ fontSize: isMobile ? 16 : 19, fontWeight: 900, letterSpacing: 0.5 }}>
               <span style={{ color: "#fff" }}>VULNUS</span><span style={{ background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>LAB</span>
             </span>
           </div>
         </a>
         <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 36, alignItems: "center", marginRight: 32 }}>
-          {["Features","Demo","Pricing","FAQ"].map(l => (
-            <a key={l} href={`#${l.toLowerCase()}`} className="nav-link"
-              onClick={() => { document.title = `VulnusLab — ${l} | Professional Penetration Testing`; }}
-              style={{ color: C.muted, textDecoration: "none", fontSize: 14, fontWeight: 500, transition: "color 0.2s" }}>{l}</a>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <a href={DASHBOARD_URL} style={{ color: C.muted, fontSize: 14, fontWeight: 500, textDecoration: "none", padding: "8px 16px" }}>Sign In</a>
-          <a href="#contact" className="btn-primary" style={{ background: "linear-gradient(135deg,#1d4ed8,#6366f1)", color: "#fff", padding: "10px 22px", borderRadius: 10, fontSize: 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px rgba(59,130,246,0.35)" }}>Start Free Trial</a>
+        {!isMobile && (
+          <div style={{ display: "flex", gap: 36, alignItems: "center", marginRight: 32 }}>
+            {["Features","Demo","Pricing","FAQ"].map(l => (
+              <a key={l} href={`#${l.toLowerCase()}`} className="nav-link"
+                onClick={() => { document.title = `VulnusLab — ${l} | Professional Penetration Testing`; }}
+                style={{ color: C.muted, textDecoration: "none", fontSize: 14, fontWeight: 500, transition: "color 0.2s" }}>{l}</a>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: isMobile ? 6 : 12, alignItems: "center" }}>
+          <a href={DASHBOARD_URL} style={{ color: C.muted, fontSize: isMobile ? 13 : 14, fontWeight: 500, textDecoration: "none", padding: isMobile ? "6px 8px" : "8px 16px" }}>Sign In</a>
+          <a href="#contact" className="btn-primary" style={{ background: "linear-gradient(135deg,#1d4ed8,#6366f1)", color: "#fff", padding: isMobile ? "8px 12px" : "10px 22px", borderRadius: 10, fontSize: isMobile ? 12 : 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px rgba(59,130,246,0.35)", whiteSpace: "nowrap" }}>{isMobile ? "Free Trial" : "Start Free Trial"}</a>
         </div>
       </div>
     </nav>
@@ -132,6 +148,7 @@ function Nav() {
 
 // ── HERO ─────────────────────────────────────────────────────────
 function Hero() {
+  const isMobile = useIsMobile();
   const lines = ["XSS Scanner", "SQL Injection", "Port Scanner", "SSL Analyzer", "WAF Detector"];
   const [li, setLi] = useState(0);
   const [typed, setTyped] = useState("");
@@ -146,7 +163,7 @@ function Hero() {
   }, [typed, del, li]);
 
   return (
-    <section style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", padding: "100px 24px 60px" }}>
+    <section style={{ minHeight: isMobile ? "auto" : "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", padding: isMobile ? "90px 16px 50px" : "100px 24px 60px" }}>
       <style>{CSS}</style>
 
       {/* Animated grid */}
@@ -156,7 +173,7 @@ function Hero() {
       <div style={{ position: "absolute", top: "10%", left: "20%", width: 500, height: 500, background: "radial-gradient(circle,rgba(59,130,246,0.1),transparent 70%)", filter: "blur(60px)", pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: "10%", right: "15%", width: 400, height: 400, background: "radial-gradient(circle,rgba(139,92,246,0.08),transparent 70%)", filter: "blur(60px)", pointerEvents: "none" }} />
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "center", position: "relative", zIndex: 1 }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 32 : 60, alignItems: "center", position: "relative", zIndex: 1 }}>
         {/* Left */}
         <div>
           <div style={{ animation: "fadeUp 0.6s ease both", marginBottom: 20 }}>
@@ -201,7 +218,8 @@ function Hero() {
           </div>
         </div>
 
-        {/* Right — animated dashboard preview */}
+        {/* Right — animated dashboard preview (hidden on mobile to save space) */}
+        {!isMobile && (
         <FadeIn delay={0.3}>
           <div style={{ position: "relative" }}>
             <div style={{ background: C.card, border: `1px solid rgba(59,130,246,0.3)`, borderRadius: 16, overflow: "hidden", boxShadow: "0 0 80px rgba(59,130,246,0.12)", animation: "float 6s ease-in-out infinite" }}>
@@ -257,6 +275,7 @@ function Hero() {
             </div>
           </div>
         </FadeIn>
+        )}
       </div>
     </section>
   );
@@ -289,6 +308,7 @@ const DEMO_PHASES = [
 ];
 
 function Demo() {
+  const isMobile = useIsMobile();
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState([]);
   const [active, setActive] = useState(-1);
@@ -347,7 +367,7 @@ function Demo() {
   ];
 
   return (
-    <section id="demo" style={{ padding: "100px 24px", background: C.card }}>
+    <section id="demo" style={{ padding: isMobile ? "60px 12px" : "100px 24px", background: C.card }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <FadeIn style={{ textAlign: "center", marginBottom: 48 }}>
           <span style={{ background: "rgba(6,182,212,0.1)", border: "1px solid rgba(6,182,212,0.3)", color: C.cyan, fontSize: 13, fontWeight: 700, padding: "6px 16px", borderRadius: 20 }}>Interactive Demo</span>
@@ -370,7 +390,8 @@ function Demo() {
 
         <FadeIn>
           {/* Full dashboard mockup */}
-          <div style={{ background: "#020617", border: `1px solid rgba(59,130,246,0.3)`, borderRadius: 16, overflow: "hidden", boxShadow: "0 0 80px rgba(59,130,246,0.1)", display: "flex", height: 580 }}>
+          <div style={{ overflowX: isMobile ? "auto" : "visible", WebkitOverflowScrolling: "touch", margin: isMobile ? "0 -12px" : "0", padding: isMobile ? "0 12px" : "0" }}>
+          <div style={{ background: "#020617", border: `1px solid rgba(59,130,246,0.3)`, borderRadius: 16, overflow: "hidden", boxShadow: "0 0 80px rgba(59,130,246,0.1)", display: "flex", height: isMobile ? 480 : 580, minWidth: isMobile ? 760 : "auto" }}>
 
             {/* Sidebar */}
             <div style={{ width: 220, background: "#0a0f1e", borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
@@ -477,10 +498,11 @@ function Demo() {
               </div>
             </div>
           </div>
+          </div>
         </FadeIn>
 
         <FadeIn>
-          <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: C.muted }}>
+          <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: C.muted }}>{isMobile && <span style={{ display: "block", fontSize: 11, marginBottom: 8, color: "#475569" }}>↔ Scroll horizontally to see full dashboard</span>}
             This is the real dashboard interface. <a href="#contact" style={{ color: C.blue, fontWeight: 700, textDecoration: "none" }}>Start your free trial →</a>
           </p>
         </FadeIn>
@@ -794,6 +816,7 @@ function CTABanner() {
 
 // ── CONTACT ──────────────────────────────────────────────────────
 function Contact() {
+  const isMobile = useIsMobile();
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", plan: "trial", message: "" });
   const [sent, setSent] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -823,8 +846,8 @@ function Contact() {
           </FadeIn>
         ) : (
           <FadeIn>
-            <form onSubmit={submit} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 20, padding: 44 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <form onSubmit={submit} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 20, padding: isMobile ? 20 : 44 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Full Name *</label>
                   <input style={inp} value={form.name} onChange={e => set("name", e.target.value)} placeholder="John Smith" required />
@@ -834,7 +857,7 @@ function Contact() {
                   <input style={inp} type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="john@company.com" required />
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Phone *</label>
                   <input style={inp} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98765 43210" required />
@@ -872,10 +895,11 @@ function Contact() {
 
 // ── FOOTER ───────────────────────────────────────────────────────
 function Footer() {
+  const isMobile = useIsMobile();
   return (
     <footer style={{ borderTop: `1px solid ${C.border}`, padding: "60px 24px 32px", background: C.bg }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 48, marginBottom: 48, flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: isMobile ? 28 : 48, marginBottom: 48 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
               <img src="/logo.svg" alt="logo" style={{ width: 44, height: 44, objectFit: "contain" }} />
