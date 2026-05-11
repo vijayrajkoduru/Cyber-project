@@ -2126,7 +2126,26 @@ async def scan_deserial(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
     import base64 as _b64
     findings = []; vulnerable = False
+    skipped_reason = None
     base = _web_url(req.target).rstrip("/")
+
+    # Skip dynamic-execution checks on static-only hosts (Netlify/Cloudflare Pages/Vercel/etc.)
+    static_host = _detect_static_host(base)
+    if static_host:
+        skipped_reason = f"Target is hosted on {static_host} (static-only — deserialization RCE not possible)"
+        scan_id = str(uuid.uuid4()); save_scan(scan_id,"deserial",req.target,{"output":str(findings)})
+        return {"scan_id":scan_id,"target":req.target,"tool":"deserial","vulnerable":False,"findings":findings,"skipped_reason":skipped_reason,"total":0,"timestamp":datetime.datetime.utcnow().isoformat()}
+
+    # Detect server tech so we can skip language-specific probes that don't apply.
+    # E.g. don't run PHP unserialize probe against a Node.js or .NET app — guaranteed false positive.
+    is_php = False
+    try:
+        tech_resp = _req_lib.get(base, timeout=8, verify=False, headers=_BROWSER_HEADERS, allow_redirects=True)
+        srv_hdr = (tech_resp.headers.get("Server","") + " " + tech_resp.headers.get("X-Powered-By","")).lower()
+        is_php = ("php" in srv_hdr) or any(p in tech_resp.text.lower() for p in [".php", "phpsessid", "<?php"])
+    except Exception:
+        pass
+
     r = _http_get(base, timeout=10)
     if r:
         body = r.text; all_cookies = " ".join(r.headers.get("Set-Cookie","").split())
@@ -2152,16 +2171,27 @@ async def scan_deserial(req: ScanRequest, user=Depends(verify_scan_quota)):
         if re.search(r'_\$\$ND_FUNC\$\$_|{"rce":', body):
             vulnerable = True
             findings.append({"detail":"Node.js deserialization payload marker detected — possible node-serialize RCE vector","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-502","cwe_name":"Node.js Deserialization RCE","owasp":"A08:2021","remediation":"Replace node-serialize with JSON.parse(). Never eval() deserialized function strings."})
-        # Send PHP unserialize probe as POST body
-        php_probe = 'O:8:"stdClass":1:{s:3:"cmd";s:2:"id";}'
-        try:
-            rp = _req_lib.post(base, data={"data": php_probe}, timeout=8, verify=False, headers=_BROWSER_HEADERS)
-            if rp and ("uid=" in rp.text or "root" in rp.text):
-                vulnerable = True
-                findings.append({"detail":"PHP unserialize RCE confirmed — POST data with serialized object triggered command execution","severity":"CRITICAL","cvss":"10.0","cve":"N/A","cwe":"CWE-502","cwe_name":"PHP Object Injection RCE","owasp":"A08:2021","remediation":"Remove unserialize() from all user-controlled input paths immediately."})
-        except: pass
+
+        # PHP unserialize active probe — ONLY run on PHP apps to avoid false positives on Node.js/Java/.NET
+        # Many SPAs (Angular, React) serve a static index.html for every request containing words like
+        # "uid" or "root" in the JS bundle — naive text matching gives critical-level false positives.
+        if is_php:
+            php_probe = 'O:8:"stdClass":1:{s:3:"cmd";s:2:"id";}'
+            try:
+                # Get baseline (no probe) AND payload response, compare them
+                r_base = _req_lib.post(base, data={"data": ""}, timeout=8, verify=False, headers=_BROWSER_HEADERS)
+                rp = _req_lib.post(base, data={"data": php_probe}, timeout=8, verify=False, headers=_BROWSER_HEADERS)
+                # Require: uid= present in PROBE response, NOT in BASELINE, AND response meaningfully different
+                payload_has = rp and ("uid=" in rp.text or re.search(r"\broot\b", rp.text))
+                baseline_has = r_base and ("uid=" in r_base.text or re.search(r"\broot\b", r_base.text))
+                if payload_has and not baseline_has and _response_meaningfully_different(r_base, rp, threshold=30):
+                    vulnerable = True
+                    findings.append({"detail":"PHP unserialize RCE confirmed — POST data with serialized object triggered command execution (uid/root appeared only after probe)","severity":"CRITICAL","cvss":"10.0","cve":"N/A","cwe":"CWE-502","cwe_name":"PHP Object Injection RCE","owasp":"A08:2021","remediation":"Remove unserialize() from all user-controlled input paths immediately."})
+            except Exception:
+                pass
+
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"deserial",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"deserial","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"deserial","vulnerable":vulnerable,"findings":findings,"skipped_reason":skipped_reason,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/protopollution")

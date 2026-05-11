@@ -1526,8 +1526,8 @@ function generateModuleReport(reportData) {
       hline(margin,iy,margin+3,iy,GREEN,1.5);
       txt(r[0],margin+6,iy+5,7.5,GRAY);
       if(r[1]==="__REPORTER__"){
-        txt(reporterName||"Security Analyst",margin+48,iy+4.5,8.5,WHITE,true);
-        txt(reporterRole||"Penetration Tester",margin+48,iy+9,7,GRAY);
+        txt(reporterName||"VulnusLab Automated Pentest",margin+48,iy+4.5,8.5,WHITE,true);
+        txt(reporterRole||"Security Assessment Engine · vulnuslab.com",margin+48,iy+9,7,GRAY);
       } else {
         txt(String(r[1]),margin+48,iy+5,8.5,WHITE,true);
       }
@@ -1766,7 +1766,7 @@ function WebAppModule(props) {
   const [selectedPhases, setSelectedPhases] = useState(() => new Set(PHASES.map((_,i)=>i)));
   const [showPDFModal, setShowPDFModal]     = useState(false);
   const [pdfConfig, setPDFConfig]           = useState({
-    companyName:"VulnusLab", reporterName:"Security Analyst", reporterRole:"Penetration Tester",
+    companyName:"VulnusLab", reporterName:"VulnusLab Automated Pentest", reporterRole:"Security Assessment Engine · vulnuslab.com",
     date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
     template:"standard", customLogo:null
   });
@@ -1912,10 +1912,9 @@ function WebAppModule(props) {
     if (allResults["xss"]?.vulnerable) {
       allFindings.push({detail:"XSS vulnerability detected on target",severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",cwe_name:"Cross-Site Scripting",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
     }
-    // CORS — returns {vulnerable:true} not findings array
-    if (allResults["cors"]?.vulnerable) {
-      allFindings.push({detail:"CORS misconfiguration — arbitrary origin allowed",severity:"HIGH",cvss:"8.1",cve:"N/A",cwe:"CWE-942",cwe_name:"Overly Permissive CORS",owasp:"A05:2021 - Security Misconfiguration",remediation:"Restrict Access-Control-Allow-Origin to trusted domains only."});
-    }
+    // CORS — backend's /api/scan/cors already returns a proper finding in its findings[] array,
+    // which is collected by the loop above. We do NOT add a synthetic finding here — that would
+    // create a duplicate in the report (one from backend, one synthetic).
     // SQLMap
     if (allResults["sqlmap"]?.vulnerable) {
       allFindings.push({detail:"SQL Injection detected",severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",cwe_name:"SQL Injection",owasp:"A03:2021 - Injection",remediation:"Use parameterized queries immediately."});
@@ -1939,8 +1938,11 @@ function WebAppModule(props) {
     generatePDF({
       target, riskScore, riskLabel,
       companyName:  cfg.companyName  || "VulnusLab",
-      reporterName: cfg.reporterName || "Security Analyst",
-      reporterRole: cfg.reporterRole || "Penetration Tester",
+      // Upgrade stale defaults from older app versions automatically — if user has
+      // the OLD generic "Security Analyst / Penetration Tester" cached, replace with
+      // the new branded defaults. Custom values set by the user are preserved.
+      reporterName: (cfg.reporterName && cfg.reporterName !== "Security Analyst") ? cfg.reporterName : "VulnusLab Automated Pentest",
+      reporterRole: (cfg.reporterRole && cfg.reporterRole !== "Penetration Tester") ? cfg.reporterRole : "Security Assessment Engine · vulnuslab.com",
       customLogo:   cfg.customLogo   || null,
       template:     cfg.template     || "standard",
       date: (cfg.date ? cfg.date + " " : "") + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
@@ -2015,7 +2017,7 @@ function WebAppModule(props) {
       if (allResults[ph.tool]?.findings) allResults[ph.tool].findings.forEach(f=>{ if(f.severity!=="INFO") allFindings.push(f); });
     });
     if (allResults["xss"]?.vulnerable)   allFindings.push({severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",detail:"XSS vulnerability detected",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
-    if (allResults["cors"]?.vulnerable)  allFindings.push({severity:"HIGH",cvss:"8.1",cve:"N/A",cwe:"CWE-942",detail:"CORS misconfiguration — arbitrary origin allowed",owasp:"A05:2021 - Security Misconfiguration",remediation:"Restrict Access-Control-Allow-Origin to trusted domains only."});
+    // CORS finding comes from backend (cors.findings[]) — collected by the loop above. No synthetic duplicate.
     if (allResults["sqlmap"]?.vulnerable) allFindings.push({severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",detail:"SQL Injection detected",owasp:"A03:2021 - Injection",remediation:"Use parameterized queries."});
     const rows = [["Severity","CVSS","CVE","CWE","OWASP","Finding","Remediation"]];
     allFindings.forEach(f => rows.push([f.severity,f.cvss||"",f.cve||"",f.cwe||"",f.owasp||"",`"${(f.detail||"").replace(/"/g,"'")}"`,`"${(f.remediation||"").replace(/"/g,"'")}"`]));
