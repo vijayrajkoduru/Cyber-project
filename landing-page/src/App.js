@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 const DASHBOARD_URL = "https://app.vulnuslab.com";
-const CONTACT_EMAIL = "vijayrajkoduruai@gmail.com";
+const CONTACT_EMAIL = "support@vulnuslab.com";
 
 const C = {
   bg: "#020617", card: "#0a0f1e", card2: "#0f172a",
