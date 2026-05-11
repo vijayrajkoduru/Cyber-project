@@ -1201,7 +1201,10 @@ function generatePDF(reportData) {
     chk(30); y+=2;
     y = sectionHead("Advanced Security Testing",y);
     if(advRun.length>0){
-      y = tableHeader(["CHECK","STATUS","OWASP","DETAIL"],[70,22,18,70],y);
+      // Column widths: [CHECK 50, STATUS 22, OWASP 18, DETAIL 90] = 180mm total.
+      // CHECK labels are short (~20 chars max), so we give the freed 20mm to DETAIL
+      // to prevent the cell text from overflowing past the page border.
+      y = tableHeader(["CHECK","STATUS","OWASP","DETAIL"],[50,22,18,90],y);
       advRun.forEach((c,i)=>{
         chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); hline(margin,y,pageW-margin,y,BORDER,0.2);
         txt(c.label,margin+3,y+5,8,DARK,true);
@@ -1209,21 +1212,20 @@ function generatePDF(reportData) {
         const hasRealFinds = c.res && Array.isArray(c.res.findings) && c.res.findings.some(f=>["CRITICAL","HIGH","MEDIUM"].includes(f.severity));
         const status = isVuln || hasRealFinds ? "VULNERABLE" : "PASSED";
         const stColor = status==="VULNERABLE"?RED:GREEN;
-        rrect(margin+73,y+1.5,status==="VULNERABLE"?18:13,4,1,stColor);
+        rrect(margin+53,y+1.5,status==="VULNERABLE"?18:13,4,1,stColor);
         doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(...WHITE);
-        doc.text(status,margin+75,y+5);
-        txt(c.owasp,margin+96,y+5,7.5,GRAY);
-        const _truncate = (s, n) => {
-          if (!s) return "";
-          if (s.length <= n) return s;
-          // Cut at last word boundary before n, then add ellipsis
-          const cut = s.substring(0, n);
-          const lastSpace = cut.lastIndexOf(" ");
-          return (lastSpace > n*0.7 ? cut.substring(0, lastSpace) : cut) + "…";
-        };
-        const detail = isVuln?(c.res.findings&&c.res.findings[0]?_truncate(c.res.findings[0].detail,72):"Vulnerability confirmed")
-          :hasRealFinds?_truncate(c.res.findings[0].detail,72):"No vulnerability detected";
-        txt(detail,margin+118,y+5,7.5,DARK);
+        doc.text(status,margin+55,y+5);
+        txt(c.owasp,margin+76,y+5,7.5,GRAY);
+        // Use jsPDF's splitTextToSize to compute exactly what fits the DETAIL column width.
+        // First line gets shown; if there's overflow, we add an ellipsis. This guarantees
+        // the text never extends past the column boundary regardless of font metrics.
+        const fullDetail = isVuln?(c.res.findings&&c.res.findings[0]?c.res.findings[0].detail||"Vulnerability confirmed":"Vulnerability confirmed")
+          :hasRealFinds?(c.res.findings[0].detail||"No vulnerability detected"):"No vulnerability detected";
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5);
+        // 86mm available (column is 90mm starting at margin+98, leaving 4mm right padding)
+        const wrapped = doc.splitTextToSize(String(fullDetail), 86);
+        const detail = wrapped.length > 1 ? wrapped[0].replace(/\s+\S*$/, "") + "…" : wrapped[0];
+        txt(detail,margin+98,y+5,7.5,DARK);
         y+=7;
       });
       if(advNotRun.length>0){
