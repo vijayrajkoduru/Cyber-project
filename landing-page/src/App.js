@@ -116,7 +116,9 @@ function Nav() {
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 36, alignItems: "center", marginRight: 32 }}>
           {["Features","Demo","Pricing","FAQ"].map(l => (
-            <a key={l} href={`#${l.toLowerCase()}`} className="nav-link" style={{ color: C.muted, textDecoration: "none", fontSize: 14, fontWeight: 500, transition: "color 0.2s" }}>{l}</a>
+            <a key={l} href={`#${l.toLowerCase()}`} className="nav-link"
+              onClick={() => { document.title = `VulnusLab — ${l} | Professional Penetration Testing`; }}
+              style={{ color: C.muted, textDecoration: "none", fontSize: 14, fontWeight: 500, transition: "color 0.2s" }}>{l}</a>
           ))}
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
