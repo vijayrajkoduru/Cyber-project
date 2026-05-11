@@ -658,17 +658,17 @@ function HowItWorks() {
 function Pricing() {
   const plans = [
     { name: "Trial", sub: "Try before you pay", price: "FREE", period: "7 days", color: C.muted, popular: false,
-      features: ["7 days free access","5 recon tools (Section 1)","50 tool calls per day","PDF reports included","1 user account"],
-      locked: ["All injection attacks","Auth & session attacks","File & path attacks","Network attacks"],
+      features: ["7 days full access","5 scans per day","All 51 tools available","PDF reports included","No credit card required"],
+      locked: [],
       cta: "Start Free Trial" },
-    { name: "Pro", sub: "For professionals", price: "Contact Us", period: "per month", color: C.blue, popular: true,
-      features: ["All 51 scanners unlocked","Unlimited scans per day","PDF + JSON + CSV reports","Priority email support","1 user account","5 built-in vulnerable labs"],
+    { name: "Pro", sub: "For professionals", price: "$29", period: "per month", color: C.blue, popular: true,
+      features: ["All 51 scanners unlocked","Unlimited scans per day","PDF + JSON + CSV reports","Email support","1 user account","5 built-in vulnerable labs","Cancel anytime"],
       locked: [],
-      cta: "Get Pro Access" },
-    { name: "Enterprise", sub: "For security teams", price: "Contact Us", period: "per month", color: C.purple, popular: false,
-      features: ["Everything in Pro","Multiple user accounts","Team scan history","Custom wordlists","Dedicated support","Admin panel access"],
+      cta: "Subscribe Now" },
+    { name: "Enterprise", sub: "For security teams", price: "Custom", period: "billed annually", color: C.purple, popular: false,
+      features: ["Everything in Pro","Multiple user accounts","Team scan history","Custom wordlists","Priority support","Admin panel access","SLA & invoicing"],
       locked: [],
-      cta: "Contact Us" },
+      cta: "Contact Sales" },
   ];
   return (
     <section id="pricing" style={{ padding: "100px 24px" }}>
@@ -706,7 +706,7 @@ function Pricing() {
         </div>
         <FadeIn>
           <p style={{ textAlign: "center", fontSize: 14, color: C.muted, marginTop: 32 }}>
-            🔒 Secure payment · Credentials by email in 30 minutes · No auto-renewal · Cancel anytime
+            🔒 Secure payment by Lemon Squeezy · No credit card for trial · Cancel anytime
           </p>
         </FadeIn>
       </div>
@@ -853,7 +853,7 @@ function Contact() {
         <FadeIn style={{ textAlign: "center", marginBottom: 48 }}>
           <span style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", color: C.green, fontSize: 13, fontWeight: 700, padding: "6px 16px", borderRadius: 20 }}>Get Access</span>
           <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 800, marginTop: 16, marginBottom: 12 }}>Request Your Account</h2>
-          <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8 }}>Fill the form. We create your account manually and email credentials within 30 minutes.</p>
+          <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8 }}>Fill the form and we'll get back to you within 24 hours at <strong style={{ color: C.text }}>support@vulnuslab.com</strong>.</p>
         </FadeIn>
         {sent ? (
           <FadeIn>

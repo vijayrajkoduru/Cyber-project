@@ -8349,6 +8349,8 @@ export default function App() {
   };
 
   const [trialInfo, setTrialInfo] = useState(null);
+  const [billingInfo, setBillingInfo] = useState(null);
+  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     api("/api/health").then(() => setBE(true)).catch(() => setBE(false));
@@ -8360,7 +8362,53 @@ export default function App() {
     if (token && plan === "trial") {
       api("/api/trial/status","GET",null,token).then(d=>setTrialInfo(d)).catch(()=>{});
     }
+    if (token) {
+      api("/api/billing/status","GET",null,token).then(d=>setBillingInfo(d)).catch(()=>{});
+    }
   }, [token, plan]);
+
+  // After returning from Lemon Squeezy checkout, refresh billing status
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("billing=success") && token) {
+      // Webhooks take a few seconds; poll for 30s
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries++;
+        api("/api/billing/status","GET",null,token).then(d => {
+          setBillingInfo(d);
+          if (d.access === "pro" || tries >= 10) {
+            clearInterval(iv);
+            // Clean the URL
+            window.history.replaceState({}, "", window.location.pathname);
+          }
+        }).catch(()=>{});
+      }, 3000);
+      return () => clearInterval(iv);
+    }
+  }, [token]);
+
+  const handleUpgrade = async () => {
+    if (upgrading) return;
+    setUpgrading(true);
+    try {
+      const res = await api("/api/billing/checkout", "POST",
+        { redirect_url: window.location.origin + "/?billing=success" }, token);
+      if (res && res.url) {
+        window.location.href = res.url;
+      } else {
+        alert("Could not start checkout. Please try again or email support@vulnuslab.com.");
+        setUpgrading(false);
+      }
+    } catch (e) {
+      const msg = (e && e.message) || "Unknown error";
+      if (msg.includes("503") || msg.toLowerCase().includes("not configured")) {
+        alert("Payments are not configured yet. Please contact support@vulnuslab.com to upgrade.");
+      } else {
+        alert("Upgrade failed: " + msg);
+      }
+      setUpgrading(false);
+    }
+  };
 
   if (!token) {
     return <Login onLogin={handleLogin}/>;
@@ -8630,17 +8678,46 @@ export default function App() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
-        {/* Trial Banner */}
-        {isTrial && trialInfo && (
-          <div style={{background: trialInfo.scans_remaining===0 ? "#1c0000" : trialInfo.days_left<=2 ? "#1c0a00" : "#0c1a0c",
-            borderBottom:`1px solid ${trialInfo.scans_remaining===0?"#7f1d1d":trialInfo.days_left<=2?"#78350f":"#166534"}`,
-            padding:"8px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
-            <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"🚫":trialInfo.days_left<=2?"⚠️":"🎯"}</span>
+        {/* Grace period banner — trial expired but 3 grace days */}
+        {billingInfo && billingInfo.access === "grace" && (
+          <div style={{background:"#1c0a00",borderBottom:"1px solid #78350f",padding:"10px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
+            <span style={{fontSize:18}}>⚠️</span>
             <div style={{flex:1}}>
-              <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":trialInfo.days_left<=2?"#fb923c":"#4ade80"}}>
+              <span style={{fontSize:13,fontWeight:700,color:"#fb923c"}}>
+                Your trial has ended. You have {billingInfo.grace_days_remaining} grace day{billingInfo.grace_days_remaining!==1?"s":""} of full access remaining — subscribe now to keep scanning.
+              </span>
+            </div>
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#dc2626,#ea580c)",border:"none",color:"#fff",padding:"7px 18px",borderRadius:6,fontSize:12,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
+              {upgrading ? "Loading..." : "Subscribe — $29/mo"}
+            </button>
+          </div>
+        )}
+
+        {/* Expired banner — trial + grace exhausted, locked out */}
+        {billingInfo && billingInfo.access === "expired" && (
+          <div style={{background:"#1c0000",borderBottom:"2px solid #7f1d1d",padding:"14px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
+            <span style={{fontSize:20}}>🚫</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:800,color:"#fca5a5"}}>Trial expired</div>
+              <div style={{fontSize:12,color:"#fecaca",marginTop:2}}>Subscribe to VulnusLab Pro to continue running scans. Your past scans are still accessible.</div>
+            </div>
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",color:"#fff",padding:"9px 22px",borderRadius:6,fontSize:13,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap",boxShadow:"0 0 16px #16a34a55"}}>
+              {upgrading ? "Loading..." : "Subscribe — $29/mo"}
+            </button>
+          </div>
+        )}
+
+        {/* Trial Banner — within trial window */}
+        {isTrial && billingInfo && billingInfo.access === "trial" && trialInfo && (
+          <div style={{background: trialInfo.scans_remaining===0 ? "#1c0000" : (billingInfo.trial_days_remaining<=2 ? "#1c0a00" : "#0c1a0c"),
+            borderBottom:`1px solid ${trialInfo.scans_remaining===0?"#7f1d1d":(billingInfo.trial_days_remaining<=2?"#78350f":"#166534")}`,
+            padding:"8px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
+            <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"🚫":(billingInfo.trial_days_remaining<=2?"⚠️":"🎯")}</span>
+            <div style={{flex:1}}>
+              <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":(billingInfo.trial_days_remaining<=2?"#fb923c":"#4ade80")}}>
                 {trialInfo.scans_remaining===0
                   ? "Daily scan limit reached — upgrade to Pro for unlimited scans"
-                  : `Trial: ${trialInfo.days_left} day${trialInfo.days_left!==1?"s":""} left  •  ${trialInfo.days_left > 0 ? "1 full scan session per day" : "Trial expired"}`}
+                  : `Trial: ${billingInfo.trial_days_remaining} day${billingInfo.trial_days_remaining!==1?"s":""} left  •  ${trialInfo.scans_remaining} scan${trialInfo.scans_remaining!==1?"s":""} remaining today`}
               </span>
             </div>
             <div style={{display:"flex",gap:6}}>
@@ -8650,9 +8727,9 @@ export default function App() {
                   border:"1px solid #334155"}}/>
               ))}
             </div>
-            <button style={{background:"linear-gradient(135deg,#1e40af,#3b82f6)",border:"none",color:"#fff",
-              padding:"5px 14px",borderRadius:6,fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-              Upgrade to Pro
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#1e40af,#3b82f6)",border:"none",color:"#fff",
+              padding:"5px 14px",borderRadius:6,fontSize:11,fontWeight:700,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
+              {upgrading ? "..." : "Upgrade to Pro"}
             </button>
           </div>
         )}

@@ -3,7 +3,7 @@
 #  Run: python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 # ══════════════════════════════════════════════════════════════
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -24,6 +24,14 @@ CORS_ORIGINS = [o.strip() for o in os.getenv(
     "CORS_ORIGINS",
     "https://app.vulnuslab.com,https://vulnuslab.com,http://localhost:3000"
 ).split(",") if o.strip()]
+# Lemon Squeezy — for subscription payments. All optional; checkout endpoint returns 503 if not set.
+LEMONSQUEEZY_API_KEY    = os.getenv("LEMONSQUEEZY_API_KEY", "")
+LEMONSQUEEZY_STORE_ID   = os.getenv("LEMONSQUEEZY_STORE_ID", "")
+LEMONSQUEEZY_VARIANT_ID = os.getenv("LEMONSQUEEZY_VARIANT_ID", "")
+LEMONSQUEEZY_WEBHOOK_SECRET = os.getenv("LEMONSQUEEZY_WEBHOOK_SECRET", "")
+# Trial / billing config
+TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "7"))
+GRACE_DAYS = int(os.getenv("GRACE_DAYS", "3"))  # extra full-access days after trial expires
 
 def _get_db():
     con = sqlite3.connect(DB_PATH, timeout=30)
@@ -71,6 +79,12 @@ def _init_db():
         "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
         "ALTER TABLE users ADD COLUMN phone TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN note TEXT DEFAULT NULL",
+        # Subscription / billing columns
+        "ALTER TABLE users ADD COLUMN trial_started_at TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN trial_expires_at TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN subscription_id TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN subscription_status TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN subscription_renews_at TEXT DEFAULT NULL",
     ]:
         try: con.execute(stmt)
         except sqlite3.OperationalError: pass
@@ -140,11 +154,18 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 async def verify_scan_quota(user=Depends(verify_token)):
-    """Check daily scan limit for trial users."""
+    """Check daily scan limit for trial users AND block expired trials with no subscription."""
     if user.get("username") == "ADMIN": return user
-    if user.get("plan") not in ("trial",): return user
-    uid   = user.get("user_id","anonymous")
-    used  = _scans_today(uid)
+    uid = user.get("user_id","anonymous")
+    # Block users whose trial + grace period is exhausted (no active subscription)
+    info = _get_billing_status(uid)
+    if info.get("access") == "expired":
+        raise HTTPException(status_code=402,
+            detail="Trial expired. Subscribe to VulnusLab Pro to continue.")
+    # Pro users have unlimited scans
+    if info.get("access") == "pro": return user
+    # Trial / grace users still have daily limit
+    used = _scans_today(uid)
     if used >= TRIAL_SCANS_DAY:
         raise HTTPException(status_code=429,
             detail=f"Daily scan limit reached ({TRIAL_SCANS_DAY} scans/day on trial). Upgrade to Pro for unlimited scans.")
@@ -252,12 +273,13 @@ async def register(req: RegisterRequest):
     user_id  = str(uuid.uuid4())
     pw_hash  = _bcrypt.hashpw(req.password.encode(), _bcrypt.gensalt()).decode()
     now      = datetime.datetime.utcnow()
+    now_iso  = now.isoformat()
     trial_exp = (now + datetime.timedelta(days=TRIAL_DAYS)).isoformat()
     try:
         con = _get_db()
         con.execute(
-            "INSERT INTO users (id,username,email,password_hash,plan,created_at,expires_at,status) VALUES (?,?,?,?,?,?,?,?)",
-            (user_id, req.username, req.email, pw_hash, "trial", now.isoformat(), trial_exp, "active"))
+            "INSERT INTO users (id,username,email,password_hash,plan,created_at,expires_at,status,trial_started_at,trial_expires_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (user_id, req.username, req.email, pw_hash, "trial", now_iso, trial_exp, "active", now_iso, trial_exp))
         con.commit(); con.close()
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="Username or email already exists")
@@ -280,7 +302,219 @@ async def login(req: LoginRequest):
 
 @app.get("/api/auth/me")
 async def me(user=Depends(verify_token)):
-    return {"user_id": user["user_id"], "username": user["username"], "plan": user.get("plan","trial")}
+    # Enrich with billing status so the frontend can render the trial banner / upgrade button
+    uid = user["user_id"]
+    info = _get_billing_status(uid)
+    return {
+        "user_id": uid,
+        "username": user["username"],
+        "plan": user.get("plan","trial"),
+        **info,
+    }
+
+# ─── Billing / subscription helpers ──────────────────────────────
+def _get_billing_status(user_id: str) -> dict:
+    """Returns access state for a user: pro / trial / grace / expired / unknown.
+
+    - pro: paid subscription is active
+    - trial: within initial trial window
+    - grace: trial expired but within GRACE_DAYS — full access + warning banner
+    - expired: trial + grace exhausted, no subscription — read-only / locked
+    """
+    try:
+        con = _get_db()
+        row = con.execute(
+            "SELECT username, plan, trial_started_at, trial_expires_at, subscription_status, subscription_renews_at FROM users WHERE id=?",
+            (user_id,)
+        ).fetchone()
+        con.close()
+    except Exception:
+        return {"access": "unknown"}
+    if not row:
+        return {"access": "unknown"}
+    # Superadmin / admin always have full access
+    if row["username"] in ("ADMIN", "admin") or row["plan"] in ("superadmin", "admin"):
+        return {"access": "pro", "plan_label": "superadmin"}
+    # Paid subscription
+    if (row["subscription_status"] or "").lower() in ("active", "on_trial", "past_due"):
+        return {
+            "access": "pro",
+            "plan_label": "pro",
+            "subscription_status": row["subscription_status"],
+            "subscription_renews_at": row["subscription_renews_at"],
+        }
+    # Trial / grace logic
+    trial_exp_str = row["trial_expires_at"]
+    if not trial_exp_str:
+        return {"access": "trial", "plan_label": "trial", "trial_days_remaining": TRIAL_DAYS}
+    try:
+        trial_exp = datetime.datetime.fromisoformat(trial_exp_str)
+    except Exception:
+        return {"access": "trial", "plan_label": "trial"}
+    now = datetime.datetime.utcnow()
+    grace_end = trial_exp + datetime.timedelta(days=GRACE_DAYS)
+    if now < trial_exp:
+        days = max(0, int((trial_exp - now).total_seconds() // 86400))
+        return {"access": "trial", "plan_label": "trial",
+                "trial_expires_at": trial_exp_str, "trial_days_remaining": days}
+    if now < grace_end:
+        days = max(0, int((grace_end - now).total_seconds() // 86400))
+        return {"access": "grace", "plan_label": "trial",
+                "trial_expires_at": trial_exp_str, "grace_days_remaining": days}
+    return {"access": "expired", "plan_label": "expired",
+            "trial_expires_at": trial_exp_str}
+
+
+def _require_active_access(user_id: str):
+    """Raises 402 Payment Required if user has no active access (trial expired + grace exhausted, no subscription)."""
+    info = _get_billing_status(user_id)
+    if info.get("access") == "expired":
+        raise HTTPException(status_code=402, detail="Trial expired. Please subscribe to continue.")
+
+
+# ─── Lemon Squeezy: checkout + webhook ──────────────────────────
+class _CheckoutReq(BaseModel):
+    redirect_url: Optional[str] = None  # where to send user after purchase (defaults to dashboard)
+
+
+@app.post("/api/billing/checkout")
+async def create_checkout(req: _CheckoutReq, user=Depends(verify_token)):
+    """Create a Lemon Squeezy checkout URL for the current user. Returns {url: ...}."""
+    if not (LEMONSQUEEZY_API_KEY and LEMONSQUEEZY_STORE_ID and LEMONSQUEEZY_VARIANT_ID):
+        raise HTTPException(status_code=503, detail="Payments are not configured yet. Contact support@vulnuslab.com.")
+    # Fetch user email so checkout pre-fills it and we can match webhook → user
+    con = _get_db()
+    row = con.execute("SELECT email, username FROM users WHERE id=?", (user["user_id"],)).fetchone()
+    con.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    redirect = req.redirect_url or "https://app.vulnuslab.com/?billing=success"
+    payload = {
+        "data": {
+            "type": "checkouts",
+            "attributes": {
+                "checkout_data": {
+                    "email": row["email"],
+                    "name": row["username"],
+                    "custom": {"user_id": user["user_id"]},  # echoed back in webhooks
+                },
+                "product_options": {
+                    "redirect_url": redirect,
+                    "receipt_button_text": "Return to VulnusLab",
+                    "receipt_thank_you_note": "Thank you for subscribing to VulnusLab Pro!",
+                },
+            },
+            "relationships": {
+                "store":           {"data": {"type": "stores",           "id": str(LEMONSQUEEZY_STORE_ID)}},
+                "variant":         {"data": {"type": "variants",         "id": str(LEMONSQUEEZY_VARIANT_ID)}},
+            },
+        }
+    }
+    import requests as _rq
+    try:
+        r = _rq.post(
+            "https://api.lemonsqueezy.com/v1/checkouts",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {LEMONSQUEEZY_API_KEY}",
+                "Accept":        "application/vnd.api+json",
+                "Content-Type":  "application/vnd.api+json",
+            },
+            timeout=15,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not reach Lemon Squeezy: {e}")
+    if r.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Lemon Squeezy error: {r.text[:300]}")
+    data = r.json()
+    url = data.get("data", {}).get("attributes", {}).get("url")
+    if not url:
+        raise HTTPException(status_code=502, detail="Lemon Squeezy did not return a checkout URL")
+    return {"url": url}
+
+
+@app.post("/api/webhooks/lemonsqueezy")
+async def lemonsqueezy_webhook(request: Request):
+    """Receive subscription events from Lemon Squeezy and update the user's billing status.
+
+    LS sends events like:
+      - subscription_created
+      - subscription_updated
+      - subscription_cancelled
+      - subscription_resumed
+      - subscription_expired
+      - subscription_payment_success
+      - subscription_payment_failed
+    """
+    raw = await request.body()
+    sig = request.headers.get("x-signature", "")
+    if not LEMONSQUEEZY_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook secret not configured")
+    import hmac, hashlib
+    expected = hmac.new(LEMONSQUEEZY_WEBHOOK_SECRET.encode(), raw, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        raise HTTPException(status_code=403, detail="Invalid signature")
+    try:
+        body = json.loads(raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event_name = body.get("meta", {}).get("event_name", "")
+    custom = body.get("meta", {}).get("custom_data", {}) or {}
+    user_id = custom.get("user_id")
+    attrs = body.get("data", {}).get("attributes", {}) or {}
+    sub_id = body.get("data", {}).get("id") or attrs.get("subscription_id")
+    status = attrs.get("status", "")  # active, cancelled, expired, on_trial, past_due, unpaid
+    renews_at = attrs.get("renews_at")
+
+    if not user_id:
+        # Fall back to matching by email if custom data wasn't carried through
+        email = attrs.get("user_email")
+        if email:
+            con = _get_db()
+            row = con.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+            con.close()
+            if row:
+                user_id = row["id"]
+    if not user_id:
+        return {"ok": True, "ignored": "no user_id and email not matched"}
+
+    # Translate event → new state
+    if event_name in ("subscription_created", "subscription_resumed", "subscription_payment_success"):
+        new_status = "active"
+        new_plan = "pro"
+    elif event_name == "subscription_updated":
+        new_status = status or "active"
+        new_plan = "pro" if new_status in ("active", "on_trial") else "trial"
+    elif event_name in ("subscription_cancelled", "subscription_expired"):
+        new_status = status or "cancelled"
+        new_plan = "trial"  # they can still access until renews_at; access logic handles grace
+    elif event_name == "subscription_payment_failed":
+        new_status = "past_due"
+        new_plan = "pro"  # keep access while we retry
+    else:
+        new_status = status
+        new_plan = None
+
+    con = _get_db()
+    if new_plan:
+        con.execute(
+            "UPDATE users SET subscription_id=?, subscription_status=?, subscription_renews_at=?, plan=? WHERE id=?",
+            (str(sub_id) if sub_id else None, new_status, renews_at, new_plan, user_id),
+        )
+    else:
+        con.execute(
+            "UPDATE users SET subscription_id=?, subscription_status=?, subscription_renews_at=? WHERE id=?",
+            (str(sub_id) if sub_id else None, new_status, renews_at, user_id),
+        )
+    con.commit(); con.close()
+    return {"ok": True, "event": event_name, "user_id": user_id, "status": new_status}
+
+
+@app.get("/api/billing/status")
+async def billing_status(user=Depends(verify_token)):
+    return _get_billing_status(user["user_id"])
+
 
 @app.post("/api/lab/autologin")
 async def lab_autologin(body: dict, user=Depends(verify_token)):
