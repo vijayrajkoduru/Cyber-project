@@ -673,21 +673,33 @@ function generatePDF(reportData) {
           try { doc.addImage(customLogo,"JPEG",cx-28,cy-20,56,40); } catch(e2){}
         }
       } else {
-        doc.setFillColor(5,5,5); doc.setDrawColor(...GREEN); doc.setLineWidth(0.3);
-        doc.circle(cx,cy,24,'FD');
-        doc.setDrawColor(...GREEN); doc.setLineWidth(2);
-        doc.circle(cx,cy,22,'S');
-        doc.setDrawColor(...DGREEN); doc.setLineWidth(0.5);
-        doc.circle(cx,cy,16,'S');
-        for(let i=0;i<6;i++){
-          const a=(Math.PI/3)*i;
-          doc.setDrawColor(...GREEN); doc.setLineWidth(1.8);
-          doc.line(cx+17*Math.cos(a),cy+17*Math.sin(a),cx+22*Math.cos(a),cy+22*Math.sin(a));
-        }
-        doc.setFont("Arial","bold"); doc.setFontSize(18); doc.setTextColor(...GREEN);
-        doc.text("CS",cx,cy+4,{align:"center"});
-        doc.setFont("Arial","normal"); doc.setFontSize(4.5); doc.setTextColor(...GREEN);
-        doc.text("CYBER",cx,cy+11,{align:"center"});
+        // VulnusLab default cover branding — shield + wordmark (drawn programmatically)
+        const BLUE = [59,130,246], DBLUE = [29,78,216], PURPLE = [139,92,246];
+        // Shield outline (rounded top, pointed bottom)
+        doc.setFillColor(15,23,42);
+        doc.setDrawColor(...BLUE); doc.setLineWidth(0.8);
+        // Shield path approximated with lines
+        const sx = cx, sy = cy - 14, w = 18, h = 22;
+        doc.lines([
+          [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
+          [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
+          [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
+        ], sx-w*0.45, sy-h*0.4, [1,1], 'FD');
+        // Inner highlight ring
+        doc.setDrawColor(...PURPLE); doc.setLineWidth(0.3);
+        doc.lines([
+          [w*0.36,0],[w*0.44,h*0.12],[0,h*0.4],
+          [-w*0.44,h*0.4],[-w*0.44,-h*0.32],[0,-h*0.08],[w*0.44,-h*0.32]
+        ], sx-w*0.36, sy-h*0.32, [1,1], 'S');
+        // V monogram
+        doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(...BLUE);
+        doc.text("V", sx, sy + 2, {align:"center"});
+        // Wordmark below the shield
+        doc.setFont("helvetica","bold"); doc.setFontSize(11);
+        doc.setTextColor(241,245,249);
+        doc.text("VULNUS", sx - 2, cy + 18, {align:"right"});
+        doc.setTextColor(...BLUE);
+        doc.text("LAB", sx - 1, cy + 18, {align:"left"});
       }
     }
     y = 72;
@@ -707,8 +719,9 @@ function generatePDF(reportData) {
         rrect(margin+48,y+1.5,28,4,1,RED);
         txt("CONFIDENTIAL",margin+50,y+5,7,WHITE,true);
       } else if(r[1]==="__REPORTER__"){
-        txt(reporterName||"Security Analyst",margin+48,y+4.5,8.5,DARK,true);
-        txt(reporterRole||"Penetration Tester",margin+48,y+9,7,GRAY,false);
+        // Use configured name if set; otherwise honest default that signals this is automated.
+        txt(reporterName||"VulnusLab Automated Pentest",margin+48,y+4.5,8.5,DARK,true);
+        txt(reporterRole||"Security Assessment Engine · vulnuslab.com",margin+48,y+9,7,GRAY,false);
       } else {
         txt(r[1],margin+48,y+(rh/2)+1.5,8.5,DARK);
       }
@@ -810,11 +823,15 @@ function generatePDF(reportData) {
       };
       for(let i=0;i<toolsUsed.length;i++){
         const t=toolsUsed[i];
-        if(y>=270){
-          const rem=toolsUsed.length-i;
-          fillR(margin,y,contentW,6,LIGHT);
-          txt(`+${rem} more tool${rem>1?"s":""} used in this assessment`,margin+4,y+4.5,7,GRAY);
-          y+=6; break;
+        // Continue tools on a new page instead of truncating with "+N more"
+        if(y>=280){
+          newPage(); y = 20;
+          // Re-draw the column header on the new page so it stays readable
+          fillR(margin,y,contentW,7,DARK);
+          txt("TOOL",margin+3,y+4.8,8,WHITE,true);
+          txt("PURPOSE",margin+43,y+4.8,8,WHITE,true);
+          txt("COST",margin+155,y+4.8,8,WHITE,true);
+          y+=7;
         }
         const info=toolInfo[t]||["Security Tool","FREE"];
         fillR(margin,y,contentW,6,i%2===0?LIGHT:WHITE);
@@ -1196,8 +1213,16 @@ function generatePDF(reportData) {
         doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(...WHITE);
         doc.text(status,margin+75,y+5);
         txt(c.owasp,margin+96,y+5,7.5,GRAY);
-        const detail = isVuln?(c.res.findings&&c.res.findings[0]?c.res.findings[0].detail.substring(0,55):"Vulnerability confirmed")
-          :hasRealFinds?(c.res.findings[0].detail.substring(0,55)):"No vulnerability detected";
+        const _truncate = (s, n) => {
+          if (!s) return "";
+          if (s.length <= n) return s;
+          // Cut at last word boundary before n, then add ellipsis
+          const cut = s.substring(0, n);
+          const lastSpace = cut.lastIndexOf(" ");
+          return (lastSpace > n*0.7 ? cut.substring(0, lastSpace) : cut) + "…";
+        };
+        const detail = isVuln?(c.res.findings&&c.res.findings[0]?_truncate(c.res.findings[0].detail,72):"Vulnerability confirmed")
+          :hasRealFinds?_truncate(c.res.findings[0].detail,72):"No vulnerability detected";
         txt(detail,margin+118,y+5,7.5,DARK);
         y+=7;
       });
@@ -1215,7 +1240,15 @@ function generatePDF(reportData) {
     }
     y+=4;
     // Detailed findings for vulnerable advanced checks
-    advRun.filter(c=>c.res&&(c.res.vulnerable||c.res.total>0)).forEach(c=>{
+    // (Skip checks whose only findings are INFO — those are "nothing here" notices that just bloat the report)
+    advRun.filter(c=>{
+      if(!c.res) return false;
+      if(c.res.vulnerable === true) return true;
+      if(c.res.allowed_methods && c.res.allowed_methods.length>0) return true;
+      if(c.res.discovered && c.res.discovered.length>0) return true;
+      if(Array.isArray(c.res.findings) && c.res.findings.some(f=>f.severity && f.severity!=="INFO")) return true;
+      return false;
+    }).forEach(c=>{
       // Calculate full section height so table never splits mid-page
       const rowsH = c.res.allowed_methods ? 8 + c.res.allowed_methods.length * 7 + 6
                   : c.res.discovered      ? 8 + Math.min(c.res.discovered.length,20) * 7 + 6
@@ -1281,8 +1314,18 @@ function generatePDF(reportData) {
       return true;
     });
 
+    // Decide whether to show the CVE column at all — only if at least one finding has a real CVE.
+    // Most findings are configuration issues (missing headers, etc.) without a CVE, so the column
+    // is almost always all "N/A" — looks like a labeling bug. Hide it cleanly when unused.
+    const showCveCol = realF.some(f => f && f.cve && f.cve !== "N/A" && f.cve.match(/CVE-\d+/i));
+
     if(realF.length>0){
-      y = tableHeader(["#","SEVERITY","CVE","CWE","CVSS","OWASP"],[8,24,34,46,14,54],y);
+      if (showCveCol) {
+        y = tableHeader(["#","SEVERITY","CVE","CWE","CVSS","OWASP"],[8,24,34,46,14,54],y);
+      } else {
+        // Widen CWE + OWASP to fill the freed space — cleaner look
+        y = tableHeader(["#","SEVERITY","CWE","CVSS","OWASP"],[8,28,68,18,58],y);
+      }
       realF.forEach((f,idx)=>{
         const dl=doc.splitTextToSize(String(f.detail||""),contentW-8);
         const rl=doc.splitTextToSize(String(f.remediation||"Apply security hardening."),contentW-22);
@@ -1293,17 +1336,27 @@ function generatePDF(reportData) {
         hline(margin,y,pageW-margin,y,BORDER,0.2);
         hline(margin,y,margin,y+needed,bg,1.5);
 
-        // Row 1
+        // Row 1 — column X positions depend on whether CVE column is shown
         txt(String(idx+1)+".",margin+2,y+6,7.5,GRAY,true);
         rrect(margin+11,y+2,20,5,1,lt);
         doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...bg);
         doc.text(f.severity,margin+12,y+6);
-        txt(f.cve&&f.cve!=="N/A"?f.cve:"N/A",margin+35,y+6,7,RED,true);
-        doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...PURPLE);
-        doc.text((f.cwe||"N/A")+(f.cwe_name?" - "+f.cwe_name.substring(0,18):""),margin+71,y+6);
-        txt(f.cvss||"0.0",margin+117,y+6,8,bg,true);
-        doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
-        doc.text((f.owasp||"").substring(0,26),margin+133,y+6);
+
+        if (showCveCol) {
+          txt(f.cve||"N/A",margin+35,y+6,7,RED,true);
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...PURPLE);
+          doc.text((f.cwe||"N/A")+(f.cwe_name?" - "+f.cwe_name.substring(0,18):""),margin+71,y+6);
+          txt(f.cvss||"0.0",margin+117,y+6,8,bg,true);
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
+          doc.text((f.owasp||"").substring(0,26),margin+133,y+6);
+        } else {
+          // No CVE column — shift CWE/CVSS/OWASP left for a wider, cleaner layout
+          doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...PURPLE);
+          doc.text((f.cwe||"N/A")+(f.cwe_name?" - "+f.cwe_name.substring(0,28):""),margin+38,y+6);
+          txt(f.cvss||"0.0",margin+115,y+6,8,bg,true);
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
+          doc.text((f.owasp||"").substring(0,30),margin+131,y+6);
+        }
 
         // Row 2 - detail (all lines)
         doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
@@ -1373,14 +1426,15 @@ function generatePDF(reportData) {
       y+=7;
     });
     // End-of-report block — placed right after last recommendation row
-    chk(30);
+    chk(38);
     const bY = y+8;
-    fillR(margin,bY,contentW,22,LBLUE);
-    fillR(margin,bY,3,22,BLUE);
-    txt("— END OF REPORT —",pageW/2,bY+9,10,BLUE,true,"center");
-    txt("Generated by automated security scanning on Kali Linux. All findings require manual verification.",pageW/2,bY+15.5,6,GRAY,false,"center");
-    txt("This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,bY+20,6,GRAY,false,"center");
-    y=bY+22;
+    fillR(margin,bY,contentW,30,LBLUE);
+    fillR(margin,bY,3,30,BLUE);
+    txt("— END OF REPORT —",pageW/2,bY+8,10,BLUE,true,"center");
+    txt("Generated by VulnusLab — automated security scanning powered by Kali Linux.",pageW/2,bY+14,6.5,GRAY,false,"center");
+    txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,bY+18,6,GRAY,false,"center");
+    txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,bY+25,7,BLUE,true,"center");
+    y=bY+30;
 
     // ─── BORDER + FOOTER ALL PAGES ───────────────────────────────
     const total=doc.internal.getNumberOfPages();
@@ -1390,7 +1444,7 @@ function generatePDF(reportData) {
       doc.setDrawColor(59,130,246); doc.setLineWidth(1.2);
       doc.rect(0,0,210,297,'S');
       if(i>=2){
-        txt((companyName||"VulnusLab")+" | CONFIDENTIAL",margin,290,6.5,GRAY);
+        txt((companyName||"VulnusLab")+" | CONFIDENTIAL  ·  vulnuslab.com",margin,290,6.5,GRAY);
         txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
       }
     }
