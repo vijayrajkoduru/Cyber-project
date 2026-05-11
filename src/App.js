@@ -8462,14 +8462,14 @@ export default function App() {
       <style>{CSS}</style>
 
       <div style={{width:280,background:"#0a0f1e",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
-        <div style={{padding:"8px 0 10px",borderBottom:"1px solid #1e293b",flexShrink:0,background:"#0a0f1e"}}>
-          <div style={{display:"flex",justifyContent:"center",marginBottom:0}}>
-            <img src={LOGO} alt="logo" style={{width:80,height:80,objectFit:"contain",display:"block"}}/>
-          </div>
-          {/* CYBERSECURITY */}
-          <div style={{textAlign:"center",marginBottom:8}}>
-            <span style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#ffffff"}}>VULNUS</span>
-            <span style={{fontSize:16,fontWeight:900,letterSpacing:2,color:"#3b82f6"}}>LAB</span>
+        <div style={{padding:"6px 0 8px",borderBottom:"1px solid #1e293b",flexShrink:0,background:"#0a0f1e"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 12px"}}>
+            <img src={LOGO} alt="logo" style={{width:48,height:48,objectFit:"contain",display:"block",flexShrink:0}}/>
+            <div>
+              <div style={{fontSize:15,fontWeight:900,letterSpacing:2,lineHeight:1.1}}>
+                <span style={{color:"#ffffff"}}>VULNUS</span><span style={{color:"#3b82f6"}}>LAB</span>
+              </div>
+            </div>
           </div>
           {/* Tagline — one tab space below */}
           <div style={{marginBottom:4,paddingTop:0}}><Tagline size={9}/></div>
