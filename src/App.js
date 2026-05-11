@@ -8395,11 +8395,25 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Nuclear logout — wipe ALL local state so the next user on this browser
+    // starts with a completely fresh dashboard. No scan caches, no target history,
+    // no module state, no auth tokens, no API keys persist between sessions.
+    try {
+      // Wipe localStorage entirely except cyberApiUrl (deployment-level setting,
+      // not user-specific — used by the app to know which backend to talk to)
+      const preserve = {};
+      const apiUrlSaved = localStorage.getItem("cyberApiUrl");
+      if (apiUrlSaved) preserve.cyberApiUrl = apiUrlSaved;
+      localStorage.clear();
+      Object.entries(preserve).forEach(([k, v]) => localStorage.setItem(k, v));
+      // Also wipe sessionStorage (any one-tab cached scan results)
+      sessionStorage.clear();
+    } catch {}
     setToken(null); setRole(""); setUsername(""); setPlan("trial");
-    localStorage.removeItem("cyberToken");
-    localStorage.removeItem("cyberRole");
-    localStorage.removeItem("cyberUser");
-    localStorage.removeItem("cyberPlan");
+    // Force a full page reload so every React component remounts with empty state.
+    // This guarantees no in-memory scan results, history, or module state leak
+    // to the next user on the same browser.
+    setTimeout(() => { window.location.replace("/"); }, 30);
   };
 
   const [trialInfo, setTrialInfo] = useState(null);
