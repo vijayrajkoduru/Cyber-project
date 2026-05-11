@@ -819,14 +819,33 @@ function Contact() {
   const isMobile = useIsMobile();
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", plan: "trial", message: "" });
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const inp = { width: "100%", background: "#0f172a", border: `1px solid ${C.border}`, borderRadius: 10, padding: "13px 16px", color: C.text, fontSize: 14, outline: "none", fontFamily: "Inter,sans-serif", boxSizing: "border-box", transition: "border-color 0.2s" };
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    const subject = `[${form.plan.toUpperCase()}] VulnusLab Access — ${form.name}`;
-    const body = `Name: ${form.name}\nEmail: ${form.email}\nPhone: ${form.phone}\nCompany: ${form.company || "N/A"}\nPlan: ${form.plan}\n\nMessage:\n${form.message}`;
-    window.location.href = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setSent(true);
+    setSubmitting(true);
+    setError("");
+    const data = new URLSearchParams();
+    data.append("form-name", "contact");
+    Object.entries(form).forEach(([k, v]) => data.append(k, v));
+    try {
+      const res = await fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: data.toString(),
+      });
+      if (res.ok) {
+        setSent(true);
+      } else {
+        setError(`Submission failed (HTTP ${res.status}). Please email ${CONTACT_EMAIL} directly.`);
+      }
+    } catch (err) {
+      setError(`Network error. Please email ${CONTACT_EMAIL} directly.`);
+    } finally {
+      setSubmitting(false);
+    }
   };
   return (
     <section id="contact" style={{ padding: "100px 24px", background: C.card }}>
@@ -841,35 +860,44 @@ function Contact() {
             <div style={{ background: "#052e16", border: "2px solid #166534", borderRadius: 20, padding: 60, textAlign: "center" }}>
               <div style={{ fontSize: 64, marginBottom: 20 }}>✅</div>
               <h3 style={{ fontSize: 26, fontWeight: 800, color: "#4ade80", marginBottom: 12 }}>Request Received!</h3>
-              <p style={{ color: C.muted, fontSize: 16, lineHeight: 1.8 }}>We'll create your account and send credentials to <strong style={{ color: C.text }}>{form.email}</strong> within 30 minutes.</p>
+              <p style={{ color: C.muted, fontSize: 16, lineHeight: 1.8 }}>Thanks {form.name || "there"} — we got your request. We'll reply to <strong style={{ color: C.text }}>{form.email}</strong> within 24 hours from <strong style={{ color: C.text }}>support@vulnuslab.com</strong>.</p>
             </div>
           </FadeIn>
         ) : (
           <FadeIn>
-            <form onSubmit={submit} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 20, padding: isMobile ? 20 : 44 }}>
+            <form
+              name="contact"
+              method="POST"
+              data-netlify="true"
+              netlify-honeypot="bot-field"
+              onSubmit={submit}
+              style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 20, padding: isMobile ? 20 : 44 }}
+            >
+              <input type="hidden" name="form-name" value="contact" />
+              <input type="hidden" name="bot-field" />
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Full Name *</label>
-                  <input style={inp} value={form.name} onChange={e => set("name", e.target.value)} placeholder="John Smith" required />
+                  <input name="name" style={inp} value={form.name} onChange={e => set("name", e.target.value)} placeholder="John Smith" required />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Email *</label>
-                  <input style={inp} type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="john@company.com" required />
+                  <input name="email" style={inp} type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="john@company.com" required />
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Phone *</label>
-                  <input style={inp} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98765 43210" required />
+                  <input name="phone" style={inp} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98765 43210" required />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Company</label>
-                  <input style={inp} value={form.company} onChange={e => set("company", e.target.value)} placeholder="Optional" />
+                  <input name="company" style={inp} value={form.company} onChange={e => set("company", e.target.value)} placeholder="Optional" />
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Plan *</label>
-                <select style={{ ...inp, cursor: "pointer" }} value={form.plan} onChange={e => set("plan", e.target.value)}>
+                <select name="plan" style={{ ...inp, cursor: "pointer" }} value={form.plan} onChange={e => set("plan", e.target.value)}>
                   <option value="trial">🆓 Trial — 7 Days Free (No payment needed)</option>
                   <option value="pro">⚡ Pro — All 51 Scanners</option>
                   <option value="enterprise">🏢 Enterprise — Team Access</option>
@@ -877,10 +905,15 @@ function Contact() {
               </div>
               <div style={{ marginBottom: 24 }}>
                 <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Message</label>
-                <textarea style={{ ...inp, minHeight: 100, resize: "vertical" }} value={form.message} onChange={e => set("message", e.target.value)} placeholder="Tell us your use case (optional)" />
+                <textarea name="message" style={{ ...inp, minHeight: 100, resize: "vertical" }} value={form.message} onChange={e => set("message", e.target.value)} placeholder="Tell us your use case (optional)" />
               </div>
-              <button type="submit" className="btn-primary" style={{ width: "100%", background: "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", border: "none", padding: "16px", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 24px rgba(59,130,246,0.4)", fontFamily: "Inter,sans-serif" }}>
-                🚀 Request Access Now
+              {error && (
+                <div style={{ background: "#1c0000", border: "1px solid #7f1d1d", borderRadius: 10, padding: "12px 16px", marginBottom: 16, color: "#f87171", fontSize: 13 }}>
+                  {error}
+                </div>
+              )}
+              <button type="submit" disabled={submitting} className="btn-primary" style={{ width: "100%", background: submitting ? "#475569" : "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", border: "none", padding: "16px", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: submitting ? "wait" : "pointer", boxShadow: "0 4px 24px rgba(59,130,246,0.4)", fontFamily: "Inter,sans-serif" }}>
+                {submitting ? "Sending..." : "🚀 Request Access Now"}
               </button>
               <p style={{ textAlign: "center", fontSize: 13, color: C.muted, marginTop: 16 }}>
                 Or email directly: <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: C.blue, textDecoration: "none", fontWeight: 600 }}>{CONTACT_EMAIL}</a>
