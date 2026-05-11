@@ -277,6 +277,17 @@ function TrustBar() {
 }
 
 // ── DEMO VIDEO SECTION ────────────────────────────────────────────
+const DEMO_PHASES = [
+  { name: "WAF Detection",       tool: "wafw00f",  result: "secure",   badge: "SECURE",     color: "#22c55e", t: 800  },
+  { name: "Tech Fingerprinting", tool: "whatweb",  result: "info",     badge: "PHP/Apache",  color: "#3b82f6", t: 1600 },
+  { name: "Port Scanning",       tool: "nmap",     result: "secure",   badge: "SECURE",     color: "#22c55e", t: 2600 },
+  { name: "SSL/TLS Analysis",    tool: "ssl",      result: "secure",   badge: "Grade A",    color: "#22c55e", t: 3400 },
+  { name: "XSS Testing",         tool: "xss",      result: "vuln",     badge: "VULNERABLE", color: "#ef4444", t: 4400 },
+  { name: "SQL Injection",       tool: "sqlmap",   result: "vuln",     badge: "VULNERABLE", color: "#ef4444", t: 5400 },
+  { name: "Header Security",     tool: "headers",  result: "warn",     badge: "6 FINDINGS", color: "#f59e0b", t: 6200 },
+  { name: "CSRF Testing",        tool: "csrf",     result: "secure",   badge: "SECURE",     color: "#22c55e", t: 7000 },
+];
+
 function Demo() {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState([]);
@@ -284,27 +295,33 @@ function Demo() {
   const [termLines, setTermLines] = useState([]);
   const [finished, setFinished] = useState(false);
   const [step, setStep] = useState(0);
+  const timeoutsRef = useRef([]);
 
-  const phases = [
-    { name: "WAF Detection",       tool: "wafw00f",  result: "secure",   badge: "SECURE",     color: "#22c55e", t: 800  },
-    { name: "Tech Fingerprinting", tool: "whatweb",  result: "info",     badge: "PHP/Apache",  color: "#3b82f6", t: 1600 },
-    { name: "Port Scanning",       tool: "nmap",     result: "secure",   badge: "SECURE",     color: "#22c55e", t: 2600 },
-    { name: "SSL/TLS Analysis",    tool: "ssl",      result: "secure",   badge: "Grade A",    color: "#22c55e", t: 3400 },
-    { name: "XSS Testing",         tool: "xss",      result: "vuln",     badge: "VULNERABLE", color: "#ef4444", t: 4400 },
-    { name: "SQL Injection",       tool: "sqlmap",   result: "vuln",     badge: "VULNERABLE", color: "#ef4444", t: 5400 },
-    { name: "Header Security",     tool: "headers",  result: "warn",     badge: "6 FINDINGS", color: "#f59e0b", t: 6200 },
-    { name: "CSRF Testing",        tool: "csrf",     result: "secure",   badge: "SECURE",     color: "#22c55e", t: 7000 },
-  ];
+  const clearAllTimeouts = () => {
+    timeoutsRef.current.forEach(id => clearTimeout(id));
+    timeoutsRef.current = [];
+  };
+
+  useEffect(() => clearAllTimeouts, []);
+
+  const schedule = (fn, ms) => {
+    const id = setTimeout(() => {
+      timeoutsRef.current = timeoutsRef.current.filter(x => x !== id);
+      fn();
+    }, ms);
+    timeoutsRef.current.push(id);
+  };
 
   const startDemo = () => {
+    clearAllTimeouts();
     setRunning(true); setDone([]); setActive(0); setTermLines([]); setFinished(false); setStep(1);
     setTermLines([{ text: "$ Starting pentest on http://testphp.vulnweb.com (51 phases)", color: C.blue }]);
-    phases.forEach((ph, i) => {
-      setTimeout(() => {
+    DEMO_PHASES.forEach((ph, i) => {
+      schedule(() => {
         setActive(i);
         setTermLines(p => [...p, { text: `[*] Phase ${i+1}/8: Running ${ph.tool}...`, color: C.muted }]);
       }, ph.t - 400);
-      setTimeout(() => {
+      schedule(() => {
         setDone(p => [...p, i]);
         setActive(i + 1);
         const col = ph.result === "vuln" ? "#f87171" : ph.result === "warn" ? "#fb923c" : "#4ade80";
@@ -313,14 +330,14 @@ function Demo() {
         if (ph.result === "vuln") setStep(2);
       }, ph.t);
     });
-    setTimeout(() => {
+    schedule(() => {
       setActive(-1); setRunning(false); setFinished(true); setStep(3);
       setTermLines(p => [...p, { text: "✓ Pentest complete — 2 CRITICAL, 1 HIGH, 0 MEDIUM", color: "#22c55e" }]);
       setTermLines(p => [...p, { text: "📄 PDF Report generated!", color: C.blue }]);
     }, 7800);
   };
 
-  const reset = () => { setRunning(false); setDone([]); setActive(-1); setTermLines([]); setFinished(false); setStep(0); };
+  const reset = () => { clearAllTimeouts(); setRunning(false); setDone([]); setActive(-1); setTermLines([]); setFinished(false); setStep(0); };
 
   const demoSteps = [
     { n: "01", label: "Enter Target URL", icon: "🎯" },
@@ -424,7 +441,7 @@ function Demo() {
 
                   {/* Phase cards */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    {phases.map((ph, i) => {
+                    {DEMO_PHASES.map((ph, i) => {
                       const isDone = done.includes(i);
                       const isActive = active === i;
                       const leftColor = isDone ? (ph.result === "vuln" ? "#ef4444" : ph.result === "warn" ? "#f59e0b" : "#22c55e") : isActive ? C.blue : "#1e293b";

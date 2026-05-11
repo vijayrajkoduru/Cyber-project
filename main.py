@@ -15,8 +15,15 @@ from contextvars import ContextVar
 _AUTH_CTX: ContextVar = ContextVar('auth_req', default=None)
 _USER_CTX: ContextVar = ContextVar('user_id', default="anonymous")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "oscp-jwt-secret-key-2024")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is required and must not be empty.")
 DB_PATH = os.getenv("DB_PATH", "/app/data/users.db")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")  # required on first init only
+CORS_ORIGINS = [o.strip() for o in os.getenv(
+    "CORS_ORIGINS",
+    "https://app.vulnuslab.com,https://vulnuslab.com,http://localhost:3000"
+).split(",") if o.strip()]
 
 def _get_db():
     con = sqlite3.connect(DB_PATH, timeout=30)
@@ -57,29 +64,28 @@ def _init_db():
             timestamp TEXT
         );
     """)
-    # Migrate existing DBs — add new columns if missing
-    for col, defval in [("expires_at","NULL"),("status","'active'"),("phone","NULL"),("note","NULL")]:
-        try: con.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {defval}")
-        except: pass
-    try: con.execute("CREATE TABLE IF NOT EXISTS renewal_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, action TEXT NOT NULL, done_by TEXT NOT NULL, timestamp TEXT NOT NULL, note TEXT DEFAULT NULL)")
-    except: pass
+    # Migrate existing DBs — add new columns if missing.
+    # Each statement is hardcoded (no f-string interpolation) to avoid SQL identifier injection patterns.
+    for stmt in [
+        "ALTER TABLE users ADD COLUMN expires_at TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
+        "ALTER TABLE users ADD COLUMN phone TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN note TEXT DEFAULT NULL",
+    ]:
+        try: con.execute(stmt)
+        except sqlite3.OperationalError: pass
     con.commit()
     now = datetime.datetime.utcnow().isoformat()
-    row = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    if row == 0:
-        admin_id = str(uuid.uuid4())
-        pw_hash = _bcrypt.hashpw(b"admin123", _bcrypt.gensalt()).decode()
-        con.execute("INSERT INTO users (id,username,email,password_hash,plan,created_at,status) VALUES (?,?,?,?,?,?,?)",
-            (admin_id, "admin", "admin@oscp.local", pw_hash, "pro", now, "active"))
-        con.commit()
-    # Always ensure ADMIN superuser exists
+    # Seed ADMIN superuser only on first init, only if ADMIN_PASSWORD env var is set.
     existing = con.execute("SELECT id FROM users WHERE username='ADMIN'").fetchone()
     if not existing:
-        superadmin_id = str(uuid.uuid4())
-        pw_hash = _bcrypt.hashpw(b"CyberAdmin@2025", _bcrypt.gensalt()).decode()
-        con.execute("INSERT INTO users (id,username,email,password_hash,plan,created_at,status) VALUES (?,?,?,?,?,?,?)",
-            (superadmin_id, "ADMIN", "admin@cyber.dev", pw_hash, "superadmin", now, "active"))
-        con.commit()
+        if ADMIN_PASSWORD:
+            superadmin_id = str(uuid.uuid4())
+            pw_hash = _bcrypt.hashpw(ADMIN_PASSWORD.encode(), _bcrypt.gensalt()).decode()
+            con.execute("INSERT INTO users (id,username,email,password_hash,plan,created_at,status) VALUES (?,?,?,?,?,?,?)",
+                (superadmin_id, "ADMIN", "admin@cyber.dev", pw_hash, "superadmin", now, "active"))
+            con.commit()
+        # else: skip — admin must be created out-of-band via a managed deployment step
     con.close()
 
 _init_db()
@@ -88,7 +94,7 @@ app = FastAPI(title="OSCP Dashboard API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -184,8 +190,6 @@ def _make_req_headers(req=None):
             h['Authorization'] = f'Bearer {auth.auth_bearer}'
     return h
 
-SCAN_HISTORY = []
-
 def save_scan(scan_id, tool, target, result):
     user_id = _USER_CTX.get()
     ts = datetime.datetime.utcnow().isoformat()
@@ -197,9 +201,6 @@ def save_scan(scan_id, tool, target, result):
         con.commit(); con.close()
     except Exception:
         pass
-    SCAN_HISTORY.append({"id":scan_id,"tool":tool,"target":target,"timestamp":ts,"summary":summary,"user_id":user_id})
-    if len(SCAN_HISTORY) > 500:
-        SCAN_HISTORY.pop(0)
 
 async def run_tool(cmd, timeout=60):
     cmd_str = " ".join(str(c) for c in cmd)
@@ -372,8 +373,7 @@ async def get_history(user=Depends(verify_token)):
         con.close()
         return {"history": [dict(r) for r in rows]}
     except Exception:
-        history = list(reversed(SCAN_HISTORY)) if is_superadmin else [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
-        return {"history": history}
+        return {"history": []}
 
 @app.get("/api/scans")
 async def get_scans(user=Depends(verify_token)):
@@ -389,8 +389,7 @@ async def get_scans(user=Depends(verify_token)):
         scans = [dict(r) for r in rows]
         return {"scans": scans, "total": len(scans)}
     except Exception:
-        scans = list(reversed(SCAN_HISTORY)) if is_superadmin else [s for s in reversed(SCAN_HISTORY) if s.get("user_id") == uid]
-        return {"scans": scans, "total": len(scans)}
+        return {"scans": [], "total": 0}
 
 def _admin_only(user):
     if user.get("username") != "ADMIN":

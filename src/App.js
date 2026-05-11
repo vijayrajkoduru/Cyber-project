@@ -1,7 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 import { jsPDF } from "jspdf";
 
-const API = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+// Resolves the API base URL. Production builds (no explicit port) use same-origin so
+// requests go through the nginx proxy. Dev (CRA on :3000) defaults to localhost:8000.
+// Override via localStorage.cyberApiUrl for custom backends.
+export const getApiUrl = () => {
+  const stored = localStorage.getItem("cyberApiUrl");
+  if (stored) return stored;
+  const port = window.location.port;
+  if (port === "" || port === "80" || port === "443") return "";
+  return `http://${window.location.hostname}:8000`;
+};
+export const getAuthToken = () => localStorage.getItem("cyberToken") || "";
+const API = getApiUrl();
 
 // PDF filename helpers — used by all report generators
 const _pdfFn = t => (t||"target").replace(/https?:\/\//,"").replace(/[^a-zA-Z0-9.\-]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"");
@@ -1758,6 +1769,11 @@ function WebAppModule(props) {
       try {
         const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, authCookie?{auth_cookie:authCookie}:{}, authBearer?{auth_bearer:authBearer}:{}, customWordlist?{wordlist:customWordlist}:{});
         const data = await api(ph.endpoint, "POST", body, token);
+        // Stop was clicked while this phase's request was in flight — discard the result.
+        if (stopRef.current) {
+          add("[!] Scan stopped by user during phase " + (idx+1) + ".");
+          break;
+        }
         results[ph.tool] = data;
         if (ph.tool==="sqlmap"  && data.vulnerable)  add("✗ SQL INJECTION FOUND — CRITICAL!");
         else if (ph.tool==="xss" && data.vulnerable) add("✗ XSS VULNERABILITY FOUND — CRITICAL!");
@@ -2858,7 +2874,7 @@ journalctl -u uvicorn -n 50
             <div style={{display:"flex", gap:24}}>
               <div><span style={{color:DIM, fontSize:12}}>Username: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin</code></div>
               <div><span style={{color:DIM, fontSize:12}}>Password: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin123</code></div>
-              <div><span style={{color:DIM, fontSize:12}}>API URL: </span><code style={{color:G, fontSize:13}}>{(window.location.port===""||window.location.port==="80")?window.location.origin+"/api":"http://192.168.56.102:8000"}</code></div>
+              <div><span style={{color:DIM, fontSize:12}}>API URL: </span><code style={{color:G, fontSize:13}}>{getApiUrl() || (window.location.origin + "/api")}</code></div>
             </div>
           </div>
         </div>
@@ -3201,8 +3217,8 @@ function generateShellReport({title, icon, target, attacks, results}) {
 
 // ── SHARED MODULE SHELL ──────────────────────────────────────
 function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn}) {
-  const API = apiUrl || (window._cyberApi||((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000"));
-  const tok = token || localStorage.getItem("cyberToken")||"oscp-dashboard-token";
+  const API = apiUrl || getApiUrl();
+  const tok = token || getAuthToken();
   const [target, setTarget] = useState("");
   const [opts,   setOpts]   = useState({});
   const [loading,setLoading]= useState("");
@@ -3220,8 +3236,14 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${tok}`},
         body: JSON.stringify(body)
       });
-      const data = await r.json();
-      setResults(p=>({...p,[atk.id]:data}));
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || j.error || detail; } catch {}
+        setResults(p=>({...p,[atk.id]:{error: detail, status: r.status}}));
+      } else {
+        const data = await r.json();
+        setResults(p=>({...p,[atk.id]:data}));
+      }
     } catch(e) {
       setResults(p=>({...p,[atk.id]:{error:e.message}}));
     }
@@ -4630,7 +4652,7 @@ function ToolManagerModule({token}) {
   const [log,    setLog]    = useState([]);
   const [running,setRunning]= useState(false);
   const [status, setStatus] = useState({});
-  const apiUrl = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+  const apiUrl = getApiUrl();
 
   const TOOLS = [
     {cat:"System Update",    tools:["kali-update","apt-upgrade"]},
@@ -4654,7 +4676,7 @@ function ToolManagerModule({token}) {
   const checkStatus = async () => {
     try {
       const res = await fetch(`${apiUrl}/api/tools/status`, {
-        method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer oscp-dashboard-token`},
+        method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${token || getAuthToken()}`},
         body: JSON.stringify({})
       });
       const d = await res.json();
@@ -4666,7 +4688,7 @@ function ToolManagerModule({token}) {
     setRunning(true); setLog([`🚀 Starting: ${mode}...`]);
     try {
       const res = await fetch(`${apiUrl}/api/tools/install`, {
-        method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer oscp-dashboard-token`},
+        method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${token || getAuthToken()}`},
         body: JSON.stringify({mode})
       });
       const d = await res.json();
@@ -5171,6 +5193,8 @@ function ReconModule({token, onRunningChange}) {
         if (ph.tool==="shodan") body.api_key = localStorage.getItem("shodanApiKey")||"";
         if (ph.tool==="shodan" && !body.api_key) { add("⚠ Shodan: no API key — set it in Settings"); setDone(p=>[...p,i]); continue; }
         const data = await api(ph.endpoint,"POST",body,token);
+        // Stop was clicked while this phase's request was in flight — discard the result.
+        if (stopRef.current) { add("[!] Scan stopped by user during phase "+(idx+1)+"."); break; }
         results[ph.tool] = data;
         if      (ph.tool==="whois"      && data.registrar)   add("✓ Registrar: "+data.registrar);
         else if (ph.tool==="dns"        && data.records)     add("✓ DNS: "+Object.values(data.records).flat().length+" record(s) found");
@@ -6094,7 +6118,7 @@ function generateExploitReport({target, port, service, cve, msfModule, msfPayloa
 
 function ExploitModule({token, onRunningChange}) {
   const _notify = onRunningChange || (()=>{});
-  const apiUrl  = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+  const apiUrl  = getApiUrl();
 
   // Target config
   const [targetIP,     setTargetIP]    = useState(()=>localStorage.getItem("exp_targetIP")||"");
@@ -6102,7 +6126,7 @@ function ExploitModule({token, onRunningChange}) {
   const [lhost,        setLhost]       = useState(()=>{
     const saved = localStorage.getItem("exp_lhost");
     if(saved) return saved;
-    const url = localStorage.getItem("cyberApiUrl")||((window.location.port===""||window.location.port==="80")?window.location.origin:"http://192.168.56.102:8000");
+    const url = getApiUrl() || window.location.origin;
     const m = url.match(/https?:\/\/([^:/]+)/);
     return m ? m[1] : "";
   });
@@ -6760,7 +6784,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
 
   const post = async (ep, body={}) => {
     const r = await fetch(`${apiUrl}${ep}`,{method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer oscp-dashboard-token"},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${getAuthToken()}`},
       body:JSON.stringify(body)});
     return r.json();
   };
@@ -6854,7 +6878,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
 }
 
 function BufferOverflowModule({token}) {
-  const apiUrl = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+  const apiUrl = getApiUrl();
   const [phase,      setPhase]      = useState(1);
   const [log,        setLog]        = useState([]);
   const [running,    setRunning]    = useState(false);
@@ -6894,7 +6918,7 @@ function BufferOverflowModule({token}) {
   const call = async (ep, body) => {
     const r = await fetch(`${apiUrl}${ep}`, {
       method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer oscp-dashboard-token"},
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token || getAuthToken()}`},
       body: JSON.stringify(body)
     });
     return r.json();
@@ -7513,7 +7537,7 @@ function PasswordModule(props) {
 //  NETWORK ATTACKS MODULE
 // ═══════════════════════════════════════════════════════════════
 function NetworkAttacksModule({token}) {
-  const API = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+  const API = getApiUrl();
   const [target,    setTarget]    = useState("");
   const [gateway,   setGateway]   = useState("");
   const [iface,     setIface]     = useState("eth0");
@@ -7539,8 +7563,14 @@ function NetworkAttacksModule({token}) {
         method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
         body: JSON.stringify(body)
       });
-      const data = await r.json();
-      setResults(prev=>({...prev, [atk.id]: data}));
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || j.error || detail; } catch {}
+        setResults(prev=>({...prev, [atk.id]:{error: detail, status: r.status}}));
+      } else {
+        const data = await r.json();
+        setResults(prev=>({...prev, [atk.id]: data}));
+      }
     } catch(e) { setResults(prev=>({...prev, [atk.id]:{error:e.message}})); }
     setLoading("");
   };
@@ -7632,7 +7662,7 @@ function NetworkAttacksModule({token}) {
 //  SYSTEM EXPLOITATION MODULE
 // ═══════════════════════════════════════════════════════════════
 function SystemExploitModule({token}) {
-  const API = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+  const API = getApiUrl();
   const [target, setTarget] = useState("");
   const [lhost,  setLhost]  = useState("");
   const [lport,  setLport]  = useState("4444");
@@ -7655,8 +7685,14 @@ function SystemExploitModule({token}) {
       const r = await fetch(`${API}${atk.ep}`,{method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
         body:JSON.stringify(body)});
-      const data = await r.json();
-      setResults(prev=>({...prev,[atk.id]:data}));
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || j.error || detail; } catch {}
+        setResults(prev=>({...prev,[atk.id]:{error: detail, status: r.status}}));
+      } else {
+        const data = await r.json();
+        setResults(prev=>({...prev,[atk.id]:data}));
+      }
     } catch(e){setResults(prev=>({...prev,[atk.id]:{error:e.message}}));}
     setLoading("");
   };
@@ -7738,7 +7774,7 @@ function SystemExploitModule({token}) {
 //  CLOUD ATTACKS MODULE
 // ═══════════════════════════════════════════════════════════════
 function CloudAttacksModule({token}) {
-  const API = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+  const API = getApiUrl();
   const [target, setTarget]  = useState("");
   const [bucket, setBucket]  = useState("");
   const [region, setRegion]  = useState("us-east-1");
@@ -7759,8 +7795,14 @@ function CloudAttacksModule({token}) {
       const r = await fetch(`${API}${atk.ep}`,{method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
         body:JSON.stringify({target, bucket, region})});
-      const data = await r.json();
-      setResults(prev=>({...prev,[atk.id]:data}));
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || j.error || detail; } catch {}
+        setResults(prev=>({...prev,[atk.id]:{error: detail, status: r.status}}));
+      } else {
+        const data = await r.json();
+        setResults(prev=>({...prev,[atk.id]:data}));
+      }
     } catch(e){setResults(prev=>({...prev,[atk.id]:{error:e.message}}));}
     setLoading("");
   };
@@ -7840,7 +7882,7 @@ function CloudAttacksModule({token}) {
 //  AUTH ATTACKS MODULE
 // ═══════════════════════════════════════════════════════════════
 function AuthAttacksModule({token}) {
-  const API = localStorage.getItem("cyberApiUrl") || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+  const API = getApiUrl();
   const [target,   setTarget]   = useState("");
   const [username, setUsername] = useState("admin");
   const [hash,     setHash]     = useState("");
@@ -7865,8 +7907,14 @@ function AuthAttacksModule({token}) {
         headers: {"Content-Type":"application/json","Authorization":`Bearer ${token}`},
         body: JSON.stringify({target, username, hash, domain, port: parseInt(port)||445})
       });
-      const data = await r.json();
-      setResults(prev => ({...prev, [atk.id]: data}));
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || j.error || detail; } catch {}
+        setResults(prev => ({...prev, [atk.id]: {error: detail, status: r.status}}));
+      } else {
+        const data = await r.json();
+        setResults(prev => ({...prev, [atk.id]: data}));
+      }
     } catch(e) {
       setResults(prev => ({...prev, [atk.id]: {error: e.message}}));
     }
@@ -8015,7 +8063,7 @@ function MetasploitModule(props) {
 //  SETTINGS MODULE
 // ═══════════════════════════════════════════════════════════════
 function SettingsModule() {
-  const [apiUrl,     setApiUrl]     = useState(localStorage.getItem("cyberApiUrl")    || ((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000"));
+  const [apiUrl,     setApiUrl]     = useState(getApiUrl());
   const [shodanKey,  setShodanKey]  = useState(localStorage.getItem("shodanApiKey")   || "");
   const [vtKey,      setVtKey]      = useState(localStorage.getItem("vtApiKey")        || "");
   const [saved, setSaved] = useState(false);
@@ -8030,7 +8078,7 @@ function SettingsModule() {
 
   const reset = () => {
     localStorage.removeItem("cyberApiUrl");
-    setApiUrl((window.location.port===""||window.location.port==="80")?"":"http://192.168.56.102:8000");
+    setApiUrl(getApiUrl());
   };
 
   return (
