@@ -102,6 +102,13 @@ services:
     image: tleemcjr/metasploitable2
     container_name: lab_metasploitable
     restart: unless-stopped
+    # Keep the container alive after the startup script finishes — the upstream
+    # image runs `/bin/services.sh && bash`, and without an allocated TTY the
+    # interactive bash exits immediately, sending the container into a crash
+    # loop even though every service (FTP, Samba, IRC, Tomcat, vsftpd, etc.)
+    # is actually running fine. tty+stdin keeps bash open as PID 1.
+    tty: true
+    stdin_open: true
     networks:
       - oscp_net
 
