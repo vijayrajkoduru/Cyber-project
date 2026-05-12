@@ -6436,15 +6436,50 @@ function ExploitationModule({token, apiUrl}) {
   const compromisedCount = Object.values(results).filter(r=>r?.ok).length;
   const failedCount      = Object.values(results).filter(r=>r&&!r.ok).length;
   const notRunCount      = catalog.length - Object.keys(results).length;
-  const isInteractive    = activeShell?.exploit?.interactive === true;
-  const termTitle        = isInteractive ? "LIVE SHELL" : "EXTRACTED DATA";
-  const termIcon         = isInteractive ? "🐚" : "📊";
-  const termAccent       = isInteractive ? "#22c55e" : "#3b82f6";
-  const termAccentDark   = isInteractive ? "#052e16" : "#0c1c3a";
-  const termBorder       = isInteractive ? "#14532d" : "#1e3a8a";
+
+  // Sort + expand-row state for the table view
+  const [expandedId, setExpandedId] = useState(null);
+  const [sortKey, setSortKey]       = useState("cvss");
+  const [sortDir, setSortDir]       = useState("desc");
+
+  // Auto-expand the row whose exploit just ran (so the user sees the
+  // result/terminal without an extra click)
+  useEffect(() => {
+    if (activeShell?.exploit_id) setExpandedId(activeShell.exploit_id);
+  }, [activeShell?.exploit_id]);
+
+  const sortBy = (key) => {
+    if (sortKey === key) setSortDir(d => d==="asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(key === "cvss" || key === "status" ? "desc" : "asc"); }
+  };
+  const sortArrow = (key) => sortKey===key ? (sortDir==="asc"?" ▲":" ▼") : "";
+
+  // Stable, sortable view of the catalog
+  const sortedCatalog = [...catalog].sort((a, b) => {
+    let av, bv;
+    if (sortKey === "name")   { av=a.name; bv=b.name; }
+    else if (sortKey === "cvss")  { av=a.cvss; bv=b.cvss; }
+    else if (sortKey === "type")  { av=a.interactive?"SHELL":"DUMP"; bv=b.interactive?"SHELL":"DUMP"; }
+    else if (sortKey === "status"){
+      const sa = results[a.id], sb = results[b.id];
+      av = sa ? (sa.ok ? 0 : 1) : 2;
+      bv = sb ? (sb.ok ? 0 : 1) : 2;
+    } else { av=0; bv=0; }
+    const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+    return sortDir==="asc" ? cmp : -cmp;
+  });
+
+  // Shared table cell styles
+  const th  = (w, ta="left", clickable=false) => ({
+    padding:"12px 14px", textAlign:ta, fontSize:11, fontWeight:800,
+    color:"#94a3b8", letterSpacing:1.2, borderBottom:"1px solid #334155",
+    width:w, cursor:clickable?"pointer":"default", userSelect:"none",
+    whiteSpace:"nowrap",
+  });
+  const td  = (ta="left") => ({padding:"12px 14px", textAlign:ta, verticalAlign:"middle"});
 
   return (
-    <div className="fade" style={{maxWidth:1400, margin:"0 auto"}}>
+    <div className="fade" style={{maxWidth:1480, margin:"0 auto"}}>
       {/* ─── Compact header bar ─── */}
       <div style={{display:"flex", alignItems:"center", justifyContent:"space-between",
         padding:"16px 20px", marginBottom:20, borderRadius:10,
@@ -6460,26 +6495,20 @@ function ExploitationModule({token, apiUrl}) {
               EXPLOITATION
             </div>
             <div style={{fontSize:11, color:"#94a3b8", marginTop:4}}>
-              Verified-working CVEs · Direct-socket exploitation · Zero false positives
+              Click any row to expand · sort by clicking column headers · zero false positives
             </div>
           </div>
         </div>
         <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
           <span style={{padding:"6px 12px", fontSize:11, fontWeight:700,
             background:"rgba(34,197,94,0.12)", color:"#4ade80", borderRadius:6,
-            border:"1px solid rgba(34,197,94,0.3)"}}>
-            ✓ {compromisedCount} compromised
-          </span>
+            border:"1px solid rgba(34,197,94,0.3)"}}>✓ {compromisedCount} compromised</span>
           <span style={{padding:"6px 12px", fontSize:11, fontWeight:700,
             background:"rgba(220,38,38,0.12)", color:"#f87171", borderRadius:6,
-            border:"1px solid rgba(220,38,38,0.3)"}}>
-            ✗ {failedCount} failed
-          </span>
+            border:"1px solid rgba(220,38,38,0.3)"}}>✗ {failedCount} failed</span>
           <span style={{padding:"6px 12px", fontSize:11, fontWeight:700,
             background:"rgba(100,116,139,0.12)", color:"#94a3b8", borderRadius:6,
-            border:"1px solid rgba(100,116,139,0.3)"}}>
-            ○ {notRunCount} not run
-          </span>
+            border:"1px solid rgba(100,116,139,0.3)"}}>○ {notRunCount} not run</span>
           <button onClick={downloadReport}
             style={{padding:"8px 16px", fontSize:11, fontWeight:800, letterSpacing:1,
               background:"linear-gradient(135deg, #2563eb, #1d4ed8)",
@@ -6490,210 +6519,310 @@ function ExploitationModule({token, apiUrl}) {
         </div>
       </div>
 
-      {/* ─── Terminal / Data viewer (when active, shown ABOVE the grid so it's visible) ─── */}
-      {activeShell && (
-        <div style={{marginBottom:24, borderRadius:14, overflow:"hidden",
-          border:`2px solid ${termAccent}`,
-          boxShadow:`0 6px 30px ${isInteractive?"rgba(34,197,94,0.2)":"rgba(59,130,246,0.2)"}`}}>
-          {/* Terminal title bar */}
-          <div style={{padding:"14px 20px", background:termAccentDark,
-            borderBottom:`1px solid ${termBorder}`,
-            display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10}}>
-            <div style={{display:"flex", alignItems:"center", gap:14}}>
-              <span style={{fontSize:20}}>{termIcon}</span>
-              <div>
-                <div style={{fontSize:14, fontWeight:800, letterSpacing:1.5,
-                  color: isInteractive?"#86efac":"#93c5fd"}}>
-                  {termTitle}
-                </div>
-                <div style={{fontSize:11, color:"#94a3b8", marginTop:3,
-                  fontFamily:"'JetBrains Mono', monospace"}}>
-                  {activeShell.exploit?.name} · sid={activeShell.sid} ·
-                  <span style={{color: shellStatus==="live" ? "#4ade80" : shellStatus==="error" ? "#f87171" : "#fbbf24"}}>
-                    {" "}{shellStatus}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div style={{display:"flex", gap:8}}>
-              <button onClick={copyOutput}
-                style={{padding:"7px 14px", fontSize:11, fontWeight:700,
-                  background:"#1e293b", color:"#cbd5e1", border:"1px solid #334155",
-                  borderRadius:6, cursor:"pointer"}}>
-                📋 COPY
-              </button>
-              <button onClick={closeShell}
-                style={{padding:"7px 14px", fontSize:11, fontWeight:700,
-                  background:"#7f1d1d", color:"#fff", border:"none",
-                  borderRadius:6, cursor:"pointer"}}>
-                ✕ CLOSE
-              </button>
-            </div>
-          </div>
-
-          {/* Terminal body */}
-          <div ref={outRef} style={{padding:"20px 24px", background:"#000",
-            color: isInteractive ? "#4ade80" : "#bfdbfe",
-            fontFamily:"'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
-            fontSize:13, minHeight:380, maxHeight:560, overflowY:"auto",
-            whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.65}}>
-            {shellOutput || (isInteractive
-              ? "Waiting for shell output…\n"
-              : "Loading extracted data…\n")}
-          </div>
-
-          {/* Command input — interactive only */}
-          {isInteractive ? (
-            <div style={{padding:14, background:"#050a16", borderTop:"1px solid #1e293b",
-              display:"flex", gap:10, alignItems:"center"}}>
-              <span style={{color:"#4ade80", fontFamily:"monospace", fontSize:16, fontWeight:800}}>$</span>
-              <input ref={inputRef}
-                value={shellCmd} onChange={e=>setShellCmd(e.target.value)}
-                onKeyDown={onKeyDown}
-                placeholder="run a command on the remote host  (id · whoami · cat /etc/shadow · ls -la /root · ↑/↓ for history)"
-                autoComplete="off" name="exp-shell-cmd" data-form-type="other"
-                style={{flex:1, padding:"10px 12px", background:"#000",
-                  color:"#4ade80", border:"1px solid #14532d", borderRadius:6,
-                  fontFamily:"'JetBrains Mono', monospace", fontSize:13, outline:"none"}}/>
-              <button onClick={sendCmd}
-                style={{padding:"10px 24px",
-                  background:"linear-gradient(135deg, #22c55e, #16a34a)",
-                  color:"#000", fontWeight:800, letterSpacing:1.5,
-                  border:"none", borderRadius:6, cursor:"pointer", fontSize:12,
-                  boxShadow:"0 4px 12px rgba(34,197,94,0.3)"}}>
-                SEND
-              </button>
-            </div>
-          ) : (
-            <div style={{padding:"12px 20px", background:"#050a16", borderTop:"1px solid #1e293b",
-              fontSize:11, color:"#94a3b8", display:"flex", alignItems:"center", gap:8}}>
-              <span style={{fontSize:13}}>📊</span>
-              <span>One-shot data extraction — no interactive shell. Above is real data exfiltrated from the target. Use COPY to save it.</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── Catalog grid: 2 columns on wide, 1 on narrow ─── */}
-      <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(540px, 1fr))",
-        gap:18, marginBottom:24}}>
-        {catalog.map(e => {
-          const r = results[e.id];
-          const isRunning = running[e.id];
-          const stateBorder = r ? (r.ok ? "#22c55e" : "#dc2626") : "#1e293b";
-          const isActive = activeShell?.exploit_id === e.id;
-          return (
-            <div key={e.id} style={{
-              background:"linear-gradient(180deg, #0f172a 0%, #0a1224 100%)",
-              border:`1px solid ${isActive ? termAccent : stateBorder}`,
-              borderRadius:12, padding:20, position:"relative",
-              transition:"all 0.2s",
-              boxShadow: isActive
-                ? `0 0 24px ${isInteractive?"rgba(34,197,94,0.2)":"rgba(59,130,246,0.2)"}`
-                : (r?.ok ? "0 0 16px rgba(34,197,94,0.08)" : "none")}}>
-
-              {/* Card header */}
-              <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start",
-                marginBottom:12, gap:12}}>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{fontSize:16, fontWeight:800, color:"#f1f5f9", marginBottom:6,
-                    lineHeight:1.3}}>{e.name}</div>
-                  <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
-                    <span style={{padding:"3px 8px", fontSize:10, fontWeight:700,
-                      background:"#1e293b", color:"#cbd5e1", borderRadius:4,
-                      fontFamily:"'JetBrains Mono', monospace"}}>{e.cve}</span>
-                    <span style={{fontSize:11, color:"#64748b"}}>{e.category}</span>
-                    {e.interactive ? (
-                      <span style={{padding:"2px 8px", fontSize:9, fontWeight:800, color:"#86efac",
-                        background:"rgba(34,197,94,0.15)", borderRadius:4, letterSpacing:1}}>
-                        SHELL
+      {/* ─── Sortable exploit table ─── */}
+      <div style={{background:"#0a1224", border:"1px solid #1e293b", borderRadius:12,
+        overflow:"hidden"}}>
+        <table style={{width:"100%", borderCollapse:"collapse"}}>
+          <thead>
+            <tr style={{background:"#0f172a"}}>
+              <th style={th(40, "center")}>#</th>
+              <th style={th("auto", "left", true)} onClick={()=>sortBy("name")}>
+                EXPLOIT{sortArrow("name")}
+              </th>
+              <th style={th(150, "left")}>CVE</th>
+              <th style={th(70, "center", true)} onClick={()=>sortBy("cvss")}>
+                CVSS{sortArrow("cvss")}
+              </th>
+              <th style={th(70, "center", true)} onClick={()=>sortBy("type")}>
+                TYPE{sortArrow("type")}
+              </th>
+              <th style={th(200, "left")}>TARGET</th>
+              <th style={th(140, "center", true)} onClick={()=>sortBy("status")}>
+                STATUS{sortArrow("status")}
+              </th>
+              <th style={th(120, "center")}>ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedCatalog.map((e, idx) => {
+              const r = results[e.id];
+              const isRunning = running[e.id];
+              const isExpanded = expandedId === e.id;
+              const isActive = activeShell?.exploit_id === e.id;
+              const leftBorder = r ? (r.ok ? "#22c55e" : "#dc2626") : "#334155";
+              const baseBg = idx % 2 ? "rgba(255,255,255,0.015)" : "transparent";
+              const rowBg = isExpanded ? "rgba(220,38,38,0.06)" : baseBg;
+              return (
+                <React.Fragment key={e.id}>
+                  <tr onClick={()=>setExpandedId(isExpanded ? null : e.id)}
+                    style={{background:rowBg, borderBottom:"1px solid #1e293b",
+                      cursor:"pointer", transition:"background 0.15s"}}
+                    onMouseEnter={(ev)=>{ev.currentTarget.style.background="rgba(59,130,246,0.06)";}}
+                    onMouseLeave={(ev)=>{ev.currentTarget.style.background=rowBg;}}>
+                    <td style={{...td("center"), borderLeft:`3px solid ${leftBorder}`}}>
+                      <span style={{color:"#64748b", fontFamily:"monospace", fontSize:11}}>
+                        {String(idx+1).padStart(2,"0")}
                       </span>
-                    ) : (
-                      <span style={{padding:"2px 8px", fontSize:9, fontWeight:800, color:"#93c5fd",
-                        background:"rgba(59,130,246,0.15)", borderRadius:4, letterSpacing:1}}>
-                        DUMP
+                    </td>
+                    <td style={td("left")}>
+                      <div style={{display:"flex", alignItems:"center", gap:10}}>
+                        <span style={{color:"#64748b", fontSize:10, width:10,
+                          display:"inline-block",
+                          transform: isExpanded ? "rotate(90deg)" : "none",
+                          transition:"transform 0.15s"}}>▶</span>
+                        <span style={{fontWeight:700, color:"#f1f5f9", fontSize:13}}>{e.name}</span>
+                      </div>
+                    </td>
+                    <td style={td("left")}>
+                      <span style={{padding:"3px 8px", background:"#1e293b",
+                        color:"#cbd5e1", borderRadius:4,
+                        fontFamily:"'JetBrains Mono', monospace", fontSize:10}}>
+                        {e.cve}
                       </span>
-                    )}
-                  </div>
-                </div>
-                <span style={{padding:"6px 12px", fontSize:12, fontWeight:800, color:"#fff",
-                  background:sev(e.cvss), borderRadius:6, whiteSpace:"nowrap",
-                  boxShadow:`0 2px 8px ${sev(e.cvss)}55`}}>
-                  CVSS {e.cvss}
-                </span>
-              </div>
+                    </td>
+                    <td style={td("center")}>
+                      <span style={{padding:"4px 10px", fontSize:12, fontWeight:800,
+                        color:"#fff", background:sev(e.cvss), borderRadius:5,
+                        boxShadow:`0 2px 6px ${sev(e.cvss)}55`}}>
+                        {e.cvss}
+                      </span>
+                    </td>
+                    <td style={td("center")}>
+                      <span style={{padding:"3px 9px", fontSize:9, fontWeight:800,
+                        letterSpacing:1.2, borderRadius:4,
+                        color: e.interactive ? "#86efac" : "#93c5fd",
+                        background: e.interactive ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.15)"}}>
+                        {e.interactive ? "SHELL" : "DUMP"}
+                      </span>
+                    </td>
+                    <td style={td("left")}>
+                      <span style={{color:"#fbbf24", fontFamily:"'JetBrains Mono', monospace",
+                        fontSize:11}}>
+                        {e.target}:{e.port}
+                      </span>
+                    </td>
+                    <td style={td("center")}>
+                      {isRunning
+                        ? <span style={{color:"#fbbf24", fontWeight:800, fontSize:11}}>⏳ RUNNING</span>
+                        : r
+                          ? (r.ok
+                              ? <span style={{color:"#4ade80", fontWeight:800, fontSize:11, letterSpacing:1}}>✓ COMPROMISED</span>
+                              : <span style={{color:"#f87171", fontWeight:800, fontSize:11, letterSpacing:1}}>✗ FAILED</span>)
+                          : <span style={{color:"#64748b", fontSize:11}}>— not run —</span>}
+                    </td>
+                    <td style={td("center")}>
+                      <button onClick={(ev)=>{ev.stopPropagation(); runExploit(e);}}
+                        disabled={isRunning}
+                        style={{padding:"7px 14px", fontSize:11, fontWeight:800, letterSpacing:1,
+                          background: isRunning ? "#374151"
+                            : r?.ok ? "linear-gradient(135deg, #16a34a, #15803d)"
+                                   : "linear-gradient(135deg, #dc2626, #b91c1c)",
+                          color:"#fff", border:"none", borderRadius:5,
+                          cursor: isRunning ? "wait" : "pointer",
+                          boxShadow: isRunning ? "none"
+                            : r?.ok ? "0 2px 8px rgba(34,197,94,0.3)"
+                                   : "0 2px 8px rgba(220,38,38,0.3)"}}>
+                        {isRunning ? "⏳ WAIT" : r ? "↻ RE-RUN" : "🚀 RUN"}
+                      </button>
+                    </td>
+                  </tr>
 
-              {/* Description */}
-              <div style={{fontSize:13, color:"#cbd5e1", lineHeight:1.65, marginBottom:14}}>
-                {e.description}
-              </div>
+                  {/* Expanded detail row */}
+                  {isExpanded && (
+                    <tr style={{background:"#020617"}}>
+                      <td colSpan={8} style={{padding:0, borderBottom:"1px solid #1e293b"}}>
+                        <div style={{padding:"22px 26px",
+                          borderLeft:`3px solid ${isActive ? (e.interactive?"#22c55e":"#3b82f6") : leftBorder}`}}>
 
-              {/* Target details — clean monospace block */}
-              <div style={{padding:"12px 14px", background:"rgba(0,0,0,0.35)",
-                borderRadius:8, marginBottom:14, fontSize:11,
-                fontFamily:"'JetBrains Mono', monospace", lineHeight:1.8}}>
-                <div>
-                  <span style={{color:"#64748b", display:"inline-block", width:70}}>target</span>
-                  <span style={{color:"#fbbf24"}}>{e.target}:{e.port}</span>
-                </div>
-                <div>
-                  <span style={{color:"#64748b", display:"inline-block", width:70}}>service</span>
-                  <span style={{color:"#e2e8f0"}}>{e.service}</span>
-                </div>
-                <div>
-                  <span style={{color:"#64748b", display:"inline-block", width:70}}>result</span>
-                  <span style={{color:"#4ade80"}}>{e.result}</span>
-                </div>
-              </div>
+                          {/* Two-column detail header */}
+                          <div style={{display:"grid",
+                            gridTemplateColumns:"minmax(0, 1.6fr) minmax(280px, 1fr)",
+                            gap:24, marginBottom: r ? 18 : 0}}>
+                            <div>
+                              <div style={{fontSize:10, fontWeight:800, color:"#64748b",
+                                letterSpacing:1.5, marginBottom:6}}>DESCRIPTION</div>
+                              <div style={{fontSize:13, color:"#cbd5e1", lineHeight:1.7,
+                                marginBottom:14}}>
+                                {e.description}
+                              </div>
+                              <div style={{fontSize:10, fontWeight:800, color:"#64748b",
+                                letterSpacing:1.5, marginBottom:6}}>SUCCESS LOOKS LIKE</div>
+                              <div style={{fontSize:12, color:"#4ade80", lineHeight:1.6}}>
+                                {e.result}
+                              </div>
+                            </div>
+                            <div style={{padding:"14px 16px", background:"rgba(0,0,0,0.4)",
+                              borderRadius:8, fontSize:11,
+                              fontFamily:"'JetBrains Mono', monospace", lineHeight:1.9,
+                              alignSelf:"start"}}>
+                              <div style={{fontSize:10, fontWeight:800, color:"#64748b",
+                                letterSpacing:1.5, marginBottom:6,
+                                fontFamily:"Inter, sans-serif"}}>TECHNICAL DETAILS</div>
+                              <div>
+                                <span style={{color:"#64748b", display:"inline-block", width:80}}>target</span>
+                                <span style={{color:"#fbbf24"}}>{e.target}:{e.port}</span>
+                              </div>
+                              <div>
+                                <span style={{color:"#64748b", display:"inline-block", width:80}}>service</span>
+                                <span style={{color:"#e2e8f0"}}>{e.service}</span>
+                              </div>
+                              <div>
+                                <span style={{color:"#64748b", display:"inline-block", width:80}}>category</span>
+                                <span style={{color:"#e2e8f0"}}>{e.category}</span>
+                              </div>
+                              <div>
+                                <span style={{color:"#64748b", display:"inline-block", width:80}}>difficulty</span>
+                                <span style={{color:"#e2e8f0"}}>{e.difficulty}</span>
+                              </div>
+                              <div>
+                                <span style={{color:"#64748b", display:"inline-block", width:80}}>type</span>
+                                <span style={{color: e.interactive?"#86efac":"#93c5fd"}}>
+                                  {e.interactive?"Interactive shell":"One-shot data dump"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-              {/* Action row */}
-              <div style={{display:"flex", gap:10, marginBottom: r ? 12 : 0}}>
-                <button onClick={() => runExploit(e)} disabled={isRunning}
-                  style={{flex:1, padding:"12px 18px", fontSize:13, fontWeight:800, letterSpacing:1.5,
-                    background: isRunning ? "#374151"
-                      : (r?.ok ? "linear-gradient(135deg, #16a34a, #15803d)"
-                               : "linear-gradient(135deg, #dc2626, #b91c1c)"),
-                    color:"#fff", border:"none", borderRadius:8,
-                    cursor: isRunning ? "wait" : "pointer",
-                    boxShadow: isRunning ? "none"
-                      : r?.ok ? "0 4px 14px rgba(34,197,94,0.3)"
-                              : "0 4px 14px rgba(220,38,38,0.3)"}}>
-                  {isRunning ? "⏳ EXPLOITING…" : (r?.ok ? "↻ RE-RUN" : "🚀 RUN EXPLOIT")}
-                </button>
-                {r?.ok && r.shell_id && !isActive && (
-                  <button onClick={()=>{
-                      setShellOutput("");
-                      setActiveShell({sid:r.shell_id, exploit_id:e.id, exploit:e});
-                    }}
-                    style={{padding:"12px 18px", fontSize:12, fontWeight:800, letterSpacing:1.5,
-                      background:"transparent", color: e.interactive ? "#86efac" : "#93c5fd",
-                      border:`1px solid ${e.interactive ? "#22c55e" : "#3b82f6"}`,
-                      borderRadius:8, cursor:"pointer"}}>
-                    {e.interactive ? "VIEW SHELL" : "VIEW DATA"}
-                  </button>
-                )}
-              </div>
+                          {/* Result strip */}
+                          {r && (
+                            <div style={{padding:"14px 16px", borderRadius:8, marginBottom:14,
+                              background: r.ok ? "rgba(34,197,94,0.08)" : "rgba(220,38,38,0.08)",
+                              border:`1px solid ${r.ok?"rgba(34,197,94,0.35)":"rgba(220,38,38,0.35)"}`}}>
+                              <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:6}}>
+                                <span style={{fontSize:16}}>{r.ok ? "✅" : "❌"}</span>
+                                <span style={{fontSize:12, fontWeight:900, letterSpacing:1.5,
+                                  color: r.ok?"#4ade80":"#f87171"}}>
+                                  {r.ok ? "EVIDENCE OF COMPROMISE" : "FAILURE REASON"}
+                                </span>
+                                {r.ok && r.shell_id && !isActive && (
+                                  <button onClick={(ev)=>{
+                                      ev.stopPropagation();
+                                      setShellOutput("");
+                                      setActiveShell({sid:r.shell_id, exploit_id:e.id, exploit:e});
+                                    }}
+                                    style={{marginLeft:"auto", padding:"5px 12px", fontSize:10,
+                                      fontWeight:800, letterSpacing:1, background:"transparent",
+                                      color: e.interactive ? "#86efac" : "#93c5fd",
+                                      border:`1px solid ${e.interactive ? "#22c55e" : "#3b82f6"}`,
+                                      borderRadius:5, cursor:"pointer"}}>
+                                    {e.interactive ? "OPEN SHELL" : "VIEW DATA"}
+                                  </button>
+                                )}
+                              </div>
+                              <div style={{fontSize:12, color:"#cbd5e1", lineHeight:1.6}}>
+                                {r.ok ? r.evidence : r.error}
+                              </div>
+                              {r.payload && (
+                                <div style={{marginTop:10, padding:"10px 12px",
+                                  background:"#000", borderRadius:6,
+                                  fontFamily:"'JetBrains Mono', monospace",
+                                  fontSize:11, color:"#fbbf24", wordBreak:"break-all",
+                                  lineHeight:1.6}}>
+                                  <div style={{fontSize:9, fontWeight:800, color:"#64748b",
+                                    letterSpacing:1.5, marginBottom:6,
+                                    fontFamily:"Inter, sans-serif"}}>PAYLOAD</div>
+                                  {r.payload}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
-              {/* Result strip */}
-              {r && (
-                <div style={{padding:"12px 14px", borderRadius:8,
-                  background: r.ok ? "rgba(34,197,94,0.08)" : "rgba(220,38,38,0.08)",
-                  border:`1px solid ${r.ok?"rgba(34,197,94,0.3)":"rgba(220,38,38,0.3)"}`}}>
-                  <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:6}}>
-                    <span style={{fontSize:14}}>{r.ok ? "✅" : "❌"}</span>
-                    <span style={{fontSize:12, fontWeight:900, letterSpacing:1.5,
-                      color: r.ok?"#4ade80":"#f87171"}}>
-                      {r.ok ? "COMPROMISED" : "FAILED"}
-                    </span>
-                  </div>
-                  <div style={{fontSize:12, color:"#cbd5e1", lineHeight:1.55}}>
-                    {r.ok ? r.evidence : r.error}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                          {/* Inline terminal — only when this row's shell is active */}
+                          {isActive && (
+                            <div style={{borderRadius:10, overflow:"hidden",
+                              border:`1.5px solid ${e.interactive?"#22c55e":"#3b82f6"}`,
+                              boxShadow:`0 4px 20px ${e.interactive?"rgba(34,197,94,0.15)":"rgba(59,130,246,0.15)"}`}}>
+                              <div style={{padding:"10px 16px",
+                                background: e.interactive?"#052e16":"#0c1c3a",
+                                borderBottom:`1px solid ${e.interactive?"#14532d":"#1e3a8a"}`,
+                                display:"flex", alignItems:"center", justifyContent:"space-between",
+                                flexWrap:"wrap", gap:8}}>
+                                <div style={{display:"flex", alignItems:"center", gap:10}}>
+                                  <span style={{fontSize:14}}>{e.interactive?"🐚":"📊"}</span>
+                                  <span style={{fontSize:12, fontWeight:800, letterSpacing:1.2,
+                                    color: e.interactive?"#86efac":"#93c5fd"}}>
+                                    {e.interactive?"LIVE SHELL":"EXTRACTED DATA"}
+                                  </span>
+                                  <span style={{fontSize:10, color:"#94a3b8",
+                                    fontFamily:"'JetBrains Mono', monospace"}}>
+                                    sid={activeShell.sid} ·
+                                    <span style={{color: shellStatus==="live" ? "#4ade80"
+                                      : shellStatus==="error" ? "#f87171" : "#fbbf24"}}>
+                                      {" "}{shellStatus}
+                                    </span>
+                                  </span>
+                                </div>
+                                <div style={{display:"flex", gap:6}}>
+                                  <button onClick={(ev)=>{ev.stopPropagation(); copyOutput();}}
+                                    style={{padding:"5px 10px", fontSize:10, fontWeight:700,
+                                      background:"#1e293b", color:"#cbd5e1",
+                                      border:"1px solid #334155", borderRadius:4,
+                                      cursor:"pointer"}}>📋 COPY</button>
+                                  <button onClick={(ev)=>{ev.stopPropagation(); closeShell();}}
+                                    style={{padding:"5px 10px", fontSize:10, fontWeight:700,
+                                      background:"#7f1d1d", color:"#fff", border:"none",
+                                      borderRadius:4, cursor:"pointer"}}>✕ CLOSE</button>
+                                </div>
+                              </div>
+                              <div ref={outRef} style={{padding:"16px 20px", background:"#000",
+                                color: e.interactive ? "#4ade80" : "#bfdbfe",
+                                fontFamily:"'JetBrains Mono', Consolas, monospace",
+                                fontSize:13, minHeight:320, maxHeight:460, overflowY:"auto",
+                                whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.65}}>
+                                {shellOutput || (e.interactive
+                                  ? "Waiting for shell output…\n"
+                                  : "Loading extracted data…\n")}
+                              </div>
+                              {e.interactive ? (
+                                <div style={{padding:12, background:"#050a16",
+                                  borderTop:"1px solid #1e293b",
+                                  display:"flex", gap:8, alignItems:"center"}}>
+                                  <span style={{color:"#4ade80", fontFamily:"monospace",
+                                    fontSize:15, fontWeight:800}}>$</span>
+                                  <input ref={inputRef}
+                                    value={shellCmd} onChange={ev=>setShellCmd(ev.target.value)}
+                                    onKeyDown={onKeyDown}
+                                    placeholder="run a command  (id · whoami · cat /etc/shadow · ls -la /root · ↑/↓ history)"
+                                    autoComplete="off" name="exp-shell-cmd" data-form-type="other"
+                                    onClick={(ev)=>ev.stopPropagation()}
+                                    style={{flex:1, padding:"9px 11px", background:"#000",
+                                      color:"#4ade80", border:"1px solid #14532d", borderRadius:5,
+                                      fontFamily:"'JetBrains Mono', monospace", fontSize:13,
+                                      outline:"none"}}/>
+                                  <button onClick={(ev)=>{ev.stopPropagation(); sendCmd();}}
+                                    style={{padding:"9px 22px",
+                                      background:"linear-gradient(135deg, #22c55e, #16a34a)",
+                                      color:"#000", fontWeight:800, letterSpacing:1.5,
+                                      border:"none", borderRadius:5, cursor:"pointer", fontSize:12,
+                                      boxShadow:"0 2px 8px rgba(34,197,94,0.3)"}}>SEND</button>
+                                </div>
+                              ) : (
+                                <div style={{padding:"10px 18px", background:"#050a16",
+                                  borderTop:"1px solid #1e293b",
+                                  fontSize:11, color:"#94a3b8",
+                                  display:"flex", alignItems:"center", gap:8}}>
+                                  <span style={{fontSize:13}}>📊</span>
+                                  <span>One-shot dump — no interactive shell. Above is real exfiltrated data.</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {catalog.length === 0 && (
+              <tr>
+                <td colSpan={8} style={{padding:40, textAlign:"center", color:"#64748b"}}>
+                  Loading exploit catalog…
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
