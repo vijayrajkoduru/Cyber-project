@@ -16,6 +16,10 @@ services:
     privileged: true          # needed for nmap, tcpdump, masscan raw sockets
     ports:
       - "8000:8000"
+      # Reverse-shell handler ports — bound to c2.vulnuslab.com (DNS-only A record,
+      # NOT Cloudflare proxied) so external targets can connect back to msfconsole
+      # listeners running inside this container.
+      - "4444-4500:4444-4500/tcp"
     env_file:
       - .env                  # optional: SHODAN_KEY, VIRUSTOTAL_KEY, etc.
     volumes:

@@ -4075,6 +4075,149 @@ class ExploitRequest(BaseModel):
 EXPLOIT_SESSIONS: dict = {}
 
 
+@app.get("/api/exploit/lhost")
+async def exploit_lhost(user=Depends(verify_token)):
+    """Return the canonical LHOST for reverse shells. The frontend auto-fills
+    this so users don't need to know their own VPS IP. c2.vulnuslab.com is a
+    DNS-only A record (NOT Cloudflare-proxied) so reverse shells from external
+    targets bypass the CDN and connect directly to the Kali container, which
+    has ports 4444-4500 mapped on the host.
+    """
+    lhost = os.environ.get("LHOST_DOMAIN", "c2.vulnuslab.com")
+    resolved_ip = None
+    try:
+        import socket as _socket
+        resolved_ip = _socket.gethostbyname(lhost)
+    except Exception:
+        pass
+    return {
+        "lhost": lhost,
+        "resolved_ip": resolved_ip,
+        "lport_range": "4444-4500",
+        "default_lport": 4444,
+        "warning": "Targets must be able to reach this host on the LPORT for reverse shells to work."
+    }
+
+
+def _suggest_exploit_module(target_os: str = "", target_port: int = 0, target_service: str = ""):
+    """Map a target's OS + port + service to a recommended Metasploit module.
+    Used by the frontend to auto-fill the MSF Module field intelligently
+    instead of forcing users to memorize module paths.
+    """
+    o = (target_os or "").lower()
+    s = (target_service or "").lower()
+    p = int(target_port or 0)
+    # Web targets (HTTP/HTTPS) — no kernel-level Metasploit module fits
+    if p in (80, 443, 8080, 8443, 3000, 8000) or "http" in s or "web" in o:
+        return {
+            "module": "",
+            "payload": "",
+            "format": "php",
+            "advice": "Web target detected. Active MSF exploitation is unlikely to fit — use VAPT scanner first, then exploit specific findings (XSS, SQLi, IDOR) manually or via custom payload."
+        }
+    # Windows SMB
+    if p == 445 or "smb" in s or "windows" in o:
+        return {
+            "module": "exploit/windows/smb/ms17_010_eternalblue",
+            "payload": "windows/x64/meterpreter/reverse_tcp",
+            "format": "exe",
+            "advice": "Windows SMB target — EternalBlue (MS17-010) is the classic choice. Verify with vuln check first."
+        }
+    # Linux SSH / generic
+    if p == 22 or "ssh" in s:
+        return {
+            "module": "auxiliary/scanner/ssh/ssh_login",
+            "payload": "linux/x64/shell_reverse_tcp",
+            "format": "elf",
+            "advice": "SSH target — try credential bruteforce (auxiliary/scanner/ssh/ssh_login) before exploits."
+        }
+    # FTP
+    if p == 21 or "ftp" in s:
+        return {
+            "module": "auxiliary/scanner/ftp/ftp_login",
+            "payload": "linux/x64/shell_reverse_tcp",
+            "format": "elf",
+            "advice": "FTP target — try credential bruteforce first; vsftpd 2.3.4 has a backdoor exploit."
+        }
+    # vsftpd backdoor
+    if "vsftpd" in s.lower():
+        return {
+            "module": "exploit/unix/ftp/vsftpd_234_backdoor",
+            "payload": "cmd/unix/interact",
+            "format": "elf",
+            "advice": "vsftpd 2.3.4 — known backdoor exploit available."
+        }
+    # Samba (Linux SMB)
+    if "samba" in s.lower():
+        return {
+            "module": "exploit/multi/samba/usermap_script",
+            "payload": "cmd/unix/reverse_netcat",
+            "format": "elf",
+            "advice": "Samba target — usermap_script exploit if version vulnerable."
+        }
+    return {
+        "module": "",
+        "payload": "",
+        "format": "exe",
+        "advice": "Unable to suggest a module — provide target OS + port, or use Search Exploits to find candidates."
+    }
+
+
+@app.get("/api/exploit/suggest")
+async def exploit_suggest(os: str = "", port: int = 0, service: str = "", user=Depends(verify_token)):
+    """Suggest an MSF module/payload combo for a target. Lets the frontend
+    auto-fill correctly instead of leaving users guessing.
+    """
+    return _suggest_exploit_module(os, port, service)
+
+
+# Targets the platform is contractually authorized to actively exploit. Any
+# active exploitation request against a host NOT on this list must be blocked
+# at the backend — relying on the frontend alone leaves us legally exposed.
+EXPLOIT_ALLOWLIST = {
+    # User's own VPS lab containers (internal)
+    "lab_dvwa", "lab_webgoat", "lab_juiceshop", "lab_bwapp", "lab_mutillidae",
+    # Public vulnerable demos explicitly authorized by their owners
+    "demo.testfire.net", "testphp.vulnweb.com", "testasp.vulnweb.com",
+    "testaspnet.vulnweb.com", "testhtml5.vulnweb.com", "rest.vulnweb.com",
+    "zero.webappsecurity.com", "www.webscantest.com", "hackazon.webscantest.com",
+    "juice-shop.herokuapp.com",
+    # Localhost / private RFC1918 (user's own infra)
+    "localhost", "127.0.0.1",
+}
+
+
+def _is_target_allowed(target: str) -> bool:
+    """Return True if a target host is on the legal allowlist OR is in private
+    RFC1918 / loopback ranges (user's own infrastructure).
+    """
+    if not target:
+        return False
+    host = target.replace("http://", "").replace("https://", "").split("/")[0].split(":")[0].lower().strip()
+    if host in EXPLOIT_ALLOWLIST:
+        return True
+    # RFC1918 + loopback + Docker bridge (always allowed — user owns it)
+    if host.startswith(("10.", "127.", "192.168.", "172.16.", "172.17.", "172.18.",
+                       "172.19.", "172.2", "172.3")):
+        return True
+    return False
+
+
+@app.post("/api/exploit/check-allowed")
+async def exploit_check_allowed(req: ExploitRequest, user=Depends(verify_token)):
+    """Frontend calls this BEFORE running active exploitation. Returns whether
+    the target is on the allowlist + the reason if not. Avoids legal exposure
+    from users pointing the platform at random sites.
+    """
+    allowed = _is_target_allowed(req.target)
+    return {
+        "target": req.target,
+        "allowed": allowed,
+        "reason": None if allowed else "Target is not on the legal allow-list. Active exploitation against unauthorized hosts is illegal (CFAA / IT Act 2000). Use Web App Pentesting for passive scanning, or contact support to add your target to the allow-list with proof of authorization.",
+        "allowed_examples": ["lab_webgoat", "demo.testfire.net", "testphp.vulnweb.com", "127.0.0.1", "10.x.x.x"]
+    }
+
+
 @app.post("/api/exploit/search")
 async def exploit_search(req: ExploitRequest, user=Depends(verify_token)):
     q = req.query.strip() or (req.msf_module.split("/")[-1] if req.msf_module else "") or "ms17-010"

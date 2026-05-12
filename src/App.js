@@ -6368,13 +6368,29 @@ function ExploitModule({token, onRunningChange}) {
   // Target config
   const [targetIP,     setTargetIP]    = useState(()=>localStorage.getItem("exp_targetIP")||"");
   const [targetPort,   setTargetPort]  = useState(()=>parseInt(localStorage.getItem("exp_port")||"445"));
-  const [lhost,        setLhost]       = useState(()=>{
-    const saved = localStorage.getItem("exp_lhost");
-    if(saved) return saved;
-    const url = getApiUrl() || window.location.origin;
-    const m = url.match(/https?:\/\/([^:/]+)/);
-    return m ? m[1] : "";
-  });
+  const [lhost,        setLhost]       = useState(()=>localStorage.getItem("exp_lhost")||"");
+  const [lhostInfo,    setLhostInfo]   = useState(null);
+  // Fetch the canonical LHOST from backend on mount. Backend returns
+  // c2.vulnuslab.com — a DNS-only subdomain that bypasses Cloudflare so
+  // reverse shells can reach the Kali container directly. Users do NOT need
+  // to know their own VPS IP.
+  useEffect(()=>{
+    (async()=>{
+      try {
+        const r = await fetch((getApiUrl()||"")+"/api/exploit/lhost", {
+          headers:{"Authorization":"Bearer "+(localStorage.getItem("token")||"")}
+        });
+        if(!r.ok) return;
+        const d = await r.json();
+        setLhostInfo(d);
+        // Only override LHOST if user hasn't manually set one. Saved value
+        // wins so power-users can still tunnel through their own VPN/C2.
+        if(!localStorage.getItem("exp_lhost") && d.lhost){
+          setLhost(d.lhost);
+        }
+      } catch {}
+    })();
+  },[]);
   const [lport,        setLport]       = useState(()=>parseInt(localStorage.getItem("exp_lport")||"4444"));
   const [msfModule,    setMsfModule]   = useState(()=>localStorage.getItem("exp_msf")||"exploit/windows/smb/ms17_010_eternalblue");
   const [msfPayload,   setMsfPayload]  = useState(()=>localStorage.getItem("exp_payload")||"windows/x64/shell_reverse_tcp");
@@ -6500,6 +6516,30 @@ function ExploitModule({token, onRunningChange}) {
     if(!targetIP.trim()) return alert("Enter target IP first");
     if(!lhost.trim())    return alert("Enter LHOST (your Kali IP) first");
     if(!msfModule.trim())return alert("Enter MSF module first");
+
+    // Legal allowlist check — active exploitation against unauthorized hosts
+    // is a criminal offense (CFAA / IT Act 2000). Backend enforces the same
+    // rule, but checking here first gives the user a clear error and avoids
+    // wasted compute time on a request that will be rejected.
+    try {
+      const chk = await callApi("/api/exploit/check-allowed", {...base(), target: targetIP});
+      if (chk && chk.allowed === false) {
+        const ok = window.confirm(
+          "⚠️ LEGAL WARNING\n\n" +
+          "Target '" + targetIP + "' is NOT on the legal allow-list.\n\n" +
+          "Reason: " + (chk.reason || "Unauthorized target") + "\n\n" +
+          "Allowed examples: " + (chk.allowed_examples||[]).join(", ") + "\n\n" +
+          "Active exploitation against unauthorized hosts is illegal. By clicking OK you affirm you have WRITTEN authorization to test this target and accept full legal responsibility.\n\n" +
+          "Continue anyway?"
+        );
+        if (!ok) return;
+      }
+    } catch (e) {
+      // If the allow-list endpoint fails (network/auth), block by default
+      // rather than silently proceeding — fail-safe stance for legal risk.
+      return alert("Could not verify target authorization: " + e.message + "\nExploitation blocked.");
+    }
+
     stopRef.current = false;
     setAutoRunning(true); setAutoLog([]); setTab("log");
     setSearchResult(null); setVulnResult(null); setMsfResult(null); setPayloadResult(null);
