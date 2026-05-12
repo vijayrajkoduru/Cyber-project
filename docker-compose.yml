@@ -91,6 +91,22 @@ services:
     networks:
       - oscp_net
 
+  # vsftpd 2.3.4 with the famous ":)" smile-username backdoor (CVE-2011-2523).
+  # When a user logs in with a username containing ":)" the daemon opens a
+  # secondary listener on port 6200 with a passwordless root shell. This is
+  # the canonical "instant shell" demo for active exploitation — fast, reliable,
+  # and visibly impressive to first-time users of the platform.
+  vsftpd234:
+    image: tleemcjr/vsftpd_2.3.4
+    container_name: lab_vsftpd
+    ports:
+      - "8021:21"        # FTP control port exposed externally for testing
+      - "8021:21/udp"
+      - "6200:6200"      # Backdoor shell port — what Metasploit connects to
+    restart: unless-stopped
+    networks:
+      - oscp_net
+
 networks:
   oscp_net:
     driver: bridge

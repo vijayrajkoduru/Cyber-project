@@ -6104,6 +6104,7 @@ const EXPLOIT_TARGETS = [
   { label:"Juice Shop",    os:"🐧", ip:"lab_juiceshop",  port:3000, service:"Node.js",          cve:"Multiple", msf:"",                                 payload:"nodejs/shell_reverse_tcp",  fmt:"js",  search:"juice shop nodejs",   desc:"🟢 LIVE Docker — 100+ challenges: JWT, SQLi, IDOR, XSS" },
   { label:"Mutillidae II", os:"🐧", ip:"lab_mutillidae", port:80,   service:"Apache/PHP",       cve:"Multiple", msf:"",                                 payload:"php/reverse_php",          fmt:"php", search:"mutillidae sqli",     desc:"🟢 LIVE Docker — SQLi, XXE, CSRF, Clickjacking" },
   { label:"bWAPP",         os:"🐧", ip:"lab_bwapp",      port:80,   service:"Apache/PHP",       cve:"Multiple", msf:"",                                 payload:"php/reverse_php",          fmt:"php", search:"bwapp php sqli",      desc:"🟢 LIVE Docker — 100+ bug categories (creds: bee/bug)" },
+  { label:"vsftpd 2.3.4",  os:"🐧", ip:"lab_vsftpd",     port:21,   service:"vsftpd 2.3.4",     cve:"CVE-2011-2523", msf:"exploit/unix/ftp/vsftpd_234_backdoor", payload:"cmd/unix/interact",   fmt:"raw", search:"vsftpd 2.3.4 backdoor", desc:"🟢 LIVE Docker — Smile-username backdoor: instant root shell on port 6200" },
 ];
 
 const SHELL_TEMPLATES = (lhost, lport) => [
@@ -6226,10 +6227,14 @@ function generateExploitReport({target, port, service, cve, msfModule, msfPayloa
       chk(20);
       y=sHead("Vulnerability Check (nmap --script vuln)",y);
       if(vulnResults.vulns?.length>0){
+        // nmap vuln scan runs against a single port, so v.port is missing in the
+        // backend payload — fall back to the target port (from vulnResults.port
+        // or the original target's port) instead of rendering "Port undefined".
+        const scannedPort = vulnResults.port || port || "—";
         vulnResults.vulns.slice(0,15).forEach((v,i)=>{
           chk(6);
           fillR(margin,y,contentW,5.5,i%2===0?[241,245,249]:[248,250,252]);
-          txt(`Port ${v.port}:`,margin+2,y+4,7.5,BLUE,true);
+          txt(`Port ${v.port||scannedPort}:`,margin+2,y+4,7.5,BLUE,true);
           txt((v.detail||"").substring(0,100),margin+22,y+4,7,DARK);
           y+=5.5;
         });

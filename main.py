@@ -4177,6 +4177,7 @@ async def exploit_suggest(os: str = "", port: int = 0, service: str = "", user=D
 EXPLOIT_ALLOWLIST = {
     # User's own VPS lab containers (internal)
     "lab_dvwa", "lab_webgoat", "lab_juiceshop", "lab_bwapp", "lab_mutillidae",
+    "lab_vsftpd",
     # Public vulnerable demos explicitly authorized by their owners
     "demo.testfire.net", "testphp.vulnweb.com", "testasp.vulnweb.com",
     "testaspnet.vulnweb.com", "testhtml5.vulnweb.com", "rest.vulnweb.com",
