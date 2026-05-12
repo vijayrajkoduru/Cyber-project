@@ -1344,17 +1344,20 @@ function generatePDF(reportData) {
         doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...bg);
         doc.text(f.severity,margin+12,y+6);
 
+        // Truncate cwe_name with ellipsis when needed, instead of hard cut mid-word
+        const _truncCwe = (s, n) => s.length > n ? s.substring(0, n - 1).trim() + "…" : s;
+
         if (showCveCol) {
           txt(f.cve||"N/A",margin+35,y+6,7,RED,true);
           doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...PURPLE);
-          doc.text((f.cwe||"N/A")+(f.cwe_name?" - "+f.cwe_name.substring(0,18):""),margin+71,y+6);
+          doc.text((f.cwe||"N/A")+(f.cwe_name?" - "+_truncCwe(f.cwe_name, 32):""),margin+71,y+6);
           txt(f.cvss||"0.0",margin+117,y+6,8,bg,true);
           doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
           doc.text((f.owasp||"").substring(0,26),margin+133,y+6);
         } else {
           // No CVE column — shift CWE/CVSS/OWASP left for a wider, cleaner layout
           doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...PURPLE);
-          doc.text((f.cwe||"N/A")+(f.cwe_name?" - "+f.cwe_name.substring(0,28):""),margin+38,y+6);
+          doc.text((f.cwe||"N/A")+(f.cwe_name?" - "+_truncCwe(f.cwe_name, 55):""),margin+38,y+6);
           txt(f.cvss||"0.0",margin+115,y+6,8,bg,true);
           doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
           doc.text((f.owasp||"").substring(0,30),margin+131,y+6);
@@ -1384,11 +1387,13 @@ function generatePDF(reportData) {
 
     // ─── RECOMMENDATIONS (dynamic from findings) ──────────────────
     const recs = [];
-    // From gobuster — exposed sensitive paths
-    const gitExposed   = (gobuster||[]).some(d=>(d.path||d).includes("/.git"));
-    const configExposed= (gobuster||[]).some(d=>/(config|database|backup|\.env|\.sql)/i.test(d.path||d));
-    const setupExposed = (gobuster||[]).some(d=>/(setup|install|phpinfo)/i.test(d.path||d));
-    const adminExposed = (gobuster||[]).some(d=>/\/admin/i.test(d.path||d));
+    // From gobuster — only count paths that ACTUALLY exist (HTTP 200/301/302).
+    // Without this filter, scanning paths that 404'd would still trigger recs.
+    const _liveGo = (gobuster||[]).filter(d=>[200,301,302].includes(d.status));
+    const gitExposed   = _liveGo.some(d=>(d.path||d).includes("/.git"));
+    const configExposed= _liveGo.some(d=>/(config|database|backup|\.env|\.sql)/i.test(d.path||d));
+    const setupExposed = _liveGo.some(d=>/(setup|install|phpinfo)/i.test(d.path||d));
+    const adminExposed = _liveGo.some(d=>/\/admin/i.test(d.path||d));
     if(gitExposed)   recs.push({p:"CRITICAL",t:"Remove .git directory from web root — exposes full source code",          a:"rm -rf /.git"});
     if(configExposed)recs.push({p:"HIGH",    t:"Restrict /config/, /database/, /backup/ from public access",              a:"Add deny rules"});
     if(setupExposed) recs.push({p:"HIGH",    t:"Remove setup.php / install files — dangerous on production servers",      a:"Delete files"});
