@@ -38,28 +38,28 @@ const MODULES = [
   // ── EXPLOITATION ─────────────────────────────────────────────
   { id:"exploit",   icon:"💥", label:"Exploitation Techniques",            cat:"exploit", free:false },
   { id:"buffer",    icon:"💾", label:"Buffer Overflow",                    cat:"exploit", free:false },
-  { id:"client",    icon:"🎯", label:"Client-Side Attacks",                cat:"exploit", free:false },
-  { id:"sysexploit",icon:"⚙️", label:"System Exploitation",               cat:"exploit", free:false },
-  { id:"msf",       icon:"🧰", label:"Metasploit Framework",               cat:"exploit", free:false },
+  { id:"client",    icon:"🎯", label:"Client-Side Attacks",                cat:"exploit", free:false, comingSoon:true },
+  { id:"sysexploit",icon:"⚙️", label:"System Exploitation",               cat:"exploit", free:false, comingSoon:true },
+  { id:"msf",       icon:"🧰", label:"Metasploit Framework",               cat:"exploit", free:false, comingSoon:true },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
-  { id:"privesc",   icon:"⬆️", label:"Privilege Escalation",               cat:"post",    free:false },
-  { id:"post",      icon:"🕵️", label:"Post Exploitation",                  cat:"post",    free:false },
-  { id:"pivot",     icon:"🔄", label:"Pivoting & Lateral Movement",        cat:"post",    free:false },
+  { id:"privesc",   icon:"⬆️", label:"Privilege Escalation",               cat:"post",    free:false, comingSoon:true },
+  { id:"post",      icon:"🕵️", label:"Post Exploitation",                  cat:"post",    free:false, comingSoon:true },
+  { id:"pivot",     icon:"🔄", label:"Pivoting & Lateral Movement",        cat:"post",    free:false, comingSoon:true },
 
   // ── NETWORK & INFRA ──────────────────────────────────────────
-  { id:"network",   icon:"🌐", label:"Network Attacks",                    cat:"network", free:false },
-  { id:"tunnel",    icon:"🔗", label:"Port Redirection & Tunneling",       cat:"network", free:false },
+  { id:"network",   icon:"🌐", label:"Network Attacks",                    cat:"network", free:false, comingSoon:true },
+  { id:"tunnel",    icon:"🔗", label:"Port Redirection & Tunneling",       cat:"network", free:false, comingSoon:true },
   { id:"password",  icon:"🔑", label:"Password Attacks",                   cat:"network", free:false },
-  { id:"auth",      icon:"🛂", label:"Authentication Attacks",             cat:"network", free:false },
-  { id:"wireless",  icon:"📶", label:"Wireless Network Attacks",           cat:"network", free:false },
+  { id:"auth",      icon:"🛂", label:"Authentication Attacks",             cat:"network", free:false, comingSoon:true },
+  { id:"wireless",  icon:"📶", label:"Wireless Network Attacks",           cat:"network", free:false, comingSoon:true },
 
   // ── ADVANCED ─────────────────────────────────────────────────
-  { id:"ad",        icon:"🏢", label:"Active Directory Attacks",           cat:"advanced",free:false },
-  { id:"av",        icon:"🥷", label:"Antivirus Evasion",                  cat:"advanced",free:false },
-  { id:"cloud",     icon:"☁️", label:"Cloud Security Testing",             cat:"advanced",free:false },
-  { id:"mobile",    icon:"📱", label:"Mobile Application Testing",         cat:"advanced",free:false },
-  { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false },
+  { id:"ad",        icon:"🏢", label:"Active Directory Attacks",           cat:"advanced",free:false, comingSoon:true },
+  { id:"av",        icon:"🥷", label:"Antivirus Evasion",                  cat:"advanced",free:false, comingSoon:true },
+  { id:"cloud",     icon:"☁️", label:"Cloud Security Testing",             cat:"advanced",free:false, comingSoon:true },
+  { id:"mobile",    icon:"📱", label:"Mobile Application Testing",         cat:"advanced",free:false, comingSoon:true },
+  { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false, comingSoon:true },
 
   // ── TOOLS ────────────────────────────────────────────────────
   { id:"tools",     icon:"🛠️", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
@@ -8673,6 +8673,34 @@ export default function App() {
   };
 
   const renderContent = () => {
+    // If the active module is marked comingSoon, render a Coming Soon placeholder
+    // instead of the broken/empty module UI. Admin (superadmin) still sees real UI
+    // so they can test in-progress modules.
+    const activeMod = MODULES.find(m => m.id === active);
+    if (activeMod && activeMod.comingSoon && !isSuperAdmin) {
+      return (
+        <div style={{padding:"60px 24px",maxWidth:720,margin:"0 auto",textAlign:"center"}}>
+          <div style={{fontSize:64,marginBottom:16}}>{activeMod.icon}</div>
+          <div style={{display:"inline-block",background:"rgba(139,92,246,0.15)",border:"1px solid rgba(139,92,246,0.4)",color:"#a78bfa",fontSize:11,fontWeight:800,padding:"5px 14px",borderRadius:20,letterSpacing:1.5,marginBottom:20}}>COMING SOON</div>
+          <h1 style={{fontSize:32,fontWeight:800,color:"#f1f5f9",marginBottom:14}}>{activeMod.label}</h1>
+          <p style={{fontSize:16,color:"#94a3b8",lineHeight:1.7,marginBottom:32}}>
+            This module is under active development. The frontend is built but the
+            backend tooling integration is not yet complete.
+          </p>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:12,padding:24,textAlign:"left",marginBottom:24}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#cbd5e1",marginBottom:10}}>What you can do:</div>
+            <ul style={{fontSize:13,color:"#94a3b8",lineHeight:2,paddingLeft:18,margin:0}}>
+              <li>Use the modules that are working today: <strong style={{color:"#3b82f6"}}>Web Application Pentesting</strong>, <strong style={{color:"#3b82f6"}}>Vulnerability Scanning</strong>, <strong style={{color:"#3b82f6"}}>Information Gathering</strong>, <strong style={{color:"#3b82f6"}}>Advanced OSINT</strong>, <strong style={{color:"#3b82f6"}}>Exploitation Techniques</strong>, <strong style={{color:"#3b82f6"}}>Buffer Overflow</strong>, <strong style={{color:"#3b82f6"}}>Password Attacks</strong></li>
+              <li>Email <a href="mailto:support@vulnuslab.com" style={{color:"#3b82f6"}}>support@vulnuslab.com</a> to request priority on this module — we build the ones customers ask for first</li>
+            </ul>
+          </div>
+          <a href="mailto:support@vulnuslab.com?subject=Module%20Request%3A%20{encodeURIComponent(activeMod.label)}"
+             style={{display:"inline-block",background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",color:"#fff",padding:"12px 28px",borderRadius:10,fontSize:14,fontWeight:700,textDecoration:"none"}}>
+            Request {activeMod.label}
+          </a>
+        </div>
+      );
+    }
     return (
       <>
         {/* Always-mounted modules — scan survives tab switches */}
@@ -8842,7 +8870,8 @@ export default function App() {
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
                       <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
                       {locked   && <span style={{fontSize:10}}>🔒</span>}
-                      {isTrial  && !locked && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
+                      {m.comingSoon && !locked && <span style={{fontSize:8,color:"#8b5cf6",fontWeight:700,background:"rgba(139,92,246,0.15)",padding:"1px 5px",borderRadius:3,letterSpacing:0.5}}>SOON</span>}
+                      {isTrial  && !locked && !m.comingSoon && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
                       {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="recon"   && reconRunning  && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="vuln"    && vulnRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
