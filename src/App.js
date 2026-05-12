@@ -6578,16 +6578,34 @@ function ExploitModule({token, onRunningChange}) {
         if(r2.vulns?.length>0) log(`   CVE hint: ${r2.vulns[0].detail?.substring(0,60)||"—"}`);
       }catch(e){ log(`⚠ Phase 2: Vuln check failed — ${e.message}`); }
 
-      // Phase 3 — Start shell listener
+      // Phase 3 — Start shell listener (ONLY when Phase 4 won't take the port)
+      // If Phase 4 will run msfconsole with a reverse payload, msfconsole
+      // starts its OWN exploit/multi/handler on LPORT. Starting a netcat
+      // listener here first means MSF can't bind ("Handler failed to bind to
+      // ...:4444"). Skip Phase 3 in that case — MSF owns the port; the SHELL
+      // panel hooks into the MSF session via /api/exploit/shell/* later.
       if(stopRef.current) throw new Error("Stopped by user");
-      log(`⏳ Phase 3: Starting shell listener on port ${lport}...`);
-      stopShell();
-      setShellStatus("waiting"); setShellOutput("");
-      const rs = await callApi("/api/exploit/shell/start", base());
-      if(rs.ok===false){ log(`⚠ Phase 3: Listener error — ${rs.error}`); }
-      else { log(`✅ Phase 3: Listener ready on port ${lport}`); }
-      if(rs.lid){ setShellLid(rs.lid); startShellPoll(rs.lid); }
-      await new Promise(r=>setTimeout(r,800));
+      // Mirror Phase 4's compatibility check: MSF runs only when a non-empty
+      // module is configured AND it's not an SMB/Windows module pointed at a
+      // web port. If MSF will run, skip our standalone listener to avoid the
+      // port collision.
+      const _webPortsP3 = [80,443,8080,8081,8443,3000,3001,8000,8888,9000];
+      const _isWebP3 = _webPortsP3.includes(parseInt(targetPort));
+      const _isSmbP3 = msfModule.toLowerCase().includes("smb") || msfModule.toLowerCase().includes("windows");
+      const _moduleEmptyP3 = !msfModule.trim();
+      const willRunMsf = !_moduleEmptyP3 && !(_isWebP3 && _isSmbP3);
+      if (willRunMsf) {
+        log(`⏭️ Phase 3: Skipping standalone listener — Metasploit will manage port ${lport} in Phase 4`);
+      } else {
+        log(`⏳ Phase 3: Starting shell listener on port ${lport}...`);
+        stopShell();
+        setShellStatus("waiting"); setShellOutput("");
+        const rs = await callApi("/api/exploit/shell/start", base());
+        if(rs.ok===false){ log(`⚠ Phase 3: Listener error — ${rs.error}`); }
+        else { log(`✅ Phase 3: Listener ready on port ${lport}`); }
+        if(rs.lid){ setShellLid(rs.lid); startShellPoll(rs.lid); }
+        await new Promise(r=>setTimeout(r,800));
+      }
 
       // Phase 4 — Run MSF exploit (only if a module is configured and makes sense for target)
       if(stopRef.current) throw new Error("Stopped by user");
