@@ -4303,15 +4303,15 @@ function OsintModule({token, apiUrl}) {
         <div style={C.row}>
           <div style={{flex:2}}>
             <label style={C.label}>Target (Domain / IP / Username for Sherlock)</label>
-            <input style={C.input} value={target} onChange={e=>setTarget(e.target.value)} placeholder="e.g. example.com or 8.8.8.8 or john_doe"/>
+            <input style={C.input} value={target} onChange={e=>setTarget(e.target.value)} placeholder="e.g. example.com or 8.8.8.8 or john_doe" autoComplete="off" name="osint-target" data-form-type="other"/>
           </div>
           <div style={{flex:1}}>
             <label style={C.label}>VirusTotal API Key (optional)</label>
-            <input style={C.input} value={vtKey} onChange={e=>setVtKey(e.target.value)} placeholder="VT API key" type="password"/>
+            <input style={C.input} value={vtKey} onChange={e=>setVtKey(e.target.value)} placeholder="VT API key" type="password" autoComplete="off" name="vt-api-key" data-form-type="other"/>
           </div>
           <div style={{flex:1}}>
             <label style={C.label}>AbuseIPDB API Key (optional)</label>
-            <input style={C.input} value={abKey} onChange={e=>setAbKey(e.target.value)} placeholder="AbuseIPDB key" type="password"/>
+            <input style={C.input} value={abKey} onChange={e=>setAbKey(e.target.value)} placeholder="AbuseIPDB key" type="password" autoComplete="off" name="ab-api-key" data-form-type="other"/>
           </div>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",marginTop:10}}>
