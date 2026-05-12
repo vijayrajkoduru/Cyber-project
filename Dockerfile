@@ -4,15 +4,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # Only keep Kali tools we cannot replicate in Python:
-#   metasploit-framework  — live exploit execution (msfconsole/msfvenom)
 #   netcat-openbsd        — reverse shell listener for BOF module
 #   curl wget             — minimal HTTP utilities
 # Everything else (nmap, sqlmap, nikto, gobuster, dirb, ffuf, sslscan,
 # whois, dnsrecon, amass, sherlock, dnstwist, wafw00f, whatweb, hydra,
-# commix, theharvester, recon-ng, hping3, tcpdump) is now pure Python.
+# commix, theharvester, recon-ng, hping3, tcpdump, msfconsole) is now
+# pure Python. Exploitation module fires direct sockets — no MSF needed.
 RUN apt-get update -q && apt-get install -y -q --no-install-recommends \
     python3 python3-pip python3-venv \
-    metasploit-framework \
     netcat-openbsd curl wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
