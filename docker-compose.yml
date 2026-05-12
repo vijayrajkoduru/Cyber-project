@@ -87,6 +87,23 @@ services:
     networks:
       - oscp_net
 
+  # Metasploitable 2 — provides vsftpd 2.3.4 backdoor + other classic
+  # vulnerable services for the Exploitation module's working-exploits catalog.
+  metasploitable2:
+    image: tleemcjr/metasploitable2
+    container_name: lab_metasploitable
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -tln 2>/dev/null | grep -q ':21 ' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    networks:
+      - oscp_net
+
 networks:
   oscp_net:
     driver: bridge

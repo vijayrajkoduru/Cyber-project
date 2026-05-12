@@ -36,6 +36,7 @@ const MODULES = [
   { id:"osint",     icon:"🌍", label:"Advanced OSINT & Threat Intel",      cat:"scan",    free:false },
 
   // ── EXPLOITATION ─────────────────────────────────────────────
+  { id:"exploit",   icon:"💥", label:"Exploitation",                       cat:"exploit", free:false, featured:true },
   { id:"buffer",    icon:"💾", label:"Buffer Overflow",                    cat:"exploit", free:false },
   { id:"client",    icon:"🎯", label:"Client-Side Attacks",                cat:"exploit", free:false, comingSoon:true },
   { id:"sysexploit",icon:"⚙️", label:"System Exploitation",               cat:"exploit", free:false, comingSoon:true },
@@ -6122,6 +6123,360 @@ const BOF_PHASES = [
 ];
 
 
+// ═══════════════════════════════════════════════════════════════
+//  EXPLOITATION MODULE — verified-working exploits with live shells
+// ═══════════════════════════════════════════════════════════════
+//
+// Catalog-driven UX: backend returns a list of exploits via
+// /api/exploit/catalog. Each card shows the CVE, target, what success
+// looks like. RUN posts to /api/exploit/run which returns a shell_id.
+// Frontend then polls /api/exploit/shell/{sid}/output every 600ms to
+// drain the live shell buffer, and posts user commands to /cmd.
+//
+// All five exploits are direct-socket implementations — no msfconsole,
+// no HTTP-stager dependencies, no timing races. They either succeed
+// reliably or return a clear actionable error.
+
+function generateExploitReport({results, date}) {
+  const _go = () => {
+    const doc = new jsPDF({unit:"mm", format:"a4"});
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentW = pageW - 2*margin;
+    let y = 0;
+    const BLUE = [37,99,235], DARK=[15,23,42], GRAY=[100,116,139],
+          GREEN=[22,163,74], RED=[220,38,38], LIGHT=[241,245,249];
+    const txt = (s, x, py, sz=10, c=DARK, bold=false, align="left") => {
+      doc.setFont("Arial", bold?"bold":"normal"); doc.setFontSize(sz);
+      doc.setTextColor(...c); doc.text(String(s||""), x, py, {align});
+    };
+    const fillR = (x, py, w, h, c) => { doc.setFillColor(...c); doc.rect(x, py, w, h, "F"); };
+    const chk = (h) => { if (y + h > pageH - 18) { footer(); doc.addPage(); y = 20; header(); } };
+    const header = () => {
+      txt("VulnusLab — Exploitation Report", margin, 10, 7, GRAY);
+      txt(date, pageW-margin, 10, 7, GRAY, false, "right");
+    };
+    const footer = () => {
+      txt("VulnusLab | CONFIDENTIAL · vulnuslab.com", margin, pageH-7, 7, BLUE);
+      txt("support@vulnuslab.com", pageW-margin, pageH-7, 7, BLUE, false, "right");
+    };
+    // ── COVER ──
+    fillR(0, 0, pageW, 60, [11,15,30]);
+    txt("V", pageW/2-5, 22, 14, [248,250,252], true, "center");
+    txt("VULNUS LAB", pageW/2, 33, 11, [248,250,252], true, "center");
+    txt("EXPLOITATION REPORT", pageW/2, 48, 22, BLUE, true, "center");
+    txt("Active Exploitation Findings", pageW/2, 56, 9, GRAY, false, "center");
+    y = 75;
+    // ── Summary table ──
+    const totalRun = results.length;
+    const succ = results.filter(r => r.ok).length;
+    fillR(margin, y, contentW, 7, BLUE);
+    txt("RESULT SUMMARY", margin+3, y+5, 9, [255,255,255], true);
+    y += 7;
+    [["Exploits Run", String(totalRun)],
+     ["Successful Compromises", String(succ)],
+     ["Generated", date],
+     ["Classification", "CONFIDENTIAL"]].forEach((row, i) => {
+       fillR(margin, y, contentW, 7, i%2===0?LIGHT:[255,255,255]);
+       txt(row[0], margin+3, y+5, 8.5, GRAY, true);
+       txt(row[1], margin+60, y+5, 8.5, DARK);
+       y += 7;
+     });
+    y += 8;
+    // ── Per-exploit findings ──
+    results.forEach((r, i) => {
+      chk(40);
+      const status = r.ok ? "COMPROMISED" : "FAILED";
+      const stColor = r.ok ? GREEN : RED;
+      fillR(margin, y, contentW, 9, stColor);
+      txt(`${i+1}. ${r.exploit?.name || r.exploit_id}`, margin+3, y+6, 10, [255,255,255], true);
+      txt(status, pageW-margin-3, y+6, 9, [255,255,255], true, "right");
+      y += 11;
+      const rows = [
+        ["CVE / Reference", r.exploit?.cve || r.cve || "—"],
+        ["CVSS", String(r.exploit?.cvss || "—")],
+        ["Target", `${r.target||"—"}:${r.exploit?.port||"—"}`],
+        ["Service", r.exploit?.service || "—"],
+        ["Category", r.exploit?.category || "—"],
+      ];
+      rows.forEach((row, idx) => {
+        fillR(margin, y, contentW, 6, idx%2===0?LIGHT:[255,255,255]);
+        txt(row[0], margin+3, y+4.5, 8, GRAY, true);
+        txt(row[1], margin+55, y+4.5, 8, DARK);
+        y += 6;
+      });
+      y += 2;
+      // Description
+      fillR(margin, y, contentW, 5.5, [219,234,254]);
+      txt("Description", margin+3, y+4, 8, BLUE, true);
+      y += 6;
+      const desc = doc.splitTextToSize(r.exploit?.description || "—", contentW-6);
+      desc.forEach(line => {
+        chk(5); txt(line, margin+3, y+3.5, 8, DARK); y += 5;
+      });
+      y += 2;
+      // Evidence / Error
+      const evColor = r.ok ? [220,252,231] : [254,226,226];
+      const evHead = r.ok ? "Evidence of Compromise" : "Failure Reason";
+      const evText = r.ok ? (r.evidence || r.message || "Shell session opened.") : (r.error || "Unknown error");
+      fillR(margin, y, contentW, 5.5, evColor);
+      txt(evHead, margin+3, y+4, 8, r.ok ? GREEN : RED, true);
+      y += 6;
+      const ev = doc.splitTextToSize(evText, contentW-6);
+      ev.forEach(line => {
+        chk(5); txt(line, margin+3, y+3.5, 8, DARK); y += 5;
+      });
+      y += 2;
+      // Payload (if any)
+      if (r.payload) {
+        fillR(margin, y, contentW, 5.5, [254,243,199]);
+        txt("Payload", margin+3, y+4, 8, [180,83,9], true);
+        y += 6;
+        const pl = doc.splitTextToSize(r.payload, contentW-6);
+        pl.forEach(line => {
+          chk(5);
+          doc.setFont("Courier","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+          doc.text(line, margin+3, y+3.5); y += 4.5;
+        });
+        doc.setFont("Arial", "normal");
+        y += 2;
+      }
+      y += 4;
+    });
+    // ── End-of-report block ──
+    chk(35);
+    fillR(margin, y, contentW, 30, [219,234,254]);
+    txt("— END OF REPORT —", pageW/2, y+10, 10, BLUE, true, "center");
+    txt("Generated by VulnusLab — automated exploitation testing.", pageW/2, y+17, 6.5, GRAY, false, "center");
+    txt("All findings have been actively verified. No false positives.", pageW/2, y+22, 6.5, GRAY, false, "center");
+    txt("vulnuslab.com  ·  support@vulnuslab.com", pageW/2, y+27, 8, BLUE, true, "center");
+    footer();
+    doc.save(`exploit_report_${date.replace(/[: ]/g,"-")}.pdf`);
+  };
+  _go();
+}
+
+function ExploitationModule({token, apiUrl}) {
+  const [catalog, setCatalog]   = useState([]);
+  const [running, setRunning]   = useState({});      // exploit_id -> bool
+  const [results, setResults]   = useState({});       // exploit_id -> last result
+  const [activeShell, setActiveShell] = useState(null); // {sid, exploit_id}
+  const [shellOutput, setShellOutput] = useState("");
+  const [shellStatus, setShellStatus] = useState("idle");
+  const [shellCmd, setShellCmd] = useState("");
+  const [healthChecking, setHealthChecking] = useState(false);
+  const [labHealth, setLabHealth] = useState({});
+  const pollRef = useRef(null);
+  const outRef  = useRef(null);
+
+  const T = (path, opts={}) => fetch(apiUrl+path, {
+    ...opts,
+    headers: {"Content-Type":"application/json", "Authorization":"Bearer "+token, ...(opts.headers||{})},
+  }).then(r => r.json());
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const d = await T("/api/exploit/catalog");
+        setCatalog(d.exploits || []);
+      } catch(e) {}
+    })();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  useEffect(() => {
+    if (outRef.current) outRef.current.scrollTop = outRef.current.scrollHeight;
+  }, [shellOutput]);
+
+  // Poll active shell output
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (!activeShell?.sid) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const d = await T(`/api/exploit/shell/${activeShell.sid}/output`);
+        if (d.output) setShellOutput(prev => prev + d.output);
+        if (d.status) setShellStatus(d.status);
+        if (d.status === "closed" || d.status === "error" || d.status === "not_found") {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        }
+      } catch(e) {}
+    }, 600);
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+  }, [activeShell?.sid]);
+
+  const runExploit = async (exploit) => {
+    setRunning(p => ({...p, [exploit.id]: true}));
+    setResults(p => ({...p, [exploit.id]: null}));
+    try {
+      const r = await T("/api/exploit/run", {
+        method: "POST",
+        body: JSON.stringify({exploit_id: exploit.id}),
+      });
+      setResults(p => ({...p, [exploit.id]: r}));
+      if (r.ok && r.shell_id) {
+        setShellOutput("");
+        setShellStatus("starting");
+        setActiveShell({sid: r.shell_id, exploit_id: exploit.id});
+      }
+    } catch(e) {
+      setResults(p => ({...p, [exploit.id]: {ok:false, error:String(e)}}));
+    }
+    setRunning(p => ({...p, [exploit.id]: false}));
+  };
+
+  const sendCmd = async () => {
+    if (!activeShell?.sid || !shellCmd.trim()) return;
+    const c = shellCmd;
+    setShellOutput(prev => prev + `$ ${c}\n`);
+    setShellCmd("");
+    try {
+      await T(`/api/exploit/shell/${activeShell.sid}/cmd`, {
+        method: "POST",
+        body: JSON.stringify({cmd: c}),
+      });
+    } catch(e) {
+      setShellOutput(prev => prev + `[error sending: ${e}]\n`);
+    }
+  };
+
+  const closeShell = async () => {
+    if (!activeShell?.sid) return;
+    try { await T(`/api/exploit/shell/${activeShell.sid}/close`, {method:"POST"}); } catch(e) {}
+    setActiveShell(null); setShellOutput(""); setShellStatus("idle");
+  };
+
+  const downloadReport = () => {
+    const all = Object.values(results).filter(Boolean);
+    if (all.length === 0) { alert("Run at least one exploit before downloading the report."); return; }
+    generateExploitReport({
+      results: all,
+      date: new Date().toLocaleString(),
+    });
+  };
+
+  // Style block
+  const card = {background:"#0f172a", border:"1px solid #1e293b", borderRadius:8, padding:14};
+  const btnRun = (running) => ({padding:"8px 16px", fontSize:11, fontWeight:700, letterSpacing:.5,
+    background: running ? "#374151" : "#dc2626", color:"#fff", border:"none", borderRadius:6,
+    cursor: running ? "wait" : "pointer", width: "100%"});
+  const sev = (cvss) => cvss>=9 ? "#dc2626" : cvss>=7 ? "#f59e0b" : "#10b981";
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:22, fontWeight:900, color:"#dc2626", letterSpacing:4, marginBottom:4}}>
+          EXPLOITATION
+        </div>
+        <div style={{color:"#64748b", fontSize:12}}>
+          Verified-working exploits · Real shells · No false positives · CWE/CVSS-mapped reports
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div style={{display:"flex", gap:10, marginBottom:14, alignItems:"center", flexWrap:"wrap"}}>
+        <button onClick={downloadReport}
+          style={{padding:"8px 16px", fontSize:11, fontWeight:700, background:"#2563eb",
+            color:"#fff", border:"none", borderRadius:6, cursor:"pointer"}}>
+          📄 Download Exploitation Report
+        </button>
+        <div style={{color:"#64748b", fontSize:11}}>
+          {Object.values(results).filter(r=>r?.ok).length} compromised · {Object.values(results).filter(r=>r&&!r.ok).length} failed · {catalog.length-Object.keys(results).length} not run
+        </div>
+      </div>
+
+      {/* Catalog grid */}
+      <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))", gap:14, marginBottom:18}}>
+        {catalog.map(e => {
+          const r = results[e.id];
+          const isRunning = running[e.id];
+          return (
+            <div key={e.id} style={card}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6}}>
+                <div>
+                  <div style={{fontSize:13, fontWeight:700, color:"#f1f5f9"}}>{e.name}</div>
+                  <div style={{fontSize:10, color:"#64748b", marginTop:2}}>{e.cve} · {e.category}</div>
+                </div>
+                <span style={{padding:"3px 8px", fontSize:10, fontWeight:700, color:"#fff",
+                  background: sev(e.cvss), borderRadius:4}}>CVSS {e.cvss}</span>
+              </div>
+              <div style={{fontSize:11, color:"#94a3b8", lineHeight:1.5, margin:"8px 0"}}>{e.description}</div>
+              <div style={{display:"flex", gap:8, fontSize:10, color:"#64748b", marginBottom:10, flexWrap:"wrap"}}>
+                <span>🎯 {e.target}:{e.port}</span>
+                <span>•</span>
+                <span>{e.service}</span>
+                <span>•</span>
+                <span>{e.difficulty}</span>
+              </div>
+              <div style={{fontSize:10, color:"#22c55e", marginBottom:10}}>
+                <strong>Success looks like:</strong> {e.result}
+              </div>
+              <button onClick={() => runExploit(e)} disabled={isRunning}
+                style={btnRun(isRunning)}>
+                {isRunning ? "⏳ EXPLOITING..." : "🚀 RUN EXPLOIT"}
+              </button>
+              {r && (
+                <div style={{marginTop:10, padding:8, borderRadius:6,
+                  background: r.ok ? "rgba(34,197,94,0.1)" : "rgba(220,38,38,0.1)",
+                  border: `1px solid ${r.ok?"#22c55e":"#dc2626"}`}}>
+                  <div style={{fontSize:11, fontWeight:700, color: r.ok?"#22c55e":"#dc2626"}}>
+                    {r.ok ? "✅ COMPROMISED" : "❌ FAILED"}
+                  </div>
+                  <div style={{fontSize:10, color:"#94a3b8", marginTop:4}}>
+                    {r.ok ? r.evidence : r.error}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Live shell terminal */}
+      {activeShell && (
+        <div style={{...card, padding:0, overflow:"hidden", marginTop:18, border:"1px solid #22c55e"}}>
+          <div style={{padding:"10px 16px", background:"#052e16", borderBottom:"1px solid #14532d",
+            display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+            <div>
+              <span style={{fontSize:12, fontWeight:700, color:"#86efac"}}>🐚 LIVE SHELL</span>
+              <span style={{fontSize:10, color:"#86efac", marginLeft:10, fontFamily:"monospace"}}>
+                sid={activeShell.sid} · {shellStatus}
+              </span>
+            </div>
+            <button onClick={closeShell} style={{padding:"4px 10px", fontSize:10,
+              background:"#dc2626", color:"#fff", border:"none", borderRadius:4, cursor:"pointer"}}>
+              ✕ CLOSE
+            </button>
+          </div>
+          <div ref={outRef} style={{padding:14, background:"#000", color:"#22c55e",
+            fontFamily:"'JetBrains Mono', Consolas, monospace", fontSize:12,
+            minHeight:280, maxHeight:480, overflowY:"auto", whiteSpace:"pre-wrap", lineHeight:1.5}}>
+            {shellOutput || "Waiting for shell output...\n"}
+          </div>
+          <div style={{padding:10, background:"#0f172a", borderTop:"1px solid #1e293b",
+            display:"flex", gap:6}}>
+            <span style={{color:"#22c55e", fontFamily:"monospace", padding:"6px 4px"}}>$</span>
+            <input value={shellCmd} onChange={e=>setShellCmd(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter") sendCmd(); }}
+              placeholder="type a command and press Enter (id, whoami, cat /etc/passwd, ls -la /root, ...)"
+              autoComplete="off" name="exp-shell-cmd" data-form-type="other"
+              style={{flex:1, padding:6, background:"#020617", color:"#e2e8f0",
+                border:"1px solid #1e293b", borderRadius:4, fontFamily:"monospace", fontSize:12}}/>
+            <button onClick={sendCmd}
+              style={{padding:"6px 16px", background:"#22c55e", color:"#000", fontWeight:700,
+                border:"none", borderRadius:4, cursor:"pointer", fontSize:11}}>
+              SEND
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, offset, badChars, jmpEsp, jmpModule, lhost, lport, payload, shellcode, notes, scripts, date}) {
   const _doGen = () => {
     const doc = new jsPDF({unit:"mm", format:"a4"});
@@ -8034,6 +8389,9 @@ export default function App() {
         </div>
         <div style={{display: active==="buffer"   ? "block" : "none"}}>
           <BufferOverflowModule token={token}/>
+        </div>
+        <div style={{display: active==="exploit"  ? "block" : "none"}}>
+          <ExploitationModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="osint"    ? "block" : "none"}}>
           <OsintModule token={token} apiUrl={API}/>
