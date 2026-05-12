@@ -6099,7 +6099,7 @@ const BOF_PHASES = [
 // click-to-fill experiences (connection refused), so the catalog stays honest:
 // every entry below maps to a container that's guaranteed to be up.
 const EXPLOIT_TARGETS = [
-  { label:"DVWA",          os:"🐧", ip:"lab_dvwa",       port:80,   service:"Apache/PHP/MySQL", cve:"Multiple", msf:"exploit/unix/webapp/php_include", payload:"php/reverse_php",          fmt:"php", search:"dvwa php injection",  desc:"🟢 LIVE Docker — SQLi, XSS, RFI, Command Injection, File Upload" },
+  { label:"DVWA",          os:"🐧", ip:"lab_dvwa",       port:80,   service:"Apache/PHP/MySQL", cve:"Multiple", msf:"",                                 payload:"php/reverse_php",          fmt:"php", search:"dvwa php injection",  desc:"🟢 LIVE Docker — SQLi, XSS, RFI, Command Injection, File Upload" },
   { label:"WebGoat",       os:"🐧", ip:"lab_webgoat",    port:8080, service:"Java/Tomcat",      cve:"Multiple", msf:"",                                 payload:"java/shell_reverse_tcp",    fmt:"jar", search:"webgoat java",        desc:"🟢 LIVE Docker — OWASP Top 10 guided lessons" },
   { label:"Juice Shop",    os:"🐧", ip:"lab_juiceshop",  port:3000, service:"Node.js",          cve:"Multiple", msf:"",                                 payload:"nodejs/shell_reverse_tcp",  fmt:"js",  search:"juice shop nodejs",   desc:"🟢 LIVE Docker — 100+ challenges: JWT, SQLi, IDOR, XSS" },
   { label:"Mutillidae II", os:"🐧", ip:"lab_mutillidae", port:80,   service:"Apache/PHP",       cve:"Multiple", msf:"",                                 payload:"php/reverse_php",          fmt:"php", search:"mutillidae sqli",     desc:"🟢 LIVE Docker — SQLi, XXE, CSRF, Clickjacking" },
