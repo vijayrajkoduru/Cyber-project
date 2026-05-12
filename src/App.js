@@ -1955,8 +1955,10 @@ function WebAppModule(props) {
       if (d.includes("x-frame-options") || d.includes("clickjacking") || d.includes("frame-ancestors")) return "header:x-frame";
       if (d.includes("x-content-type-options")) return "header:x-content-type";
       if (d.includes("permissions-policy")) return "header:permissions-policy";
-      // File-based: collapse same file detected by different scanners
-      const fileMatch = d.match(/\/(robots\.txt|security\.txt|\.git|\.env|\.svn|\.ds_store|composer\.json|package\.json|dockerfile|docker-compose\.yml)/);
+      // File-based: collapse same file detected by different scanners.
+      // Match with OR without leading slash — nikto says "robots.txt exposes hidden paths"
+      // while sensitivefiles says "Accessible: /robots.txt" — both refer to same file.
+      const fileMatch = d.match(/\b(robots\.txt|security\.txt|\.git\b|\.env\b|\.svn|\.ds_store|composer\.json|package\.json|dockerfile|docker-compose\.yml)/);
       if (fileMatch) return "file:" + fileMatch[1];
       // Default: CWE family + first 35 chars of detail
       return (f.cwe || "no-cwe") + "|" + d.substring(0, 35);
@@ -2043,7 +2045,18 @@ function WebAppModule(props) {
       rfi:              allResults["rfi"]              || null,
       smuggling:        allResults["smuggling"]        || null,
       responsesplitting:allResults["responsesplitting"]|| null,
-      sessionfixation:  allResults["sessionfixation"]  || null,
+      sessionfixation:  (() => {
+        // If cookies scanner found NO cookies on the target, suppress sessionfixation's
+        // cookie-related findings — they're probing artifacts that contradict Section 12.
+        // Keeps Section 15 status accurate (PASSED instead of false VULNERABLE) and
+        // prevents Section 21 from rendering empty/contradictory cookie advice.
+        const sf = allResults["sessionfixation"];
+        if (!sf) return null;
+        const noCookies = allResults["cookies"] && (!allResults["cookies"].cookies || allResults["cookies"].cookies.length === 0);
+        if (!noCookies) return sf;
+        const filtered = (sf.findings || []).filter(f => !((f.detail || "").toLowerCase().includes("cookie")));
+        return { ...sf, findings: filtered, vulnerable: filtered.some(f => f.severity && f.severity !== "INFO" && f.severity !== "LOW") };
+      })(),
       dataexfil:        allResults["dataexfil"]        || null,
       racecondition:    allResults["racecondition"]    || null,
       smb:              allResults["smb"]              || null,
