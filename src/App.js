@@ -6228,20 +6228,78 @@ function generateExploitReport({results, date}) {
         chk(5); txt(line, margin+3, y+3.5, 8, DARK); y += 5;
       });
       y += 2;
-      // Payload (if any)
-      if (r.payload) {
-        fillR(margin, y, contentW, 5.5, [254,243,199]);
-        txt("Payload", margin+3, y+4, 8, [180,83,9], true);
+      // Code-aware line wrap so long unbroken strings don't get truncated
+      // mid-character the way splitTextToSize handles them.
+      const wrapCode = (s, lineLen) => {
+        const out = [];
+        let cur = String(s || "");
+        while (cur.length > lineLen) {
+          let cut = cur.lastIndexOf(" ", lineLen);
+          if (cut < lineLen * 0.5) cut = lineLen;  // hard break for no-space runs
+          out.push(cur.substring(0, cut));
+          cur = cur.substring(cut).replace(/^\s+/, "");
+        }
+        if (cur) out.push(cur);
+        return out;
+      };
+      const codeBlock = (heading, headColor, bgColor, body) => {
+        if (!body) return;
+        fillR(margin, y, contentW, 5.5, bgColor);
+        txt(heading, margin+3, y+4, 8, headColor, true);
         y += 6;
-        const pl = doc.splitTextToSize(r.payload, contentW-6);
-        pl.forEach(line => {
+        const lines = wrapCode(body, 100);
+        lines.forEach(line => {
           chk(5);
           doc.setFont("Courier","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
           doc.text(line, margin+3, y+3.5); y += 4.5;
         });
         doc.setFont("Arial", "normal");
         y += 2;
+      };
+
+      // Payload
+      if (r.payload) codeBlock("Payload", [180,83,9], [254,243,199], r.payload);
+
+      // Extracted data table — user/hash pairs for SQLi exploits
+      if (r.ok && Array.isArray(r.rows) && r.rows.length > 0) {
+        chk(20);
+        fillR(margin, y, contentW, 5.5, [243,232,255]);
+        txt(`Extracted Records (${r.rows.length})`, margin+3, y+4, 8, [109,40,217], true);
+        y += 6;
+        // Table header
+        fillR(margin, y, contentW, 5, [221,214,254]);
+        txt("Username", margin+3, y+3.5, 7.5, DARK, true);
+        txt("Hash / Password", margin+60, y+3.5, 7.5, DARK, true);
+        y += 5;
+        r.rows.slice(0, 20).forEach((row, idx) => {
+          chk(5);
+          fillR(margin, y, contentW, 4.5, idx%2===0 ? LIGHT : [255,255,255]);
+          doc.setFont("Courier","normal"); doc.setFontSize(7); doc.setTextColor(...DARK);
+          doc.text(String(row[0]||"").substring(0,28), margin+3, y+3.2);
+          doc.text(String(row[1]||"").substring(0,68), margin+60, y+3.2);
+          y += 4.5;
+        });
+        if (r.rows.length > 20) {
+          chk(5);
+          doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+          doc.text(`… and ${r.rows.length - 20} more records (truncated for readability)`, margin+3, y+3);
+          y += 5;
+        }
+        doc.setFont("Arial", "normal");
+        y += 3;
       }
+
+      // Extracted JWT — Juice Shop auth bypass
+      if (r.ok && r.jwt) codeBlock("Extracted JSON Web Token", [180,83,9], [254,243,199], r.jwt);
+
+      // Shell verification output (vsftpd, DVWA cmdi etc.) — only if not
+      // already covered by Evidence line. We mine the evidence string for
+      // an `id` output if present.
+      if (r.ok && r.shell_target && r.shell_port) {
+        codeBlock("Reverse-Shell Endpoint", [22,163,74], [220,252,231],
+                  `${r.shell_target}:${r.shell_port}  (shell session id: ${r.shell_id})`);
+      }
+
       y += 4;
     });
     // ── End-of-report block ──
