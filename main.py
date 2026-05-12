@@ -4528,39 +4528,71 @@ async def scan_takeover(req: ScanRequest, user=Depends(verify_scan_quota)):
 async def scan_otp(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
     findings = []; base = _web_url(req.target)
+
+    # SPA baseline: probe a random non-existent path. If the server returns 200
+    # with substantial content, it's serving an SPA index.html for every route.
+    # We compare candidate endpoint responses against this baseline to reject
+    # the OS Angular/React fallback that masquerades as "endpoint exists".
+    spa_baseline_len = 0
+    spa_baseline_text = ""
+    is_spa = False
+    try:
+        _probe = _http_get(base.rstrip("/") + "/__vulnuslab_probe_" + uuid.uuid4().hex[:10], timeout=5)
+        if _probe and _probe.status_code == 200 and len(_probe.text) > 200:
+            is_spa = True
+            spa_baseline_len = len(_probe.text)
+            spa_baseline_text = _probe.text[:500]
+    except Exception:
+        pass
+
+    def _looks_like_spa_fallback(resp_text: str) -> bool:
+        if not is_spa or not resp_text: return False
+        if abs(len(resp_text) - spa_baseline_len) < max(50, spa_baseline_len * 0.05):
+            return True
+        if resp_text[:500] == spa_baseline_text:
+            return True
+        return False
+
     otp_paths = ["/otp", "/verify", "/2fa", "/mfa", "/totp", "/api/otp", "/api/verify",
                  "/api/2fa", "/api/mfa", "/auth/otp", "/auth/2fa", "/verify-otp", "/confirm"]
     discovered_otp = []
     for path in otp_paths:
         r = _http_get(base.rstrip("/") + path, timeout=5)
-        if r and r.status_code in (200, 302, 400, 405, 422):
+        if not r: continue
+        if r.status_code in (302, 400, 405, 422):
+            discovered_otp.append(path)
+        elif r.status_code == 200 and not _looks_like_spa_fallback(r.text):
             discovered_otp.append(path)
     for path in discovered_otp:
         url = base.rstrip("/") + path
         statuses = []
+        sample_text = ""
         for otp_val in ["000000", "111111", "222222", "333333", "444444"]:
             try:
                 r = _req_lib.post(url, json={"otp": otp_val, "code": otp_val, "token": otp_val},
                                   timeout=5, verify=False, headers=_BROWSER_HEADERS)
                 statuses.append(r.status_code)
+                if not sample_text: sample_text = r.text
             except: statuses.append(0)
+        # If POST replies still match SPA fallback, this isn't a real OTP endpoint
+        if _looks_like_spa_fallback(sample_text): continue
         rate_limited = any(s in (429, 423, 503) for s in statuses)
         if not rate_limited and statuses.count(200) >= 3:
             findings.append({"detail": f"OTP endpoint {path} has no rate limiting — brute force possible ({statuses.count(200)}/5 attempts returned 200)", "severity": "HIGH", "cvss": "7.5", "cve": "N/A", "cwe": "CWE-307", "cwe_name": "Improper Restriction of Excessive Authentication Attempts", "owasp": "A07:2021 - Identification and Authentication Failures", "remediation": "Implement rate limiting (max 5 attempts). Lock out after failures. Use TOTP (RFC 6238)."})
         try:
             r1 = _req_lib.post(url, json={"otp": "123456", "code": "123456"}, timeout=5, verify=False, headers=_BROWSER_HEADERS)
             r2 = _req_lib.post(url, json={"otp": "123456", "code": "123456"}, timeout=5, verify=False, headers=_BROWSER_HEADERS)
-            if r1.status_code == r2.status_code == 200 and r1.text == r2.text:
+            if r1.status_code == r2.status_code == 200 and r1.text == r2.text and not _looks_like_spa_fallback(r1.text):
                 findings.append({"detail": f"OTP reuse possible at {path} — same OTP accepted twice (no single-use enforcement)", "severity": "MEDIUM", "cvss": "6.5", "cve": "N/A", "cwe": "CWE-294", "cwe_name": "Authentication Bypass by Capture-Replay", "owasp": "A07:2021", "remediation": "Invalidate OTP immediately after first use. Store used OTPs until expiry window passes."})
         except: pass
         try:
             r = _req_lib.post(url, json={"otp": "000000"}, timeout=5, verify=False, headers=_BROWSER_HEADERS)
-            if '"success":false' in r.text or '"valid":false' in r.text:
+            if ('"success":false' in r.text or '"valid":false' in r.text) and not _looks_like_spa_fallback(r.text):
                 findings.append({"detail": f"OTP endpoint {path} returns JSON boolean in response — potential response manipulation attack", "severity": "MEDIUM", "cvss": "5.9", "cve": "N/A", "cwe": "CWE-807", "cwe_name": "Reliance on Untrusted Inputs in a Security Decision", "owasp": "A07:2021", "remediation": "Validate OTP server-side only. Do not rely on client-side response parsing for access control."})
         except: pass
     for path in ["/backup-codes", "/recovery-codes", "/api/backup-codes", "/account/backup-codes"]:
         r = _http_get(base.rstrip("/") + path, timeout=5)
-        if r and r.status_code == 200:
+        if r and r.status_code == 200 and not _looks_like_spa_fallback(r.text):
             findings.append({"detail": f"Backup/recovery codes endpoint at {path} accessible without apparent authentication", "severity": "HIGH", "cvss": "7.5", "cve": "N/A", "cwe": "CWE-288", "cwe_name": "Authentication Bypass Using Alternate Path", "owasp": "A07:2021", "remediation": "Require authentication and re-authentication before exposing backup codes."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id, "otp", req.target, {"output": str(findings)})
     return {"scan_id": scan_id, "target": req.target, "tool": "otp", "vulnerable": bool(findings), "findings": findings, "total": len(findings), "endpoints": discovered_otp, "timestamp": datetime.datetime.utcnow().isoformat()}
