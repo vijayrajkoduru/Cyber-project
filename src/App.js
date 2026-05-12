@@ -6094,23 +6094,16 @@ const BOF_PHASES = [
 // ═══════════════════════════════════════════════════════════════
 //  EXPLOITATION TECHNIQUES MODULE
 // ═══════════════════════════════════════════════════════════════
-// ── Live Docker lab targets (running on Kali server 192.168.56.102) ──
+// Live practice targets — only the ones actually deployed via docker-compose.yml
+// on the VulnusLab VPS. Listing targets that aren't running gives users broken
+// click-to-fill experiences (connection refused), so the catalog stays honest:
+// every entry below maps to a container that's guaranteed to be up.
 const EXPLOIT_TARGETS = [
-  // ── Web App Targets ──────────────────────────────────────────────────────────────────────────────
-  { label:"DVWA",                os:"🐧", ip:"lab_dvwa", port:80,   service:"Apache/PHP/MySQL",     cve:"Multiple",      msf:"exploit/unix/webapp/php_include",               payload:"php/reverse_php",               fmt:"php", search:"dvwa php injection",    desc:"🟢 LIVE Docker — SQLi, XSS, RFI, Command Injection, File Upload" },
-  { label:"WebGoat",             os:"🐧", ip:"lab_webgoat", port:8080, service:"Java/Tomcat",          cve:"Multiple",      msf:"",                                              payload:"java/shell_reverse_tcp",        fmt:"jar", search:"webgoat java",          desc:"🟢 LIVE Docker — OWASP Top 10 guided lessons" },
-  { label:"Juice Shop",          os:"🐧", ip:"lab_juiceshop", port:3000, service:"Node.js",              cve:"Multiple",      msf:"",                                              payload:"nodejs/shell_reverse_tcp",      fmt:"js",  search:"juice shop nodejs",      desc:"🟢 LIVE Docker — 100+ challenges: JWT, SQLi, IDOR, XSS" },
-  { label:"Mutillidae II",       os:"🐧", ip:"lab_mutillidae", port:80, service:"Apache/PHP",           cve:"Multiple",      msf:"",                                              payload:"php/reverse_php",               fmt:"php", search:"mutillidae sqli",        desc:"🟢 LIVE Docker — SQLi, XXE, CSRF, Clickjacking" },
-  // ── Exploit / Service Targets ────────────────────────────────────────────────────────────────────
-  { label:"vsftpd 2.3.4",        os:"🐧", ip:"172.20.0.20", port:21,   service:"vsftpd 2.3.4",        cve:"CVE-2011-2523", msf:"exploit/unix/ftp/vsftpd_234_backdoor",          payload:"cmd/unix/interact",             fmt:"elf", search:"vsftpd 2.3.4",          desc:"🟢 LIVE Docker — FTP backdoor: username with :) opens root shell on port 6200" },
-  { label:"SambaCry",            os:"🐧", ip:"172.20.0.21", port:445,  service:"Samba 4.x",           cve:"CVE-2017-7494", msf:"exploit/linux/samba/is_known_pipename",         payload:"linux/x86/shell_reverse_tcp",   fmt:"elf", search:"samba is_known_pipename",desc:"🟢 LIVE Docker — Samba pipe name arbitrary module load RCE" },
-  { label:"Shellshock",          os:"🐧", ip:"172.20.0.23", port:80,   service:"Apache/bash CGI",     cve:"CVE-2014-6271", msf:"exploit/multi/http/apache_mod_cgi_bash_env_exec",payload:"linux/x86/shell_reverse_tcp",  fmt:"elf", search:"shellshock bash",        desc:"🟢 LIVE Docker — bash env var RCE via CGI: /cgi-bin/test.cgi" },
-  { label:"Heartbleed",          os:"🐧", ip:"172.20.0.24", port:443,  service:"OpenSSL 1.0.1",       cve:"CVE-2014-0160", msf:"auxiliary/scanner/ssl/openssl_heartbleed",      payload:"",                              fmt:"",    search:"heartbleed openssl",      desc:"🟢 LIVE Docker — TLS heartbeat memory leak (up to 64KB per request)" },
-  { label:"UnrealIRCd 3.2.8.1", os:"🐧", ip:"172.20.0.26", port:6667, service:"IRC",                 cve:"CVE-2010-2075", msf:"exploit/unix/irc/unreal_ircd_3281_backdoor",    payload:"cmd/unix/reverse",              fmt:"elf", search:"UnrealIRCd",             desc:"🟢 LIVE Docker — IRC server backdoor: AB; prefix triggers command execution" },
-  { label:"ProFTPd 1.3.3c",      os:"🐧", ip:"172.20.0.27", port:21,   service:"ProFTPd 1.3.3c",      cve:"CVE-2010-4221", msf:"exploit/unix/ftp/proftpd_133c_backdoor",        payload:"cmd/unix/reverse",              fmt:"elf", search:"proftpd 1.3.3",          desc:"🟢 LIVE Docker — FTP backdoor: HELP ACIDBITCHEZ gives root shell" },
-  // ── Windows VMs (VirtualBox — set up separately) ─────────────────────────────────────────────────
-  { label:"Windows XP SP3 🪟",   os:"🪟", ip:"192.168.56.104", port:445, service:"SMB (MS08-067)",    cve:"CVE-2008-4250", msf:"exploit/windows/smb/ms08_067_netapi",           payload:"windows/shell_reverse_tcp",     fmt:"exe", search:"ms08-067 netapi",        desc:"⚙️ VirtualBox VM — NetAPI buffer overflow, no auth needed" },
-  { label:"Windows 7 SP1 🪟",    os:"🪟", ip:"192.168.56.105", port:445, service:"SMB EternalBlue",  cve:"CVE-2017-0144", msf:"exploit/windows/smb/ms17_010_eternalblue",      payload:"windows/x64/shell_reverse_tcp", fmt:"exe", search:"eternalblue ms17-010",    desc:"⚙️ VirtualBox VM — EternalBlue SMB RCE (WannaCry vector)" },
+  { label:"DVWA",          os:"🐧", ip:"lab_dvwa",       port:80,   service:"Apache/PHP/MySQL", cve:"Multiple", msf:"exploit/unix/webapp/php_include", payload:"php/reverse_php",          fmt:"php", search:"dvwa php injection",  desc:"🟢 LIVE Docker — SQLi, XSS, RFI, Command Injection, File Upload" },
+  { label:"WebGoat",       os:"🐧", ip:"lab_webgoat",    port:8080, service:"Java/Tomcat",      cve:"Multiple", msf:"",                                 payload:"java/shell_reverse_tcp",    fmt:"jar", search:"webgoat java",        desc:"🟢 LIVE Docker — OWASP Top 10 guided lessons" },
+  { label:"Juice Shop",    os:"🐧", ip:"lab_juiceshop",  port:3000, service:"Node.js",          cve:"Multiple", msf:"",                                 payload:"nodejs/shell_reverse_tcp",  fmt:"js",  search:"juice shop nodejs",   desc:"🟢 LIVE Docker — 100+ challenges: JWT, SQLi, IDOR, XSS" },
+  { label:"Mutillidae II", os:"🐧", ip:"lab_mutillidae", port:80,   service:"Apache/PHP",       cve:"Multiple", msf:"",                                 payload:"php/reverse_php",          fmt:"php", search:"mutillidae sqli",     desc:"🟢 LIVE Docker — SQLi, XXE, CSRF, Clickjacking" },
+  { label:"bWAPP",         os:"🐧", ip:"lab_bwapp",      port:80,   service:"Apache/PHP",       cve:"Multiple", msf:"",                                 payload:"php/reverse_php",          fmt:"php", search:"bwapp php sqli",      desc:"🟢 LIVE Docker — 100+ bug categories (creds: bee/bug)" },
 ];
 
 const SHELL_TEMPLATES = (lhost, lport) => [
