@@ -6378,7 +6378,7 @@ function ExploitModule({token, onRunningChange}) {
     (async()=>{
       try {
         const r = await fetch((getApiUrl()||"")+"/api/exploit/lhost", {
-          headers:{"Authorization":"Bearer "+(localStorage.getItem("token")||"")}
+          headers:{"Authorization":"Bearer "+getAuthToken()}
         });
         if(!r.ok) return;
         const d = await r.json();
