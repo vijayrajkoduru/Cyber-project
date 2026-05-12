@@ -6515,7 +6515,13 @@ function ExploitModule({token, onRunningChange}) {
   const autoExploit = async () => {
     if(!targetIP.trim()) return alert("Enter target IP first");
     if(!lhost.trim())    return alert("Enter LHOST (your Kali IP) first");
-    if(!msfModule.trim())return alert("Enter MSF module first");
+    // Web-app targets have NO direct Metasploit module — VulnusLab correctly
+    // leaves the MSF Module field empty in that case ("use manual techniques").
+    // Auto-Exploit should still run for these: Phase 1 (search) + Phase 2 (vuln
+    // check) + Phase 4 (payload gen), skipping Phase 3 (MSF run). Forcing an
+    // MSF module here would block the most common case (web target scans).
+    const isWebTarget = /^https?:\/\//i.test(targetIP) || ["http","https","web","tomcat","apache","nginx","iis"].some(k => (service||"").toLowerCase().includes(k));
+    if(!msfModule.trim() && !isWebTarget) return alert("Enter MSF module first");
 
     // Legal allowlist check — active exploitation against unauthorized hosts
     // is a criminal offense (CFAA / IT Act 2000). Backend enforces the same
