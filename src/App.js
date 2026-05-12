@@ -3046,6 +3046,17 @@ function generateShellReport({title, icon, target, attacks, results}) {
   const W=210, M=15; let y=20;
   const SC = s=>s==="CRITICAL"?[239,68,68]:s==="HIGH"?[249,115,22]:s==="MEDIUM"?[234,179,8]:s==="LOW"?[34,197,94]:[100,116,139];
   const chk=(n=20)=>{if(y+n>280){doc.addPage();y=20;}};
+  // jsPDF's default fonts (Helvetica/Courier) don't support Unicode emojis — they render
+  // as garbled byte sequences like "Ø<ßð". Strip all emoji codepoints + variation selectors
+  // before passing any text to doc.text(). Used everywhere icons appear (cover, sections, attacks).
+  const _safe = s => String(s||"")
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")   // Most emoji ranges
+    .replace(/[\u{2600}-\u{27BF}]/gu, "")     // Misc symbols / dingbats
+    .replace(/[\u{2B00}-\u{2BFF}]/gu, "")     // Arrows / boxes
+    .replace(/[\u{FE00}-\u{FE0F}]/gu, "")     // Variation selectors
+    .replace(/[\u{200D}]/gu, "")              // Zero-width joiner
+    .replace(/\s+/g, " ")
+    .trim();
   const sHead=(txt,accent)=>{
     chk(12); const [r,g,b]=accent||[30,64,175];
     doc.setFillColor(r,g,b); doc.rect(M,y,W-2*M,7,"F");
@@ -3086,7 +3097,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
   doc.text("PENETRATION TEST", M, 75);
   doc.text("REPORT", M, 88);
   doc.setFontSize(16); doc.setTextColor(96,165,250);
-  doc.text(`${icon}  ${title}`, M, 105);
+  doc.text(_safe(`${icon}  ${title}`) || _safe(title), M, 105);
   doc.setFillColor(30,41,59); doc.rect(M,118,W-2*M,45,"F");
   doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
   const coverInfo=[["Target",target||"—"],["Date",new Date().toLocaleDateString()],
@@ -3142,9 +3153,9 @@ function generateShellReport({title, icon, target, attacks, results}) {
     doc.setFillColor(i%2===0?13:18,i%2===0?20:26,i%2===0?42:52);
     doc.rect(M,y,W-2*M,8,"F");
     doc.setFontSize(8); doc.setTextColor(241,245,249); doc.setFont("helvetica","bold");
-    doc.text(`${atk.icon} ${atk.label}`,M+3,y+5.5);
+    doc.text(_safe(atk.label),M+3,y+5.5);
     doc.setFont("helvetica","normal"); doc.setTextColor(148,163,184);
-    doc.text(atk.desc.slice(0,55),M+65,y+5.5);
+    doc.text(_safe(atk.desc).slice(0,55),M+65,y+5.5);
     const status=!ran2?"NOT RUN":fcount>0?`${fcount} FINDING(S)`:"CLEAN";
     const [sr,sg,sb]=!ran2?[71,85,105]:fcount>0?[239,68,68]:[34,197,94];
     doc.setTextColor(sr,sg,sb); doc.setFont("helvetica","bold");
@@ -3167,29 +3178,29 @@ function generateShellReport({title, icon, target, attacks, results}) {
     chk(20);
     doc.setFillColor(15,23,42); doc.rect(M,y,W-2*M,7,"F");
     doc.setFontSize(8); doc.setTextColor(96,165,250); doc.setFont("helvetica","bold");
-    doc.text(`${atk.icon} ${atk.label}`,M+3,y+4.8); y+=9;
+    doc.text(_safe(atk.label),M+3,y+4.8); y+=9;
     if(atk.target_type){
       chk(5); doc.setFontSize(7); doc.setTextColor(251,191,36); doc.setFont("helvetica","bold");
       doc.text("Target: ",M+4,y);
       doc.setFont("helvetica","normal"); doc.setTextColor(203,213,225);
-      doc.text(atk.target_type.slice(0,75),M+19,y); y+=5;
+      doc.text(_safe(atk.target_type).slice(0,75),M+19,y); y+=5;
     }
     if(atk.howto){
       chk(7); doc.setFontSize(7.5); doc.setTextColor(203,213,225); doc.setFont("helvetica","normal");
-      const lines=doc.splitTextToSize(atk.howto,W-2*M-6);
+      const lines=doc.splitTextToSize(_safe(atk.howto),W-2*M-6);
       lines.slice(0,3).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
     }
     if(atk.requires){
       chk(6); doc.setFontSize(7); doc.setTextColor(234,179,8); doc.setFont("helvetica","bold");
       doc.text("Requires: ",M+4,y);
       doc.setFont("helvetica","normal"); doc.setTextColor(203,213,225);
-      doc.text(atk.requires.slice(0,72),M+22,y); y+=5;
+      doc.text(_safe(atk.requires).slice(0,72),M+22,y); y+=5;
     }
     if(atk.vulns && atk.vulns.length>0){
       chk(5); doc.setFontSize(7); doc.setTextColor(34,197,94); doc.setFont("helvetica","bold");
       doc.text("Detects: ",M+4,y);
       doc.setFont("helvetica","normal"); doc.setTextColor(148,163,184);
-      doc.text(atk.vulns.slice(0,3).join(" | ").slice(0,80),M+20,y); y+=5;
+      doc.text(_safe(atk.vulns.slice(0,3).join(" | ")).slice(0,80),M+20,y); y+=5;
     }
     y+=3;
   });
@@ -3203,9 +3214,9 @@ function generateShellReport({title, icon, target, attacks, results}) {
       chk(20);
       doc.setFillColor(40,10,10); doc.rect(M,y,W-2*M,7,"F");
       doc.setFontSize(8); doc.setTextColor(248,113,113); doc.setFont("helvetica","bold");
-      doc.text(`${atk.icon} ${atk.label} — Real World Attack Scenario`,M+3,y+4.8); y+=9;
+      doc.text(_safe(atk.label)+" — Real World Attack Scenario",M+3,y+4.8); y+=9;
       doc.setFontSize(7.5); doc.setTextColor(203,213,225); doc.setFont("helvetica","normal");
-      const impLines=doc.splitTextToSize(atk.hackerImpact,W-2*M-6);
+      const impLines=doc.splitTextToSize(_safe(atk.hackerImpact),W-2*M-6);
       impLines.slice(0,4).forEach(l=>{chk(5);doc.text(l,M+4,y);y+=4.5;});
       y+=4;
     });
@@ -3221,7 +3232,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
     foundAny=true; chk(14);
     doc.setFillColor(20,30,55); doc.rect(M,y,W-2*M,8,"F");
     doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","bold");
-    doc.text(`${atk.icon} ${atk.label}`,M+3,y+5.5);
+    doc.text(_safe(atk.label),M+3,y+5.5);
     if(res.message){
       const msgClean=res.message.replace(/[❌✅⚠]/g,"").trim();
       doc.setTextColor(...(res.message.includes("❌")?[239,68,68]:[34,197,94]));
@@ -3239,10 +3250,10 @@ function generateShellReport({title, icon, target, attacks, results}) {
         doc.setFontSize(7); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
         doc.text((f.severity||"INFO").slice(0,8),M+1,y+4);
         doc.setTextColor(241,245,249); doc.setFont("helvetica","bold");
-        doc.text((f.title||"").slice(0,40),M+22,y+4);
+        doc.text(_safe(f.title).slice(0,40),M+22,y+4);
         if(f.detail){
           doc.setFont("helvetica","normal"); doc.setTextColor(148,163,184);
-          doc.text(String(f.detail).slice(0,60),M+22,y+9); y+=5;
+          doc.text(_safe(f.detail).slice(0,60),M+22,y+9); y+=5;
         }
         y+=7;
       });
@@ -3288,7 +3299,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
   doc.setFontSize(10); doc.setTextColor(59,130,246); doc.setFont("helvetica","bold");
   doc.text("— END OF REPORT —", W/2, y+10, {align:"center"});
   doc.setFontSize(6.5); doc.setTextColor(100,116,139); doc.setFont("helvetica","normal");
-  doc.text(`Generated by VulnusLab — automated ${title.toLowerCase()} testing powered by Kali Linux.`, W/2, y+16, {align:"center"});
+  doc.text(`Generated by VulnusLab — automated ${_safe(title).toLowerCase()} testing powered by Kali Linux.`, W/2, y+16, {align:"center"});
   doc.text("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.", W/2, y+20, {align:"center"});
   doc.setFontSize(7); doc.setTextColor(59,130,246); doc.setFont("helvetica","bold");
   doc.text("vulnuslab.com  ·  support@vulnuslab.com", W/2, y+27, {align:"center"});
@@ -3299,7 +3310,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
     doc.setPage(i);
     doc.setFillColor(10,15,30); doc.rect(0,288,W,9,"F");
     doc.setFontSize(6); doc.setTextColor(71,85,105); doc.setFont("helvetica","normal");
-    doc.text(`VulnusLab | CONFIDENTIAL · vulnuslab.com — ${title} — Target: ${target||"—"}`,M,293);
+    doc.text(`VulnusLab | CONFIDENTIAL · vulnuslab.com — ${_safe(title)} — Target: ${_safe(target)||"—"}`,M,293);
     doc.text(`Page ${i}/${pages}`,W-M-12,293);
   }
   doc.save(`shell_${_pdfFn(target)}_${_pdfDt()}.pdf`);
