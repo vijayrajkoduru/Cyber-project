@@ -6684,7 +6684,7 @@ function ExploitModule({token, onRunningChange}) {
               <div>
                 <label style={S.label}>Payload Format</label>
                 <select value={payloadFmt} onChange={e=>setPayloadFmt(e.target.value)} style={{...S.input,cursor:"pointer"}}>
-                  {["exe","elf","php","py","raw","asp","aspx","ps1"].map(f=><option key={f}>{f}</option>)}
+                  {["exe","elf","php","py","raw","asp","aspx","ps1","jar","war","js","sh","bash","vba","macho","apk"].map(f=><option key={f}>{f}</option>)}
                 </select>
               </div>
               <div>
