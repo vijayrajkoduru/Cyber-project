@@ -91,18 +91,16 @@ services:
     networks:
       - oscp_net
 
-  # vsftpd 2.3.4 with the famous ":)" smile-username backdoor (CVE-2011-2523).
-  # When a user logs in with a username containing ":)" the daemon opens a
-  # secondary listener on port 6200 with a passwordless root shell. This is
-  # the canonical "instant shell" demo for active exploitation — fast, reliable,
-  # and visibly impressive to first-time users of the platform.
-  vsftpd234:
-    image: tleemcjr/vsftpd_2.3.4
-    container_name: lab_vsftpd
-    ports:
-      - "8021:21"        # FTP control port exposed externally for testing
-      - "8021:21/udp"
-      - "6200:6200"      # Backdoor shell port — what Metasploit connects to
+  # Metasploitable 2 — Rapid7's classic vulnerable VM packaged for Docker.
+  # Includes ~25 intentionally vulnerable services on a single container:
+  # vsftpd 2.3.4 backdoor (21), Samba 3.x (445), distccd (3632), UnrealIRCd
+  # backdoor (6667), Tomcat default creds (8180), and many more. Ports are
+  # NOT exposed externally — the backend container reaches it over the
+  # internal oscp_net bridge by hostname, which is faster and avoids host
+  # port conflicts (we already use 80/8000/8001-8004/3000/6200).
+  metasploitable2:
+    image: tleemcjr/metasploitable2
+    container_name: lab_metasploitable
     restart: unless-stopped
     networks:
       - oscp_net
