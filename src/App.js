@@ -1908,7 +1908,7 @@ function WebAppModule(props) {
 
   // PDF + CSV export
   const dlPDF = (cfg = {}) => {
-    const allFindings = [];
+    let allFindings = [];
     // Collect findings from ALL 51 scan tools automatically
     PHASES.forEach(ph => {
       if (allResults[ph.tool]?.findings) {
@@ -1938,6 +1938,47 @@ function WebAppModule(props) {
         });
       });
     }
+
+    // ─── DEDUP: suppress contradictory + duplicate findings ───────────
+    // Different scanners often detect the same underlying issue (e.g. nikto AND sensitivefiles
+    // both flag /robots.txt; csrf AND headers both flag missing Referrer-Policy). Without dedup
+    // the report shows the same problem twice with different CWE codes, inflating findings
+    // count and confusing customers. We compute a canonical "fingerprint" for each finding
+    // and keep only the first occurrence per fingerprint.
+    const _cookiesScannerFoundNone = allResults["cookies"] && (!allResults["cookies"].cookies || allResults["cookies"].cookies.length === 0);
+    const _fingerprint = (f) => {
+      const d = (f.detail || "").toLowerCase();
+      // Canonical issue indicators — collapse duplicates from different scanners
+      if (d.includes("referrer-policy")) return "header:referrer-policy";
+      if (d.includes("content-security-policy") || /\bcsp\b/.test(d)) return "header:csp";
+      if (d.includes("hsts") || d.includes("strict-transport-security")) return "header:hsts";
+      if (d.includes("x-frame-options") || d.includes("clickjacking") || d.includes("frame-ancestors")) return "header:x-frame";
+      if (d.includes("x-content-type-options")) return "header:x-content-type";
+      if (d.includes("permissions-policy")) return "header:permissions-policy";
+      // File-based: collapse same file detected by different scanners
+      const fileMatch = d.match(/\/(robots\.txt|security\.txt|\.git|\.env|\.svn|\.ds_store|composer\.json|package\.json|dockerfile|docker-compose\.yml)/);
+      if (fileMatch) return "file:" + fileMatch[1];
+      // Default: CWE family + first 35 chars of detail
+      return (f.cwe || "no-cwe") + "|" + d.substring(0, 35);
+    };
+    const _seen = new Set();
+    allFindings = allFindings.filter(f => {
+      // Cookie contradiction fix: if cookies scanner found NO cookies on target,
+      // suppress sessionfixation/header-based cookie findings (they're likely noise
+      // from probing requests that don't reflect the actual app state).
+      if (_cookiesScannerFoundNone) {
+        const d = (f.detail || "").toLowerCase();
+        const cwe = (f.cwe || "").toUpperCase();
+        if ((cwe === "CWE-384" || cwe === "CWE-1004" || cwe === "CWE-614") && d.includes("cookie")) {
+          return false;
+        }
+      }
+      const fp = _fingerprint(f);
+      if (_seen.has(fp)) return false;
+      _seen.add(fp);
+      return true;
+    });
+
     // Tools used list for cover page
     const toolsUsed = Object.keys(allResults).filter(k=>allResults[k]);
     const riskScore = Math.min(100, allFindings.reduce((s,f)=>s+({CRITICAL:25,HIGH:15,MEDIUM:8,LOW:3}[f.severity]||0),0));
