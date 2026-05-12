@@ -6259,16 +6259,17 @@ function generateExploitReport({results, date}) {
 
 function ExploitationModule({token, apiUrl}) {
   const [catalog, setCatalog]   = useState([]);
-  const [running, setRunning]   = useState({});      // exploit_id -> bool
-  const [results, setResults]   = useState({});       // exploit_id -> last result
-  const [activeShell, setActiveShell] = useState(null); // {sid, exploit_id}
+  const [running, setRunning]   = useState({});
+  const [results, setResults]   = useState({});
+  const [activeShell, setActiveShell] = useState(null);  // {sid, exploit_id, exploit}
   const [shellOutput, setShellOutput] = useState("");
   const [shellStatus, setShellStatus] = useState("idle");
   const [shellCmd, setShellCmd] = useState("");
-  const [healthChecking, setHealthChecking] = useState(false);
-  const [labHealth, setLabHealth] = useState({});
+  const [cmdHistory, setCmdHistory] = useState([]);
+  const [histIdx, setHistIdx]   = useState(-1);
   const pollRef = useRef(null);
   const outRef  = useRef(null);
+  const inputRef = useRef(null);
 
   const T = (path, opts={}) => fetch(apiUrl+path, {
     ...opts,
@@ -6289,7 +6290,6 @@ function ExploitationModule({token, apiUrl}) {
     if (outRef.current) outRef.current.scrollTop = outRef.current.scrollHeight;
   }, [shellOutput]);
 
-  // Poll active shell output
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (!activeShell?.sid) return;
@@ -6318,7 +6318,8 @@ function ExploitationModule({token, apiUrl}) {
       if (r.ok && r.shell_id) {
         setShellOutput("");
         setShellStatus("starting");
-        setActiveShell({sid: r.shell_id, exploit_id: exploit.id});
+        setActiveShell({sid: r.shell_id, exploit_id: exploit.id, exploit});
+        setTimeout(() => { if (inputRef.current && exploit.interactive) inputRef.current.focus(); }, 300);
       }
     } catch(e) {
       setResults(p => ({...p, [exploit.id]: {ok:false, error:String(e)}}));
@@ -6329,15 +6330,29 @@ function ExploitationModule({token, apiUrl}) {
   const sendCmd = async () => {
     if (!activeShell?.sid || !shellCmd.trim()) return;
     const c = shellCmd;
-    setShellOutput(prev => prev + `$ ${c}\n`);
+    setCmdHistory(h => [...h, c]); setHistIdx(-1);
+    setShellOutput(prev => prev + `\x1b[36m$\x1b[0m ${c}\n`.replace(/\x1b\[\d+m/g,""));
     setShellCmd("");
     try {
       await T(`/api/exploit/shell/${activeShell.sid}/cmd`, {
-        method: "POST",
-        body: JSON.stringify({cmd: c}),
+        method: "POST", body: JSON.stringify({cmd: c}),
       });
     } catch(e) {
       setShellOutput(prev => prev + `[error sending: ${e}]\n`);
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Enter") { sendCmd(); return; }
+    if (e.key === "ArrowUp" && cmdHistory.length) {
+      e.preventDefault();
+      const i = histIdx === -1 ? cmdHistory.length-1 : Math.max(0, histIdx-1);
+      setHistIdx(i); setShellCmd(cmdHistory[i] || "");
+    }
+    if (e.key === "ArrowDown" && cmdHistory.length) {
+      e.preventDefault();
+      const i = histIdx === -1 ? -1 : (histIdx+1 >= cmdHistory.length ? -1 : histIdx+1);
+      setHistIdx(i); setShellCmd(i === -1 ? "" : cmdHistory[i]);
     }
   };
 
@@ -6347,84 +6362,172 @@ function ExploitationModule({token, apiUrl}) {
     setActiveShell(null); setShellOutput(""); setShellStatus("idle");
   };
 
+  const copyOutput = () => {
+    try {
+      navigator.clipboard.writeText(shellOutput);
+    } catch(e) {}
+  };
+
   const downloadReport = () => {
     const all = Object.values(results).filter(Boolean);
     if (all.length === 0) { alert("Run at least one exploit before downloading the report."); return; }
-    generateExploitReport({
-      results: all,
-      date: new Date().toLocaleString(),
-    });
+    generateExploitReport({results: all, date: new Date().toLocaleString()});
   };
 
-  // Style block
-  const card = {background:"#0f172a", border:"1px solid #1e293b", borderRadius:8, padding:14};
-  const btnRun = (running) => ({padding:"8px 16px", fontSize:11, fontWeight:700, letterSpacing:.5,
-    background: running ? "#374151" : "#dc2626", color:"#fff", border:"none", borderRadius:6,
-    cursor: running ? "wait" : "pointer", width: "100%"});
-  const sev = (cvss) => cvss>=9 ? "#dc2626" : cvss>=7 ? "#f59e0b" : "#10b981";
+  const sev   = (cvss) => cvss>=9 ? "#dc2626" : cvss>=7 ? "#f59e0b" : "#10b981";
+  const compromisedCount = Object.values(results).filter(r=>r?.ok).length;
+  const failedCount      = Object.values(results).filter(r=>r&&!r.ok).length;
+  const notRunCount      = catalog.length - Object.keys(results).length;
+  const isInteractive    = activeShell?.exploit?.interactive === true;
+  const termTitle        = isInteractive ? "LIVE SHELL" : "EXTRACTED DATA";
+  const termIcon         = isInteractive ? "🐚" : "📊";
+  const termAccent       = isInteractive ? "#22c55e" : "#3b82f6";
+  const termAccentDark   = isInteractive ? "#052e16" : "#0c1c3a";
+  const termBorder       = isInteractive ? "#14532d" : "#1e3a8a";
 
   return (
     <div className="fade">
-      {/* Header */}
-      <div style={{marginBottom:18}}>
-        <div style={{fontSize:22, fontWeight:900, color:"#dc2626", letterSpacing:4, marginBottom:4}}>
-          EXPLOITATION
+      {/* ─── Hero header ─── */}
+      <div style={{padding:"20px 24px", marginBottom:20, borderRadius:12,
+        background:"linear-gradient(135deg, #1e0a0a 0%, #0f172a 60%, #020617 100%)",
+        border:"1px solid #7f1d1d"}}>
+        <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:8}}>
+          <span style={{fontSize:28}}>💥</span>
+          <div style={{fontSize:24, fontWeight:900, color:"#fca5a5", letterSpacing:5}}>
+            EXPLOITATION
+          </div>
+          <span style={{padding:"3px 10px", fontSize:10, fontWeight:700, color:"#fecaca",
+            background:"rgba(127,29,29,0.5)", borderRadius:99, border:"1px solid #991b1b"}}>
+            ACTIVE TESTING
+          </span>
         </div>
-        <div style={{color:"#64748b", fontSize:12}}>
-          Verified-working exploits · Real shells · No false positives · CWE/CVSS-mapped reports
+        <div style={{color:"#94a3b8", fontSize:13, lineHeight:1.6, maxWidth:780}}>
+          Direct-socket exploitation of verified-working CVEs. Real shells where applicable,
+          real credential dumps otherwise. <strong style={{color:"#22c55e"}}>Zero false positives</strong> —
+          every &ldquo;COMPROMISED&rdquo; tag means we actually held a shell or dumped real data.
         </div>
       </div>
 
-      {/* Action bar */}
-      <div style={{display:"flex", gap:10, marginBottom:14, alignItems:"center", flexWrap:"wrap"}}>
+      {/* ─── Status bar ─── */}
+      <div style={{display:"flex", gap:12, marginBottom:18, alignItems:"center", flexWrap:"wrap"}}>
         <button onClick={downloadReport}
-          style={{padding:"8px 16px", fontSize:11, fontWeight:700, background:"#2563eb",
-            color:"#fff", border:"none", borderRadius:6, cursor:"pointer"}}>
-          📄 Download Exploitation Report
+          style={{padding:"10px 18px", fontSize:12, fontWeight:700, background:"#2563eb",
+            color:"#fff", border:"none", borderRadius:8, cursor:"pointer",
+            boxShadow:"0 4px 12px rgba(37,99,235,0.3)"}}>
+          📄 DOWNLOAD REPORT
         </button>
-        <div style={{color:"#64748b", fontSize:11}}>
-          {Object.values(results).filter(r=>r?.ok).length} compromised · {Object.values(results).filter(r=>r&&!r.ok).length} failed · {catalog.length-Object.keys(results).length} not run
+        <div style={{display:"flex", gap:10, marginLeft:"auto", flexWrap:"wrap"}}>
+          <span style={{padding:"6px 12px", fontSize:11, fontWeight:600,
+            background:"rgba(34,197,94,0.1)", color:"#22c55e", borderRadius:6,
+            border:"1px solid rgba(34,197,94,0.3)"}}>
+            ✓ {compromisedCount} Compromised
+          </span>
+          <span style={{padding:"6px 12px", fontSize:11, fontWeight:600,
+            background:"rgba(220,38,38,0.1)", color:"#f87171", borderRadius:6,
+            border:"1px solid rgba(220,38,38,0.3)"}}>
+            ✗ {failedCount} Failed
+          </span>
+          <span style={{padding:"6px 12px", fontSize:11, fontWeight:600,
+            background:"rgba(100,116,139,0.1)", color:"#94a3b8", borderRadius:6,
+            border:"1px solid rgba(100,116,139,0.3)"}}>
+            ○ {notRunCount} Not Run
+          </span>
         </div>
       </div>
 
-      {/* Catalog grid */}
-      <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))", gap:14, marginBottom:18}}>
+      {/* ─── Catalog grid ─── */}
+      <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(420px, 1fr))",
+        gap:16, marginBottom:24}}>
         {catalog.map(e => {
           const r = results[e.id];
           const isRunning = running[e.id];
+          const stateBorder = r ? (r.ok ? "#22c55e" : "#dc2626") : "#1e293b";
           return (
-            <div key={e.id} style={card}>
-              <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6}}>
-                <div>
-                  <div style={{fontSize:13, fontWeight:700, color:"#f1f5f9"}}>{e.name}</div>
-                  <div style={{fontSize:10, color:"#64748b", marginTop:2}}>{e.cve} · {e.category}</div>
-                </div>
-                <span style={{padding:"3px 8px", fontSize:10, fontWeight:700, color:"#fff",
-                  background: sev(e.cvss), borderRadius:4}}>CVSS {e.cvss}</span>
-              </div>
-              <div style={{fontSize:11, color:"#94a3b8", lineHeight:1.5, margin:"8px 0"}}>{e.description}</div>
-              <div style={{display:"flex", gap:8, fontSize:10, color:"#64748b", marginBottom:10, flexWrap:"wrap"}}>
-                <span>🎯 {e.target}:{e.port}</span>
-                <span>•</span>
-                <span>{e.service}</span>
-                <span>•</span>
-                <span>{e.difficulty}</span>
-              </div>
-              <div style={{fontSize:10, color:"#22c55e", marginBottom:10}}>
-                <strong>Success looks like:</strong> {e.result}
-              </div>
-              <button onClick={() => runExploit(e)} disabled={isRunning}
-                style={btnRun(isRunning)}>
-                {isRunning ? "⏳ EXPLOITING..." : "🚀 RUN EXPLOIT"}
-              </button>
-              {r && (
-                <div style={{marginTop:10, padding:8, borderRadius:6,
-                  background: r.ok ? "rgba(34,197,94,0.1)" : "rgba(220,38,38,0.1)",
-                  border: `1px solid ${r.ok?"#22c55e":"#dc2626"}`}}>
-                  <div style={{fontSize:11, fontWeight:700, color: r.ok?"#22c55e":"#dc2626"}}>
-                    {r.ok ? "✅ COMPROMISED" : "❌ FAILED"}
+            <div key={e.id} style={{background:"linear-gradient(180deg, #0f172a 0%, #0a1224 100%)",
+              border:`1px solid ${stateBorder}`, borderRadius:10, padding:18, position:"relative",
+              transition:"all 0.2s", boxShadow: r?.ok ? "0 0 20px rgba(34,197,94,0.1)" : "none"}}>
+
+              {/* Card header */}
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:10}}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:14, fontWeight:700, color:"#f1f5f9", marginBottom:3,
+                    overflow:"hidden", textOverflow:"ellipsis"}}>{e.name}</div>
+                  <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+                    <span style={{fontSize:10, color:"#94a3b8", fontFamily:"monospace"}}>{e.cve}</span>
+                    <span style={{fontSize:10, color:"#475569"}}>·</span>
+                    <span style={{fontSize:10, color:"#64748b"}}>{e.category}</span>
+                    {e.interactive && (
+                      <span style={{padding:"2px 6px", fontSize:9, fontWeight:700, color:"#86efac",
+                        background:"rgba(34,197,94,0.15)", borderRadius:4, marginLeft:4}}>
+                        SHELL
+                      </span>
+                    )}
+                    {!e.interactive && (
+                      <span style={{padding:"2px 6px", fontSize:9, fontWeight:700, color:"#93c5fd",
+                        background:"rgba(59,130,246,0.15)", borderRadius:4, marginLeft:4}}>
+                        DUMP
+                      </span>
+                    )}
                   </div>
-                  <div style={{fontSize:10, color:"#94a3b8", marginTop:4}}>
+                </div>
+                <span style={{padding:"4px 10px", fontSize:11, fontWeight:800, color:"#fff",
+                  background:sev(e.cvss), borderRadius:6, whiteSpace:"nowrap"}}>
+                  CVSS {e.cvss}
+                </span>
+              </div>
+
+              {/* Description */}
+              <div style={{fontSize:12, color:"#94a3b8", lineHeight:1.6, marginBottom:12,
+                minHeight:48}}>{e.description}</div>
+
+              {/* Target details */}
+              <div style={{padding:"8px 10px", background:"rgba(0,0,0,0.3)", borderRadius:6,
+                marginBottom:12, fontSize:10, color:"#94a3b8", fontFamily:"monospace"}}>
+                <div style={{marginBottom:4}}>
+                  <span style={{color:"#64748b"}}>target  </span>
+                  <span style={{color:"#fbbf24"}}>{e.target}:{e.port}</span>
+                </div>
+                <div style={{marginBottom:4}}>
+                  <span style={{color:"#64748b"}}>service </span>
+                  <span>{e.service}</span>
+                </div>
+                <div>
+                  <span style={{color:"#64748b"}}>output  </span>
+                  <span style={{color:"#22c55e"}}>{e.result}</span>
+                </div>
+              </div>
+
+              {/* Action button */}
+              <button onClick={() => runExploit(e)} disabled={isRunning}
+                style={{padding:"10px 16px", fontSize:12, fontWeight:800, letterSpacing:1,
+                  background: isRunning ? "#374151" : (r?.ok ? "#15803d" : "#dc2626"),
+                  color:"#fff", border:"none", borderRadius:6,
+                  cursor: isRunning ? "wait" : "pointer", width:"100%",
+                  boxShadow: isRunning ? "none" : "0 4px 12px rgba(220,38,38,0.25)"}}>
+                {isRunning ? "⏳ EXPLOITING…" : (r?.ok ? "↻ RE-RUN EXPLOIT" : "🚀 RUN EXPLOIT")}
+              </button>
+
+              {/* Result strip */}
+              {r && (
+                <div style={{marginTop:10, padding:10, borderRadius:6,
+                  background: r.ok ? "rgba(34,197,94,0.08)" : "rgba(220,38,38,0.08)",
+                  border:`1px solid ${r.ok?"rgba(34,197,94,0.3)":"rgba(220,38,38,0.3)"}`}}>
+                  <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:4}}>
+                    <span style={{fontSize:13}}>{r.ok ? "✅" : "❌"}</span>
+                    <span style={{fontSize:11, fontWeight:800, letterSpacing:1,
+                      color: r.ok?"#22c55e":"#f87171"}}>
+                      {r.ok ? "COMPROMISED" : "FAILED"}
+                    </span>
+                    {r.ok && r.shell_id && (
+                      <button onClick={()=>{ setShellOutput(""); setActiveShell({sid:r.shell_id, exploit_id:e.id, exploit:e}); }}
+                        style={{marginLeft:"auto", padding:"3px 8px", fontSize:10,
+                          background:"#0f172a", color:"#86efac",
+                          border:"1px solid #22c55e", borderRadius:4, cursor:"pointer"}}>
+                        VIEW {e.interactive ? "SHELL" : "DATA"}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{fontSize:11, color:"#cbd5e1", lineHeight:1.5}}>
                     {r.ok ? r.evidence : r.error}
                   </div>
                 </div>
@@ -6434,42 +6537,80 @@ function ExploitationModule({token, apiUrl}) {
         })}
       </div>
 
-      {/* Live shell terminal */}
+      {/* ─── Terminal / Data viewer ─── */}
       {activeShell && (
-        <div style={{...card, padding:0, overflow:"hidden", marginTop:18, border:"1px solid #22c55e"}}>
-          <div style={{padding:"10px 16px", background:"#052e16", borderBottom:"1px solid #14532d",
-            display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-            <div>
-              <span style={{fontSize:12, fontWeight:700, color:"#86efac"}}>🐚 LIVE SHELL</span>
-              <span style={{fontSize:10, color:"#86efac", marginLeft:10, fontFamily:"monospace"}}>
-                sid={activeShell.sid} · {shellStatus}
-              </span>
+        <div style={{marginTop:20, borderRadius:12, overflow:"hidden",
+          border:`2px solid ${termAccent}`,
+          boxShadow:`0 0 30px ${isInteractive?"rgba(34,197,94,0.15)":"rgba(59,130,246,0.15)"}`}}>
+          {/* Terminal header */}
+          <div style={{padding:"12px 18px", background:termAccentDark,
+            borderBottom:`1px solid ${termBorder}`,
+            display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10}}>
+            <div style={{display:"flex", alignItems:"center", gap:12}}>
+              <span style={{fontSize:16}}>{termIcon}</span>
+              <div>
+                <div style={{fontSize:13, fontWeight:800, color: isInteractive?"#86efac":"#93c5fd", letterSpacing:1}}>
+                  {termTitle}
+                </div>
+                <div style={{fontSize:10, color:"#94a3b8", fontFamily:"monospace", marginTop:2}}>
+                  {activeShell.exploit?.name} · sid={activeShell.sid} · {shellStatus}
+                </div>
+              </div>
             </div>
-            <button onClick={closeShell} style={{padding:"4px 10px", fontSize:10,
-              background:"#dc2626", color:"#fff", border:"none", borderRadius:4, cursor:"pointer"}}>
-              ✕ CLOSE
-            </button>
+            <div style={{display:"flex", gap:6}}>
+              <button onClick={copyOutput}
+                style={{padding:"6px 12px", fontSize:10, fontWeight:700,
+                  background:"#1e293b", color:"#cbd5e1", border:"1px solid #334155",
+                  borderRadius:4, cursor:"pointer"}}>
+                📋 COPY
+              </button>
+              <button onClick={closeShell}
+                style={{padding:"6px 12px", fontSize:10, fontWeight:700,
+                  background:"#7f1d1d", color:"#fff", border:"none",
+                  borderRadius:4, cursor:"pointer"}}>
+                ✕ CLOSE
+              </button>
+            </div>
           </div>
-          <div ref={outRef} style={{padding:14, background:"#000", color:"#22c55e",
-            fontFamily:"'JetBrains Mono', Consolas, monospace", fontSize:12,
-            minHeight:280, maxHeight:480, overflowY:"auto", whiteSpace:"pre-wrap", lineHeight:1.5}}>
-            {shellOutput || "Waiting for shell output...\n"}
+
+          {/* Terminal body */}
+          <div ref={outRef} style={{padding:"18px 20px", background:"#000",
+            color: isInteractive ? "#22c55e" : "#bfdbfe",
+            fontFamily:"'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
+            fontSize:13, minHeight:340, maxHeight:520, overflowY:"auto",
+            whiteSpace:"pre-wrap", wordBreak:"break-word", lineHeight:1.6}}>
+            {shellOutput || (isInteractive
+              ? "Waiting for shell output…\n"
+              : "Loading extracted data…\n")}
           </div>
-          <div style={{padding:10, background:"#0f172a", borderTop:"1px solid #1e293b",
-            display:"flex", gap:6}}>
-            <span style={{color:"#22c55e", fontFamily:"monospace", padding:"6px 4px"}}>$</span>
-            <input value={shellCmd} onChange={e=>setShellCmd(e.target.value)}
-              onKeyDown={e=>{ if(e.key==="Enter") sendCmd(); }}
-              placeholder="type a command and press Enter (id, whoami, cat /etc/passwd, ls -la /root, ...)"
-              autoComplete="off" name="exp-shell-cmd" data-form-type="other"
-              style={{flex:1, padding:6, background:"#020617", color:"#e2e8f0",
-                border:"1px solid #1e293b", borderRadius:4, fontFamily:"monospace", fontSize:12}}/>
-            <button onClick={sendCmd}
-              style={{padding:"6px 16px", background:"#22c55e", color:"#000", fontWeight:700,
-                border:"none", borderRadius:4, cursor:"pointer", fontSize:11}}>
-              SEND
-            </button>
-          </div>
+
+          {/* Command input — interactive only */}
+          {isInteractive ? (
+            <div style={{padding:12, background:"#0a0f1c", borderTop:"1px solid #1e293b",
+              display:"flex", gap:8, alignItems:"center"}}>
+              <span style={{color:"#22c55e", fontFamily:"monospace", fontSize:14, fontWeight:700}}>$</span>
+              <input ref={inputRef}
+                value={shellCmd} onChange={e=>setShellCmd(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="run a command on the remote host  (id · whoami · cat /etc/shadow · ls -la /root · ↑/↓ for history)"
+                autoComplete="off" name="exp-shell-cmd" data-form-type="other"
+                style={{flex:1, padding:"8px 10px", background:"#000",
+                  color:"#22c55e", border:"1px solid #14532d", borderRadius:4,
+                  fontFamily:"'JetBrains Mono', monospace", fontSize:13, outline:"none"}}/>
+              <button onClick={sendCmd}
+                style={{padding:"8px 20px", background:"#22c55e", color:"#000",
+                  fontWeight:800, letterSpacing:1, border:"none", borderRadius:4,
+                  cursor:"pointer", fontSize:11}}>
+                SEND
+              </button>
+            </div>
+          ) : (
+            <div style={{padding:"10px 18px", background:"#0a0f1c", borderTop:"1px solid #1e293b",
+              fontSize:11, color:"#64748b", fontStyle:"italic"}}>
+              📊 This is a one-shot data extraction — no interactive shell. Above is the actual
+              data exfiltrated from the target via the exploit. Use the COPY button to save it.
+            </div>
+          )}
         </div>
       )}
     </div>

