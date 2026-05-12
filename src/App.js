@@ -2802,15 +2802,46 @@ function SystemHealth() {
 function ScanHistory(props) {
   const token = props.token;
   const [scans,setScans] = useState([]);
-  useEffect(() => {
-    api("/api/scans","GET",null,token).then(d=>setScans(d.scans)).catch(()=>{});
-  }, [token]);
+  const [clearing,setClearing] = useState(false);
+  const loadScans = () => {
+    api("/api/scans","GET",null,token).then(d=>setScans(d.scans||[])).catch(()=>{});
+  };
+  useEffect(() => { loadScans(); /* eslint-disable-next-line */ }, [token]);
+
+  const clearHistory = async () => {
+    if (!window.confirm(`Delete ALL ${scans.length} scan(s)? This cannot be undone (last daily backup is in /root/backups on the VPS).`)) return;
+    setClearing(true);
+    try {
+      const r = await api("/api/scans","DELETE",null,token);
+      if (r.ok) {
+        alert(`Cleared ${r.deleted} scan(s).`);
+        loadScans();
+      } else {
+        alert("Error clearing: " + (r.error||"unknown"));
+      }
+    } catch (e) {
+      alert("Network error: " + e.message);
+    }
+    setClearing(false);
+  };
+
   return (
     <div className="fade">
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-        <div style={{padding:"14px 20px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between"}}>
+        <div style={{padding:"14px 20px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
           <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9"}}>Scan History</h2>
-          <Badge label={scans.length+" scans"} color="gray"/>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Badge label={scans.length+" scans"} color="gray"/>
+            {scans.length > 0 && (
+              <button onClick={clearHistory} disabled={clearing}
+                style={{padding:"6px 14px",fontSize:11,fontWeight:600,
+                  background:clearing?"#374151":"#dc2626",color:"#fff",
+                  border:"none",borderRadius:6,cursor:clearing?"wait":"pointer",
+                  letterSpacing:.3}}>
+                {clearing ? "Clearing..." : "🗑 Clear All"}
+              </button>
+            )}
+          </div>
         </div>
         {scans.length > 0 ? (
           <table style={{width:"100%",borderCollapse:"collapse"}}>

@@ -625,6 +625,28 @@ async def get_scans(user=Depends(verify_token)):
     except Exception:
         return {"scans": [], "total": 0}
 
+
+@app.delete("/api/scans")
+async def clear_scans(user=Depends(verify_token)):
+    """Delete scan history. Admin can clear ALL scans; regular users can
+    only clear their own. Soft-safety: there's no UI-side undo, but the daily
+    cron backup at /root/backup-vulnuslab.sh preserves yesterday's DB if
+    needed."""
+    uid = user.get("user_id", "anonymous")
+    is_superadmin = user.get("username") == "ADMIN"
+    try:
+        con = _get_db()
+        if is_superadmin:
+            cur = con.execute("DELETE FROM scans")
+        else:
+            cur = con.execute("DELETE FROM scans WHERE user_id=?", (uid,))
+        deleted = cur.rowcount
+        con.commit()
+        con.close()
+        return {"ok": True, "deleted": deleted, "scope": "all" if is_superadmin else "user"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 def _admin_only(user):
     if user.get("username") != "ADMIN":
         raise HTTPException(status_code=403, detail="Superadmin only")
