@@ -6621,26 +6621,26 @@ function ExploitModule({token, onRunningChange}) {
             <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:10}}>🎯 Target Configuration</div>
             <label style={S.label}>Target IP</label>
             <input id="exp-target-ip" value={targetIP} onChange={e=>setTargetIP(e.target.value)}
-              placeholder="192.168.56.103" style={{...S.input,border:filledLabel?"1px solid #22c55e":"1px solid #334155",marginBottom:8}}/>
+              placeholder="192.168.56.103" autoComplete="off" name="exp-target-ip" data-form-type="other" style={{...S.input,border:filledLabel?"1px solid #22c55e":"1px solid #334155",marginBottom:8}}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
               <div>
                 <label style={S.label}>Port</label>
-                <input value={targetPort} onChange={e=>setTargetPort(e.target.value)} placeholder="445" style={S.input}/>
+                <input value={targetPort} onChange={e=>setTargetPort(e.target.value)} placeholder="445" autoComplete="off" name="exp-port" data-form-type="other" style={S.input}/>
               </div>
               <div>
                 <label style={S.label}>LPORT (your listener)</label>
-                <input value={lport} onChange={e=>setLport(e.target.value)} placeholder="4444" style={S.input}/>
+                <input value={lport} onChange={e=>setLport(e.target.value)} placeholder="4444" autoComplete="off" name="exp-lport" data-form-type="other" style={S.input}/>
               </div>
             </div>
             <label style={S.label}>LHOST (your Kali IP)</label>
             <input value={lhost} onChange={e=>setLhost(e.target.value)}
-              placeholder="192.168.56.102" style={{...S.input,marginBottom:8}}/>
+              placeholder="192.168.56.102" autoComplete="off" name="exp-lhost" data-form-type="other" style={{...S.input,marginBottom:8}}/>
             <label style={S.label}>MSF Module {!msfModule&&service&&<span style={{color:"#f59e0b",fontWeight:400}}> — web app target: use manual techniques</span>}</label>
             <input value={msfModule} onChange={e=>setMsfModule(e.target.value)}
-              placeholder={service?"(web app — no MSF module, use Searchsploit or manual)":"exploit/windows/smb/ms17_010_eternalblue"} style={{...S.input,marginBottom:8,fontSize:10}}/>
+              placeholder={service?"(web app — no MSF module, use Searchsploit or manual)":"exploit/windows/smb/ms17_010_eternalblue"} autoComplete="off" name="exp-msf-module" data-form-type="other" style={{...S.input,marginBottom:8,fontSize:10}}/>
             <label style={S.label}>MSF Payload</label>
             <input value={msfPayload} onChange={e=>setMsfPayload(e.target.value)}
-              placeholder="windows/x64/shell_reverse_tcp" style={{...S.input,marginBottom:8,fontSize:10}}/>
+              placeholder="windows/x64/shell_reverse_tcp" autoComplete="off" name="exp-msf-payload" data-form-type="other" style={{...S.input,marginBottom:8,fontSize:10}}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
               <div>
                 <label style={S.label}>Payload Format</label>
@@ -6650,7 +6650,7 @@ function ExploitModule({token, onRunningChange}) {
               </div>
               <div>
                 <label style={S.label}>Search Query</label>
-                <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="ms17-010" style={S.input}/>
+                <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="ms17-010" autoComplete="off" name="exp-search-query" data-form-type="other" style={S.input}/>
               </div>
             </div>
             {service && <div style={{fontSize:10,color:"#64748b",marginTop:4}}>Service: <span style={{color:"#fbbf24"}}>{service}</span>{cve&&<> · CVE: <span style={{color:"#f87171"}}>{cve}</span></>}</div>}
