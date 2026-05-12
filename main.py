@@ -4330,11 +4330,101 @@ def _resolve_lhost_for_target(target: str, user_lhost: str) -> str:
     return user_lhost
 
 
+def _check_port_reachable(host: str, port: int, timeout: float = 5.0) -> bool:
+    """Quick TCP connect — is the service alive? Used as a pre-flight before
+    running MSF so we fail fast with a clear message instead of an opaque
+    Metasploit OptionValidator error 30 seconds later."""
+    import socket as _socket
+    try:
+        s = _socket.create_connection((host, port), timeout=timeout)
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
+def _resolves(host: str) -> bool:
+    """Does this hostname resolve at all from inside this container?"""
+    import socket as _socket
+    try:
+        _socket.gethostbyname(host)
+        return True
+    except Exception:
+        return False
+
+
+# Lab container → docker-compose service name. Used to surface a clear "the
+# container is down, run this command" remediation hint when DNS fails.
+LAB_SERVICE_MAP = {
+    "lab_dvwa": "dvwa",
+    "lab_webgoat": "webgoat",
+    "lab_juiceshop": "juiceshop",
+    "lab_bwapp": "bwapp",
+    "lab_mutillidae": "mutillidae",
+    "lab_metasploitable": "metasploitable2",
+}
+
+
+@app.get("/api/exploit/lab-health")
+async def exploit_lab_health(user=Depends(verify_token)):
+    """Frontend probes this before showing practice-target buttons so users
+    see green/red status next to each target. If a container is down they
+    know to run `docker compose up -d` instead of running an exploit that
+    will fail with a confusing Metasploit error."""
+    out = {}
+    for lab, service in LAB_SERVICE_MAP.items():
+        reachable = _resolves(lab)
+        ip = None
+        if reachable:
+            try:
+                import socket as _socket
+                ip = _socket.gethostbyname(lab)
+            except Exception:
+                pass
+        out[lab] = {
+            "reachable": reachable,
+            "ip": ip,
+            "service": service,
+            "remediation": None if reachable else f"docker compose up -d {service}",
+        }
+    return out
+
+
 @app.post("/api/exploit/msf")
 async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
     host = _recon_host(req.target) if req.target else req.target
     if not host:
         return {"error": "Target required"}
+
+    # ─── AUTO-FIX PRE-FLIGHT CHECKS ────────────────────────────────
+    # Without these, every failure manifests as "Msf::OptionValidateError"
+    # or a 30-second hang followed by no session — neither of which tells
+    # the user WHY it failed. Fail fast with a specific, actionable error.
+
+    # 1. Does the hostname resolve?
+    if not _resolves(host):
+        service = LAB_SERVICE_MAP.get(host)
+        if service:
+            return {
+                "error": f"Lab container '{host}' is not running. Start it on the VPS: docker compose up -d {service}",
+                "remediation": "container_down",
+                "service": service,
+                "session_opened": False,
+            }
+        return {
+            "error": f"Cannot resolve target hostname: {host}. Check spelling or DNS.",
+            "remediation": "dns_failed",
+            "session_opened": False,
+        }
+
+    # 2. Is the target service actually listening on the port we're hitting?
+    target_port = int(req.port or 80)
+    if not _check_port_reachable(host, target_port, timeout=4):
+        return {
+            "error": f"Target {host}:{target_port} is not reachable. Service may not be running on this port.",
+            "remediation": "port_unreachable",
+            "session_opened": False,
+        }
     # Auto-select the right LHOST: internal Docker lab targets use the backend
     # container's Docker DNS name (oscp_backend), external targets use the
     # public-facing c2.vulnuslab.com (resolved to IP for MSF validator).

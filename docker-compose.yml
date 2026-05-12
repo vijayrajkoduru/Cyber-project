@@ -109,6 +109,15 @@ services:
     # is actually running fine. tty+stdin keeps bash open as PID 1.
     tty: true
     stdin_open: true
+    # Docker watches port 21 (vsftpd) to confirm services are up. If it stops
+    # responding, the container is marked unhealthy — `restart: unless-stopped`
+    # plus the healthcheck means most transient failures auto-recover.
+    healthcheck:
+      test: ["CMD-SHELL", "netstat -tln 2>/dev/null | grep -q ':21 ' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
     networks:
       - oscp_net
 
