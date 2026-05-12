@@ -16,10 +16,6 @@ services:
     privileged: true          # needed for nmap, tcpdump, masscan raw sockets
     ports:
       - "8000:8000"
-      # Reverse-shell handler ports — bound to c2.vulnuslab.com (DNS-only A record,
-      # NOT Cloudflare proxied) so external targets can connect back to msfconsole
-      # listeners running inside this container.
-      - "4444-4500:4444-4500/tcp"
     env_file:
       - .env                  # optional: SHODAN_KEY, VIRUSTOTAL_KEY, etc.
     volumes:
@@ -88,36 +84,6 @@ services:
     ports:
       - "8004:80"
     restart: unless-stopped
-    networks:
-      - oscp_net
-
-  # Metasploitable 2 — Rapid7's classic vulnerable VM packaged for Docker.
-  # Includes ~25 intentionally vulnerable services on a single container:
-  # vsftpd 2.3.4 backdoor (21), Samba 3.x (445), distccd (3632), UnrealIRCd
-  # backdoor (6667), Tomcat default creds (8180), and many more. Ports are
-  # NOT exposed externally — the backend container reaches it over the
-  # internal oscp_net bridge by hostname, which is faster and avoids host
-  # port conflicts (we already use 80/8000/8001-8004/3000/6200).
-  metasploitable2:
-    image: tleemcjr/metasploitable2
-    container_name: lab_metasploitable
-    restart: unless-stopped
-    # Keep the container alive after the startup script finishes — the upstream
-    # image runs `/bin/services.sh && bash`, and without an allocated TTY the
-    # interactive bash exits immediately, sending the container into a crash
-    # loop even though every service (FTP, Samba, IRC, Tomcat, vsftpd, etc.)
-    # is actually running fine. tty+stdin keeps bash open as PID 1.
-    tty: true
-    stdin_open: true
-    # Docker watches port 21 (vsftpd) to confirm services are up. If it stops
-    # responding, the container is marked unhealthy — `restart: unless-stopped`
-    # plus the healthcheck means most transient failures auto-recover.
-    healthcheck:
-      test: ["CMD-SHELL", "netstat -tln 2>/dev/null | grep -q ':21 ' || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 45s
     networks:
       - oscp_net
 
