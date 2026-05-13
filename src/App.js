@@ -6644,15 +6644,45 @@ function ExploitationModule({token, apiUrl}) {
                 <label style={labelStyle}>LPORT (listener)</label>
                 <input value={lport}
                   onChange={(ev)=>setLport(ev.target.value)}
-                  style={inputStyle}/>
+                  disabled={selectedExploit && selectedExploit.lport_needed === false}
+                  placeholder={selectedExploit?.lport_needed === false ? "(not used)" : "4444"}
+                  style={{...inputStyle,
+                    opacity: selectedExploit?.lport_needed === false ? 0.5 : 1}}/>
               </div>
             </div>
 
             <label style={labelStyle}>LHOST (callback host)</label>
             <input value={lhost}
               onChange={(ev)=>setLhost(ev.target.value)}
-              placeholder="c2.vulnuslab.com"
-              style={{...inputStyle, marginBottom:12}}/>
+              disabled={selectedExploit && selectedExploit.lhost_needed === false}
+              placeholder={selectedExploit?.lhost_needed === false
+                ? "(not used by this exploit)" : "c2.vulnuslab.com"}
+              style={{...inputStyle, marginBottom:12,
+                opacity: selectedExploit?.lhost_needed === false ? 0.5 : 1}}/>
+
+            <label style={labelStyle}>MSF Module</label>
+            <input value={selectedExploit?.msf_module || ""} readOnly
+              style={{...inputStyle, marginBottom:12,
+                color:"#93c5fd", background:"#0a1224"}}/>
+
+            <label style={labelStyle}>MSF Payload</label>
+            <input value={selectedExploit?.msf_payload || ""} readOnly
+              style={{...inputStyle, marginBottom:12,
+                color:"#86efac", background:"#0a1224"}}/>
+
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1.4fr", gap:10,
+              marginBottom:12}}>
+              <div>
+                <label style={labelStyle}>Payload Format</label>
+                <input value={selectedExploit?.format || ""} readOnly
+                  style={{...inputStyle, color:"#fbbf24", background:"#0a1224"}}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Search Query</label>
+                <input value={selectedExploit?.search_query || ""} readOnly
+                  style={{...inputStyle, color:"#cbd5e1", background:"#0a1224"}}/>
+              </div>
+            </div>
 
             <label style={labelStyle}>CVE / Reference</label>
             <input value={selectedExploit?.cve || ""} readOnly
