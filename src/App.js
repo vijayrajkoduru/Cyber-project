@@ -6367,15 +6367,20 @@ function ShellPanel({
   const [activeTab, setActiveTab]     = useState("log");
   const [logLines, setLogLines]       = useState([]);
 
-  const pollRef  = useRef(null);
-  const outRef   = useRef(null);
-  const logRef   = useRef(null);
-  const inputRef = useRef(null);
+  const pollRef     = useRef(null);
+  const outRef      = useRef(null);
+  const logRef      = useRef(null);
+  const inputRef    = useRef(null);
+  const runAbortRef = useRef(null);   // for the "stop running exploit" button
 
   const T = (path, opts = {}) => fetch(apiUrl + path, {
     ...opts,
     headers: {"Content-Type": "application/json", "Authorization": "Bearer " + token, ...(opts.headers || {})},
   }).then(r => r.json());
+
+  // Session-storage key: scoped per panel title so multiple panels in the
+  // future don't clobber each other.
+  const SHELL_STORAGE_KEY = `shellPanel_${title || "exploit"}_activeShell`;
 
   const selected = catalog.find(c => c.id === selectedId);
   const isInteractive = selected ? isInteractiveFor(selected) : false;
@@ -6385,7 +6390,7 @@ function ShellPanel({
 
   const sevColor = (cvss) => cvss >= 9 ? "#dc2626" : cvss >= 7 ? "#f59e0b" : "#10b981";
 
-  // Bootstrap: catalog fetch
+  // Bootstrap: catalog fetch + session-storage reconnect
   useEffect(() => {
     if (!catalogFetchUrl) return;
     (async () => {
@@ -6394,9 +6399,49 @@ function ShellPanel({
         setCatalog(d[catalogKey] || []);
       } catch (e) {}
     })();
+
+    // Reconnect to a live shell from a previous page load (browser refresh,
+    // accidental tab close + reopen). We only validate; the polling effect
+    // below picks up from there.
+    if (shellEndpoints) {
+      try {
+        const stored = sessionStorage.getItem(SHELL_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.sid) {
+            T(shellEndpoints.output(parsed.sid)).then(d => {
+              if (d && d.status && d.status !== "not_found") {
+                setActiveShell(parsed);
+                setShellStatus(d.status);
+                if (d.output) setShellOutput(d.output);
+                setActiveTab(parsed.isInteractive ? "shell" : "result");
+              } else {
+                sessionStorage.removeItem(SHELL_STORAGE_KEY);
+              }
+            }).catch(() => sessionStorage.removeItem(SHELL_STORAGE_KEY));
+          }
+        }
+      } catch (e) {
+        try { sessionStorage.removeItem(SHELL_STORAGE_KEY); } catch (e2) {}
+      }
+    }
+
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
     // eslint-disable-next-line
   }, []);
+
+  // Persist activeShell so a refresh / navigation away doesn't lose the
+  // session. Cleared on close + on session sweep.
+  useEffect(() => {
+    try {
+      if (activeShell?.sid) {
+        sessionStorage.setItem(SHELL_STORAGE_KEY, JSON.stringify(activeShell));
+      } else {
+        sessionStorage.removeItem(SHELL_STORAGE_KEY);
+      }
+    } catch (e) {}
+    // eslint-disable-next-line
+  }, [activeShell]);
 
   // Auto-select first catalog item
   useEffect(() => {
@@ -6460,9 +6505,16 @@ function ShellPanel({
 
     setRunning(p => ({...p, [selected.id]: true}));
     setResults(p => ({...p, [selected.id]: null}));
+
+    // AbortController gives us a Stop button. Backend keeps running until done
+    // (no real cancellation primitive yet) — but the frontend stops listening,
+    // and the idle-session sweeper will close any orphaned shell after 30 min.
+    const ac = new AbortController();
+    runAbortRef.current = ac;
+
     try {
       const body = buildRunBody(selected, fieldValues);
-      const r = await T(runEndpoint, {method: "POST", body: JSON.stringify(body)});
+      const r = await T(runEndpoint, {method: "POST", body: JSON.stringify(body), signal: ac.signal});
       setResults(p => ({...p, [selected.id]: r}));
 
       if (r.ok === false && r.error && /resolve|not accepting/i.test(r.error)) {
@@ -6487,14 +6539,33 @@ function ShellPanel({
 
       if (r.ok && r.shell_id && shellEndpoints) {
         setShellOutput(""); setShellStatus("starting");
-        setActiveShell({sid: r.shell_id, source_id: selected.id, meta: selected});
+        // Bake interactivity into the session object so a page reload
+        // restores the correct tab even if the user has since switched
+        // catalog entries.
+        setActiveShell({sid: r.shell_id, source_id: selected.id,
+                        meta: selected, isInteractive});
         setActiveTab(isInteractive ? "shell" : "result");
       }
     } catch (err) {
-      appendLog("❌ Network error: " + String(err), "#f87171");
-      setResults(p => ({...p, [selected.id]: {ok: false, error: String(err)}}));
+      // AbortError is the user clicking Stop — distinct from a real failure.
+      if (err && (err.name === "AbortError" || /aborted/i.test(String(err)))) {
+        appendLog("⏹ Stopped by user. Backend may still finish — refresh to check.", "#fbbf24");
+        setResults(p => ({...p, [selected.id]: {ok: false, error: "Stopped by user",
+          suggested_action: "The backend may still complete in the background. " +
+                             "Refresh the page in ~30s to see if a session opened."}}));
+      } else {
+        appendLog("❌ Network error: " + String(err), "#f87171");
+        setResults(p => ({...p, [selected.id]: {ok: false, error: String(err)}}));
+      }
     }
+    runAbortRef.current = null;
     setRunning(p => ({...p, [selected.id]: false}));
+  };
+
+  const stopRunning = () => {
+    if (runAbortRef.current) {
+      try { runAbortRef.current.abort(); } catch (e) {}
+    }
   };
 
   const sendCmd = async () => {
@@ -6660,16 +6731,17 @@ function ShellPanel({
 
           {phases.length > 0 && (
             <div style={panelStyle}>
-              <div style={panelHead}>
-                <span>🔥</span> <span>Phase Runners</span>
+              <div style={{...panelHead, marginBottom: 6}}>
+                <span>🔥</span> <span>Phases (auto-run in sequence)</span>
+              </div>
+              <div style={{fontSize: 10, color: "#64748b", marginBottom: 10, lineHeight: 1.5}}>
+                Clicking AUTO-RUN fires all phases below in order.
               </div>
               {phases.map(p => (
-                <div key={p.n} onClick={runSelected}
+                <div key={p.n}
                   style={{padding: "10px 12px", marginBottom: 8, borderRadius: 6,
-                    background: "#020617", border: "1px solid #1e293b", cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 10, transition: "all 0.15s"}}
-                  onMouseEnter={(ev) => { ev.currentTarget.style.borderColor = color; }}
-                  onMouseLeave={(ev) => { ev.currentTarget.style.borderColor = "#1e293b"; }}>
+                    background: "#020617", border: "1px solid #1e293b",
+                    display: "flex", alignItems: "center", gap: 10}}>
                   <div style={{width: 24, height: 24, borderRadius: "50%",
                     background: `linear-gradient(135deg, ${color}, #7f1d1d)`,
                     display: "flex", alignItems: "center", justifyContent: "center",
@@ -6685,14 +6757,23 @@ function ShellPanel({
             </div>
           )}
 
-          <button onClick={runSelected} disabled={isRunning || !selected}
-            style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
-              background: isRunning ? "#374151" : `linear-gradient(135deg, ${color}, #991b1b)`,
-              color: "#fff", border: "none", borderRadius: 10,
-              cursor: isRunning ? "wait" : "pointer",
-              boxShadow: isRunning ? "none" : `0 6px 20px ${color}55`}}>
-            {isRunning ? "⏳ RUNNING…" : "🚀 AUTO-RUN (All Phases)"}
-          </button>
+          {isRunning ? (
+            <button onClick={stopRunning}
+              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
+                background: "linear-gradient(135deg, #f59e0b, #b45309)",
+                color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
+                boxShadow: "0 6px 20px rgba(245,158,11,0.45)"}}>
+              ⏹ STOP
+            </button>
+          ) : (
+            <button onClick={runSelected} disabled={!selected}
+              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
+                background: `linear-gradient(135deg, ${color}, #991b1b)`,
+                color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
+                boxShadow: `0 6px 20px ${color}55`}}>
+              🚀 AUTO-RUN (All Phases)
+            </button>
+          )}
         </div>
 
         {/* RIGHT: Tabs */}
@@ -6757,6 +6838,29 @@ function ShellPanel({
                       fontSize: 13, color: "#cbd5e1", lineHeight: 1.6}}>
                       {r.ok ? (r.evidence || "Success") : r.error}
                     </div>
+
+                    {/* "What to try" hint surfaced from the backend on failure or
+                        when an auto-recovery happened. Helps customers self-serve
+                        instead of opening a support ticket. */}
+                    {r.suggested_action && (
+                      <div style={{padding: "11px 14px", borderRadius: 8, marginBottom: 14,
+                        background: "rgba(251,191,36,0.10)",
+                        border: "1px solid rgba(251,191,36,0.35)",
+                        fontSize: 12, color: "#fde68a", lineHeight: 1.6}}>
+                        <span style={{color: "#fbbf24", fontWeight: 800, marginRight: 6}}>💡 What to try:</span>
+                        {r.suggested_action}
+                      </div>
+                    )}
+
+                    {r.auto_recovered && (
+                      <div style={{padding: "9px 12px", borderRadius: 8, marginBottom: 14,
+                        background: "rgba(59,130,246,0.10)",
+                        border: "1px solid rgba(59,130,246,0.35)",
+                        fontSize: 11, color: "#bfdbfe", lineHeight: 1.5}}>
+                        <span style={{color: "#60a5fa", fontWeight: 800, marginRight: 6}}>♻ Auto-recovery:</span>
+                        We detected a stuck lab container and restarted it automatically before retrying.
+                      </div>
+                    )}
 
                     {r.payload && (
                       <div style={{marginBottom: 14}}>
@@ -6935,17 +7039,13 @@ function ExploitationModule({token, apiUrl}) {
     catalogKey="exploits"
 
     configFields={[
-      {id: "target",      label: "Target IP / Host",  catalogKey: "target"},
-      {id: "port",        label: "Port",              catalogKey: "port",         width: "half"},
-      {id: "lport",       label: "LPORT (listener)",  defaultValue: 4444,         width: "half", disabledKey: "lport_needed"},
+      {id: "target",      label: "Target IP / Host",      catalogKey: "target"},
+      {id: "port",        label: "Port",                  catalogKey: "port",  width: "half"},
+      {id: "lport",       label: "LPORT (listener)",      defaultValue: 4444, width: "half", disabledKey: "lport_needed"},
       {id: "lhost",       label: "LHOST (callback host)", defaultValue: "c2.vulnuslab.com", disabledKey: "lhost_needed"},
-      {id: "msf_module",  label: "MSF Module",        catalogKey: "msf_module",   readOnly: true, color: "#93c5fd"},
-      {id: "msf_payload", label: "MSF Payload",       catalogKey: "msf_payload",  readOnly: true, color: "#86efac"},
-      {id: "format",      label: "Payload Format",    catalogKey: "format",       readOnly: true, color: "#fbbf24", width: "half"},
-      {id: "search",      label: "Search Query",      catalogKey: "search_query", readOnly: true,                   width: "half"},
-      {id: "cve",         label: "CVE / Reference",   catalogKey: "cve",          readOnly: true, color: "#fbbf24"},
-      {id: "type",        label: "Type",              computedFrom: (c) => c.interactive ? "shell" : "data dump", readOnly: true, width: "half"},
-      {id: "cvss",        label: "CVSS",              catalogKey: "cvss",         readOnly: true, width: "half"},
+      {id: "cve",         label: "CVE / Reference",       catalogKey: "cve",   readOnly: true, color: "#fbbf24",  width: "half"},
+      {id: "cvss",        label: "CVSS",                  catalogKey: "cvss",  readOnly: true, width: "half"},
+      {id: "format",      label: "Result Type",           computedFrom: (c) => c.interactive ? "Interactive shell" : "Data extraction", readOnly: true, color: "#86efac"},
     ]}
 
     phases={[

@@ -1,0 +1,45 @@
+# Secrets — NEVER bake these into images. docker-compose mounts .env at runtime.
+.env
+.env.*
+*.env
+
+# Git
+.git
+.gitignore
+
+# Node / frontend build artifacts (backend image doesn't need them)
+node_modules
+build
+landing-page
+public
+src
+package*.json
+.react-server.pid
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+
+# Editor / OS
+.claude
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.pid
+uvicorn.out.log
+
+# Docs / dev notes
+*.md
+ruff
+
+# Backup / temp
+*.bak
+*.tmp
+backend_*.py

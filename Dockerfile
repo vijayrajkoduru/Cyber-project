@@ -24,8 +24,10 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Backend code
 COPY main.py .
 
-# .env is optional (API keys)
-COPY .env* ./
+# .env is NEVER baked into the image — it stays on the host and is mounted
+# at runtime via docker-compose `env_file: .env`. This keeps secrets
+# (JWT_SECRET, ADMIN_PASSWORD, SHODAN_KEY, etc.) out of image layers and
+# `docker history`.
 
 EXPOSE 8000
 

