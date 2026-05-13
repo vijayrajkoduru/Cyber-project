@@ -5166,11 +5166,20 @@ function generateReconReport({target, allResults, date}) {
     y = sHead("Tools Used",y);
     y = tHead(["TOOL","RESULT SUMMARY"],[50,130],y);
     const toolSummary = {
-      whois:"WHOIS registration data", dns:"DNS records (A/MX/NS/TXT)", dnsrecon:"DNS reconnaissance",
-      subdomains:"Passive subdomain discovery", crtsh:"Certificate transparency (crt.sh)", amass:"Deep subdomain enumeration",
-      harvester:"OSINT email & host harvesting", shodan:"Shodan internet intelligence",
-      masscan:"Fast port scanning", nmap:"Deep port scanning", services:"Service version detection",
-      os:"OS fingerprinting", banner:"Service banner grabbing",
+      whois:      "WHOIS registration data",
+      dns:        "DNS records (A/MX/NS/TXT/CNAME/SOA)",
+      dnsrecon:   "DNS reconnaissance — full record enum",
+      subdomains: "Passive + active subdomain discovery",
+      crtsh:      "Certificate Transparency (crt.sh) — issuers + dates",
+      amass:      "Deep subdomain enumeration",
+      harvester:  "OSINT — emails & sibling hosts",
+      shodan:     "Shodan Internet Intelligence (ports, vulns, geo)",
+      masscan:    "Fast port scan (top 40 ports)",
+      nmap:       "Deep port scan + service detection",
+      services:   "Service version detection",
+      os:         "OS fingerprinting (banners + Server header + CDN)",
+      banner:     "Service banner grabbing (TLS-aware)",
+      gobuster:   "Directory enumeration (100+ path wordlist)",
     };
     toolsRun.forEach((tool,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(tool,margin+3,y+5,8,BLUE,true); txt(toolSummary[tool]||"Completed",margin+53,y+5,8,DARK); y+=7; });
     y+=8;
@@ -5229,17 +5238,35 @@ function generateReconReport({target, allResults, date}) {
     y += 6; }
 
   // ── DNS Recon ──────────────────────────────────────────────
-  if(r.dnsrecon && r.dnsrecon.records && r.dnsrecon.records.length>0){ chk(30); y = sHead("DNS Reconnaissance (dnsrecon)",y);
-    y = tHead(["TYPE","NAME","ADDRESS"],[22,70,88],y);
-    r.dnsrecon.records.slice(0,40).forEach((rec,i)=>{
-      chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
-      rrect(margin+3,y+1.5,18,4,1,[219,234,254]); doc.setFont("Arial","bold");doc.setFontSize(7);doc.setTextColor(30,64,175);doc.text(String(rec.type||""),margin+5,y+5);
-      txt(String(rec.name||"").substring(0,38),margin+25,y+5,7.5,DARK);
-      const addr=String(rec.address||""); doc.setFont("Arial","normal");doc.setFontSize(7.5);doc.setTextColor(...GRAY);doc.text(addr.substring(0,45),margin+95,y+5);
-      y+=7;
+  // Long TXT records (SPF, domain-verification, BIMI) are too wide for a
+  // single 45-char cell — wrap with splitTextToSize so the customer sees
+  // the FULL value, not "openai-domain-verification=dv-aadifDyfGx0jGv"
+  // cut off mid-string.
+  if(r.dnsrecon && r.dnsrecon.records && r.dnsrecon.records.length>0){
+    chk(30); y = sHead("DNS Reconnaissance (dnsrecon)", y);
+    y = tHead(["TYPE","NAME","ADDRESS / VALUE"], [22, 55, contentW-77], y);
+    r.dnsrecon.records.slice(0, 80).forEach((rec, i) => {
+      const addrStr = String(rec.address || rec.value || "").replace(/^"|"$/g, "").trim();
+      const addrLines = doc.splitTextToSize(addrStr, contentW - 80);
+      const rowH = Math.max(7, addrLines.length * 3.8 + 3);
+      chk(rowH + 2);
+      fillR(margin, y, contentW, rowH, i % 2 === 0 ? LIGHT : WHITE);
+      rrect(margin+3, y+1.5, 18, 4, 1, [219, 234, 254]);
+      doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(30, 64, 175);
+      doc.text(String(rec.type || "?"), margin+5, y+5);
+      doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+      doc.text(String(rec.name || "").substring(0, 28), margin+25, y+5);
+      doc.setFont("Courier","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+      doc.text(addrLines, margin+78, y+5);
+      y += rowH;
     });
-    if(r.dnsrecon.records.length>40){ fillR(margin,y,contentW,7,LIGHT); txt("... and "+(r.dnsrecon.records.length-40)+" more records",margin+4,y+5,8,GRAY); y+=7; }
-    y+=6; }
+    if(r.dnsrecon.records.length > 80){
+      chk(7); fillR(margin, y, contentW, 7, LIGHT);
+      txt("... and " + (r.dnsrecon.records.length-80) + " more records", margin+4, y+5, 8, GRAY);
+      y += 7;
+    }
+    y += 6;
+  }
 
   // ── Subdomains ─────────────────────────────────────────────
   const allSubs = [...new Set([...(r.subdomains?.subdomains||[]),...(r.crtsh?.subdomains||[]),...(r.amass?.subdomains||[])])];
@@ -5252,6 +5279,51 @@ function generateReconReport({target, allResults, date}) {
     allSubs.slice(0,50).forEach((s,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(59,130,246);doc.text(String(s).substring(0,55),margin+3,y+5); txt(subSrc[s]||"—",margin+123,y+5,7.5,GRAY); y+=7; });
     if(allSubs.length>50){ fillR(margin,y,contentW,7,LIGHT); txt("... and "+(allSubs.length-50)+" more subdomains",margin+4,y+5,8,GRAY); y+=7; }
     y+=6; }
+
+  // ── Cert Transparency (crt.sh) ─────────────────────────────
+  // Surfaces the certificate metadata that drives subdomain discovery —
+  // total certs seen, who issued them, and the date range. Useful for the
+  // customer to understand "where did all these subdomains come from?"
+  if(r.crtsh && (r.crtsh.certs_seen > 0 || (r.crtsh.top_issuers||[]).length > 0)){
+    chk(30); y = sHead("Certificate Transparency (crt.sh)", y);
+    if(r.crtsh.error){
+      fillR(margin, y, contentW, 7, [254, 226, 226]);
+      txt("crt.sh issue: " + r.crtsh.error, margin+4, y+5, 8, [162,28,28]);
+      y += 9;
+    }
+    const ctRows = [
+      ["Certificates seen", String(r.crtsh.certs_seen || 0)],
+      ["Unique subdomains", String((r.crtsh.subdomains||[]).length)],
+      ["First issued",      r.crtsh.first_seen ? String(r.crtsh.first_seen).split("T")[0] : "—"],
+      ["Last issued",       r.crtsh.last_seen  ? String(r.crtsh.last_seen ).split("T")[0] : "—"],
+    ];
+    y = tHead(["FIELD","VALUE"], [55, 125], y);
+    ctRows.forEach((row, i) => {
+      chk(7); fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
+      txt(row[0], margin+3, y+5, 8.5, GRAY, true);
+      txt(row[1], margin+58, y+5, 8.5, DARK);
+      y += 7;
+    });
+    if((r.crtsh.top_issuers || []).length > 0){
+      y += 2; chk(20);
+      fillR(margin, y, contentW, 7, LBLUE);
+      txt("Top Certificate Issuers", margin+4, y+5, 9, BLUE, true);
+      y += 8;
+      r.crtsh.top_issuers.forEach((iss, i) => {
+        chk(7); fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
+        const issName = String(iss.issuer || "Unknown");
+        const lines = doc.splitTextToSize(issName, contentW - 40);
+        const rh = Math.max(7, lines.length * 3.8 + 3);
+        chk(rh + 1);
+        doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+        doc.text(lines, margin+3, y+5);
+        txt(iss.count + " cert" + (iss.count === 1 ? "" : "s"),
+            margin+contentW-4, y+5, 8, BLUE, true, "right");
+        y += rh;
+      });
+    }
+    y += 6;
+  }
 
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];
@@ -5312,30 +5384,65 @@ function generateReconReport({target, allResults, date}) {
     y+=6; }
 
   // ── OS ─────────────────────────────────────────────────────
+  // Honest output: shows confidence ONLY when the backend produced a real
+  // signal; falls back to "Indeterminate ..." when the target is CDN-fronted
+  // or no OS-revealing data was in scope. Lists supporting evidence (HTTP
+  // Server header, detected CDN) so the customer can audit the conclusion.
   if(r.os && r.os.os){
-    chk(30); y = sHead("OS Fingerprinting",y);
-    const osLabel = r.os.accuracy ? `${r.os.os}  (${r.os.accuracy}% confidence)` : r.os.os;
+    chk(30); y = sHead("OS Fingerprinting", y);
+    const conf = r.os.accuracy;
+    const osLabel = conf ? `${r.os.os}  (${conf}% confidence)` : r.os.os;
     const osLines = doc.splitTextToSize(osLabel, contentW - 42);
     const osRowH  = Math.max(10, osLines.length * 5 + 4);
     chk(osRowH + 2);
-    fillR(margin,y,contentW,osRowH,LIGHT);
-    txt("Detected OS:",margin+4,y+7,9,GRAY,true);
+    fillR(margin, y, contentW, osRowH, LIGHT);
+    txt("Detected OS:", margin+4, y+7, 9, GRAY, true);
     doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
     doc.text(osLines, margin+36, y+7);
     y += osRowH + 4;
-    if(r.os.matches && r.os.matches.length>0){
-      chk(20); y=sHead("OS Match Candidates",y);
-      r.os.matches.slice(0,5).forEach((m,i)=>{
-        chk(8);
-        const mLines = doc.splitTextToSize(m.name||"", contentW - 40);
+
+    // CDN/edge banner if the origin is hidden — flags this finding clearly
+    if(r.os.cdn){
+      chk(10);
+      fillR(margin, y, contentW, 8, [254, 243, 199]);
+      fillR(margin, y, 3, 8, [217, 119, 6]);
+      txt(`Edge proxy detected: ${r.os.cdn} — origin OS is not directly observable.`,
+          margin+6, y+5.5, 8, [120, 53, 15]);
+      y += 11;
+    }
+
+    // Evidence list — what the verdict is based on
+    if(r.os.evidence && r.os.evidence.length > 0){
+      chk(8 + r.os.evidence.length * 5);
+      fillR(margin, y, contentW, 7, LBLUE);
+      txt("Evidence", margin+4, y+5, 8.5, BLUE, true);
+      y += 8;
+      r.os.evidence.forEach((e, i) => {
+        const eLines = doc.splitTextToSize(String(e), contentW - 12);
+        const eH = Math.max(6, eLines.length * 4 + 2);
+        chk(eH + 1);
+        fillR(margin, y, contentW, eH, i%2===0 ? LIGHT : WHITE);
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+        doc.text(eLines, margin+5, y+4.5);
+        y += eH;
+      });
+      y += 3;
+    }
+
+    if(r.os.matches && r.os.matches.length > 0){
+      chk(20); y = sHead("OS Match Candidates", y);
+      r.os.matches.slice(0, 5).forEach((m, i) => {
+        const mLines = doc.splitTextToSize(m.name || "", contentW - 40);
         const mH = Math.max(8, mLines.length * 4.5 + 3);
-        fillR(margin,y,contentW,mH,i%2===0?LIGHT:WHITE);
+        chk(mH + 2);
+        fillR(margin, y, contentW, mH, i%2===0 ? LIGHT : WHITE);
         doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
         doc.text(mLines, margin+4, y+5.5);
-        txt(m.accuracy?m.accuracy+"%":"",margin+contentW-8,y+5.5,8,BLUE,true,"right");
-        y+=mH;
+        txt(m.accuracy ? m.accuracy + "%" : "n/a",
+            margin+contentW-8, y+5.5, 8, BLUE, true, "right");
+        y += mH;
       });
-      y+=4;
+      y += 4;
     }
   }
 
@@ -5359,6 +5466,60 @@ function generateReconReport({target, allResults, date}) {
       y+=rh;
     });
     y+=4;
+  }
+
+  // ── DIRECTORY ENUMERATION (gobuster / python-fuzz) ─────────
+  // Renders the 100+ path wordlist sweep with color-coded status codes.
+  // 200/301/302 are "live" (green/blue); 403 is "exists but forbidden"
+  // (amber); everything else is gray. Customer can hand this to a
+  // junior pentester to start manual review.
+  if(r.gobuster && Array.isArray(r.gobuster.found) && r.gobuster.found.length > 0){
+    chk(30); y = sHead("Directory Enumeration", y);
+    if(r.gobuster.engine){
+      chk(6);
+      fillR(margin, y, contentW, 6, LIGHT);
+      txt(`Engine: ${r.gobuster.engine}  ·  ${r.gobuster.found.length} path(s) discovered`,
+          margin+4, y+4.5, 7.5, GRAY);
+      y += 8;
+    }
+    y = tHead(["STATUS","PATH"], [25, contentW-25], y);
+    r.gobuster.found.slice(0, 80).forEach((item, i) => {
+      const st = item.status;
+      const stColor = st === 200 ? [22,163,74]
+                    : (st === 301 || st === 302) ? [37,99,235]
+                    : st === 403 ? [217,119,6]
+                    : [100,116,139];
+      const stBg = st === 200 ? [220,252,231]
+                 : (st === 301 || st === 302) ? [219,234,254]
+                 : st === 403 ? [254,243,199]
+                 : [241,245,249];
+      chk(7);
+      fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
+      rrect(margin+3, y+1.5, 18, 4, 1, stBg);
+      doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...stColor);
+      doc.text(String(st || "?"), margin+5, y+5);
+      const path = String(item.path || "");
+      doc.setFont("Courier","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+      doc.text(path.substring(0, 100), margin+28, y+5);
+      y += 7;
+    });
+    if(r.gobuster.found.length > 80){
+      chk(7);
+      fillR(margin, y, contentW, 7, LIGHT);
+      txt(`... and ${r.gobuster.found.length - 80} more paths`,
+          margin+4, y+5, 7.5, GRAY);
+      y += 7;
+    }
+    y += 6;
+  } else if(r.gobuster && Array.isArray(r.gobuster.found) && r.gobuster.found.length === 0){
+    // Be explicit when the sweep returned zero — customers shouldn't
+    // wonder if it ran. Common on CDN-fronted sites where Fastly/
+    // Cloudflare returns identical 404s for every path.
+    chk(20); y = sHead("Directory Enumeration", y);
+    fillR(margin, y, contentW, 10, LIGHT);
+    txt("No exposed paths discovered. Common when the target sits behind a CDN that normalizes all 404s.",
+        margin+4, y+6.5, 8.5, GRAY);
+    y += 14;
   }
 
   // ── END OF REPORT ──────────────────────────────────────────

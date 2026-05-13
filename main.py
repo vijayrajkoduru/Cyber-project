@@ -3971,21 +3971,74 @@ async def recon_dnsrecon(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/recon/crtsh")
 async def recon_crtsh(req: ScanRequest, user=Depends(verify_token)):
+    """Certificate Transparency lookup via crt.sh — returns rich cert
+    metadata (issuer, dates, sample names) so the PDF can render a
+    proper Cert Transparency section, not just feed into subdomain enum.
+
+    BUG FIX: previous version imported `httpx` which is not in
+    requirements.txt and raised NameError on every call. Now uses
+    `requests` (already a dependency) with a browser User-Agent (crt.sh
+    rate-limits the default `python-requests/X.Y` UA aggressively)."""
     host = _recon_host(req.target)
-    subdomains = []
+    subdomains = set()
+    certs_seen = 0
+    issuers   = {}    # short issuer label → cert count
+    latest_iso   = None
+    earliest_iso = None
+    error = None
+
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.get(f"https://crt.sh/?q=%.{host}&output=json")
-            if r.status_code == 200:
-                for entry in r.json():
-                    for sub in entry.get("name_value","").split("\n"):
-                        sub = sub.strip().lstrip("*.")
-                        if sub and sub not in subdomains:
-                            subdomains.append(sub)
-    except: pass
+        r = _req_lib.get(
+            f"https://crt.sh/?q=%.{host}&output=json",
+            timeout=30, verify=True,
+            headers={
+                "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+                "Accept": "application/json,text/plain,*/*",
+            })
+        if r.status_code != 200:
+            error = f"crt.sh returned HTTP {r.status_code}"
+        elif not r.text.strip().startswith("["):
+            error = "crt.sh returned non-JSON (rate-limited or down)"
+        else:
+            entries = r.json()
+            certs_seen = len(entries)
+            for entry in entries:
+                # Subdomains in the cert SAN list
+                for n in (entry.get("name_value") or "").split("\n"):
+                    n = n.strip().lower().lstrip("*.")
+                    if n.endswith(host) and "@" not in n:
+                        subdomains.add(n)
+                # Trim the noisy issuer string to a useful label
+                iss = (entry.get("issuer_name") or "").strip()
+                m = re.search(r"O=([^,]+)", iss)
+                iss_short = m.group(1).strip() if m else (iss[:80] if iss else "Unknown")
+                issuers[iss_short] = issuers.get(iss_short, 0) + 1
+                # Issuance dates
+                nb = entry.get("not_before") or ""
+                if nb:
+                    if not latest_iso   or nb > latest_iso:   latest_iso   = nb
+                    if not earliest_iso or nb < earliest_iso: earliest_iso = nb
+    except Exception as e:
+        error = f"crt.sh request failed: {type(e).__name__}: {e}"
+
+    top_issuers = [{"issuer": i, "count": c}
+                   for i, c in sorted(issuers.items(), key=lambda kv: -kv[1])[:5]]
+
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "crtsh", req.target, {"output":str(subdomains)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"crtsh","subdomains":subdomains,"total":len(subdomains),"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id, "crtsh", req.target,
+              {"output": f"{certs_seen} certificate(s) for {host}"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "crtsh",
+        "subdomains":  sorted(subdomains),
+        "total":       len(subdomains),
+        "certs_seen":  certs_seen,
+        "top_issuers": top_issuers,
+        "first_seen":  earliest_iso,
+        "last_seen":   latest_iso,
+        "error":       error,
+        "timestamp":   datetime.datetime.utcnow().isoformat(),
+    }
 
 @app.post("/api/recon/amass")
 async def recon_amass(req: ScanRequest, user=Depends(verify_token)):
@@ -4009,26 +4062,145 @@ async def recon_services(req: ScanRequest, user=Depends(verify_token)):
     save_scan(scan_id, "services", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"services","ports":ports,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
+_CDN_HINTS = {
+    "cloudflare":   "Cloudflare CDN",
+    "cf-ray":       "Cloudflare CDN",
+    "fastly":       "Fastly CDN",
+    "akamai":       "Akamai CDN",
+    "akamaighost":  "Akamai CDN",
+    "cloudfront":   "AWS CloudFront",
+    "x-amz-cf":     "AWS CloudFront",
+    "vercel":       "Vercel Edge",
+    "netlify":      "Netlify Edge",
+    "amazons3":     "AWS S3",
+    "googfe":       "Google Frontend",
+    "azurefd":      "Azure Front Door",
+    "x-azure-ref":  "Azure Front Door",
+    "sucuri":       "Sucuri WAF",
+    "incapsula":    "Imperva Incapsula",
+}
+
+
 @app.post("/api/recon/os")
 async def recon_os(req: ScanRequest, user=Depends(verify_token)):
+    """Honest OS detection. Instead of returning a fake "Linux/Unix 40%"
+    placeholder when nothing is observable, this:
+
+      1. Reads HTTP Server: header from port 80/443/8080/8443
+      2. Inspects TCP banners for distro keywords (ubuntu/debian/centos/...)
+      3. Maps signals to a confident verdict OR an honest "indeterminate"
+         when the target is CDN-fronted (origin OS is hidden)
+
+    Never invents a confidence number. A `cdn` field is surfaced when
+    we identify the edge proxy — the customer then knows to look at
+    the origin separately if they have access."""
     host = _recon_host(req.target)
     ports = await _tcp_scan(host, timeout=2.0)
-    banners = {str(p["port"]): p["version"] for p in ports if p["version"]}
-    os_name = None; matches = []
-    # Heuristic OS detection from open ports + banners
-    all_text = " ".join(banners.values()).lower()
-    if "windows" in all_text or 3389 in [p["port"] for p in ports] or 445 in [p["port"] for p in ports]:
-        os_name = "Windows (inferred from ports/banners)"; matches = [{"name":"Windows","accuracy":60}]
-    elif "ubuntu" in all_text or "debian" in all_text or "centos" in all_text or "linux" in all_text:
-        os_name = "Linux (inferred from banner)"; matches = [{"name":"Linux","accuracy":70}]
-    elif "freebsd" in all_text or "openbsd" in all_text:
-        os_name = "BSD (inferred from banner)"; matches = [{"name":"BSD","accuracy":65}]
-    elif ports:
-        os_name = "Linux/Unix (common default)"; matches = [{"name":"Linux/Unix","accuracy":40}]
-    out = f"OS guess: {os_name}\nOpen ports: {[p['port'] for p in ports]}"
+    open_ports = {p["port"] for p in ports}
+    banners    = {str(p["port"]): p["version"] for p in ports if p["version"]}
+    all_text   = " | ".join(banners.values()).lower()
+    evidence   = []
+
+    # 1) HTTP Server header — most reliable single signal
+    server_header = None
+    loop = asyncio.get_event_loop()
+    def _fetch_server(port):
+        proto = "https" if port in (443, 8443, 4443) else "http"
+        try:
+            r = _req_lib.get(f"{proto}://{host}",
+                             timeout=8, verify=False,
+                             allow_redirects=False,
+                             headers={"User-Agent": "VulnusLab-Recon/1.0"})
+            return r.headers.get("Server") or r.headers.get("server")
+        except Exception:
+            return None
+    for p in (443, 80, 8443, 8080):
+        if p in open_ports:
+            server_header = await loop.run_in_executor(None, _fetch_server, p)
+            if server_header:
+                evidence.append(f"HTTP Server header (:{p}): {server_header}")
+                break
+
+    # 2) CDN / edge proxy detection
+    cdn = None
+    hay = f"{server_header or ''} {all_text}".lower()
+    for needle, label in _CDN_HINTS.items():
+        if needle in hay:
+            cdn = label
+            evidence.append(f"Edge identified: {cdn}")
+            break
+
+    # 3) OS verdict
+    os_label = None
+    confidence = None
+    matches = []
+
+    if cdn:
+        # Target is behind a CDN — origin OS is not observable from here.
+        # Refuse to fake a guess.
+        os_label = f"Indeterminate — origin hidden behind {cdn}"
+        matches = [{"name": f"{cdn} (origin not exposed)", "accuracy": None}]
+    else:
+        if "windows" in all_text or 3389 in open_ports:
+            os_label, confidence = "Windows", 85
+            matches = [{"name": "Windows (RDP open or banner match)", "accuracy": 85}]
+        elif server_header and "iis" in server_header.lower():
+            os_label, confidence = "Windows", 90
+            matches = [{"name": "Windows (Microsoft-IIS server header)", "accuracy": 90}]
+        else:
+            for distro, conf in [("ubuntu", 85), ("debian", 85), ("centos", 80),
+                                 ("fedora", 80), ("rhel", 80), ("alpine", 80),
+                                 ("amazon", 75), ("kali", 80)]:
+                if distro in all_text:
+                    os_label, confidence = f"Linux ({distro.capitalize()})", conf
+                    matches = [{"name": f"Linux / {distro}", "accuracy": conf}]
+                    break
+            if not os_label:
+                if "linux" in all_text:
+                    os_label, confidence = "Linux", 75
+                    matches = [{"name": "Linux (banner match)", "accuracy": 75}]
+                elif "freebsd" in all_text or "openbsd" in all_text:
+                    os_label = "BSD"; confidence = 75
+                    matches = [{"name": "BSD (banner match)", "accuracy": 75}]
+                elif server_header and "nginx" in server_header.lower():
+                    os_label = "Linux (probable)"; confidence = 60
+                    matches = [{"name": "Linux (nginx typically Linux-hosted)", "accuracy": 60}]
+                elif server_header and "apache" in server_header.lower():
+                    os_label = "Linux (likely)"; confidence = 55
+                    matches = [{"name": "Linux (Apache server, no distro signal)", "accuracy": 55}]
+                else:
+                    os_label = "Indeterminate — no OS-revealing data in scope"
+                    matches  = []
+
+    # Compose audit-grade raw output
+    out_lines = [f"OS detection for {host}", "=" * 50,
+                 f"Result:     {os_label}"]
+    if confidence is not None:
+        out_lines.append(f"Confidence: {confidence}%")
+    if cdn:
+        out_lines.append(f"CDN/Edge:   {cdn}")
+    if evidence:
+        out_lines.append("")
+        out_lines.append("Evidence:")
+        for e in evidence:
+            out_lines.append(f"  • {e}")
+    out_lines.append("")
+    out_lines.append(f"Open ports observed: {sorted(open_ports)}")
+
+    raw_output = "\n".join(out_lines)
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "os", req.target, {"output":out})
-    return {"scan_id":scan_id,"target":req.target,"tool":"os","os":os_name,"accuracy":matches[0]["accuracy"] if matches else None,"matches":matches,"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id, "os", req.target, {"output": raw_output})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "os",
+        "os":            os_label,
+        "accuracy":      confidence,
+        "matches":       matches,
+        "evidence":      evidence,
+        "cdn":           cdn,
+        "server_header": server_header,
+        "raw_output":    raw_output,
+        "timestamp":     datetime.datetime.utcnow().isoformat(),
+    }
 
 def _clean_banner(raw: str) -> str:
     """Strip binary/non-printable bytes from nmap banner output."""
