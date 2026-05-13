@@ -1488,23 +1488,106 @@ _TOP_PORTS = [21,22,23,25,53,80,110,111,135,139,143,443,445,465,587,
               9000,9200,27017]
 
 
+# Ports we know speak TLS — don't try to grab plaintext banners (you get TLS
+# handshake bytes that decode to garbage like "\x02" → "2"). For these we
+# do a proper TLS handshake and read the cert CN/issuer instead.
+_TLS_PORTS = {443, 465, 636, 853, 993, 995, 4443, 5986, 8443, 9443, 4444}
+
+# Ports that ANNOUNCE themselves on connect (server speaks first) — we just
+# read, never write. Sending \r\n to these often confuses the daemon and
+# truncates the banner.
+_GREETING_PORTS = {21, 22, 23, 25, 110, 143, 587, 110, 119, 220, 465}
+
+# Ports where the server waits for the client to speak first. We send a
+# minimal protocol-aware probe so the banner reflects something useful
+# instead of "400 Bad Request".
+def _probe_for(port: int) -> bytes:
+    if port in {80, 8000, 8008, 8080, 8888, 5985, 9200}:
+        return b"GET / HTTP/1.1\r\nHost: x\r\nUser-Agent: VulnusLab-Recon/1.0\r\nConnection: close\r\n\r\n"
+    if port in {3306}:   # MySQL — server actually speaks first, but probe is benign
+        return b""
+    if port in {6379}:   # Redis
+        return b"PING\r\n"
+    if port in {11211}:  # memcached
+        return b"version\r\n"
+    return b""
+
+
+def _tls_banner(host: str, port: int, timeout: float = 3.0) -> str:
+    """Open a real TLS socket, read the cert subject, return a one-line banner.
+    Avoids the "decode garbage as utf-8" bug that produced banner='2'."""
+    try:
+        ctx = _ssl_lib.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl_lib.CERT_NONE
+        with _socket_lib.create_connection((host, port), timeout=timeout) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                cert = ssock.getpeercert(binary_form=False)
+                if cert:
+                    subject = dict(x[0] for x in cert.get("subject", []) if x)
+                    issuer  = dict(x[0] for x in cert.get("issuer", []) if x)
+                    cn = subject.get("commonName") or "?"
+                    iss = issuer.get("commonName") or issuer.get("organizationName") or "?"
+                    return f"TLS · CN={cn} · issuer={iss}"
+                # No cert details available — at least record the protocol version
+                return f"TLS · {ssock.version() or 'handshake-ok'}"
+    except Exception as e:
+        return f"TLS · handshake-failed ({type(e).__name__})"
+
+
 async def _tcp_scan(host: str, ports=None, timeout: float=2.5) -> list:
+    """Async port scanner. For each open port, attempts a protocol-aware
+    banner grab: TLS ports get a real TLS handshake (cert CN/issuer in the
+    banner field), HTTP ports get a real GET request, server-greeting
+    ports just read, others get a benign newline. Result lands in
+    `version` for backward-compat with downstream renderers."""
     if ports is None: ports = _TOP_PORTS
     sem = asyncio.Semaphore(50)
+    loop = asyncio.get_event_loop()
+
     async def _probe(port):
         async with sem:
             try:
-                r, w = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
-                banner = ""
-                try:
-                    w.write(b"\r\n"); await w.drain()
-                    d = await asyncio.wait_for(r.read(256), timeout=1.0)
-                    banner = d.decode("utf-8", errors="replace").strip()[:80]
-                except: pass
-                try: w.close(); await w.wait_closed()
-                except: pass
-                return {"port":port,"proto":"tcp","state":"open","service":_SVC.get(port,"unknown"),"version":banner}
-            except: return None
+                r, w = await asyncio.wait_for(
+                    asyncio.open_connection(host, port), timeout=timeout)
+            except Exception:
+                return None
+            banner = ""
+            try:
+                if port in _TLS_PORTS:
+                    # Close async socket, redo as a sync TLS handshake. Faster
+                    # than wrestling asyncio's StartTLS API for a one-shot probe.
+                    try: w.close()
+                    except Exception: pass
+                    banner = await loop.run_in_executor(None, _tls_banner, host, port, 3.0)
+                else:
+                    probe = _probe_for(port)
+                    if probe:
+                        try:
+                            w.write(probe); await w.drain()
+                        except Exception: pass
+                    # Read whatever the daemon sends back
+                    try:
+                        d = await asyncio.wait_for(r.read(512), timeout=1.5)
+                        text = d.decode("utf-8", errors="replace")
+                        # Drop replacement characters + control bytes
+                        text = "".join(ch for ch in text if (32 <= ord(ch) < 127) or ch in ("\t","\n","\r"))
+                        # First non-empty line — that's the banner
+                        for line in text.splitlines():
+                            line = line.strip()
+                            if line and len(line) >= 3:
+                                banner = line[:120]
+                                break
+                    except Exception:
+                        pass
+                    try: w.close()
+                    except Exception: pass
+            except Exception:
+                try: w.close()
+                except Exception: pass
+            return {"port": port, "proto": "tcp", "state": "open",
+                    "service": _SVC.get(port, "unknown"), "version": banner}
+
     results = await asyncio.gather(*[_probe(p) for p in ports])
     return [r for r in results if r]
 
@@ -1897,25 +1980,92 @@ def _detect_tech(url: str) -> list:
 
 
 async def _enum_subdomains(host: str) -> list:
+    """Subdomain discovery — combines passive (crt.sh certificate transparency
+    + the DNS TXT records on the apex, which often advertise sibling hosts via
+    `vc-domain-verify=tg.example.com`-style entries) with an active DNS brute
+    of 80+ common subdomain names. Each source feeds a single dedup set.
+
+    crt.sh is best-effort: rate-limits and 503s are common, so a failure
+    there must NOT prevent the brute-force part from running."""
     subs = set()
+
+    # ── PASSIVE 1: crt.sh certificate transparency ──
     try:
-        r = _http_get(f"https://crt.sh/?q=%.{host}&output=json", timeout=20)
-        if r and r.status_code==200:
+        r = _req_lib.get(
+            f"https://crt.sh/?q=%.{host}&output=json",
+            timeout=30,
+            verify=True,
+            headers={
+                "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+                "Accept": "application/json,text/plain,*/*",
+            })
+        if r.status_code == 200 and r.text.strip().startswith("["):
             for entry in r.json():
-                for n in entry.get("name_value","").split("\n"):
-                    n = n.strip().lstrip("*.")
-                    if n.endswith(host) and n!=host: subs.add(n)
-    except: pass
-    common = ["www","mail","ftp","smtp","api","dev","staging","test","beta","admin",
-              "portal","webmail","cdn","static","secure","app","docs","blog","shop","m"]
+                for n in (entry.get("name_value") or "").split("\n"):
+                    n = n.strip().lower().lstrip("*.")
+                    if n.endswith(host) and n != host and "@" not in n:
+                        subs.add(n)
+    except Exception:
+        pass  # crt.sh down / timeout — fall through to active brute below
+
+    # ── PASSIVE 2: parse TXT records on the apex for `domain-verify=sub.host`-
+    #     style assertions (Notion, vc-domain-verify, fastly-delegation, etc.
+    #     often leak sibling subdomain names). ──
+    try:
+        for ans in _dns_resolver.resolve(host, "TXT", lifetime=5):
+            s = str(ans)
+            # Extract anything that looks like a host inside the TXT
+            for m in re.findall(r"([a-z0-9][a-z0-9\-\.]+\." + re.escape(host) + r")", s, re.IGNORECASE):
+                m = m.strip().lower().lstrip("*.")
+                if m != host: subs.add(m)
+    except Exception:
+        pass
+
+    # ── ACTIVE: DNS-brute the common-name wordlist ──
+    common = [
+        # Web frontend
+        "www","www2","m","mobile","web","portal","home","main","beta","alpha",
+        # Mail / collaboration
+        "mail","mx","smtp","pop","pop3","imap","webmail","email","exchange","autodiscover","mta-sts",
+        # API / app
+        "api","apis","app","apps","graphql","grpc","rest","ws","websocket",
+        # Auth / admin
+        "admin","login","auth","sso","oauth","accounts","id","account","my","user","users","panel",
+        # Dev / staging
+        "dev","develop","development","stage","staging","staging2","qa","test","tests","testing","preview","preprod","sandbox","demo","uat",
+        # Infra
+        "cdn","static","assets","img","images","media","files","download","downloads","upload","uploads","video","videos","audio",
+        # Services
+        "blog","forum","forums","community","wiki","docs","help","support","kb","status","health",
+        # Geo / branch
+        "us","eu","uk","de","fr","jp","cn","in","br","ap","emea","apac",
+        # Internal / ops
+        "vpn","intranet","corp","internal","jenkins","jira","confluence","grafana","prometheus","kibana","gitlab","git","bitbucket","github",
+        # Cloud / pages
+        "ftp","sftp","s3","storage","cloud","cdn1","cdn2","static1","static2","origin",
+        # E-commerce
+        "shop","store","cart","checkout","pay","payment","billing","orders",
+        # Misc
+        "secure","ssl","www3","ww","new","old","legacy","tmp","temp","backup"
+    ]
+    # dedup
+    common = list(dict.fromkeys(common))
+
+    sem = asyncio.Semaphore(40)
+    loop = asyncio.get_event_loop()
     async def _resolve(sub):
-        loop = asyncio.get_event_loop()
-        try:
-            await loop.run_in_executor(None, lambda: _dns_resolver.resolve(f"{sub}.{host}","A",lifetime=3))
-            return f"{sub}.{host}"
-        except: return None
-    for r in await asyncio.gather(*[_resolve(s) for s in common]):
-        if r: subs.add(r)
+        fqdn = f"{sub}.{host}"
+        async with sem:
+            try:
+                await loop.run_in_executor(
+                    None, lambda: _dns_resolver.resolve(fqdn, "A", lifetime=3))
+                return fqdn
+            except Exception:
+                return None
+    for hit in await asyncio.gather(*[_resolve(s) for s in common]):
+        if hit: subs.add(hit)
+
     return sorted(subs)
 
 
