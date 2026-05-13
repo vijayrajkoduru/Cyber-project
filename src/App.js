@@ -6315,7 +6315,658 @@ function generateExploitReport({results, date}) {
   _go();
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ShellPanel — unified module UI used across all pentest modules.
+   ───────────────────────────────────────────────────────────────────────────
+   Encapsulates the form-config + tabbed log/result/shell pattern. Other
+   modules (Network, Auth, AD, Privesc, ...) configure this via props rather
+   than re-implementing the form/tabs/shell-polling glue themselves.
+
+   Props (all optional unless marked required):
+     title, subtitle, icon, color      — header identity
+     catalogFetchUrl, catalogKey       — dropdown of pre-canned attacks
+     configFields                      — declarative left-panel form fields
+     phases                            — decorative phase runners (clickable)
+     runEndpoint (required), buildRunBody (required)  — POST trigger
+     hasInteractiveShell, shellEndpoints, isInteractiveFor — optional shell tab
+     onDownloadReport                  — PDF generator hook
+     token, apiUrl                     — auth boilerplate
+
+   configFields entry shape:
+     id           form state key (and DOM input name)
+     label        visible label above input
+     placeholder  optional placeholder text
+     readOnly     render as gray non-editable (auto-fill from catalog)
+     catalogKey   pull initial value from catalog[selected][catalogKey]
+     defaultValue fallback initial value when no catalogKey or empty
+     color        text color for the input (highlights read-only fields)
+     width        "full" (default) | "half" — pair two halves on one row
+     disabledKey  catalog key whose `false` value disables this input
+     computedFrom (entry) => string — derived display value
+*/
+function ShellPanel({
+  title, subtitle, icon = "💥", color = "#dc2626",
+  catalogFetchUrl, catalogKey = "items",
+  configFields = [], phases = [],
+  runEndpoint, buildRunBody,
+  hasInteractiveShell = false, shellEndpoints, isInteractiveFor = () => false,
+  onDownloadReport,
+  token, apiUrl,
+}) {
+  const [catalog, setCatalog]         = useState([]);
+  const [selectedId, setSelectedId]   = useState("");
+  const [valuesById, setValuesById]   = useState({});   // per-catalog-id form values
+  const [running, setRunning]         = useState({});
+  const [results, setResults]         = useState({});
+  const [activeShell, setActiveShell] = useState(null);
+  const [shellOutput, setShellOutput] = useState("");
+  const [shellStatus, setShellStatus] = useState("idle");
+  const [shellCmd, setShellCmd]       = useState("");
+  const [cmdHistory, setCmdHistory]   = useState([]);
+  const [histIdx, setHistIdx]         = useState(-1);
+  const [activeTab, setActiveTab]     = useState("log");
+  const [logLines, setLogLines]       = useState([]);
+
+  const pollRef  = useRef(null);
+  const outRef   = useRef(null);
+  const logRef   = useRef(null);
+  const inputRef = useRef(null);
+
+  const T = (path, opts = {}) => fetch(apiUrl + path, {
+    ...opts,
+    headers: {"Content-Type": "application/json", "Authorization": "Bearer " + token, ...(opts.headers || {})},
+  }).then(r => r.json());
+
+  const selected = catalog.find(c => c.id === selectedId);
+  const isInteractive = selected ? isInteractiveFor(selected) : false;
+  const fieldValues = valuesById[selectedId] || {};
+  const setField = (key, value) =>
+    setValuesById(prev => ({...prev, [selectedId]: {...(prev[selectedId] || {}), [key]: value}}));
+
+  const sevColor = (cvss) => cvss >= 9 ? "#dc2626" : cvss >= 7 ? "#f59e0b" : "#10b981";
+
+  // Bootstrap: catalog fetch
+  useEffect(() => {
+    if (!catalogFetchUrl) return;
+    (async () => {
+      try {
+        const d = await T(catalogFetchUrl);
+        setCatalog(d[catalogKey] || []);
+      } catch (e) {}
+    })();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    // eslint-disable-next-line
+  }, []);
+
+  // Auto-select first catalog item
+  useEffect(() => {
+    if (catalog.length && !selectedId) setSelectedId(catalog[0].id);
+    // eslint-disable-next-line
+  }, [catalog]);
+
+  // Auto-fill form values when selection arrives for the first time
+  useEffect(() => {
+    if (!selected) return;
+    setValuesById(prev => {
+      if (prev[selectedId]) return prev;
+      const next = {};
+      for (const f of configFields) {
+        if (f.computedFrom)                                  next[f.id] = f.computedFrom(selected);
+        else if (f.catalogKey && selected[f.catalogKey] !== undefined) next[f.id] = selected[f.catalogKey];
+        else if (f.defaultValue !== undefined)               next[f.id] = f.defaultValue;
+        else                                                 next[f.id] = "";
+      }
+      return {...prev, [selectedId]: next};
+    });
+    // eslint-disable-next-line
+  }, [selectedId, catalog.length]);
+
+  // Auto-scroll log + shell
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logLines]);
+  useEffect(() => { if (outRef.current) outRef.current.scrollTop = outRef.current.scrollHeight; }, [shellOutput]);
+
+  // Poll shell output
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (!activeShell?.sid || !shellEndpoints) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const d = await T(shellEndpoints.output(activeShell.sid));
+        if (d.output) setShellOutput(prev => prev + d.output);
+        if (d.status) setShellStatus(d.status);
+        if (d.status === "closed" || d.status === "error" || d.status === "not_found") {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        }
+      } catch (e) {}
+    }, 600);
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+    // eslint-disable-next-line
+  }, [activeShell?.sid]);
+
+  const appendLog = (text, c = "#cbd5e1") => {
+    setLogLines(prev => [...prev, {
+      ts: new Date().toLocaleTimeString([], {hour12: false}),
+      text, color: c,
+    }]);
+  };
+
+  const runSelected = async () => {
+    if (!selected || !runEndpoint || !buildRunBody) return;
+    setLogLines([]); setActiveTab("log");
+    appendLog(`▶ Module:   ${selected.id}`, "#fbbf24");
+    if (selected.cve) appendLog(`▶ CVE:      ${selected.cve}  ·  CVSS ${selected.cvss ?? "?"}  ·  ${selected.category ?? ""}`, "#fbbf24");
+    appendLog("", "#94a3b8");
+    appendLog(phases.length ? "⏱ Phase 1: Pre-flight (DNS + port reachability) ..." : "⏱ Sending request ...", "#60a5fa");
+
+    setRunning(p => ({...p, [selected.id]: true}));
+    setResults(p => ({...p, [selected.id]: null}));
+    try {
+      const body = buildRunBody(selected, fieldValues);
+      const r = await T(runEndpoint, {method: "POST", body: JSON.stringify(body)});
+      setResults(p => ({...p, [selected.id]: r}));
+
+      if (r.ok === false && r.error && /resolve|not accepting/i.test(r.error)) {
+        appendLog("❌ Phase 1: " + r.error, "#f87171");
+      } else if (r.ok === false) {
+        appendLog("❌ " + (r.error || "Failed"), "#f87171");
+      } else if (phases.length) {
+        appendLog("✅ Phase 1: target reachable", "#4ade80");
+        appendLog("⏱ Phase 2: Sending exploit trigger ...", "#60a5fa");
+        appendLog("✅ Phase 2: trigger accepted by target", "#4ade80");
+        appendLog(`⏱ Phase 3: Verifying ${isInteractive ? "shell session" : "data extraction"} ...`, "#60a5fa");
+        appendLog("✅ Phase 3: " + (r.evidence || "compromise verified"), "#4ade80");
+        if (r.shell_id) {
+          appendLog(`⏱ Phase 4: Opening ${isInteractive ? "interactive shell" : "data view"} ...`, "#60a5fa");
+          appendLog(`✅ Phase 4: session sid=${r.shell_id} ready`, "#4ade80");
+        }
+        appendLog("", "#94a3b8");
+        appendLog("🎉 AUTO-RUN COMPLETE — see Results / Shell tab", "#22c55e");
+      } else {
+        appendLog("✅ Complete", "#4ade80");
+      }
+
+      if (r.ok && r.shell_id && shellEndpoints) {
+        setShellOutput(""); setShellStatus("starting");
+        setActiveShell({sid: r.shell_id, source_id: selected.id, meta: selected});
+        setActiveTab(isInteractive ? "shell" : "result");
+      }
+    } catch (err) {
+      appendLog("❌ Network error: " + String(err), "#f87171");
+      setResults(p => ({...p, [selected.id]: {ok: false, error: String(err)}}));
+    }
+    setRunning(p => ({...p, [selected.id]: false}));
+  };
+
+  const sendCmd = async () => {
+    if (!activeShell?.sid || !shellCmd.trim() || !shellEndpoints) return;
+    const c = shellCmd;
+    setCmdHistory(h => [...h, c]); setHistIdx(-1);
+    setShellOutput(prev => prev + `$ ${c}\n`);
+    setShellCmd("");
+    try {
+      await T(shellEndpoints.cmd(activeShell.sid), {method: "POST", body: JSON.stringify({cmd: c})});
+    } catch (e) {
+      setShellOutput(prev => prev + `[error sending: ${e}]\n`);
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Enter") { sendCmd(); return; }
+    if (e.key === "ArrowUp" && cmdHistory.length) {
+      e.preventDefault();
+      const i = histIdx === -1 ? cmdHistory.length - 1 : Math.max(0, histIdx - 1);
+      setHistIdx(i); setShellCmd(cmdHistory[i] || "");
+    }
+    if (e.key === "ArrowDown" && cmdHistory.length) {
+      e.preventDefault();
+      const i = histIdx === -1 ? -1 : (histIdx + 1 >= cmdHistory.length ? -1 : histIdx + 1);
+      setHistIdx(i); setShellCmd(i === -1 ? "" : cmdHistory[i]);
+    }
+  };
+
+  const closeShell = async () => {
+    if (!activeShell?.sid || !shellEndpoints) return;
+    try { await T(shellEndpoints.close(activeShell.sid), {method: "POST"}); } catch (e) {}
+    setActiveShell(null); setShellOutput(""); setShellStatus("idle");
+  };
+
+  const copyOutput = () => { try { navigator.clipboard.writeText(shellOutput); } catch (e) {} };
+
+  const downloadReport = () => {
+    if (!onDownloadReport) return;
+    const all = Object.values(results).filter(Boolean);
+    if (all.length === 0) { alert("Run at least one module before downloading the report."); return; }
+    onDownloadReport(all);
+  };
+
+  const r = selected ? results[selected.id] : null;
+  const isRunning = selected ? running[selected.id] : false;
+  const successCount = Object.values(results).filter(x => x?.ok).length;
+  const failedCount  = Object.values(results).filter(x => x && !x.ok).length;
+  const notRunCount  = catalog.length - Object.keys(results).length;
+
+  // Styles (shared with the original Exploitation look)
+  const labelStyle = {fontSize: 10, fontWeight: 700, color: "#94a3b8",
+    letterSpacing: 1, marginBottom: 5, display: "block"};
+  const inputStyle = {width: "100%", padding: "8px 10px",
+    background: "#020617", color: "#e2e8f0", border: "1px solid #1e293b",
+    borderRadius: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+    outline: "none"};
+  const panelStyle = {background: "#0f172a", border: "1px solid #1e293b",
+    borderRadius: 10, padding: 16, marginBottom: 14};
+  const panelHead  = {fontSize: 11, fontWeight: 800, letterSpacing: 1.5,
+    color: "#fca5a5", marginBottom: 12, display: "flex", alignItems: "center", gap: 8};
+
+  const renderField = (f) => {
+    const value = fieldValues[f.id] ?? "";
+    const disabled = f.disabledKey && selected ? selected[f.disabledKey] === false : false;
+    // CVSS gets severity coloring automatically
+    const dynamicColor = (f.id === "cvss" && selected) ? sevColor(selected.cvss) : f.color;
+    const fieldStyle = {...inputStyle,
+      ...(f.readOnly ? {background: "#0a1224"} : {}),
+      ...(dynamicColor ? {color: dynamicColor} : {}),
+      ...(f.id === "cvss" ? {fontWeight: 800} : {}),
+      ...(disabled ? {opacity: 0.5} : {}),
+    };
+    return (
+      <div key={f.id}>
+        <label style={labelStyle}>{f.label}</label>
+        <input value={String(value)}
+          onChange={f.readOnly ? undefined : (ev) => setField(f.id, ev.target.value)}
+          readOnly={!!f.readOnly}
+          disabled={disabled}
+          placeholder={disabled ? "(not used by this module)" : (f.placeholder || "")}
+          style={fieldStyle}/>
+      </div>
+    );
+  };
+
+  // Group "half"-width fields into 2-column rows
+  const renderFieldRows = () => {
+    const rows = [];
+    let i = 0;
+    while (i < configFields.length) {
+      const f = configFields[i];
+      const next = configFields[i + 1];
+      if (f.width === "half" && next && next.width === "half") {
+        rows.push(
+          <div key={i} style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12}}>
+            {renderField(f)}{renderField(next)}
+          </div>
+        );
+        i += 2;
+      } else {
+        rows.push(<div key={i} style={{marginBottom: 12}}>{renderField(f)}</div>);
+        i += 1;
+      }
+    }
+    return rows;
+  };
+
+  return (
+    <div className="fade" style={{maxWidth: 1500, margin: "0 auto"}}>
+      {/* Title row */}
+      <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+        marginBottom: 18, gap: 14, flexWrap: "wrap"}}>
+        <div>
+          <div style={{fontSize: 22, fontWeight: 900, color: "#f1f5f9", lineHeight: 1.1}}>
+            {title}
+          </div>
+          {subtitle && <div style={{fontSize: 11, color: "#64748b", marginTop: 4}}>{subtitle}</div>}
+        </div>
+        {onDownloadReport && (
+          <button onClick={downloadReport}
+            style={{padding: "9px 18px", fontSize: 12, fontWeight: 800, letterSpacing: 1,
+              background: "linear-gradient(135deg, #ea580c, #c2410c)",
+              color: "#fff", border: "none", borderRadius: 6, cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(234,88,12,0.3)"}}>
+            📄 Report
+          </button>
+        )}
+      </div>
+
+      {/* Two-column body */}
+      <div style={{display: "grid", gridTemplateColumns: "320px 1fr", gap: 18,
+        alignItems: "flex-start"}}>
+
+        {/* LEFT: Target Configuration + Phase Runners */}
+        <div>
+          <div style={panelStyle}>
+            <div style={panelHead}>
+              <span>🎯</span> <span>Target Configuration</span>
+            </div>
+
+            {catalogFetchUrl && (
+              <>
+                <label style={labelStyle}>Module</label>
+                <select value={selectedId}
+                  onChange={(ev) => setSelectedId(ev.target.value)}
+                  style={{...inputStyle, marginBottom: 12}}>
+                  {catalog.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              </>
+            )}
+
+            {renderFieldRows()}
+
+            {selected && (selected.service || selected.category) && (
+              <div style={{marginTop: 10, fontSize: 10, color: "#64748b"}}>
+                {selected.service && <>Service: <span style={{color: "#e2e8f0"}}>{selected.service}</span></>}
+                {selected.service && selected.category && <span style={{margin: "0 6px"}}>·</span>}
+                {selected.category && <>Category: <span style={{color: "#e2e8f0"}}>{selected.category}</span></>}
+              </div>
+            )}
+          </div>
+
+          {phases.length > 0 && (
+            <div style={panelStyle}>
+              <div style={panelHead}>
+                <span>🔥</span> <span>Phase Runners</span>
+              </div>
+              {phases.map(p => (
+                <div key={p.n} onClick={runSelected}
+                  style={{padding: "10px 12px", marginBottom: 8, borderRadius: 6,
+                    background: "#020617", border: "1px solid #1e293b", cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 10, transition: "all 0.15s"}}
+                  onMouseEnter={(ev) => { ev.currentTarget.style.borderColor = color; }}
+                  onMouseLeave={(ev) => { ev.currentTarget.style.borderColor = "#1e293b"; }}>
+                  <div style={{width: 24, height: 24, borderRadius: "50%",
+                    background: `linear-gradient(135deg, ${color}, #7f1d1d)`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 900, color: "#fff", flexShrink: 0}}>
+                    {p.n}
+                  </div>
+                  <div style={{flex: 1, minWidth: 0}}>
+                    <div style={{fontSize: 12, fontWeight: 700, color: "#f1f5f9"}}>{p.name}</div>
+                    <div style={{fontSize: 10, color: "#64748b"}}>{p.tool}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button onClick={runSelected} disabled={isRunning || !selected}
+            style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
+              background: isRunning ? "#374151" : `linear-gradient(135deg, ${color}, #991b1b)`,
+              color: "#fff", border: "none", borderRadius: 10,
+              cursor: isRunning ? "wait" : "pointer",
+              boxShadow: isRunning ? "none" : `0 6px 20px ${color}55`}}>
+            {isRunning ? "⏳ RUNNING…" : "🚀 AUTO-RUN (All Phases)"}
+          </button>
+        </div>
+
+        {/* RIGHT: Tabs */}
+        <div>
+          <div style={{display: "flex", gap: 2, marginBottom: 0,
+            background: "#0f172a", borderRadius: "10px 10px 0 0",
+            border: "1px solid #1e293b", borderBottom: "none", padding: "4px 4px 0"}}>
+            {[
+              {id: "log",    label: "Auto-Run LOG"},
+              {id: "result", label: "Results"},
+              ...(hasInteractiveShell ? [{id: "shell", label: isInteractive ? "Live Shell" : "Extracted Data"}] : []),
+            ].map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                style={{padding: "10px 18px", fontSize: 11, fontWeight: 800, letterSpacing: 1,
+                  background: activeTab === t.id ? "#2563eb" : "transparent",
+                  color: activeTab === t.id ? "#fff" : "#94a3b8",
+                  border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer"}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{background: "#0a1224", border: "1px solid #1e293b",
+            borderRadius: "0 10px 10px 10px", marginBottom: 14, padding: 0, overflow: "hidden"}}>
+
+            {/* LOG */}
+            {activeTab === "log" && (
+              <div ref={logRef} style={{padding: "18px 22px",
+                fontFamily: "'JetBrains Mono', Consolas, monospace",
+                fontSize: 12, minHeight: 340, maxHeight: 520, overflowY: "auto", lineHeight: 1.7}}>
+                {logLines.length === 0 ? (
+                  <div style={{color: "#64748b", fontStyle: "italic"}}>
+                    Click <strong style={{color}}>AUTO-RUN</strong> to fire the selected module and watch phase progress here.
+                  </div>
+                ) : logLines.map((line, i) => (
+                  <div key={i} style={{color: line.color, whiteSpace: "pre-wrap", wordBreak: "break-word"}}>
+                    <span style={{color: "#475569", marginRight: 8}}>{line.ts}</span>{line.text}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* RESULTS */}
+            {activeTab === "result" && (
+              <div style={{padding: "18px 22px", minHeight: 340, maxHeight: 520, overflowY: "auto"}}>
+                {!r ? (
+                  <div style={{color: "#64748b", fontStyle: "italic"}}>
+                    No results yet — run the selected module to populate this tab.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 14}}>
+                      <span style={{fontSize: 18}}>{r.ok ? "✅" : "❌"}</span>
+                      <span style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.5,
+                        color: r.ok ? "#4ade80" : "#f87171"}}>
+                        {r.ok ? "EVIDENCE OF COMPROMISE" : "FAILURE REASON"}
+                      </span>
+                    </div>
+                    <div style={{padding: "12px 14px", borderRadius: 8, marginBottom: 14,
+                      background: r.ok ? "rgba(34,197,94,0.08)" : "rgba(220,38,38,0.08)",
+                      border: `1px solid ${r.ok ? "rgba(34,197,94,0.35)" : "rgba(220,38,38,0.35)"}`,
+                      fontSize: 13, color: "#cbd5e1", lineHeight: 1.6}}>
+                      {r.ok ? (r.evidence || "Success") : r.error}
+                    </div>
+
+                    {r.payload && (
+                      <div style={{marginBottom: 14}}>
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                          letterSpacing: 1.5, marginBottom: 6}}>PAYLOAD</div>
+                        <div style={{padding: "10px 12px", background: "#000",
+                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, color: "#fbbf24", wordBreak: "break-all", lineHeight: 1.6}}>
+                          {r.payload}
+                        </div>
+                      </div>
+                    )}
+
+                    {r.ok && r.rows && Array.isArray(r.rows) && r.rows.length > 0 && (
+                      <div style={{marginBottom: 14}}>
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                          letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED RECORDS ({r.rows.length})</div>
+                        <div style={{background: "#000", borderRadius: 6, padding: "10px 12px",
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                          color: "#bfdbfe", maxHeight: 240, overflowY: "auto"}}>
+                          {r.rows.slice(0, 30).map((row, i) => (
+                            <div key={i} style={{padding: "3px 0"}}>
+                              <span style={{color: "#86efac"}}>{String(row[0] || "").padEnd(22)}</span>
+                              <span style={{color: "#fbbf24"}}>{row[1] || ""}</span>
+                            </div>
+                          ))}
+                          {r.rows.length > 30 && (
+                            <div style={{color: "#64748b", marginTop: 6, fontStyle: "italic"}}>
+                              … and {r.rows.length - 30} more
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {r.ok && r.jwt && (
+                      <div style={{marginBottom: 14}}>
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                          letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED JWT</div>
+                        <div style={{padding: "10px 12px", background: "#000",
+                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, color: "#fbbf24", wordBreak: "break-all"}}>
+                          {r.jwt}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* SHELL */}
+            {activeTab === "shell" && hasInteractiveShell && (
+              <div>
+                <div style={{padding: "10px 16px",
+                  background: isInteractive ? "#052e16" : "#0c1c3a",
+                  borderBottom: `1px solid ${isInteractive ? "#14532d" : "#1e3a8a"}`,
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  flexWrap: "wrap", gap: 8}}>
+                  <div style={{display: "flex", alignItems: "center", gap: 10}}>
+                    <span style={{fontSize: 14}}>{isInteractive ? "🐚" : "📊"}</span>
+                    <span style={{fontSize: 12, fontWeight: 800, letterSpacing: 1.2,
+                      color: isInteractive ? "#86efac" : "#93c5fd"}}>
+                      {activeShell ? (isInteractive ? "LIVE SHELL" : "EXTRACTED DATA") : "SHELL — Waiting for connection…"}
+                    </span>
+                    {activeShell && (
+                      <span style={{fontSize: 10, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace"}}>
+                        sid={activeShell.sid} ·
+                        <span style={{color: shellStatus === "live" ? "#4ade80"
+                          : shellStatus === "error" ? "#f87171" : "#fbbf24"}}>
+                          {" "}{shellStatus}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                  {activeShell && (
+                    <div style={{display: "flex", gap: 6}}>
+                      <button onClick={copyOutput}
+                        style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+                          background: "#1e293b", color: "#cbd5e1",
+                          border: "1px solid #334155", borderRadius: 4, cursor: "pointer"}}>📋 COPY</button>
+                      <button onClick={closeShell}
+                        style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+                          background: "#7f1d1d", color: "#fff", border: "none",
+                          borderRadius: 4, cursor: "pointer"}}>✕ CLOSE</button>
+                    </div>
+                  )}
+                </div>
+                <div ref={outRef} style={{padding: "18px 22px", background: "#000",
+                  color: isInteractive ? "#4ade80" : "#bfdbfe",
+                  fontFamily: "'JetBrains Mono', Consolas, monospace",
+                  fontSize: 13, minHeight: 300, maxHeight: 440, overflowY: "auto",
+                  whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.65}}>
+                  {shellOutput || (activeShell
+                    ? (isInteractive ? "Waiting for shell output…\n" : "Loading extracted data…\n")
+                    : "Waiting for reverse shell connection…")}
+                </div>
+                <div style={{padding: 12, background: "#050a16",
+                  borderTop: "1px solid #1e293b",
+                  display: "flex", gap: 8, alignItems: "center"}}>
+                  {isInteractive && activeShell ? (
+                    <>
+                      <span style={{color: "#4ade80", fontFamily: "monospace", fontSize: 15, fontWeight: 800}}>$</span>
+                      <input ref={inputRef}
+                        value={shellCmd} onChange={ev => setShellCmd(ev.target.value)}
+                        onKeyDown={onKeyDown}
+                        placeholder="run a command  (id · whoami · cat /etc/shadow · ↑/↓ history)"
+                        autoComplete="off" name="shell-cmd" data-form-type="other"
+                        style={{flex: 1, padding: "9px 11px", background: "#000",
+                          color: "#4ade80", border: "1px solid #14532d", borderRadius: 5,
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 13, outline: "none"}}/>
+                      <button onClick={sendCmd}
+                        style={{padding: "9px 22px",
+                          background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                          color: "#000", fontWeight: 800, letterSpacing: 1.5,
+                          border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12,
+                          boxShadow: "0 2px 8px rgba(34,197,94,0.3)"}}>SEND</button>
+                    </>
+                  ) : (
+                    <span style={{fontSize: 11, color: "#94a3b8", fontStyle: "italic"}}>
+                      {activeShell ? "📊 One-shot data dump — no interactive shell" : "⏱ waiting for shell…"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Status pills */}
+          <div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
+            <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+              background: "rgba(34,197,94,0.12)", color: "#4ade80", borderRadius: 5,
+              border: "1px solid rgba(34,197,94,0.3)"}}>✓ {successCount} success</span>
+            <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+              background: "rgba(220,38,38,0.12)", color: "#f87171", borderRadius: 5,
+              border: "1px solid rgba(220,38,38,0.3)"}}>✗ {failedCount} failed</span>
+            <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+              background: "rgba(100,116,139,0.12)", color: "#94a3b8", borderRadius: 5,
+              border: "1px solid rgba(100,116,139,0.3)"}}>○ {notRunCount} not run</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ExploitationModule — thin wrapper that configures ShellPanel for the
+   /api/exploit/* endpoints + catalog. Adopting this pattern in every
+   module gives us a single source of truth for the form+log+shell UI.
+*/
 function ExploitationModule({token, apiUrl}) {
+  return <ShellPanel
+    title="Exploitation Techniques"
+    subtitle="direct-socket exploits · vsftpd · DVWA cmdi · DVWA SQLi · Juice Shop · bWAPP · zero false positives"
+    icon="💥"
+    color="#dc2626"
+
+    catalogFetchUrl="/api/exploit/catalog"
+    catalogKey="exploits"
+
+    configFields={[
+      {id: "target",      label: "Target IP / Host",  catalogKey: "target"},
+      {id: "port",        label: "Port",              catalogKey: "port",         width: "half"},
+      {id: "lport",       label: "LPORT (listener)",  defaultValue: 4444,         width: "half", disabledKey: "lport_needed"},
+      {id: "lhost",       label: "LHOST (callback host)", defaultValue: "c2.vulnuslab.com", disabledKey: "lhost_needed"},
+      {id: "msf_module",  label: "MSF Module",        catalogKey: "msf_module",   readOnly: true, color: "#93c5fd"},
+      {id: "msf_payload", label: "MSF Payload",       catalogKey: "msf_payload",  readOnly: true, color: "#86efac"},
+      {id: "format",      label: "Payload Format",    catalogKey: "format",       readOnly: true, color: "#fbbf24", width: "half"},
+      {id: "search",      label: "Search Query",      catalogKey: "search_query", readOnly: true,                   width: "half"},
+      {id: "cve",         label: "CVE / Reference",   catalogKey: "cve",          readOnly: true, color: "#fbbf24"},
+      {id: "type",        label: "Type",              computedFrom: (c) => c.interactive ? "shell" : "data dump", readOnly: true, width: "half"},
+      {id: "cvss",        label: "CVSS",              catalogKey: "cvss",         readOnly: true, width: "half"},
+    ]}
+
+    phases={[
+      {n: 1, name: "Pre-Flight Check",   tool: "DNS + port reachability"},
+      {n: 2, name: "Send Exploit",       tool: "trigger payload"},
+      {n: 3, name: "Verify Compromise",  tool: "validate response / id"},
+      {n: 4, name: "Capture Output",     tool: "shell or data exfil"},
+    ]}
+
+    runEndpoint="/api/exploit/run"
+    buildRunBody={(selected, values) => {
+      const body = {exploit_id: selected.id};
+      const defaultTgt = String(selected.target);
+      const defaultPort = selected.port;
+      if (values.target && String(values.target) !== defaultTgt)        body.target = String(values.target);
+      if (values.port   && parseInt(values.port, 10) !== defaultPort)   body.port   = parseInt(values.port, 10);
+      return body;
+    }}
+
+    hasInteractiveShell
+    shellEndpoints={{
+      output: (sid) => `/api/exploit/shell/${sid}/output`,
+      cmd:    (sid) => `/api/exploit/shell/${sid}/cmd`,
+      close:  (sid) => `/api/exploit/shell/${sid}/close`,
+    }}
+    isInteractiveFor={(c) => c?.interactive === true}
+
+    onDownloadReport={(all) => generateExploitReport({results: all, date: new Date().toLocaleString()})}
+
+    token={token} apiUrl={apiUrl}
+  />;
+}
+
+
+// ─── Old inline body left commented out for reference during the rollout ───
+function _OldExploitationModule_DELETE_AFTER_QA({token, apiUrl}) {
   const [catalog, setCatalog]   = useState([]);
   const [running, setRunning]   = useState({});
   const [results, setResults]   = useState({});
