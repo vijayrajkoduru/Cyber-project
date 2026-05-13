@@ -6859,14 +6859,23 @@ function ShellPanel({
                   display: "flex", gap: 8, alignItems: "center"}}>
                   {isInteractive && activeShell ? (
                     <>
+                      {/* Decoy inputs that absorb Chrome's username/password autofill so
+                          the real shell input stays clean. Off-screen, untabbable. */}
+                      <div aria-hidden="true" style={{position:"absolute", left:"-9999px", top:0,
+                        width:1, height:1, overflow:"hidden", opacity:0, pointerEvents:"none"}}>
+                        <input type="text"     name="username" tabIndex={-1} autoComplete="username"          defaultValue=""/>
+                        <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue=""/>
+                      </div>
                       <span style={{color: "#4ade80", fontFamily: "monospace", fontSize: 15, fontWeight: 800}}>$</span>
                       <input ref={inputRef}
                         value={shellCmd} onChange={ev => setShellCmd(ev.target.value)}
                         onKeyDown={onKeyDown}
-                        type="text"
+                        type="search"
                         placeholder="run a command  (id · whoami · cat /etc/shadow · ↑/↓ history)"
-                        autoComplete="new-password"
-                        name={`vl-cmd-${activeShell?.sid || "x"}`}
+                        autoComplete="off"
+                        name="vl-shell-x"
+                        role="presentation"
+                        aria-autocomplete="none"
                         data-form-type="other"
                         data-lpignore="true"
                         data-1p-ignore="true"
