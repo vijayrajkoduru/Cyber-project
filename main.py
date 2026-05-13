@@ -1290,25 +1290,69 @@ async def scan_dirb(req: ScanRequest, user=Depends(verify_scan_quota)):
 
 
 @app.post("/api/scan/nuclei")
-async def nuclei_scan(req: ScanRequest, user=Depends(verify_token)):
-    cmd = ["nuclei","-u",_web_url(req.target),"-severity","critical,high,medium,low","-c","10","-timeout","8","-no-color","-jsonl"]
-    result = await run_tool(cmd, timeout=240)
+async def nuclei_scan(req: ScanRequest, user=Depends(verify_scan_quota)):
+    """Nuclei vulnerability scan — runs 10,000+ community templates against
+    the target. Templates cover CVEs, misconfigurations, default credentials,
+    exposed admin panels, technology-specific issues, etc.
+
+    Hardening:
+      - `verify_scan_quota` (was `verify_token`) so trial quotas apply
+        consistently with other /api/scan/* endpoints.
+      - Defensive `result.get(...)` — if nuclei errored (binary missing or
+        crashed), we surface a friendly explanation instead of a Python
+        TypeError on `None.split`.
+      - 5-min timeout (was 4) since a full nuclei pass on a slow target
+        with 10k templates often needs more than 4 min.
+      - `-silent` suppresses the noisy progress lines that polluted
+        `raw_output`."""
+    cmd = ["nuclei", "-u", _web_url(req.target),
+           "-severity", "critical,high,medium,low",
+           "-c", "10", "-timeout", "8",
+           "-no-color", "-silent", "-jsonl"]
+    result = await run_tool(cmd, timeout=300)
+    output = result.get("output") or ""
+    err    = result.get("error") or ""
+
     findings = []
-    CVSS_MAP = {"critical":"9.8","high":"7.5","medium":"5.3","low":"3.1"}
-    for line in result["output"].split("\n"):
+    CVSS_MAP = {"critical": "9.8", "high": "7.5", "medium": "5.3", "low": "3.1"}
+    for line in output.split("\n"):
         line = line.strip()
         if not line: continue
         try:
             data = json.loads(line)
-            info = data.get("info",{})
-            sev  = info.get("severity","info").lower()
-            cves = info.get("classification",{}).get("cve-id") or []
-            cwes = info.get("classification",{}).get("cwe-id") or []
-            findings.append({"detail":info.get("name","Nuclei Finding")+(f" — {data.get('matched-at','')}" if data.get("matched-at") else ""),"severity":sev.upper(),"cvss":CVSS_MAP.get(sev,"0.0"),"cve":cves[0] if cves else "N/A","cwe":cwes[0] if cwes else "N/A","cwe_name":"Security Vulnerability","owasp":"A05:2021","remediation":info.get("remediation") or "Apply patch or update the affected component."})
-        except: pass
-    scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"nuclei",req.target,result)
-    return {"scan_id":scan_id,"target":req.target,"tool":"nuclei","findings":findings,"total":len(findings),"raw_output":result["output"],"timestamp":datetime.datetime.utcnow().isoformat()}
+            info = data.get("info", {})
+            sev  = info.get("severity", "info").lower()
+            cves = info.get("classification", {}).get("cve-id") or []
+            cwes = info.get("classification", {}).get("cwe-id") or []
+            findings.append({
+                "detail": info.get("name", "Nuclei Finding")
+                          + (f" — {data.get('matched-at','')}" if data.get("matched-at") else ""),
+                "severity": sev.upper(),
+                "cvss":     CVSS_MAP.get(sev, "0.0"),
+                "cve":      cves[0] if cves else "N/A",
+                "cwe":      cwes[0] if cwes else "N/A",
+                "cwe_name": "Security Vulnerability",
+                "owasp":    "A05:2021",
+                "remediation": info.get("remediation")
+                               or "Apply patch or update the affected component.",
+            })
+        except Exception:
+            pass
+
+    # If nuclei failed to run at all (binary missing, permissions), surface a
+    # clear message instead of an empty silent result.
+    response = {"scan_id": str(uuid.uuid4()), "target": req.target, "tool": "nuclei",
+                "findings": findings, "total": len(findings),
+                "raw_output": output[-4000:] if output else "",
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    if not findings and err and ("No such file" in err or "not found" in err):
+        response["error"] = "nuclei binary is not installed in this image."
+        response["suggested_action"] = (
+            "Rebuild the backend Docker image — the latest Dockerfile installs "
+            "nuclei automatically. Run on the VPS: "
+            "`docker compose build --no-cache backend && docker compose up -d`.")
+    save_scan(response["scan_id"], "nuclei", req.target, {"output": output[:1000]})
+    return response
 
 
 # ══════════════════════════════════════════════════════════════

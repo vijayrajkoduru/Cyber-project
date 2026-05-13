@@ -1682,11 +1682,13 @@ const PHASES = [
   {name:"Tech Fingerprinting",    tool:"whatweb",       endpoint:"/api/scan/whatweb",           icon:"🔍"},
   {name:"CMS Detection",          tool:"cms",           endpoint:"/api/scan/cms",               icon:"📦"},
   {name:"Port Scanning",          tool:"nmap",          endpoint:"/api/scan/nmap",              icon:"🔌", body:{scan_type:"quick"}},
+  {name:"Network Vuln Check",     tool:"nmap_vuln",     endpoint:"/api/scan/nmap_vuln",         icon:"⚠️"},
   {name:"SSL/TLS Analysis",       tool:"ssl",           endpoint:"/api/scan/ssl",               icon:"🔒"},
   {name:"DNS Enumeration",        tool:"dig",           endpoint:"/api/scan/dns",               icon:"🔎"},
   {name:"Subdomain Discovery",    tool:"subdomains",    endpoint:"/api/scan/subdomains",        icon:"🌍"},
   {name:"Subdomain Takeover",     tool:"takeover",      endpoint:"/api/scan/takeover",          icon:"🎯"},
   {name:"Vulnerability Scan",     tool:"nikto",         endpoint:"/api/scan/nikto",             icon:"🎯"},
+  {name:"Nuclei Templates",       tool:"nuclei",        endpoint:"/api/scan/nuclei",            icon:"☢️"},
   {name:"Sensitive File Exposure",tool:"sensitivefiles",endpoint:"/api/scan/sensitivefiles",    icon:"🗂"},
   {name:"Exploit Search",         tool:"exploitsearch", endpoint:"/api/scan/exploitsearch",     icon:"🔍"},
   // ── SECTION 2: Discovery & Fuzzing ──────────────────────────

@@ -11,8 +11,24 @@ ENV PYTHONUNBUFFERED=1
 # msfconsole) is pure Python — the Exploitation module fires direct sockets.
 RUN apt-get update -q -o Acquire::Retries=3 \
  && apt-get install -y -q --no-install-recommends \
-        netcat-openbsd curl wget ca-certificates \
+        netcat-openbsd curl wget ca-certificates unzip \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install nuclei — ProjectDiscovery's industry-standard vulnerability scanner.
+# Ships with 10,000+ community templates covering CVEs, misconfigurations,
+# default credentials, exposed panels, etc. Pre-pulls the template DB at
+# image-build time so the first customer scan doesn't pay the ~1-min
+# cold-start cost. The binary is statically linked Go — no runtime deps.
+#
+# Pinned to a specific version for reproducibility. To bump: change
+# NUCLEI_VERSION below and rebuild with --no-cache.
+RUN NUCLEI_VERSION=3.3.7 \
+ && curl -fsSL "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" -o /tmp/nuclei.zip \
+ && unzip -q /tmp/nuclei.zip -d /usr/local/bin/ \
+ && rm /tmp/nuclei.zip \
+ && chmod +x /usr/local/bin/nuclei \
+ && nuclei -duc -update-templates 2>&1 | tail -5 \
+ && nuclei -version
 
 WORKDIR /app
 
