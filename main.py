@@ -1305,10 +1305,15 @@ async def nuclei_scan(req: ScanRequest, user=Depends(verify_scan_quota)):
         with 10k templates often needs more than 4 min.
       - `-silent` suppresses the noisy progress lines that polluted
         `raw_output`."""
+    # Explicit -t /root/nuclei-templates so we don't depend on nuclei's
+    # auto-discovery (which silently fails to find templates in some
+    # versions / install layouts and leaves customers with empty scans).
     cmd = ["nuclei", "-u", _web_url(req.target),
+           "-t", "/root/nuclei-templates",
            "-severity", "critical,high,medium,low",
            "-c", "10", "-timeout", "8",
-           "-no-color", "-silent", "-jsonl"]
+           "-no-color", "-silent", "-jsonl",
+           "-disable-update-check"]
     result = await run_tool(cmd, timeout=300)
     output = result.get("output") or ""
     err    = result.get("error") or ""
