@@ -939,19 +939,51 @@ async def recon_dirb(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/recon/gobuster")
 async def recon_gobuster(req: ScanRequest, user=Depends(verify_token)):
+    """Directory enumeration. Tries the real `gobuster` binary first;
+    transparently falls back to our pure-Python fuzzer when the binary
+    isn't installed (the slim Debian base in our Dockerfile excludes it
+    by default). Same 100+ path curated wordlist used by /api/recon/dirb,
+    so the customer never sees an empty result just because a system
+    binary is missing.
+
+    The `engine` field in the response tells the frontend which path was
+    taken — useful for support tickets ("why does my paid scan look like
+    the free one?")."""
+    base_url = _web_url(req.target).rstrip("/")
+
+    # Attempt 1 — real gobuster
     result = await run_tool(
-        ["gobuster", "dir", "-u", _web_url(req.target), "-w", "/usr/share/wordlists/dirb/common.txt",
+        ["gobuster", "dir", "-u", base_url,
+         "-w", "/usr/share/wordlists/dirb/common.txt",
          "-t", "20", "-q", "--no-progress"], timeout=120)
-    out = result.get("output","")
-    found = []
-    for line in out.splitlines():
-        m = re.match(r"(/\S+)\s+\(Status:\s*(\d+)\)", line.strip())
-        if m: found.append({"path": m.group(1), "status": int(m.group(2))})
+    raw_out = result.get("output", "")
+    err     = result.get("error", "")
+    found   = []
+    engine  = "gobuster"
+
+    if raw_out and not err:
+        for line in raw_out.splitlines():
+            m = re.match(r"(/\S+)\s+\(Status:\s*(\d+)\)", line.strip())
+            if m:
+                found.append({"path": m.group(1), "status": int(m.group(2))})
+
+    # Attempt 2 — pure-Python fallback when gobuster is missing or empty
+    if not found:
+        engine = "python-fuzz"
+        items  = await _python_fuzz(req.target)
+        found  = [{"path": it["path"], "status": it["status"]} for it in items]
+        reason = ("gobuster binary not present in this Docker image"
+                  if err else "real gobuster returned no results")
+        raw_out = (f"[Engine: pure-Python fuzzer — {reason}]\n"
+                   + "\n".join(f"[{it['status']}] {it['path']}" for it in items))
+
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id, "gobuster", req.target, result)
+    save_scan(scan_id, "gobuster", req.target, {"output": raw_out})
     return {
         "scan_id": scan_id, "target": req.target, "tool": "gobuster",
-        "found": found, "total": len(found), "raw_output": out,
+        "engine": engine,
+        "found": found, "total": len(found),
+        "raw_output": raw_out,
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
 
@@ -3677,6 +3709,104 @@ async def bof_shell_stop(lid: str, user=Depends(verify_token)):
             if s.writer: s.writer.close()
         except: pass
     return {"stopped": True}
+
+@app.post("/api/recon/shodan")
+async def recon_shodan(req: ScanRequest, user=Depends(verify_token)):
+    """Shodan host lookup. Customer supplies their own API key via the
+    Settings panel (stored in localStorage and sent in req.api_key) —
+    we don't ship a shared key. If no key is configured we return a
+    helpful error instead of a 404 like before.
+
+    Walks DNS first to resolve hostnames to IPs since Shodan's host
+    endpoint takes an IP only, not a domain."""
+    api_key = (getattr(req, "api_key", None) or "").strip()
+    if not api_key:
+        return {"target": req.target, "tool": "shodan",
+                "error": "No Shodan API key configured.",
+                "suggested_action": ("Set your Shodan key in Settings → API Keys. "
+                                     "Free Shodan accounts get ~100 lookups/month — "
+                                     "register at https://account.shodan.io for one."),
+                "ports": [], "os": None, "organization": None,
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    # Resolve target to IP (Shodan host endpoint takes IP only)
+    host = _recon_host(req.target)
+    try:
+        ip = _socket_lib.gethostbyname(host)
+    except Exception as e:
+        return {"target": req.target, "tool": "shodan",
+                "error": f"Could not resolve '{host}' to an IP: {e}",
+                "suggested_action": "Check the target is reachable from this server.",
+                "ports": [], "os": None, "organization": None,
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    # Hit Shodan
+    try:
+        r = _req_lib.get(f"https://api.shodan.io/shodan/host/{ip}",
+                         params={"key": api_key}, timeout=15, verify=True)
+    except Exception as e:
+        return {"target": req.target, "tool": "shodan",
+                "error": f"Shodan API request failed: {e}",
+                "ports": [], "os": None, "organization": None,
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    if r.status_code == 401:
+        return {"target": req.target, "tool": "shodan",
+                "error": "Shodan rejected the API key (HTTP 401).",
+                "suggested_action": "Double-check the key in Settings → API Keys.",
+                "ports": [], "os": None, "organization": None,
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    if r.status_code == 404:
+        return {"target": req.target, "ip": ip, "tool": "shodan",
+                "error": f"Shodan has no record for {ip}.",
+                "suggested_action": ("Shodan only sees hosts it has actively scanned. "
+                                     "Internal IPs and freshly-deployed cloud hosts may not "
+                                     "show up. Try /api/recon/nmap for first-hand data."),
+                "ports": [], "os": None, "organization": None,
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    if r.status_code != 200:
+        return {"target": req.target, "tool": "shodan",
+                "error": f"Shodan API returned HTTP {r.status_code}: {(r.text or '')[:200]}",
+                "ports": [], "os": None, "organization": None,
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    try:
+        data = r.json()
+    except Exception:
+        return {"target": req.target, "tool": "shodan",
+                "error": "Shodan returned a non-JSON body.",
+                "ports": [], "os": None, "organization": None,
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+    # Build a compact summary the frontend can render
+    ports = sorted({int(p) for p in (data.get("ports") or []) if isinstance(p, int)})
+    services = []
+    for entry in (data.get("data") or [])[:20]:
+        services.append({
+            "port":     entry.get("port"),
+            "transport": entry.get("transport") or "tcp",
+            "product":  entry.get("product") or "",
+            "version":  entry.get("version") or "",
+            "banner":   (entry.get("data") or "").splitlines()[0][:160] if entry.get("data") else "",
+        })
+    summary = "\n".join(
+        f"{s['port']}/{s['transport']:<3}  {s['product']} {s['version']}  {s['banner']}".strip()
+        for s in services)
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "shodan", req.target,
+              {"output": f"{ip} — {len(ports)} port(s)\n{summary}"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "shodan",
+        "ip": ip,
+        "ports":         ports,
+        "total_ports":   len(ports),
+        "os":            data.get("os"),
+        "organization":  data.get("org"),
+        "isp":           data.get("isp"),
+        "country":       data.get("country_name"),
+        "city":          data.get("city"),
+        "hostnames":     data.get("hostnames") or [],
+        "vulns":         list((data.get("vulns") or [])),
+        "services":      services,
+        "raw_output":    summary,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+
 
 @app.post("/api/recon/dnsrecon")
 async def recon_dnsrecon(req: ScanRequest, user=Depends(verify_token)):

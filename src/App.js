@@ -5372,6 +5372,7 @@ const RECON_PHASES = [
   {name:"Service Detection",     tool:"services",   endpoint:"/api/recon/services",   icon:"⚙️"},
   {name:"OS Fingerprinting",     tool:"os",         endpoint:"/api/recon/os",         icon:"💻"},
   {name:"Banner Grabbing",       tool:"banner",     endpoint:"/api/recon/banner",     icon:"🏷️"},
+  {name:"Directory Enumeration", tool:"gobuster",   endpoint:"/api/recon/gobuster",   icon:"📁"},
 ];
 
 function ReconModule({token, onRunningChange}) {
@@ -5438,6 +5439,7 @@ function ReconModule({token, onRunningChange}) {
         else if (ph.tool==="services"   && data.ports)       add("✓ Services: "+data.ports.length+" service(s) detected");
         else if (ph.tool==="os"         && data.os)          add("✓ OS: "+data.os);
         else if (ph.tool==="banner"     && data.banners)     add("✓ Banners: "+Object.keys(data.banners||{}).length+" captured");
+        else if (ph.tool==="gobuster"   && data.found)       add("✓ Gobuster: "+data.found.length+" path(s) discovered"+(data.engine==="python-fuzz"?" (pure-Python engine)":""));
         else add("✓ "+ph.name+" complete");
         setDone(p=>[...p,i]); setAll(Object.assign({},results));
       } catch(e) {
@@ -5706,7 +5708,7 @@ function ReconModule({token, onRunningChange}) {
           {finished && <Badge label="DONE" color="green"/>}
         </div>
         <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>
-          whois · dig · dnsrecon · sublist3r · theHarvester · masscan · nmap · service detection · OS fingerprinting · banner grabbing
+          WHOIS · DNS · subdomains · cert transparency · OSINT · Shodan · port scan · service detection · OS fingerprinting · banners · directory enum
         </p>
 
         {/* Target + controls */}
