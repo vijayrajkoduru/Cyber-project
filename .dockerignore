@@ -1,19 +1,24 @@
-# Secrets — NEVER bake these into images. docker-compose mounts .env at runtime.
+# Shared by Dockerfile (backend) AND Dockerfile.frontend.
+# Both builds read THIS file as the build-context filter, so we can only
+# exclude things neither image needs. Items the frontend needs (public/,
+# src/, package*.json) MUST stay in context.
+#
+# If you ever want per-Dockerfile excludes, BuildKit supports
+# `Dockerfile.frontend.dockerignore` as a sibling file — split it then.
+
+# Secrets — NEVER bake into any image. docker-compose mounts .env at runtime.
 .env
 .env.*
 *.env
 
-# Git
+# Git history (large, never needed at runtime)
 .git
 .gitignore
 
-# Node / frontend build artifacts (backend image doesn't need them)
+# Node — installed inside the frontend builder stage, never copied in
 node_modules
 build
 landing-page
-public
-src
-package*.json
 .react-server.pid
 
 # Python
@@ -35,7 +40,8 @@ Thumbs.db
 *.pid
 uvicorn.out.log
 
-# Docs / dev notes
+# Docs / dev notes (not needed at runtime; if you reference them inside
+# the image, remove them from this list)
 *.md
 ruff
 
