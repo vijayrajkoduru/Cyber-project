@@ -6863,8 +6863,14 @@ function ShellPanel({
                       <input ref={inputRef}
                         value={shellCmd} onChange={ev => setShellCmd(ev.target.value)}
                         onKeyDown={onKeyDown}
+                        type="text"
                         placeholder="run a command  (id · whoami · cat /etc/shadow · ↑/↓ history)"
-                        autoComplete="off" name="shell-cmd" data-form-type="other"
+                        autoComplete="new-password"
+                        name={`vl-cmd-${activeShell?.sid || "x"}`}
+                        data-form-type="other"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        spellCheck={false}
                         style={{flex: 1, padding: "9px 11px", background: "#000",
                           color: "#4ade80", border: "1px solid #14532d", borderRadius: 5,
                           fontFamily: "'JetBrains Mono', monospace", fontSize: 13, outline: "none"}}/>
