@@ -6758,11 +6758,20 @@ function ShellPanel({
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logLines]);
   useEffect(() => { if (outRef.current) outRef.current.scrollTop = outRef.current.scrollHeight; }, [shellOutput]);
 
-  // Poll shell output
+  // Poll shell output.
+  //
+  // Two cost reductions vs. the original 600ms tight loop:
+  //   1. 1500ms cadence — still feels live to a human, but cuts backend
+  //      shell-output requests from ~1.7/sec to ~0.7/sec per active shell.
+  //   2. Pause when document is hidden — if the customer has the dashboard
+  //      in a background tab we don't hammer the backend pointlessly.
+  //      The backend buffers output, so when they return all the catch-up
+  //      text shows up on the next tick.
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (!activeShell?.sid || !shellEndpoints) return;
     pollRef.current = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       try {
         const d = await T(shellEndpoints.output(activeShell.sid));
         if (d.output) setShellOutput(prev => prev + d.output);
@@ -6771,7 +6780,7 @@ function ShellPanel({
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         }
       } catch (e) {}
-    }, 600);
+    }, 1500);
     return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
     // eslint-disable-next-line
   }, [activeShell?.sid]);
@@ -7561,13 +7570,18 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
       if(!d.session_id) throw new Error("No session");
       setSid(d.session_id);
       setOutput(""); setLoading(false);
+      // Poll terminal output every 2s instead of 800ms — same
+      // user-experience but 60% less backend load. Also skips when the
+      // tab is hidden so dashboards left open in background tabs don't
+      // hammer the API. Server-side buffer drains on return.
       pollRef.current = setInterval(async()=>{
+        if (typeof document !== "undefined" && document.hidden) return;
         try {
           const o = await post("/api/terminal/output",{session_id:d.session_id});
           if(o.output !== undefined) setOutput(o.output);
           if(outRef.current) outRef.current.scrollTop=outRef.current.scrollHeight;
         } catch(e){}
-      },800);
+      },2000);
     } catch(e) {
       setOutput("⚠ Backend not running\nStart uvicorn on Kali:\ncd ~/Cyber-project && uvicorn main:app --host 0.0.0.0 --port 8000 --reload");
       setLoading(false);
