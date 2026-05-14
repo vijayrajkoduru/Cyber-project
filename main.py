@@ -4932,6 +4932,15 @@ async def recon_params(req: ScanRequest, user=Depends(verify_token)):
         # Native event/property names
         "enter","escape","backspace","tab","arrowup","arrowdown","arrowleft","arrowright","unidentified","ms","ns","ol","na","os","aa",
         "auto","hidden","display","collapsed","forwards","backwards","family","included","excluded",
+        # React error / warning helper names
+        "invariant","warning","useeffect","usestate","usememo","usecallback","useref","usecontext","usereducer",
+        # Generic HTML body / meta tokens that aren't HTTP params
+        "body","head","title","meta","link","script","style","base","html","root",
+        # Common JS internals
+        "constructor","prototype","__proto__","tostring","valueof","hasownproperty","propertyisenumerable",
+        "isnan","isfinite","parseint","parsefloat","stringify","parse","trim","substring","substr","slice",
+        # MIME / encoding tokens that look like params but aren't
+        "json","xml","html","text","blob","arraybuffer","formdata","binary","base64","utf-8","utf8",
     }
     def _looks_real_param(p):
         if len(p) < 2: return False

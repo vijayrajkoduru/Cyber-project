@@ -5804,28 +5804,66 @@ function generateReconReport({target, allResults, date}) {
   });
   y+=10;
 
-  // Tools used
+  // Tools used — show real, data-driven summaries instead of generic
+  // "Completed". Each summary pulls the actual count/value from the
+  // scanner's response so the customer sees what was discovered.
   const toolsRun = Object.keys(r).filter(k=>r[k]);
   if(toolsRun.length>0){
     y = sHead("Tools Used",y);
     y = tHead(["TOOL","RESULT SUMMARY"],[50,130],y);
-    const toolSummary = {
-      whois:      "WHOIS registration data",
-      dns:        "DNS records (A/MX/NS/TXT/CNAME/SOA)",
-      dnsrecon:   "DNS reconnaissance — full record enum",
-      subdomains: "Passive + active subdomain discovery",
-      crtsh:      "Certificate Transparency (crt.sh) — issuers + dates",
-      amass:      "Deep subdomain enumeration",
-      harvester:  "OSINT — emails & sibling hosts",
-      shodan:     "Shodan Internet Intelligence (ports, vulns, geo)",
-      masscan:    "Fast port scan (top 40 ports)",
-      nmap:       "Deep port scan + service detection",
-      services:   "Service version detection",
-      os:         "OS fingerprinting (banners + Server header + CDN)",
-      banner:     "Service banner grabbing (TLS-aware)",
-      gobuster:   "Directory enumeration (100+ path wordlist)",
+    const _dynamicSummary = (tool) => {
+      const d = r[tool] || {};
+      switch(tool){
+        case "whois":      return `Registrar: ${d.registrar || "n/a"}`;
+        case "dns":        return `${(d.records||[]).length || Object.keys(d.records||{}).length} record(s) (A/MX/NS/TXT/CNAME/SOA)`;
+        case "dnsrecon":   return `${(d.records||[]).length} DNS record(s)`;
+        case "subdomains": return `${(d.subdomains||[]).length} subdomain(s) discovered`;
+        case "crtsh":      return `${d.total_subdomains || (d.subdomains||[]).length} subdomain(s) from CT logs`;
+        case "amass":      return `${(d.subdomains||[]).length} subdomain(s) (deep enum)`;
+        case "harvester":  return `${(d.emails||[]).length} emails · ${(d.hosts||[]).length} hosts`;
+        case "shodan":     return d.error ? `Shodan API error — ${String(d.error).substring(0,60)}` : `${(d.ports||[]).length} port(s), ${(d.vulns||[]).length} CVE(s)`;
+        case "masscan":    return `${(d.ports||[]).length} open port(s)`;
+        case "nmap":       return `${(d.ports||[]).length} open port(s)` + (d.banner ? ` · ${String(d.banner).substring(0,40)}` : "");
+        case "services":   return `${(d.ports||[]).length} service(s) detected`;
+        case "os":         return d.os || d.os_match || "OS detection completed";
+        case "banner":     return `${Object.keys(d.banners||{}).length} banner(s) grabbed`;
+        case "gobuster":   return `${(d.found||[]).length} path(s) discovered`;
+        case "jsendpoints":return `${(d.paths||[]).length} endpoint(s) across ${(d.js_files||[]).length} JS file(s)`;
+        case "wayback":    return `${d.total||0} archived URL(s) · ${d.interesting_total||0} interesting`;
+        case "robotsmap":  return `${(d.disallow||[]).length} disallow · ${(d.sitemap||[]).length} sitemap · ${(d.well_known||[]).length} well-known`;
+        case "crawl":      return `${d.total||0} URL(s) crawled · ${d.interesting_total||0} interesting`;
+        case "params":     return `${(d.params||[]).length} parameter(s) discovered`;
+        case "favicon":    return d.found ? `Hash ${d.shodan_hash} · ${d.matched_service || "unknown service"}` : (d.skipped_reason || "No favicon");
+        case "cloudbuckets":return `${(d.open_buckets||[]).length} OPEN · ${(d.existing_buckets||[]).length} existing bucket(s)`;
+        case "secrets":    return `${(d.findings||[]).length} secret(s) across ${(d.js_files||[]).length} JS file(s)`;
+        case "asn":        return d.asn ? `AS${d.asn} — ${(d.as_owner||"").substring(0,50)} (${d.country||"?"})` : "ASN lookup completed";
+        case "internetdb": return d.found ? `${(d.ports||[]).length} port(s) · ${(d.vulns||[]).length} CVE(s) · ${(d.tags||[]).length} tag(s)` : (d.skipped_reason || "No Shodan record");
+        default:           return "Completed";
+      }
     };
-    toolsRun.forEach((tool,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(tool,margin+3,y+5,8,BLUE,true); txt(toolSummary[tool]||"Completed",margin+53,y+5,8,DARK); y+=7; });
+    // Group rows so the table doesn't leave a single orphan row floating
+    // on the next page after a page-break — pre-measure remaining height
+    // and start a fresh page if we have less than 4 rows of space.
+    if(toolsRun.length>0){
+      const remaining = 285 - y;
+      const rowsThatFit = Math.floor(remaining / 7);
+      if(rowsThatFit < Math.min(toolsRun.length, 4)){
+        doc.addPage(); y=18; drawHeader();
+        y = sHead("Tools Used (cont.)",y);
+        y = tHead(["TOOL","RESULT SUMMARY"],[50,130],y);
+      }
+    }
+    toolsRun.forEach((tool,i)=>{
+      const summary = _dynamicSummary(tool);
+      chk(7);
+      fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+      txt(tool,margin+3,y+5,8,BLUE,true);
+      // Wrap long summaries — some (e.g. asn AS owner) push the 130mm column
+      const sLines = doc.splitTextToSize(String(summary), 128);
+      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+      doc.text(sLines[0] || "", margin+53, y+5);
+      y+=7;
+    });
     y+=8;
   }
 
