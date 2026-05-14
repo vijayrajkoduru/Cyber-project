@@ -867,6 +867,115 @@ function generatePDF(reportData) {
     });
     y += 5;
 
+    // ─── COMPLIANCE COVERAGE — PCI-DSS / SOC 2 / ISO 27001 ──────
+    // Maps every finding's CWE / OWASP tag onto controls in the three
+    // frameworks customers' auditors actually use. For each framework,
+    // shows controls VIOLATED by current findings + a sample finding.
+    // CISOs forward this section straight to their compliance team.
+    //
+    // The mapping table is intentionally focused on the ~15 CWE classes
+    // our scanners actually emit — adding more controls would be noise.
+    const CWE_TO_COMPLIANCE = {
+      // CWE         PCI-DSS v4         SOC 2 (TSC)   ISO 27001:2022
+      "CWE-79":    ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // XSS
+      "CWE-89":    ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // SQLi
+      "CWE-94":    ["6.2.4",           "CC6.6",      "A.8.28"],   // Code Injection
+      "CWE-352":   ["6.2.4",           "CC6.1",      "A.5.15"],   // CSRF
+      "CWE-1021":  ["6.4.3",           "CC6.6",      "A.8.23"],   // Clickjacking
+      "CWE-200":   ["3.4.1",           "CC6.1",      "A.5.10"],   // Info Exposure
+      "CWE-319":   ["4.2.1",           "CC6.7",      "A.8.24"],   // Cleartext Transmission
+      "CWE-942":   ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.23"],   // CORS Misconfig
+      "CWE-639":   ["7.2 / 8.2.5",     "CC6.1",      "A.5.15"],   // IDOR
+      "CWE-444":   ["6.2.4",           "CC6.6",      "A.8.21"],   // HTTP Smuggling
+      "CWE-538":   ["2.2.7 / 6.4.1",   "CC6.1",      "A.5.10"],   // Sensitive Files
+      "CWE-693":   ["6.2.4",           "CC6.6",      "A.8.23"],   // Protection Mechanism Failure
+      "CWE-650":   ["6.2.4",           "CC6.1",      "A.8.21"],   // Verb Tampering
+      "CWE-1004":  ["8.3.10",          "CC6.7",      "A.8.5"],    // Cookie HttpOnly missing
+      "CWE-614":   ["4.2.1 / 8.3.10",  "CC6.7",      "A.8.5"],    // Cookie Secure missing
+      "CWE-601":   ["6.2.4",           "CC6.6",      "A.8.21"],   // Open Redirect
+      "CWE-918":   ["6.2.4",           "CC6.6",      "A.8.23"],   // SSRF
+      "CWE-611":   ["6.2.4",           "CC6.6",      "A.8.28"],   // XXE
+      "CWE-78":    ["6.2.4",           "CC6.6",      "A.8.28"],   // Command Injection
+      "CWE-22":    ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // Path Traversal
+      "CWE-434":   ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // Unrestricted Upload
+      "CWE-502":   ["6.2.4",           "CC6.6",      "A.8.28"],   // Deserialization
+      "CWE-287":   ["7.2 / 8.2",       "CC6.1",      "A.5.15"],   // Auth Bypass
+      "CWE-307":   ["8.3.4",           "CC6.1",      "A.5.17"],   // Brute Force Possible
+      "CWE-384":   ["8.3.10",          "CC6.7",      "A.5.15"],   // Session Fixation
+      "CWE-1275":  ["8.3.10",          "CC6.7",      "A.8.5"],    // SameSite missing
+      "CWE-16":    ["2.2.4",           "CC6.6",      "A.8.9"],    // Config
+    };
+    // Walk current findings, collect which controls are touched per framework.
+    const _pci = new Map(), _soc = new Map(), _iso = new Map();
+    const _push = (m, ctrl, f) => {
+      if (!ctrl) return;
+      // Split on " / " so a CWE that maps to multiple controls registers each one.
+      ctrl.split(/\s*\/\s*/).forEach(c => {
+        if (!m.has(c)) m.set(c, []);
+        m.get(c).push(f);
+      });
+    };
+    (findings || []).forEach(f => {
+      const cwe = String(f.cwe || "").trim().toUpperCase();
+      const map = CWE_TO_COMPLIANCE[cwe];
+      if (!map) return;
+      _push(_pci, map[0], f);
+      _push(_soc, map[1], f);
+      _push(_iso, map[2], f);
+    });
+
+    // Render only when something maps — empty section is just noise.
+    const _hasAny = _pci.size + _soc.size + _iso.size > 0;
+    if (_hasAny) {
+      chk(70); y += 2;
+      y = sectionHead("Compliance Coverage",y);
+      doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+      doc.text("Findings mapped onto PCI-DSS v4.0, SOC 2 (Trust Services Criteria), and ISO 27001:2022 controls. Forward to your compliance team.", margin+2, y);
+      doc.setFont("Arial","normal");
+      y += 4;
+
+      const _renderFw = (name, blurb, controlsMap) => {
+        if (controlsMap.size === 0) return;
+        chk(controlsMap.size * 7 + 14);
+        // Framework banner row
+        fillR(margin, y, contentW, 7, [30,64,175]);
+        doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor(...WHITE);
+        doc.text(name, margin+3, y+5);
+        doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(218,234,254);
+        doc.text(blurb, margin+62, y+5);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...WHITE);
+        doc.text(`${controlsMap.size} control(s) impacted`, pageW-margin-3, y+5, {align:"right"});
+        y += 7;
+        // Per-control rows
+        const sorted = Array.from(controlsMap.entries()).sort((a,b)=>b[1].length - a[1].length);
+        sorted.forEach(([ctrl, fs], i) => {
+          chk(7);
+          fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
+          hline(margin, y, pageW-margin, y, BORDER, 0.2);
+          fillR(margin, y, 1.5, 6.5, [162,28,28]);
+          doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...DARK);
+          doc.text(ctrl, margin+4, y+4.5);
+          // Count + worst severity
+          const sevs = fs.map(f=>f.severity);
+          const worst = ["CRITICAL","HIGH","MEDIUM","LOW","INFO"].find(s => sevs.includes(s)) || "LOW";
+          const [bg,lt] = sevColor(worst);
+          rrect(margin+28, y+1.5, 18, 5, 1, lt);
+          doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...bg);
+          doc.text(worst, margin+29, y+5);
+          // Sample finding
+          const sample = (fs[0].detail || "").substring(0, 95);
+          doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+          doc.text(`${fs.length} finding(s): ${sample}`, margin+50, y+4.5);
+          y += 6.5;
+        });
+        y += 4;
+      };
+
+      _renderFw("PCI-DSS v4.0",       "Payment Card Industry — Req 6 (Secure Systems) & Req 8 (Access)", _pci);
+      _renderFw("SOC 2 (Trust Services)", "AICPA Common Criteria — CC6 (Logical & Physical Access)",       _soc);
+      _renderFw("ISO 27001:2022",     "Annex A controls — A.5/8/14 (Org, People, Tech)",                _iso);
+    }
+
     // ─── REMEDIATION PROGRESS — diff vs previous scan ───────────
     // Shown only when a previous scan exists. The CTO opens this report after
     // their team has fixed things and sees exactly what changed since last time.
