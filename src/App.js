@@ -1785,6 +1785,10 @@ function WebAppModule(props) {
   const [customWordlist, setCustomWordlist] = useState(null);
   const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
   const [showHistory, setShowHistory]       = useState(false);
+  // Which tile (phase index) is currently expanded showing its result details.
+  // Click "Details" on any finished tile to inspect error message + findings;
+  // saves the customer from opening DevTools to debug a failed scan.
+  const [expandedTile, setExpandedTile]     = useState(null);
 
   const add = l => setLines(p => [...p, l]);
 
@@ -2347,6 +2351,12 @@ function WebAppModule(props) {
                   {res.vulnerable !== undefined && <div style={{fontSize:11,color:res.vulnerable?"#f87171":"#4ade80",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>{res.vulnerable?"VULNERABLE":"SECURE"}</div>}
                 </div>
               )}
+              {isDone && res && (
+                <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
+                  style={{background:expandedTile===i?"#1e3a8a":"#1e293b",border:"1px solid "+(expandedTile===i?"#3b82f6":"#334155"),borderRadius:5,padding:"4px 10px",color:"#93c5fd",fontSize:10,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+                  {expandedTile===i?"Hide":"Details"}
+                </button>
+              )}
               {!running && target && (
                 <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
                   style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 10px",color:"#60a5fa",fontSize:10,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
@@ -2354,6 +2364,92 @@ function WebAppModule(props) {
                 </button>
               )}
             </div>
+            {/* Expansion panel — surfaces real-world error/success details
+                so the customer never has to crack open DevTools or SSH into
+                the VPS to figure out why a scan failed. */}
+            {expandedTile === i && isDone && res && (
+              <div style={{marginTop:-4,marginBottom:8,padding:"14px 18px",background:"#0a1224",border:"1px solid "+(isFailed?"#7f1d1d":isVuln||isSQLi?"#7c2d12":"#14532d"),borderLeft:"3px solid "+(isFailed?"#ef4444":isVuln||isSQLi?"#f97316":"#22c55e"),borderRadius:"0 8px 8px 0",fontSize:12,lineHeight:1.55}}>
+                {/* Header */}
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{fontSize:14}}>{isFailed?"❌":isVuln||isSQLi?"⚠️":"✅"}</span>
+                  <span style={{fontSize:12,fontWeight:800,letterSpacing:1.2,color:isFailed?"#fca5a5":isVuln||isSQLi?"#fdba74":"#86efac"}}>
+                    {isFailed?"SCAN FAILED — DETAILS":isVuln||isSQLi?"FINDINGS — REVIEW":"SCAN COMPLETE — NO ISSUES"}
+                  </span>
+                </div>
+
+                {/* Error message (from {error: ...} in response) */}
+                {(res.error || res.detail) && (
+                  <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:6,color:"#fecaca"}}>
+                    <div style={{fontSize:10,fontWeight:800,color:"#f87171",letterSpacing:1.5,marginBottom:4}}>ERROR</div>
+                    <div style={{wordBreak:"break-word"}}>{res.error || res.detail}</div>
+                  </div>
+                )}
+
+                {/* Suggested action — the friendly "what to try" hint */}
+                {res.suggested_action && (
+                  <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(251,191,36,0.10)",border:"1px solid rgba(251,191,36,0.35)",borderRadius:6,color:"#fde68a"}}>
+                    <span style={{fontSize:11,fontWeight:800,color:"#fbbf24",marginRight:6}}>💡 What to try:</span>
+                    {res.suggested_action}
+                  </div>
+                )}
+
+                {/* Findings list (when scan succeeded and found issues) */}
+                {Array.isArray(res.findings) && res.findings.length > 0 && (
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",letterSpacing:1.5,marginBottom:6}}>
+                      FINDINGS ({res.findings.length})
+                    </div>
+                    <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+                      {res.findings.slice(0,50).map((f,fi)=>{
+                        const sev = String(f.severity||"INFO").toUpperCase();
+                        const sevColor = sev==="CRITICAL"?"#dc2626":sev==="HIGH"?"#f97316":sev==="MEDIUM"?"#eab308":sev==="LOW"?"#22c55e":"#94a3b8";
+                        return (
+                          <div key={fi} style={{padding:"8px 10px",background:"#020617",border:"1px solid #1e293b",borderRadius:5,borderLeft:`3px solid ${sevColor}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                              <span style={{fontSize:9,fontWeight:800,color:sevColor,background:sevColor+"22",padding:"1px 6px",borderRadius:3,letterSpacing:1}}>{sev}</span>
+                              {f.cvss && <span style={{fontSize:9,color:"#94a3b8"}}>CVSS {f.cvss}</span>}
+                              {f.cve && f.cve !== "N/A" && <span style={{fontSize:9,color:"#60a5fa",fontFamily:"monospace"}}>{f.cve}</span>}
+                            </div>
+                            <div style={{fontSize:11,color:"#cbd5e1"}}>{f.detail}</div>
+                            {f.remediation && (
+                              <div style={{fontSize:10,color:"#86efac",marginTop:4,fontStyle:"italic"}}>
+                                Fix: {f.remediation}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {res.findings.length > 50 && (
+                        <div style={{fontSize:10,color:"#64748b",textAlign:"center",padding:6,fontStyle:"italic"}}>
+                          ... and {res.findings.length - 50} more findings (download full PDF report)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Plain-success — no error, no findings, no vuln flag */}
+                {!res.error && !res.detail && (!res.findings || res.findings.length === 0) && !res.vulnerable && (
+                  <div style={{padding:"10px 12px",background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.30)",borderRadius:6,color:"#bbf7d0"}}>
+                    Scan completed cleanly — no issues detected for this target.
+                  </div>
+                )}
+
+                {/* Raw output snippet for debugging — collapsed by default
+                    via <details>. The customer doesn't need it, but it's
+                    there if they want to see what the scanner printed. */}
+                {res.raw_output && (
+                  <details style={{marginTop:8}}>
+                    <summary style={{fontSize:10,color:"#64748b",cursor:"pointer",userSelect:"none"}}>
+                      Show raw output ({String(res.raw_output).length} chars)
+                    </summary>
+                    <pre style={{marginTop:6,padding:"8px 10px",background:"#020617",border:"1px solid #1e293b",borderRadius:5,color:"#94a3b8",fontSize:10,maxHeight:200,overflow:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
+                      {String(res.raw_output).substring(0,3000)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
             </React.Fragment>
           );
         })}
