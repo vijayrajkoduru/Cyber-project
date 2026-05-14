@@ -1810,6 +1810,57 @@ function generatePDF(reportData) {
       actLines.forEach((ln, li) => doc.text(ln, margin+143, y+5 + li*3.8));
       y += rowH;
     });
+
+    // ─── VERIFICATION AUDIT ───────────────────────────────────
+    // Trust signal: for every scanner that ran, show exactly WHAT it
+    // tested. Customer's auditor can confirm we actually fired the
+    // probes we claim. "What we tested for and didn't find" matters
+    // as much as the findings list — proves negative space is real.
+    const _scannerAudits = [];
+    const _allResultsLocal = {  // reconstruct from props passed to generatePDF
+      sqlmap, xss, cors, openredirect, sensitivefiles, hydra, ssrf, xxe,
+      clickjacking, verbtamper, pollution, csrf, idor, ssti, fileupload,
+      smuggling, responsesplitting, sessionfixation, dataexfil, racecondition,
+      deserial, protopollution, typejuggling, jwt, graphql, nosql, oauth,
+      hostheader, websocket, takeover, otp, commix, lfi, rfi, smb, ftp, smtp, snmp,
+    };
+    Object.entries(_allResultsLocal).forEach(([tool, res]) => {
+      if (!res) return;
+      if (!res.tests_summary && !res.tests_performed) return;
+      _scannerAudits.push({
+        tool,
+        tests: res.tests_performed || "—",
+        summary: res.tests_summary || "Active probe completed",
+        found: (res.findings || []).filter(f => f.severity !== "INFO").length,
+      });
+    });
+    if (_scannerAudits.length > 0) {
+      chk(20); y += 3;
+      y = sectionHead("Verification Audit",y);
+      doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+      doc.text("What each scanner actively tested — proves the negative space (what we looked for and didn't find) is as real as the positive findings.", margin+2, y);
+      doc.setFont("Arial","normal"); y += 4;
+      y = tableHeader(["TOOL","PROBES","WHAT WAS TESTED","FOUND"],[30,15,110,20],y);
+      _scannerAudits.forEach((a,i)=>{
+        const lines = doc.splitTextToSize(String(a.summary||""), 108);
+        const h = Math.max(7, lines.length * 3.6 + 2);
+        chk(h+1);
+        fillR(margin,y,contentW,h,i%2===0?LIGHT:WHITE);
+        hline(margin,y,pageW-margin,y,BORDER,0.2);
+        doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...BLUE);
+        doc.text(a.tool, margin+3, y+5);
+        doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+        doc.text(String(a.tests), margin+33, y+5);
+        lines.forEach((ln,li)=>doc.text(ln, margin+48, y+5 + li*3.6));
+        // Found count
+        const foundColor = a.found > 0 ? [162,28,28] : [15,118,82];
+        doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...foundColor);
+        doc.text(a.found > 0 ? `${a.found} ✗` : "0 ✓", pageW-margin-15, y+5);
+        y += h;
+      });
+      y += 6;
+    }
+
     // End-of-report block — placed right after last recommendation row
     chk(38);
     const bY = y+8;

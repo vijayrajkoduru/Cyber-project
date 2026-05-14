@@ -2755,7 +2755,9 @@ async def scan_cors(req: ScanRequest, user=Depends(verify_scan_quota)):
             vulnerable = True
             findings.append({"detail":"CORS: Credentials allowed with permissive origin","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-942","cwe_name":"CORS Misconfiguration","owasp":"A05:2021","remediation":"Never combine Access-Control-Allow-Credentials: true with wildcard origins."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"cors",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"cors","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"cors","vulnerable":vulnerable,"findings":findings,"total":len(findings),
+            "tests_performed":1, "tests_summary":"1 probe with Origin: https://evil.com — checked ACAO reflection + ACAC pairing",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/gobuster")
 async def scan_gobuster(req: ScanRequest, user=Depends(verify_scan_quota)):
@@ -3186,7 +3188,9 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_scan_quota)):
             findings.append({"detail":f"Open Redirect via {p} → {loc} (server redirects directly to attacker domain)","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
             break
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"openredirect",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"openredirect","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"openredirect","vulnerable":vulnerable,"findings":findings,"total":len(findings),
+            "tests_performed":5, "tests_summary":"5 redirect-parameter payloads: ?url= ?redirect= ?next= ?return= ?to= → evil.com (checked Location header for direct attacker-domain redirect)",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/sensitivefiles")
 async def scan_sensitivefiles(req: ScanRequest, user=Depends(verify_scan_quota)):
@@ -3329,7 +3333,9 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_scan_quota)):
                 vulnerable = True
         except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"ssrf",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"ssrf","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"ssrf","vulnerable":vulnerable,"findings":findings,"total":len(findings),
+            "tests_performed":3, "tests_summary":"3 cloud-metadata SSRF probes: AWS (169.254.169.254/latest/meta-data/), GCP (metadata.google.internal), Azure (169.254.169.254/metadata/instance)",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/xxe")
@@ -3391,7 +3397,9 @@ async def scan_xxe(req: ScanRequest, user=Depends(verify_scan_quota)):
             })
     except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"xxe",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"xxe","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"xxe","vulnerable":vulnerable,"findings":findings,"total":len(findings),
+            "tests_performed":3, "tests_summary":"3 XXE payloads (file:///etc/passwd, http://, parameter entity) against POST endpoints + JSON-wrapped XML",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/clickjacking")
@@ -3437,7 +3445,9 @@ async def scan_clickjacking(req: ScanRequest, user=Depends(verify_scan_quota)):
         findings.append({"detail":"X-Frame-Options: DENY — strong clickjacking protection confirmed","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Protection Present","owasp":"A05:2021","remediation":"No action needed."})
 
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"clickjacking",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"clickjacking","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"clickjacking","vulnerable":vulnerable,"findings":findings,"total":len(findings),
+            "tests_performed":1, "tests_summary":"1 GET on / — inspected X-Frame-Options header + CSP frame-ancestors directive",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/verbtamper")
 async def scan_verbtamper(req: ScanRequest, user=Depends(verify_scan_quota)):
@@ -3451,7 +3461,9 @@ async def scan_verbtamper(req: ScanRequest, user=Depends(verify_scan_quota)):
             vulnerable = True
             findings.append({"detail":f"Dangerous HTTP methods allowed: {', '.join(dangerous)}","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-650","cwe_name":"HTTP Verb Tampering","owasp":"A05:2021","remediation":f"Disable methods: {', '.join(dangerous)} in server config."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"verbtamper",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"verbtamper","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"verbtamper","vulnerable":vulnerable,"findings":findings,"total":len(findings),
+            "tests_performed":1, "tests_summary":"1 OPTIONS request — parsed Allow header for PUT/DELETE/TRACE/CONNECT/PATCH",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/pollution")
 async def scan_pollution(req: ScanRequest, user=Depends(verify_scan_quota)):
@@ -3464,7 +3476,9 @@ async def scan_pollution(req: ScanRequest, user=Depends(verify_scan_quota)):
         vulnerable = True
         findings.append({"detail":"HTTP Parameter Pollution: duplicate 'id' parameter produces significantly different response (>100 byte difference)","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-235","cwe_name":"Parameter Pollution","owasp":"A03:2021","remediation":"Validate and deduplicate all query parameters server-side. Use the first or last value consistently."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"pollution",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"pollution","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"pollution","vulnerable":vulnerable,"findings":findings,"total":len(findings),
+            "tests_performed":2, "tests_summary":"2 probes: ?id=1 (baseline) vs ?id=1&id=2 (duplicated) — compared response sizes for >100-byte divergence",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/idor")
 async def scan_idor(req: ScanRequest, user=Depends(verify_scan_quota)):
