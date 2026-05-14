@@ -783,6 +783,90 @@ function generatePDF(reportData) {
     });
     y+=5;
 
+    // ─── OWASP TOP 10 — 2021 COVERAGE SCORECARD ─────────────────
+    // Net-new section. Maps every finding's OWASP tag (e.g. "A03:2021") onto
+    // the 10 OWASP categories, computes a coverage grade (A-F), and shows a
+    // pass/fail row per category with severity breakdown. This is the
+    // single most-asked-for section by auditors and CISOs.
+    const OWASP_2021 = [
+      ["A01","Broken Access Control"],
+      ["A02","Cryptographic Failures"],
+      ["A03","Injection"],
+      ["A04","Insecure Design"],
+      ["A05","Security Misconfiguration"],
+      ["A06","Vulnerable & Outdated Components"],
+      ["A07","Identification & Authentication Failures"],
+      ["A08","Software & Data Integrity Failures"],
+      ["A09","Security Logging & Monitoring Failures"],
+      ["A10","Server-Side Request Forgery"]
+    ];
+    const _owaspMap = {};
+    OWASP_2021.forEach(([code]) => _owaspMap[code] = []);
+    (findings || []).forEach(f => {
+      const tag = String(f.owasp || "").toUpperCase();
+      const m = tag.match(/A(\d{1,2})/);
+      if (!m) return;
+      const code = "A" + m[1].padStart(2, "0");
+      if (_owaspMap[code]) _owaspMap[code].push(f);
+    });
+    const _failCats = OWASP_2021.filter(([c]) => _owaspMap[c].length > 0).length;
+    const _passCats = 10 - _failCats;
+    const _owaspGrade = _passCats >= 9 ? "A" : _passCats >= 7 ? "B" : _passCats >= 5 ? "C" : _passCats >= 3 ? "D" : "F";
+    const _gradeColor = _owaspGrade === "A" ? [15,118,82] : _owaspGrade === "B" ? [22,163,74] :
+                        _owaspGrade === "C" ? [202,138,4] : _owaspGrade === "D" ? [194,65,12] : [162,28,28];
+
+    chk(95); y += 2;
+    y = sectionHead("OWASP Top 10 — 2021 Coverage", y);
+
+    // Grade summary panel — big letter grade + plain-English summary
+    fillR(margin, y, contentW, 16, LIGHT);
+    fillR(margin, y, 4, 16, _gradeColor); // accent stripe
+    doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._gradeColor);
+    doc.text(_owaspGrade, margin+10, y+11);
+    doc.setFont("Arial","bold"); doc.setFontSize(12); doc.setTextColor(...DARK);
+    doc.text(`${_passCats}/10 OWASP categories passing`, margin+28, y+7);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+    const _gradeMsg = _failCats === 0 ? "All 10 categories clear — strong security posture across OWASP Top 10." :
+                      _failCats === 1 ? "1 category failing — focused remediation in the row below restores full coverage." :
+                      `${_failCats} categories failing — prioritize fixes for the failed rows to improve grade.`;
+    doc.text(_gradeMsg, margin+28, y+12);
+    y += 19;
+
+    // Per-category table
+    y = tableHeader(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
+    OWASP_2021.forEach(([code, name], i) => {
+      const matches = _owaspMap[code];
+      const passing = matches.length === 0;
+      const rowH = 8;
+      chk(rowH + 1);
+      fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
+      hline(margin, y, pageW-margin, y, BORDER, 0.2);
+      fillR(margin, y, 1.5, rowH, passing ? [15,118,82] : [162,28,28]); // pass/fail accent
+      doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+      doc.text(code+":2021", margin+4, y+5.5);
+      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+      doc.text(name, margin+24, y+5.5);
+      // Status pill
+      const stBg = passing ? [220,252,231] : [254,226,226];
+      const stFg = passing ? [15,118,82]  : [162,28,28];
+      rrect(margin+106, y+1.5, 18, 5, 1, stBg);
+      doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...stFg);
+      doc.text(passing ? "PASS" : "FAIL", margin+(passing?112:111.5), y+5);
+      // Breakdown — severity counts when failing, plain "Clear" when passing
+      if (passing) {
+        doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(15,118,82);
+        doc.text("No findings in this category", margin+128, y+5.5);
+      } else {
+        const sc = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0};
+        matches.forEach(f => { if (sc[f.severity] !== undefined) sc[f.severity]++; });
+        const parts = ["CRITICAL","HIGH","MEDIUM","LOW"].filter(s => sc[s] > 0).map(s => `${sc[s]} ${s}`);
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+        doc.text(parts.join(" · ") || `${matches.length} finding(s)`, margin+128, y+5.5);
+      }
+      y += rowH;
+    });
+    y += 5;
+
     // Tools used table on cover
     if(toolsUsed&&toolsUsed.length>0){
       y = sectionHead("Tools Used",y);
