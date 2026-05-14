@@ -6166,6 +6166,204 @@ function generateReconReport({target, allResults, date}) {
     y += 14;
   }
 
+  // ─── ASN / IP Ownership ────────────────────────────────────
+  if(r.asn && (r.asn.asn || r.asn.ip)){
+    chk(30); y = sHead("ASN / IP Ownership (Team-Cymru)", y);
+    const rows = [
+      ["IP",        r.asn.ip],
+      ["ASN",       r.asn.asn ? `AS${r.asn.asn}` : null],
+      ["Owner",     r.asn.as_owner],
+      ["Prefix",    r.asn.prefix],
+      ["Country",   r.asn.country],
+      ["Registry",  r.asn.registry],
+      ["Allocated", r.asn.allocated],
+    ].filter(p => p[1]);
+    y = tHead(["FIELD","VALUE"],[45,contentW-45],y);
+    rows.forEach((row,i)=>{
+      chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+      txt(row[0],margin+3,y+5,8.5,GRAY,true);
+      doc.setFont("Courier","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+      doc.text(String(row[1]),margin+48,y+5);
+      y+=7;
+    });
+    y+=6;
+  }
+
+  // ─── Shodan InternetDB (free, no API key) ──────────────────
+  if(r.internetdb && r.internetdb.found){
+    chk(30); y = sHead("Shodan InternetDB Lookup", y);
+    chk(6); fillR(margin,y,contentW,6,LIGHT);
+    txt(`IP ${r.internetdb.ip}  ·  ${(r.internetdb.ports||[]).length} ports  ·  ${(r.internetdb.vulns||[]).length} CVEs  ·  ${(r.internetdb.tags||[]).length} tags  (free, no API key)`,
+        margin+4,y+4.5,7.5,GRAY); y+=8;
+    if((r.internetdb.ports||[]).length>0){
+      y=tHead(["FIELD","VALUE"],[35,contentW-35],y);
+      const rows = [
+        ["Ports",    (r.internetdb.ports||[]).join(", ")],
+        ["Hostnames",(r.internetdb.hostnames||[]).slice(0,8).join(", ")],
+        ["Tags",     (r.internetdb.tags||[]).join(", ")],
+        ["CVEs",     (r.internetdb.vulns||[]).slice(0,12).join(", ")],
+        ["CPEs",     (r.internetdb.cpes||[]).slice(0,6).join(" / ")],
+      ].filter(p=>p[1]);
+      rows.forEach((row,i)=>{
+        const lines = doc.splitTextToSize(String(row[1]),contentW-38);
+        const h = Math.max(7,lines.length*3.8+2);
+        chk(h+1); fillR(margin,y,contentW,h,i%2===0?LIGHT:WHITE);
+        txt(row[0],margin+3,y+5,8.5,GRAY,true);
+        doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
+        lines.forEach((ln,li)=>doc.text(ln,margin+38,y+5+li*3.8));
+        y+=h;
+      });
+    }
+    y+=6;
+  } else if(r.internetdb && r.internetdb.skipped_reason){
+    chk(14); y = sHead("Shodan InternetDB Lookup", y);
+    fillR(margin,y,contentW,8,LIGHT);
+    txt(r.internetdb.skipped_reason,margin+4,y+5.5,8,GRAY); y+=10;
+  }
+
+  // ─── Favicon Fingerprint ───────────────────────────────────
+  if(r.favicon && r.favicon.found){
+    chk(22); y = sHead("Favicon Fingerprint", y);
+    y = tHead(["FIELD","VALUE"],[45,contentW-45],y);
+    const rows = [
+      ["Favicon URL",    r.favicon.favicon_url],
+      ["Shodan hash",    String(r.favicon.shodan_hash)],
+      ["Matched service",r.favicon.matched_service || "(unknown / custom)"],
+      ["Shodan pivot",   r.favicon.shodan_query],
+    ].filter(p=>p[1]);
+    rows.forEach((row,i)=>{
+      chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+      txt(row[0],margin+3,y+5,8.5,GRAY,true);
+      doc.setFont("Courier","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
+      doc.text(String(row[1]).substring(0,90),margin+48,y+5);
+      y+=7;
+    });
+    y+=6;
+  }
+
+  // ─── Cloud Bucket Finder ───────────────────────────────────
+  if(r.cloudbuckets && (r.cloudbuckets.open_buckets || r.cloudbuckets.existing_buckets)){
+    const open  = r.cloudbuckets.open_buckets    || [];
+    const exist = r.cloudbuckets.existing_buckets || [];
+    if(open.length>0 || exist.length>0){
+      chk(20); y = sHead("Cloud Buckets (S3 / GCS / Azure)", y);
+      y = tHead(["STATUS","PROVIDER","BUCKET NAME","URL"],[25,25,40,contentW-90],y);
+      open.forEach((b,i)=>{
+        chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+        rrect(margin+3,y+1.5,20,4,1,[254,202,202]);
+        doc.setFont("Arial","bold");doc.setFontSize(6.5);doc.setTextColor(162,28,28);
+        doc.text("OPEN",margin+5,y+5);
+        txt(b.provider,margin+30,y+5,8,DARK,true);
+        doc.setFont("Courier","normal");doc.setFontSize(7.5);doc.setTextColor(...DARK);
+        doc.text(String(b.name||"").substring(0,30),margin+57,y+5);
+        doc.text(String(b.url||"").substring(0,80),margin+99,y+5);
+        y+=7;
+      });
+      exist.forEach((b,i)=>{
+        chk(7); fillR(margin,y,contentW,7,(open.length+i)%2===0?LIGHT:WHITE);
+        rrect(margin+3,y+1.5,20,4,1,[254,243,199]);
+        doc.setFont("Arial","bold");doc.setFontSize(6.5);doc.setTextColor(120,53,15);
+        doc.text("EXISTS",margin+5,y+5);
+        txt(b.provider,margin+30,y+5,8,DARK,true);
+        doc.setFont("Courier","normal");doc.setFontSize(7.5);doc.setTextColor(...DARK);
+        doc.text(String(b.name||"").substring(0,30),margin+57,y+5);
+        doc.text(String(b.url||"").substring(0,80),margin+99,y+5);
+        y+=7;
+      });
+      y+=6;
+    }
+  }
+
+  // ─── JS Secret Scanner ─────────────────────────────────────
+  if(r.secrets && Array.isArray(r.secrets.findings) && r.secrets.findings.length > 0){
+    chk(20); y = sHead("JS Secret Scanner", y);
+    chk(6); fillR(margin,y,contentW,6,LIGHT);
+    txt(`${r.secrets.findings.length} secret(s) found across ${(r.secrets.js_files||[]).length} JS file(s)`,
+        margin+4,y+4.5,7.5,GRAY); y+=8;
+    r.secrets.findings.slice(0,20).forEach((f,i)=>{
+      const lines = doc.splitTextToSize(String(f.detail||""),contentW-30);
+      const h = Math.max(8,lines.length*3.6+2);
+      chk(h+1); fillR(margin,y,contentW,h,i%2===0?LIGHT:WHITE);
+      const sevC = f.severity==="CRITICAL"?[162,28,28]:f.severity==="HIGH"?[194,65,12]:[120,53,15];
+      const sevB = f.severity==="CRITICAL"?[254,202,202]:f.severity==="HIGH"?[254,215,170]:[254,243,199];
+      rrect(margin+3,y+2,20,5,1,sevB);
+      doc.setFont("Arial","bold");doc.setFontSize(6.5);doc.setTextColor(...sevC);
+      doc.text(f.severity,margin+4,y+5.5);
+      doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
+      lines.forEach((ln,li)=>doc.text(ln,margin+26,y+5.5+li*3.6));
+      y+=h;
+    });
+    y+=6;
+  }
+
+  // ─── JS Endpoint Extractor ─────────────────────────────────
+  if(r.jsendpoints && Array.isArray(r.jsendpoints.paths) && r.jsendpoints.paths.length > 0){
+    chk(20); y = sHead("JS Endpoint Extractor", y);
+    chk(6); fillR(margin,y,contentW,6,LIGHT);
+    txt(`${r.jsendpoints.paths.length} path(s) + ${(r.jsendpoints.discovered||[]).length - (r.jsendpoints.paths||[]).length} external URL(s) across ${(r.jsendpoints.js_files||[]).length} JS file(s)`,
+        margin+4,y+4.5,7.5,GRAY); y+=8;
+    y = tHead(["#","PATH"],[12,contentW-12],y);
+    r.jsendpoints.paths.slice(0,60).forEach((p,i)=>{
+      chk(6); fillR(margin,y,contentW,6,i%2===0?LIGHT:WHITE);
+      txt(String(i+1),margin+3,y+4.5,7.5,GRAY);
+      doc.setFont("Courier","normal");doc.setFontSize(7.5);doc.setTextColor(...DARK);
+      doc.text(String(p).substring(0,140),margin+15,y+4.5);
+      y+=6;
+    });
+    if(r.jsendpoints.paths.length>60){
+      chk(6); fillR(margin,y,contentW,6,LIGHT);
+      txt(`... and ${r.jsendpoints.paths.length-60} more endpoints`,margin+4,y+4.5,7.5,GRAY);
+      y+=6;
+    }
+    y+=6;
+  }
+
+  // ─── Wayback Machine ───────────────────────────────────────
+  if(r.wayback && (r.wayback.total||0) > 0){
+    chk(20); y = sHead("Wayback Machine (archive.org)", y);
+    chk(6); fillR(margin,y,contentW,6,LIGHT);
+    txt(`${r.wayback.total} archived URL(s) total  ·  ${r.wayback.interesting_total||0} interesting (admin/api/.env/.git)`,
+        margin+4,y+4.5,7.5,GRAY); y+=8;
+    const list = (r.wayback.interesting && r.wayback.interesting.length>0) ? r.wayback.interesting : (r.wayback.discovered||[]);
+    list.slice(0,40).forEach((u,i)=>{
+      chk(6); fillR(margin,y,contentW,6,i%2===0?LIGHT:WHITE);
+      doc.setFont("Courier","normal");doc.setFontSize(7);doc.setTextColor(...DARK);
+      doc.text(String(u).substring(0,150),margin+4,y+4.5);
+      y+=6;
+    });
+    if(list.length>40){
+      chk(6); fillR(margin,y,contentW,6,LIGHT);
+      txt(`... and ${list.length-40} more archived URLs`,margin+4,y+4.5,7.5,GRAY); y+=6;
+    }
+    y+=6;
+  }
+
+  // ─── Parameter Discovery ───────────────────────────────────
+  if(r.params && Array.isArray(r.params.params) && r.params.params.length > 0){
+    chk(20); y = sHead("Parameter Discovery", y);
+    chk(6); fillR(margin,y,contentW,6,LIGHT);
+    const src = r.params.sources || {};
+    txt(`${r.params.params.length} param(s) discovered  ·  sources: query=${src.query||0}, form=${src.form||0}, json=${src.json||0}, js=${src.js_var||0}`,
+        margin+4,y+4.5,7.5,GRAY); y+=8;
+    // Three-column layout — params are short, fit many per row
+    const pCols = 3;
+    const pColW = contentW / pCols;
+    for(let i=0;i<r.params.params.length && i<60;i+=pCols){
+      const rowH = 6;
+      chk(rowH+1); fillR(margin,y,contentW,rowH,(i/pCols)%2===0?LIGHT:WHITE);
+      for(let c=0;c<pCols && i+c<r.params.params.length;c++){
+        doc.setFont("Courier","normal");doc.setFontSize(7.5);doc.setTextColor(...DARK);
+        doc.text(String(r.params.params[i+c]).substring(0,38),margin+3+c*pColW,y+4.5);
+      }
+      y+=rowH;
+    }
+    if(r.params.params.length>60){
+      chk(6); fillR(margin,y,contentW,6,LIGHT);
+      txt(`... and ${r.params.params.length-60} more params`,margin+4,y+4.5,7.5,GRAY); y+=6;
+    }
+    y+=6;
+  }
+
   // ── END OF REPORT ──────────────────────────────────────────
   if(y+32>284){doc.addPage();y=18;drawHeader();}
   const bY=y+5;

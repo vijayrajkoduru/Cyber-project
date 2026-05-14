@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List
-import subprocess, asyncio, re, json, uuid, datetime, os, ssl as _ssl_lib, socket as _socket_lib, time as _time, itertools as _itertools, sqlite3
+import subprocess, asyncio, re, json, uuid, datetime, os, ssl as _ssl_lib, socket as _socket_lib, time as _time, itertools as _itertools, sqlite3, random
 import jwt as _jwt, bcrypt as _bcrypt
 from urllib.parse import urlparse
 from contextvars import ContextVar
@@ -2000,6 +2000,26 @@ def _get_lab_targets(base_url: str):
     return []
 
 async def _python_fuzz(base_url: str, concurrency: int=20, custom_paths: list=None, extra_headers: dict=None) -> list:
+    """Pure-Python directory enumeration with BASELINE FILTERING — the
+    critical missing piece that previously caused 120 false-positive
+    "discovered paths" on Netlify-hosted SPAs.
+
+    Without baseline filtering, edge redirects (e.g. Netlify's HTTP→HTTPS
+    301 on every URL) made every path in the wordlist look "found".
+    Real customer trust nightmare — /admin /.git /.env all flagged on a
+    static marketing site that doesn't actually serve any of those.
+
+    Algorithm:
+      1. Probe two random non-existent paths to fingerprint the
+         catch-all / SPA-fallback response (status + redirect target +
+         body-size envelope).
+      2. For each real path probe, suppress results whose status code,
+         redirect target, and body size all match the baseline. That
+         filters out edge-redirect fallbacks while keeping genuinely
+         distinct responses (e.g. an actual /admin/ that returns
+         different content from the catch-all).
+    """
+    import string
     found = []
     base = _web_url(base_url).rstrip("/")
     sem = asyncio.Semaphore(concurrency)
@@ -2008,22 +2028,61 @@ async def _python_fuzz(base_url: str, concurrency: int=20, custom_paths: list=No
     hdrs = dict(_BROWSER_HEADERS)
     if extra_headers: hdrs.update(extra_headers)
 
-    def _sync_check(path):
+    def _probe(path):
         try:
             r = _req_lib.get(f"{base}/{path}", timeout=6, verify=False,
                              headers=hdrs, allow_redirects=False)
-            if r.status_code in (200, 201, 301, 302, 403):
-                return {"path": f"/{path}", "status": r.status_code,
-                        "size": len(r.content),
-                        "content_type": r.headers.get("content-type","").split(";")[0].strip(),
-                        "redirect": r.headers.get("location","")}
-        except: pass
-        return None
+            return {
+                "path": f"/{path}",
+                "status": r.status_code,
+                "size": len(r.content),
+                "content_type": r.headers.get("content-type","").split(";")[0].strip(),
+                "redirect": r.headers.get("location",""),
+            }
+        except Exception:
+            return None
+
+    # ── BASELINE: two random paths that almost certainly don't exist ──
+    rnd1 = "".join(random.choices(string.ascii_lowercase, k=18)) + ".nonexistent"
+    rnd2 = "z" + "".join(random.choices(string.ascii_lowercase + string.digits, k=22))
+    baselines = []
+    for rnd in (rnd1, rnd2):
+        b = await loop.run_in_executor(None, _probe, rnd)
+        if b: baselines.append(b)
+
+    def _looks_like_baseline(result):
+        """Match heuristic: status code + redirect target + body size envelope.
+        We compare against both baseline probes to defeat tiny variations."""
+        if not result: return False
+        for b in baselines:
+            if result["status"] != b["status"]: continue
+            # Redirect target — normalize away the variable path portion. If
+            # baseline's redirect is e.g. https://site/{rnd1} and result is
+            # https://site/admin, both are "Location: https://site/<path>" so
+            # we compare the host+scheme prefix only.
+            rh = result.get("redirect","")
+            bh = b.get("redirect","")
+            if rh and bh:
+                # Strip query and fragment, keep scheme+host+leading path
+                rhroot = rh.split("?")[0].rsplit("/", 1)[0]
+                bhroot = bh.split("?")[0].rsplit("/", 1)[0]
+                if rhroot != bhroot: continue
+            elif (rh and not bh) or (bh and not rh):
+                continue
+            # Size within ±30 bytes (handles minor variation in
+            # auto-generated error pages that include the requested path)
+            if abs(result["size"] - b["size"]) > 30: continue
+            return True
+        return False
 
     async def _check(path):
         async with sem:
-            result = await loop.run_in_executor(None, _sync_check, path)
-            if result:
+            result = await loop.run_in_executor(None, _probe, path)
+            if not result: return
+            # Filter: skip baseline-matching responses (catch-all / SPA fallback)
+            if _looks_like_baseline(result): return
+            # Keep only status codes that are actually meaningful
+            if result["status"] in (200, 201, 204, 301, 302, 401, 403, 405):
                 found.append(result)
 
     await asyncio.gather(*[_check(p) for p in paths])
