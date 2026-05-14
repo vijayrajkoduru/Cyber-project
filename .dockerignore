@@ -1,0 +1,39 @@
+.env
+.env.*
+.git/
+.gitignore
+.gdb_history
+.react-server.pid
+.claude/
+
+# Frontend artifacts (rebuilt inside Dockerfile.frontend)
+node_modules/
+build/
+package*.json
+
+# Frontend source — only Dockerfile.frontend needs it; backend doesn't
+src/
+public/
+nginx.conf
+
+# Python compile cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Editor / OS junk
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Project docs / scripts — not needed at runtime
+README.md
+*.md
+landing-page/
+deploy.sh
+
+# Backups (just in case any local backup files exist)
+*.bak
+*.broken

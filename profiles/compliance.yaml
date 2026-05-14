@@ -1,0 +1,25 @@
+name: Compliance Evidence
+description: >
+  Targeted scan for PCI-DSS / SOC 2 / ISO 27001 audit evidence.
+  Includes the specific tools whose findings map to compliance
+  controls — auditor-ready output.
+estimated_runtime_seconds: 300
+target_frameworks:
+  - PCI-DSS v4.0
+  - SOC 2 Trust Services
+  - ISO 27001:2022
+tools:
+  - webapp/headers          # PCI 6.2.4, SOC2 CC6.6, ISO A.8.23
+  - webapp/cookies          # PCI 8.3.10, SOC2 CC6.7, ISO A.8.5
+  - webapp/ssl              # PCI 4.2.1, SOC2 CC6.7, ISO A.8.24
+  - webapp/cors             # PCI 6.2.4, SOC2 CC6.6, ISO A.8.23
+  - webapp/csrf             # PCI 6.2.4, SOC2 CC6.1, ISO A.5.15
+  - webapp/clickjacking     # PCI 6.4.3, SOC2 CC6.6, ISO A.8.23
+  - webapp/idor             # PCI 7.2, SOC2 CC6.1, ISO A.5.15
+  - webapp/xss              # PCI 6.2.4, SOC2 CC6.6, ISO A.8.28
+  - webapp/sqlmap           # PCI 6.2.4, SOC2 CC6.6, ISO A.8.28
+  - webapp/ssrf             # PCI 6.2.4, SOC2 CC6.6, ISO A.8.23
+  - webapp/sensitivefiles   # PCI 2.2.7, SOC2 CC6.1, ISO A.5.10
+  - webapp/jwt              # PCI 8.2, SOC2 CC6.1, ISO A.5.15
+  - webapp/sessionfixation  # PCI 8.3.10, SOC2 CC6.7, ISO A.5.15
+  - osint/internetdb        # CVE matching for A.8.8 (vuln mgmt)

@@ -1,0 +1,24 @@
+name: Recon Only
+description: >
+  Pure information gathering — no active vulnerability probes. Safe
+  to run against targets where you're not authorized to actively
+  test (just OSINT + passive lookups).
+estimated_runtime_seconds: 120
+tools:
+  - recon/whois
+  - recon/dns
+  - recon/dnsrecon
+  - recon/subdomains
+  - recon/crtsh
+  - recon/amass
+  - recon/harvester
+  - recon/asn
+  - recon/internetdb
+  - recon/jsendpoints
+  - recon/wayback
+  - recon/robotsmap
+  - recon/crawl
+  - recon/favicon
+  - osint/virustotal
+  - osint/abuseipdb
+  - osint/dnstwist

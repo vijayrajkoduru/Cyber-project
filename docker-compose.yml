@@ -1,0 +1,88 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vulnuslab_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - WORKERS=2
+    volumes:
+      - scan_data:/app/data
+    restart: unless-stopped
+    networks:
+      - vulnuslab
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: vulnuslab_frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - vulnuslab
+
+  # ── Bundled vulnerable lab targets ─────────────────────────────
+  # Customers test the scanner against these BEFORE pointing it at
+  # their own production. Each is a single Docker container that
+  # exposes a known-vulnerable web app on the internal network.
+
+  lab_dvwa:
+    image: vulnerables/web-dvwa
+    container_name: lab_dvwa
+    networks:
+      - vulnuslab
+    restart: unless-stopped
+
+  lab_juiceshop:
+    image: bkimminich/juice-shop
+    container_name: lab_juiceshop
+    networks:
+      - vulnuslab
+    restart: unless-stopped
+
+  lab_bwapp:
+    image: raesene/bwapp
+    container_name: lab_bwapp
+    networks:
+      - vulnuslab
+    restart: unless-stopped
+
+  lab_mutillidae:
+    image: citizenstig/nowasp
+    container_name: lab_mutillidae
+    networks:
+      - vulnuslab
+    restart: unless-stopped
+
+  lab_webgoat:
+    image: webgoat/webgoat
+    container_name: lab_webgoat
+    networks:
+      - vulnuslab
+    restart: unless-stopped
+
+  lab_metasploitable:
+    image: tleemcjr/metasploitable2
+    container_name: lab_metasploitable
+    networks:
+      - vulnuslab
+    restart: unless-stopped
+
+volumes:
+  scan_data:
+    # Persistent volume — survives container restarts.
+    # Contains SQLite DB (users.db), scan history, snapshot store.
+    # NEVER delete this volume unless you intend to wipe all customer data.
+
+networks:
+  vulnuslab:
+    driver: bridge

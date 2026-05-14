@@ -1,0 +1,14 @@
+name: Quick Scan
+description: >
+  Fast recon + headline checks. ~30 seconds. Good for initial triage
+  before committing to a full scan.
+estimated_runtime_seconds: 30
+tools:
+  - recon/whois
+  - recon/dns
+  - recon/asn
+  - osint/internetdb
+  - webapp/headers
+  - webapp/cookies
+  - webapp/clickjacking
+  - webapp/cors
