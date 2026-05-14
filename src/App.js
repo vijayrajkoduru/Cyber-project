@@ -2685,28 +2685,134 @@ function WebAppModule(props) {
     });
   };
 
+  // Aggregate findings ONCE — same logic the PDF uses — so CSV / JSON / SARIF
+  // all export from the same source of truth. Includes the Trust-First
+  // metadata (tool, confidence, verified_at, evidence_marker).
+  const _collectFindingsForExport = () => {
+    const collected = [];
+    PHASES.forEach(ph => {
+      if (allResults[ph.tool]?.findings) {
+        allResults[ph.tool].findings.forEach(f => {
+          if (f.severity !== "INFO") collected.push({...f, _tool: ph.tool});
+        });
+      }
+    });
+    if (allResults["xss"]?.vulnerable)    collected.push({_tool:"xss", confidence:"CONFIRMED", severity:"CRITICAL", cvss:"9.0", cve:"N/A", cwe:"CWE-79", cwe_name:"Cross-Site Scripting", detail:"XSS vulnerability detected on target", owasp:"A03:2021", remediation:"Sanitize all user input. Implement CSP."});
+    if (allResults["sqlmap"]?.vulnerable) collected.push({_tool:"sqlmap", confidence:"CONFIRMED", severity:"CRITICAL", cvss:"9.8", cve:"N/A", cwe:"CWE-89", cwe_name:"SQL Injection", detail:"SQL Injection detected", owasp:"A03:2021", remediation:"Use parameterised queries."});
+    return collected;
+  };
+
   const dlJSON = () => {
-    const blob = new Blob([JSON.stringify({target, scanDate: new Date().toISOString(), results: allResults}, null, 2)], {type:"application/json"});
+    // Pure raw dump — every scanner's full response.
+    const payload = {
+      schema:    "vulnuslab.json/v1",
+      target,
+      scan_date: new Date().toISOString(),
+      results:   allResults,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = "pentest_raw_" + Date.now() + ".json"; a.click();
   };
 
   const dlCSV = () => {
-    const allFindings = [];
-    PHASES.forEach(ph => {
-      if (allResults[ph.tool]?.findings) allResults[ph.tool].findings.forEach(f=>{ if(f.severity!=="INFO") allFindings.push(f); });
+    const findings = _collectFindingsForExport();
+    // CSV column set chosen to satisfy security-team intake tools
+    // (most expect: tool, severity, CVSS, CWE, OWASP, confidence,
+    // verified-at, evidence, detail, remediation).
+    const rows = [["Tool","Severity","CVSS","CVE","CWE","CWE Name","OWASP","Confidence","Verified At","Evidence","Finding","Remediation"]];
+    const _esc = (v) => `"${String(v || "").replace(/"/g, '""').replace(/[\r\n]+/g, " ")}"`;
+    findings.forEach(f => rows.push([
+      _esc(f._tool || ""),
+      _esc(f.severity || ""),
+      _esc(f.cvss || ""),
+      _esc(f.cve || ""),
+      _esc(f.cwe || ""),
+      _esc(f.cwe_name || ""),
+      _esc(f.owasp || ""),
+      _esc(f.confidence || "CONFIRMED"),
+      _esc(f.verified_at || ""),
+      _esc(f.evidence_marker || ""),
+      _esc(f.detail || ""),
+      _esc(f.remediation || ""),
+    ]));
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "pentest_findings_" + Date.now() + ".csv"; a.click();
+  };
+
+  const dlSARIF = () => {
+    // SARIF 2.1.0 — industry-standard schema consumed by GitHub Code
+    // Scanning, GitLab SAST dashboards, Microsoft Defender for Cloud,
+    // VS Code's SARIF Viewer, Azure DevOps. Customers can drop our
+    // SARIF into their existing security pipeline with zero glue code.
+    const findings = _collectFindingsForExport();
+    // Build the unique rules catalog — one SARIF rule per CWE
+    const ruleMap = {};
+    findings.forEach(f => {
+      const id = f.cwe || "VULN-UNKNOWN";
+      if (!ruleMap[id]) {
+        ruleMap[id] = {
+          id,
+          name: f.cwe_name || "Security Finding",
+          shortDescription: { text: f.cwe_name || "Security Finding" },
+          fullDescription:  { text: f.cwe_name || "Security Finding" },
+          help: { text: f.remediation || "Apply security hardening.",
+                  markdown: `**Remediation:** ${f.remediation || "Apply security hardening."}` },
+          properties: {
+            "security-severity": String(f.cvss || "5.0"),
+            tags: ["security", f.owasp || ""].filter(Boolean),
+          },
+        };
+      }
     });
-    if (allResults["xss"]?.vulnerable)   allFindings.push({severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",detail:"XSS vulnerability detected",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
-    // CORS finding comes from backend (cors.findings[]) — collected by the loop above. No synthetic duplicate.
-    if (allResults["sqlmap"]?.vulnerable) allFindings.push({severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",detail:"SQL Injection detected",owasp:"A03:2021 - Injection",remediation:"Use parameterized queries."});
-    const rows = [["Severity","CVSS","CVE","CWE","OWASP","Finding","Remediation"]];
-    allFindings.forEach(f => rows.push([f.severity,f.cvss||"",f.cve||"",f.cwe||"",f.owasp||"",`"${(f.detail||"").replace(/"/g,"'")}"`,`"${(f.remediation||"").replace(/"/g,"'")}"`]));
-    const csv = rows.map(r=>r.join(",")).join("\n");
-    const blob = new Blob([csv],{type:"text/csv"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "pentest_findings_"+Date.now()+".csv";
-    a.click();
+    const _sevLevel = (s) => {
+      // SARIF only has: none / note / warning / error
+      if (s === "CRITICAL" || s === "HIGH") return "error";
+      if (s === "MEDIUM") return "warning";
+      return "note";
+    };
+    const sarif = {
+      $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+      version: "2.1.0",
+      runs: [{
+        tool: {
+          driver: {
+            name:    "VulnusLab",
+            version: "1.0.0",
+            informationUri: "https://vulnuslab.com",
+            rules: Object.values(ruleMap),
+          },
+        },
+        results: findings.map(f => ({
+          ruleId: f.cwe || "VULN-UNKNOWN",
+          level:  _sevLevel(f.severity),
+          message: { text: f.detail || "Security finding" },
+          locations: [{
+            physicalLocation: {
+              artifactLocation: { uri: target || "unknown-target" },
+            },
+          }],
+          properties: {
+            tool:        f._tool || "",
+            severity:    f.severity || "",
+            cvss:        f.cvss || "",
+            confidence:  f.confidence || "CONFIRMED",
+            verified_at: f.verified_at || "",
+            evidence:    f.evidence_marker || "",
+            owasp:       f.owasp || "",
+          },
+        })),
+        invocations: [{
+          executionSuccessful: true,
+          startTimeUtc: new Date().toISOString(),
+        }],
+      }],
+    };
+    const blob = new Blob([JSON.stringify(sarif, null, 2)], {type:"application/sarif+json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "pentest_" + Date.now() + ".sarif"; a.click();
   };
 
   return (
@@ -2873,6 +2979,7 @@ function WebAppModule(props) {
                 <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>📄 Report</button>
                 <button onClick={dlCSV} style={{background:"#166534",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>📊 CSV</button>
                 <button onClick={dlJSON} style={{background:"#1e3a8a",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>🗃 JSON</button>
+                <button onClick={dlSARIF} title="GitHub Code Scanning / GitLab SAST / Defender for Cloud compatible" style={{background:"#7c3aed",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>⚡ SARIF</button>
               </>;
             })()}
           </div>
