@@ -2155,6 +2155,31 @@ function WebAppModule(props) {
   // Click "Details" on any finished tile to inspect error message + findings;
   // saves the customer from opening DevTools to debug a failed scan.
   const [expandedTile, setExpandedTile]     = useState(null);
+  // Live scan telemetry — scanStart is the timestamp the run loop began;
+  // tickN is just a counter incremented every 1s while running so React
+  // re-renders the elapsed/ETA banner. Findings counts derive from allResults
+  // automatically — no separate state needed.
+  const [scanStart, setScanStart] = useState(0);
+  const [tickN, setTickN]         = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setTickN(n => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  // Live finding counts — computed every render so the banner updates as
+  // each phase completes and writes its findings into allResults.
+  const liveCounts = React.useMemo(() => {
+    const c = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    Object.values(allResults || {}).forEach(r => {
+      if (r?.findings) r.findings.forEach(f => {
+        if (f.severity && c[f.severity] !== undefined) c[f.severity]++;
+      });
+      // Synthetic vuln-flag tools (xss/sqlmap return vulnerable:true, not findings)
+      if (r?.vulnerable && r?.tool === "sqlmap") c.CRITICAL++;
+      if (r?.vulnerable && r?.tool === "xss")    c.CRITICAL++;
+    });
+    return c;
+  }, [allResults, tickN]);
 
   const add = l => setLines(p => [...p, l]);
 
@@ -2174,6 +2199,7 @@ function WebAppModule(props) {
     const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)(target.trim());
     if (normTarget !== target) setTarget(normTarget);
     stopRef.current = false; setStopped(false);
+    setScanStart(Date.now()); setTickN(0);
     setRunningState(true); setDone([]); setFailed([]); setSkipped([]); setAll({}); setFinished(false);
     // Save to target history
     setTargetHistory(prev => { const updated = [normTarget, ...prev.filter(t=>t!==normTarget)].slice(0,10); localStorage.setItem("cyberTargetHistory", JSON.stringify(updated)); return updated; });
@@ -2807,6 +2833,60 @@ function WebAppModule(props) {
             </div>
           ))}
         </div>
+
+        {/* ─── LIVE SCAN TELEMETRY ─── shows only while scan is running.
+             Customer watches findings accumulate in real-time + sees ETA,
+             current phase, and progress bar. Trust-building feedback —
+             without this, scans feel like a 5-min black-box spinner. */}
+        {running && (() => {
+          const doneCount = done.length;
+          const totalCount = (selectedPhases?.size || PHASES.length) || 1;
+          const elapsed = Math.floor((Date.now() - scanStart) / 1000);
+          const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+          const eta = doneCount > 0 ? Math.max(0, Math.floor((elapsed * totalCount / doneCount) - elapsed)) : null;
+          const pct = Math.min(100, Math.round(doneCount / totalCount * 100));
+          const currentPhase = curPhase >= 0 ? PHASES[curPhase] : null;
+          const totalFindings = liveCounts.CRITICAL + liveCounts.HIGH + liveCounts.MEDIUM + liveCounts.LOW;
+          return (
+            <div style={{background:"linear-gradient(180deg,#0a0f1e 0%,#0f172a 100%)",border:"1px solid #1e3a8a",borderRadius:10,padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
+              {/* Row 1: progress + current phase + timing */}
+              <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 280px",minWidth:240}}>
+                  <span style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1}}>SCANNING</span>
+                  <span style={{fontSize:13,color:"#e2e8f0",fontWeight:600,fontFamily:"monospace"}}>
+                    {currentPhase ? `${currentPhase.icon||""} ${currentPhase.name}` : "Initializing..."}
+                  </span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:14,fontSize:11,fontFamily:"monospace",color:"#94a3b8"}}>
+                  <span>Phase <b style={{color:"#3b82f6"}}>{doneCount}</b>/<b style={{color:"#e2e8f0"}}>{totalCount}</b></span>
+                  <span>Elapsed <b style={{color:"#22c55e"}}>{fmt(elapsed)}</b></span>
+                  {eta !== null && <span>ETA <b style={{color:"#f59e0b"}}>~{fmt(eta)}</b></span>}
+                </div>
+              </div>
+              {/* Row 2: progress bar */}
+              <div style={{height:6,background:"#0a0f1e",borderRadius:3,overflow:"hidden",border:"1px solid #1e293b"}}>
+                <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#3b82f6 0%,#22c55e 100%)",transition:"width 0.6s ease",borderRadius:3}}/>
+              </div>
+              {/* Row 3: live finding counter */}
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>FINDINGS SO FAR:</span>
+                {[
+                  {label:"CRITICAL", n:liveCounts.CRITICAL, color:"#f87171", bg:"#1c0000"},
+                  {label:"HIGH",     n:liveCounts.HIGH,     color:"#fb923c", bg:"#1c0a00"},
+                  {label:"MEDIUM",   n:liveCounts.MEDIUM,   color:"#fbbf24", bg:"#1c1500"},
+                  {label:"LOW",      n:liveCounts.LOW,      color:"#4ade80", bg:"#052e16"},
+                ].map(s=>(
+                  <span key={s.label} style={{background:s.bg,border:`1px solid ${s.color}50`,color:s.color,fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:5,fontFamily:"monospace"}}>
+                    {s.n} {s.label}
+                  </span>
+                ))}
+                {totalFindings === 0 && (
+                  <span style={{fontSize:11,color:"#475569",fontStyle:"italic"}}>No issues found yet — scan in progress...</span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Phase selection controls */}
         {!running && (
