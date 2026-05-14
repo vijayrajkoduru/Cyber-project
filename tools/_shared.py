@@ -22,7 +22,7 @@ from typing import Optional, List
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-import jwt as _jwt
+from jose import jwt as _jwt
 import requests as _req_lib
 import urllib3
 
