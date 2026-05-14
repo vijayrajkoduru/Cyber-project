@@ -6285,7 +6285,7 @@ const RECON_PHASES = [
   {name:"OS Fingerprinting",     tool:"os",         endpoint:"/api/recon/os",         icon:"💻"},
   {name:"Banner Grabbing",       tool:"banner",     endpoint:"/api/recon/banner",     icon:"🏷️"},
   {name:"Directory Enumeration", tool:"gobuster",   endpoint:"/api/recon/gobuster",   icon:"📁"},
-  // ── Pure-Python URL Discovery Suite ─────────────────────────
+  // ── Pure-Python URL Discovery Suite (vol. 1) ────────────────
   // These pull hidden URLs out of (1) JS bundles referenced by the homepage,
   // (2) the Wayback Machine archive, (3) robots.txt + sitemap.xml +
   // .well-known files. Together they solve the "SPA returns 0 findings"
@@ -6293,6 +6293,15 @@ const RECON_PHASES = [
   {name:"JS Endpoint Extractor", tool:"jsendpoints",endpoint:"/api/recon/jsendpoints",icon:"📜"},
   {name:"Wayback Machine",       tool:"wayback",    endpoint:"/api/recon/wayback",    icon:"⏪"},
   {name:"robots + sitemap",      tool:"robotsmap",  endpoint:"/api/recon/robotsmap",  icon:"🗺"},
+  // ── Pure-Python Recon Suite (vol. 2) ────────────────────────
+  // BFS crawler + param discovery feed the WebApp scanners.
+  // Favicon hash, cloud buckets, secrets, and ASN finish the recon picture.
+  {name:"BFS Crawler",           tool:"crawl",      endpoint:"/api/recon/crawl",      icon:"🕷"},
+  {name:"Parameter Discovery",   tool:"params",     endpoint:"/api/recon/params",     icon:"❓"},
+  {name:"Favicon Fingerprint",   tool:"favicon",    endpoint:"/api/recon/favicon",    icon:"🎯"},
+  {name:"Cloud Bucket Finder",   tool:"cloudbuckets",endpoint:"/api/recon/cloudbuckets",icon:"☁"},
+  {name:"JS Secret Scanner",     tool:"secrets",    endpoint:"/api/recon/secrets",    icon:"🔑"},
+  {name:"ASN / IP Ownership",    tool:"asn",        endpoint:"/api/recon/asn",        icon:"🌐"},
 ];
 
 function ReconModule({token, onRunningChange}) {

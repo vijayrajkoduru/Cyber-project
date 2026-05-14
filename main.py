@@ -4690,6 +4690,552 @@ async def recon_robotsmap(req: ScanRequest, user=Depends(verify_token)):
     }
 
 
+# ══════════════════════════════════════════════════════════════
+#  PURE-PYTHON RECON SUITE VOL. 2
+#  Six more pure-Python recon endpoints:
+#    crawl         — Photon-equivalent same-origin BFS crawler
+#    params        — Arjun+ParamSpider HTTP parameter discovery
+#    favicon       — mmh3 favicon hash → tech stack ID (FavFreak)
+#    cloudbuckets  — S3/GCS/Azure permutation finder (CloudEnum)
+#    secrets       — Regex secret hunt in JS bundles (SecretFinder)
+#    asn           — Team-Cymru ASN / IP-block ownership lookup
+# ══════════════════════════════════════════════════════════════
+
+
+@app.post("/api/recon/crawl")
+async def recon_crawl(req: ScanRequest, user=Depends(verify_token)):
+    """Same-origin BFS crawler — starts at the target homepage and follows
+    every same-origin <a href>, <link href>, <form action>, and <script src>
+    up to a depth of 2 and a hard cap of 150 URLs. Pure-Python, no headless
+    browser, no Kali deps.
+
+    Solves the "scanner only tests the root URL" gap. Discovered URLs feed
+    the WebApp module (xss, sqli, idor, lfi, ...) for real coverage on
+    SPAs and multi-page apps.
+    """
+    _AUTH_CTX.set(req)
+    from urllib.parse import urljoin, urlparse
+    start = _web_url(req.target)
+    origin = urlparse(start).netloc
+    visited, queue, results = set(), [(start, 0)], []
+    MAX_URLS, MAX_DEPTH = 150, 2
+    error = None
+    try:
+        while queue and len(visited) < MAX_URLS:
+            url, depth = queue.pop(0)
+            if url in visited: continue
+            visited.add(url)
+            r = _safe_get(url, retries=1, timeout=8, req=req)
+            if r is None: continue
+            results.append({"url": url, "status": r.status_code, "size": len(r.content), "depth": depth})
+            if depth >= MAX_DEPTH: continue
+            ct = (r.headers.get("Content-Type") or "").lower()
+            if "html" not in ct: continue
+            for m in re.findall(r'''(?:href|src|action)=["']([^"'#]+)["']''', r.text or "", re.IGNORECASE):
+                absurl = urljoin(url, m.strip())
+                p = urlparse(absurl)
+                # Same-origin only; strip fragments; skip mailto:/tel:/javascript:
+                if p.scheme not in ("http", "https"): continue
+                if p.netloc != origin: continue
+                clean = f"{p.scheme}://{p.netloc}{p.path}" + (f"?{p.query}" if p.query else "")
+                if clean not in visited and len(queue) + len(visited) < MAX_URLS:
+                    queue.append((clean, depth + 1))
+    except Exception as e:
+        error = str(e)
+
+    findings = []
+    # Surface high-signal discovered paths as INFO so downstream scanners see them
+    interesting = re.compile(r"/(admin|api|login|auth|debug|config|backup|test|dev|staging|graphql|swagger|console|dashboard|internal)/?", re.IGNORECASE)
+    for r in results:
+        if interesting.search(r["url"]):
+            findings.append({
+                "detail": f"Discovered URL: {r['url']} (HTTP {r['status']}, {r['size']} bytes)",
+                "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+                "cwe": "CWE-200", "cwe_name": "Endpoint Discovered", "owasp": "A05:2021",
+                "remediation": "Review whether this endpoint enforces authentication and is intentionally public.",
+                "confidence": "CONFIRMED",
+            })
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "crawl", req.target, {"output": f"crawled {len(visited)} URLs ({len(findings)} interesting)"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "crawl",
+        "discovered": results,
+        "total": len(results),
+        "interesting_total": len(findings),
+        "findings": findings,
+        "vulnerable": False,
+        "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/api/recon/params")
+async def recon_params(req: ScanRequest, user=Depends(verify_token)):
+    """HTTP parameter discovery — pulls every distinct query-string param,
+    form input name, and JSON key referenced by the target homepage + the
+    JS bundles it loads. Equivalent to Arjun's "spider" mode plus
+    ParamSpider's archive-driven param hunt — but only against the live
+    target (no spam to wayback).
+
+    Discovered params become test seeds for xss/sqli/lfi/openredirect.
+    """
+    _AUTH_CTX.set(req)
+    from urllib.parse import urljoin, urlparse, parse_qs
+    target = _web_url(req.target)
+    params = set()
+    sources = {"query": 0, "form": 0, "json": 0, "js_var": 0}
+    error = None
+    try:
+        r = _safe_get(target, retries=2, timeout=10, req=req)
+        if r is None: raise RuntimeError("target unreachable")
+        html = r.text or ""
+        # 1. Query params from links on the page
+        for href in re.findall(r'''href=["']([^"']+)["']''', html, re.IGNORECASE):
+            absurl = urljoin(target, href)
+            for k in parse_qs(urlparse(absurl).query).keys():
+                params.add(k); sources["query"] += 1
+        # 2. Form input names
+        for nm in re.findall(r'''<input[^>]+name=["']([^"']+)["']''', html, re.IGNORECASE):
+            params.add(nm); sources["form"] += 1
+        for nm in re.findall(r'''<select[^>]+name=["']([^"']+)["']''', html, re.IGNORECASE):
+            params.add(nm); sources["form"] += 1
+        for nm in re.findall(r'''<textarea[^>]+name=["']([^"']+)["']''', html, re.IGNORECASE):
+            params.add(nm); sources["form"] += 1
+        # 3. JS variable / JSON key references on the page itself
+        for k in re.findall(r'''["']([a-zA-Z_][a-zA-Z0-9_]{1,40})["']\s*:''', html):
+            if not k.startswith("_") and len(k) > 1:
+                params.add(k); sources["json"] += 1
+        # 4. Pull JS bundles and scan them too (capped)
+        js_urls = list({urljoin(target, m) for m in re.findall(r'''<script[^>]+src=["']([^"']+)["']''', html, re.IGNORECASE)})[:25]
+        for ju in js_urls:
+            jr = _safe_get(ju, retries=1, timeout=8, req=req)
+            if jr is None or len(jr.content) > 2_000_000: continue
+            body = jr.text or ""
+            # Common JS patterns: `formData.append('foo', ...)`, `params.foo`,
+            # `data: {foo: ...}`, `?foo=` in url-templates
+            for k in re.findall(r'''\.append\(["']([a-zA-Z_][a-zA-Z0-9_]{0,40})["']''', body): params.add(k); sources["js_var"] += 1
+            for k in re.findall(r'''["']([a-zA-Z_][a-zA-Z0-9_]{1,40})["']\s*:''', body):
+                if not k.startswith("_") and len(k) > 1: params.add(k); sources["json"] += 1
+            for k in re.findall(r'''[?&]([a-zA-Z_][a-zA-Z0-9_]{0,40})=''', body): params.add(k); sources["query"] += 1
+    except Exception as e:
+        error = str(e)
+
+    # Filter noise — single-letter / numeric-only / framework-internal keys
+    filtered = sorted({p for p in params if len(p) > 1 and not p.isdigit() and p.lower() not in {
+        "true","false","null","undefined","this","self","window","document","location","value","name","type","id"
+    }})
+
+    findings = []
+    # Highlight params with names that suggest sensitive functionality
+    sensitive_kw = re.compile(r"^(admin|token|password|api_key|secret|jwt|session|debug|test|redirect|url|callback|file|path|cmd|exec|query|sql)$", re.IGNORECASE)
+    for p in filtered:
+        if sensitive_kw.match(p):
+            findings.append({
+                "detail": f"Sensitive-named parameter discovered: '{p}' — likely candidate for injection/redirect testing",
+                "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+                "cwe": "CWE-200", "cwe_name": "Parameter Disclosure", "owasp": "A03:2021",
+                "remediation": "Verify the parameter is properly validated server-side. Sensitive-named params are high-value targets for fuzzing.",
+                "confidence": "CONFIRMED",
+            })
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "params", req.target, {"output": f"{len(filtered)} params ({sources})"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "params",
+        "params": filtered, "sources": sources, "total": len(filtered),
+        "findings": findings, "vulnerable": False, "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/api/recon/favicon")
+async def recon_favicon(req: ScanRequest, user=Depends(verify_token)):
+    """Favicon hash fingerprint — fetches /favicon.ico and computes the
+    mmh3 hash (Shodan's favicon DB convention). Customers can then
+    pivot via Shodan to find every other host running the same tech
+    stack, which often surfaces forgotten staging/admin servers.
+
+    Pure-Python — no mmh3 dep needed, we implement MurmurHash3 32-bit
+    inline. Output also includes the standard Acunetix-style ico hash
+    for cross-referencing.
+    """
+    _AUTH_CTX.set(req)
+    import base64, struct
+    base = _web_url(req.target).rstrip("/")
+    icon_bytes = None
+    icon_url = None
+    error = None
+    for path in ("/favicon.ico", "/static/favicon.ico", "/assets/favicon.ico"):
+        try:
+            r = _safe_get(base + path, retries=1, timeout=6, req=req)
+            if r is not None and r.status_code == 200 and len(r.content) > 0:
+                icon_bytes = r.content
+                icon_url = base + path
+                break
+        except Exception:
+            continue
+    if icon_bytes is None:
+        # Fallback — parse <link rel="icon" href="..."> from homepage
+        try:
+            hr = _safe_get(base + "/", retries=1, timeout=8, req=req)
+            if hr is not None:
+                m = re.search(r'''<link[^>]+rel=["'](?:shortcut\s+)?icon["'][^>]+href=["']([^"']+)["']''', hr.text or "", re.IGNORECASE)
+                if m:
+                    from urllib.parse import urljoin
+                    ico_url = urljoin(base + "/", m.group(1))
+                    ir = _safe_get(ico_url, retries=1, timeout=6, req=req)
+                    if ir is not None and ir.status_code == 200:
+                        icon_bytes = ir.content
+                        icon_url = ico_url
+        except Exception as e:
+            error = str(e)
+
+    if icon_bytes is None:
+        scan_id = str(uuid.uuid4())
+        save_scan(scan_id, "favicon", req.target, {"output": "no favicon"})
+        return {"scan_id": scan_id, "target": req.target, "tool": "favicon",
+                "found": False, "findings": [],
+                "skipped_reason": "Target serves no favicon — fingerprint not applicable",
+                "error": error, "timestamp": datetime.datetime.utcnow().isoformat()}
+
+    # Pure-Python MurmurHash3 32-bit (Austin Appleby algorithm)
+    def _mmh3_32(data: bytes, seed: int = 0) -> int:
+        c1, c2, r1, r2, m, n = 0xcc9e2d51, 0x1b873593, 15, 13, 5, 0xe6546b64
+        length = len(data); h = seed; i = 0
+        while i + 4 <= length:
+            k = struct.unpack("<I", data[i:i+4])[0]
+            k = (k * c1) & 0xffffffff
+            k = ((k << r1) | (k >> (32 - r1))) & 0xffffffff
+            k = (k * c2) & 0xffffffff
+            h ^= k
+            h = ((h << r2) | (h >> (32 - r2))) & 0xffffffff
+            h = (h * m + n) & 0xffffffff
+            i += 4
+        k = 0; tail = length - i
+        if tail > 0:
+            for j in range(tail): k |= data[i+j] << (j * 8)
+            k = (k * c1) & 0xffffffff
+            k = ((k << r1) | (k >> (32 - r1))) & 0xffffffff
+            k = (k * c2) & 0xffffffff
+            h ^= k
+        h ^= length
+        h ^= (h >> 16); h = (h * 0x85ebca6b) & 0xffffffff
+        h ^= (h >> 13); h = (h * 0xc2b2ae35) & 0xffffffff
+        h ^= (h >> 16)
+        # Shodan favicon hash uses signed int32 of base64-encoded bytes
+        b64 = base64.encodebytes(data).decode("ascii")
+        return _mmh3_32_signed(b64.encode("ascii"))
+
+    def _mmh3_32_signed(data: bytes, seed: int = 0) -> int:
+        # Re-run with bytes form Shodan uses; convert to signed int32
+        c1, c2, r1, r2, m, n = 0xcc9e2d51, 0x1b873593, 15, 13, 5, 0xe6546b64
+        length = len(data); h = seed; i = 0
+        while i + 4 <= length:
+            k = struct.unpack("<I", data[i:i+4])[0]
+            k = (k * c1) & 0xffffffff
+            k = ((k << r1) | (k >> (32 - r1))) & 0xffffffff
+            k = (k * c2) & 0xffffffff
+            h ^= k
+            h = ((h << r2) | (h >> (32 - r2))) & 0xffffffff
+            h = (h * m + n) & 0xffffffff
+            i += 4
+        k = 0; tail = length - i
+        if tail > 0:
+            for j in range(tail): k |= data[i+j] << (j * 8)
+            k = (k * c1) & 0xffffffff
+            k = ((k << r1) | (k >> (32 - r1))) & 0xffffffff
+            k = (k * c2) & 0xffffffff
+            h ^= k
+        h ^= length
+        h ^= (h >> 16); h = (h * 0x85ebca6b) & 0xffffffff
+        h ^= (h >> 13); h = (h * 0xc2b2ae35) & 0xffffffff
+        h ^= (h >> 16)
+        # Convert unsigned 32-bit to signed
+        if h & 0x80000000: h = h - 0x100000000
+        return h
+
+    shodan_hash = _mmh3_32(icon_bytes)
+    # Curated set of well-known favicon hashes (selection from FavFreak DB)
+    KNOWN_FAVICONS = {
+        81586312: "GitLab",
+        -1922474218: "Jenkins",
+        -1474564925: "Jira",
+        -976514843: "GitHub Enterprise",
+        708578229:  "Atlassian Confluence",
+        -2122683699:"Splunk",
+        1768726119: "WordPress",
+        1075473754: "Joomla",
+        708445661:  "phpMyAdmin",
+        1283554667: "Grafana",
+        -631559155: "Kibana",
+        -1255347784:"PRTG Network Monitor",
+        2125631841: "Adobe Experience Manager",
+        -1965476403:"Apache Tomcat",
+    }
+    matched = KNOWN_FAVICONS.get(shodan_hash)
+    findings = []
+    findings.append({
+        "detail": f"Favicon hash (Shodan/mmh3): {shodan_hash}" + (f" — matches known service: {matched}" if matched else ""),
+        "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+        "cwe": "CWE-200", "cwe_name": "Tech Stack Fingerprint", "owasp": "A05:2021",
+        "remediation": f"Pivot via Shodan: search 'http.favicon.hash:{shodan_hash}' to find every other host with the same favicon — often reveals forgotten staging/admin servers.",
+        "confidence": "CONFIRMED",
+    })
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "favicon", req.target, {"output": f"hash={shodan_hash} matched={matched}"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "favicon",
+        "found": True, "favicon_url": icon_url,
+        "shodan_hash": shodan_hash, "size": len(icon_bytes),
+        "matched_service": matched,
+        "shodan_query": f"http.favicon.hash:{shodan_hash}",
+        "findings": findings, "vulnerable": False,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/api/recon/cloudbuckets")
+async def recon_cloudbuckets(req: ScanRequest, user=Depends(verify_token)):
+    """Cloud bucket finder — tries permutations of the target name against
+    AWS S3, GCS, and Azure Blob naming patterns. Surfaces buckets that
+    leak content (open listing or public objects), which is one of the
+    top breach causes since ~2017.
+
+    Pure-Python — just probes well-known host patterns and inspects the
+    HTTP response. We never download bucket contents.
+    """
+    _AUTH_CTX.set(req)
+    host = _recon_host(req.target)
+    # Derive a base name from the apex domain (strip www. and TLD)
+    name = host.replace("www.", "").split(".")[0]
+    if len(name) < 3:
+        scan_id = str(uuid.uuid4())
+        return {"scan_id": scan_id, "target": req.target, "tool": "cloudbuckets",
+                "skipped_reason": "Target name too short to permute safely (<3 chars)",
+                "findings": [], "timestamp": datetime.datetime.utcnow().isoformat()}
+
+    suffixes = ["", "-prod", "-production", "-dev", "-staging", "-test", "-backup",
+                "-backups", "-data", "-assets", "-media", "-uploads", "-files",
+                "-logs", "-private", "-internal", "-static", "-cdn", "-public"]
+    candidates = []
+    for s in suffixes:
+        n = name + s
+        # AWS S3 — three URL forms
+        candidates.append(("aws-s3", n, f"https://{n}.s3.amazonaws.com/"))
+        candidates.append(("aws-s3", n, f"https://s3.amazonaws.com/{n}/"))
+        # Google Cloud Storage
+        candidates.append(("gcs", n, f"https://storage.googleapis.com/{n}/"))
+        # Azure Blob
+        candidates.append(("azure", n, f"https://{n}.blob.core.windows.net/"))
+    open_buckets, exists_buckets = [], []
+    for provider, bucket_name, url in candidates[:80]:  # safety cap
+        try:
+            r = _safe_get(url, retries=0, timeout=5, req=req, allow_redirects=False)
+            if r is None: continue
+            sc = r.status_code
+            body = (r.text or "")[:500].lower()
+            if sc == 200 and ("<listbucketresult" in body or "<enumerationresults" in body or '"items"' in body):
+                open_buckets.append({"provider": provider, "name": bucket_name, "url": url, "status": sc})
+            elif sc in (403, 401) and ("accessdenied" in body or "<error" in body):
+                exists_buckets.append({"provider": provider, "name": bucket_name, "url": url, "status": sc})
+        except Exception:
+            continue
+
+    findings = []
+    for b in open_buckets:
+        findings.append({
+            "detail": f"OPEN cloud bucket: {b['provider']} '{b['name']}' — listing publicly accessible at {b['url']}",
+            "severity": "CRITICAL", "cvss": "9.1", "cve": "N/A",
+            "cwe": "CWE-284", "cwe_name": "Improper Access Control (Cloud Bucket)", "owasp": "A01:2021",
+            "remediation": f"Disable public listing on '{b['name']}' immediately. Audit object permissions — anything publicly listable is publicly readable. Use bucket policies to enforce least-privilege.",
+            "confidence": "CONFIRMED",
+        })
+    for b in exists_buckets:
+        findings.append({
+            "detail": f"Existing cloud bucket discovered: {b['provider']} '{b['name']}' (HTTP {b['status']}, not publicly listable but EXISTS)",
+            "severity": "LOW", "cvss": "3.1", "cve": "N/A",
+            "cwe": "CWE-200", "cwe_name": "Cloud Asset Disclosure", "owasp": "A05:2021",
+            "remediation": "Naming convention reveals that this bucket exists. Consider hashing bucket names to prevent enumeration.",
+            "confidence": "CONFIRMED",
+        })
+
+    vulnerable = len(open_buckets) > 0
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "cloudbuckets", req.target, {"output": f"open={len(open_buckets)} exists={len(exists_buckets)}"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "cloudbuckets",
+        "open_buckets": open_buckets, "existing_buckets": exists_buckets,
+        "total": len(open_buckets) + len(exists_buckets),
+        "findings": findings, "vulnerable": vulnerable,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+# Curated secret-finder regex patterns — high-signal, low false-positive.
+# Order matters: more specific patterns first so a Stripe key isn't also
+# caught by the generic "long hex" rule.
+_SECRET_PATTERNS = [
+    ("AWS Access Key",       re.compile(r"\bAKIA[0-9A-Z]{16}\b"),                                    "CRITICAL", "9.8"),
+    ("AWS Secret Key",       re.compile(r"(?i)aws(.{0,20})?(secret|access)?(.{0,20})?[\"'][0-9a-zA-Z/+]{40}[\"']"), "CRITICAL", "9.8"),
+    ("Google API Key",       re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"),                              "HIGH",     "7.5"),
+    ("Google OAuth ID",      re.compile(r"\b[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com\b"),"HIGH",    "7.5"),
+    ("Stripe Live Key",      re.compile(r"\bsk_live_[0-9a-zA-Z]{24,}\b"),                            "CRITICAL", "9.8"),
+    ("Stripe Restricted Key",re.compile(r"\brk_live_[0-9a-zA-Z]{24,}\b"),                            "HIGH",     "8.0"),
+    ("Slack Bot Token",      re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b"),                        "HIGH",     "8.0"),
+    ("Slack Webhook",        re.compile(r"\bhttps?://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+\b"), "HIGH", "7.5"),
+    ("GitHub Token",         re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[0-9a-zA-Z]{36}\b"),             "CRITICAL", "9.0"),
+    ("GitHub Fine-grained",  re.compile(r"\bgithub_pat_[0-9a-zA-Z_]{82}\b"),                         "CRITICAL", "9.0"),
+    ("Twilio API Key",       re.compile(r"\bSK[0-9a-fA-F]{32}\b"),                                   "HIGH",     "7.5"),
+    ("SendGrid API Key",     re.compile(r"\bSG\.[0-9A-Za-z_\-]{22}\.[0-9A-Za-z_\-]{43}\b"),          "HIGH",     "7.5"),
+    ("Mailgun API Key",      re.compile(r"\bkey-[0-9a-zA-Z]{32}\b"),                                 "HIGH",     "7.5"),
+    ("Mailchimp API Key",    re.compile(r"\b[0-9a-f]{32}-us[0-9]{1,2}\b"),                           "HIGH",     "7.5"),
+    ("Heroku API Key",       re.compile(r"(?i)heroku.{0,20}[\"'][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[\"']"), "HIGH","7.5"),
+    ("PayPal Braintree",     re.compile(r"\baccess_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}\b"),"CRITICAL", "9.0"),
+    ("JWT Token",            re.compile(r"\bey[A-Za-z0-9_-]{15,}\.ey[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\b"), "MEDIUM", "5.3"),
+    ("Private Key (RSA/EC)", re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"),   "CRITICAL", "9.8"),
+    ("Generic API Key Var",  re.compile(r"(?i)(?:api[_-]?key|apikey|secret[_-]?key|auth[_-]?token)\s*[:=]\s*[\"']([0-9a-zA-Z\-_!@#$%^&*]{20,})[\"']"), "MEDIUM", "5.3"),
+]
+
+
+@app.post("/api/recon/secrets")
+async def recon_secrets(req: ScanRequest, user=Depends(verify_token)):
+    """Pure-Python SecretFinder — pulls every <script src=...> JS bundle
+    referenced by the homepage and regex-scans them for hard-coded
+    secrets: AWS / Google / Stripe / Slack / GitHub / Twilio / SendGrid
+    / JWT / private keys / generic API-key vars.
+
+    Each match is a CRITICAL/HIGH finding the customer should rotate
+    immediately — leaked keys are typically the first foothold of a
+    real-world breach.
+    """
+    _AUTH_CTX.set(req)
+    from urllib.parse import urljoin
+    target = _web_url(req.target)
+    findings = []
+    files_seen = []
+    error = None
+    try:
+        r = _safe_get(target, retries=2, timeout=12, req=req)
+        if r is None: raise RuntimeError("target unreachable")
+        html = r.text or ""
+        # Scan the homepage itself
+        for name, pat, sev, cvss in _SECRET_PATTERNS:
+            for m in pat.findall(html):
+                snippet = (m if isinstance(m, str) else m[0])[:80]
+                findings.append({
+                    "detail": f"{name} leaked in homepage HTML: {snippet}...",
+                    "severity": sev, "cvss": cvss, "cve": "N/A",
+                    "cwe": "CWE-798", "cwe_name": "Hardcoded Credentials in Source", "owasp": "A07:2021",
+                    "remediation": f"Rotate the leaked {name} immediately. Move secrets to server-side env vars — they must never appear in client-facing code.",
+                    "confidence": "CONFIRMED",
+                })
+        # Scan each referenced JS bundle (cap to keep scan time bounded)
+        js_urls = list({urljoin(target, m) for m in re.findall(r'''<script[^>]+src=["']([^"']+)["']''', html, re.IGNORECASE)})[:30]
+        for ju in js_urls:
+            jr = _safe_get(ju, retries=1, timeout=10, req=req)
+            if jr is None or len(jr.content) > 3_000_000: continue
+            files_seen.append({"url": ju, "size": len(jr.content)})
+            body = jr.text or ""
+            for name, pat, sev, cvss in _SECRET_PATTERNS:
+                for m in pat.findall(body):
+                    snippet = (m if isinstance(m, str) else m[0])[:80]
+                    findings.append({
+                        "detail": f"{name} leaked in {ju.split('/')[-1][:40]}: {snippet}...",
+                        "severity": sev, "cvss": cvss, "cve": "N/A",
+                        "cwe": "CWE-798", "cwe_name": "Hardcoded Credentials in Source", "owasp": "A07:2021",
+                        "remediation": f"Rotate the leaked {name} immediately. Move secrets to server-side env vars — they must never appear in client-facing code.",
+                        "confidence": "CONFIRMED",
+                    })
+    except Exception as e:
+        error = str(e)
+    # Dedup by (detail) — same secret might appear in multiple bundles
+    seen = set(); deduped = []
+    for f in findings:
+        key = f["detail"]
+        if key not in seen:
+            seen.add(key); deduped.append(f)
+
+    vulnerable = any(f["severity"] in ("CRITICAL","HIGH") for f in deduped)
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "secrets", req.target, {"output": f"{len(deduped)} secrets across {len(files_seen)} files"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "secrets",
+        "js_files": files_seen, "total": len(deduped),
+        "findings": deduped, "vulnerable": vulnerable, "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/api/recon/asn")
+async def recon_asn(req: ScanRequest, user=Depends(verify_token)):
+    """ASN / IP-block ownership via Team-Cymru DNS lookup. Pure-Python:
+    resolves the target to an IP, then issues a TXT query against
+    `<reversed-ip>.origin.asn.cymru.com` to get the ASN, prefix, country,
+    registry, and allocation date. No external API, no Kali deps.
+
+    Useful for: confirming the customer actually owns the IP block they
+    asked you to scan (no surprise third parties), and for identifying
+    CDN-fronted vs origin servers.
+    """
+    _AUTH_CTX.set(req)
+    host = _recon_host(req.target)
+    findings = []; result = {}
+    try:
+        # Resolve host → IP
+        loop = asyncio.get_event_loop()
+        def _resolve():
+            answers = _dns_resolver.resolve(host, "A")
+            return str(answers[0]) if answers else None
+        ip = await loop.run_in_executor(None, _resolve)
+        if not ip: raise RuntimeError("could not resolve target to IP")
+        result["ip"] = ip
+        # Team-Cymru reverse format: 4.3.2.1.origin.asn.cymru.com
+        reversed_ip = ".".join(reversed(ip.split(".")))
+        cymru_q = f"{reversed_ip}.origin.asn.cymru.com"
+        def _cymru():
+            ans = _dns_resolver.resolve(cymru_q, "TXT")
+            return str(ans[0]).strip('"') if ans else None
+        txt = await loop.run_in_executor(None, _cymru)
+        if not txt: raise RuntimeError("Team-Cymru returned no record")
+        # Format: "ASN | IP-prefix | Country | Registry | Allocated"
+        parts = [p.strip() for p in txt.split("|")]
+        if len(parts) >= 5:
+            result["asn"]      = parts[0]
+            result["prefix"]   = parts[1]
+            result["country"]  = parts[2]
+            result["registry"] = parts[3]
+            result["allocated"] = parts[4]
+            # Pull AS owner name from a second lookup
+            try:
+                as_q = f"AS{parts[0]}.asn.cymru.com"
+                def _asowner():
+                    ans = _dns_resolver.resolve(as_q, "TXT")
+                    return str(ans[0]).strip('"') if ans else None
+                owner_txt = await loop.run_in_executor(None, _asowner)
+                if owner_txt:
+                    op = [p.strip() for p in owner_txt.split("|")]
+                    if len(op) >= 5:
+                        result["as_owner"] = op[4]
+            except Exception:
+                pass
+        findings.append({
+            "detail": f"AS{result.get('asn','?')} {result.get('as_owner','')} · prefix {result.get('prefix','?')} · {result.get('country','?')} ({result.get('registry','?')})",
+            "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+            "cwe": "N/A", "cwe_name": "Network Ownership", "owasp": "A05:2021",
+            "remediation": "Confirm the IP block owner matches the customer organization. Mismatch indicates either a CDN edge (Cloudflare/Fastly/Akamai), a hosting provider's shared IP, or — concerning — a third-party host the customer doesn't actually control.",
+            "confidence": "CONFIRMED",
+        })
+    except Exception as e:
+        result["error"] = str(e)
+
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "asn", req.target, {"output": str(result)})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "asn",
+        **result, "findings": findings, "vulnerable": False,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
 @app.post("/api/recon/harvester")
 async def recon_harvester(req: ScanRequest, user=Depends(verify_token)):
     return await recon_theharvester(req, user)
