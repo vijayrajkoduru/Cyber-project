@@ -211,6 +211,66 @@ def _make_req_headers(req=None):
             h['Authorization'] = f'Bearer {auth.auth_bearer}'
     return h
 
+
+def _safe_request(method, url, *, retries=2, timeout=15, headers=None, req=None,
+                  verify=False, allow_redirects=True, data=None, json=None, params=None):
+    """HTTP request with retry + 429-aware rate-limit handling.
+
+    Real-world customer targets behind Cloudflare/Fastly/AWS WAF will throw
+    transient 429s, 502s, and connection resets that flip a perfectly-working
+    scanner into ERROR state on the first run and PASS on the second. This
+    helper retries those transient failures (exponential backoff, honors
+    Retry-After) so reports are reproducible.
+
+    Returns the requests.Response on success, or None after final failure
+    (callers can `if r:` check).
+    """
+    import time as _tm, random as _rnd
+    h = headers if headers is not None else _make_req_headers(req)
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            kw = dict(timeout=timeout, headers=h, verify=verify,
+                      allow_redirects=allow_redirects)
+            if data is not None:   kw["data"] = data
+            if json is not None:   kw["json"] = json
+            if params is not None: kw["params"] = params
+            r = _req_lib.request(method.upper(), url, **kw)
+            # Honor rate-limit on retry-eligible attempts.
+            if r.status_code == 429 and attempt < retries:
+                ra = r.headers.get("Retry-After", "")
+                try:
+                    wait = float(ra) if ra and ra.isdigit() else 2.0 * (attempt + 1)
+                except Exception:
+                    wait = 2.0 * (attempt + 1)
+                _tm.sleep(min(wait, 8.0))
+                continue
+            # Retry on 5xx — origin or upstream glitch
+            if 500 <= r.status_code < 600 and attempt < retries:
+                _tm.sleep((1.5 ** attempt) + _rnd.random() * 0.5)
+                continue
+            return r
+        except (_req_lib.exceptions.Timeout,
+                _req_lib.exceptions.ConnectionError,
+                _req_lib.exceptions.ChunkedEncodingError) as e:
+            last_exc = e
+            if attempt < retries:
+                _tm.sleep((1.5 ** attempt) + _rnd.random() * 0.4)
+                continue
+        except Exception as e:
+            # Non-network errors don't benefit from retry; bail out
+            last_exc = e
+            return None
+    return None
+
+
+def _safe_get(url, **kw):
+    return _safe_request("GET", url, **kw)
+
+
+def _safe_post(url, **kw):
+    return _safe_request("POST", url, **kw)
+
 def save_scan(scan_id, tool, target, result):
     user_id = _USER_CTX.get()
     ts = datetime.datetime.utcnow().isoformat()
@@ -1128,17 +1188,14 @@ async def scan_headers(req: ScanRequest, user=Depends(verify_scan_quota)):
 
     # 1. Fetch headers (real HTTP request → real response, not curl HEAD)
     target = req.target if req.target.startswith(("http://", "https://")) else "http://" + req.target
-    try:
-        loop = asyncio.get_event_loop()
-        r = await loop.run_in_executor(None, lambda: _req_lib.get(
-            target, timeout=10, verify=False, allow_redirects=True,
-            headers={"User-Agent": "VulnusLab-HeaderScan/1.0"}))
-        headers_found = {k.lower(): v for k, v in r.headers.items()}
-        final_url = str(r.url)
-        is_https_final = final_url.startswith("https://")
-    except Exception as e:
+    loop = asyncio.get_event_loop()
+    # Use _safe_get for retry/429-aware fetching so CDN/WAF-protected targets
+    # don't ERROR on transient throttling.
+    r = await loop.run_in_executor(None, lambda: _safe_get(
+        target, retries=2, timeout=12, req=req, allow_redirects=True))
+    if r is None:
         return {"scan_id": str(uuid.uuid4()), "target": req.target, "tool": "headers",
-                "findings": [{"detail": f"Could not fetch headers: {e}",
+                "findings": [{"detail": "Could not fetch headers: target unreachable after retries",
                               "severity": "INFO", "cvss": "0.0", "cve": "N/A",
                               "cwe": "N/A", "cwe_name": "Scan Error", "owasp": "N/A",
                               "remediation": "Check target is reachable and accepts HTTP/HTTPS."}],
@@ -1146,6 +1203,9 @@ async def scan_headers(req: ScanRequest, user=Depends(verify_scan_quota)):
                 "grade": "?", "score": 0, "is_https": False,
                 "suggested_action": "Confirm the target URL is correct and the host is online.",
                 "timestamp": datetime.datetime.utcnow().isoformat()}
+    headers_found = {k.lower(): v for k, v in r.headers.items()}
+    final_url = str(r.url)
+    is_https_final = final_url.startswith("https://")
 
     # 2. HTTPS enforcement
     if not is_https_final:
@@ -1661,8 +1721,12 @@ async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
         # _make_req_headers picks up auth_cookie/auth_bearer from req.
         # CSRF scanning is far more valuable when authenticated — most CSRF
         # bugs live on logged-in pages (delete-account, change-email, etc).
-        r = _req_lib.get(_web_url(req.target), timeout=15, verify=False,
-                         headers=_make_req_headers(req), allow_redirects=True)
+        # _safe_get retries on 429/timeout/5xx so the scanner doesn't ERROR
+        # out on CDN-protected real-world targets.
+        r = _safe_get(_web_url(req.target), retries=2, timeout=15, req=req,
+                      allow_redirects=True)
+        if r is None:
+            raise RuntimeError("target unreachable")
         forms = re.findall(r"<form[^>]*?>.*?</form>",r.text,re.DOTALL|re.IGNORECASE)
         csrf_patterns = ["csrf","_token","token","authenticity_token","__requestverificationtoken","xsrf","nonce"]
         for i,form in enumerate(forms):
@@ -2531,8 +2595,15 @@ async def scan_nmap(req: ScanRequest, user=Depends(verify_scan_quota)):
 async def scan_cors(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
     findings = []; vulnerable = False
-    try:
-        r = _req_lib.get(_web_url(req.target),timeout=15,verify=False,headers={**_BROWSER_HEADERS,"Origin":"https://evil.com"},allow_redirects=True)
+    # Origin-reflection probe — use _safe_get for 429/timeout resilience on
+    # CDN-protected targets. Send a malicious Origin and look for permissive
+    # ACAO reflection — confirmed CORS misconfig, not heuristic.
+    h = dict(_make_req_headers(req)); h["Origin"] = "https://evil.com"
+    r = _safe_get(_web_url(req.target), retries=2, timeout=15, req=req,
+                  headers=h, allow_redirects=True)
+    if r is None:
+        findings.append({"detail":"CORS scan error: target unreachable after retries","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target."})
+    else:
         acao = r.headers.get("Access-Control-Allow-Origin","")
         acac = r.headers.get("Access-Control-Allow-Credentials","")
         if acao in ("*","https://evil.com"):
@@ -2541,8 +2612,6 @@ async def scan_cors(req: ScanRequest, user=Depends(verify_scan_quota)):
         if acac.lower()=="true" and acao!="":
             vulnerable = True
             findings.append({"detail":"CORS: Credentials allowed with permissive origin","severity":"CRITICAL","cvss":"9.0","cve":"N/A","cwe":"CWE-942","cwe_name":"CORS Misconfiguration","owasp":"A05:2021","remediation":"Never combine Access-Control-Allow-Credentials: true with wildcard origins."})
-    except Exception as e:
-        findings.append({"detail":f"CORS scan error: {e}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"cors",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"cors","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
@@ -2966,15 +3035,14 @@ async def scan_openredirect(req: ScanRequest, user=Depends(verify_scan_quota)):
     findings = []; vulnerable = False
     payloads = ["?url=https://evil.com","?redirect=https://evil.com","?next=https://evil.com","?return=https://evil.com","?to=https://evil.com"]
     for p in payloads:
-        try:
-            r = _req_lib.get(_web_url(req.target)+p,timeout=10,verify=False,headers=_BROWSER_HEADERS,allow_redirects=False)
-            loc = r.headers.get("Location","").strip()
-            # Must redirect TO evil.com, not just echo it as a query parameter
-            if loc.startswith("https://evil.com") or loc.startswith("http://evil.com") or loc.startswith("//evil.com"):
-                vulnerable = True
-                findings.append({"detail":f"Open Redirect via {p} → {loc} (server redirects directly to attacker domain)","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
-                break
-        except: pass
+        r = _safe_get(_web_url(req.target)+p, retries=1, timeout=10, req=req, allow_redirects=False)
+        if r is None: continue
+        loc = r.headers.get("Location","").strip()
+        # Must redirect TO evil.com, not just echo it as a query parameter
+        if loc.startswith("https://evil.com") or loc.startswith("http://evil.com") or loc.startswith("//evil.com"):
+            vulnerable = True
+            findings.append({"detail":f"Open Redirect via {p} → {loc} (server redirects directly to attacker domain)","severity":"MEDIUM","cvss":"6.1","cve":"N/A","cwe":"CWE-601","cwe_name":"Open Redirect","owasp":"A01:2021","remediation":"Whitelist allowed redirect destinations. Never redirect to user-supplied URLs."})
+            break
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"openredirect",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"openredirect","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
@@ -3189,9 +3257,8 @@ async def scan_clickjacking(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
     findings = []; vulnerable = False
     url = _web_url(req.target)
-    try:
-        r = _req_lib.get(url, timeout=15, verify=False, headers=_BROWSER_HEADERS)
-    except:
+    r = _safe_get(url, retries=2, timeout=15, req=req)
+    if r is None:
         scan_id = str(uuid.uuid4()); save_scan(scan_id,"clickjacking",req.target,{"output":"unreachable"})
         return {"scan_id":scan_id,"target":req.target,"tool":"clickjacking","vulnerable":False,"findings":[],"total":0,"timestamp":datetime.datetime.utcnow().isoformat()}
 
@@ -3234,14 +3301,13 @@ async def scan_clickjacking(req: ScanRequest, user=Depends(verify_scan_quota)):
 async def scan_verbtamper(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
     findings = []; vulnerable = False
-    try:
-        r = _req_lib.options(_web_url(req.target),timeout=15,verify=False,headers=_BROWSER_HEADERS)
+    r = _safe_request("OPTIONS", _web_url(req.target), retries=2, timeout=15, req=req)
+    if r is not None:
         allow = r.headers.get("Allow","")
         dangerous = [m for m in ["PUT","DELETE","TRACE","CONNECT","PATCH"] if m in allow]
         if dangerous:
             vulnerable = True
             findings.append({"detail":f"Dangerous HTTP methods allowed: {', '.join(dangerous)}","severity":"HIGH","cvss":"7.5","cve":"N/A","cwe":"CWE-650","cwe_name":"HTTP Verb Tampering","owasp":"A05:2021","remediation":f"Disable methods: {', '.join(dangerous)} in server config."})
-    except: pass
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"verbtamper",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"verbtamper","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
@@ -3249,14 +3315,12 @@ async def scan_verbtamper(req: ScanRequest, user=Depends(verify_scan_quota)):
 async def scan_pollution(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
     findings = []; vulnerable = False
-    try:
-        r1 = _req_lib.get(_web_url(req.target)+"?id=1",timeout=15,verify=False,headers=_BROWSER_HEADERS)
-        r2 = _req_lib.get(_web_url(req.target)+"?id=1&id=2",timeout=15,verify=False,headers=_BROWSER_HEADERS)
-        # Only flag if the response difference is substantial (>100 chars) — not just timestamps/session IDs
-        if r1 and r2 and abs(len(r1.text)-len(r2.text)) > 100:
-            vulnerable = True
-            findings.append({"detail":"HTTP Parameter Pollution: duplicate 'id' parameter produces significantly different response (>100 byte difference)","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-235","cwe_name":"Parameter Pollution","owasp":"A03:2021","remediation":"Validate and deduplicate all query parameters server-side. Use the first or last value consistently."})
-    except: pass
+    r1 = _safe_get(_web_url(req.target)+"?id=1", retries=2, timeout=15, req=req)
+    r2 = _safe_get(_web_url(req.target)+"?id=1&id=2", retries=2, timeout=15, req=req)
+    # Only flag if the response difference is substantial (>100 chars) — not just timestamps/session IDs
+    if r1 is not None and r2 is not None and abs(len(r1.text)-len(r2.text)) > 100:
+        vulnerable = True
+        findings.append({"detail":"HTTP Parameter Pollution: duplicate 'id' parameter produces significantly different response (>100 byte difference)","severity":"MEDIUM","cvss":"5.4","cve":"N/A","cwe":"CWE-235","cwe_name":"Parameter Pollution","owasp":"A03:2021","remediation":"Validate and deduplicate all query parameters server-side. Use the first or last value consistently."})
     scan_id = str(uuid.uuid4()); save_scan(scan_id,"pollution",req.target,{"output":str(findings)})
     return {"scan_id":scan_id,"target":req.target,"tool":"pollution","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
