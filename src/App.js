@@ -2755,8 +2755,17 @@ function WebAppModule(props) {
             </div>
           )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {/* Hidden honeypot inputs — Chrome fills these FIRST, leaving the
+                real target field alone. Combined with autoComplete="off" +
+                a non-standard name + data-form-type="other" this kills the
+                "Chrome puts the user's ADMIN username in the target field"
+                annoyance for good. */}
+            <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
+            <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
             <input value={target} onChange={e=>setTarget(e.target.value)} onFocus={()=>setShowHistory(targetHistory.length>0)}
               placeholder="example.com  or  http://192.168.1.1:8080"
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
               style={{flex:3,minWidth:220,background:"#020617",border:"1px solid "+(running?"#3b82f6":"#1e3a8a"),borderRadius:6,padding:"11px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
             {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
               <div style={{background:"#451a03",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"#fb923c",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
@@ -2808,7 +2817,6 @@ function WebAppModule(props) {
           {id:"phases",    label:"📡 Scan Phases"},
           {id:"findings",  label:"🚨 Findings"},
           {id:"methodology",label:"📚 Methodology"},
-          {id:"attacker",  label:"🧠 Think Like Attacker"},
         ].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
             style={{background:tab===t.id?"#1e3a8a":"#0f172a",border:"1px solid "+(tab===t.id?"#3b82f6":"#1e293b"),borderRadius:6,padding:"7px 14px",color:tab===t.id?"#fff":"#64748b",fontSize:12,fontWeight:600,cursor:"pointer"}}>
@@ -3278,101 +3286,6 @@ function WebAppModule(props) {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* ATTACKER MINDSET TAB */}
-      {tab==="attacker" && (
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <div style={{background:"linear-gradient(135deg,#1c0a0a,#0f172a)",border:"1px solid #7f1d1d",borderRadius:8,padding:16}}>
-            <div style={{fontSize:14,fontWeight:700,color:"#ef4444",marginBottom:6}}>🧠 Attack Chain Reference — Educational Examples</div>
-            <div style={{fontSize:11,color:"#64748b"}}>These are example attack chains for educational purposes. All techniques require explicit written authorization.</div>
-          </div>
-
-          {[
-            {
-              chain:"Chain 1: Recon → Directory → File Exposure → RCE",
-              steps:[
-                {step:"1",tool:"wafw00f",label:"WAF Detection",detail:"Is there protection? No WAF = easier attack","color":"#3b82f6"},
-                {step:"2",tool:"gobuster",label:"Directory Brute-Force",detail:"Found /.git/HEAD exposed!","color":"#f59e0b"},
-                {step:"3",tool:"curl",label:"Git Repo Dump",detail:"Download .git folder → extract source code","color":"#f59e0b"},
-                {step:"4",tool:"manual",label:"Read Source Code",detail:"Find database credentials in config.php","color":"#ea580c"},
-                {step:"5",tool:"sqlmap",label:"SQL Injection",detail:"Use creds to access DB directly → dump tables","color":"#dc2626"},
-              ]
-            },
-            {
-              chain:"Chain 2: XSS → Session Hijack → Account Takeover",
-              steps:[
-                {step:"1",tool:"xsser",label:"XSS Discovery",detail:"Stored XSS found in comment field","color":"#a855f7"},
-                {step:"2",tool:"manual",label:"Cookie Stealing",detail:"Inject: <script>fetch attacker-server with stolen session cookie</script>","color":"#dc2626"},
-                {step:"3",tool:"curl",label:"Session Hijack",detail:"Use stolen cookie to authenticate as victim","color":"#dc2626"},
-                {step:"4",tool:"manual",label:"Account Takeover",detail:"Change victim's email/password → full control","color":"#dc2626"},
-                {step:"5",tool:"manual",label:"Privilege Escalation",detail:"If victim is admin → own the entire application","color":"#dc2626"},
-              ]
-            },
-            {
-              chain:"Chain 3: SQLi → DB Dump → Password Crack → System Access",
-              steps:[
-                {step:"1",tool:"sqlmap",label:"SQL Injection",detail:"Error-based SQLi found on login form","color":"#dc2626"},
-                {step:"2",tool:"sqlmap",label:"Database Dump",detail:"sqlmap --dump → extract all user credentials","color":"#dc2626"},
-                {step:"3",tool:"hashcat",label:"Password Cracking",detail:"Crack MD5/bcrypt hashes with rockyou.txt","color":"#ea580c"},
-                {step:"4",tool:"hydra",label:"Credential Stuffing",detail:"Try cracked passwords on SSH/FTP/Admin panel","color":"#f59e0b"},
-                {step:"5",tool:"msf",label:"System Shell",detail:"Use valid creds → get shell → escalate privileges","color":"#22c55e"},
-              ]
-            },
-            {
-              chain:"Chain 4: Subdomain → Dev Environment → Admin Access",
-              steps:[
-                {step:"1",tool:"sublist3r",label:"Subdomain Discovery",detail:"Found: dev.example.com, staging.example.com","color":"#22c55e"},
-                {step:"2",tool:"whatweb",label:"Tech Fingerprinting",detail:"Staging server runs outdated CMS version","color":"#f59e0b"},
-                {step:"3",tool:"nikto",label:"Vulnerability Scan",detail:"Found: wp-admin exposed, no rate limiting","color":"#ea580c"},
-                {step:"4",tool:"hydra",label:"Brute Force WP Admin",detail:"Weak credentials → WordPress admin access","color":"#dc2626"},
-                {step:"5",tool:"manual",label:"Plugin Upload → RCE",detail:"Upload malicious plugin → webshell → root","color":"#dc2626"},
-              ]
-            },
-          ].map((chain,ci)=>(
-            <div key={ci} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-              <div style={{background:"#1c0a0a",padding:"10px 16px",borderBottom:"1px solid #7f1d1d"}}>
-                <span style={{fontSize:12,fontWeight:700,color:"#f87171"}}>⛓ {chain.chain}</span>
-              </div>
-              <div style={{padding:12,display:"flex",gap:0,alignItems:"center",flexWrap:"wrap"}}>
-                {chain.steps.map((s,si)=>(
-                  <div key={si} style={{display:"flex",alignItems:"center",gap:0}}>
-                    <div style={{padding:"10px 12px",background:s.color+"15",border:`1px solid ${s.color}40`,borderRadius:6,minWidth:130}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                        <div style={{width:18,height:18,borderRadius:"50%",background:s.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"#fff",flexShrink:0}}>{s.step}</div>
-                        <span style={{fontSize:10,fontWeight:700,color:s.color}}>{s.label}</span>
-                      </div>
-                      <div style={{fontSize:9,color:"#64748b",marginBottom:3,fontFamily:"monospace"}}>[{s.tool}]</div>
-                      <div style={{fontSize:9,color:"#94a3b8",lineHeight:1.4}}>{s.detail}</div>
-                    </div>
-                    {si<chain.steps.length-1 && <div style={{fontSize:16,color:"#dc2626",padding:"0 4px",flexShrink:0}}>→</div>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {/* Coverage Summary */}
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:16}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#f1f5f9",marginBottom:12}}>📊 Platform Coverage Summary</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {[
-                {label:"Automated by Platform",count:"14 phases",color:"#22c55e",icon:"✅"},
-                {label:"Partially Covered",count:"8 areas",color:"#f59e0b",icon:"⚠"},
-                {label:"Needs Manual Testing",count:"18 areas",color:"#ef4444",icon:"❌"},
-              ].map((s,i)=>(
-                <div key={i} style={{background:"#020617",border:`1px solid ${s.color}30`,borderRadius:6,padding:12,textAlign:"center"}}>
-                  <div style={{fontSize:24,marginBottom:4}}>{s.icon}</div>
-                  <div style={{fontSize:16,fontWeight:700,color:s.color,marginBottom:2}}>{s.count}</div>
-                  <div style={{fontSize:10,color:"#64748b"}}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{marginTop:12,padding:10,background:"#020617",borderRadius:6,border:"1px solid #1e293b",fontSize:11,color:"#64748b",lineHeight:1.7}}>
-              💡 <strong style={{color:"#93c5fd"}}>Pro Tip:</strong> Use this platform for automated reconnaissance first, then use <strong style={{color:"#f59e0b"}}>Burp Suite</strong> for manual testing of business logic, IDOR, and chained attacks. The platform gives you 80% coverage — the remaining 20% requires attacker intuition.
-            </div>
-          </div>
         </div>
       )}
 
@@ -4231,8 +4144,15 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
       {/* Target + Inputs */}
       <div style={{padding:"12px 24px 0"}}>
         <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+          {/* Honeypot inputs absorb Chrome's username/password autofill so the
+              real target field stays clean. Without this, Chrome was filling
+              "ADMIN" (the logged-in user's username) into the target. */}
+          <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
+          <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             placeholder="Target IP / Domain / URL"
+            autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+            name="moduleshell-target" data-form-type="other" aria-autocomplete="none"
             style={{flex:1,minWidth:220,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 12px",color:"#f1f5f9",fontSize:13,outline:"none"}}/>
           {extraInputs && extraInputs(opts, setOpts)}
         </div>
