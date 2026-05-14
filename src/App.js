@@ -729,6 +729,38 @@ function generatePDF(reportData) {
     });
     y+=5;
 
+    // ─── KEY RISK HEADLINE ──────────────────────────────────────
+    // Single most important takeaway for the customer's CTO/auditor — they
+    // open the PDF, see this box first, and instantly know what to do.
+    const _allF = Array.isArray(findings) ? findings : [];
+    const _topF = _allF.find(f=>f.severity==="CRITICAL") || _allF.find(f=>f.severity==="HIGH") || _allF.find(f=>f.severity==="MEDIUM") || null;
+    const _critN = (summary.critical||0), _highN = (summary.high||0), _medN = (summary.medium||0);
+    let _hlBgColor = [240,253,244], _hlAccent = [15,118,82], _hlTag = "POSTURE OK", _hlTitle = "No critical issues found", _hlSub = "Security posture is acceptable. Review LOW findings for hardening opportunities.";
+    if (_critN > 0) {
+      _hlBgColor = [254,242,242]; _hlAccent = [162,28,28]; _hlTag = "FIX IMMEDIATELY";
+      _hlTitle = `${_critN} CRITICAL finding(s) — patch within 24 hours`;
+      _hlSub = _topF ? (_topF.detail||"").substring(0,160) : "See Detailed Findings for full list.";
+    } else if (_highN > 0) {
+      _hlBgColor = [255,247,237]; _hlAccent = [133,79,11]; _hlTag = "FIX THIS WEEK";
+      _hlTitle = `${_highN} HIGH finding(s) — patch within 7 days`;
+      _hlSub = _topF ? (_topF.detail||"").substring(0,160) : "See Detailed Findings for full list.";
+    } else if (_medN > 0) {
+      _hlBgColor = [254,252,232]; _hlAccent = [120,89,15]; _hlTag = "HARDENING";
+      _hlTitle = `${_medN} MEDIUM finding(s) — hardening recommended`;
+      _hlSub = _topF ? (_topF.detail||"").substring(0,160) : "Review per the SLA table below.";
+    }
+    chk(28);
+    fillR(margin,y,contentW,24,_hlBgColor);
+    fillR(margin,y,3,24,_hlAccent); // left accent stripe
+    doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(..._hlAccent);
+    doc.text(_hlTag,margin+6,y+6);
+    doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
+    doc.text(_hlTitle,margin+6,y+13);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+    const _subLines = doc.splitTextToSize(String(_hlSub||""), contentW - 10);
+    _subLines.slice(0,2).forEach((ln,i)=>doc.text(ln,margin+6,y+18+i*3.6));
+    y += 28;
+
     // Summary table on cover
     y = sectionHead("Executive Summary",y);
     y = tableHeader(["SEVERITY","COUNT","SLA","RECOMMENDATION"],[35,20,25,100],y);
