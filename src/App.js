@@ -1310,14 +1310,20 @@ function generatePDF(reportData) {
       else if(c.res.findings&&c.res.findings.length>0){
         const visF = c.res.findings.filter(f=>f.severity!=="INFO");
         (visF.length>0?visF:c.res.findings).slice(0,5).forEach((f,i)=>{
-          chk(10);
-          fillR(margin,y,contentW,9,i%2===0?LIGHT:WHITE); hline(margin,y,pageW-margin,y,BORDER,0.2);
+          // Wrap the detail to fit the column width — replaces the old substring(0,110)
+          // truncation that cut sentences mid-word and dropped remediation context.
+          doc.setFont("Arial","normal"); doc.setFontSize(8);
+          const lines = doc.splitTextToSize(String(f.detail||""), contentW - 30);
+          const rowH = Math.max(9, lines.length * 3.6 + 3);
+          chk(rowH + 1);
+          fillR(margin,y,contentW,rowH,i%2===0?LIGHT:WHITE); hline(margin,y,pageW-margin,y,BORDER,0.2);
           const [bg]=sevColor(f.severity);
           rrect(margin+3,y+2,20,5,1,bg);
           doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...WHITE);
           doc.text(f.severity,margin+4,y+6);
-          txt((f.detail||"").substring(0,110),margin+26,y+6,8,DARK);
-          y+=9;
+          doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+          lines.forEach((ln, li) => doc.text(ln, margin+26, y+6 + li*3.6));
+          y += rowH;
         });
         y+=6;
       } else {
@@ -1410,9 +1416,10 @@ function generatePDF(reportData) {
     }
 
     // ─── RECOMMENDATIONS (dynamic from findings) ──────────────────
+    // Build recommendations from what we actually FOUND on this target — every line
+    // must be traceable to a real finding so customers don't see filler advice.
     const recs = [];
     // From gobuster — only count paths that ACTUALLY exist (HTTP 200/301/302).
-    // Without this filter, scanning paths that 404'd would still trigger recs.
     const _liveGo = (gobuster||[]).filter(d=>[200,301,302].includes(d.status));
     const gitExposed   = _liveGo.some(d=>(d.path||d).includes("/.git"));
     const configExposed= _liveGo.some(d=>/(config|database|backup|\.env|\.sql)/i.test(d.path||d));
@@ -1422,39 +1429,71 @@ function generatePDF(reportData) {
     if(configExposed)recs.push({p:"HIGH",    t:"Restrict /config/, /database/, /backup/ from public access",              a:"Add deny rules"});
     if(setupExposed) recs.push({p:"HIGH",    t:"Remove setup.php / install files — dangerous on production servers",      a:"Delete files"});
     if(adminExposed) recs.push({p:"HIGH",    t:"Protect /admin panel with IP whitelist or strong authentication",          a:"Restrict access"});
-    const hasCritical= realF.some(f=>f.severity==="CRITICAL");
-    if(hasCritical) recs.push({p:"CRITICAL",t:"Address all CRITICAL findings within 24 hours before next assessment",     a:"Immediate fix"});
-    const missingHeaders=(findings||[]).some(f=>/(x-frame|csp|hsts|x-content|content-security)/i.test(f.detail||""));
-    if(missingHeaders)recs.push({p:"HIGH",   t:"Add missing HTTP security headers: CSP, HSTS, X-Content-Type-Options",    a:"Update server config"});
-    if(cors&&cors.vulnerable) recs.push({p:"HIGH", t:"Fix CORS misconfiguration — restrict Access-Control-Allow-Origin", a:"Update CORS policy"});
-    if(xss&&xss.vulnerable)  recs.push({p:"HIGH",  t:"Fix XSS vulnerability — sanitize and encode all user input",       a:"Input validation"});
-    if(sqlmap&&sqlmap.vulnerable) recs.push({p:"CRITICAL",t:"Parameterize all SQL queries — SQL injection found",         a:"Use prepared stmts"});
+    // Critical roll-up — only when there ARE critical findings on this target
+    const critCount = allFindings.filter(f=>f.severity==="CRITICAL").length;
+    const highCount = allFindings.filter(f=>f.severity==="HIGH").length;
+    if(critCount>0) recs.push({p:"CRITICAL",t:`Address all ${critCount} CRITICAL finding(s) within 24 hours before next assessment`, a:"Immediate fix"});
+    if(highCount>0 && critCount===0) recs.push({p:"HIGH", t:`Address ${highCount} HIGH-severity finding(s) within 7 days`, a:"Sprint priority"});
+    // Header coverage — derived from the headers scanner's own findings array.
+    const headersMissing = (allResults["headers"]?.findings||[]).filter(f=>/^missing /i.test(f.detail||"")).map(f=>(f.detail.match(/Missing ([A-Za-z-]+)/)||[])[1]).filter(Boolean);
+    if(headersMissing.length>0) recs.push({p:"HIGH", t:"Add missing HTTP security headers: "+headersMissing.slice(0,4).join(", "), a:"Update server config"});
+    // Web app findings
+    if(cors&&cors.vulnerable) recs.push({p:"HIGH", t:"Fix CORS misconfiguration — restrict Access-Control-Allow-Origin to specific trusted origins", a:"Update CORS policy"});
+    if(xss&&xss.vulnerable)  recs.push({p:"HIGH",  t:"Fix XSS vulnerability — sanitize and encode all user input, deploy CSP header", a:"Input validation"});
+    if(sqlmap&&sqlmap.vulnerable) recs.push({p:"CRITICAL",t:"Parameterize all SQL queries immediately — SQL injection confirmed on target", a:"Use prepared stmts"});
+    if(allResults["clickjacking"]?.vulnerable) recs.push({p:"MEDIUM", t:"Set X-Frame-Options: DENY or CSP frame-ancestors 'none' to block iframe embedding", a:"Add header"});
+    if(allResults["verbtamper"]?.vulnerable) recs.push({p:"HIGH", t:"Disable dangerous HTTP methods (PUT/DELETE/TRACE/CONNECT) at the web server / reverse proxy layer", a:"Restrict methods"});
+    if(allResults["ssrf"]?.vulnerable) recs.push({p:"HIGH", t:"Block outbound requests to cloud metadata endpoints (169.254.169.254, metadata.google.internal) — SSRF confirmed", a:"Egress firewall"});
+    if(allResults["xxe"]?.vulnerable) recs.push({p:"HIGH", t:"Disable external entity processing in XML parsers (libxml: LIBXML_NOENT off; Java: FEATURE_SECURE_PROCESSING)", a:"Patch parser config"});
+    if(allResults["openredirect"]?.vulnerable) recs.push({p:"MEDIUM", t:"Validate redirect URLs against a strict allow-list — prevent phishing via open redirect", a:"URL allow-list"});
+    if(allResults["lfi"]?.vulnerable) recs.push({p:"CRITICAL", t:"Block path traversal in file-reading endpoints — sanitize/restrict to a known base directory", a:"Path canonicalize"});
+    if(allResults["ssti"]?.vulnerable) recs.push({p:"CRITICAL", t:"Server-side template injection found — never pass user input directly to template engines", a:"Sandbox templates"});
+    if(allResults["jwt"]?.vulnerable) recs.push({p:"CRITICAL", t:"Reject 'alg: none' JWTs and rotate to a 256-bit+ random HMAC secret — current secret is weak", a:"Rotate JWT key"});
+    if(allResults["deserial"]?.vulnerable) recs.push({p:"CRITICAL", t:"Replace unsafe deserialization (pickle/PHP unserialize/Java ObjectInputStream) with JSON / schema-validated payloads", a:"Refactor parser"});
+    if(allResults["fileupload"]?.vulnerable) recs.push({p:"CRITICAL", t:"File upload accepts dangerous types — enforce MIME + magic-byte + extension allow-list, store outside web root", a:"Restrict uploads"});
+    if(allResults["takeover"]?.vulnerable) recs.push({p:"HIGH", t:"Reclaim or remove dangling DNS records pointing to deprovisioned 3rd-party services", a:"Audit CNAMEs"});
+    // SSL/TLS — show the actual issue rather than a generic note
     const sslHighFindings=(ssl&&ssl.findings||[]).filter(f=>f.severity==="HIGH"||f.severity==="CRITICAL");
-    if(sslHighFindings.length>0) recs.push({p:"HIGH",  t:"Fix SSL/TLS issues: "+sslHighFindings[0].detail.substring(0,60),a:"Update TLS config"});
+    if(sslHighFindings.length>0) recs.push({p:"HIGH",  t:"Fix SSL/TLS issue: "+(sslHighFindings[0].detail||"").substring(0,90),a:"Update TLS config"});
+    // Cookies
     const _allRawCookies = cookies&&cookies.cookies ? (Array.isArray(cookies.cookies)?cookies.cookies:Object.values(cookies.cookies)) : [];
     const insecureCookies=_allRawCookies.filter(c=>!c.secure||(!(c.httponly)&&!(c.http_only)));
-    if(insecureCookies.length>0) recs.push({p:"MEDIUM",t:"Set Secure and HttpOnly flags on all session cookies",          a:"Update Set-Cookie"});
-    if(!wafw00f||!wafw00f.detected) recs.push({p:"MEDIUM",t:"Deploy a Web Application Firewall (WAF) to filter malicious traffic", a:"Install ModSecurity"});
-    recs.push({p:"LOW",  t:"Conduct monthly re-scans to track remediation progress",                                      a:"Schedule scans"});
-    recs.push({p:"LOW",  t:"Keep all web server software and CMS plugins up to date",                                     a:"apt upgrade / admin"});
+    if(insecureCookies.length>0) recs.push({p:"MEDIUM",t:`Set Secure + HttpOnly + SameSite flags on ${insecureCookies.length} session cookie(s)`, a:"Update Set-Cookie"});
+    // WAF — only recommend if static-host detection didn't already credit the CDN edge
+    const _wafSkippedAsCdn = wafw00f && (wafw00f.skipped || /cdn|static/i.test(wafw00f.skipped_reason||""));
+    if((!wafw00f||(!wafw00f.detected && !_wafSkippedAsCdn))) recs.push({p:"MEDIUM",t:"Deploy a Web Application Firewall (WAF) to filter malicious traffic at the edge", a:"Cloudflare / ModSec"});
+    // Operational fillers — only added when we have very few specific recs.
+    // On a heavy-finding report these would feel like padding, so we drop them.
+    if(recs.length < 5){
+      recs.push({p:"LOW", t:"Conduct monthly re-scans to track remediation progress and catch regressions", a:"Schedule scans"});
+      recs.push({p:"LOW", t:"Keep web server, frameworks, and CMS plugins on the latest patched versions", a:"Patch management"});
+    }
     if(recs.length<2){
-      recs.push({p:"MEDIUM",t:"Enable comprehensive security logging and alerting on all endpoints",                       a:"Configure logging"});
-      recs.push({p:"LOW",   t:"Review and restrict file and directory permissions on web root",                            a:"chmod / chown"});
+      recs.push({p:"MEDIUM",t:"Enable comprehensive security logging and alerting on all endpoints (WAF events, auth failures, 5xx spikes)", a:"Configure logging"});
+      recs.push({p:"LOW",   t:"Review and restrict file and directory permissions on web root (no world-writable)", a:"chmod / chown"});
     }
     chk(30);
     y+=2;
     y = sectionHead("Recommendations",y);
     y = tableHeader(["PRIORITY","RECOMMENDATION","ACTION"],[22,118,40],y);
     recs.forEach((r,i)=>{
-      chk(7);
-      fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+      // Wrap recommendation text to its column width so long entries don't get cut.
+      doc.setFont("Arial","normal"); doc.setFontSize(8.5);
+      const recLines = doc.splitTextToSize(String(r.t||""), 115);
+      const actLines = doc.splitTextToSize(String(r.a||""), 35);
+      const lineCount = Math.max(recLines.length, actLines.length, 1);
+      const rowH = Math.max(7, lineCount * 3.8 + 2);
+      chk(rowH + 1);
+      fillR(margin,y,contentW,rowH,i%2===0?LIGHT:WHITE);
       hline(margin,y,pageW-margin,y,BORDER,0.2);
       rrect(margin+3,y+1.5,16,4,1,sevColor(r.p)[1]);
       doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...sevColor(r.p)[0]);
       doc.text(r.p,margin+4,y+5);
-      txt(r.t,margin+25,y+5,8.5,DARK);
-      txt(r.a,margin+143,y+5,7.5,GRAY);
-      y+=7;
+      doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+      recLines.forEach((ln, li) => doc.text(ln, margin+25, y+5 + li*3.8));
+      doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+      actLines.forEach((ln, li) => doc.text(ln, margin+143, y+5 + li*3.8));
+      y += rowH;
     });
     // End-of-report block — placed right after last recommendation row
     chk(38);
@@ -2017,18 +2056,19 @@ function WebAppModule(props) {
 
     // ─── DEDUP: suppress contradictory + duplicate findings ───────────
     // Different scanners often detect the same underlying issue (e.g. nikto AND sensitivefiles
-    // both flag /robots.txt; csrf AND headers both flag missing Referrer-Policy). Without dedup
-    // the report shows the same problem twice with different CWE codes, inflating findings
-    // count and confusing customers. We compute a canonical "fingerprint" for each finding
-    // and keep only the first occurrence per fingerprint.
+    // both flag /robots.txt; clickjacking AND headers both flag missing X-Frame-Options).
+    // We compute a canonical "fingerprint" per finding and, within each group, keep the
+    // MOST SPECIFIC one (scanner-named issue beats generic "Missing X header") so the master
+    // findings table surfaces e.g. "Clickjacking" rather than "Missing X-Frame-Options".
     const _cookiesScannerFoundNone = allResults["cookies"] && (!allResults["cookies"].cookies || allResults["cookies"].cookies.length === 0);
     const _fingerprint = (f) => {
       const d = (f.detail || "").toLowerCase();
+      const cn = (f.cwe_name || "").toLowerCase();
       // Canonical issue indicators — collapse duplicates from different scanners
       if (d.includes("referrer-policy")) return "header:referrer-policy";
       if (d.includes("content-security-policy") || /\bcsp\b/.test(d)) return "header:csp";
       if (d.includes("hsts") || d.includes("strict-transport-security")) return "header:hsts";
-      if (d.includes("x-frame-options") || d.includes("clickjacking") || d.includes("frame-ancestors")) return "header:x-frame";
+      if (d.includes("x-frame-options") || d.includes("clickjacking") || cn.includes("clickjacking") || d.includes("frame-ancestors")) return "header:x-frame";
       if (d.includes("x-content-type-options")) return "header:x-content-type";
       if (d.includes("permissions-policy")) return "header:permissions-policy";
       // File-based: collapse same file detected by different scanners.
@@ -2039,11 +2079,27 @@ function WebAppModule(props) {
       // Default: CWE family + first 35 chars of detail
       return (f.cwe || "no-cwe") + "|" + d.substring(0, 35);
     };
-    const _seen = new Set();
+    // Specificity score — higher = more specific finding kept when dedup collides.
+    // Prefers scanner-named root cause ("Clickjacking", "SQL Injection") over generic
+    // header advisories ("Missing X-Frame-Options"). Severity is the tiebreaker so a
+    // CRITICAL beats a LOW even if both are equally specific.
+    const _specificity = (f) => {
+      const d = (f.detail || "").toLowerCase();
+      const cn = (f.cwe_name || "").toLowerCase();
+      let s = 0;
+      // Specific vulnerability names beat generic "Missing X header" wording
+      if (cn.includes("clickjacking") || d.includes("can be embedded in any iframe")) s += 100;
+      if (cn.includes("cross-site scripting") || cn.includes("sql injection") || cn.includes("injection")) s += 80;
+      if (cn.includes("csp misconfiguration") || cn.includes("weak hsts")) s += 60;
+      if (d.startsWith("missing ")) s -= 30; // generic header advisory
+      // Severity weight — CRITICAL beats LOW when otherwise equal
+      const sevW = {CRITICAL:50, HIGH:35, MEDIUM:20, LOW:8, INFO:0}[f.severity] || 0;
+      // Longer detail = usually more specific (capped to avoid runaway)
+      const lenW = Math.min((f.detail || "").length, 200) / 10;
+      return s + sevW + lenW;
+    };
+    // First pass — cookie contradiction filter (unchanged).
     allFindings = allFindings.filter(f => {
-      // Cookie contradiction fix: if cookies scanner found NO cookies on target,
-      // suppress sessionfixation/header-based cookie findings (they're likely noise
-      // from probing requests that don't reflect the actual app state).
       if (_cookiesScannerFoundNone) {
         const d = (f.detail || "").toLowerCase();
         const cwe = (f.cwe || "").toUpperCase();
@@ -2051,11 +2107,20 @@ function WebAppModule(props) {
           return false;
         }
       }
-      const fp = _fingerprint(f);
-      if (_seen.has(fp)) return false;
-      _seen.add(fp);
       return true;
     });
+    // Second pass — group by fingerprint, keep highest-specificity per group.
+    const _best = new Map();
+    allFindings.forEach(f => {
+      const fp = _fingerprint(f);
+      const sc = _specificity(f);
+      const cur = _best.get(fp);
+      if (!cur || sc > cur.score) _best.set(fp, {finding: f, score: sc});
+    });
+    allFindings = Array.from(_best.values()).map(v => v.finding);
+    // Sort final findings by severity so master table reads CRITICAL → INFO
+    const _sevOrder = {CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3, INFO:4};
+    allFindings.sort((a, b) => (_sevOrder[a.severity] ?? 5) - (_sevOrder[b.severity] ?? 5));
 
     // Tools used list for cover page
     const toolsUsed = Object.keys(allResults).filter(k=>allResults[k]);

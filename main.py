@@ -1673,13 +1673,16 @@ async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
             action = am.group(1) if am else req.target
             if method in ("POST","PUT","DELETE") and not has_csrf:
                 findings.append({"detail":f"CSRF: Form #{i+1} (action={action}) has no CSRF token","severity":"HIGH","cvss":"8.0","cve":"N/A","cwe":"CWE-352","cwe_name":"CSRF","owasp":"A01:2021","remediation":"Add CSRF tokens to all state-changing forms."})
-        if not r.headers.get("Referrer-Policy"):
-            findings.append({"detail":"Missing Referrer-Policy header","severity":"LOW","cvss":"3.1","cve":"N/A","cwe":"CWE-352","cwe_name":"CSRF","owasp":"A01:2021","remediation":"Add Referrer-Policy: strict-origin-when-cross-origin header."})
+        # Note: Referrer-Policy / SameSite cookie checks belong to the headers and
+        # cookies scanners — surfacing them here pollutes the CSRF Details section
+        # with header findings. Keep CSRF strictly about token presence on
+        # state-changing forms.
     except Exception:
         pass
+    vulnerable = any(f.get("severity") in ("CRITICAL","HIGH","MEDIUM") for f in findings)
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"csrf",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"csrf","findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"csrf","vulnerable":vulnerable,"findings":findings,"total":len(findings),"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 # ══════════════════════════════════════════════════════════════
