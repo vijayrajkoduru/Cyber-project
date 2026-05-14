@@ -2237,19 +2237,42 @@ function WebAppModule(props) {
             </div>
           )}
           {showAuthPanel && (
-            <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:6,padding:"12px",marginBottom:8,display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:2}}>FOR EXTERNAL TARGETS — paste session cookie or JWT token:</div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                <div style={{flex:1,minWidth:200}}>
-                  <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Session Cookie</div>
-                  <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123; token=xyz" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+            <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:6,padding:"14px",marginBottom:8,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:11,color:"#60a5fa",fontWeight:700,marginBottom:2,letterSpacing:0.5}}>
+                🔓 AUTHENTICATED SCANNING — unlocks 70% of vulns that live behind login
+              </div>
+              <div style={{fontSize:10,color:"#94a3b8",lineHeight:1.6}}>
+                <b style={{color:"#fbbf24"}}>How to get your session cookie:</b>
+                {" "}1) Login to your site in Chrome/Firefox.{" "}
+                2) Press F12 → Application tab (Chrome) or Storage tab (Firefox).{" "}
+                3) Click <b>Cookies</b> → your domain.{" "}
+                4) Copy the value of `PHPSESSID`, `JSESSIONID`, `session`, or `connect.sid` cookie.{" "}
+                5) Paste below in the format <code style={{color:"#86efac",background:"#020617",padding:"1px 4px",borderRadius:2}}>name=value</code> (multiple cookies separated by `;`).
+              </div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                  <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123; sid=xyz; csrf_token=..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
-                <div style={{flex:1,minWidth:200}}>
-                  <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>Bearer Token (JWT)</div>
-                  <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJIUzI1NiJ9..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
+                  <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJIUzI1NiJ9..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               </div>
-              {(authCookie||authBearer) && <div style={{fontSize:10,color:"#22c55e"}}>✓ Auth active — all scan requests will include these credentials</div>}
+              {(authCookie||authBearer) ? (
+                <div style={{fontSize:11,color:"#4ade80",fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                  ✓ AUTHENTICATED MODE ACTIVE — all 53 scanners will use these credentials. Logged-in pages, /api/* endpoints, /admin/* and /dashboard/* will all be tested.
+                </div>
+              ) : (
+                <div style={{fontSize:10,color:"#fbbf24",fontStyle:"italic"}}>
+                  ⚠ Without auth, scanners can only test the public surface (~30% of real vulns). Add a cookie or token above to unlock authenticated scanning.
+                </div>
+              )}
+              {(authCookie||authBearer) && (
+                <button onClick={()=>{setAuthCookie("");setAuthBearer("");localStorage.removeItem("cyberAuthCookie");localStorage.removeItem("cyberAuthBearer");}} style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>
+                  ✕ Clear auth credentials
+                </button>
+              )}
             </div>
           )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>

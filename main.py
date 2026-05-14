@@ -1479,6 +1479,14 @@ async def nuclei_scan(req: ScanRequest, user=Depends(verify_scan_quota)):
            "-c", "10", "-timeout", "8",
            "-no-color", "-silent", "-jsonl",
            "-disable-update-check"]
+    # Authenticated scanning — pass session cookies / Bearer token to nuclei
+    # via -H flags. This unlocks 70% of real-world vulns that live behind
+    # login (broken-access-control templates, admin-panel templates,
+    # authenticated SSRF / IDOR templates, etc.).
+    if req.auth_cookie:
+        cmd.extend(["-H", f"Cookie: {req.auth_cookie}"])
+    if req.auth_bearer:
+        cmd.extend(["-H", f"Authorization: Bearer {req.auth_bearer}"])
     result = await run_tool(cmd, timeout=300)
     output = result.get("output") or ""
     err    = result.get("error") or ""
@@ -1584,6 +1592,7 @@ async def commix_scan(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/lfi")
 async def lfi_scan(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)   # so the inner _check() picks up auth_cookie / auth_bearer
     skip = _maybe_static_skip(req, "lfi")
     if skip: return skip
     findings = []
@@ -1612,7 +1621,11 @@ async def lfi_scan(req: ScanRequest, user=Depends(verify_token)):
 
     def _check(url):
         try:
-            r = _req_lib.get(url, timeout=8, verify=False, allow_redirects=True)
+            # Use _make_req_headers so auth_cookie / auth_bearer flow into the
+            # request — critical for LFI testing on authenticated pages.
+            r = _req_lib.get(url, timeout=8, verify=False,
+                             headers=_make_req_headers(req),
+                             allow_redirects=True)
             for ind in indicators:
                 if ind in r.text:
                     return True
@@ -1642,9 +1655,14 @@ async def lfi_scan(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/csrf")
 async def csrf_scan(req: ScanRequest, user=Depends(verify_token)):
+    _AUTH_CTX.set(req)
     findings = []
     try:
-        r = _req_lib.get(_web_url(req.target),timeout=15,verify=False,headers=_BROWSER_HEADERS,allow_redirects=True)
+        # _make_req_headers picks up auth_cookie/auth_bearer from req.
+        # CSRF scanning is far more valuable when authenticated — most CSRF
+        # bugs live on logged-in pages (delete-account, change-email, etc).
+        r = _req_lib.get(_web_url(req.target), timeout=15, verify=False,
+                         headers=_make_req_headers(req), allow_redirects=True)
         forms = re.findall(r"<form[^>]*?>.*?</form>",r.text,re.DOTALL|re.IGNORECASE)
         csrf_patterns = ["csrf","_token","token","authenticity_token","__requestverificationtoken","xsrf","nonce"]
         for i,form in enumerate(forms):
