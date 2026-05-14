@@ -1086,32 +1086,181 @@ async def scan_sqlmap(req: ScanRequest, user=Depends(verify_scan_quota)):
 
 @app.post("/api/scan/headers")
 async def scan_headers(req: ScanRequest, user=Depends(verify_scan_quota)):
+    """HTTP Security Headers Analyzer — checks 10 required headers for
+    presence AND value quality, plus information-disclosure headers and
+    HTTPS enforcement. Computes a securityheaders.com-style A-F grade.
+
+    Pure-Python. Uses `requests` directly instead of shelling to curl —
+    gives us the final URL (for HTTP→HTTPS detection) and proper header
+    access. No external binary deps.
+
+    Findings classes:
+      - HIGH:   site not on HTTPS / missing CSP, HSTS
+      - MEDIUM: missing X-Frame-Options, X-Content-Type-Options;
+                weak CSP (`unsafe-inline`, `unsafe-eval`, wildcard sources);
+                weak HSTS max-age
+      - LOW:    missing modern headers (COEP, COOP, CORP, Referrer-Policy,
+                Permissions-Policy); HSTS without includeSubDomains;
+                X-Frame-Options with non-standard value;
+                Server/X-Powered-By disclosing version info
+      - INFO:   HSTS missing preload"""
     _AUTH_CTX.set(req)
-    SECURITY_HEADERS = [
-        ("content-security-policy","Content-Security-Policy","HIGH","CSP prevents XSS attacks","6.1","CWE-79","Cross-Site Scripting","A03:2021"),
-        ("strict-transport-security","HSTS","HIGH","Forces HTTPS connections","7.5","CWE-319","Cleartext Transmission","A02:2021"),
-        ("x-content-type-options","X-Content-Type-Options","MEDIUM","Prevents MIME sniffing","5.3","CWE-693","Protection Mechanism Failure","A05:2021"),
-        ("x-frame-options","X-Frame-Options","MEDIUM","Prevents clickjacking","6.1","CWE-1021","Improper Frame Restriction","A05:2021"),
-        ("referrer-policy","Referrer-Policy","LOW","Controls referrer information","3.1","CWE-200","Information Exposure","A01:2021"),
-        ("permissions-policy","Permissions-Policy","LOW","Controls browser features","3.1","CWE-16","Configuration","A05:2021"),
-    ]
     findings = []
     headers_found = {}
+    final_url = req.target
+    is_https_final = False
+
+    # 1. Fetch headers (real HTTP request → real response, not curl HEAD)
+    target = req.target if req.target.startswith(("http://", "https://")) else "http://" + req.target
     try:
-        result = await run_tool(["curl","-sI","--max-time","10","-L",req.target], timeout=20)
-        out = result.get("output","")
-        for line in out.splitlines():
-            if ":" in line:
-                k,_,v = line.partition(":")
-                headers_found[k.strip().lower()] = v.strip()
-        for hdr_key, hdr_name, sev, desc, cvss, cwe, cwe_name, owasp in SECURITY_HEADERS:
-            if hdr_key not in headers_found:
-                findings.append({"detail":f"Missing {hdr_name} header — {desc}","severity":sev,"cvss":cvss,"cve":"N/A","cwe":cwe,"cwe_name":cwe_name,"owasp":owasp,"remediation":_rem(hdr_name)})
+        loop = asyncio.get_event_loop()
+        r = await loop.run_in_executor(None, lambda: _req_lib.get(
+            target, timeout=10, verify=False, allow_redirects=True,
+            headers={"User-Agent": "VulnusLab-HeaderScan/1.0"}))
+        headers_found = {k.lower(): v for k, v in r.headers.items()}
+        final_url = str(r.url)
+        is_https_final = final_url.startswith("https://")
     except Exception as e:
-        findings.append({"detail":f"Scan error: {e}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"Scan Error","owasp":"N/A","remediation":"Check target"})
+        return {"scan_id": str(uuid.uuid4()), "target": req.target, "tool": "headers",
+                "findings": [{"detail": f"Could not fetch headers: {e}",
+                              "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+                              "cwe": "N/A", "cwe_name": "Scan Error", "owasp": "N/A",
+                              "remediation": "Check target is reachable and accepts HTTP/HTTPS."}],
+                "total": 1, "headers_present": {},
+                "grade": "?", "score": 0, "is_https": False,
+                "suggested_action": "Confirm the target URL is correct and the host is online.",
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+
+    # 2. HTTPS enforcement
+    if not is_https_final:
+        findings.append({
+            "detail": f"Site does not enforce HTTPS (final URL: {final_url}) — all traffic in cleartext",
+            "severity": "HIGH", "cvss": "7.5", "cve": "N/A", "cwe": "CWE-319",
+            "cwe_name": "Cleartext Transmission", "owasp": "A02:2021",
+            "remediation": "Redirect HTTP to HTTPS and enable HSTS preload."})
+
+    # 3. Missing-header checks (10 modern security headers)
+    REQUIRED_HEADERS = [
+        ("content-security-policy", "Content-Security-Policy", "HIGH",
+         "CSP prevents XSS attacks", "6.1", "CWE-79", "Cross-Site Scripting", "A03:2021",
+         "Add: default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'"),
+        ("strict-transport-security", "HSTS", "HIGH",
+         "Forces HTTPS connections", "7.5", "CWE-319", "Cleartext Transmission", "A02:2021",
+         "Add: max-age=31536000; includeSubDomains; preload"),
+        ("x-content-type-options", "X-Content-Type-Options", "MEDIUM",
+         "Prevents MIME sniffing", "5.3", "CWE-693", "Protection Mechanism Failure", "A05:2021",
+         "Add: nosniff"),
+        ("x-frame-options", "X-Frame-Options", "MEDIUM",
+         "Prevents clickjacking", "6.1", "CWE-1021", "Improper Frame Restriction", "A05:2021",
+         "Add: DENY (or SAMEORIGIN if you use frames)"),
+        ("referrer-policy", "Referrer-Policy", "LOW",
+         "Controls referrer leakage", "3.1", "CWE-200", "Information Exposure", "A01:2021",
+         "Add: strict-origin-when-cross-origin"),
+        ("permissions-policy", "Permissions-Policy", "LOW",
+         "Controls browser-feature access", "3.1", "CWE-16", "Configuration", "A05:2021",
+         "Add: geolocation=(), camera=(), microphone=(), payment=()"),
+        ("cross-origin-opener-policy", "Cross-Origin-Opener-Policy", "LOW",
+         "Isolates browsing context from popups (Spectre defense)", "3.1", "CWE-16",
+         "Configuration", "A05:2021", "Add: same-origin"),
+        ("cross-origin-embedder-policy", "Cross-Origin-Embedder-Policy", "LOW",
+         "Required for cross-origin isolation (Spectre defense)", "3.1", "CWE-16",
+         "Configuration", "A05:2021", "Add: require-corp"),
+        ("cross-origin-resource-policy", "Cross-Origin-Resource-Policy", "LOW",
+         "Restricts cross-origin resource access (Spectre defense)", "3.1", "CWE-16",
+         "Configuration", "A05:2021", "Add: same-origin"),
+        ("x-permitted-cross-domain-policies", "X-Permitted-Cross-Domain-Policies", "INFO",
+         "Restricts legacy Flash/PDF cross-domain loading", "0.0", "CWE-16",
+         "Configuration", "A05:2021", "Add: none"),
+    ]
+    for hdr_key, hdr_name, sev, desc, cvss, cwe, cwe_name, owasp, rem in REQUIRED_HEADERS:
+        if hdr_key not in headers_found:
+            findings.append({"detail": f"Missing {hdr_name} header — {desc}",
+                             "severity": sev, "cvss": cvss, "cve": "N/A",
+                             "cwe": cwe, "cwe_name": cwe_name, "owasp": owasp,
+                             "remediation": rem})
+
+    # 4. CSP value-quality checks
+    csp = headers_found.get("content-security-policy", "")
+    if csp:
+        if "unsafe-inline" in csp.lower():
+            findings.append({"detail": "CSP contains 'unsafe-inline' — defeats most XSS protection",
+                             "severity": "MEDIUM", "cvss": "5.3", "cve": "N/A", "cwe": "CWE-79",
+                             "cwe_name": "CSP Misconfiguration", "owasp": "A05:2021",
+                             "remediation": "Remove 'unsafe-inline'. Use nonces or hashes for inline scripts."})
+        if "unsafe-eval" in csp.lower():
+            findings.append({"detail": "CSP contains 'unsafe-eval' — allows eval() and dynamic code execution",
+                             "severity": "MEDIUM", "cvss": "5.3", "cve": "N/A", "cwe": "CWE-79",
+                             "cwe_name": "CSP Misconfiguration", "owasp": "A05:2021",
+                             "remediation": "Remove 'unsafe-eval'. Refactor code that depends on eval()."})
+        if re.search(r"(default-src|script-src|object-src)\s+[^;]*\*", csp):
+            findings.append({"detail": "CSP uses wildcard (*) source — allows ANY origin to provide content",
+                             "severity": "MEDIUM", "cvss": "5.3", "cve": "N/A", "cwe": "CWE-79",
+                             "cwe_name": "CSP Misconfiguration", "owasp": "A05:2021",
+                             "remediation": "Replace wildcards with explicit allowed origins."})
+
+    # 5. HSTS value-quality checks
+    hsts = headers_found.get("strict-transport-security", "").lower()
+    if hsts:
+        m = re.search(r"max-age\s*=\s*(\d+)", hsts)
+        if m and int(m.group(1)) < 31536000:
+            findings.append({"detail": f"HSTS max-age is {m.group(1)}s (< 1 year). Recommend 31536000+",
+                             "severity": "MEDIUM", "cvss": "5.3", "cve": "N/A", "cwe": "CWE-319",
+                             "cwe_name": "Weak HSTS max-age", "owasp": "A02:2021",
+                             "remediation": "Set max-age to at least 31536000 (1 year)."})
+        if "includesubdomains" not in hsts:
+            findings.append({"detail": "HSTS missing 'includeSubDomains' — subdomains can be downgraded",
+                             "severity": "LOW", "cvss": "3.1", "cve": "N/A", "cwe": "CWE-319",
+                             "cwe_name": "Incomplete HSTS", "owasp": "A02:2021",
+                             "remediation": "Append 'includeSubDomains' to HSTS header."})
+        if "preload" not in hsts:
+            findings.append({"detail": "HSTS missing 'preload' — first-ever request unprotected from downgrade",
+                             "severity": "INFO", "cvss": "0.0", "cve": "N/A", "cwe": "CWE-319",
+                             "cwe_name": "HSTS Not Preloaded", "owasp": "A02:2021",
+                             "remediation": "Append 'preload' to HSTS and submit to hstspreload.org."})
+
+    # 6. X-Frame-Options value check
+    xfo = headers_found.get("x-frame-options", "").lower()
+    if xfo and xfo not in ("deny", "sameorigin"):
+        findings.append({"detail": f"X-Frame-Options has unusual value: '{xfo}' (expected DENY or SAMEORIGIN)",
+                         "severity": "LOW", "cvss": "3.1", "cve": "N/A", "cwe": "CWE-1021",
+                         "cwe_name": "Weak Frame Protection", "owasp": "A05:2021",
+                         "remediation": "Use the standard values DENY or SAMEORIGIN."})
+
+    # 7. Information disclosure — version info in headers
+    DISCLOSURE_HEADERS = [
+        ("server", "Server"), ("x-powered-by", "X-Powered-By"),
+        ("x-aspnet-version", "X-AspNet-Version"),
+        ("x-aspnetmvc-version", "X-AspNetMvc-Version"),
+        ("x-generator", "X-Generator"),
+    ]
+    for hdr_key, hdr_name in DISCLOSURE_HEADERS:
+        if hdr_key in headers_found:
+            val = headers_found[hdr_key]
+            if re.search(r"\d", val):   # version digits → useful to attackers
+                findings.append({"detail": f"{hdr_name} reveals version: '{val}' — helps attackers find CVEs",
+                                 "severity": "LOW", "cvss": "3.1", "cve": "N/A", "cwe": "CWE-200",
+                                 "cwe_name": "Information Exposure", "owasp": "A01:2021",
+                                 "remediation": f"Strip version from the {hdr_name} header (web-server config)."})
+
+    # 8. Grade computation (A-F like securityheaders.com)
+    SEVERITY_WEIGHTS = {"CRITICAL": 25, "HIGH": 15, "MEDIUM": 7, "LOW": 3, "INFO": 0}
+    score = 100
+    for f in findings:
+        score -= SEVERITY_WEIGHTS.get(f["severity"], 0)
+    score = max(0, score)
+    grade = ("A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70
+             else "D" if score >= 50 else "F")
+
     scan_id = str(uuid.uuid4())
-    save_scan(scan_id,"headers",req.target,{"output":str(findings)})
-    return {"scan_id":scan_id,"target":req.target,"tool":"headers","findings":findings,"total":len(findings),"headers_present":headers_found,"timestamp":datetime.datetime.utcnow().isoformat()}
+    save_scan(scan_id, "headers", req.target,
+              {"output": f"Grade {grade} ({score}/100) — {len(findings)} findings"})
+    return {"scan_id": scan_id, "target": req.target, "tool": "headers",
+            "findings": findings, "total": len(findings),
+            "headers_present": headers_found,
+            "grade": grade, "score": score,
+            "is_https": is_https_final, "final_url": final_url,
+            "vulnerable": any(f["severity"] in ("CRITICAL", "HIGH", "MEDIUM") for f in findings),
+            "timestamp": datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/cookies")
