@@ -1077,11 +1077,27 @@ async def scan_nmap_vuln(req: ScanRequest, user=Depends(verify_scan_quota)):
 @app.post("/api/scan/sqlmap")
 async def scan_sqlmap(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
-    findings = await _sqli_engine(_web_url(req.target))
-    out = str(findings) if findings else "No SQL injection found"
+    target_url = _web_url(req.target)
+    # Static-only hosts (Netlify, Vercel, Cloudflare Pages, S3, GitHub Pages)
+    # can't execute server-side SQL. Marking them as PASSED would be
+    # misleading — the scanner literally cannot test for SQLi here.
+    static_host = _detect_static_host(target_url)
+    skipped_reason = None
+    findings = []
+    if static_host:
+        skipped_reason = f"Target hosted on {static_host} — static-only, no server-side SQL execution possible"
+    else:
+        findings = await _sqli_engine(target_url)
+    out = (skipped_reason if skipped_reason
+           else (str(findings) if findings else "No SQL injection found"))
     scan_id = str(uuid.uuid4())
     save_scan(scan_id,"sqlmap",req.target,{"output":out})
-    return {"scan_id":scan_id,"target":req.target,"tool":"sqlmap","vulnerable":len(findings)>0,"findings":findings,"total":len(findings),"raw_output":out,"command":"python _sqli_engine","timestamp":datetime.datetime.utcnow().isoformat()}
+    return {"scan_id":scan_id,"target":req.target,"tool":"sqlmap",
+            "vulnerable":len(findings)>0,"findings":findings,
+            "skipped_reason":skipped_reason,
+            "total":len(findings),"raw_output":out,
+            "command":"python _sqli_engine",
+            "timestamp":datetime.datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scan/headers")
@@ -1568,6 +1584,8 @@ async def commix_scan(req: ScanRequest, user=Depends(verify_token)):
 
 @app.post("/api/scan/lfi")
 async def lfi_scan(req: ScanRequest, user=Depends(verify_token)):
+    skip = _maybe_static_skip(req, "lfi")
+    if skip: return skip
     findings = []
     base = req.target.rstrip("/")
     indicators = ["root:x:","bin:x:","daemon:x:","[extensions]","for 16-bit","boot.ini"]
@@ -2092,6 +2110,33 @@ _STATIC_HOST_SIGNATURES = {
     "akamai":       "Akamai CDN",
 }
 
+def _maybe_static_skip(req, tool: str):
+    """Returns a complete response dict if the target is hosted on a
+    static-only CDN. Returns None otherwise so the caller continues with
+    normal scan logic.
+
+    Why this exists: scanners like XXE / SSTI / SSRF / file-upload look
+    for SERVER-SIDE vulnerabilities. They physically cannot exist on a
+    static Netlify/Vercel/S3 site. Returning fake-PASSED findings for
+    such targets misleads paying customers. Returning a `skipped_reason`
+    field tells the frontend to render an honest SKIPPED badge.
+
+    Cached via the same `_detect_static_host` call all other scanners
+    use, so multiple calls per scan don't re-fetch the target."""
+    static_host = _detect_static_host(_web_url(req.target))
+    if not static_host:
+        return None
+    reason = (f"Target hosted on {static_host} — static-only, no "
+              f"server-side execution possible for this check.")
+    return {
+        "scan_id": str(uuid.uuid4()), "target": req.target, "tool": tool,
+        "vulnerable": False, "findings": [], "total": 0,
+        "skipped_reason": reason,
+        "raw_output": reason,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
 def _detect_static_host(url: str):
     """If the URL is served by a known static-only CDN, return its name. Otherwise None.
 
@@ -2404,13 +2449,44 @@ def _cyclic_pattern(size: int) -> str:
 
 @app.post("/api/scan/wafw00f")
 async def scan_wafw00f(req: ScanRequest, user=Depends(verify_scan_quota)):
+    """WAF / Edge-protection detection. Detects in two passes:
+
+    1. Traditional WAF signatures via `_detect_waf` (Cloudflare WAF rules,
+       AWS WAF, Imperva, F5 BIG-IP, etc.) — matches by response header
+       fingerprints + a deliberately-malicious second request to bait the
+       WAF into blocking.
+
+    2. CDN / static-host edge protection via `_detect_static_host` —
+       Netlify, Cloudflare Pages, Vercel, GitHub Pages, AWS S3 etc. don't
+       necessarily trigger traditional WAF detection, but they DO provide
+       DDoS + bot mitigation at the edge.
+
+    Without pass 2, the old detector said "No WAF / Unprotected" for
+    every customer hosted on Netlify or Cloudflare — which is wrong and
+    misleads paying customers. They ARE protected, just by a CDN edge
+    layer rather than a classic WAF rule engine."""
     _AUTH_CTX.set(req)
     loop = asyncio.get_event_loop()
     waf = await loop.run_in_executor(None, _detect_waf, _web_url(req.target))
-    out = f"WAF detected: {waf}" if waf else "No WAF detected"
-    findings = [{"detail":f"WAF detected: {waf}","severity":"INFO","cvss":"0.0","cve":"N/A","cwe":"N/A","cwe_name":"WAF","owasp":"N/A","remediation":"WAF is a defensive control."}] if waf else []
-    scan_id = str(uuid.uuid4()); save_scan(scan_id,"wafw00f",req.target,{"output":out})
-    return {"scan_id":scan_id,"target":req.target,"tool":"wafw00f","waf":waf,"detected":bool(waf),"findings":findings,"output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
+    waf_kind = "WAF"
+    if not waf:
+        # Pass 2: CDN / edge protection
+        cdn = await loop.run_in_executor(None, _detect_static_host, _web_url(req.target))
+        if cdn:
+            waf = f"{cdn} (CDN/Edge protection)"
+            waf_kind = "CDN"
+    out = f"{waf_kind} detected: {waf}" if waf else "No WAF / CDN detected — target appears unprotected"
+    findings = ([{"detail": f"{waf_kind} detected: {waf}",
+                  "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+                  "cwe": "N/A", "cwe_name": waf_kind, "owasp": "N/A",
+                  "remediation": f"{waf_kind} is a defensive control. "
+                                 f"Confirm WAF rules cover the OWASP Top 10."}]
+                if waf else [])
+    scan_id = str(uuid.uuid4()); save_scan(scan_id, "wafw00f", req.target, {"output": out})
+    return {"scan_id": scan_id, "target": req.target, "tool": "wafw00f",
+            "waf": waf, "waf_kind": waf_kind,
+            "detected": bool(waf), "findings": findings,
+            "output": out, "timestamp": datetime.datetime.utcnow().isoformat()}
 
 @app.post("/api/scan/whatweb")
 async def scan_whatweb(req: ScanRequest, user=Depends(verify_scan_quota)):
@@ -2491,6 +2567,8 @@ async def scan_ffuf(req: ScanRequest, user=Depends(verify_scan_quota)):
 @app.post("/api/scan/rfi")
 async def scan_rfi(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
+    skip = _maybe_static_skip(req, "rfi")
+    if skip: return skip
     findings = []; vulnerable = False
     skipped_reason = None
     target_url = _web_url(req.target)
@@ -2526,6 +2604,8 @@ async def scan_rfi(req: ScanRequest, user=Depends(verify_scan_quota)):
 @app.post("/api/scan/deserial")
 async def scan_deserial(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
+    skip = _maybe_static_skip(req, "deserial")
+    if skip: return skip
     import base64 as _b64
     findings = []; vulnerable = False
     skipped_reason = None
@@ -2966,6 +3046,8 @@ async def scan_hydra(req: ScanRequest, user=Depends(verify_scan_quota)):
 @app.post("/api/scan/ssrf")
 async def scan_ssrf(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
+    skip = _maybe_static_skip(req, "ssrf")
+    if skip: return skip
     findings = []; vulnerable = False
     base = _web_url(req.target).rstrip("/")
     # Top SSRF parameter names (most commonly exploited)
@@ -3022,6 +3104,8 @@ async def scan_ssrf(req: ScanRequest, user=Depends(verify_scan_quota)):
 @app.post("/api/scan/xxe")
 async def scan_xxe(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
+    skip = _maybe_static_skip(req, "xxe")
+    if skip: return skip
     findings = []; vulnerable = False
     url = _web_url(req.target)
     headers_xml  = {"Content-Type":"application/xml","User-Agent":"Mozilla/5.0","Accept":"application/xml,text/xml,*/*"}
@@ -3200,6 +3284,8 @@ async def scan_idor(req: ScanRequest, user=Depends(verify_scan_quota)):
 @app.post("/api/scan/ssti")
 async def scan_ssti(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
+    skip = _maybe_static_skip(req, "ssti")
+    if skip: return skip
     findings = []; vulnerable = False
     base_url = _web_url(req.target).rstrip("/")
     # Fetch baseline to filter out numbers already present on the page
@@ -3234,6 +3320,8 @@ async def scan_ssti(req: ScanRequest, user=Depends(verify_scan_quota)):
 @app.post("/api/scan/fileupload")
 async def scan_fileupload(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)
+    skip = _maybe_static_skip(req, "fileupload")
+    if skip: return skip
     findings = []; vulnerable = False
     base = req.target.rstrip("/")
     upload_paths = ["/upload","/file-upload","/upload.php","/fileupload","/api/upload","/admin/upload","/media/upload"]

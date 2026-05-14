@@ -971,19 +971,33 @@ function generatePDF(reportData) {
 
     if(wasRun('sqlmap')){
       // ─── SQL INJECTION ───────────────────────────────────────────
+      // Three states: SKIPPED (target can't host SQLi — static site etc),
+      // VULNERABLE (injection found), PASSED (scanner ran and found nothing).
       chk(30); y = sectionHead("SQL Injection Assessment",y);
       y = tableHeader(["TEST","RESULT","SEVERITY","CVSS"],[60,60,30,30],y);
       fillR(margin,y,contentW,7,LIGHT);
       txt("SQL Injection (SQLMap)",margin+3,y+5,8.5,DARK,true);
-      const vulnC = sqlmap&&sqlmap.vulnerable?RED:GREEN;
-      const vulnL = sqlmap&&sqlmap.vulnerable?"VULNERABLE":"PASSED";
-      const vulnW = sqlmap&&sqlmap.vulnerable?22:18;
-      rrect(margin+63,y+1.5,vulnW,4,1,sqlmap&&sqlmap.vulnerable?[254,226,226]:[220,252,231]);
+      const sqlSkipped = sqlmap && (sqlmap.skipped_reason || sqlmap.skipped);
+      const sqlVuln    = sqlmap && sqlmap.vulnerable;
+      const vulnC = sqlVuln ? RED : sqlSkipped ? [217,119,6] : GREEN;
+      const vulnL = sqlVuln ? "VULNERABLE" : sqlSkipped ? "SKIPPED" : "PASSED";
+      const vulnW = sqlVuln ? 22 : sqlSkipped ? 18 : 18;
+      const vulnBg = sqlVuln ? [254,226,226] : sqlSkipped ? [254,243,199] : [220,252,231];
+      rrect(margin+63,y+1.5,vulnW,4,1,vulnBg);
       doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...vulnC);
       doc.text(vulnL,margin+65,y+5);
-      txt(sqlmap&&sqlmap.vulnerable?"HIGH":"NONE",margin+123,y+5,8.5,vulnC,true);
-      txt(sqlmap&&sqlmap.vulnerable?"9.8":"0.0",margin+153,y+5,8.5,vulnC,true);
+      const sevTxt  = sqlVuln ? "HIGH" : sqlSkipped ? "N/A"  : "NONE";
+      const cvssTxt = sqlVuln ? "9.8"  : sqlSkipped ? "—"    : "0.0";
+      txt(sevTxt, margin+123,y+5,8.5,vulnC,true);
+      txt(cvssTxt,margin+153,y+5,8.5,vulnC,true);
       y+=11;
+      // If skipped, surface the reason underneath so the customer knows why
+      if(sqlSkipped){
+        chk(7); fillR(margin,y,contentW,6,[254,243,199]);
+        txt(String(sqlmap.skipped_reason || "Not applicable to this target"),
+            margin+3,y+4,7.5,[120,53,15]);
+        y+=8;
+      }
     }
 
     if(wasRun('wafw00f')){
@@ -1210,22 +1224,32 @@ function generatePDF(reportData) {
         txt(c.label,margin+3,y+5,8,DARK,true);
         const isVuln = c.res && c.res.vulnerable === true;
         const hasRealFinds = c.res && Array.isArray(c.res.findings) && c.res.findings.some(f=>["CRITICAL","HIGH","MEDIUM"].includes(f.severity));
-        const status = isVuln || hasRealFinds ? "VULNERABLE" : "PASSED";
-        const stColor = status==="VULNERABLE"?RED:GREEN;
-        rrect(margin+53,y+1.5,status==="VULNERABLE"?18:13,4,1,stColor);
+        const isSkipped = c.res && (c.res.skipped_reason || c.res.skipped === true);
+        // Three-state status — never "PASSED" if the scanner didn't actually test.
+        // SKIPPED (orange) means we recognized the target as not having the
+        // surface needed for this check (e.g. SSTI on a Netlify static site).
+        // PASSED only when the scanner actually ran and found nothing.
+        const status = isSkipped ? "SKIPPED" : (isVuln || hasRealFinds ? "VULNERABLE" : "PASSED");
+        const stColor = status==="VULNERABLE" ? RED : status==="SKIPPED" ? [217,119,6] : GREEN;
+        const stW = status==="VULNERABLE" ? 18 : status==="SKIPPED" ? 16 : 13;
+        rrect(margin+53,y+1.5,stW,4,1,stColor);
         doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(...WHITE);
         doc.text(status,margin+55,y+5);
         txt(c.owasp,margin+76,y+5,7.5,GRAY);
-        // Use jsPDF's splitTextToSize to compute exactly what fits the DETAIL column width.
-        // First line gets shown; if there's overflow, we add an ellipsis. This guarantees
-        // the text never extends past the column boundary regardless of font metrics.
-        const fullDetail = isVuln?(c.res.findings&&c.res.findings[0]?c.res.findings[0].detail||"Vulnerability confirmed":"Vulnerability confirmed")
-          :hasRealFinds?(c.res.findings[0].detail||"No vulnerability detected"):"No vulnerability detected";
-        doc.setFont("Arial","normal"); doc.setFontSize(7.5);
         // 86mm available (column is 90mm starting at margin+98, leaving 4mm right padding)
+        // Use jsPDF's splitTextToSize to ensure the text never overflows.
+        const fullDetail = isSkipped
+          ? String(c.res.skipped_reason || "Not applicable to this target")
+          : isVuln
+            ? (c.res.findings && c.res.findings[0] ? c.res.findings[0].detail || "Vulnerability confirmed" : "Vulnerability confirmed")
+            : hasRealFinds
+              ? (c.res.findings[0].detail || "No vulnerability detected")
+              : "No vulnerability detected";
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5);
         const wrapped = doc.splitTextToSize(String(fullDetail), 86);
         const detail = wrapped.length > 1 ? wrapped[0].replace(/\s+\S*$/, "") + "…" : wrapped[0];
-        txt(detail,margin+98,y+5,7.5,DARK);
+        const dColor = isSkipped ? [120,53,15] : DARK;
+        txt(detail,margin+98,y+5,7.5,dColor);
         y+=7;
       });
       if(advNotRun.length>0){
@@ -1843,6 +1867,24 @@ function WebAppModule(props) {
           break;
         }
         results[ph.tool] = data;
+        // Generic SKIPPED handler — must come BEFORE the tool-specific
+        // checks. Many backend scanners detect "no testable surface" (e.g.
+        // commix on a static Netlify site, sqlmap on a host with no URL
+        // params, hydra on external targets without auth context) and
+        // return `skipped_reason` instead of fake-PASSED findings. We
+        // promote those to the SKIPPED bucket so the tile shows an honest
+        // orange badge instead of misleading green PASSED.
+        if (data && (data.skipped_reason || data.skipped)) {
+          const reason = data.skipped_reason || "Not applicable to this target";
+          add("⚠ " + ph.name + " skipped: " + reason);
+          setSkipped(p => [...p, i]);
+          setDone(p => [...p, i]);
+          setAll(Object.assign({}, results));
+          if (isExternal && idx < activePhases.length - 1) {
+            await new Promise(r => setTimeout(r, 1500));
+          }
+          continue;
+        }
         if (ph.tool==="sqlmap"  && data.vulnerable)  add("✗ SQL INJECTION FOUND — CRITICAL!");
         else if (ph.tool==="xss" && data.vulnerable) add("✗ XSS VULNERABILITY FOUND — CRITICAL!");
         else if (ph.tool==="cors"&& data.vulnerable) add("✗ CORS MISCONFIGURATION FOUND — HIGH!");
