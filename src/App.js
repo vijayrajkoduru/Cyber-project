@@ -1869,6 +1869,22 @@ function WebAppModule(props) {
         const msg = e.message||"unknown error";
         const hint = msg.includes("404") ? " (endpoint missing — add to main.py)" : msg.includes("Failed to fetch")||msg.includes("NetworkError") ? " (backend offline)" : "";
         add("✗ " + ph.name + " failed: " + msg + hint);
+        // CRITICAL: save the error to allResults so the tile's Details panel
+        // can render it. Without this, the customer sees a red ERROR badge
+        // with no way to know what went wrong — exactly the gap this whole
+        // session has been chasing.
+        const suggested_action =
+          msg.includes("404") ? "Endpoint missing from backend. Pull latest code and redeploy." :
+          msg.includes("Failed to fetch") || msg.includes("NetworkError") ? "Backend is offline or CORS-blocked. Check `docker compose ps` on the VPS." :
+          msg.includes("500") || msg.includes("Internal Server Error") ? "Scanner crashed on the backend. The target may be incompatible (e.g. static-only host) or hit a Python exception." :
+          msg.includes("429") || msg.includes("Too Many") ? "Target rate-limited our scanner. Try again in a minute, or use auth credentials so it knows you're authorized." :
+          msg.includes("timeout") || msg.includes("Timeout") || msg.includes("504") ? "Scan took too long — target may be slow or CDN-fronted. Try a smaller scope or check connectivity." :
+          msg.includes("Subscription") || msg.includes("trial") || msg.includes("quota") ? "Trial limit reached. Upgrade your plan or wait until quota resets." :
+          "Click Re-run to retry, or check `docker compose logs --tail 50 backend` on the VPS for the underlying cause.";
+        results[ph.tool] = {
+          ok: false, error: msg, suggested_action,
+          findings: [], total: 0,
+        };
         if (ph.tool === "hydra") {
           add("💡 Tip: Use the Password Attacks module for targeted brute force with custom wordlists and protocols.");
           setSkipped(p => [...p, i]);
@@ -1876,6 +1892,7 @@ function WebAppModule(props) {
           setFailed(p => [...p, i]);
         }
         setDone(p => [...p, i]);
+        setAll(Object.assign({}, results));   // ← persist error so Details panel renders
       }
       if (isExternal && idx < activePhases.length - 1) {
         await new Promise(r => setTimeout(r, 1500));
@@ -1905,9 +1922,19 @@ function WebAppModule(props) {
       setDone(p => [...p.filter(x => x !== i), i]);
       add("✓ " + ph.name + " complete");
     } catch(e) {
+      const msg = e.message || "unknown error";
+      // Save error to allResults so the tile's Details panel can render it.
+      const suggested_action =
+        msg.includes("404") ? "Endpoint missing from backend." :
+        msg.includes("Failed to fetch") || msg.includes("NetworkError") ? "Backend offline or unreachable." :
+        msg.includes("500") || msg.includes("Internal Server Error") ? "Scanner crashed — target may be incompatible." :
+        msg.includes("429") || msg.includes("Too Many") ? "Rate-limited by target. Wait and retry." :
+        msg.includes("timeout") || msg.includes("Timeout") || msg.includes("504") ? "Scan took too long." :
+        "Click Re-run to retry.";
+      setAll(prev => ({...prev, [ph.tool]: {ok: false, error: msg, suggested_action, findings: [], total: 0}}));
       setFailed(p => [...p.filter(x => x !== i), i]);
       setDone(p => [...p.filter(x => x !== i), i]);
-      add("✗ " + ph.name + " failed: " + (e.message || "unknown error"));
+      add("✗ " + ph.name + " failed: " + msg);
     }
     setCurPhase(-1); setRunningState(false);
   };
