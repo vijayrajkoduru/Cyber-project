@@ -6815,6 +6815,178 @@ async def scan_takeover(req: ScanRequest, user=Depends(verify_scan_quota)):
     }
 
 
+# ───────────────────────────────────────────────────────────────
+#  DNS ZONE TRANSFER (AXFR) — pure-Python, zero false positives.
+#
+#  Background: AXFR is the DNS query that asks a name server to dump
+#  ITS ENTIRE ZONE — every A record, MX, TXT, CNAME, internal IP, dev
+#  subdomain, staging hostname, everything. AXFR is supposed to be
+#  restricted to authorized secondary name servers via ACL.
+#
+#  When misconfigured (allowing AXFR from any IP on the internet),
+#  attackers get a full inventory of the target's infrastructure in a
+#  single DNS query. This includes:
+#     - All subdomains (production, staging, dev, internal)
+#     - Internal IP addresses (10.x, 172.x, 192.168.x)
+#     - Mail servers + email infrastructure
+#     - Service-specific hostnames (jenkins.corp.target.com,
+#       grafana.target.com, vpn.target.com — all attack surface)
+#
+#  Zero false positives by design: AXFR either WORKS (we get records)
+#  or DOESN'T (we get refused / timeout). Binary outcome. There is no
+#  middle ground.
+#
+#  Real-world impact: When found, this is a CRITICAL info-disclosure
+#  finding. Bug bounty payouts: $500-$3,000 typical. Some Fortune 500
+#  AXFR-leak findings paid $5k+ (the full enterprise attack surface is
+#  exposed in one query).
+#
+#  Dependencies: dnspython only (already in requirements.txt). No
+#  external binaries, no shell-out. Pure Python.
+# ───────────────────────────────────────────────────────────────
+
+@app.post("/api/scan/zonetransfer")
+async def scan_zonetransfer(req: ScanRequest, user=Depends(verify_scan_quota)):
+    """DNS Zone Transfer (AXFR) misconfiguration check.
+
+    Steps:
+      1. Extract the apex domain from the target URL
+      2. Resolve NS records for the apex
+      3. For each name server, attempt `dns.query.xfr` with a 6s timeout
+      4. If ANY name server returns records → CONFIRMED finding
+      5. Return up to 100 of the leaked records as evidence
+
+    `confidence: CONFIRMED` on every finding — AXFR is binary. We never
+    report SUSPECTED entries."""
+    _AUTH_CTX.set(req)
+    findings = []
+    apex = _recon_host(req.target)
+    if not apex:
+        return {"scan_id": str(uuid.uuid4()), "target": req.target, "tool": "zonetransfer",
+                "vulnerable": False, "findings": [], "total": 0,
+                "error": "Could not parse hostname from target URL",
+                "suggested_action": "Enter a valid URL like https://example.com",
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+
+    # 1. Get the apex domain's NS records (best-effort — try the host as-is
+    #    first, then walk up parents if it has subdomains).
+    candidates = [apex]
+    parts = apex.split(".")
+    if len(parts) > 2:
+        candidates.append(".".join(parts[-2:]))   # e.g. tesla.com from blog.tesla.com
+
+    loop = asyncio.get_event_loop()
+    name_servers = []
+    parent_domain = None
+    for candidate in candidates:
+        try:
+            answers = await loop.run_in_executor(
+                None, lambda c=candidate: _dns_resolver.resolve(c, "NS", lifetime=5))
+            name_servers = [str(a.target).rstrip(".") for a in answers]
+            parent_domain = candidate
+            break
+        except Exception:
+            continue
+
+    if not name_servers:
+        scan_id = str(uuid.uuid4())
+        save_scan(scan_id, "zonetransfer", req.target,
+                  {"output": f"No NS records for {apex} or its parents — cannot test AXFR"})
+        return {"scan_id": scan_id, "target": req.target, "tool": "zonetransfer",
+                "vulnerable": False, "findings": [], "total": 0,
+                "name_servers_tested": [],
+                "raw_output": f"No NS records resolved for {apex}",
+                "timestamp": datetime.datetime.utcnow().isoformat()}
+
+    # 2. Attempt AXFR against each name server. dnspython's `dns.query.xfr`
+    #    returns a generator of dns.message.Message; if AXFR is refused,
+    #    it raises. Try each NS in turn.
+    import dns.query as _dns_query
+    import dns.zone  as _dns_zone
+
+    leaked_records = []
+    successful_ns  = None
+
+    for ns in name_servers:
+        try:
+            # Resolve NS IP first to avoid DNS-on-DNS recursion failures
+            try:
+                ns_ip_answers = await loop.run_in_executor(
+                    None, lambda n=ns: _dns_resolver.resolve(n, "A", lifetime=4))
+                ns_ip = str(ns_ip_answers[0])
+            except Exception:
+                continue
+
+            def _do_xfr(ns_ip_inner, domain_inner):
+                # `dns.query.xfr` returns a generator — wrap into a real Zone
+                # so we can iterate records once.
+                z = _dns_zone.from_xfr(
+                    _dns_query.xfr(ns_ip_inner, domain_inner, timeout=6, lifetime=10))
+                out = []
+                for (name, ttl, rdata) in z.iterate_rdatas():
+                    out.append(f"{name} {ttl} {rdata.rdtype.name} {rdata}")
+                    if len(out) >= 500:   # cap so we don't blow up memory
+                        break
+                return out
+
+            leaked_records = await loop.run_in_executor(
+                None, _do_xfr, ns_ip, parent_domain)
+            if leaked_records:
+                successful_ns = ns
+                break
+
+        except Exception:
+            # AXFR refused or NS unreachable — try next NS
+            continue
+
+    # 3. Report findings
+    if leaked_records:
+        # CRITICAL: full zone is exposed to the world
+        findings.append({
+            "detail": (f"DNS Zone Transfer (AXFR) succeeded against name server "
+                       f"`{successful_ns}` for zone `{parent_domain}` — the server "
+                       f"returned {len(leaked_records)} record(s) including potentially "
+                       f"internal hostnames, IP addresses, and infrastructure metadata "
+                       f"to an unauthenticated client."),
+            "severity": "HIGH",
+            "cvss": "5.3",
+            "cve": "N/A",
+            "cwe": "CWE-540",
+            "cwe_name": "Information Exposure",
+            "owasp": "A05:2021",
+            "remediation": (
+                f"On the DNS server `{successful_ns}`, restrict AXFR queries to "
+                f"authorized secondary name servers only. For BIND, add an "
+                f"`allow-transfer {{ <secondary-ip-list> }};` directive to the "
+                f"zone configuration. For PowerDNS, set "
+                f"`allow-axfr-ips=<secondary-ip-list>`. Verify with `dig AXFR "
+                f"{parent_domain} @{successful_ns}` — should now return "
+                f"`Transfer failed`."),
+            "subdomain": parent_domain,
+            "name_server": successful_ns,
+            "records_leaked": len(leaked_records),
+            "sample_records": leaked_records[:30],   # first 30 as evidence
+            "confidence": "CONFIRMED",
+        })
+
+    scan_id = str(uuid.uuid4())
+    summary = (f"AXFR successful against {successful_ns} — {len(leaked_records)} "
+               f"records leaked" if leaked_records
+               else f"AXFR refused by all {len(name_servers)} name server(s) — secure")
+    save_scan(scan_id, "zonetransfer", req.target, {"output": summary})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "zonetransfer",
+        "vulnerable":           bool(findings),
+        "findings":             findings,
+        "total":                len(findings),
+        "name_servers_tested":  name_servers,
+        "zone_tested":          parent_domain,
+        "records_leaked":       len(leaked_records),
+        "raw_output":           summary,
+        "timestamp":            datetime.datetime.utcnow().isoformat(),
+    }
+
+
 @app.post("/api/scan/otp")
 async def scan_otp(req: ScanRequest, user=Depends(verify_scan_quota)):
     _AUTH_CTX.set(req)

@@ -1687,6 +1687,7 @@ const PHASES = [
   {name:"DNS Enumeration",        tool:"dig",           endpoint:"/api/scan/dns",               icon:"🔎"},
   {name:"Subdomain Discovery",    tool:"subdomains",    endpoint:"/api/scan/subdomains",        icon:"🌍"},
   {name:"Subdomain Takeover",     tool:"takeover",      endpoint:"/api/scan/takeover",          icon:"🎯"},
+  {name:"DNS Zone Transfer",      tool:"zonetransfer",  endpoint:"/api/scan/zonetransfer",      icon:"🌐"},
   {name:"Vulnerability Scan",     tool:"nikto",         endpoint:"/api/scan/nikto",             icon:"🎯"},
   {name:"Nuclei Templates",       tool:"nuclei",        endpoint:"/api/scan/nuclei",            icon:"☢️"},
   {name:"Sensitive File Exposure",tool:"sensitivefiles",endpoint:"/api/scan/sensitivefiles",    icon:"🗂"},
