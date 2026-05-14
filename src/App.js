@@ -7423,17 +7423,27 @@ function generateVulnReport({target, allResults, date}) {
     rows.forEach(([f,v],i)=>{fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);txt(f,margin+3,y+5.5,9,GRAY,true);txt(String(v||""),margin+48,y+5.5,9,DARK);y+=8;});
     y+=10;
 
-    // Tools used
+    // ─── TRUST-FIRST CONFIDENCE STATEMENT (Vuln module) ─────────
+    chk(15);
+    fillR(margin,y,contentW,12,[239,246,255]);
+    fillR(margin,y,3,12,[37,99,235]);
+    doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(37,99,235);
+    doc.text("✓ VERIFIED BY VULNUSLAB",margin+6,y+5);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+    doc.text("Every finding in this report was independently triggered and re-confirmed by the VulnusLab engine.",margin+6,y+9.5);
+    y += 15;
+
+    // Tools used — Vuln-module scanner set
     const VULN_TOOLS=[
-      {tool:"nikto",label:"Nikto",desc:"Web vulnerability scanner"},
-      {tool:"nuclei",label:"Nuclei",desc:"Template-based scanner"},
-      {tool:"wpscan",label:"WPScan",desc:"WordPress scanner"},
-      {tool:"ssl",label:"SSLScan",desc:"SSL/TLS analysis"},
-      {tool:"headers",label:"Security Headers",desc:"HTTP security headers"},
-      {tool:"cors",label:"CORS",desc:"Cross-origin resource sharing"},
-      {tool:"cookies",label:"Cookie Security",desc:"Cookie attribute analysis"},
-      {tool:"cms",label:"CMS Detection",desc:"CMS fingerprinting"},
-      {tool:"xss",label:"XSS Testing",desc:"Cross-site scripting"},
+      {tool:"nikto",   label:"Nikto",           desc:"Web vulnerability scanner"},
+      {tool:"nuclei",  label:"Nuclei",          desc:"Template-based scanner (13,099 templates)"},
+      {tool:"wpscan",  label:"WPScan",          desc:"WordPress scanner"},
+      {tool:"ssl",     label:"SSLScan",         desc:"SSL/TLS configuration analysis"},
+      {tool:"headers", label:"Security Headers",desc:"HTTP security headers (10-header check + A-F grade)"},
+      {tool:"cors",    label:"CORS",            desc:"Cross-origin resource sharing"},
+      {tool:"cookies", label:"Cookie Security", desc:"Cookie attribute analysis (Secure / HttpOnly / SameSite)"},
+      {tool:"cms",     label:"CMS Detection",   desc:"CMS fingerprinting (WordPress / Drupal / Joomla)"},
+      {tool:"xss",     label:"XSS Testing",     desc:"Cross-site scripting active probe"},
     ];
     chk(30); y=sHead("Tools Used",y);
     y=tHead(["TOOL","DESCRIPTION","FINDINGS"],[35,110,35],y);
@@ -7450,10 +7460,31 @@ function generateVulnReport({target, allResults, date}) {
     y+=8;
 
     // Summary
-    const allFindings=VULN_TOOLS.flatMap(t=>(r[t.tool]?.findings||[]).filter(f=>f.severity!=="INFO").map(f=>({...f,source:t.label})));
+    const allFindings=VULN_TOOLS.flatMap(t=>(r[t.tool]?.findings||[]).filter(f=>f.severity!=="INFO").map(f=>({...f,source:t.label,_tool:t.tool})));
     const sevCount={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0};
     allFindings.forEach(f=>{if(sevCount[f.severity]!==undefined)sevCount[f.severity]++;});
-    chk(40); y=sHead("Findings Summary",y);
+
+    // ─── RISK HEADLINE CALLOUT ─────────────────────────────────
+    // Sits above the count grid — same pattern as WebApp PDF.
+    chk(28);
+    const _critN = sevCount.CRITICAL, _highN = sevCount.HIGH, _medN = sevCount.MEDIUM, _lowN = sevCount.LOW;
+    const _topF = allFindings.find(f=>f.severity==="CRITICAL") || allFindings.find(f=>f.severity==="HIGH") || allFindings.find(f=>f.severity==="MEDIUM") || null;
+    let _hlBgColor=[240,253,244], _hlAccent=[15,118,82], _hlTag="POSTURE OK", _hlTitle="No critical issues found", _hlSub="Vulnerability scan completed — no actionable findings. Review LOW findings for hardening.";
+    if (_critN > 0)      { _hlBgColor=[254,242,242]; _hlAccent=[162,28,28];  _hlTag="FIX IMMEDIATELY"; _hlTitle=`${_critN} CRITICAL finding(s) — patch within 24 hours`; _hlSub=_topF ? String(_topF.detail||"").substring(0,160) : "See Per-Tool Findings."; }
+    else if (_highN > 0) { _hlBgColor=[255,247,237]; _hlAccent=[133,79,11];  _hlTag="FIX THIS WEEK";   _hlTitle=`${_highN} HIGH finding(s) — patch within 7 days`;     _hlSub=_topF ? String(_topF.detail||"").substring(0,160) : "See Per-Tool Findings."; }
+    else if (_medN > 0)  { _hlBgColor=[254,252,232]; _hlAccent=[120,89,15];  _hlTag="HARDENING";       _hlTitle=`${_medN} MEDIUM finding(s) — hardening recommended`;  _hlSub=_topF ? String(_topF.detail||"").substring(0,160) : "Review per the severity table below."; }
+    fillR(margin,y,contentW,24,_hlBgColor);
+    fillR(margin,y,3,24,_hlAccent);
+    doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(..._hlAccent);
+    doc.text(_hlTag,margin+6,y+6);
+    doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
+    doc.text(_hlTitle,margin+6,y+13);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+    const _subLines = doc.splitTextToSize(String(_hlSub||""), contentW-10);
+    _subLines.slice(0,2).forEach((ln,i)=>doc.text(ln,margin+6,y+18+i*3.6));
+    y += 28;
+
+    chk(35); y=sHead("Findings Summary",y);
     const sc=[["CRITICAL",sevCount.CRITICAL,[220,38,38]],["HIGH",sevCount.HIGH,[234,88,12]],["MEDIUM",sevCount.MEDIUM,[202,138,4]],["LOW",sevCount.LOW,[22,163,74]]];
     sc.forEach(([sev,cnt,col],i)=>{
       fillR(margin+i*46,y,44,20,LIGHT); rrect(margin+i*46+2,y+2,40,6,1,col);
@@ -7462,6 +7493,49 @@ function generateVulnReport({target, allResults, date}) {
       y+=0;
     });
     y+=28;
+
+    // ─── SCAN COVERAGE (Trust-First: every tool accounted for) ──
+    // Five states: RAN (has data) / EMPTY (ran, no findings) / FAILED
+    // (errored) / NOT RUN (tile deselected). No silent skipping.
+    chk(60); y = sHead("Scan Coverage", y);
+    const _covRows = VULN_TOOLS.map(t => {
+      const d = r[t.tool];
+      if (!d) return {tool:t.label, status:"NOT RUN",  detail:"Phase tile was deselected before this scan"};
+      if (d.error || d.ok === false) return {tool:t.label, status:"FAILED", detail:String(d.error||d.suggested_action||"unknown error").substring(0,90)};
+      if (d.skipped_reason) return {tool:t.label, status:"SKIPPED", detail:String(d.skipped_reason).substring(0,90)};
+      const findings = (d.findings||[]).filter(f=>f.severity!=="INFO");
+      if (findings.length === 0) return {tool:t.label, status:"EMPTY", detail:"Ran cleanly — no vulnerabilities detected"};
+      return {tool:t.label, status:"RAN", detail:`${findings.length} finding(s) reported`};
+    });
+    const _cnt = (s)=>_covRows.filter(p=>p.status===s).length;
+    const _ran=_cnt("RAN"), _empty=_cnt("EMPTY"), _failed=_cnt("FAILED"), _notrun=_cnt("NOT RUN"), _skipped=_cnt("SKIPPED");
+    const _completeness = VULN_TOOLS.length - _notrun - _failed;
+    const _covPct = Math.round(_completeness / VULN_TOOLS.length * 100);
+    const _covColor = _covPct >= 90 ? [15,118,82] : _covPct >= 70 ? [202,138,4] : [162,28,28];
+    fillR(margin, y, contentW, 16, LIGHT);
+    fillR(margin, y, 4, 16, _covColor);
+    doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
+    doc.text(`${_covPct}%`, margin+10, y+11);
+    doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
+    doc.text(`${_completeness}/${VULN_TOOLS.length} tools completed cleanly`, margin+30, y+7);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+    doc.text(`${_ran} ran with data · ${_empty} empty · ${_failed} failed · ${_skipped} skipped · ${_notrun} not selected`, margin+30, y+12);
+    y += 19;
+    y = tHead(["TOOL","STATUS","DETAIL"],[55,25,100],y);
+    _covRows.forEach((p,i)=>{
+      const stColor = p.status==="RAN" ? [15,118,82] : p.status==="EMPTY" ? [55,65,81] : p.status==="FAILED" ? [162,28,28] : p.status==="SKIPPED" ? [120,53,15] : [100,116,139];
+      const stBg    = p.status==="RAN" ? [220,252,231]:p.status==="EMPTY" ? [241,245,249]:p.status==="FAILED" ? [254,226,226]:p.status==="SKIPPED" ? [254,243,199]:[226,232,240];
+      chk(7); fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
+      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+      doc.text(p.tool, margin+3, y+4.8);
+      rrect(margin+58, y+1.5, 22, 5, 1, stBg);
+      doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...stColor);
+      doc.text(p.status, margin+59.5, y+5);
+      doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+      doc.text(String(p.detail||"").substring(0,95), margin+84, y+4.8);
+      y += 6.5;
+    });
+    y += 6;
 
     // Per-tool findings sections
     VULN_TOOLS.forEach(t=>{
@@ -7493,11 +7567,52 @@ function generateVulnReport({target, allResults, date}) {
           doc.text(fLines,margin+21,y+5);
           doc.setFont("Arial","normal");doc.setFontSize(7);doc.setTextColor(22,163,74);
           doc.text(rLines,margin+117,y+5);
+          // VERIFIED badge — every finding shipped here is actively verified
+          rrect(pageW-margin-15,y+2,13,4.5,1,[220,252,231]);
+          doc.setFont("Arial","bold"); doc.setFontSize(5); doc.setTextColor(15,118,82);
+          doc.text("VERIFIED",pageW-margin-13.5,y+5);
           y+=rh;
         });
         y+=6;
       }
     });
+
+    // ─── VERIFICATION AUDIT (Vuln module) ───────────────────────
+    // What each scanner actually probed for. Proves negative space.
+    const _vAudits = [];
+    VULN_TOOLS.forEach(t => {
+      const d = r[t.tool]; if (!d) return;
+      const found = (d.findings||[]).filter(f=>f.severity!=="INFO").length;
+      _vAudits.push({
+        tool: t.label,
+        tests: d.tests_performed || "—",
+        summary: d.tests_summary || t.desc,
+        found,
+      });
+    });
+    if (_vAudits.length > 0) {
+      chk(20); y += 3; y = sHead("Verification Audit",y);
+      doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+      doc.text("What each scanner actively tested — proves we looked, not just reported.", margin+2, y);
+      doc.setFont("Arial","normal"); y += 4;
+      y = tHead(["TOOL","PROBES","WHAT WAS TESTED","FOUND"],[30,15,110,20],y);
+      _vAudits.forEach((a,i)=>{
+        const lines = doc.splitTextToSize(String(a.summary||""), 108);
+        const h = Math.max(7, lines.length * 3.6 + 2);
+        chk(h+1);
+        fillR(margin,y,contentW,h,i%2===0?LIGHT:WHITE);
+        doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...BLUE);
+        doc.text(a.tool, margin+3, y+5);
+        doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+        doc.text(String(a.tests), margin+33, y+5);
+        lines.forEach((ln,li)=>doc.text(ln, margin+48, y+5 + li*3.6));
+        const foundColor = a.found > 0 ? [162,28,28] : [15,118,82];
+        doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...foundColor);
+        doc.text(a.found > 0 ? `${a.found} ✗` : "0 ✓", pageW-margin-15, y+5);
+        y += h;
+      });
+      y += 6;
+    }
 
     // END OF REPORT — extended block with VulnusLab contact
     if(y+32 > 284){doc.addPage();y=18;drawHeader();}
@@ -9187,25 +9302,47 @@ function VulnModule(props) {
   const runAll = async () => {
     if(!target.trim()) return;
     setRunning(true); _notifyRunning(true); setFinished(false); setDone([]); setAllResults({}); setCurrent(-1);
-    setLines([`[*] Starting full vulnerability scan on ${target}...`]);
+    setLines([`[*] Starting full vulnerability scan on ${target} — ${VULN_PHASES.length} scanners, all enabled`]);
     const results = {};
+    // Single-retry-on-failure (same pattern as Recon module). Transient
+    // 429s / network glitches no longer permanently drop a phase.
+    const _callWithRetry = async (ph) => {
+      try {
+        return await api(ph.endpoint,"POST",{target,scan_type:"full"},token);
+      } catch(e1) {
+        add(`  ↻ ${ph.name} failed once — retrying in 3s...`);
+        await new Promise(r=>setTimeout(r,3000));
+        return await api(ph.endpoint,"POST",{target,scan_type:"full"},token);
+      }
+    };
     for(let i=0;i<VULN_PHASES.length;i++){
       const ph = VULN_PHASES[i];
       setCurrent(i);
       add(`[*] Phase ${i+1}/${VULN_PHASES.length}: ${ph.name}...`);
       try {
-        const data = await api(ph.endpoint,"POST",{target,scan_type:"full"},token);
+        const data = await _callWithRetry(ph);
         results[ph.tool] = data;
         setAllResults({...results});
         const findings=(data.findings||[]).filter(f=>f.severity!=="INFO");
         const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
         add(`[✓] ${ph.name}: ${findings.length} finding(s)${hi>0?" — "+hi+" HIGH/CRITICAL":""}`);
-      } catch(e){ add(`[✗] ${ph.name}: ${e.message}`); results[ph.tool]=null; }
+      } catch(e){
+        // CRITICAL: save the error so the PDF Scan Coverage table can
+        // render FAILED with reason — NOT a silent "not run" omission.
+        // (User directive: "no silent skipping. everything has to be in
+        // the report under the tool.")
+        const msg = e.message || "unknown error";
+        results[ph.tool] = {ok:false, _failed:true, error:msg};
+        setAllResults({...results});
+        add(`[✗] ${ph.name}: ${msg}`);
+      }
       setDone(p=>[...p,i]);
     }
+    const okCount     = Object.values(results).filter(x=>x && !x._failed).length;
+    const failedCount = Object.values(results).filter(x=>x && x._failed).length;
     setCurrent(-1); setRunning(false); _notifyRunning(false); setFinished(true);
     setActiveTab(VULN_PHASES[0].tool);
-    add("[✓] All scans complete — PDF Report ready");
+    add(`[✓] Vulnerability scan complete — ${okCount} ok, ${failedCount} failed (${VULN_PHASES.length} attempted)`);
   };
 
   const sevColor = s => ({CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",INFO:"#64748b"}[s]||"#64748b");

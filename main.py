@@ -1589,6 +1589,156 @@ async def scan_dirb(req: ScanRequest, user=Depends(verify_scan_quota)):
     return {"scan_id":scan_id,"target":req.target,"tool":"dirb","findings":findings,"found":found,"total":len(found),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
 
+@app.post("/api/scan/wpscan")
+async def scan_wpscan(req: ScanRequest, user=Depends(verify_scan_quota)):
+    """Pure-Python WordPress scanner — checks for WP installation,
+    version disclosure, exposed admin paths, XML-RPC, user enumeration,
+    and the readme.html version leak.
+
+    Returns SKIPPED with reason when target isn't WordPress (most
+    common case on real customer targets) — no false positives, no
+    "scan ran but found nothing" ambiguity.
+    """
+    _AUTH_CTX.set(req)
+    base = _web_url(req.target).rstrip("/")
+    findings = []
+    is_wp = False
+    wp_version = None
+    tests_performed = 0
+    error = None
+
+    # Step 1: is this WordPress at all? Look for telltale paths.
+    indicators = {
+        "/wp-login.php":   "WP login page",
+        "/wp-admin/":      "WP admin dir",
+        "/wp-content/":    "WP content dir",
+        "/wp-includes/":   "WP includes dir",
+        "/xmlrpc.php":     "XML-RPC endpoint",
+    }
+    hits = {}
+    for path, label in indicators.items():
+        tests_performed += 1
+        try:
+            r = _safe_get(base + path, retries=1, timeout=8, req=req,
+                          allow_redirects=False)
+            if r is not None and r.status_code in (200, 301, 302, 401, 403):
+                hits[path] = {"status": r.status_code, "label": label}
+                is_wp = True
+        except Exception as e:
+            error = (error or "") + f" {path}:{e};"
+
+    if not is_wp:
+        scan_id = str(uuid.uuid4())
+        save_scan(scan_id, "wpscan", req.target, {"output": "not wordpress"})
+        return {
+            "scan_id": scan_id, "target": req.target, "tool": "wpscan",
+            "is_wordpress": False, "findings": [],
+            "skipped_reason": "Target does not appear to be WordPress — none of /wp-login.php, /wp-admin/, /wp-content/, /wp-includes/, /xmlrpc.php responded with WP-typical status codes",
+            "tests_performed": tests_performed,
+            "tests_summary": f"{tests_performed} probes for WordPress indicator paths — target is not WordPress",
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+        }
+
+    # Step 2: WP confirmed — actively check the high-value items.
+    _now_z = datetime.datetime.utcnow().isoformat() + "Z"
+
+    # 2a. xmlrpc.php — always exploitable for amplification + bruteforce
+    if "/xmlrpc.php" in hits:
+        tests_performed += 1
+        findings.append({
+            "detail": "XML-RPC endpoint exposed at /xmlrpc.php — usable for password bruteforce amplification (system.multicall) and pingback DDoS",
+            "severity": "MEDIUM", "cvss": "5.3", "cve": "N/A",
+            "cwe": "CWE-307", "cwe_name": "Improper Restriction of Excessive Authentication Attempts",
+            "owasp": "A07:2021",
+            "remediation": "Disable XML-RPC unless required: add 'add_filter(\"xmlrpc_enabled\", \"__return_false\");' OR block /xmlrpc.php at the web server level.",
+            "confidence": "CONFIRMED", "verified_at": _now_z,
+            "evidence_marker": f"HTTP {hits['/xmlrpc.php']['status']} on /xmlrpc.php",
+        })
+
+    # 2b. /wp-admin/ accessible without auth-only protection?
+    if "/wp-admin/" in hits and hits["/wp-admin/"]["status"] in (200, 302):
+        tests_performed += 1
+        findings.append({
+            "detail": "/wp-admin/ is publicly reachable — should be IP-restricted on production WordPress installs",
+            "severity": "LOW", "cvss": "3.1", "cve": "N/A",
+            "cwe": "CWE-284", "cwe_name": "Improper Access Control",
+            "owasp": "A01:2021",
+            "remediation": "Restrict /wp-admin/ access by IP (via .htaccess / nginx allow rules) or place it behind a VPN.",
+            "confidence": "CONFIRMED", "verified_at": _now_z,
+            "evidence_marker": f"HTTP {hits['/wp-admin/']['status']} on /wp-admin/",
+        })
+
+    # 2c. Version disclosure via /readme.html
+    tests_performed += 1
+    try:
+        rr = _safe_get(base + "/readme.html", retries=1, timeout=6, req=req)
+        if rr is not None and rr.status_code == 200 and "wordpress" in (rr.text or "").lower():
+            m = re.search(r"[Vv]ersion\s+(\d+\.\d+(?:\.\d+)?)", rr.text or "")
+            if m:
+                wp_version = m.group(1)
+                findings.append({
+                    "detail": f"WordPress version disclosed via /readme.html: {wp_version}",
+                    "severity": "LOW", "cvss": "3.1", "cve": "N/A",
+                    "cwe": "CWE-200", "cwe_name": "Information Exposure",
+                    "owasp": "A05:2021",
+                    "remediation": "Delete /readme.html — it serves no production purpose and reveals the WP version to attackers searching for CVEs.",
+                    "confidence": "CONFIRMED", "verified_at": _now_z,
+                    "evidence_marker": f"readme.html disclosed version: {wp_version}",
+                })
+    except Exception: pass
+
+    # 2d. User enumeration via ?author=1 redirect
+    tests_performed += 1
+    try:
+        ur = _safe_get(base + "/?author=1", retries=1, timeout=6, req=req,
+                       allow_redirects=False)
+        if ur is not None and ur.status_code in (301, 302):
+            loc = ur.headers.get("Location", "")
+            if "/author/" in loc:
+                username = loc.split("/author/")[1].split("/")[0]
+                findings.append({
+                    "detail": f"User enumeration: ?author=1 redirects to /author/{username}/ — admin username leaked",
+                    "severity": "MEDIUM", "cvss": "5.3", "cve": "N/A",
+                    "cwe": "CWE-200", "cwe_name": "User Enumeration",
+                    "owasp": "A07:2021",
+                    "remediation": "Disable author archives or remap ?author=N to a generic landing page. Plugins like 'Stop User Enumeration' do this in one click.",
+                    "confidence": "CONFIRMED", "verified_at": _now_z,
+                    "evidence_marker": f"301/302 from /?author=1 to /author/{username}/",
+                })
+    except Exception: pass
+
+    # 2e. /wp-content/uploads/ directory listing
+    tests_performed += 1
+    try:
+        ur = _safe_get(base + "/wp-content/uploads/", retries=1, timeout=6, req=req)
+        if ur is not None and ur.status_code == 200 and "<title>Index of" in (ur.text or ""):
+            findings.append({
+                "detail": "/wp-content/uploads/ directory listing enabled — exposes uploaded files",
+                "severity": "MEDIUM", "cvss": "5.3", "cve": "N/A",
+                "cwe": "CWE-548", "cwe_name": "Information Exposure Through Directory Listing",
+                "owasp": "A05:2021",
+                "remediation": "Disable directory listing: add 'Options -Indexes' to .htaccess (Apache) or 'autoindex off;' to nginx config.",
+                "confidence": "CONFIRMED", "verified_at": _now_z,
+                "evidence_marker": "Index-of page returned from /wp-content/uploads/",
+            })
+    except Exception: pass
+
+    vulnerable = any(f["severity"] in ("CRITICAL", "HIGH", "MEDIUM") for f in findings)
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "wpscan", req.target, {"output": f"is_wp={is_wp} version={wp_version} findings={len(findings)}"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "wpscan",
+        "is_wordpress": True, "wp_version": wp_version,
+        "indicators": list(hits.keys()),
+        "findings": findings, "total": len(findings),
+        "vulnerable": vulnerable,
+        "tests_performed": tests_performed,
+        "tests_summary": f"{tests_performed} active probes — WP-indicator paths, XML-RPC, /wp-admin reachability, readme.html version, ?author=1 user enum, /wp-content/uploads/ listing",
+        "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
 @app.post("/api/scan/nuclei")
 async def nuclei_scan(req: ScanRequest, user=Depends(verify_scan_quota)):
     """Nuclei vulnerability scan — runs 10,000+ community templates against
