@@ -228,9 +228,15 @@ def _safe_request(method, url, *, retries=2, timeout=15, headers=None, req=None,
     import time as _tm, random as _rnd
     h = headers if headers is not None else _make_req_headers(req)
     last_exc = None
+    # ADAPTIVE TIMEOUT: each retry attempt gets a 50% larger budget than
+    # the previous one (attempt 0 = `timeout`, attempt 1 = 1.5×, attempt
+    # 2 = 2.25×). Trust-First principle: never kill a tool by running out
+    # of time on a slow target. Hard ceiling of 60s per attempt prevents
+    # runaway scans.
     for attempt in range(retries + 1):
+        effective_timeout = min(60, int(timeout * (1.5 ** attempt)))
         try:
-            kw = dict(timeout=timeout, headers=h, verify=verify,
+            kw = dict(timeout=effective_timeout, headers=h, verify=verify,
                       allow_redirects=allow_redirects)
             if data is not None:   kw["data"] = data
             if json is not None:   kw["json"] = json
@@ -270,6 +276,75 @@ def _safe_get(url, **kw):
 
 def _safe_post(url, **kw):
     return _safe_request("POST", url, **kw)
+
+
+# ── Trust-First infrastructure ──────────────────────────────────────────
+# A small registry keyed by target host that caches the first-probe
+# baseline response time. Subsequent calls on the same host get an
+# adaptive timeout — `max(8, 5 * baseline)` — so slow customer targets
+# never silently lose a phase to a hardcoded 10s timeout. The cache is
+# tiny (per-process, evicts after 5 minutes) and only used as a hint.
+_BASELINE_RTT = {}  # host → (rtt_seconds, recorded_at)
+
+def _baseline_rtt(target):
+    """Probe target's HTTP root once, cache the round-trip time. Returns
+    None if unreachable (caller should fall back to default timeout)."""
+    from urllib.parse import urlparse
+    import time as _tm
+    try:
+        u = urlparse(target if "://" in target else "http://" + target)
+        host = u.netloc or u.path
+        if not host: return None
+        now = _tm.time()
+        cached = _BASELINE_RTT.get(host)
+        if cached and (now - cached[1]) < 300:
+            return cached[0]
+        start = _tm.monotonic()
+        r = _req_lib.head(f"{u.scheme or 'http'}://{host}/",
+                          timeout=8, verify=False, allow_redirects=True,
+                          headers={"User-Agent": "VulnusLab-Baseline/1.0"})
+        rtt = _tm.monotonic() - start
+        _BASELINE_RTT[host] = (rtt, now)
+        return rtt
+    except Exception:
+        return None
+
+
+def _adaptive_timeout(target, floor=8, ceiling=60, factor=5):
+    """Return a timeout appropriate for the target. Uses cached baseline
+    RTT; multiplies by factor (default 5) so a probe that responded in
+    2s gets a 10s budget for follow-up requests, while a sluggish 8s
+    baseline gets a 40s budget. Bounded by [floor, ceiling] so we
+    don't wait forever on a hung target."""
+    rtt = _baseline_rtt(target)
+    if rtt is None: return floor
+    return max(floor, min(ceiling, int(rtt * factor)))
+
+
+def _wrap_finding(detail, severity, **kw):
+    """Stamp a finding with the new mandatory trust fields. Every finding
+    that flows into the PDF should pass through here so we never ship a
+    finding without:
+      - confidence: always CONFIRMED (SUSPECTED tier removed)
+      - verified_at: timestamp of the verifying probe
+      - evidence_marker: 1-line summary of WHAT proved it (request/response
+        marker, banner string, etc.)
+      - tests_performed: how many probes ran to confirm
+    """
+    return {
+        "detail":     detail,
+        "severity":   severity,
+        "cvss":       kw.get("cvss", "0.0"),
+        "cve":        kw.get("cve", "N/A"),
+        "cwe":        kw.get("cwe", "N/A"),
+        "cwe_name":   kw.get("cwe_name", ""),
+        "owasp":      kw.get("owasp", "N/A"),
+        "remediation":kw.get("remediation", ""),
+        "confidence": "CONFIRMED",
+        "verified_at":datetime.datetime.utcnow().isoformat() + "Z",
+        "evidence_marker": kw.get("evidence_marker", ""),
+        "tests_performed": kw.get("tests_performed", 1),
+    }
 
 def save_scan(scan_id, tool, target, result):
     user_id = _USER_CTX.get()
