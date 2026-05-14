@@ -563,7 +563,7 @@ function generatePDF(reportData) {
           csrf, idor, ssti, fileupload,
           deserial, protopollution, typejuggling, jwt, graphql, nosql, oauth, hostheader, websocket, takeover, otp,
           rfi, smuggling, responsesplitting, sessionfixation, dataexfil, racecondition, smb, ftp, smtp, snmp,
-          companyName, reporterName, reporterRole, customLogo, template } = reportData;
+          companyName, reporterName, reporterRole, customLogo, template, remediation } = reportData;
   // wasRun(key): returns true if tool was run or if toolsUsed is empty (show all)
   const _toolSet = new Set(toolsUsed||[]);
   const wasRun = key => _toolSet.size === 0 || _toolSet.has(key);
@@ -866,6 +866,66 @@ function generatePDF(reportData) {
       y += rowH;
     });
     y += 5;
+
+    // ─── REMEDIATION PROGRESS — diff vs previous scan ───────────
+    // Shown only when a previous scan exists. The CTO opens this report after
+    // their team has fixed things and sees exactly what changed since last time.
+    // Three buckets: FIXED (in prev but not current), NEW (current but not prev),
+    // PERSISTING (in both). Each bucket gets a colored banner with count + the
+    // top-severity sample so the customer can act on the deltas immediately.
+    if (remediation && (remediation.fixed.length + remediation.novel.length + remediation.persisting.length > 0)) {
+      chk(60); y += 2;
+      y = sectionHead("Remediation Progress",y);
+
+      // Header strip — context line
+      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+      doc.text(`Compared against previous scan on ${remediation.prevDate || "an earlier date"} (${remediation.prevTotal} findings then).`, margin+2, y);
+      doc.setFont("Arial","bold");
+      y += 5;
+
+      // Three KPI tiles side-by-side
+      const tileW = (contentW - 4) / 3;
+      const _tile = (idx, color, bg, count, label, sample) => {
+        const x = margin + idx * (tileW + 2);
+        fillR(x, y, tileW, 20, bg);
+        fillR(x, y, 3, 20, color);
+        doc.setFont("Arial","bold"); doc.setFontSize(18); doc.setTextColor(...color);
+        doc.text(String(count), x+8, y+11);
+        doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...DARK);
+        doc.text(label, x+8 + (count>=10?12:8), y+8);
+        doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+        const sLines = doc.splitTextToSize(sample || "", tileW - 12);
+        if (sLines[0]) doc.text(sLines[0], x+8 + (count>=10?12:8), y+13);
+        if (sLines[1]) doc.text(sLines[1], x+8 + (count>=10?12:8), y+16.5);
+      };
+      const fixedTop = remediation.fixed.find(f=>f.severity==="CRITICAL")||remediation.fixed.find(f=>f.severity==="HIGH")||remediation.fixed[0];
+      const newTop   = remediation.novel.find(f=>f.severity==="CRITICAL")||remediation.novel.find(f=>f.severity==="HIGH")||remediation.novel[0];
+      const persTop  = remediation.persisting.find(f=>f.severity==="CRITICAL")||remediation.persisting.find(f=>f.severity==="HIGH")||remediation.persisting[0];
+      _tile(0, [15,118,82],  [220,252,231], remediation.fixed.length,      "FIXED",
+            fixedTop ? `e.g. ${(fixedTop.detail||"").substring(0,70)}` : "Nothing fixed since last scan.");
+      _tile(1, [162,28,28],  [254,226,226], remediation.novel.length,      "NEW",
+            newTop   ? `e.g. ${(newTop.detail||"").substring(0,70)}`   : "No new findings — posture stable.");
+      _tile(2, [120,89,15],  [254,243,199], remediation.persisting.length, "STILL OPEN",
+            persTop  ? `e.g. ${(persTop.detail||"").substring(0,70)}`  : "All previous findings resolved.");
+      y += 23;
+
+      // Narrative one-liner — picks the story to tell based on the deltas
+      const _net = remediation.fixed.length - remediation.novel.length;
+      let _story = "";
+      if (remediation.fixed.length === 0 && remediation.novel.length === 0) {
+        _story = "No change since last scan — same set of findings still open.";
+      } else if (_net > 0) {
+        _story = `Net improvement: ${_net} more issue${_net===1?"":"s"} fixed than introduced since last scan.`;
+      } else if (_net < 0) {
+        _story = `Net regression: ${Math.abs(_net)} more new issue${Math.abs(_net)===1?"":"s"} than fixes since last scan. Investigate recent deployments.`;
+      } else {
+        _story = `Even trade: ${remediation.fixed.length} fixed and ${remediation.novel.length} new findings since last scan.`;
+      }
+      doc.setFont("Arial","italic"); doc.setFontSize(8); doc.setTextColor(...DARK);
+      const _stLines = doc.splitTextToSize(_story, contentW - 4);
+      _stLines.slice(0,2).forEach((ln,i)=>doc.text(ln, margin+2, y + i*3.8));
+      y += _stLines.length * 3.8 + 4;
+    }
 
     // Tools used table on cover
     if(toolsUsed&&toolsUsed.length>0){
@@ -2118,6 +2178,36 @@ function WebAppModule(props) {
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         new Notification("Pentest Complete", { body: normTarget + " — " + activePhases.length + " phases done", icon: "" });
       }
+      // ─── REMEDIATION PROGRESS: snapshot this scan for next-time comparison ───
+      // Two-slot rotation in localStorage keyed by target:
+      //   vulnuslab_lastScan_<target>     — the scan that JUST finished
+      //   vulnuslab_previousScan_<target> — the prior one (diff target)
+      // dlPDF reads previousScan to compute "fixed / new / persisting" deltas.
+      try {
+        const snapshot = { ts: new Date().toISOString(), findings: [] };
+        PHASES.forEach(ph => {
+          const r = results[ph.tool];
+          if (r?.findings) r.findings.forEach(f => {
+            if (f.severity && f.severity !== "INFO" && f.detail) {
+              snapshot.findings.push({
+                detail: String(f.detail).substring(0, 200),
+                severity: f.severity,
+                cwe: f.cwe || "",
+                owasp: f.owasp || "",
+                _tool: ph.tool
+              });
+            }
+          });
+        });
+        if (results["sqlmap"]?.vulnerable) snapshot.findings.push({detail:"SQL Injection detected",severity:"CRITICAL",cwe:"CWE-89",owasp:"A03:2021",_tool:"sqlmap"});
+        if (results["xss"]?.vulnerable) snapshot.findings.push({detail:"XSS vulnerability detected on target",severity:"CRITICAL",cwe:"CWE-79",owasp:"A03:2021",_tool:"xss"});
+        // Rotate: previous = old last, last = new snapshot
+        const oldLast = localStorage.getItem("vulnuslab_lastScan_" + normTarget);
+        if (oldLast) localStorage.setItem("vulnuslab_previousScan_" + normTarget, oldLast);
+        localStorage.setItem("vulnuslab_lastScan_" + normTarget, JSON.stringify(snapshot));
+        if (oldLast) add("📊 Snapshot saved — next PDF will show remediation progress vs this scan");
+        else add("📊 Baseline snapshot saved — re-scan this target to see remediation deltas");
+      } catch(e) { /* localStorage full or disabled — non-fatal */ }
     }
     setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
   };
@@ -2156,6 +2246,16 @@ function WebAppModule(props) {
 
   // PDF + CSV export
   const dlPDF = (cfg = {}) => {
+    // ─── Load PREVIOUS scan snapshot for remediation diff ─────────
+    // dlPDF runs AFTER scan completes, so "vulnuslab_previousScan_<target>" is
+    // the second-most-recent run (the one to diff against). On the first scan
+    // this is null and the Remediation Progress section gracefully skips.
+    let _prevScan = null;
+    try {
+      const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)((target || "").trim());
+      const raw = localStorage.getItem("vulnuslab_previousScan_" + normTarget);
+      if (raw) _prevScan = JSON.parse(raw);
+    } catch(e) { _prevScan = null; }
     let allFindings = [];
     // Tools whose findings are NOT actively verified — they pattern-match server
     // responses against template/signature databases, so the finding is "looks
@@ -2274,8 +2374,30 @@ function WebAppModule(props) {
     const toolsUsed = Object.keys(allResults).filter(k=>allResults[k]);
     const riskScore = Math.min(100, allFindings.reduce((s,f)=>s+({CRITICAL:25,HIGH:15,MEDIUM:8,LOW:3}[f.severity]||0),0));
     const riskLabel = riskScore>=75?"CRITICAL":riskScore>=50?"HIGH":riskScore>=25?"MEDIUM":riskScore>0?"LOW":"SAFE";
+
+    // ─── REMEDIATION DIFF vs previous scan ──────────────────────
+    // Compute fixed / new / persisting buckets by hashing each finding to
+    // a stable key (cwe + first 40 chars of detail). The same fingerprinting
+    // strategy used by dedup so a renamed scanner output doesn't flag a
+    // "new" finding when it's really the same root cause.
+    let _remediation = null;
+    if (_prevScan && Array.isArray(_prevScan.findings) && _prevScan.findings.length > 0) {
+      const _key = f => (f.cwe || "") + "|" + String(f.detail || "").toLowerCase().substring(0, 40);
+      const curKeys  = new Set(allFindings.map(_key));
+      const prevKeys = new Set(_prevScan.findings.map(_key));
+      const fixed = _prevScan.findings.filter(f => !curKeys.has(_key(f)));
+      const novel = allFindings.filter(f => !prevKeys.has(_key(f)));
+      const persisting = allFindings.filter(f => prevKeys.has(_key(f)));
+      _remediation = {
+        prevDate: (_prevScan.ts || "").substring(0, 10),
+        prevTotal: _prevScan.findings.length,
+        fixed, novel, persisting
+      };
+    }
+
     generatePDF({
       target, riskScore, riskLabel,
+      remediation: _remediation,
       companyName:  cfg.companyName  || "VulnusLab",
       // Upgrade stale defaults from older app versions automatically — if user has
       // the OLD generic "Security Analyst / Penetration Tester" cached, replace with
