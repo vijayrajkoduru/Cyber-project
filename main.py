@@ -2050,25 +2050,33 @@ async def _python_fuzz(base_url: str, concurrency: int=20, custom_paths: list=No
         b = await loop.run_in_executor(None, _probe, rnd)
         if b: baselines.append(b)
 
+    def _redirect_origin(loc):
+        """Extract scheme://host of a Location URL — ignores path, query,
+        fragment. Robust against trailing slashes and multi-segment paths
+        that broke the previous rsplit approach."""
+        if not loc: return ""
+        try:
+            p = urlparse(loc)
+            if p.scheme and p.netloc: return f"{p.scheme}://{p.netloc}"
+        except Exception: pass
+        return loc
+
     def _looks_like_baseline(result):
-        """Match heuristic: status code + redirect target + body size envelope.
-        We compare against both baseline probes to defeat tiny variations."""
+        """Match heuristic: status code + redirect ORIGIN (scheme+host) +
+        body size envelope. We compare against both baseline probes to
+        defeat tiny variations.
+
+        Critical: redirect comparison uses scheme://host ONLY, not path.
+        Netlify/Cloudflare/etc. redirects every URL to https://<same-host>/
+        <same-path-as-probed>; the path differs per probe but the origin
+        is constant. Comparing origin lets us detect "catch-all redirect
+        to same host" regardless of what path the probe specified."""
         if not result: return False
         for b in baselines:
             if result["status"] != b["status"]: continue
-            # Redirect target — normalize away the variable path portion. If
-            # baseline's redirect is e.g. https://site/{rnd1} and result is
-            # https://site/admin, both are "Location: https://site/<path>" so
-            # we compare the host+scheme prefix only.
-            rh = result.get("redirect","")
-            bh = b.get("redirect","")
-            if rh and bh:
-                # Strip query and fragment, keep scheme+host+leading path
-                rhroot = rh.split("?")[0].rsplit("/", 1)[0]
-                bhroot = bh.split("?")[0].rsplit("/", 1)[0]
-                if rhroot != bhroot: continue
-            elif (rh and not bh) or (bh and not rh):
-                continue
+            ro = _redirect_origin(result.get("redirect",""))
+            bo = _redirect_origin(b.get("redirect",""))
+            if (ro or bo) and ro != bo: continue
             # Size within ±30 bytes (handles minor variation in
             # auto-generated error pages that include the requested path)
             if abs(result["size"] - b["size"]) > 30: continue
@@ -4841,8 +4849,11 @@ async def recon_params(req: ScanRequest, user=Depends(verify_token)):
     _AUTH_CTX.set(req)
     from urllib.parse import urljoin, urlparse, parse_qs
     target = _web_url(req.target)
-    params = set()
-    sources = {"query": 0, "form": 0, "json": 0, "js_var": 0}
+    # Track each param's source — we only keep params that appeared in a
+    # URL-param / form / fetch-call context. JSON object keys alone are
+    # too noisy (every React DOM event handler key gets caught otherwise).
+    sources = {"query": 0, "form": 0, "js_url": 0, "js_form": 0}
+    params = set()       # params that DID show URL-param context
     error = None
     try:
         r = _safe_get(target, retries=2, timeout=10, req=req)
@@ -4853,36 +4864,89 @@ async def recon_params(req: ScanRequest, user=Depends(verify_token)):
             absurl = urljoin(target, href)
             for k in parse_qs(urlparse(absurl).query).keys():
                 params.add(k); sources["query"] += 1
-        # 2. Form input names
+        # 2. Form input names (high-signal — these ARE HTTP params)
         for nm in re.findall(r'''<input[^>]+name=["']([^"']+)["']''', html, re.IGNORECASE):
             params.add(nm); sources["form"] += 1
         for nm in re.findall(r'''<select[^>]+name=["']([^"']+)["']''', html, re.IGNORECASE):
             params.add(nm); sources["form"] += 1
         for nm in re.findall(r'''<textarea[^>]+name=["']([^"']+)["']''', html, re.IGNORECASE):
             params.add(nm); sources["form"] += 1
-        # 3. JS variable / JSON key references on the page itself
-        for k in re.findall(r'''["']([a-zA-Z_][a-zA-Z0-9_]{1,40})["']\s*:''', html):
-            if not k.startswith("_") and len(k) > 1:
-                params.add(k); sources["json"] += 1
-        # 4. Pull JS bundles and scan them too (capped)
+        # 3. URL-param patterns in inline JS / HTML attributes — only `?key=`
+        # and `&key=` style. Catches API endpoint definitions hardcoded in
+        # the page (e.g. `fetch("/api/users?role=admin")`).
+        for k in re.findall(r'''[?&]([a-zA-Z_][a-zA-Z0-9_]{0,40})=''', html):
+            params.add(k); sources["query"] += 1
+        # 4. Pull JS bundles and scan them — but ONLY for URL-param patterns
+        # and formData.append() calls. Skip raw JSON object keys (they're
+        # 99% DOM event names / React internals / class properties).
         js_urls = list({urljoin(target, m) for m in re.findall(r'''<script[^>]+src=["']([^"']+)["']''', html, re.IGNORECASE)})[:25]
         for ju in js_urls:
             jr = _safe_get(ju, retries=1, timeout=8, req=req)
             if jr is None or len(jr.content) > 2_000_000: continue
             body = jr.text or ""
-            # Common JS patterns: `formData.append('foo', ...)`, `params.foo`,
-            # `data: {foo: ...}`, `?foo=` in url-templates
-            for k in re.findall(r'''\.append\(["']([a-zA-Z_][a-zA-Z0-9_]{0,40})["']''', body): params.add(k); sources["js_var"] += 1
-            for k in re.findall(r'''["']([a-zA-Z_][a-zA-Z0-9_]{1,40})["']\s*:''', body):
-                if not k.startswith("_") and len(k) > 1: params.add(k); sources["json"] += 1
-            for k in re.findall(r'''[?&]([a-zA-Z_][a-zA-Z0-9_]{0,40})=''', body): params.add(k); sources["query"] += 1
+            # 4a. URL-param patterns: ?key= and &key= in URL templates
+            for k in re.findall(r'''[?&]([a-zA-Z_][a-zA-Z0-9_]{0,40})=''', body):
+                params.add(k); sources["js_url"] += 1
+            # 4b. formData.append('key', ...) / searchParams.append('key', ...)
+            for k in re.findall(r'''\.(?:append|set|get|has|delete)\s*\(\s*["']([a-zA-Z_][a-zA-Z0-9_]{1,40})["']''', body):
+                params.add(k); sources["js_form"] += 1
+            # 4c. URLSearchParams({key: ...}) — keys inside URLSearchParams
+            # constructor calls. Conservative regex: must follow the literal
+            # `URLSearchParams(` or `new FormData(` prefix.
+            for m in re.finditer(r'''(?:URLSearchParams|FormData)\s*\(\s*\{([^}]{0,500})\}''', body):
+                for k in re.findall(r'''["']?([a-zA-Z_][a-zA-Z0-9_]{1,40})["']?\s*:''', m.group(1)):
+                    params.add(k); sources["js_form"] += 1
     except Exception as e:
         error = str(e)
 
-    # Filter noise — single-letter / numeric-only / framework-internal keys
-    filtered = sorted({p for p in params if len(p) > 1 and not p.isdigit() and p.lower() not in {
-        "true","false","null","undefined","this","self","window","document","location","value","name","type","id"
-    }})
+    # Aggressive noise filter — JS DOM event names, React internals, JS
+    # globals, common keywords. None of these are HTTP parameters; they're
+    # all "looks like a word in source" false positives that erode trust.
+    _JS_DOM_NOISE = {
+        # React internals
+        "strictmode","fragment","suspense","provider","consumer","forwardref","memo","lazy",
+        "capture","children","ref","key","props","state","context","reducer","dispatch",
+        # DOM events
+        "click","dblclick","mousedown","mouseup","mouseover","mouseout","mousemove","mouseenter","mouseleave",
+        "keydown","keyup","keypress","focus","blur","focusin","focusout","change","input","submit",
+        "load","unload","resize","scroll","wheel","drag","dragend","dragenter","dragexit","dragleave",
+        "dragover","dragstart","drop","copy","cut","paste","select","abort","cancel","close","play",
+        "pause","ended","error","stalled","waiting","suspend","seeking","seeked","ratechange","volumechange",
+        "timeupdate","progress","durationchange","loadeddata","loadedmetadata","loadstart","canplay","canplaythrough",
+        "compositionstart","compositionend","compositionupdate","beforeinput","beforeblur","afterblur",
+        "auxclick","contextmenu","pointerdown","pointerup","pointermove","pointercancel","pointerenter","pointerleave",
+        "pointerover","pointerout","gotpointercapture","lostpointercapture","touchstart","touchend","touchmove","touchcancel",
+        "transitionstart","transitionend","transitioncancel","transitionrun","animationstart","animationend","animationiteration",
+        "hashchange","popstate","pageshow","pagehide","beforeunload","online","offline","message","messageerror",
+        "fullscreenchange","fullscreenerror","visibilitychange","gamepadconnected","gamepaddisconnected",
+        "show","toggle","reset","invalid","cuechange","ratechange","seeking","seeked",
+        # HTML element names (commonly appear as keys in render objects)
+        "div","span","button","input","form","label","select","option","textarea","iframe","img","image",
+        "audio","video","embed","object","canvas","svg","path","circle","rect","polygon","polyline","line",
+        "table","tr","td","th","thead","tbody","tfoot","ul","ol","li","dl","dt","dd","nav","main","aside",
+        "header","footer","section","article","figure","figcaption","details","summary","dialog",
+        # JS/TS keywords + globals
+        "true","false","null","undefined","this","self","window","document","location","value","name","type","id",
+        "function","class","const","let","var","import","export","default","return","async","await","yield",
+        "string","number","boolean","object","array","symbol","bigint","void","any","never","unknown",
+        # Native event/property names
+        "enter","escape","backspace","tab","arrowup","arrowdown","arrowleft","arrowright","unidentified","ms","ns","ol","na","os","aa",
+        "auto","hidden","display","collapsed","forwards","backwards","family","included","excluded",
+    }
+    def _looks_real_param(p):
+        if len(p) < 2: return False
+        if p.isdigit(): return False
+        # Reject the noise set
+        if p.lower() in _JS_DOM_NOISE: return False
+        # Reject pascalCase React component names (capital first letter,
+        # rest contains capitals — e.g. StrictMode, Capture)
+        if p[0].isupper() and re.search(r"[A-Z]", p[1:]): return False
+        # Reject anything that's clearly a single English word matching
+        # the keys-only patterns (no _ or - or .) AND under 4 chars —
+        # too generic to be a meaningful param name.
+        if len(p) < 4 and "_" not in p and "-" not in p: return False
+        return True
+    filtered = sorted({p for p in params if _looks_real_param(p)})
 
     findings = []
     # Highlight params with names that suggest sensitive functionality
