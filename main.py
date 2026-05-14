@@ -1600,6 +1600,7 @@ async def scan_wpscan(req: ScanRequest, user=Depends(verify_scan_quota)):
     "scan ran but found nothing" ambiguity.
     """
     _AUTH_CTX.set(req)
+    import string as _string
     base = _web_url(req.target).rstrip("/")
     findings = []
     is_wp = False
@@ -1607,7 +1608,49 @@ async def scan_wpscan(req: ScanRequest, user=Depends(verify_scan_quota)):
     tests_performed = 0
     error = None
 
+    # Step 0: Baseline probe — fingerprint the SPA-fallback / catch-all
+    # response that returns 200 for EVERY path (Angular, React, Vue,
+    # Netlify rewrite rules). If wp-login.php response matches baseline,
+    # the target is an SPA, NOT WordPress. Without this check, WPScan
+    # produces false positives on every SPA (Juice Shop reported as WP).
+    rnd = "/_vulnuslab_wp_baseline_" + "".join(random.choices(_string.ascii_lowercase, k=18)) + ".nonexistent"
+    baseline = None
+    try:
+        br = _safe_get(base + rnd, retries=1, timeout=8, req=req, allow_redirects=False)
+        if br is not None:
+            baseline = {
+                "status": br.status_code,
+                "size":   len(br.content),
+                "body":   (br.text or "")[:5000].lower(),
+            }
+    except Exception:
+        pass
+
+    def _matches_baseline(r):
+        """True if this response looks like the SPA catch-all fallback.
+        Status code identical + body size within ±50 bytes + same first
+        kB of content (lowercased) = same page, just a different URL."""
+        if not baseline or r is None: return False
+        if r.status_code != baseline["status"]: return False
+        if abs(len(r.content) - baseline["size"]) > 50: return False
+        body_lower = (r.text or "")[:5000].lower()
+        # Strong match = identical lowercase content for first 5KB
+        return body_lower == baseline["body"]
+
+    def _looks_like_wordpress(r):
+        """Positive WP confirmation: response body contains WordPress-
+        specific markers. We require this in addition to a non-baseline
+        status to avoid SPA false positives."""
+        if r is None: return False
+        body = (r.text or "")[:8000].lower()
+        wp_markers = ("wp-content", "wp-includes", "wp-json", "wordpress",
+                      "wp_enqueue_script", "wp-emoji-release", "wp-block-",
+                      "<meta name=\"generator\" content=\"wordpress")
+        return any(m in body for m in wp_markers)
+
     # Step 1: is this WordPress at all? Look for telltale paths.
+    # CRITICAL: a 200 alone is NOT enough — must NOT match baseline AND
+    # SHOULD show WP markers in the body (or be a redirect to known WP path).
     indicators = {
         "/wp-login.php":   "WP login page",
         "/wp-admin/":      "WP admin dir",
@@ -1621,7 +1664,16 @@ async def scan_wpscan(req: ScanRequest, user=Depends(verify_scan_quota)):
         try:
             r = _safe_get(base + path, retries=1, timeout=8, req=req,
                           allow_redirects=False)
-            if r is not None and r.status_code in (200, 301, 302, 401, 403):
+            if r is None: continue
+            # Reject SPA fallback responses outright
+            if _matches_baseline(r): continue
+            # Accept only when response code is WP-typical AND either
+            # the body shows WP markers OR the status is a redirect/401/403
+            # (those are protocol signals, not page content)
+            if r.status_code in (301, 302, 401, 403):
+                hits[path] = {"status": r.status_code, "label": label}
+                is_wp = True
+            elif r.status_code == 200 and _looks_like_wordpress(r):
                 hits[path] = {"status": r.status_code, "label": label}
                 is_wp = True
         except Exception as e:
