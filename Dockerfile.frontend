@@ -4,7 +4,12 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps
 COPY public ./public
 COPY src ./src
-RUN npm run build
+# CI=false tells react-scripts to NOT treat warnings as errors. Without this,
+# Docker's non-TTY stdout makes CRA auto-detect "CI mode" and reject the build
+# on any legacy unused-var / no-mixed-operators warning. We have those in
+# App.js (9k+ lines, accumulated over time) — fixing them all is a separate
+# cleanup pass. For now, warnings are still printed but don't fail the build.
+RUN CI=false npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/build /usr/share/nginx/html

@@ -1731,29 +1731,33 @@ function generatePDF(reportData) {
     if(configExposed)recs.push({p:"HIGH",    t:"Restrict /config/, /database/, /backup/ from public access",              a:"Add deny rules"});
     if(setupExposed) recs.push({p:"HIGH",    t:"Remove setup.php / install files — dangerous on production servers",      a:"Delete files"});
     if(adminExposed) recs.push({p:"HIGH",    t:"Protect /admin panel with IP whitelist or strong authentication",          a:"Restrict access"});
-    // Critical roll-up — only when there ARE critical findings on this target
-    const critCount = allFindings.filter(f=>f.severity==="CRITICAL").length;
-    const highCount = allFindings.filter(f=>f.severity==="HIGH").length;
+    // Critical roll-up — only when there ARE critical findings on this target.
+    // `findings` is the deduped aggregated list (passed in from dlPDF as the
+    // `findings` reportData prop), so counts here match the master table.
+    const _findArr = findings || [];
+    const critCount = _findArr.filter(f=>f.severity==="CRITICAL").length;
+    const highCount = _findArr.filter(f=>f.severity==="HIGH").length;
     if(critCount>0) recs.push({p:"CRITICAL",t:`Address all ${critCount} CRITICAL finding(s) within 24 hours before next assessment`, a:"Immediate fix"});
     if(highCount>0 && critCount===0) recs.push({p:"HIGH", t:`Address ${highCount} HIGH-severity finding(s) within 7 days`, a:"Sprint priority"});
-    // Header coverage — derived from the headers scanner's own findings array.
-    const headersMissing = (allResults["headers"]?.findings||[]).filter(f=>/^missing /i.test(f.detail||"")).map(f=>(f.detail.match(/Missing ([A-Za-z-]+)/)||[])[1]).filter(Boolean);
+    // Header coverage — derive missing-header names from the aggregated findings list.
+    const headerMissingFinds = _findArr.filter(f => /^missing\s/i.test(f.detail||"") && /(x-frame|csp|hsts|x-content|content-security|permissions-policy|cross-origin|referrer)/i.test(f.detail||""));
+    const headersMissing = headerMissingFinds.map(f => (f.detail.match(/Missing\s+([A-Za-z-]+)/i)||[])[1]).filter(Boolean);
     if(headersMissing.length>0) recs.push({p:"HIGH", t:"Add missing HTTP security headers: "+headersMissing.slice(0,4).join(", "), a:"Update server config"});
-    // Web app findings
+    // Web app findings — these are individual destructured scanner-result objects
     if(cors&&cors.vulnerable) recs.push({p:"HIGH", t:"Fix CORS misconfiguration — restrict Access-Control-Allow-Origin to specific trusted origins", a:"Update CORS policy"});
     if(xss&&xss.vulnerable)  recs.push({p:"HIGH",  t:"Fix XSS vulnerability — sanitize and encode all user input, deploy CSP header", a:"Input validation"});
     if(sqlmap&&sqlmap.vulnerable) recs.push({p:"CRITICAL",t:"Parameterize all SQL queries immediately — SQL injection confirmed on target", a:"Use prepared stmts"});
-    if(allResults["clickjacking"]?.vulnerable) recs.push({p:"MEDIUM", t:"Set X-Frame-Options: DENY or CSP frame-ancestors 'none' to block iframe embedding", a:"Add header"});
-    if(allResults["verbtamper"]?.vulnerable) recs.push({p:"HIGH", t:"Disable dangerous HTTP methods (PUT/DELETE/TRACE/CONNECT) at the web server / reverse proxy layer", a:"Restrict methods"});
-    if(allResults["ssrf"]?.vulnerable) recs.push({p:"HIGH", t:"Block outbound requests to cloud metadata endpoints (169.254.169.254, metadata.google.internal) — SSRF confirmed", a:"Egress firewall"});
-    if(allResults["xxe"]?.vulnerable) recs.push({p:"HIGH", t:"Disable external entity processing in XML parsers (libxml: LIBXML_NOENT off; Java: FEATURE_SECURE_PROCESSING)", a:"Patch parser config"});
-    if(allResults["openredirect"]?.vulnerable) recs.push({p:"MEDIUM", t:"Validate redirect URLs against a strict allow-list — prevent phishing via open redirect", a:"URL allow-list"});
-    if(allResults["lfi"]?.vulnerable) recs.push({p:"CRITICAL", t:"Block path traversal in file-reading endpoints — sanitize/restrict to a known base directory", a:"Path canonicalize"});
-    if(allResults["ssti"]?.vulnerable) recs.push({p:"CRITICAL", t:"Server-side template injection found — never pass user input directly to template engines", a:"Sandbox templates"});
-    if(allResults["jwt"]?.vulnerable) recs.push({p:"CRITICAL", t:"Reject 'alg: none' JWTs and rotate to a 256-bit+ random HMAC secret — current secret is weak", a:"Rotate JWT key"});
-    if(allResults["deserial"]?.vulnerable) recs.push({p:"CRITICAL", t:"Replace unsafe deserialization (pickle/PHP unserialize/Java ObjectInputStream) with JSON / schema-validated payloads", a:"Refactor parser"});
-    if(allResults["fileupload"]?.vulnerable) recs.push({p:"CRITICAL", t:"File upload accepts dangerous types — enforce MIME + magic-byte + extension allow-list, store outside web root", a:"Restrict uploads"});
-    if(allResults["takeover"]?.vulnerable) recs.push({p:"HIGH", t:"Reclaim or remove dangling DNS records pointing to deprovisioned 3rd-party services", a:"Audit CNAMEs"});
+    if(clickjacking&&clickjacking.vulnerable) recs.push({p:"MEDIUM", t:"Set X-Frame-Options: DENY or CSP frame-ancestors 'none' to block iframe embedding", a:"Add header"});
+    if(verbtamper&&verbtamper.vulnerable) recs.push({p:"HIGH", t:"Disable dangerous HTTP methods (PUT/DELETE/TRACE/CONNECT) at the web server / reverse proxy layer", a:"Restrict methods"});
+    if(ssrf&&ssrf.vulnerable) recs.push({p:"HIGH", t:"Block outbound requests to cloud metadata endpoints (169.254.169.254, metadata.google.internal) — SSRF confirmed", a:"Egress firewall"});
+    if(xxe&&xxe.vulnerable) recs.push({p:"HIGH", t:"Disable external entity processing in XML parsers (libxml: LIBXML_NOENT off; Java: FEATURE_SECURE_PROCESSING)", a:"Patch parser config"});
+    if(openredirect&&openredirect.vulnerable) recs.push({p:"MEDIUM", t:"Validate redirect URLs against a strict allow-list — prevent phishing via open redirect", a:"URL allow-list"});
+    if(lfi&&lfi.vulnerable) recs.push({p:"CRITICAL", t:"Block path traversal in file-reading endpoints — sanitize/restrict to a known base directory", a:"Path canonicalize"});
+    if(ssti&&ssti.vulnerable) recs.push({p:"CRITICAL", t:"Server-side template injection found — never pass user input directly to template engines", a:"Sandbox templates"});
+    if(jwt&&jwt.vulnerable) recs.push({p:"CRITICAL", t:"Reject 'alg: none' JWTs and rotate to a 256-bit+ random HMAC secret — current secret is weak", a:"Rotate JWT key"});
+    if(deserial&&deserial.vulnerable) recs.push({p:"CRITICAL", t:"Replace unsafe deserialization (pickle/PHP unserialize/Java ObjectInputStream) with JSON / schema-validated payloads", a:"Refactor parser"});
+    if(fileupload&&fileupload.vulnerable) recs.push({p:"CRITICAL", t:"File upload accepts dangerous types — enforce MIME + magic-byte + extension allow-list, store outside web root", a:"Restrict uploads"});
+    if(takeover&&takeover.vulnerable) recs.push({p:"HIGH", t:"Reclaim or remove dangling DNS records pointing to deprovisioned 3rd-party services", a:"Audit CNAMEs"});
     // SSL/TLS — show the actual issue rather than a generic note
     const sslHighFindings=(ssl&&ssl.findings||[]).filter(f=>f.severity==="HIGH"||f.severity==="CRITICAL");
     if(sslHighFindings.length>0) recs.push({p:"HIGH",  t:"Fix SSL/TLS issue: "+(sslHighFindings[0].detail||"").substring(0,90),a:"Update TLS config"});
@@ -2158,28 +2162,27 @@ function WebAppModule(props) {
   // Live scan telemetry — scanStart is the timestamp the run loop began;
   // tickN is just a counter incremented every 1s while running so React
   // re-renders the elapsed/ETA banner. Findings counts derive from allResults
-  // automatically — no separate state needed.
+  // on each render — no useMemo needed, the cost is trivial.
   const [scanStart, setScanStart] = useState(0);
+  // eslint-disable-next-line no-unused-vars
   const [tickN, setTickN]         = useState(0);
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => setTickN(n => n + 1), 1000);
     return () => clearInterval(id);
   }, [running]);
-  // Live finding counts — computed every render so the banner updates as
-  // each phase completes and writes its findings into allResults.
-  const liveCounts = React.useMemo(() => {
+  // Live finding counts — recomputed every render (cheap; <100 findings).
+  const liveCounts = (() => {
     const c = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
     Object.values(allResults || {}).forEach(r => {
-      if (r?.findings) r.findings.forEach(f => {
+      if (r && r.findings) r.findings.forEach(f => {
         if (f.severity && c[f.severity] !== undefined) c[f.severity]++;
       });
-      // Synthetic vuln-flag tools (xss/sqlmap return vulnerable:true, not findings)
-      if (r?.vulnerable && r?.tool === "sqlmap") c.CRITICAL++;
-      if (r?.vulnerable && r?.tool === "xss")    c.CRITICAL++;
+      if (r && r.vulnerable && r.tool === "sqlmap") c.CRITICAL++;
+      if (r && r.vulnerable && r.tool === "xss")    c.CRITICAL++;
     });
     return c;
-  }, [allResults, tickN]);
+  })();
 
   const add = l => setLines(p => [...p, l]);
 
