@@ -1368,6 +1368,11 @@ function generatePDF(reportData) {
     // ─── DETAILED FINDINGS (flows after advanced section) ────────
     chk(30); y+=2;
     y = sectionHead("Detailed Findings",y);
+    // Legend so customers know what the confidence badges mean
+    doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+    doc.text("VERIFIED = actively triggered or directly observed.  SUSPECTED = signature/heuristic match — manual review recommended.", margin+2, y);
+    doc.setFont("Arial","normal");
+    y += 4;
 
     const realF=(findings||[]).filter(f=>{
       if(!f || !f.severity) return false;
@@ -1405,6 +1410,18 @@ function generatePDF(reportData) {
         rrect(margin+11,y+2,20,5,1,lt);
         doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...bg);
         doc.text(f.severity,margin+12,y+6);
+        // Confidence badge — top-right corner of the row. Tells the customer's
+        // auditor which findings we actively verified vs heuristic signature
+        // matches that need manual review.
+        if (f.confidence === "CONFIRMED") {
+          rrect(pageW-margin-16,y+2,14,5,1,[220,252,231]);
+          doc.setFont("Arial","bold"); doc.setFontSize(5.5); doc.setTextColor(15,118,82);
+          doc.text("VERIFIED",pageW-margin-14.5,y+5.5);
+        } else if (f.confidence === "SUSPECTED") {
+          rrect(pageW-margin-16,y+2,14,5,1,[254,243,199]);
+          doc.setFont("Arial","bold"); doc.setFontSize(5.5); doc.setTextColor(146,64,14);
+          doc.text("SUSPECTED",pageW-margin-15.5,y+5.5);
+        }
 
         // Truncate cwe_name with ellipsis when needed, instead of hard cut mid-word
         const _truncCwe = (s, n) => s.length > n ? s.substring(0, n - 1).trim() + "…" : s;
@@ -2056,24 +2073,39 @@ function WebAppModule(props) {
   // PDF + CSV export
   const dlPDF = (cfg = {}) => {
     let allFindings = [];
-    // Collect findings from ALL 51 scan tools automatically
+    // Tools whose findings are NOT actively verified — they pattern-match server
+    // responses against template/signature databases, so the finding is "looks
+    // like X" rather than "proved X". Anything else we treat as actively
+    // verified: scanners that send a payload and check for an expected response
+    // (sqlmap/cors/xxe/...) or that directly observe the issue (headers/cookies/
+    // ssl/cms/ports). User explicit requirement: default to CONFIRMED only when
+    // a verification step actually succeeded; SUSPECTED otherwise.
+    const _SUSPECTED_TOOLS = new Set(["nikto","nuclei","sherlock","dnstwist","exploitsearch"]);
+    // Collect findings from ALL 51 scan tools automatically. Stamp each finding
+    // with its source tool + a confidence flag so the PDF can render a badge.
     PHASES.forEach(ph => {
       if (allResults[ph.tool]?.findings) {
-        allResults[ph.tool].findings.forEach(f => { if(f.severity!=="INFO") allFindings.push(f); });
+        const conf = _SUSPECTED_TOOLS.has(ph.tool) ? "SUSPECTED" : "CONFIRMED";
+        allResults[ph.tool].findings.forEach(f => {
+          if(f.severity!=="INFO") {
+            // Backend can override our inference by setting f.confidence directly
+            allFindings.push({...f, _tool: ph.tool, confidence: f.confidence || conf});
+          }
+        });
       }
     });
-    // XSS — returns {vulnerable:true} not findings array
+    // XSS — returns {vulnerable:true} not findings array. Verified by active probe.
     if (allResults["xss"]?.vulnerable) {
-      allFindings.push({detail:"XSS vulnerability detected on target",severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",cwe_name:"Cross-Site Scripting",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
+      allFindings.push({_tool:"xss", confidence:"CONFIRMED", detail:"XSS vulnerability detected on target",severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",cwe_name:"Cross-Site Scripting",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
     }
     // CORS — backend's /api/scan/cors already returns a proper finding in its findings[] array,
     // which is collected by the loop above. We do NOT add a synthetic finding here — that would
     // create a duplicate in the report (one from backend, one synthetic).
-    // SQLMap
+    // SQLMap — backend triggered the injection and verified, so CONFIRMED.
     if (allResults["sqlmap"]?.vulnerable) {
-      allFindings.push({detail:"SQL Injection detected",severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",cwe_name:"SQL Injection",owasp:"A03:2021 - Injection",remediation:"Use parameterized queries immediately."});
+      allFindings.push({_tool:"sqlmap", confidence:"CONFIRMED", detail:"SQL Injection detected",severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",cwe_name:"SQL Injection",owasp:"A03:2021 - Injection",remediation:"Use parameterized queries immediately."});
     }
-    // Cookie issues — stored in cookies.cookies[].issues (deduplicated by name)
+    // Cookie issues — directly observed in Set-Cookie response header → CONFIRMED.
     if (allResults["cookies"]?.cookies) {
       const seenCookies = new Set();
       allResults["cookies"].cookies.forEach(c => {
@@ -2081,7 +2113,7 @@ function WebAppModule(props) {
         if(seenCookies.has(cname)) return;
         seenCookies.add(cname);
         (c.issues||[]).forEach(issue => {
-          if(issue.severity!=="INFO") allFindings.push({detail:`Cookie missing ${issue.flag} flag: ${cname}`,severity:issue.severity,cvss:issue.cvss||"5.3",cve:"N/A",cwe:issue.flag==="HttpOnly"?"CWE-1004":"CWE-614",cwe_name:`Cookie without ${issue.flag}`,owasp:"A05:2021 - Security Misconfiguration",remediation:issue.fix});
+          if(issue.severity!=="INFO") allFindings.push({_tool:"cookies", confidence:"CONFIRMED", detail:`Cookie missing ${issue.flag} flag: ${cname}`,severity:issue.severity,cvss:issue.cvss||"5.3",cve:"N/A",cwe:issue.flag==="HttpOnly"?"CWE-1004":"CWE-614",cwe_name:`Cookie without ${issue.flag}`,owasp:"A05:2021 - Security Misconfiguration",remediation:issue.fix});
         });
       });
     }
