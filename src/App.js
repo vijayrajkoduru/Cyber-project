@@ -6285,6 +6285,14 @@ const RECON_PHASES = [
   {name:"OS Fingerprinting",     tool:"os",         endpoint:"/api/recon/os",         icon:"💻"},
   {name:"Banner Grabbing",       tool:"banner",     endpoint:"/api/recon/banner",     icon:"🏷️"},
   {name:"Directory Enumeration", tool:"gobuster",   endpoint:"/api/recon/gobuster",   icon:"📁"},
+  // ── Pure-Python URL Discovery Suite ─────────────────────────
+  // These pull hidden URLs out of (1) JS bundles referenced by the homepage,
+  // (2) the Wayback Machine archive, (3) robots.txt + sitemap.xml +
+  // .well-known files. Together they solve the "SPA returns 0 findings"
+  // problem — WebApp scanners can later test these discovered URLs.
+  {name:"JS Endpoint Extractor", tool:"jsendpoints",endpoint:"/api/recon/jsendpoints",icon:"📜"},
+  {name:"Wayback Machine",       tool:"wayback",    endpoint:"/api/recon/wayback",    icon:"⏪"},
+  {name:"robots + sitemap",      tool:"robotsmap",  endpoint:"/api/recon/robotsmap",  icon:"🗺"},
 ];
 
 function ReconModule({token, onRunningChange}) {

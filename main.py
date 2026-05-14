@@ -4420,6 +4420,276 @@ async def recon_amass(req: ScanRequest, user=Depends(verify_token)):
     save_scan(scan_id, "amass", req.target, {"output":out})
     return {"scan_id":scan_id,"target":req.target,"tool":"amass","subdomains":subdomains,"total":len(subdomains),"raw_output":out,"timestamp":datetime.datetime.utcnow().isoformat()}
 
+
+# ══════════════════════════════════════════════════════════════
+#  PURE-PYTHON URL DISCOVERY SUITE
+#  Three new recon endpoints that pull hidden URLs out of a
+#  target by reading: (1) referenced JS files, (2) the Wayback
+#  Machine archive, (3) robots.txt / sitemap.xml / .well-known.
+#  These exist because most "0-findings" scans on real customer
+#  targets aren't actually clean — they're SPAs whose endpoints
+#  live in JS bundles or behind paths the homepage never links to.
+# ══════════════════════════════════════════════════════════════
+
+# LinkFinder-style regex patterns — find URLs/endpoints/paths in JS code.
+# Kept conservative to minimize false positives (no random strings flagged
+# as "endpoints"). All patterns require at least one slash or a known
+# file extension to qualify.
+_JS_URL_PATTERNS = [
+    # Absolute URLs (http://, https://, //cdn.foo)
+    re.compile(r'''(?:[a-zA-Z]{1,10}://|//)[^\s"'<>]{2,}\.[a-zA-Z]{2,}[^\s"'<>]{0,}'''),
+    # Relative API paths with leading slash — most common: "/api/users", "/v1/auth/login"
+    re.compile(r'''['"`](/[a-zA-Z0-9_\-/.]{2,}(?:\?[^'"`<>\s]{0,})?)['"`]'''),
+    # Path-with-extension references — config.json, settings.yaml, admin.php
+    re.compile(r'''['"`]([a-zA-Z0-9_\-/.]{1,}\.(?:php|asp|aspx|jsp|json|html|xml|yml|yaml|txt|env|bak|cfg|conf|ini)(?:\?[^'"`<>\s]{0,})?)['"`]'''),
+]
+
+# Strip obvious noise — these aren't actionable endpoints, just static assets
+_JS_URL_NOISE = re.compile(r"\.(png|jpe?g|gif|svg|webp|woff2?|ttf|eot|ico|css|map|min\.js)(\?|$)", re.IGNORECASE)
+
+
+@app.post("/api/recon/jsendpoints")
+async def recon_jsendpoints(req: ScanRequest, user=Depends(verify_token)):
+    """Pure-Python LinkFinder equivalent — fetches the target homepage,
+    grabs every <script src="..."> URL, downloads each JS bundle, and
+    regex-extracts API endpoints / paths / URLs hidden in the source.
+
+    Critical for SPA scanning. testphp.vulnweb.com's homepage links to
+    PHP pages; modern React/Angular targets bury their REST endpoints
+    in webpack bundles. Without this scanner the WebApp module tests
+    only `/` and pronounces the site "POSTURE OK" while /api/users is
+    sitting wide open.
+    """
+    _AUTH_CTX.set(req)
+    target = _web_url(req.target)
+    discovered = set()
+    js_files_seen = []
+    error = None
+    try:
+        r = _safe_get(target, retries=2, timeout=12, req=req)
+        if r is None:
+            raise RuntimeError("target unreachable")
+        html = r.text or ""
+        # Find <script src="..."> URLs
+        from urllib.parse import urljoin, urlparse
+        js_urls = set()
+        for m in re.findall(r'''<script[^>]+src=["']([^"']+)["']''', html, re.IGNORECASE):
+            absurl = urljoin(target, m.strip())
+            js_urls.add(absurl)
+        # Also harvest inline-script endpoints from the homepage itself
+        for pat in _JS_URL_PATTERNS:
+            for m in pat.findall(html):
+                u = m if isinstance(m, str) else m[0]
+                if u and not _JS_URL_NOISE.search(u):
+                    discovered.add(u.strip())
+        # Cap JS file count to avoid runaway scans (some apps have 50+ chunks)
+        js_urls = list(js_urls)[:40]
+        for url in js_urls:
+            try:
+                jr = _safe_get(url, retries=1, timeout=10, req=req)
+                if jr is None or len(jr.content) > 2_000_000:  # 2MB cap per file
+                    continue
+                js_files_seen.append({"url": url, "size": len(jr.content)})
+                body = jr.text or ""
+                for pat in _JS_URL_PATTERNS:
+                    for m in pat.findall(body):
+                        u = m if isinstance(m, str) else m[0]
+                        if u and not _JS_URL_NOISE.search(u):
+                            discovered.add(u.strip())
+            except Exception:
+                continue
+    except Exception as e:
+        error = str(e)
+
+    # Build findings list — each discovered API path is a (low-severity) info
+    # leak that the customer should manually review for missing authn.
+    findings = []
+    paths_only = sorted({d for d in discovered if d.startswith("/") and len(d) > 1})
+    for p in paths_only[:50]:
+        findings.append({
+            "detail": f"Endpoint discovered in JS bundle: {p}",
+            "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+            "cwe": "CWE-200", "cwe_name": "Endpoint Disclosure", "owasp": "A05:2021",
+            "remediation": "Review whether this endpoint enforces authentication. Endpoints discoverable via static analysis should still gate every request server-side.",
+            "confidence": "CONFIRMED",
+        })
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "jsendpoints", req.target, {"output": f"{len(discovered)} URLs across {len(js_files_seen)} JS files"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "jsendpoints",
+        "discovered": sorted(discovered),
+        "paths": paths_only,
+        "js_files": js_files_seen,
+        "total": len(discovered),
+        "findings": findings,
+        "vulnerable": False,  # info-only — exposure of endpoint is not itself a vuln
+        "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/api/recon/wayback")
+async def recon_wayback(req: ScanRequest, user=Depends(verify_token)):
+    """Wayback Machine recon — pull every historical URL the Internet
+    Archive has crawled for this domain. Often reveals retired admin
+    panels, old API versions, leaked debug endpoints, and orphan files
+    that are still live on the production server because nobody
+    remembered to delete them.
+
+    Pure-Python — just queries web.archive.org's CDX API and dedupes.
+    """
+    _AUTH_CTX.set(req)
+    host = _recon_host(req.target)
+    discovered = []
+    error = None
+    try:
+        # CDX API — JSON output, deduplicated by URL key, limited to 5000 rows
+        url = f"http://web.archive.org/cdx/search/cdx?url=*.{host}/*&output=json&fl=original&collapse=urlkey&limit=5000"
+        r = _safe_get(url, retries=2, timeout=20, req=req)
+        if r is None:
+            raise RuntimeError("Wayback Machine unreachable")
+        rows = r.json() if r.text.strip().startswith("[") else []
+        # First row is the header (["original"]) — skip it
+        for row in rows[1:]:
+            if row and row[0]:
+                discovered.append(row[0])
+    except Exception as e:
+        error = str(e)
+
+    # Filter out static assets (images, fonts, css) — focus on actionable URLs
+    actionable = [u for u in discovered if not _JS_URL_NOISE.search(u)]
+    # Highlight URLs that look interesting: admin, api, debug, backup, config
+    interesting_kw = re.compile(r"(admin|backup|config|debug|dump|internal|private|secret|test|staging|dev|api|graphql|swagger|\.env|\.git|\.bak|\.old|\.sql)", re.IGNORECASE)
+    interesting = [u for u in actionable if interesting_kw.search(u)]
+    findings = []
+    for u in interesting[:25]:
+        sev = "MEDIUM" if re.search(r"\.(env|git|sql|bak|old)\b", u, re.I) else "LOW"
+        findings.append({
+            "detail": f"Wayback-archived URL: {u[:160]}",
+            "severity": sev, "cvss": "3.1" if sev=="LOW" else "5.3", "cve": "N/A",
+            "cwe": "CWE-200", "cwe_name": "Historical Endpoint Exposure", "owasp": "A05:2021",
+            "remediation": "Verify the URL is no longer live OR is properly access-controlled. Historical URLs often outlive the apps that created them and become forgotten attack surface.",
+            "confidence": "CONFIRMED",
+        })
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "wayback", req.target, {"output": f"{len(discovered)} archived URLs ({len(interesting)} interesting)"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "wayback",
+        "discovered": actionable[:500],
+        "interesting": interesting,
+        "total": len(actionable),
+        "interesting_total": len(interesting),
+        "findings": findings,
+        "vulnerable": False,
+        "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
+@app.post("/api/recon/robotsmap")
+async def recon_robotsmap(req: ScanRequest, user=Depends(verify_token)):
+    """Pulls disclosed URLs from the customer's own published files —
+    robots.txt (Disallow lines often reveal admin paths), sitemap.xml
+    (every internal URL the site explicitly invites crawlers to index),
+    plus the standard /.well-known/ family.
+
+    Pure-Python. No deps beyond `requests`.
+    """
+    _AUTH_CTX.set(req)
+    base = _web_url(req.target).rstrip("/")
+    disallow_paths = []
+    sitemap_urls = []
+    well_known = []
+    error = None
+
+    # robots.txt
+    try:
+        r = _safe_get(base + "/robots.txt", retries=1, timeout=8, req=req)
+        if r is not None and r.status_code == 200:
+            for line in r.text.splitlines():
+                m = re.match(r"^\s*Disallow:\s*(\S+)", line, re.IGNORECASE)
+                if m: disallow_paths.append(m.group(1))
+                sm = re.match(r"^\s*Sitemap:\s*(\S+)", line, re.IGNORECASE)
+                if sm and sm.group(1).startswith("http"):
+                    # Pull the explicitly-referenced sitemap (might be elsewhere)
+                    try:
+                        sr = _safe_get(sm.group(1), retries=1, timeout=8, req=req)
+                        if sr is not None:
+                            sitemap_urls.extend(re.findall(r"<loc>([^<]+)</loc>", sr.text or ""))
+                    except Exception:
+                        pass
+    except Exception as e:
+        error = (error or "") + f"robots.txt: {e}; "
+
+    # sitemap.xml (default location, in addition to any Sitemap: directives above)
+    for p in ("/sitemap.xml", "/sitemap_index.xml", "/sitemap1.xml"):
+        try:
+            r = _safe_get(base + p, retries=1, timeout=8, req=req)
+            if r is not None and r.status_code == 200:
+                sitemap_urls.extend(re.findall(r"<loc>([^<]+)</loc>", r.text or ""))
+        except Exception:
+            continue
+
+    # .well-known family — security.txt, openid-configuration, OAuth, etc.
+    well_known_paths = [
+        "/.well-known/security.txt",
+        "/.well-known/openid-configuration",
+        "/.well-known/oauth-authorization-server",
+        "/.well-known/host-meta",
+        "/.well-known/change-password",
+        "/.well-known/assetlinks.json",
+        "/.well-known/apple-app-site-association",
+        "/humans.txt",
+    ]
+    for p in well_known_paths:
+        try:
+            r = _safe_get(base + p, retries=1, timeout=6, req=req)
+            if r is not None and r.status_code == 200 and len(r.content) < 200_000:
+                well_known.append({"path": p, "status": 200, "size": len(r.content)})
+        except Exception:
+            continue
+
+    sitemap_urls = sorted(set(sitemap_urls))[:500]
+    disallow_paths = sorted(set(disallow_paths))
+
+    # Findings — Disallow paths are interesting because robots.txt itself
+    # advertises them to anyone reading it (including attackers).
+    findings = []
+    interesting_kw = re.compile(r"(admin|backup|config|debug|dump|internal|private|secret|api|\.env|\.git|\.sql)", re.IGNORECASE)
+    for p in disallow_paths:
+        sev = "MEDIUM" if interesting_kw.search(p) else "LOW"
+        findings.append({
+            "detail": f"robots.txt Disallow: {p} — path disclosed to attackers via public robots file",
+            "severity": sev, "cvss": "5.3" if sev=="MEDIUM" else "3.1", "cve": "N/A",
+            "cwe": "CWE-200", "cwe_name": "Information Disclosure via robots.txt", "owasp": "A05:2021",
+            "remediation": "robots.txt is publicly readable. Listing sensitive paths there acts as an attacker roadmap. Either remove the entries (and rely on authentication) or move the sensitive content to non-guessable paths.",
+            "confidence": "CONFIRMED",
+        })
+    for wk in well_known:
+        if wk["path"] == "/.well-known/security.txt": continue  # presence is GOOD
+        findings.append({
+            "detail": f"Discovered well-known file: {wk['path']} ({wk['size']} bytes)",
+            "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+            "cwe": "CWE-200", "cwe_name": "Server Metadata Exposure", "owasp": "A05:2021",
+            "remediation": "Review whether the disclosed metadata is intended for public consumption.",
+            "confidence": "CONFIRMED",
+        })
+
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "robotsmap", req.target, {"output": f"{len(disallow_paths)} disallow + {len(sitemap_urls)} sitemap URLs + {len(well_known)} well-known files"})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "robotsmap",
+        "disallow": disallow_paths,
+        "sitemap": sitemap_urls,
+        "well_known": well_known,
+        "total": len(disallow_paths) + len(sitemap_urls) + len(well_known),
+        "findings": findings,
+        "vulnerable": False,
+        "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
 @app.post("/api/recon/harvester")
 async def recon_harvester(req: ScanRequest, user=Depends(verify_token)):
     return await recon_theharvester(req, user)
