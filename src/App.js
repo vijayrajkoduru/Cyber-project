@@ -5804,6 +5804,129 @@ function generateReconReport({target, allResults, date}) {
   });
   y+=10;
 
+  // ─── SCAN COVERAGE ───────────────────────────────────────────
+  // Every recon report MUST account for every phase. Three states:
+  //   RAN        — tool returned data
+  //   EMPTY      — tool ran cleanly but found nothing (still success)
+  //   FAILED     — tool errored; reason shown
+  //   NOT RUN    — phase tile was deselected before scan started
+  // Eliminates the "DNS missing — why?" question customers shouldn't
+  // need to ask. If a section is absent from this PDF, this table tells
+  // them WHY.
+  const _PHASE_DEFS = [
+    {tool:"whois",       name:"WHOIS Lookup",          isEmpty:d=>!d.registrar && !d.raw_output},
+    {tool:"dns",         name:"DNS Records",           isEmpty:d=>!d.records || (Array.isArray(d.records) ? d.records.length===0 : Object.keys(d.records).length===0)},
+    {tool:"dnsrecon",    name:"DNS Recon",             isEmpty:d=>!d.records || d.records.length===0},
+    {tool:"subdomains",  name:"Subdomain Discovery",   isEmpty:d=>!d.subdomains || d.subdomains.length===0},
+    {tool:"crtsh",       name:"Cert Transparency",     isEmpty:d=>!d.subdomains || d.subdomains.length===0},
+    {tool:"amass",       name:"Deep Subdomain (amass)",isEmpty:d=>!d.subdomains || d.subdomains.length===0},
+    {tool:"harvester",   name:"OSINT Harvesting",      isEmpty:d=>(!d.emails||d.emails.length===0) && (!d.hosts||d.hosts.length===0)},
+    {tool:"shodan",      name:"Shodan Lookup",         isEmpty:d=>!d.ports || d.ports.length===0},
+    {tool:"masscan",     name:"Fast Port Scan",        isEmpty:d=>!d.ports || d.ports.length===0},
+    {tool:"nmap",        name:"Deep Port Scan",        isEmpty:d=>!d.ports || d.ports.length===0},
+    {tool:"services",    name:"Service Detection",     isEmpty:d=>!d.ports || d.ports.length===0},
+    {tool:"os",          name:"OS Fingerprinting",     isEmpty:d=>!d.os && !d.os_match},
+    {tool:"banner",      name:"Banner Grabbing",       isEmpty:d=>!d.banners || Object.keys(d.banners).length===0},
+    {tool:"gobuster",    name:"Directory Enumeration", isEmpty:d=>!d.found || d.found.length===0},
+    {tool:"jsendpoints", name:"JS Endpoint Extractor", isEmpty:d=>(!d.paths||d.paths.length===0) && (!d.discovered||d.discovered.length===0)},
+    {tool:"wayback",     name:"Wayback Machine",       isEmpty:d=>(d.total||0)===0},
+    {tool:"robotsmap",   name:"robots + sitemap",      isEmpty:d=>(d.total||0)===0},
+    {tool:"crawl",       name:"BFS Crawler",           isEmpty:d=>(d.total||0)===0},
+    {tool:"params",      name:"Parameter Discovery",   isEmpty:d=>!d.params || d.params.length===0},
+    {tool:"favicon",     name:"Favicon Fingerprint",   isEmpty:d=>!d.found},
+    {tool:"cloudbuckets",name:"Cloud Bucket Finder",   isEmpty:d=>(!d.open_buckets||d.open_buckets.length===0) && (!d.existing_buckets||d.existing_buckets.length===0)},
+    {tool:"secrets",     name:"JS Secret Scanner",     isEmpty:d=>!d.findings || d.findings.length===0},
+    {tool:"asn",         name:"ASN / IP Ownership",    isEmpty:d=>!d.asn && !d.ip},
+    {tool:"internetdb",  name:"Free Shodan (InternetDB)",isEmpty:d=>!d.found},
+  ];
+  const _coverageRows = _PHASE_DEFS.map(p => {
+    const d = r[p.tool];
+    if (!d) return {...p, status:"NOT RUN",  detail:"Phase tile was deselected before this scan"};
+    if (d._failed) return {...p, status:"FAILED", detail:String(d.error||"unknown error").substring(0,90)};
+    if (d._skipped) return {...p, status:"SKIPPED",detail:String(d.skipped_reason||"skipped").substring(0,90)};
+    if (d.skipped_reason) return {...p, status:"SKIPPED",detail:String(d.skipped_reason).substring(0,90)};
+    if (p.isEmpty(d)) return {...p, status:"EMPTY",  detail:"Ran successfully — target returned no data for this check"};
+    return {...p, status:"RAN", detail:_dynamicSummaryFor(p.tool, d)};
+  });
+  // Forward declaration of summary fn (used by both coverage + tools-used).
+  // Function expression hoisted via let-binding shim so we can keep this
+  // section above the Tools Used block.
+  function _dynamicSummaryFor(tool, d) {
+    d = d || {};
+    switch(tool){
+      case "whois":      return `Registrar: ${d.registrar || "n/a"}`;
+      case "dns":        return `${(d.records||[]).length || Object.keys(d.records||{}).length} record(s)`;
+      case "dnsrecon":   return `${(d.records||[]).length} DNS record(s)`;
+      case "subdomains": return `${(d.subdomains||[]).length} subdomain(s)`;
+      case "crtsh":      return `${d.total_subdomains || (d.subdomains||[]).length} from CT logs`;
+      case "amass":      return `${(d.subdomains||[]).length} subdomain(s)`;
+      case "harvester":  return `${(d.emails||[]).length}e · ${(d.hosts||[]).length}h`;
+      case "shodan":     return `${(d.ports||[]).length} port(s), ${(d.vulns||[]).length} CVE(s)`;
+      case "masscan":    return `${(d.ports||[]).length} open port(s)`;
+      case "nmap":       return `${(d.ports||[]).length} open port(s)`;
+      case "services":   return `${(d.ports||[]).length} service(s)`;
+      case "os":         return (d.os || d.os_match || "OS detected").substring(0,60);
+      case "banner":     return `${Object.keys(d.banners||{}).length} banner(s)`;
+      case "gobuster":   return `${(d.found||[]).length} path(s)`;
+      case "jsendpoints":return `${(d.paths||[]).length} path(s), ${(d.js_files||[]).length} JS file(s)`;
+      case "wayback":    return `${d.total||0} archived · ${d.interesting_total||0} interesting`;
+      case "robotsmap":  return `${(d.disallow||[]).length}d · ${(d.sitemap||[]).length}s · ${(d.well_known||[]).length}wk`;
+      case "crawl":      return `${d.total||0} URLs crawled`;
+      case "params":     return `${(d.params||[]).length} parameter(s)`;
+      case "favicon":    return d.found ? `Hash ${d.shodan_hash}` : "no favicon";
+      case "cloudbuckets":return `${(d.open_buckets||[]).length} OPEN · ${(d.existing_buckets||[]).length} existing`;
+      case "secrets":    return `${(d.findings||[]).length} secret(s)`;
+      case "asn":        return d.asn ? `AS${d.asn} — ${String(d.as_owner||"").substring(0,40)}` : "ASN done";
+      case "internetdb": return d.found ? `${(d.ports||[]).length}p · ${(d.vulns||[]).length} CVE` : "no record";
+      default:           return "Completed";
+    }
+  }
+  // Tally + grade
+  const _cnt = (s)=>_coverageRows.filter(p=>p.status===s).length;
+  const _ran    = _cnt("RAN");
+  const _empty  = _cnt("EMPTY");
+  const _failed = _cnt("FAILED");
+  const _skipped= _cnt("SKIPPED");
+  const _notrun = _cnt("NOT RUN");
+  const _completeness = _PHASE_DEFS.length - _notrun - _failed;
+  const _covPct = Math.round(_completeness / _PHASE_DEFS.length * 100);
+  const _covColor = _covPct >= 90 ? [15,118,82] : _covPct >= 70 ? [202,138,4] : [162,28,28];
+
+  chk(85); y = sHead("Scan Coverage", y);
+  fillR(margin, y, contentW, 16, LIGHT);
+  fillR(margin, y, 4, 16, _covColor);
+  doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
+  doc.text(`${_covPct}%`, margin+10, y+11);
+  doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
+  doc.text(`${_completeness}/${_PHASE_DEFS.length} phases completed cleanly`, margin+30, y+7);
+  doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+  doc.text(`${_ran} ran with data · ${_empty} empty · ${_failed} failed · ${_skipped} skipped · ${_notrun} not selected`, margin+30, y+12);
+  y += 19;
+  // Per-phase coverage table
+  y = tHead(["PHASE","STATUS","DETAIL"],[55,25,100],y);
+  _coverageRows.forEach((p,i)=>{
+    const stColor = p.status==="RAN"     ? [15,118,82]
+                  : p.status==="EMPTY"   ? [55,65,81]
+                  : p.status==="FAILED"  ? [162,28,28]
+                  : p.status==="SKIPPED" ? [120,53,15]
+                  :                        [100,116,139];
+    const stBg    = p.status==="RAN"     ? [220,252,231]
+                  : p.status==="EMPTY"   ? [241,245,249]
+                  : p.status==="FAILED"  ? [254,226,226]
+                  : p.status==="SKIPPED" ? [254,243,199]
+                  :                        [226,232,240];
+    chk(7); fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+    doc.text(p.name, margin+3, y+4.8);
+    rrect(margin+58, y+1.5, 22, 5, 1, stBg);
+    doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...stColor);
+    doc.text(p.status, margin+59.5, y+5);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    doc.text(String(p.detail||"").substring(0,95), margin+84, y+4.8);
+    y += 6.5;
+  });
+  y += 6;
+
   // Tools used — show real, data-driven summaries instead of generic
   // "Completed". Each summary pulls the actual count/value from the
   // scanner's response so the customer sees what was discovered.
@@ -6500,8 +6623,28 @@ function ReconModule({token, onRunningChange}) {
     setRunning(true); _notifyRunning(true); setDone([]); setFailed([]); setAll({}); setFinished(false);
     setTab("phases");
     const active = RECON_PHASES.map((ph,i)=>({ph,i})).filter(({i})=>selectedPhases.has(i));
-    setLines(["[*] Starting recon on: "+target+" ("+active.length+" phases selected)"]);
+    // Warn loudly when the customer has deselected phases — silent omissions
+    // are why "DNS records missing" surprises happen on report 2 of 2.
+    if (active.length < RECON_PHASES.length) {
+      const skipped = RECON_PHASES.filter((_,i)=>!selectedPhases.has(i)).map(p=>p.name);
+      setLines([`[*] Starting recon on: ${target} (${active.length}/${RECON_PHASES.length} phases selected)`,
+                `⚠ Skipping ${skipped.length} phase(s): ${skipped.join(", ")} — re-check tiles to include them`]);
+    } else {
+      setLines([`[*] Starting recon on: ${target} (${active.length} phases, all enabled)`]);
+    }
     const results = {};
+    // Single-retry-on-failure helper — most transient errors (429, network
+    // glitch, brief origin 502) clear on a 3-second pause. Without this, a
+    // bad blip permanently drops a phase from the PDF.
+    const _callWithRetry = async (ph, body) => {
+      try {
+        return await api(ph.endpoint,"POST",body,token);
+      } catch(e1) {
+        add(`  ↻ ${ph.name} failed once — retrying in 3s...`);
+        await new Promise(r=>setTimeout(r,3000));
+        return await api(ph.endpoint,"POST",body,token);
+      }
+    };
     for (let idx=0; idx<active.length; idx++) {
       if (stopRef.current) { add("[!] Scan stopped by user after "+idx+" phase(s)."); break; }
       const {ph,i} = active[idx];
@@ -6510,8 +6653,14 @@ function ReconModule({token, onRunningChange}) {
       try {
         const body = {target};
         if (ph.tool==="shodan") body.api_key = localStorage.getItem("shodanApiKey")||"";
-        if (ph.tool==="shodan" && !body.api_key) { add("⚠ Shodan: no API key — set it in Settings"); setDone(p=>[...p,i]); continue; }
-        const data = await api(ph.endpoint,"POST",body,token);
+        if (ph.tool==="shodan" && !body.api_key) {
+          add("⚠ Shodan: no API key — set it in Settings");
+          // Save explicit skip so the PDF coverage shows "no API key" not just missing
+          results[ph.tool] = {ok:false, _skipped:true, skipped_reason:"No Shodan API key configured — set in Settings"};
+          setAll(Object.assign({},results));
+          setDone(p=>[...p,i]); continue;
+        }
+        const data = await _callWithRetry(ph, body);
         // Stop was clicked while this phase's request was in flight — discard the result.
         if (stopRef.current) { add("[!] Scan stopped by user during phase "+(idx+1)+"."); break; }
         results[ph.tool] = data;
@@ -6535,10 +6684,19 @@ function ReconModule({token, onRunningChange}) {
         const msg = e.message||"unknown error";
         const hint = msg.includes("404")?" (endpoint missing — add to main.py)":msg.includes("Failed to fetch")||msg.includes("NetworkError")?" (backend offline)":"";
         add("✗ "+ph.name+" failed: "+msg+hint);
+        // CRITICAL: save the error to results so the PDF coverage section
+        // can render a FAILED row instead of silently omitting the tool.
+        results[ph.tool] = {ok:false, _failed:true, error:msg};
+        setAll(Object.assign({},results));
         setFailed(p=>[...p,i]); setDone(p=>[...p,i]);
       }
     }
-    if (!stopRef.current) add("✓ Recon complete — "+active.length+" phases done");
+    if (!stopRef.current) {
+      const okCount     = Object.values(results).filter(x=>x && !x._failed && !x._skipped).length;
+      const failedCount = Object.values(results).filter(x=>x && x._failed).length;
+      const skipCount   = Object.values(results).filter(x=>x && x._skipped).length;
+      add(`✓ Recon complete — ${okCount} ok, ${failedCount} failed, ${skipCount} skipped (${active.length} attempted)`);
+    }
     setCurPhase(-1); setRunning(false); _notifyRunning(false); setFinished(true);
   };
 
