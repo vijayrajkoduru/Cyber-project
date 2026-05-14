@@ -6302,6 +6302,10 @@ const RECON_PHASES = [
   {name:"Cloud Bucket Finder",   tool:"cloudbuckets",endpoint:"/api/recon/cloudbuckets",icon:"☁"},
   {name:"JS Secret Scanner",     tool:"secrets",    endpoint:"/api/recon/secrets",    icon:"🔑"},
   {name:"ASN / IP Ownership",    tool:"asn",        endpoint:"/api/recon/asn",        icon:"🌐"},
+  // Free Shodan alternative — InternetDB API requires NO API key, so every
+  // customer gets Shodan-equivalent CVE + port + tag intel for any internet-
+  // resolvable target. Pairs with the keyed Shodan tile above.
+  {name:"Free Shodan (InternetDB)",tool:"internetdb",endpoint:"/api/recon/internetdb",icon:"🆓"},
 ];
 
 function ReconModule({token, onRunningChange}) {

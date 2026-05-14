@@ -5236,6 +5236,122 @@ async def recon_asn(req: ScanRequest, user=Depends(verify_token)):
     }
 
 
+@app.post("/api/recon/internetdb")
+async def recon_internetdb(req: ScanRequest, user=Depends(verify_token)):
+    """Free Shodan alternative via InternetDB — Shodan's public read-only
+    API (https://internetdb.shodan.io/{ip}). NO API KEY REQUIRED, no rate
+    limit gate, no signup. Returns:
+
+      - open ports observed by Shodan's last scan
+      - known CVEs affecting the host
+      - hostnames pointing at this IP
+      - tags (e.g. "self-signed", "router", "vpn", "cloud")
+
+    This is the "build our own Shodan" tile customers asked about — we
+    can't realistically scan the entire IPv4 space ourselves, but Shodan
+    publishes their results for free via InternetDB. Every customer gets
+    a Shodan-equivalent lookup without paying $59/mo for the keyed API.
+
+    For the keyed `recon_shodan` tile we still query the paid API when
+    a key is set; this one is the universal fallback.
+    """
+    _AUTH_CTX.set(req)
+    host = _recon_host(req.target)
+    findings = []
+    error = None
+    data = {}
+    try:
+        # Resolve to IP — InternetDB only accepts IPs, not hostnames
+        loop = asyncio.get_event_loop()
+        def _resolve():
+            try:
+                answers = _dns_resolver.resolve(host, "A")
+                return str(answers[0]) if answers else None
+            except Exception:
+                return None
+        ip = await loop.run_in_executor(None, _resolve)
+        if not ip:
+            raise RuntimeError(f"Could not resolve {host} to an IPv4 address")
+
+        # Free Shodan InternetDB — no auth needed.
+        r = _safe_get(f"https://internetdb.shodan.io/{ip}", retries=2, timeout=12, req=req)
+        if r is None:
+            raise RuntimeError("internetdb.shodan.io unreachable")
+        if r.status_code == 404:
+            # InternetDB returns 404 when Shodan has no record for that IP.
+            # That's a clean answer, not an error — surface it as such.
+            scan_id = str(uuid.uuid4())
+            save_scan(scan_id, "internetdb", req.target, {"output": f"no record for {ip}"})
+            return {
+                "scan_id": scan_id, "target": req.target, "tool": "internetdb",
+                "ip": ip, "found": False,
+                "skipped_reason": f"Shodan has no record for {ip} — IP is not internet-exposed or hasn't been scanned",
+                "findings": [], "vulnerable": False,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            }
+        if r.status_code != 200:
+            raise RuntimeError(f"internetdb HTTP {r.status_code}")
+        data = r.json()
+        # Schema: {"ip": "1.2.3.4", "ports": [22,80,443], "hostnames": [...],
+        #          "vulns": ["CVE-2021-44228", ...], "tags": [...], "cpes": [...]}
+
+        # Each known CVE becomes a finding — these come straight from
+        # Shodan's CPE → CVE matching, so they're real, externally-confirmed
+        # vulns affecting the host.
+        for cve in data.get("vulns", [])[:50]:
+            sev_match = re.match(r"CVE-(\d{4})-(\d+)", cve)
+            findings.append({
+                "detail": f"Shodan/InternetDB reports {cve} affecting {ip} (port banner matched a vulnerable CPE)",
+                "severity": "HIGH", "cvss": "7.5", "cve": cve,
+                "cwe": "CWE-1395", "cwe_name": "Vulnerable Component (Shodan)", "owasp": "A06:2021",
+                "remediation": f"Check NVD: https://nvd.nist.gov/vuln/detail/{cve} — verify if the service exposing port banner is actually the vulnerable version. Patch or upgrade the affected service.",
+                "confidence": "SUSPECTED",  # CPE matching is heuristic — banner version → CVE
+            })
+        # Open ports beyond what nmap saw — Shodan may have caught services
+        # we missed (e.g. behind transient firewall rules)
+        new_ports = data.get("ports", [])
+        if new_ports:
+            findings.append({
+                "detail": f"Shodan-observed open ports on {ip}: {', '.join(str(p) for p in new_ports[:30])}",
+                "severity": "INFO", "cvss": "0.0", "cve": "N/A",
+                "cwe": "CWE-200", "cwe_name": "Open Port Exposure (Shodan)", "owasp": "A05:2021",
+                "remediation": "Cross-reference Shodan's observed ports with your firewall policy. Shodan may see ports during scan windows you don't expect.",
+                "confidence": "CONFIRMED",
+            })
+        # Tags — e.g. "self-signed", "vpn", "router", "cloud", "compromised"
+        risky_tags = [t for t in data.get("tags", []) if t in
+                      {"self-signed","router","vpn","compromised","honeypot","tor",
+                       "malware","onion","scanner","ddos-attacker","mirai"}]
+        if risky_tags:
+            findings.append({
+                "detail": f"Shodan tags {ip} as: {', '.join(risky_tags)}",
+                "severity": "MEDIUM" if "compromised" in risky_tags or "malware" in risky_tags else "LOW",
+                "cvss": "5.3" if "compromised" in risky_tags else "3.1",
+                "cve": "N/A", "cwe": "CWE-1395", "cwe_name": "Risky Host Signature", "owasp": "A05:2021",
+                "remediation": "Investigate why this host carries these tags. 'Compromised' or 'malware' tags require immediate IR. 'Self-signed' suggests a misconfigured TLS endpoint.",
+                "confidence": "CONFIRMED",
+            })
+    except Exception as e:
+        error = str(e)
+
+    vulnerable = any(f["severity"] in ("CRITICAL","HIGH") for f in findings)
+    scan_id = str(uuid.uuid4())
+    save_scan(scan_id, "internetdb", req.target, {"output": str(data)[:400]})
+    return {
+        "scan_id": scan_id, "target": req.target, "tool": "internetdb",
+        "ip": data.get("ip"),
+        "ports": data.get("ports", []),
+        "hostnames": data.get("hostnames", []),
+        "vulns": data.get("vulns", []),
+        "tags": data.get("tags", []),
+        "cpes": data.get("cpes", []),
+        "found": bool(data),
+        "total": len(data.get("vulns", [])) + len(data.get("ports", [])),
+        "findings": findings, "vulnerable": vulnerable, "error": error,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
+
 @app.post("/api/recon/harvester")
 async def recon_harvester(req: ScanRequest, user=Depends(verify_token)):
     return await recon_theharvester(req, user)
