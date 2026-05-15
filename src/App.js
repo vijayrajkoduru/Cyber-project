@@ -7137,12 +7137,10 @@ function ReconModule({token, onRunningChange}) {
 
         {/* Target + controls */}
         <TestTargets onSelect={setTarget} targets={[
-          {icon:"🔴",label:"DVWA",                      value:"lab_dvwa",                  desc:"🟢 Live Docker — Damn Vulnerable Web App"},
-          {icon:"🐐",label:"WebGoat",                   value:"lab_webgoat",                  desc:"🟢 Live Docker — OWASP WebGoat (port 8080)"},
-          {icon:"🧃",label:"Juice Shop",                value:"lab_juiceshop",                  desc:"🟢 Live Docker — OWASP Juice Shop (port 3000)"},
-          {icon:"🧩",label:"Mutillidae",                value:"lab_mutillidae",                desc:"🟢 Live Docker — Mutillidae II (port 80)"},
-          {icon:"🐛",label:"bWAPP",                     value:"lab_bwapp",                    desc:"🟢 Live Docker — Buggy Web App (port 80)"},
-          {icon:"📡",label:"Scanme (nmap official)",    value:"scanme.nmap.org",              desc:"nmap's official test server — safe to scan"},
+          {icon:"📡",label:"Scanme (nmap)",       value:"scanme.nmap.org",      desc:"nmap test server — safe to scan"},
+          {icon:"💀",label:"Metasploitable",      value:"lab_metasploitable",   desc:"🟢 Live Docker — many open ports"},
+          {icon:"🌐",label:"example.com",         value:"example.com",          desc:"IANA test domain — public WHOIS/DNS"},
+          {icon:"🔍",label:"google.com",          value:"google.com",           desc:"Demo target — full report"},
         ]}/>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
