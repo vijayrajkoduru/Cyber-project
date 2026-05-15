@@ -7944,15 +7944,25 @@ function generateVulnReport({target, allResults, date}) {
 //  VULNERABILITY SCANNING MODULE
 // ═══════════════════════════════════════════════════════════════
 const VULN_PHASES = [
-  {name:"Nikto Web Scanner",    tool:"nikto",   endpoint:"/api/scan/nikto",   icon:"🔍"},
-  {name:"Nuclei Scanner",       tool:"nuclei",  endpoint:"/api/scan/nuclei",  icon:"⚡"},
-  {name:"WPScan",               tool:"wpscan",  endpoint:"/api/scan/wpscan",  icon:"📝"},
-  {name:"SSL/TLS Analysis",     tool:"ssl",     endpoint:"/api/scan/ssl",     icon:"🔒"},
-  {name:"Security Headers",     tool:"headers", endpoint:"/api/scan/headers", icon:"📋"},
-  {name:"CORS Testing",         tool:"cors",    endpoint:"/api/scan/cors",    icon:"🌐"},
-  {name:"Cookie Security",      tool:"cookies", endpoint:"/api/scan/cookies", icon:"🍪"},
-  {name:"CMS Detection",        tool:"cms",     endpoint:"/api/scan/cms",     icon:"🏗️"},
-  {name:"XSS Testing",          tool:"xss",     endpoint:"/api/scan/xss",     icon:"💉"},
+  {name:"Nikto Web Scanner",    tool:"nikto",          endpoint:"/api/scan/nikto",          icon:"🔍"},
+  {name:"Nuclei Scanner",       tool:"nuclei",         endpoint:"/api/scan/nuclei",         icon:"⚡"},
+  {name:"WPScan",               tool:"wpscan",         endpoint:"/api/scan/wpscan",         icon:"📝"},
+  {name:"SSL/TLS Analysis",     tool:"ssl",            endpoint:"/api/scan/ssl",            icon:"🔒"},
+  {name:"Security Headers",     tool:"headers",        endpoint:"/api/scan/headers",        icon:"📋"},
+  {name:"CORS Testing",         tool:"cors",           endpoint:"/api/scan/cors",           icon:"🌐"},
+  {name:"Cookie Security",      tool:"cookies",        endpoint:"/api/scan/cookies",        icon:"🍪"},
+  {name:"CMS Detection",        tool:"cms",            endpoint:"/api/scan/cms",            icon:"🏗️"},
+  {name:"Reflected XSS",        tool:"xss",            endpoint:"/api/scan/xss",            icon:"💉"},
+  {name:"SQL Injection",        tool:"sqli",           endpoint:"/api/scan/sqli",           icon:"🗄️"},
+  {name:"Command Injection",    tool:"cmd_injection",  endpoint:"/api/scan/cmd_injection",  icon:"⌨️"},
+  {name:"Path Traversal / LFI", tool:"lfi",            endpoint:"/api/scan/lfi",            icon:"📂"},
+  {name:"Open Redirect",        tool:"open_redirect",  endpoint:"/api/scan/open_redirect",  icon:"↪️"},
+  {name:"SSRF",                 tool:"ssrf",           endpoint:"/api/scan/ssrf",           icon:"🛰️"},
+  {name:"XXE Injection",        tool:"xxe",            endpoint:"/api/scan/xxe",            icon:"📜"},
+  {name:"CSRF Protection",      tool:"csrf",           endpoint:"/api/scan/csrf",           icon:"🛡️"},
+  {name:"JWT Security",         tool:"jwt",            endpoint:"/api/scan/jwt",            icon:"🔑"},
+  {name:"Exposed Files",        tool:"exposed_files",  endpoint:"/api/scan/exposed_files",  icon:"📑"},
+  {name:"HTTP Methods",         tool:"http_methods",   endpoint:"/api/scan/http_methods",   icon:"🔧"},
 ];
 
 // ═══════════════════════════════════════════════════════════════
