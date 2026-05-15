@@ -6056,6 +6056,7 @@ function generateReconReport({target, allResults, date}) {
       case "secrets":    return `${(d.findings||[]).length} secret(s)`;
       case "asn":        return d.asn ? `AS${d.asn} — ${String(d.as_owner||"").substring(0,40)}` : "ASN done";
       case "internetdb": return d.found ? `${(d.ports||[]).length}p · ${(d.vulns||[]).length} CVE` : "no record";
+      case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high` : "no match";
       default:           return "Completed";
     }
   }
@@ -6139,6 +6140,7 @@ function generateReconReport({target, allResults, date}) {
         case "secrets":    return `${(d.findings||[]).length} secret(s) across ${(d.js_files||[]).length} JS file(s)`;
         case "asn":        return d.asn ? `AS${d.asn} — ${(d.as_owner||"").substring(0,50)} (${d.country||"?"})` : "ASN lookup completed";
         case "internetdb": return d.found ? `${(d.ports||[]).length} port(s) · ${(d.vulns||[]).length} CVE(s) · ${(d.tags||[]).length} tag(s)` : (d.skipped_reason || "No Shodan record");
+        case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) found · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high · ${d.summary.medium_cves||0} medium` : (d.skipped_reason || "No CVEs matched");
         default:           return "Completed";
       }
     };
@@ -6703,6 +6705,54 @@ function generateReconReport({target, allResults, date}) {
     y+=6;
   }
 
+  // ── CVE Matches (NVD) ──────────────────────────────────────
+  if(r.cve_match && r.cve_match.summary && (r.cve_match.summary.total_cves||0) > 0){
+    chk(40); y = sHead("CVE Matches (NVD)", y);
+    const sum = r.cve_match.summary;
+    chk(8); fillR(margin, y, contentW, 7, LIGHT);
+    txt(`${sum.total_cves} CVE(s) found  ·  ${sum.critical_cves} critical  ·  ${sum.high_cves} high  ·  ${sum.medium_cves||0} medium  ·  ${sum.low_cves||0} low`,
+        margin+4, y+5, 8.5, BLUE, true);
+    y += 9;
+    const svcs = r.cve_match.services_detected || [];
+    if(svcs.length>0){
+      chk(6); fillR(margin, y, contentW, 6, WHITE);
+      const svcList = svcs.map(s=>`${s.vendor}/${s.product} ${s.version}`).join(", ");
+      txt(`Services detected: ${svcList.substring(0,150)}`, margin+4, y+4.5, 7.5, GRAY);
+      y += 7;
+    }
+    y = tHead(["CVE","CVSS","SEVERITY","DESCRIPTION"],[28,12,22,118],y);
+    const cves = (r.cve_match.cves||[]).slice(0, 30);
+    cves.forEach((c, i) => {
+      const sevColor = c.cvss_severity === "CRITICAL" ? [162,28,28]
+                     : c.cvss_severity === "HIGH"     ? [194,65,12]
+                     : c.cvss_severity === "MEDIUM"   ? [202,138,4]
+                     :                                   [55,65,81];
+      const sevBg    = c.cvss_severity === "CRITICAL" ? [254,226,226]
+                     : c.cvss_severity === "HIGH"     ? [255,237,213]
+                     : c.cvss_severity === "MEDIUM"   ? [254,243,199]
+                     :                                   [241,245,249];
+      chk(8);
+      fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
+      doc.setFont("Courier","bold"); doc.setFontSize(7); doc.setTextColor(...BLUE);
+      doc.text(String(c.id||"").substring(0,16), margin+3, y+4.8);
+      doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+      doc.text(String(c.cvss_score ?? "?"), margin+31, y+4.8);
+      rrect(margin+44, y+1.5, 20, 5, 1, sevBg);
+      doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...sevColor);
+      doc.text(String(c.cvss_severity||"?"), margin+46, y+5);
+      doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+      const dLines = doc.splitTextToSize(String(c.description||""), 113);
+      doc.text(dLines[0] || "", margin+68, y+4.8);
+      y += 7;
+    });
+    if(r.cve_match.cves && r.cve_match.cves.length > 30){
+      chk(6); fillR(margin, y, contentW, 6, LIGHT);
+      txt(`... and ${r.cve_match.cves.length-30} more CVEs (top 30 shown by severity)`, margin+4, y+4.5, 7.5, GRAY);
+      y += 6;
+    }
+    y += 6;
+  }
+
   // ── END OF REPORT ──────────────────────────────────────────
   if(y+32>284){doc.addPage();y=18;drawHeader();}
   const bY=y+5;
@@ -7113,6 +7163,30 @@ function ReconModule({token, onRunningChange}) {
               <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>
                 {r.shodan.tags.map((t,i)=><span key={i} style={S.badge("#3b82f6")}>{t}</span>)}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* CVE Matches (NVD) */}
+        {r.cve_match && r.cve_match.summary && (r.cve_match.summary.total_cves||0)>0 && (
+          <div style={S.section}>
+            <div style={{fontSize:13,fontWeight:700,color:"#ef4444",marginBottom:10}}>🚨 CVE Matches — {r.cve_match.summary.total_cves} found ({r.cve_match.summary.critical_cves} critical, {r.cve_match.summary.high_cves} high, {r.cve_match.summary.medium_cves||0} medium)</div>
+            {(r.cve_match.services_detected||[]).length>0 && (
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:10}}>
+                Services: {(r.cve_match.services_detected||[]).map(s=>`${s.vendor}/${s.product} ${s.version}`).join(", ")}
+              </div>
+            )}
+            {(r.cve_match.cves||[]).slice(0,20).map((c,i)=>(
+              <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:5,padding:"8px 12px",marginBottom:6}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#fca5a5",fontWeight:700}}>{c.id}</span>
+                  <span style={S.badge(c.cvss_severity==="CRITICAL"?"#dc2626":c.cvss_severity==="HIGH"?"#ea580c":c.cvss_severity==="MEDIUM"?"#ca8a04":"#64748b")}>{c.cvss_severity} · CVSS {c.cvss_score ?? "?"}</span>
+                </div>
+                <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.4}}>{String(c.description||"").substring(0,200)}</div>
+              </div>
+            ))}
+            {(r.cve_match.cves||[]).length>20 && (
+              <div style={{fontSize:11,color:"#475569",marginTop:8,textAlign:"center"}}>... and {r.cve_match.cves.length-20} more CVEs (top 20 shown)</div>
             )}
           </div>
         )}
