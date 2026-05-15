@@ -6123,6 +6123,7 @@ function generateReconReport({target, allResults, date}) {
     {tool:"asn",         name:"ASN / IP Ownership",    isEmpty:d=>!d.asn && !d.ip},
     {tool:"internetdb",  name:"Free Shodan (InternetDB)",isEmpty:d=>!d.found},
     {tool:"cve_match",   name:"CVE Matching (NVD)", isEmpty:d=>!d.summary || (d.summary.total_cves||0)===0},
+    {tool:"subdomain_takeover", name:"Subdomain Takeover", isEmpty:d=>!d.vulnerable || d.vulnerable.length===0},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -6164,6 +6165,7 @@ function generateReconReport({target, allResults, date}) {
       case "asn":        return d.asn ? `AS${d.asn} — ${String(d.as_owner||"").substring(0,40)}` : "ASN done";
       case "internetdb": return d.found ? `${(d.ports||[]).length}p · ${(d.vulns||[]).length} CVE` : "no record";
       case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high` : "no match";
+      case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} VULN takeover(s) on ${d.checked||0} subs` : `0 takeovers (${d.checked||0} subs checked)`;
       default:           return "Completed";
     }
   }
@@ -6316,6 +6318,7 @@ function generateReconReport({target, allResults, date}) {
         case "asn":        return d.asn ? `AS${d.asn} — ${(d.as_owner||"").substring(0,50)} (${d.country||"?"})` : "ASN lookup completed";
         case "internetdb": return d.found ? `${(d.ports||[]).length} port(s) · ${(d.vulns||[]).length} CVE(s) · ${(d.tags||[]).length} tag(s)` : (d.skipped_reason || "No Shodan record");
         case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) found · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high · ${d.summary.medium_cves||0} medium` : (d.skipped_reason || "No CVEs matched");
+        case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} takeover-vulnerable subdomain(s) on ${d.checked||0} checked` : `${d.checked||0} subdomain(s) checked, none vulnerable`;
         default:           return "Completed";
       }
     };
@@ -6989,6 +6992,7 @@ const RECON_PHASES = [
   // resolvable target. Pairs with the keyed Shodan tile above.
   {name:"Free Shodan (InternetDB)",tool:"internetdb",endpoint:"/api/recon/internetdb",icon:"🆓"},
   {name:"CVE Matching (NVD)",     tool:"cve_match", endpoint:"/api/recon/cve_match",  icon:"🚨"},
+  {name:"Subdomain Takeover",     tool:"subdomain_takeover", endpoint:"/api/recon/subdomain_takeover", icon:"🎯"},
 ];
 
 function ReconModule({token, onRunningChange}) {
@@ -7083,6 +7087,7 @@ function ReconModule({token, onRunningChange}) {
         else if (ph.tool==="banner"     && data.banners)     add("✓ Banners: "+Object.keys(data.banners||{}).length+" captured");
         else if (ph.tool==="gobuster"   && data.found)       add("✓ Gobuster: "+data.found.length+" path(s) discovered"+(data.engine==="python-fuzz"?" (pure-Python engine)":""));
         else if (ph.tool==="cve_match"  && data.summary)     add("✓ CVE Match: "+data.summary.total_cves+" CVE(s) — "+data.summary.critical_cves+" critical, "+data.summary.high_cves+" high");
+        else if (ph.tool==="subdomain_takeover")              add("✓ Subdomain Takeover: "+(data.total_vulnerable||0)+" vulnerable on "+(data.checked||0)+" checked");
         else add("✓ "+ph.name+" complete");
         setDone(p=>[...p,i]); setAll(Object.assign({},results));
       } catch(e) {

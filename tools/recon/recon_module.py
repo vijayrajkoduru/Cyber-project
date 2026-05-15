@@ -810,5 +810,97 @@ async def recon_internetdb(req: ScanRequest, _=Depends(verify_scan_quota)):
         return {"ok": False, "skipped_reason": f"InternetDB query failed: {e}"}
 
 
+# ── Subdomain Takeover Detection ──────────────────────────────
+_TAKEOVER_SIGS = [
+    ("github.io",                "There isn't a GitHub Pages site here",   "CRITICAL", "GitHub Pages"),
+    ("s3.amazonaws.com",         "NoSuchBucket",                            "CRITICAL", "AWS S3"),
+    ("herokuapp.com",            "No such app",                             "CRITICAL", "Heroku"),
+    ("bitbucket.io",             "Repository not found",                    "CRITICAL", "Bitbucket"),
+    ("tumblr.com",               "Whatever you were looking for",           "CRITICAL", "Tumblr"),
+    ("wordpress.com",            "Do you want to register",                 "CRITICAL", "WordPress"),
+    ("surge.sh",                 "project not found",                       "CRITICAL", "Surge.sh"),
+    ("myshopify.com",            "Sorry, this shop is currently unavailable", "CRITICAL", "Shopify"),
+    ("fastly.net",               "Fastly error: unknown domain",            "CRITICAL", "Fastly"),
+    ("ghost.io",                 "The thing you were looking for is no longer here", "CRITICAL", "Ghost"),
+    ("helpscoutdocs.com",        "No settings were found for this company", "CRITICAL", "Help Scout"),
+    ("readme.io",                "Project doesnt exist",                    "CRITICAL", "Readme.io"),
+    ("pingdom.com",              "Public Report Not Activated",             "HIGH",     "Pingdom"),
+    ("getresponse.com",          "Unrecognized domain",                     "HIGH",     "GetResponse"),
+    ("teamwork.com",             "Oops - We didn't find your site",         "HIGH",     "Teamwork"),
+    ("wpengine.com",             "The site you were looking for",           "HIGH",     "WPEngine"),
+    ("cargo.site",               "404 Not Found",                           "HIGH",     "Cargo"),
+    ("strikinglydns.com",        "PAGE NOT FOUND",                          "HIGH",     "Strikingly"),
+    ("tilda.ws",                 "Please renew your subscription",          "HIGH",     "Tilda"),
+    ("uberflip.com",             "Non-Hub domain",                          "HIGH",     "Uberflip"),
+    ("ngrok.io",                 "Tunnel .* not found",                     "HIGH",     "Ngrok"),
+    ("pantheonsite.io",          "The gods are wise",                       "HIGH",     "Pantheon"),
+    ("cloudfront.net",           "Bad request",                             "MEDIUM",   "CloudFront"),
+    ("elasticbeanstalk.com",     "404 Not Found",                           "MEDIUM",   "Elastic Beanstalk"),
+    ("azurewebsites.net",        "404 Web Site not found",                  "MEDIUM",   "Azure WebSites"),
+]
+
+
+async def _check_takeover(subdomain):
+    try:
+        resolver = dns.asyncresolver.Resolver()
+        resolver.timeout = 3
+        resolver.lifetime = 3
+        try:
+            ans = await resolver.resolve(subdomain, "CNAME")
+            cname = str(ans[0].target).rstrip(".").lower()
+        except Exception:
+            return None
+        for pattern, fp, severity, service in _TAKEOVER_SIGS:
+            if pattern in cname:
+                try:
+                    r = requests.get(
+                        f"http://{subdomain}", timeout=8, allow_redirects=True,
+                        headers={"User-Agent": "VulnusLab/1.0"},
+                    )
+                    body = (r.text or "")[:5000]
+                    if fp.lower() in body.lower() or re.search(fp, body, re.I):
+                        return {
+                            "subdomain": subdomain, "cname": cname,
+                            "service": service, "severity": severity,
+                            "fingerprint": fp, "status_code": r.status_code,
+                        }
+                except Exception:
+                    pass
+        return None
+    except Exception:
+        return None
+
+
+@router.post("/api/recon/subdomain_takeover")
+async def recon_subdomain_takeover(req: ScanRequest, _=Depends(verify_scan_quota)):
+    host = recon_host(req.target)
+    all_subs = set()
+    try:
+        r = requests.get(f"https://crt.sh/?q=%25.{host}&output=json", timeout=15,
+                         headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            for entry in r.json():
+                for line in str(entry.get("name_value", "")).split("\n"):
+                    line = line.strip().lower().lstrip("*.")
+                    if line and line.endswith(host) and not line.startswith("*"):
+                        all_subs.add(line)
+    except Exception:
+        pass
+    all_subs.add(host)
+    subs_to_check = sorted(all_subs)[:150]
+    if not subs_to_check:
+        return {"ok": True, "vulnerable": [], "checked": 0,
+                "skipped_reason": "No subdomains discovered",
+                "engine": "pure-Python (CNAME + HTTP fingerprint)"}
+    results = await asyncio.gather(*[_check_takeover(s) for s in subs_to_check])
+    vulnerable = [v for v in results if v is not None]
+    return {
+        "ok": True, "vulnerable": vulnerable,
+        "total_vulnerable": len(vulnerable), "checked": len(subs_to_check),
+        "services_checked": len(_TAKEOVER_SIGS),
+        "engine": f"pure-Python (CNAME + HTTP fingerprint, {len(_TAKEOVER_SIGS)} services)",
+    }
+
+
 def register(app):
     app.include_router(router)
