@@ -6124,6 +6124,7 @@ function generateReconReport({target, allResults, date}) {
     {tool:"internetdb",  name:"Free Shodan (InternetDB)",isEmpty:d=>!d.found},
     {tool:"cve_match",   name:"CVE Matching (NVD)", isEmpty:d=>!d.summary || (d.summary.total_cves||0)===0},
     {tool:"subdomain_takeover", name:"Subdomain Takeover", isEmpty:d=>!d.vulnerable || d.vulnerable.length===0},
+    {tool:"waf_cdn",     name:"WAF / CDN Fingerprint", isEmpty:d=>!d.detected || d.detected.length===0},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -6166,6 +6167,7 @@ function generateReconReport({target, allResults, date}) {
       case "internetdb": return d.found ? `${(d.ports||[]).length}p · ${(d.vulns||[]).length} CVE` : "no record";
       case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high` : "no match";
       case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} VULN takeover(s) on ${d.checked||0} subs` : `0 takeovers (${d.checked||0} subs checked)`;
+      case "waf_cdn":    return (d.detected||[]).length > 0 ? `${(d.detected||[]).map(x=>x.vendor).slice(0,2).join(", ")}${d.detected.length>2?` +${d.detected.length-2}`:""}` : "none detected";
       default:           return "Completed";
     }
   }
@@ -6993,6 +6995,7 @@ const RECON_PHASES = [
   {name:"Free Shodan (InternetDB)",tool:"internetdb",endpoint:"/api/recon/internetdb",icon:"🆓"},
   {name:"CVE Matching (NVD)",     tool:"cve_match", endpoint:"/api/recon/cve_match",  icon:"🚨"},
   {name:"Subdomain Takeover",     tool:"subdomain_takeover", endpoint:"/api/recon/subdomain_takeover", icon:"🎯"},
+  {name:"WAF / CDN Fingerprint",  tool:"waf_cdn",   endpoint:"/api/recon/waf_cdn",    icon:"🛡️"},
 ];
 
 function ReconModule({token, onRunningChange}) {
@@ -7088,6 +7091,7 @@ function ReconModule({token, onRunningChange}) {
         else if (ph.tool==="gobuster"   && data.found)       add("✓ Gobuster: "+data.found.length+" path(s) discovered"+(data.engine==="python-fuzz"?" (pure-Python engine)":""));
         else if (ph.tool==="cve_match"  && data.summary)     add("✓ CVE Match: "+data.summary.total_cves+" CVE(s) — "+data.summary.critical_cves+" critical, "+data.summary.high_cves+" high");
         else if (ph.tool==="subdomain_takeover")              add("✓ Subdomain Takeover: "+(data.total_vulnerable||0)+" vulnerable on "+(data.checked||0)+" checked");
+        else if (ph.tool==="waf_cdn")                         add("✓ WAF/CDN: "+((data.detected||[]).length)+" detected — "+((data.detected||[]).map(x=>x.vendor).slice(0,3).join(", ")||"none"));
         else add("✓ "+ph.name+" complete");
         setDone(p=>[...p,i]); setAll(Object.assign({},results));
       } catch(e) {
