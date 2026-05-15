@@ -1,17 +1,23 @@
-"""POST /api/auth/register — create a new user account.
+"""POST /api/auth/register — create user AND issue JWT (auto-login).
 
-Trial users by default. Real (paying) users get upgraded via the
-billing webhook (separate endpoint).
+Returns the same shape as /api/auth/login so the frontend can call
+onLogin(data.access_token, data.role, data.username, data.plan)
+immediately after registration.
 """
+import os
 import re
 import uuid
 import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from jose import jwt
 
 from tools.auth._db import get_db, hash_password
 
 router = APIRouter()
+
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+TOKEN_TTL_HOURS = 24 * 7
 
 
 class RegisterRequest(BaseModel):
@@ -48,13 +54,32 @@ async def auth_register(req: RegisterRequest):
              "user", "trial", "active", now),
         )
 
-    return {
-        "id":       user_id,
+    payload = {
+        "sub":      user_id,
         "username": req.username,
-        "email":    req.email,
         "role":     "user",
         "plan":     "trial",
-        "status":   "active",
+        "iat":      datetime.datetime.utcnow(),
+        "exp":      datetime.datetime.utcnow() + datetime.timedelta(hours=TOKEN_TTL_HOURS),
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+    return {
+        "token":        token,
+        "access_token": token,
+        "role":         "user",
+        "username":     req.username,
+        "plan":         "trial",
+        "user": {
+            "id":       user_id,
+            "username": req.username,
+            "email":    req.email,
+            "role":     "user",
+            "plan":     "trial",
+        },
+        "id":     user_id,
+        "email":  req.email,
+        "status": "active",
     }
 
 

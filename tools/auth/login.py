@@ -1,7 +1,9 @@
 """POST /api/auth/login — verify credentials, issue JWT.
 
-Response shape matches what the React Login component expects:
-  { token, user: { id, username, email, role, plan } }
+Returns BOTH:
+  - flat fields the React Login expects:  access_token, role, username, plan
+  - the nested {user: {...}} shape for direct API users
+  - 'token' alias kept for backward compatibility with curl scripts
 """
 import os
 import datetime
@@ -14,7 +16,7 @@ from tools.auth._db import get_db, verify_password
 router = APIRouter()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "")
-TOKEN_TTL_HOURS = 24 * 7  # 1 week
+TOKEN_TTL_HOURS = 24 * 7
 
 
 class LoginRequest(BaseModel):
@@ -31,14 +33,12 @@ async def auth_login(req: LoginRequest):
             (req.username,),
         ).fetchone()
 
-    # Generic error so attackers can't enumerate which usernames exist
     if not user or not verify_password(req.password, user["password_hash"]):
         raise HTTPException(401, "Invalid username or password")
 
     if user["status"] != "active":
         raise HTTPException(403, f"Account is {user['status']}")
 
-    # Issue JWT — 1 week expiry
     payload = {
         "sub":      user["id"],
         "username": user["username"],
@@ -50,7 +50,11 @@ async def auth_login(req: LoginRequest):
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
     return {
-        "token": token,
+        "token":        token,
+        "access_token": token,
+        "role":         user["role"],
+        "username":     user["username"],
+        "plan":         user["plan"],
         "user": {
             "id":       user["id"],
             "username": user["username"],
