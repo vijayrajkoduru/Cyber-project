@@ -90,11 +90,80 @@ async def recon_dnsrecon(req: ScanRequest, _=Depends(verify_scan_quota)):
     return {"ok": True, "records": records}
 
 
-# ── Subdomains (kept; crtsh does the heavy lifting) ────────────
+# ── Subdomains: active DNS brute force (~250 high-signal prefixes) ──
+_SUB_BRUTE_WORDLIST = [
+    "www","mail","ftp","smtp","pop","imap","webmail","remote","ns1","ns2","ns3","ns4","ns5",
+    "mx","mx1","mx2","mx3","dns","dns1","dns2","ldap",
+    "dev","test","staging","stage","stg","beta","alpha","preview","demo","sandbox","qa","uat",
+    "lab","labs","internal","intranet","preprod","pre-prod","production","prod",
+    "admin","administrator","panel","cpanel","phpmyadmin","pma","auth","sso","login",
+    "account","accounts","signup","register","oauth","saml","openid",
+    "app","apps","application","api","api-v1","api-v2","api-v3","api1","api2","api3",
+    "api-dev","api-staging","api-prod","api-internal","api-public","api-gateway",
+    "cdn","static","assets","media","img","images","files","downloads","upload","uploads","videos","video",
+    "m","mobile","wap","iphone","android",
+    "us","uk","eu","asia","na","sa","africa","au","us-east","us-west","eu-west","eu-east","ap-south",
+    "blog","shop","store","forum","wiki","kb","support","help","docs","documentation","portal",
+    "dashboard","console","status","stats","metrics","monitor","monitoring",
+    "git","gitlab","github","bitbucket","jenkins","ci","cd","build","deploy","registry","docker",
+    "k8s","kubernetes","grafana","kibana","prometheus","alertmanager","sentry","datadog","splunk",
+    "db","database","mysql","postgres","postgresql","mongo","mongodb","redis","memcache",
+    "memcached","elasticsearch","es","cassandra",
+    "vpn","secure","ssl","tls","ssh","rdp",
+    "intra","ext","external","partners","partner","vendor","vendors","ticket","tickets","helpdesk",
+    "news","ads","tracker","tracking","analytics","marketing","campaign","campaigns","newsletter",
+    "checkout","payment","payments","billing","invoice","invoices","subscription","subscriptions",
+    "hr","careers","jobs","recruiting","talent","ops","devops","sre","noc","soc",
+    "email","mailing","outbound","smtp1","smtp2","mail2","webmail2","outlook",
+    "old","new","legacy","v1","v2","v3","next","deprecated","archive","archives",
+    "drupal","joomla","wordpress","wp",
+    "auth-internal","auth-service","user-service","user-api","account-service","billing-service",
+    "payment-service","order-service","search-service","notification-service","metrics-service",
+    "server","server1","server2","host","host1","host2","node1","node2","node3","node4",
+    "aws","gcp","azure","cloud","compute",
+    "crm","sales","erp","salesforce","hubspot",
+    "client","clients","customer","customers","user","users","guest","anonymous","public","private","vip",
+    "security","audit","compliance","vault","keyvault",
+    "it","tech","engineering","eng","dev-team",
+    "feed","feeds","rss","atom",
+    "proxy","gateway","router","firewall","fw","switch","ap","wifi",
+    "loadbalancer","lb","haproxy","nginx","apache","iis",
+    "elk","logstash","fluentd","rabbitmq","kafka","zookeeper","nats","consul","etcd","minio",
+    "pci","stripe","paypal","square",
+]
+
+
+async def _resolve_sub_brute(host, prefix):
+    try:
+        resolver = dns.asyncresolver.Resolver()
+        resolver.timeout = 2
+        resolver.lifetime = 2
+        ans = await resolver.resolve(f"{prefix}.{host}", "A")
+        return (f"{prefix}.{host}", str(ans[0]))
+    except Exception:
+        return None
+
+
 @router.post("/api/recon/subdomains")
 async def recon_subdomains(req: ScanRequest, _=Depends(verify_scan_quota)):
-    return {"ok": True, "subdomains": [],
-            "skipped_reason": "Use crt.sh tile for CT-based subdomains."}
+    host = recon_host(req.target)
+    # Batch parallel to avoid DNS server flooding
+    BATCH = 50
+    found = []
+    for i in range(0, len(_SUB_BRUTE_WORDLIST), BATCH):
+        batch = _SUB_BRUTE_WORDLIST[i:i+BATCH]
+        results = await asyncio.gather(*[_resolve_sub_brute(host, p) for p in batch])
+        for r in results:
+            if r is not None:
+                found.append({"subdomain": r[0], "ip": r[1]})
+    return {
+        "ok": True,
+        "subdomains": [f["subdomain"] for f in found],
+        "details": found,
+        "total": len(found),
+        "wordlist_size": len(_SUB_BRUTE_WORDLIST),
+        "engine": f"pure-Python active DNS brute force ({len(_SUB_BRUTE_WORDLIST)} prefixes, parallel async)",
+    }
 
 
 # ── crt.sh Certificate Transparency ────────────────────────────
@@ -549,8 +618,53 @@ async def recon_services(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 @router.post("/api/recon/os")
 async def recon_os(req: ScanRequest, _=Depends(verify_scan_quota)):
-    return {"ok": True, "os": None,
-            "skipped_reason": "Active OS fingerprinting needs raw sockets (Kali nmap)."}
+    """Passive OS fingerprint via ICMP ping TTL.
+
+    Initial TTL values are OS-typical:
+      64  -> Linux/Unix/macOS/Android
+      128 -> Windows
+      255 -> Cisco IOS / older Solaris / BSD variants
+    """
+    import subprocess
+    import re as _re
+    host = recon_host(req.target)
+    try:
+        ip = socket.gethostbyname(host)
+    except Exception as e:
+        return {"ok": False, "skipped_reason": f"Could not resolve {host}: {e}"}
+    try:
+        r = subprocess.run(
+            ["ping", "-c", "1", "-W", "2", ip],
+            capture_output=True, timeout=5,
+        )
+        out = (r.stdout or b"").decode("utf-8", errors="ignore") + (r.stderr or b"").decode("utf-8", errors="ignore")
+        m = _re.search(r"ttl[=\s]+(\d+)", out, _re.I)
+        if not m:
+            return {"ok": True, "ip": ip, "os": None,
+                    "skipped_reason": "Could not parse TTL from ping output (ICMP may be blocked / no ping binary)"}
+        ttl = int(m.group(1))
+        if 33 <= ttl <= 64:
+            os_guess, confidence = "Linux / Unix / macOS / Android (initial TTL 64)", "high"
+        elif 65 <= ttl <= 128:
+            os_guess, confidence = "Windows (initial TTL 128)", "high"
+        elif 129 <= ttl <= 255:
+            os_guess, confidence = "Cisco IOS / older Solaris / BSD (initial TTL 255)", "medium"
+        elif ttl <= 32:
+            os_guess, confidence = "Linux / Unix (TTL 64 with many hops)", "low"
+        else:
+            os_guess, confidence = "Unknown", "none"
+        return {
+            "ok": True,
+            "ip": ip,
+            "ttl_observed": ttl,
+            "os": os_guess,
+            "confidence": confidence,
+            "method": "passive TTL fingerprint via ICMP ping",
+            "engine": "pure-Python (subprocess ping + TTL bucket analysis)",
+        }
+    except Exception as e:
+        return {"ok": False, "ip": ip,
+                "skipped_reason": f"ping failed: {e} (ICMP may be blocked or no ping binary in container)"}
 
 
 async def _grab_banner(host, port, timeout=3.0):
@@ -783,37 +897,140 @@ async def recon_robotsmap(req: ScanRequest, _=Depends(verify_scan_quota)):
     return {"ok": True, "disallow": disallow, "sitemaps": sitemaps, "well_known": well_known}
 
 
-# ── BFS crawler (depth 1, same-origin) ─────────────────────────
+# ── BFS crawler (depth-3 recursive, same-origin, parallel async) ──
+import aiohttp as _aiohttp_crawl
+
+_INTERESTING_CRAWL = ["admin","login","config","backup","test","internal",
+                       ".env",".git","api","swagger","console","dashboard","setup"]
+
+
 @router.post("/api/recon/crawl")
 async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    r = safe_get(base, req=req)
-    if r is None:
-        return {"ok": False, "urls": [], "skipped_reason": f"Could not reach {base}"}
-    links = set()
-    host = recon_host(req.target)
-    for m in re.findall(r'href=["\']([^"\']+)["\']', r.text):
-        if m.startswith("http"):
-            if recon_host(m) == host:
-                links.add(m)
-        elif m.startswith("/"):
-            links.add(base + m)
-    return {"ok": True, "urls": sorted(links)[:50]}
+    host = recon_host(req.target).lower()
+    MAX_DEPTH = 3
+    MAX_PAGES = 80
+
+    visited = set()
+    queue = [(base, 0)]
+    pages = []
+    interesting = set()
+
+    async def _fetch(session, url):
+        try:
+            async with session.get(url,
+                                   timeout=_aiohttp_crawl.ClientTimeout(total=6),
+                                   allow_redirects=True,
+                                   headers={"User-Agent": "Mozilla/5.0 VulnusLab"}) as r:
+                text = await r.text()
+                return r.status, text
+        except Exception:
+            return None, None
+
+    async with _aiohttp_crawl.ClientSession() as session:
+        while queue and len(pages) < MAX_PAGES:
+            batch = []
+            while queue and len(batch) < 15:
+                u, d = queue.pop(0)
+                if u in visited or d > MAX_DEPTH:
+                    continue
+                visited.add(u)
+                batch.append((u, d))
+            if not batch:
+                continue
+            results = await asyncio.gather(*[_fetch(session, u) for u, _ in batch])
+            for (url, depth), (status, body) in zip(batch, results):
+                if status is None:
+                    continue
+                pages.append({"url": url, "depth": depth, "status": status})
+                for kw in _INTERESTING_CRAWL:
+                    if kw in url.lower():
+                        interesting.add(url)
+                        break
+                if depth < MAX_DEPTH and body:
+                    for m in re.findall(r'href=["\']([^"\']+)["\']', body):
+                        try:
+                            if m.startswith("http"):
+                                if recon_host(m).lower() == host:
+                                    queue.append((m, depth + 1))
+                            elif m.startswith("/"):
+                                queue.append((base + m, depth + 1))
+                        except Exception:
+                            continue
+
+    return {
+        "ok": True,
+        "urls": [p["url"] for p in pages],
+        "details": pages,
+        "interesting": sorted(interesting)[:30],
+        "total": len(pages),
+        "interesting_total": len(interesting),
+        "depth_reached": max((p["depth"] for p in pages), default=0),
+        "engine": f"pure-Python BFS crawler (depth {MAX_DEPTH}, parallel async, same-origin)",
+    }
 
 
-# ── Parameter discovery ────────────────────────────────────────
+# ── Parameter discovery — regex extract + Arjun-style reflection probe ──
+_COMMON_PARAMS = [
+    "id","user","username","page","query","search","q","url","redirect","return","next","filename",
+    "file","path","name","email","type","category","action","method","token","key","api_key","auth",
+    "session","sid","lang","locale","language","country","region","format","view","tab","sort","order",
+    "limit","offset","start","end","from","to","since","until","date","callback","jsonp","output","debug",
+    "test","admin","cmd","command","exec","system","data","value","param","arg","input","content",
+    "title","message","comment","body","subject","ref","source","src","dest","destination",
+]
+
+
 @router.post("/api/recon/params")
 async def recon_params(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     r = safe_get(base, req=req)
     if r is None:
         return {"ok": False, "params": [], "skipped_reason": f"Could not reach {base}"}
+
+    # Step 1 — regex extract from HTML (passive, fast)
     params = set()
-    for m in re.findall(r'<input[^>]+name=["\']([^"\']+)', r.text, re.I):
-        params.add(m)
-    for m in re.findall(r'[?&]([a-zA-Z_][a-zA-Z0-9_]{0,30})=', r.text):
-        params.add(m)
-    return {"ok": True, "params": sorted(params)[:100]}
+    sources = {"query": 0, "form": 0, "js": 0, "reflected": 0}
+    for m in re.findall(r'<input[^>]+name=["\']([^"\']+)', r.text or "", re.I):
+        if m not in params:
+            params.add(m); sources["form"] += 1
+    for m in re.findall(r'[?&]([a-zA-Z_][a-zA-Z0-9_]{0,30})=', r.text or ""):
+        if m not in params:
+            params.add(m); sources["query"] += 1
+
+    # Step 2 — Arjun-style reflection probe (active, slower)
+    # Inject each common param with a unique canary, look for reflection.
+    import uuid
+    reflection_params = []
+    baseline_body = (r.text or "")[:50000]
+    baseline_len = len(baseline_body)
+
+    for pname in _COMMON_PARAMS:
+        canary = f"arjncan{uuid.uuid4().hex[:10]}xy"
+        probe_url = f"{base}?{pname}={canary}"
+        pr = safe_get(probe_url, req=req, timeout=6)
+        if pr is None:
+            continue
+        body = pr.text or ""
+        # Reflection found?
+        if canary in body and pname not in params:
+            params.add(pname)
+            sources["reflected"] += 1
+            reflection_params.append(pname)
+        # Significant length diff also suggests param is processed
+        elif abs(len(body) - baseline_len) > 200 and pname not in params:
+            # softer signal — add but mark as probable
+            params.add(pname)
+            sources["js"] += 1
+
+    return {
+        "ok": True,
+        "params": sorted(params)[:200],
+        "sources": sources,
+        "reflected_params": reflection_params,
+        "wordlist_size": len(_COMMON_PARAMS),
+        "engine": "pure-Python regex extract + Arjun-style reflection probe",
+    }
 
 
 
