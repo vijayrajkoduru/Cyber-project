@@ -600,14 +600,22 @@ async def recon_cloudbuckets(req: ScanRequest, _=Depends(verify_scan_quota)):
         candidates.append(f"https://storage.googleapis.com/{bn}")
         candidates.append(f"https://{bn}.blob.core.windows.net")
         candidates.append(f"https://{bn}.digitaloceanspaces.com")
+    # Parallel async HEAD probes with short timeout — 90 candidates resolve in ~5s total
+    async def _probe_bucket(url):
+        try:
+            import aiohttp
+            timeout = aiohttp.ClientTimeout(total=4)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.head(url, allow_redirects=False) as r:
+                    return (url, r.status)
+        except Exception:
+            return (url, None)
+    results = await asyncio.gather(*[_probe_bucket(u) for u in candidates])
     existing, open_buckets = [], []
-    for url in candidates:
-        r = safe_get(url, req=req, allow_redirects=False)
-        if r is None:
-            continue
-        if r.status_code in (200, 403):
-            existing.append({"url": url, "status": r.status_code})
-            if r.status_code == 200:
+    for url, status in results:
+        if status in (200, 403):
+            existing.append({"url": url, "status": status})
+            if status == 200:
                 open_buckets.append(url)
     return {"ok": True, "existing": existing, "open": open_buckets, "tested": len(candidates)}
 
