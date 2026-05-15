@@ -1208,7 +1208,6 @@ _SECRET_PATTERNS = [
     ("DigitalOcean PAT",      r"dop_v1_[a-f0-9]{64}"),
     ("Linode API Token",      r"(?i)linode.{0,20}?[a-f0-9]{64}"),
     ("Hetzner API Token",     r"(?i)hcloud.{0,20}?[a-zA-Z0-9]{64}"),
-]{16}"),
     ("AWS Secret Key",       r"(?i)aws(.{0,20})?(secret|priv)?(.{0,20})?[\"\'][0-9a-zA-Z/+]{40}[\"\']"),
     ("Google API Key",       r"AIza[0-9A-Za-z_-]{35}"),
     ("Google OAuth",         r"[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com"),
