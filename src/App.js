@@ -6015,6 +6015,7 @@ function generateReconReport({target, allResults, date}) {
     {tool:"secrets",     name:"JS Secret Scanner",     isEmpty:d=>!d.findings || d.findings.length===0},
     {tool:"asn",         name:"ASN / IP Ownership",    isEmpty:d=>!d.asn && !d.ip},
     {tool:"internetdb",  name:"Free Shodan (InternetDB)",isEmpty:d=>!d.found},
+    {tool:"cve_match",   name:"CVE Matching (NVD)", isEmpty:d=>!d.summary || (d.summary.total_cves||0)===0},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -6762,6 +6763,7 @@ const RECON_PHASES = [
   // customer gets Shodan-equivalent CVE + port + tag intel for any internet-
   // resolvable target. Pairs with the keyed Shodan tile above.
   {name:"Free Shodan (InternetDB)",tool:"internetdb",endpoint:"/api/recon/internetdb",icon:"🆓"},
+  {name:"CVE Matching (NVD)",     tool:"cve_match", endpoint:"/api/recon/cve_match",  icon:"🚨"},
 ];
 
 function ReconModule({token, onRunningChange}) {
@@ -6855,6 +6857,7 @@ function ReconModule({token, onRunningChange}) {
         else if (ph.tool==="os"         && data.os)          add("✓ OS: "+data.os);
         else if (ph.tool==="banner"     && data.banners)     add("✓ Banners: "+Object.keys(data.banners||{}).length+" captured");
         else if (ph.tool==="gobuster"   && data.found)       add("✓ Gobuster: "+data.found.length+" path(s) discovered"+(data.engine==="python-fuzz"?" (pure-Python engine)":""));
+        else if (ph.tool==="cve_match"  && data.summary)     add("✓ CVE Match: "+data.summary.total_cves+" CVE(s) — "+data.summary.critical_cves+" critical, "+data.summary.high_cves+" high");
         else add("✓ "+ph.name+" complete");
         setDone(p=>[...p,i]); setAll(Object.assign({},results));
       } catch(e) {
