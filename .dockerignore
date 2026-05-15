@@ -12,9 +12,6 @@ build/
 package*.json
 
 # Frontend source — only Dockerfile.frontend needs it; backend doesn't
-src/
-public/
-nginx.conf
 
 # Python compile cache
 __pycache__/
