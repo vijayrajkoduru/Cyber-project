@@ -238,7 +238,72 @@ async def recon_amass(req: ScanRequest, _=Depends(verify_scan_quota)):
     except Exception as e:
         sources_failed["rapiddns"] = str(e)[:80]
 
-    # 7. DNS brute force — parallel resolution of common subdomain prefixes
+    # 7. ThreatCrowd passive DNS
+    try:
+        r = requests.get(f"https://www.threatcrowd.org/searchApi/v2/domain/report/?domain={host}",
+                         timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            try:
+                data = r.json()
+                _add_subs(data.get("subdomains", []), "threatcrowd")
+            except Exception:
+                pass
+    except Exception as e:
+        sources_failed["threatcrowd"] = str(e)[:80]
+
+    # 8. URLScan.io passive search
+    try:
+        r = requests.get(f"https://urlscan.io/api/v1/search/?q=domain:{host}&size=100",
+                         timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            try:
+                data = r.json()
+                hosts = set()
+                for item in data.get("results", []):
+                    page_host = item.get("page", {}).get("domain", "")
+                    if page_host and page_host.endswith(host):
+                        hosts.add(page_host.lower())
+                _add_subs(hosts, "urlscan_io")
+            except Exception:
+                pass
+    except Exception as e:
+        sources_failed["urlscan_io"] = str(e)[:80]
+
+    # 9. ShrewdEye (passive DNS aggregator)
+    try:
+        r = requests.get(f"https://shrewdeye.app/domains/{host}.txt", timeout=10,
+                         headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            _add_subs(r.text.splitlines(), "shrewdeye")
+    except Exception as e:
+        sources_failed["shrewdeye"] = str(e)[:80]
+
+    # 10. CommonCrawl URL index (recent month)
+    try:
+        idx_r = requests.get("https://index.commoncrawl.org/collinfo.json", timeout=8,
+                             headers={"User-Agent": "VulnusLab/1.0"})
+        if idx_r.status_code == 200 and idx_r.json():
+            recent_idx = idx_r.json()[0].get("cdx-api")
+            if recent_idx:
+                cc_r = requests.get(f"{recent_idx}?url=*.{host}/*&output=json&limit=200",
+                                    timeout=15, headers={"User-Agent": "VulnusLab/1.0"})
+                if cc_r.status_code == 200:
+                    import json as _json
+                    hosts = set()
+                    for line in cc_r.text.splitlines()[:200]:
+                        try:
+                            row = _json.loads(line)
+                            from urllib.parse import urlparse as _up
+                            u = _up(row.get("url", ""))
+                            if u.hostname and u.hostname.lower().endswith(host):
+                                hosts.add(u.hostname.lower())
+                        except Exception:
+                            continue
+                    _add_subs(hosts, "commoncrawl")
+    except Exception as e:
+        sources_failed["commoncrawl"] = str(e)[:80]
+
+    # 11. DNS brute force — parallel resolution of common subdomain prefixes
     try:
         results = await asyncio.gather(*[_resolve_brute(host, p) for p in _BRUTE_WORDLIST])
         brute_found = [r for r in results if r]
@@ -348,6 +413,31 @@ async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
     except Exception as e:
         sources_failed["hackertarget_hosts"] = str(e)[:80]
 
+    # 5. GitHub code search — find emails in public repositories mentioning the domain
+    # Free API, rate-limited (10 req/min unauthenticated; 30/min with PAT).
+    try:
+        gh_r = requests.get(
+            f"https://api.github.com/search/code?q=%22@{host}%22+in:file&per_page=30",
+            timeout=10,
+            headers={"User-Agent": "VulnusLab/1.0",
+                     "Accept": "application/vnd.github.v3.text-match+json"},
+        )
+        if gh_r.status_code == 200:
+            pre_count = len(emails)
+            for item in gh_r.json().get("items", []):
+                for tm in item.get("text_matches", []):
+                    for m in email_pattern.findall(tm.get("fragment", "")):
+                        ml = m.lower()
+                        if host in ml:
+                            emails.add(ml)
+            sources_hit["github_code"] = len(emails) - pre_count
+        elif gh_r.status_code == 403:
+            sources_failed["github_code"] = "rate-limited (10/min unauthenticated)"
+        else:
+            sources_failed["github_code"] = f"status {gh_r.status_code}"
+    except Exception as e:
+        sources_failed["github_code"] = str(e)[:80]
+
     return {
         "ok": True,
         "emails": sorted(emails),
@@ -356,7 +446,7 @@ async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
         "total_hosts": len(hosts),
         "sources": sources_hit,
         "sources_failed": sources_failed,
-        "engine": "pure-Python (pattern gen + target scrape + Wayback + HackerTarget)",
+        "engine": "pure-Python (pattern gen + target scrape + Wayback + HackerTarget + GitHub code search)",
     }
 
 
@@ -595,19 +685,77 @@ async def recon_jsendpoints(req: ScanRequest, _=Depends(verify_scan_quota)):
 # ── Wayback Machine ────────────────────────────────────────────
 @router.post("/api/recon/wayback")
 async def recon_wayback(req: ScanRequest, _=Depends(verify_scan_quota)):
+    """Archived URL discovery from 3 sources: Wayback Machine, CommonCrawl, URLScan.io."""
     host = recon_host(req.target)
+    all_urls = set()
+    sources_hit = {}
+    sources_failed = {}
+
+    # Source 1 — Wayback Machine CDX
     try:
         r = requests.get(
-            f"http://web.archive.org/cdx/search/cdx?url={host}/*&output=json&limit=200",
-            timeout=15,
+            f"http://web.archive.org/cdx/search/cdx?url={host}/*&output=json&limit=300&filter=statuscode:200",
+            timeout=15, headers={"User-Agent": "VulnusLab/1.0"},
         )
-        if r.status_code != 200:
-            return {"ok": False, "urls": [], "skipped_reason": f"Wayback returned {r.status_code}"}
-        rows = r.json()
-        urls = [row[2] for row in rows[1:]] if rows and len(rows) > 1 else []
-        return {"ok": True, "urls": urls[:200]}
+        if r.status_code == 200:
+            rows = r.json()
+            urls = [row[2] for row in rows[1:]] if rows and len(rows) > 1 else []
+            before = len(all_urls)
+            for u in urls:
+                all_urls.add(u)
+            sources_hit["wayback"] = len(all_urls) - before
+        else:
+            sources_failed["wayback"] = f"status {r.status_code}"
     except Exception as e:
-        return {"ok": False, "urls": [], "skipped_reason": f"Wayback query failed: {e}"}
+        sources_failed["wayback"] = str(e)[:80]
+
+    # Source 2 — CommonCrawl most-recent index
+    try:
+        idx_r = requests.get("https://index.commoncrawl.org/collinfo.json", timeout=8,
+                             headers={"User-Agent": "VulnusLab/1.0"})
+        if idx_r.status_code == 200 and idx_r.json():
+            recent_idx = idx_r.json()[0].get("cdx-api")
+            if recent_idx:
+                cc_r = requests.get(f"{recent_idx}?url=*.{host}/*&output=json&limit=300",
+                                    timeout=15, headers={"User-Agent": "VulnusLab/1.0"})
+                if cc_r.status_code == 200:
+                    import json as _json
+                    before = len(all_urls)
+                    for line in cc_r.text.splitlines()[:300]:
+                        try:
+                            row = _json.loads(line)
+                            u = row.get("url", "")
+                            if u:
+                                all_urls.add(u)
+                        except Exception:
+                            continue
+                    sources_hit["commoncrawl"] = len(all_urls) - before
+    except Exception as e:
+        sources_failed["commoncrawl"] = str(e)[:80]
+
+    # Source 3 — URLScan.io
+    try:
+        r = requests.get(f"https://urlscan.io/api/v1/search/?q=domain:{host}&size=100",
+                         timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            data = r.json()
+            before = len(all_urls)
+            for item in data.get("results", []):
+                u = item.get("page", {}).get("url", "")
+                if u:
+                    all_urls.add(u)
+            sources_hit["urlscan_io"] = len(all_urls) - before
+    except Exception as e:
+        sources_failed["urlscan_io"] = str(e)[:80]
+
+    return {
+        "ok": True,
+        "urls": sorted(all_urls)[:500],
+        "total": len(all_urls),
+        "sources": sources_hit,
+        "sources_failed": sources_failed,
+        "engine": "pure-Python (Wayback + CommonCrawl + URLScan.io)",
+    }
 
 
 # ── robots.txt + sitemap.xml + .well-known ─────────────────────
