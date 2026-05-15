@@ -65,7 +65,7 @@ async def scan_http_methods(req: ScanRequest, _=Depends(verify_scan_quota)):
             probed[method] = "no response"
             continue
         probed[method] = r.status_code
-        if r.status_code not in (405, 501):
+        if r.status_code in (200, 201, 202, 204, 207, 301, 302, 401, 403):
             allowed.add(method)
 
     # Step 3 — Emit findings

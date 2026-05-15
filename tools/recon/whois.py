@@ -169,3 +169,4 @@ async def scan_whois(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 def register(app):
     app.include_router(router)
+garbage SYNTAX ERROR garbage
