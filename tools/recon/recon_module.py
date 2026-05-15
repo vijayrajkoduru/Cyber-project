@@ -278,10 +278,58 @@ async def recon_banner(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 # ── Gobuster (pure-Python dir bruteforce) ──────────────────────
 _COMMON_DIRS = [
-    "admin","administrator","login","wp-admin","phpmyadmin","backup","config",
-    "uploads","files","api","v1","v2","test","dev","staging","old","tmp",
-    "robots.txt","sitemap.xml",".git/config",".env","swagger","api-docs","health",
-    "metrics","status",".well-known/security.txt",
+    # admin / login portals
+    "admin","administrator","admin.php","admin/login","admin/index","login","login.php","signin","cpanel",
+    "wp-admin","wp-login.php","phpmyadmin","pma","adminer","myadmin","manage","management","manager",
+    "panel","controlpanel","dashboard","moderator","webadmin","sysadmin",
+    # config + secrets
+    ".env",".env.local",".env.production",".env.development",".env.staging",".env.backup",
+    "config.php","config.json","config.yaml","config.yml","config.xml","configuration.php",
+    "settings.php","settings.json","settings.py","appsettings.json","web.config","wp-config.php",
+    ".aws/credentials",".aws/config",".ssh/id_rsa",".ssh/authorized_keys",
+    "secrets.json","secrets.yml","credentials.json","credentials.txt",
+    # version control + IDE
+    ".git/config",".git/HEAD",".git/index",".gitignore",".gitlab-ci.yml",".github/workflows",
+    ".svn/entries",".svn/wc.db",".hg/hgrc",".bzr/README",".DS_Store",
+    ".vscode/settings.json",".idea/workspace.xml",
+    # backup files
+    "backup","backup.zip","backup.tar.gz","backup.tar","backup.sql","backup.rar","backup.7z",
+    "site-backup.zip","www.zip","html.zip","public.zip","sql.zip","db.sql","db.zip",
+    "dump.sql","mysql.sql","postgres.sql","mongodump",
+    "wp-config.php.bak","config.php.bak","config.php~","index.php.bak","index.html.bak",
+    # info disclosure files
+    "phpinfo.php","info.php","test.php","p.php","i.php","x.php","debug.php","trace.php",
+    "server-status","server-info","status","stats","statistics","metrics","health","healthcheck",
+    "ping","heartbeat","alive","ready","probe",
+    # API + docs
+    "api","api/v1","api/v2","api/v3","api/docs","api-docs","swagger","swagger.json","swagger-ui",
+    "openapi.json","openapi.yaml","redoc","graphql","graphql-playground","graphiql",
+    "rest","rest/v1","actuator","actuator/health","actuator/env","actuator/metrics",
+    # dev/staging leaks
+    "dev","development","staging","stage","beta","test","testing","preview","sandbox",
+    "demo","tmp","temp","old","new","backup-old","internal","intranet",
+    # uploads / file paths
+    "uploads","upload","files","file","download","downloads","docs","documents",
+    "images","img","media","assets","static","public","private","data",
+    # WordPress paths
+    "wp-content","wp-includes","wp-content/uploads","wp-content/plugins","wp-content/themes",
+    "wp-content/debug.log","wp-content/backup-db",
+    # Drupal/Joomla
+    "sites/default","sites/default/files","sites/default/settings.php",
+    "administrator/index.php","joomla","drupal",
+    # well-known + standard
+    "robots.txt","sitemap.xml","sitemap_index.xml","sitemap.xml.gz","humans.txt","ads.txt",
+    ".well-known/security.txt",".well-known/openid-configuration",".well-known/change-password",
+    # auth tokens / JWT
+    ".htaccess",".htpasswd",".bash_history",".profile",".bashrc",
+    # logs
+    "logs","log","error.log","access.log","debug.log","application.log","app.log",
+    # rare-but-juicy
+    "phpunit.xml","composer.json","composer.lock","package.json","package-lock.json","yarn.lock",
+    "Gemfile","Gemfile.lock","requirements.txt","Pipfile","Pipfile.lock","go.mod","go.sum",
+    "Dockerfile","docker-compose.yml","Vagrantfile","Makefile",
+    "README.md","README.txt","CHANGELOG.md","LICENSE","TODO.txt",
+    "console","actuator","jolokia","prometheus","grafana",
 ]
 
 
@@ -413,15 +461,17 @@ async def recon_favicon(req: ScanRequest, _=Depends(verify_scan_quota)):
 @router.post("/api/recon/cloudbuckets")
 async def recon_cloudbuckets(req: ScanRequest, _=Depends(verify_scan_quota)):
     name = recon_host(req.target).split(".")[0]
-    candidates = [
-        f"https://{name}.s3.amazonaws.com",
-        f"https://{name}-prod.s3.amazonaws.com",
-        f"https://{name}-staging.s3.amazonaws.com",
-        f"https://{name}-backup.s3.amazonaws.com",
-        f"https://{name}-uploads.s3.amazonaws.com",
-        f"https://storage.googleapis.com/{name}",
-        f"https://storage.googleapis.com/{name}-prod",
-    ]
+    _suffixes = ["", "-prod", "-staging", "-dev", "-test", "-backup", "-backups",
+                 "-uploads", "-files", "-data", "-assets", "-media", "-images",
+                 "-public", "-private", "-internal", "-archive", "-logs"]
+    candidates = []
+    for sfx in _suffixes:
+        bn = name + sfx
+        candidates.append(f"https://{bn}.s3.amazonaws.com")
+        candidates.append(f"https://s3.amazonaws.com/{bn}")
+        candidates.append(f"https://storage.googleapis.com/{bn}")
+        candidates.append(f"https://{bn}.blob.core.windows.net")
+        candidates.append(f"https://{bn}.digitaloceanspaces.com")
     existing, open_buckets = [], []
     for url in candidates:
         r = safe_get(url, req=req, allow_redirects=False)
@@ -436,11 +486,34 @@ async def recon_cloudbuckets(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 # ── JS Secret Scanner (tight high-confidence patterns only) ──
 _SECRET_PATTERNS = [
-    ("AWS Access Key", r"AKIA[0-9A-Z]{16}"),
-    ("Google API Key", r"AIza[0-9A-Za-z_-]{35}"),
-    ("Slack Token",    r"xox[baprs]-[0-9a-zA-Z]{10,}"),
-    ("GitHub Token",   r"ghp_[0-9A-Za-z]{36}"),
-    ("Stripe Live",    r"sk_live_[0-9a-zA-Z]{24,}"),
+    ("AWS Access Key",       r"AKIA[0-9A-Z]{16}"),
+    ("AWS Secret Key",       r"(?i)aws(.{0,20})?(secret|priv)?(.{0,20})?[\"\'][0-9a-zA-Z/+]{40}[\"\']"),
+    ("Google API Key",       r"AIza[0-9A-Za-z_-]{35}"),
+    ("Google OAuth",         r"[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com"),
+    ("Slack Token",          r"xox[baprs]-[0-9a-zA-Z]{10,}"),
+    ("Slack Webhook",        r"https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+"),
+    ("GitHub PAT (classic)", r"ghp_[0-9A-Za-z]{36}"),
+    ("GitHub PAT (fine)",    r"github_pat_[0-9A-Za-z_]{82}"),
+    ("GitHub OAuth",         r"gho_[0-9A-Za-z]{36}"),
+    ("GitHub App Token",     r"(ghu|ghs)_[0-9A-Za-z]{36}"),
+    ("Stripe Live",          r"sk_live_[0-9a-zA-Z]{24,}"),
+    ("Stripe Restricted",    r"rk_live_[0-9a-zA-Z]{24,}"),
+    ("Stripe Publishable",   r"pk_live_[0-9a-zA-Z]{24,}"),
+    ("Mailgun API",          r"key-[0-9a-zA-Z]{32}"),
+    ("SendGrid API",         r"SG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}"),
+    ("Twilio Account SID",   r"AC[a-z0-9]{32}"),
+    ("Twilio API Key",       r"SK[a-z0-9]{32}"),
+    ("Heroku API",           r"(?i)heroku.{0,20}?[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"),
+    ("Dropbox API",          r"sl\.[A-Za-z0-9_-]{135,}"),
+    ("Discord Bot Token",    r"[MN][A-Za-z\d]{23}\.[\w-]{6}\.[\w-]{27}"),
+    ("Discord Webhook",      r"https://discord(?:app)?\.com/api/webhooks/\d+/[A-Za-z0-9_-]+"),
+    ("OpenAI API Key",       r"sk-[A-Za-z0-9]{48}"),
+    ("Anthropic API Key",    r"sk-ant-[A-Za-z0-9-_]{90,}"),
+    ("Square OAuth",         r"sq0atp-[0-9A-Za-z-_]{22}"),
+    ("RSA Private Key",      r"-----BEGIN RSA PRIVATE KEY-----"),
+    ("SSH Private Key",      r"-----BEGIN (OPENSSH|DSA|EC|PGP) PRIVATE KEY-----"),
+    ("JWT Token",            r"eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}"),
+    ("Basic Auth in URL",    r"https?://[^/\s:@]+:[^/\s:@]{4,}@[^/\s]+"),
 ]
 
 
