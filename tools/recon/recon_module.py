@@ -668,13 +668,31 @@ async def recon_os(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 
 async def _grab_banner(host, port, timeout=3.0):
+    is_https = port in (443, 8443)
+    is_http  = port in (80, 8000, 8080, 8888) or is_https
     try:
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
-        if port in (80, 8000, 8080, 8443, 8888):
-            writer.write(b"GET / HTTP/1.0\r\nHost: x\r\n\r\n")
+        if is_https:
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port, ssl=ctx, server_hostname=host),
+                timeout=timeout,
+            )
+        else:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=timeout,
+            )
+        if is_http:
+            req = (f"GET / HTTP/1.0\r\n"
+                   f"Host: {host}\r\n"
+                   f"User-Agent: VulnusLab/1.0\r\n"
+                   f"Accept: */*\r\n\r\n").encode()
+            writer.write(req)
             await writer.drain()
         try:
-            data = await asyncio.wait_for(reader.read(512), timeout=timeout)
+            data = await asyncio.wait_for(reader.read(2048), timeout=timeout)
         except asyncio.TimeoutError:
             data = b""
         writer.close()
