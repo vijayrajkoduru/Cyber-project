@@ -9,7 +9,6 @@
 # Frontend artifacts (rebuilt inside Dockerfile.frontend)
 node_modules/
 build/
-package*.json
 
 # Frontend source — only Dockerfile.frontend needs it; backend doesn't
 
