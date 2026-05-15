@@ -13,6 +13,7 @@ from typing import Optional
 
 import requests
 import dns.resolver
+import dns.asyncresolver
 import whois as whois_lib
 from fastapi import APIRouter, Depends
 
@@ -123,11 +124,138 @@ async def recon_crtsh(req: ScanRequest, _=Depends(verify_scan_quota)):
     return {"ok": True, "subdomains": sorted(subs)}
 
 
-# ── Amass (heavy Go binary not bundled in pure-Python build) ──
+# ── Amass-equivalent: 6 passive sources + DNS brute force, all parallel ──
+_BRUTE_WORDLIST = [
+    "www","mail","ftp","smtp","pop","imap","webmail","remote","admin",
+    "blog","shop","store","api","api-dev","api-staging","api-prod",
+    "app","apps","dev","test","staging","stage","beta","alpha",
+    "preview","demo","qa","uat","sandbox",
+    "cdn","static","assets","media","img","images","files","uploads",
+    "secure","ssl","vpn","git","gitlab","jenkins",
+    "ci","monitor","grafana","kibana","prometheus",
+    "db","database","mysql","postgres","mongo",
+    "backup","old","new","v1","v2","v3","internal",
+    "support","help","docs","wiki","portal","dashboard",
+    "auth","sso","login","account",
+    "cpanel","panel","phpmyadmin",
+    "mobile","m",
+    "ns1","ns2","ns3","ns4","mx","mx1","mx2",
+]
+
+
+async def _resolve_brute(host, prefix):
+    try:
+        resolver = dns.asyncresolver.Resolver()
+        resolver.timeout = 2
+        resolver.lifetime = 2
+        await resolver.resolve(f"{prefix}.{host}", "A")
+        return f"{prefix}.{host}"
+    except Exception:
+        return None
+
+
 @router.post("/api/recon/amass")
 async def recon_amass(req: ScanRequest, _=Depends(verify_scan_quota)):
-    return {"ok": True, "subdomains": [],
-            "skipped_reason": "Amass not installed in this build — crt.sh tile covers CT-based discovery."}
+    host = recon_host(req.target)
+    all_subs = set()
+    sources_hit = {}
+    sources_failed = {}
+
+    def _add_subs(names, source):
+        before = len(all_subs)
+        for name in names:
+            name = str(name).strip().lower().lstrip("*.")
+            if name and name.endswith(host) and not name.startswith("*"):
+                all_subs.add(name)
+        sources_hit[source] = len(all_subs) - before
+
+    # 1. crt.sh
+    try:
+        r = requests.get(f"https://crt.sh/?q=%25.{host}&output=json", timeout=10,
+                         headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            names = []
+            for e in r.json():
+                names.extend(str(e.get("name_value", "")).split("\n"))
+            _add_subs(names, "crt.sh")
+    except Exception as e:
+        sources_failed["crt.sh"] = str(e)[:80]
+
+    # 2. CertSpotter
+    try:
+        r = requests.get(
+            f"https://api.certspotter.com/v1/issuances?domain={host}&include_subdomains=true&expand=dns_names",
+            timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            names = []
+            for e in r.json():
+                names.extend(e.get("dns_names", []))
+            _add_subs(names, "certspotter")
+    except Exception as e:
+        sources_failed["certspotter"] = str(e)[:80]
+
+    # 3. JLDC / Anubis
+    try:
+        r = requests.get(f"https://jldc.me/anubis/subdomains/{host}", timeout=10,
+                         headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            _add_subs(r.json(), "jldc_anubis")
+    except Exception as e:
+        sources_failed["jldc_anubis"] = str(e)[:80]
+
+    # 4. AlienVault OTX
+    try:
+        r = requests.get(
+            f"https://otx.alienvault.com/api/v1/indicators/domain/{host}/passive_dns",
+            timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            names = [e.get("hostname", "") for e in r.json().get("passive_dns", [])]
+            _add_subs(names, "alienvault_otx")
+    except Exception as e:
+        sources_failed["alienvault_otx"] = str(e)[:80]
+
+    # 5. HackerTarget
+    try:
+        r = requests.get(f"https://api.hackertarget.com/hostsearch/?q={host}", timeout=10,
+                         headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200 and "API count exceeded" not in r.text:
+            names = [line.split(",")[0] for line in r.text.splitlines()]
+            _add_subs(names, "hackertarget")
+        elif "API count exceeded" in (r.text or ""):
+            sources_failed["hackertarget"] = "rate limit"
+    except Exception as e:
+        sources_failed["hackertarget"] = str(e)[:80]
+
+    # 6. RapidDNS (HTML parse)
+    try:
+        r = requests.get(f"https://rapiddns.io/subdomain/{host}?full=1", timeout=10,
+                         headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code == 200:
+            import re as _re
+            esc_host = _re.escape(host)
+            names = _re.findall(r"<td>([a-z0-9.-]+\." + esc_host + r")</td>", r.text.lower())
+            _add_subs(names, "rapiddns")
+    except Exception as e:
+        sources_failed["rapiddns"] = str(e)[:80]
+
+    # 7. DNS brute force — parallel resolution of common subdomain prefixes
+    try:
+        results = await asyncio.gather(*[_resolve_brute(host, p) for p in _BRUTE_WORDLIST])
+        brute_found = [r for r in results if r]
+        for name in brute_found:
+            all_subs.add(name)
+        sources_hit["dns_brute"] = len(brute_found)
+    except Exception as e:
+        sources_failed["dns_brute"] = str(e)[:80]
+
+    return {
+        "ok": True,
+        "subdomains": sorted(all_subs),
+        "total_subdomains": len(all_subs),
+        "sources": sources_hit,
+        "sources_failed": sources_failed,
+        "engine": "pure-Python (6 passive sources + DNS brute, parallel)",
+    }
 
 
 # ── theHarvester (not bundled) ─────────────────────────────────
