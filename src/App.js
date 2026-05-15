@@ -5927,6 +5927,113 @@ function Dashboard(props) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  RECON FINDINGS SYNTHESIS
+// ═══════════════════════════════════════════════════════════════
+function synthesizeReconFindings(r) {
+  r = r || {};
+  const findings = [];
+  if (r.cve_match && r.cve_match.cves && r.cve_match.cves.length > 0) {
+    const services = r.cve_match.services_detected || [];
+    services.forEach(svc => {
+      const svcKey = svc.vendor + "/" + svc.product;
+      const svcCves = r.cve_match.cves.filter(c => c.vendor_product === svcKey);
+      const critical = svcCves.filter(c => c.cvss_severity === "CRITICAL");
+      const high     = svcCves.filter(c => c.cvss_severity === "HIGH");
+      if (critical.length > 0) {
+        findings.push({
+          title: "Outdated " + svc.product + " " + svc.version + " - " + critical.length + " CRITICAL CVE(s)",
+          severity: "CRITICAL", category: "Outdated Software",
+          description: svc.vendor + "/" + svc.product + " " + svc.version + " has " + critical.length + " CRITICAL CVE(s). Top: " + critical.slice(0,3).map(c => c.id + " (CVSS " + c.cvss_score + ")").join(", "),
+          evidence: svc.detected_in || (svc.vendor + "/" + svc.product + " " + svc.version),
+          remediation: "Upgrade " + svc.product + " to the latest stable version.",
+          references: critical.slice(0,5).map(c => c.id).join(", "),
+          cvss: critical[0].cvss_score || 9.0,
+        });
+      }
+      if (high.length > 0) {
+        findings.push({
+          title: "Outdated " + svc.product + " " + svc.version + " - " + high.length + " HIGH CVE(s)",
+          severity: "HIGH", category: "Outdated Software",
+          description: svc.vendor + "/" + svc.product + " " + svc.version + " has " + high.length + " HIGH CVE(s). Top: " + high.slice(0,3).map(c => c.id + " (CVSS " + c.cvss_score + ")").join(", "),
+          evidence: svc.detected_in || (svc.vendor + "/" + svc.product + " " + svc.version),
+          remediation: "Upgrade " + svc.product + " to the latest stable version.",
+          references: high.slice(0,5).map(c => c.id).join(", "),
+          cvss: high[0].cvss_score || 7.5,
+        });
+      }
+    });
+  }
+  if (r.whois && r.whois.expires) {
+    const exp = new Date(r.whois.expires);
+    if (!isNaN(exp.getTime())) {
+      const days = Math.floor((exp - new Date()) / 86400000);
+      if (days < 0) {
+        findings.push({title:"Domain expired " + Math.abs(days) + " days ago",severity:"CRITICAL",category:"Domain Ownership",description:(r.whois.domain || "Target") + " expired on " + r.whois.expires + ".",evidence:"WHOIS: expires=" + r.whois.expires,remediation:"Renew the domain immediately.",references:"CWE-298",cvss:9.0});
+      } else if (days <= 30) {
+        findings.push({title:"Domain expires in " + days + " days",severity:"HIGH",category:"Domain Ownership",description:r.whois.domain + " expires on " + r.whois.expires + " - renewal urgent.",evidence:"WHOIS: expires=" + r.whois.expires,remediation:"Renew within two weeks.",references:"CWE-298",cvss:7.5});
+      } else if (days <= 90) {
+        findings.push({title:"Domain expires in " + days + " days",severity:"MEDIUM",category:"Domain Ownership",description:r.whois.domain + " expires on " + r.whois.expires + ".",evidence:"WHOIS: expires=" + r.whois.expires,remediation:"Schedule the renewal.",cvss:5.0});
+      }
+    }
+  }
+  if (r.dns && r.dns.records) {
+    const recs = r.dns.records;
+    let txtRecs = [];
+    if (Array.isArray(recs)) { txtRecs = recs.filter(x => (x.type||"").toUpperCase() === "TXT").map(x => x.value || x.address || ""); }
+    else if (typeof recs === "object") { txtRecs = (recs.TXT || []).map(x => typeof x === "string" ? x : String(x)); }
+    const hasSpf = txtRecs.some(t => String(t).toLowerCase().includes("v=spf1"));
+    if (!hasSpf && txtRecs.length > 0) {
+      findings.push({title:"No SPF record published",severity:"HIGH",category:"Email Security",description:"Domain has no SPF record. Email can be spoofed.",evidence:txtRecs.length + " TXT records, none contain v=spf1",remediation:"Publish 'v=spf1 mx -all' TXT record.",references:"CWE-290, OWASP A07:2021",cvss:7.0});
+    } else if (hasSpf) {
+      const spf = txtRecs.find(t => String(t).toLowerCase().includes("v=spf1"));
+      if (spf && !spf.includes("-all") && !spf.includes("~all")) {
+        findings.push({title:"SPF record uses weak policy",severity:"MEDIUM",category:"Email Security",description:"SPF exists but no -all/~all.",evidence:"spf=" + String(spf).substring(0,120),remediation:"Tighten to '-all' or '~all'.",references:"CWE-290",cvss:5.0});
+      }
+    }
+  }
+  const allPorts = new Set();
+  ((r.masscan && r.masscan.ports) || []).forEach(p => allPorts.add(p.port));
+  ((r.nmap    && r.nmap.ports)    || []).forEach(p => allPorts.add(p.port));
+  const dangerous = {
+    23:["Telnet","CRITICAL","Cleartext remote-admin exposed",9.5,"CWE-319"],
+    21:["FTP","HIGH","Cleartext file transfer",7.5,"CWE-319"],
+    1433:["MSSQL","CRITICAL","Database directly exposed",9.0,"CWE-668"],
+    3306:["MySQL","CRITICAL","Database directly exposed",9.0,"CWE-668"],
+    5432:["PostgreSQL","CRITICAL","Database directly exposed",9.0,"CWE-668"],
+    27017:["MongoDB","CRITICAL","Database exposed",9.5,"CWE-668"],
+    6379:["Redis","CRITICAL","Cache exposed",9.5,"CWE-668"],
+    9200:["Elasticsearch","CRITICAL","Search engine exposed",9.5,"CWE-668"],
+    11211:["Memcached","CRITICAL","Cache exposed",8.5,"CWE-668"],
+    5984:["CouchDB","CRITICAL","Database exposed",9.0,"CWE-668"],
+    2375:["Docker API","CRITICAL","Docker daemon exposed",9.8,"CWE-306"],
+    2376:["Docker API","CRITICAL","Docker daemon (TLS) exposed",9.0,"CWE-306"],
+    445:["SMB","HIGH","File-sharing exposed",8.0,"CWE-200"],
+    139:["NetBIOS","HIGH","Windows file-sharing exposed",7.5,"CWE-200"],
+    3389:["RDP","HIGH","Remote desktop exposed",7.5,"CWE-200"],
+    5900:["VNC","HIGH","VNC exposed",7.5,"CWE-306"],
+    5601:["Kibana","HIGH","Kibana UI exposed",7.0,"CWE-200"],
+    15672:["RabbitMQ","HIGH","RabbitMQ UI exposed",7.0,"CWE-200"],
+  };
+  allPorts.forEach(port => {
+    if (dangerous[port]) {
+      const [name, sev, why, cvss, cwe] = dangerous[port];
+      findings.push({title:name + " exposed on port " + port + "/tcp",severity:sev,category:"Exposed Service",description:why,evidence:"Port " + port + "/tcp confirmed open",remediation:"Bind " + name + " to localhost or restrict via firewall/VPN.",references:cwe + ", OWASP A05:2021",cvss:cvss});
+    }
+  });
+  if (allPorts.has(80) && !allPorts.has(443)) {
+    findings.push({title:"HTTP exposed without HTTPS",severity:"MEDIUM",category:"Encryption",description:"Port 80 open, port 443 not detected. Traffic unencrypted.",evidence:"Port 80 open, port 443 not detected",remediation:"Deploy TLS (Let's Encrypt), redirect HTTP to HTTPS.",references:"CWE-319, OWASP A02:2021",cvss:5.5});
+  }
+  const sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
+  findings.sort((a, b) => {
+    const sa = sevOrder[a.severity] !== undefined ? sevOrder[a.severity] : 5;
+    const sb = sevOrder[b.severity] !== undefined ? sevOrder[b.severity] : 5;
+    if (sa !== sb) return sa - sb;
+    return (b.cvss || 0) - (a.cvss || 0);
+  });
+  return findings;
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  RECON PDF REPORT
 // ═══════════════════════════════════════════════════════════════
 function generateReconReport({target, allResults, date}) {
@@ -6105,6 +6212,74 @@ function generateReconReport({target, allResults, date}) {
     y += 6.5;
   });
   y += 6;
+
+  // ── Findings — synthesized severity-ranked actionable risks ──
+  const _findings = synthesizeReconFindings(r);
+  if (_findings.length > 0) {
+    chk(40); y = sHead("Findings", y);
+    const _sev = (s) => _findings.filter(f => f.severity === s).length;
+    const _crit = _sev("CRITICAL"), _high = _sev("HIGH"), _med = _sev("MEDIUM"), _low = _sev("LOW");
+    chk(10); fillR(margin, y, contentW, 9, LIGHT);
+    txt(_findings.length + " finding(s)  -  " + _crit + " critical  -  " + _high + " high  -  " + _med + " medium  -  " + _low + " low",
+        margin+4, y+6, 9, BLUE, true);
+    y += 12;
+    _findings.slice(0, 30).forEach((f, i) => {
+      const sevColor = f.severity === "CRITICAL" ? [162,28,28]
+                     : f.severity === "HIGH"     ? [194,65,12]
+                     : f.severity === "MEDIUM"   ? [202,138,4]
+                     : f.severity === "LOW"      ? [55,65,81]
+                     :                              [100,116,139];
+      const sevBg    = f.severity === "CRITICAL" ? [254,226,226]
+                     : f.severity === "HIGH"     ? [255,237,213]
+                     : f.severity === "MEDIUM"   ? [254,243,199]
+                     : f.severity === "LOW"      ? [241,245,249]
+                     :                              [226,232,240];
+      chk(40);
+      fillR(margin, y, contentW, 8, sevBg);
+      fillR(margin, y, 3, 8, sevColor);
+      doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor.apply(doc, sevColor);
+      const titleLines = doc.splitTextToSize((i+1) + ". " + f.title, 130);
+      doc.text(titleLines[0] || "", margin+7, y+5.5);
+      rrect(pageW-margin-30, y+1.5, 25, 5, 1, sevColor);
+      doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(255,255,255);
+      doc.text(f.severity + "  CVSS " + (f.cvss||"?"), pageW-margin-28, y+5);
+      y += 9;
+      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc, DARK);
+      const descLines = doc.splitTextToSize(String(f.description||""), contentW-6);
+      descLines.slice(0,3).forEach(line => {
+        chk(5); doc.text(line, margin+4, y+3.5); y += 4;
+      });
+      if (f.evidence) {
+        chk(5); fillR(margin, y, contentW, 4.5, [248,250,252]);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, GRAY);
+        doc.text("Evidence:", margin+4, y+3.2);
+        doc.setFont("Courier","normal"); doc.setFontSize(7); doc.setTextColor.apply(doc, DARK);
+        const evLines = doc.splitTextToSize(String(f.evidence), contentW-30);
+        doc.text(evLines[0] || "", margin+22, y+3.2);
+        y += 5;
+      }
+      if (f.remediation) {
+        chk(5); fillR(margin, y, contentW, 4.5, [240,253,244]);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(15,118,82);
+        doc.text("Fix:", margin+4, y+3.2);
+        doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor.apply(doc, DARK);
+        const remLines = doc.splitTextToSize(String(f.remediation), contentW-14);
+        doc.text(remLines[0] || "", margin+13, y+3.2);
+        y += 5;
+      }
+      if (f.references) {
+        chk(4); doc.setFont("Arial","italic"); doc.setFontSize(6.5); doc.setTextColor.apply(doc, GRAY);
+        doc.text("Refs: " + f.references, margin+4, y+3); y += 4;
+      }
+      y += 3;
+    });
+    if (_findings.length > 30) {
+      chk(6); fillR(margin, y, contentW, 6, LIGHT);
+      txt("... and " + (_findings.length-30) + " more findings (top 30 shown by severity)", margin+4, y+4.5, 7.5, GRAY);
+      y += 7;
+    }
+    y += 4;
+  }
 
   // Tools used — show real, data-driven summaries instead of generic
   // "Completed". Each summary pulls the actual count/value from the
@@ -6948,8 +7123,50 @@ function ReconModule({token, onRunningChange}) {
       <div style={{color:"#475569",fontSize:13,padding:24,textAlign:"center"}}>Run a scan to see results here.</div>
     );
     const r = allResults;
+    const findings = synthesizeReconFindings(r);
     return (
       <div>
+        {/* Findings — severity-ranked actionable risks */}
+        {findings.length > 0 && (
+          <div style={S.section}>
+            <div style={{fontSize:13,fontWeight:700,color:"#fca5a5",marginBottom:10}}>
+              🛡️ Findings — {findings.length} risk{findings.length>1?"s":""} (
+              {findings.filter(f=>f.severity==="CRITICAL").length} critical,{" "}
+              {findings.filter(f=>f.severity==="HIGH").length} high,{" "}
+              {findings.filter(f=>f.severity==="MEDIUM").length} medium,{" "}
+              {findings.filter(f=>f.severity==="LOW").length} low)
+            </div>
+            {findings.slice(0,25).map((f,i)=>{
+              const sevColor = f.severity==="CRITICAL"?"#dc2626":f.severity==="HIGH"?"#ea580c":f.severity==="MEDIUM"?"#ca8a04":"#64748b";
+              return (
+                <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderLeft:`3px solid ${sevColor}`,borderRadius:5,padding:"10px 12px",marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,gap:10}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#e2e8f0",lineHeight:1.3}}>{i+1}. {f.title}</span>
+                    <span style={S.badge(sevColor)}>{f.severity} · CVSS {f.cvss||"?"}</span>
+                  </div>
+                  <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.4,marginBottom:6}}>{f.description}</div>
+                  {f.evidence && (
+                    <div style={{fontSize:10,color:"#64748b",fontFamily:"JetBrains Mono,monospace",marginBottom:4}}>
+                      <span style={{color:"#94a3b8",fontWeight:700}}>Evidence: </span>{f.evidence}
+                    </div>
+                  )}
+                  {f.remediation && (
+                    <div style={{fontSize:10,color:"#86efac",marginBottom:4}}>
+                      <span style={{fontWeight:700}}>Fix: </span>{f.remediation}
+                    </div>
+                  )}
+                  {f.references && (
+                    <div style={{fontSize:9,color:"#475569",fontStyle:"italic"}}>Refs: {f.references}</div>
+                  )}
+                </div>
+              );
+            })}
+            {findings.length > 25 && (
+              <div style={{fontSize:11,color:"#475569",textAlign:"center",marginTop:6}}>... and {findings.length-25} more findings (top 25 shown)</div>
+            )}
+          </div>
+        )}
+
         {/* WHOIS */}
         {r.whois && (
           <div style={S.section}>
