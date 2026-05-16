@@ -10718,6 +10718,17 @@ function UserBackupsModule({token}) {
     finally { setLoading(false); }
   };
 
+  const deleteSnapshot = async (snap) => {
+    if (!window.confirm(`PERMANENTLY DELETE snapshot ${snap}?\n\nThis cannot be undone.`)) return;
+    setLoading(true); setMsg(null);
+    try {
+      await api(`/api/user/backups/${snap}`, "DELETE", null, token);
+      setMsg({type:"success", text:`Deleted ${snap}`});
+      await refresh();
+    } catch(e) { setMsg({type:"error", text: e.message}); }
+    finally { setLoading(false); }
+  };
+
   const restoreSnapshot = async (snap) => {
     if (!window.confirm(`Restore from ${snap}?\n\nYour CURRENT data will be REPLACED. Other snapshots stay available.`)) return;
     setLoading(true); setMsg(null);

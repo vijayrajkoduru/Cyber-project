@@ -72,7 +72,7 @@ def verify_scan_quota(payload=Depends(verify_token)):
 def verify_admin(payload=Depends(verify_token)):
     """Admin-only gate. Use on every /api/admin/* endpoint.
     Raises 403 if the JWT does not carry role='admin'."""
-    if payload.get("role") != "admin":
+    if payload.get("role") not in ("admin", "superadmin"):
         raise HTTPException(403, "Admin role required")
     return payload
 
