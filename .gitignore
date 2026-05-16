@@ -52,3 +52,5 @@ users.db
 
 # Self-healing autoloader snapshots
 .last_known_good/
+backups/
+data/
