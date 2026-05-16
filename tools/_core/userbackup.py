@@ -62,11 +62,10 @@ def restore_snapshot(user_id, snap_name):
     if not snap.exists():
         return False
     zr = zone_root(user_id)
-    preserved = zr.parent / f"_tmp_backup_{user_id}"
-    if bdir.exists():
-        shutil.move(str(bdir), str(preserved))
     try:
         for child in zr.iterdir():
+            if child.name == ".backup":
+                continue
             if child.is_dir():
                 shutil.rmtree(child)
             else:
@@ -78,11 +77,6 @@ def restore_snapshot(user_id, snap_name):
     except Exception as exc:
         log.error("restore FAILED for %s: %s", user_id, exc)
         return False
-    finally:
-        if preserved.exists():
-            if bdir.exists():
-                shutil.rmtree(bdir)
-            shutil.move(str(preserved), str(bdir))
 
 
 def restore_latest(user_id):
