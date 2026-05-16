@@ -25,69 +25,12 @@ router = APIRouter()
 
 
 # ── WHOIS ──────────────────────────────────────────────────────
-@router.post("/api/recon/whois")
-async def recon_whois(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        w = whois_lib.whois(host)
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"WHOIS query failed: {e}"}
-
-    def _first(v):
-        return v[0] if isinstance(v, list) and v else v
-
-    def _iso(d):
-        d = _first(d)
-        if isinstance(d, datetime.datetime):
-            return d.isoformat()
-        return str(d) if d else None
-
-    return {
-        "ok": True,
-        "domain": host,
-        "registrar": _first(w.registrar),
-        "created": _iso(w.creation_date),
-        "expires": _iso(w.expiration_date),
-        "updated": _iso(w.updated_date),
-        "name_servers": sorted({str(n).lower() for n in (w.name_servers or [])}),
-        "registrant": _first(w.registrant_name) or _first(w.org),
-        "country": _first(w.country),
-    }
 
 
 # ── DNS Records (typed dict) ───────────────────────────────────
-@router.post("/api/recon/dns")
-async def recon_dns(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    records = {}
-    for rtype in ("A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"):
-        try:
-            resolver = dns.resolver.Resolver()
-            resolver.lifetime = 5
-            ans = resolver.resolve(host, rtype)
-            records[rtype] = [r.to_text() for r in ans]
-        except Exception:
-            pass
-    if not records:
-        return {"ok": False, "skipped_reason": "No DNS records found for this target (private/local IP)."}
-    return {"ok": True, "records": records}
 
 
 # ── DNS Recon (flat list, more shape) ──────────────────────────
-@router.post("/api/recon/dnsrecon")
-async def recon_dnsrecon(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    records = []
-    for rtype in ("A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"):
-        try:
-            resolver = dns.resolver.Resolver()
-            resolver.lifetime = 5
-            ans = resolver.resolve(host, rtype)
-            for r in ans:
-                records.append({"type": rtype, "name": host, "address": r.to_text()})
-        except Exception:
-            pass
-    return {"ok": True, "records": records}
 
 
 # ── Subdomains: active DNS brute force (~250 high-signal prefixes) ──
@@ -144,53 +87,9 @@ async def _resolve_sub_brute(host, prefix):
         return None
 
 
-@router.post("/api/recon/subdomains")
-async def recon_subdomains(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    # Batch parallel to avoid DNS server flooding
-    BATCH = 50
-    found = []
-    for i in range(0, len(_SUB_BRUTE_WORDLIST), BATCH):
-        batch = _SUB_BRUTE_WORDLIST[i:i+BATCH]
-        results = await asyncio.gather(*[_resolve_sub_brute(host, p) for p in batch])
-        for r in results:
-            if r is not None:
-                found.append({"subdomain": r[0], "ip": r[1]})
-    return {
-        "ok": True,
-        "subdomains": [f["subdomain"] for f in found],
-        "details": found,
-        "total": len(found),
-        "wordlist_size": len(_SUB_BRUTE_WORDLIST),
-        "engine": f"pure-Python active DNS brute force ({len(_SUB_BRUTE_WORDLIST)} prefixes, parallel async)",
-    }
 
 
 # ── crt.sh Certificate Transparency ────────────────────────────
-@router.post("/api/recon/crtsh")
-async def recon_crtsh(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        r = requests.get(
-            f"https://crt.sh/?q=%25.{host}&output=json",
-            timeout=20,
-            headers={"User-Agent": "VulnusLab/1.0"},
-        )
-        if r.status_code != 200:
-            return {"ok": False, "subdomains": [],
-                    "skipped_reason": f"crt.sh returned {r.status_code}"}
-        data = r.json()
-    except Exception as e:
-        return {"ok": False, "subdomains": [],
-                "skipped_reason": f"crt.sh query failed: {e}"}
-
-    subs = set()
-    for entry in data:
-        for line in str(entry.get("name_value", "")).split("\n"):
-            line = line.strip().lower().lstrip("*.")
-            if line and line.endswith(host):
-                subs.add(line)
-    return {"ok": True, "subdomains": sorted(subs)}
 
 
 # ── Amass-equivalent: 6 passive sources + DNS brute force, all parallel ──
@@ -223,173 +122,6 @@ async def _resolve_brute(host, prefix):
         return None
 
 
-@router.post("/api/recon/amass")
-async def recon_amass(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    all_subs = set()
-    sources_hit = {}
-    sources_failed = {}
-
-    def _add_subs(names, source):
-        before = len(all_subs)
-        for name in names:
-            name = str(name).strip().lower().lstrip("*.")
-            if name and name.endswith(host) and not name.startswith("*"):
-                all_subs.add(name)
-        sources_hit[source] = len(all_subs) - before
-
-    # 1. crt.sh
-    try:
-        r = requests.get(f"https://crt.sh/?q=%25.{host}&output=json", timeout=10,
-                         headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            names = []
-            for e in r.json():
-                names.extend(str(e.get("name_value", "")).split("\n"))
-            _add_subs(names, "crt.sh")
-    except Exception as e:
-        sources_failed["crt.sh"] = str(e)[:80]
-
-    # 2. CertSpotter
-    try:
-        r = requests.get(
-            f"https://api.certspotter.com/v1/issuances?domain={host}&include_subdomains=true&expand=dns_names",
-            timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            names = []
-            for e in r.json():
-                names.extend(e.get("dns_names", []))
-            _add_subs(names, "certspotter")
-    except Exception as e:
-        sources_failed["certspotter"] = str(e)[:80]
-
-    # 3. JLDC / Anubis
-    try:
-        r = requests.get(f"https://jldc.me/anubis/subdomains/{host}", timeout=10,
-                         headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            _add_subs(r.json(), "jldc_anubis")
-    except Exception as e:
-        sources_failed["jldc_anubis"] = str(e)[:80]
-
-    # 4. AlienVault OTX
-    try:
-        r = requests.get(
-            f"https://otx.alienvault.com/api/v1/indicators/domain/{host}/passive_dns",
-            timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            names = [e.get("hostname", "") for e in r.json().get("passive_dns", [])]
-            _add_subs(names, "alienvault_otx")
-    except Exception as e:
-        sources_failed["alienvault_otx"] = str(e)[:80]
-
-    # 5. HackerTarget
-    try:
-        r = requests.get(f"https://api.hackertarget.com/hostsearch/?q={host}", timeout=10,
-                         headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200 and "API count exceeded" not in r.text:
-            names = [line.split(",")[0] for line in r.text.splitlines()]
-            _add_subs(names, "hackertarget")
-        elif "API count exceeded" in (r.text or ""):
-            sources_failed["hackertarget"] = "rate limit"
-    except Exception as e:
-        sources_failed["hackertarget"] = str(e)[:80]
-
-    # 6. RapidDNS (HTML parse)
-    try:
-        r = requests.get(f"https://rapiddns.io/subdomain/{host}?full=1", timeout=10,
-                         headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            import re as _re
-            esc_host = _re.escape(host)
-            names = _re.findall(r"<td>([a-z0-9.-]+\." + esc_host + r")</td>", r.text.lower())
-            _add_subs(names, "rapiddns")
-    except Exception as e:
-        sources_failed["rapiddns"] = str(e)[:80]
-
-    # 7. ThreatCrowd passive DNS
-    try:
-        r = requests.get(f"https://www.threatcrowd.org/searchApi/v2/domain/report/?domain={host}",
-                         timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            try:
-                data = r.json()
-                _add_subs(data.get("subdomains", []), "threatcrowd")
-            except Exception:
-                pass
-    except Exception as e:
-        sources_failed["threatcrowd"] = str(e)[:80]
-
-    # 8. URLScan.io passive search
-    try:
-        r = requests.get(f"https://urlscan.io/api/v1/search/?q=domain:{host}&size=100",
-                         timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            try:
-                data = r.json()
-                hosts = set()
-                for item in data.get("results", []):
-                    page_host = item.get("page", {}).get("domain", "")
-                    if page_host and page_host.endswith(host):
-                        hosts.add(page_host.lower())
-                _add_subs(hosts, "urlscan_io")
-            except Exception:
-                pass
-    except Exception as e:
-        sources_failed["urlscan_io"] = str(e)[:80]
-
-    # 9. ShrewdEye (passive DNS aggregator)
-    try:
-        r = requests.get(f"https://shrewdeye.app/domains/{host}.txt", timeout=10,
-                         headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            _add_subs(r.text.splitlines(), "shrewdeye")
-    except Exception as e:
-        sources_failed["shrewdeye"] = str(e)[:80]
-
-    # 10. CommonCrawl URL index (recent month)
-    try:
-        idx_r = requests.get("https://index.commoncrawl.org/collinfo.json", timeout=8,
-                             headers={"User-Agent": "VulnusLab/1.0"})
-        if idx_r.status_code == 200 and idx_r.json():
-            recent_idx = idx_r.json()[0].get("cdx-api")
-            if recent_idx:
-                cc_r = requests.get(f"{recent_idx}?url=*.{host}/*&output=json&limit=200",
-                                    timeout=15, headers={"User-Agent": "VulnusLab/1.0"})
-                if cc_r.status_code == 200:
-                    import json as _json
-                    hosts = set()
-                    for line in cc_r.text.splitlines()[:200]:
-                        try:
-                            row = _json.loads(line)
-                            from urllib.parse import urlparse as _up
-                            u = _up(row.get("url", ""))
-                            if u.hostname and u.hostname.lower().endswith(host):
-                                hosts.add(u.hostname.lower())
-                        except Exception:
-                            continue
-                    _add_subs(hosts, "commoncrawl")
-    except Exception as e:
-        sources_failed["commoncrawl"] = str(e)[:80]
-
-    # 11. DNS brute force — parallel resolution of common subdomain prefixes
-    try:
-        results = await asyncio.gather(*[_resolve_brute(host, p) for p in _BRUTE_WORDLIST])
-        brute_found = [r for r in results if r]
-        for name in brute_found:
-            all_subs.add(name)
-        sources_hit["dns_brute"] = len(brute_found)
-    except Exception as e:
-        sources_failed["dns_brute"] = str(e)[:80]
-
-    return {
-        "ok": True,
-        "subdomains": sorted(all_subs),
-        "total_subdomains": len(all_subs),
-        "sources": sources_hit,
-        "sources_failed": sources_failed,
-        "engine": "pure-Python (6 passive sources + DNS brute, parallel)",
-    }
 
 
 # ── theHarvester-equivalent: pattern gen + target scrape + Wayback + HackerTarget ──
@@ -406,143 +138,9 @@ _CONTACT_PAGES = [
 ]
 
 
-@router.post("/api/recon/harvester")
-async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    emails = set()
-    hosts = set()
-    sources_hit = {}
-    sources_failed = {}
-    email_pattern = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-
-    # 1. Pattern generation — common business email prefixes for the domain
-    pre_count = len(emails)
-    for p in _COMMON_EMAIL_PREFIXES:
-        emails.add(f"{p}@{host}")
-    sources_hit["pattern_generation"] = len(emails) - pre_count
-
-    # 2. Scrape target's own pages for real emails
-    try:
-        base = web_url(req.target).rstrip("/")
-        pre_count = len(emails)
-        for p in _CONTACT_PAGES:
-            r = safe_get(base + p, req=req, allow_redirects=True)
-            if r is not None and r.status_code == 200:
-                for match in email_pattern.findall(r.text or ""):
-                    m = match.lower()
-                    if host in m or m.endswith(f".{host}"):
-                        emails.add(m)
-        sources_hit["target_scrape"] = len(emails) - pre_count
-    except Exception as e:
-        sources_failed["target_scrape"] = str(e)[:80]
-
-    # 3. Wayback Machine — fetch archived homepage and extract emails
-    try:
-        wb = requests.get(
-            f"http://web.archive.org/cdx/search/cdx?url={host}&output=json&limit=5&filter=statuscode:200",
-            timeout=10, headers={"User-Agent": "VulnusLab/1.0"},
-        )
-        if wb.status_code == 200:
-            rows = wb.json()
-            pre_count = len(emails)
-            for row in rows[1:3]:
-                if len(row) >= 3:
-                    archive_url = f"http://web.archive.org/web/{row[1]}/{row[2]}"
-                    try:
-                        ar = requests.get(archive_url, timeout=10,
-                                          headers={"User-Agent": "VulnusLab/1.0"})
-                        if ar.status_code == 200:
-                            for match in email_pattern.findall(ar.text):
-                                m = match.lower()
-                                if host in m:
-                                    emails.add(m)
-                    except Exception:
-                        continue
-            sources_hit["wayback"] = len(emails) - pre_count
-    except Exception as e:
-        sources_failed["wayback"] = str(e)[:80]
-
-    # 4. HackerTarget hostsearch for hosts (hostname + ip pairs)
-    try:
-        r = requests.get(
-            f"https://api.hackertarget.com/hostsearch/?q={host}",
-            timeout=10, headers={"User-Agent": "VulnusLab/1.0"},
-        )
-        if r.status_code == 200 and "API count exceeded" not in r.text:
-            pre_count = len(hosts)
-            for line in r.text.splitlines():
-                parts = line.split(",")
-                if len(parts) >= 2:
-                    hostname = parts[0].strip().lower()
-                    if hostname.endswith(host):
-                        hosts.add(hostname)
-            sources_hit["hackertarget_hosts"] = len(hosts) - pre_count
-        elif "API count exceeded" in (r.text or ""):
-            sources_failed["hackertarget_hosts"] = "rate limit"
-    except Exception as e:
-        sources_failed["hackertarget_hosts"] = str(e)[:80]
-
-    # 5. GitHub code search — find emails in public repositories mentioning the domain
-    # Free API, rate-limited (10 req/min unauthenticated; 30/min with PAT).
-    try:
-        gh_r = requests.get(
-            f"https://api.github.com/search/code?q=%22@{host}%22+in:file&per_page=30",
-            timeout=10,
-            headers={"User-Agent": "VulnusLab/1.0",
-                     "Accept": "application/vnd.github.v3.text-match+json"},
-        )
-        if gh_r.status_code == 200:
-            pre_count = len(emails)
-            for item in gh_r.json().get("items", []):
-                for tm in item.get("text_matches", []):
-                    for m in email_pattern.findall(tm.get("fragment", "")):
-                        ml = m.lower()
-                        if host in ml:
-                            emails.add(ml)
-            sources_hit["github_code"] = len(emails) - pre_count
-        elif gh_r.status_code == 403:
-            sources_failed["github_code"] = "rate-limited (10/min unauthenticated)"
-        else:
-            sources_failed["github_code"] = f"status {gh_r.status_code}"
-    except Exception as e:
-        sources_failed["github_code"] = str(e)[:80]
-
-    return {
-        "ok": True,
-        "emails": sorted(emails),
-        "hosts": sorted(hosts),
-        "total_emails": len(emails),
-        "total_hosts": len(hosts),
-        "sources": sources_hit,
-        "sources_failed": sources_failed,
-        "engine": "pure-Python (pattern gen + target scrape + Wayback + HackerTarget + GitHub code search)",
-    }
 
 
 # ── Shodan (paid API; key from frontend body) ──────────────────
-@router.post("/api/recon/shodan")
-async def recon_shodan(req: ScanRequest, _=Depends(verify_scan_quota)):
-    api_key = getattr(req, "api_key", "") or ""
-    if not api_key:
-        return {"ok": False, "skipped_reason": "No Shodan API key configured — set in Settings"}
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception:
-        return {"ok": False, "skipped_reason": f"Could not resolve {host}"}
-    try:
-        r = requests.get(f"https://api.shodan.io/shodan/host/{ip}?key={api_key}", timeout=15)
-        if r.status_code != 200:
-            return {"ok": False, "skipped_reason": f"Shodan API returned {r.status_code}"}
-        d = r.json()
-        return {
-            "ok": True, "ip": d.get("ip_str", ip), "org": d.get("org"),
-            "isp": d.get("isp"), "country": d.get("country_name"),
-            "city": d.get("city"), "os": d.get("os"),
-            "ports": d.get("ports", []),
-        }
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"Shodan query failed: {e}"}
 
 
 # ── Port-scan helpers ──────────────────────────────────────────
@@ -576,95 +174,12 @@ async def _scan_open_ports(host):
     return [p for p, ok in zip(ports, results) if ok]
 
 
-@router.post("/api/recon/masscan")
-async def recon_masscan(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "ports": [], "skipped_reason": f"Could not resolve {host}: {e}"}
-    open_ports = await _scan_open_ports(ip)
-    return {"ok": True, "ip": ip,
-            "ports": [{"port": p, "proto": "tcp", "state": "open"} for p in open_ports],
-            "engine": "python-asyncio"}
 
 
-@router.post("/api/recon/nmap")
-async def recon_nmap(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "ports": [], "skipped_reason": f"Could not resolve {host}: {e}"}
-    open_ports = await _scan_open_ports(ip)
-    return {"ok": True, "ip": ip,
-            "ports": [{"port": p, "proto": "tcp", "state": "open",
-                       "service": _PORT_CATALOG.get(p, "unknown")} for p in open_ports],
-            "engine": "python-asyncio"}
 
 
-@router.post("/api/recon/services")
-async def recon_services(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "ports": [], "skipped_reason": f"Could not resolve {host}: {e}"}
-    open_ports = await _scan_open_ports(ip)
-    return {"ok": True,
-            "ports": [{"port": p, "service": _PORT_CATALOG.get(p, "unknown"),
-                       "version": None} for p in open_ports]}
 
 
-@router.post("/api/recon/os")
-async def recon_os(req: ScanRequest, _=Depends(verify_scan_quota)):
-    """Passive OS fingerprint via ICMP ping TTL.
-
-    Initial TTL values are OS-typical:
-      64  -> Linux/Unix/macOS/Android
-      128 -> Windows
-      255 -> Cisco IOS / older Solaris / BSD variants
-    """
-    import subprocess
-    import re as _re
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"Could not resolve {host}: {e}"}
-    try:
-        r = subprocess.run(
-            ["ping", "-c", "1", "-W", "2", ip],
-            capture_output=True, timeout=5,
-        )
-        out = (r.stdout or b"").decode("utf-8", errors="ignore") + (r.stderr or b"").decode("utf-8", errors="ignore")
-        m = _re.search(r"ttl[=\s]+(\d+)", out, _re.I)
-        if not m:
-            return {"ok": True, "ip": ip, "os": None,
-                    "skipped_reason": "Could not parse TTL from ping output (ICMP may be blocked / no ping binary)"}
-        ttl = int(m.group(1))
-        if 33 <= ttl <= 64:
-            os_guess, confidence = "Linux / Unix / macOS / Android (initial TTL 64)", "high"
-        elif 65 <= ttl <= 128:
-            os_guess, confidence = "Windows (initial TTL 128)", "high"
-        elif 129 <= ttl <= 255:
-            os_guess, confidence = "Cisco IOS / older Solaris / BSD (initial TTL 255)", "medium"
-        elif ttl <= 32:
-            os_guess, confidence = "Linux / Unix (TTL 64 with many hops)", "low"
-        else:
-            os_guess, confidence = "Unknown", "none"
-        return {
-            "ok": True,
-            "ip": ip,
-            "ttl_observed": ttl,
-            "os": os_guess,
-            "confidence": confidence,
-            "method": "passive TTL fingerprint via ICMP ping",
-            "engine": "pure-Python (subprocess ping + TTL bucket analysis)",
-        }
-    except Exception as e:
-        return {"ok": False, "ip": ip,
-                "skipped_reason": f"ping failed: {e} (ICMP may be blocked or no ping binary in container)"}
 
 
 async def _grab_banner(host, port, timeout=3.0):
@@ -705,20 +220,6 @@ async def _grab_banner(host, port, timeout=3.0):
         return ""
 
 
-@router.post("/api/recon/banner")
-async def recon_banner(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "banners": {}, "skipped_reason": f"Could not resolve {host}: {e}"}
-    open_ports = await _scan_open_ports(ip)
-    banners = {}
-    for p in open_ports[:10]:
-        b = await _grab_banner(ip, p)
-        if b:
-            banners[p] = b
-    return {"ok": True, "banners": banners}
 
 
 # ── Gobuster (pure-Python dir bruteforce) ──────────────────────
@@ -778,141 +279,15 @@ _COMMON_DIRS = [
 ]
 
 
-@router.post("/api/recon/gobuster")
-async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    found = []
-    baseline = safe_get(f"{base}/{hashlib.sha1(req.target.encode()).hexdigest()[:12]}-404probe", req=req)
-    if baseline is None:
-        return {"ok": False, "found": [], "skipped_reason": f"Could not reach {base}"}
-    bs, bl = baseline.status_code, len(baseline.content)
-    for path in _COMMON_DIRS:
-        r = safe_get(f"{base}/{path}", req=req, allow_redirects=False)
-        if r is None:
-            continue
-        if r.status_code != 404 and (r.status_code != bs or abs(len(r.content) - bl) > 64):
-            found.append({"path": "/" + path, "status": r.status_code, "length": len(r.content)})
-    return {"ok": True, "found": found, "engine": "python-fuzz"}
 
 
 # ── JS endpoint extractor ──────────────────────────────────────
-@router.post("/api/recon/jsendpoints")
-async def recon_jsendpoints(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    r = safe_get(base, req=req, allow_redirects=True)
-    if r is None:
-        return {"ok": False, "endpoints": [], "skipped_reason": f"Could not reach {base}"}
-    js_urls = re.findall(r'src=["\']([^"\']+\.js)', r.text)
-    endpoints = set()
-    for js_url in js_urls[:5]:
-        full = js_url if js_url.startswith("http") else f"{base}/{js_url.lstrip('/')}"
-        rjs = safe_get(full, req=req)
-        if rjs is None:
-            continue
-        for m in re.findall(r'["\']/(api/[a-zA-Z0-9_/.-]+)', rjs.text):
-            endpoints.add("/" + m)
-    return {"ok": True, "endpoints": sorted(endpoints), "js_files": len(js_urls)}
 
 
 # ── Wayback Machine ────────────────────────────────────────────
-@router.post("/api/recon/wayback")
-async def recon_wayback(req: ScanRequest, _=Depends(verify_scan_quota)):
-    """Archived URL discovery from 3 sources: Wayback Machine, CommonCrawl, URLScan.io."""
-    host = recon_host(req.target)
-    all_urls = set()
-    sources_hit = {}
-    sources_failed = {}
-
-    # Source 1 — Wayback Machine CDX
-    try:
-        r = requests.get(
-            f"http://web.archive.org/cdx/search/cdx?url={host}/*&output=json&limit=300&filter=statuscode:200",
-            timeout=15, headers={"User-Agent": "VulnusLab/1.0"},
-        )
-        if r.status_code == 200:
-            rows = r.json()
-            urls = [row[2] for row in rows[1:]] if rows and len(rows) > 1 else []
-            before = len(all_urls)
-            for u in urls:
-                all_urls.add(u)
-            sources_hit["wayback"] = len(all_urls) - before
-        else:
-            sources_failed["wayback"] = f"status {r.status_code}"
-    except Exception as e:
-        sources_failed["wayback"] = str(e)[:80]
-
-    # Source 2 — CommonCrawl most-recent index
-    try:
-        idx_r = requests.get("https://index.commoncrawl.org/collinfo.json", timeout=8,
-                             headers={"User-Agent": "VulnusLab/1.0"})
-        if idx_r.status_code == 200 and idx_r.json():
-            recent_idx = idx_r.json()[0].get("cdx-api")
-            if recent_idx:
-                cc_r = requests.get(f"{recent_idx}?url=*.{host}/*&output=json&limit=300",
-                                    timeout=15, headers={"User-Agent": "VulnusLab/1.0"})
-                if cc_r.status_code == 200:
-                    import json as _json
-                    before = len(all_urls)
-                    for line in cc_r.text.splitlines()[:300]:
-                        try:
-                            row = _json.loads(line)
-                            u = row.get("url", "")
-                            if u:
-                                all_urls.add(u)
-                        except Exception:
-                            continue
-                    sources_hit["commoncrawl"] = len(all_urls) - before
-    except Exception as e:
-        sources_failed["commoncrawl"] = str(e)[:80]
-
-    # Source 3 — URLScan.io
-    try:
-        r = requests.get(f"https://urlscan.io/api/v1/search/?q=domain:{host}&size=100",
-                         timeout=10, headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            data = r.json()
-            before = len(all_urls)
-            for item in data.get("results", []):
-                u = item.get("page", {}).get("url", "")
-                if u:
-                    all_urls.add(u)
-            sources_hit["urlscan_io"] = len(all_urls) - before
-    except Exception as e:
-        sources_failed["urlscan_io"] = str(e)[:80]
-
-    return {
-        "ok": True,
-        "urls": sorted(all_urls)[:500],
-        "total": len(all_urls),
-        "sources": sources_hit,
-        "sources_failed": sources_failed,
-        "engine": "pure-Python (Wayback + CommonCrawl + URLScan.io)",
-    }
 
 
 # ── robots.txt + sitemap.xml + .well-known ─────────────────────
-@router.post("/api/recon/robotsmap")
-async def recon_robotsmap(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    disallow, sitemaps, well_known = [], [], []
-    r = safe_get(f"{base}/robots.txt", req=req)
-    if r is not None and r.status_code == 200:
-        for line in r.text.splitlines():
-            line = line.strip()
-            if line.lower().startswith("disallow:"):
-                p = line.split(":", 1)[1].strip()
-                if p:
-                    disallow.append(p)
-            elif line.lower().startswith("sitemap:"):
-                sitemaps.append(line.split(":", 1)[1].strip())
-    if not sitemaps:
-        rs = safe_get(f"{base}/sitemap.xml", req=req)
-        if rs is not None and rs.status_code == 200:
-            sitemaps.append(f"{base}/sitemap.xml")
-    sec = safe_get(f"{base}/.well-known/security.txt", req=req)
-    if sec is not None and sec.status_code == 200:
-        well_known.append("/.well-known/security.txt")
-    return {"ok": True, "disallow": disallow, "sitemaps": sitemaps, "well_known": well_known}
 
 
 # ── BFS crawler (depth-3 recursive, same-origin, parallel async) ──
@@ -922,70 +297,6 @@ _INTERESTING_CRAWL = ["admin","login","config","backup","test","internal",
                        ".env",".git","api","swagger","console","dashboard","setup"]
 
 
-@router.post("/api/recon/crawl")
-async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    host = recon_host(req.target).lower()
-    MAX_DEPTH = 3
-    MAX_PAGES = 80
-
-    visited = set()
-    queue = [(base, 0)]
-    pages = []
-    interesting = set()
-
-    async def _fetch(session, url):
-        try:
-            async with session.get(url,
-                                   timeout=_aiohttp_crawl.ClientTimeout(total=6),
-                                   allow_redirects=True,
-                                   headers={"User-Agent": "Mozilla/5.0 VulnusLab"}) as r:
-                text = await r.text()
-                return r.status, text
-        except Exception:
-            return None, None
-
-    async with _aiohttp_crawl.ClientSession() as session:
-        while queue and len(pages) < MAX_PAGES:
-            batch = []
-            while queue and len(batch) < 15:
-                u, d = queue.pop(0)
-                if u in visited or d > MAX_DEPTH:
-                    continue
-                visited.add(u)
-                batch.append((u, d))
-            if not batch:
-                continue
-            results = await asyncio.gather(*[_fetch(session, u) for u, _ in batch])
-            for (url, depth), (status, body) in zip(batch, results):
-                if status is None:
-                    continue
-                pages.append({"url": url, "depth": depth, "status": status})
-                for kw in _INTERESTING_CRAWL:
-                    if kw in url.lower():
-                        interesting.add(url)
-                        break
-                if depth < MAX_DEPTH and body:
-                    for m in re.findall(r'href=["\']([^"\']+)["\']', body):
-                        try:
-                            if m.startswith("http"):
-                                if recon_host(m).lower() == host:
-                                    queue.append((m, depth + 1))
-                            elif m.startswith("/"):
-                                queue.append((base + m, depth + 1))
-                        except Exception:
-                            continue
-
-    return {
-        "ok": True,
-        "urls": [p["url"] for p in pages],
-        "details": pages,
-        "interesting": sorted(interesting)[:30],
-        "total": len(pages),
-        "interesting_total": len(interesting),
-        "depth_reached": max((p["depth"] for p in pages), default=0),
-        "engine": f"pure-Python BFS crawler (depth {MAX_DEPTH}, parallel async, same-origin)",
-    }
 
 
 # ── Parameter discovery — regex extract + Arjun-style reflection probe ──
@@ -999,56 +310,6 @@ _COMMON_PARAMS = [
 ]
 
 
-@router.post("/api/recon/params")
-async def recon_params(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    r = safe_get(base, req=req)
-    if r is None:
-        return {"ok": False, "params": [], "skipped_reason": f"Could not reach {base}"}
-
-    # Step 1 — regex extract from HTML (passive, fast)
-    params = set()
-    sources = {"query": 0, "form": 0, "js": 0, "reflected": 0}
-    for m in re.findall(r'<input[^>]+name=["\']([^"\']+)', r.text or "", re.I):
-        if m not in params:
-            params.add(m); sources["form"] += 1
-    for m in re.findall(r'[?&]([a-zA-Z_][a-zA-Z0-9_]{0,30})=', r.text or ""):
-        if m not in params:
-            params.add(m); sources["query"] += 1
-
-    # Step 2 — Arjun-style reflection probe (active, slower)
-    # Inject each common param with a unique canary, look for reflection.
-    import uuid
-    reflection_params = []
-    baseline_body = (r.text or "")[:50000]
-    baseline_len = len(baseline_body)
-
-    for pname in _COMMON_PARAMS:
-        canary = f"arjncan{uuid.uuid4().hex[:10]}xy"
-        probe_url = f"{base}?{pname}={canary}"
-        pr = safe_get(probe_url, req=req, timeout=6)
-        if pr is None:
-            continue
-        body = pr.text or ""
-        # Reflection found?
-        if canary in body and pname not in params:
-            params.add(pname)
-            sources["reflected"] += 1
-            reflection_params.append(pname)
-        # Significant length diff also suggests param is processed
-        elif abs(len(body) - baseline_len) > 200 and pname not in params:
-            # softer signal — add but mark as probable
-            params.add(pname)
-            sources["js"] += 1
-
-    return {
-        "ok": True,
-        "params": sorted(params)[:200],
-        "sources": sources,
-        "reflected_params": reflection_params,
-        "wordlist_size": len(_COMMON_PARAMS),
-        "engine": "pure-Python regex extract + Arjun-style reflection probe",
-    }
 
 
 
@@ -1086,64 +347,9 @@ def _murmur3_32(data, seed=0):
 
 
 # ── Favicon fingerprint ────────────────────────────────────────
-@router.post("/api/recon/favicon")
-async def recon_favicon(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    r = safe_get(f"{base}/favicon.ico", req=req)
-    if r is None or r.status_code != 200 or not r.content:
-        return {"ok": True, "favicon": None, "skipped_reason": "No favicon found at /favicon.ico"}
-    import base64 as _b64
-    b64_content = _b64.encodebytes(r.content)
-    shodan_hash = _murmur3_32(b64_content)
-    return {"ok": True,
-            "found": True,
-            "favicon": {
-                "md5": hashlib.md5(r.content).hexdigest(),
-                "shodan_hash": shodan_hash,
-                "shodan_query": f"http.favicon.hash:{shodan_hash}",
-                "size": len(r.content),
-            }}
 
 
 # ── Cloud buckets (S3 / GCS guess+probe) ──────────────────────
-@router.post("/api/recon/cloudbuckets")
-async def recon_cloudbuckets(req: ScanRequest, _=Depends(verify_scan_quota)):
-    name = recon_host(req.target).split(".")[0]
-    _suffixes = ["", "-prod", "-production", "-staging", "-stage", "-dev", "-development",
-                 "-test", "-testing", "-qa", "-uat", "-sandbox", "-backup", "-backups",
-                 "-uploads", "-files", "-data", "-assets", "-media", "-images", "-img",
-                 "-public", "-private", "-internal", "-secure", "-archive", "-logs",
-                 "-cdn", "-static", "-app", "-web", "-www"]
-    _prefixes = ["", "prod-", "staging-", "dev-", "test-", "backup-"]
-    candidates = []
-    for pfx in _prefixes:
-        for sfx in _suffixes:
-            bn = pfx + name + sfx
-            candidates.append(f"https://{bn}.s3.amazonaws.com")
-            candidates.append(f"https://s3.amazonaws.com/{bn}")
-            candidates.append(f"https://storage.googleapis.com/{bn}")
-            candidates.append(f"https://{bn}.blob.core.windows.net")
-            candidates.append(f"https://{bn}.digitaloceanspaces.com")
-            candidates.append(f"https://{bn}.linodeobjects.com")
-            candidates.append(f"https://s3.wasabisys.com/{bn}")
-    # Parallel async HEAD probes with short timeout — 90 candidates resolve in ~5s total
-    async def _probe_bucket(url):
-        try:
-            import aiohttp
-            timeout = aiohttp.ClientTimeout(total=4)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.head(url, allow_redirects=False) as r:
-                    return (url, r.status)
-        except Exception:
-            return (url, None)
-    results = await asyncio.gather(*[_probe_bucket(u) for u in candidates])
-    existing, open_buckets = [], []
-    for url, status in results:
-        if status in (200, 403):
-            existing.append({"url": url, "status": status})
-            if status == 200:
-                open_buckets.append(url)
-    return {"ok": True, "existing": existing, "open": open_buckets, "tested": len(candidates)}
 
 
 # ── JS Secret Scanner (tight high-confidence patterns only) ──
@@ -1256,66 +462,12 @@ _SECRET_PATTERNS = [
 ]
 
 
-@router.post("/api/recon/secrets")
-async def recon_secrets(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    r = safe_get(base, req=req, allow_redirects=True)
-    if r is None:
-        return {"ok": False, "secrets": [], "skipped_reason": f"Could not reach {base}"}
-    js_urls = re.findall(r'src=["\']([^"\']+\.js)', r.text)
-    secrets, js_count = [], 0
-    for js_url in js_urls[:5]:
-        full = js_url if js_url.startswith("http") else f"{base}/{js_url.lstrip('/')}"
-        rjs = safe_get(full, req=req)
-        if rjs is None:
-            continue
-        js_count += 1
-        for name, pattern in _SECRET_PATTERNS:
-            for m in re.finditer(pattern, rjs.text):
-                secrets.append({"type": name, "match": m.group(0)[:60], "file": full})
-    return {"ok": True, "secrets": secrets, "js_files": js_count}
 
 
 # ── ASN / IP Ownership ─────────────────────────────────────────
-@router.post("/api/recon/asn")
-async def recon_asn(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"Could not resolve {host}: {e}"}
-    try:
-        r = requests.get(f"https://ipinfo.io/{ip}/json", timeout=10)
-        if r.status_code != 200:
-            return {"ok": False, "skipped_reason": f"ipinfo returned {r.status_code}"}
-        d = r.json()
-        return {"ok": True, "ip": ip, "asn": d.get("org", ""),
-                "country": d.get("country"), "city": d.get("city"),
-                "region": d.get("region"), "hostname": d.get("hostname")}
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"ASN lookup failed: {e}"}
 
 
 # ── Free Shodan via InternetDB (no API key) ────────────────────
-@router.post("/api/recon/internetdb")
-async def recon_internetdb(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"Could not resolve {host}: {e}"}
-    try:
-        r = requests.get(f"https://internetdb.shodan.io/{ip}", timeout=10)
-        if r.status_code == 404:
-            return {"ok": True, "ip": ip, "skipped_reason": "No InternetDB record for this IP"}
-        if r.status_code != 200:
-            return {"ok": False, "skipped_reason": f"InternetDB returned {r.status_code}"}
-        d = r.json()
-        return {"ok": True, "ip": ip,
-                "ports": d.get("ports", []), "cves": d.get("vulns", []),
-                "hostnames": d.get("hostnames", []), "tags": d.get("tags", [])}
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"InternetDB query failed: {e}"}
 
 
 # ── Subdomain Takeover Detection ──────────────────────────────
@@ -1410,35 +562,6 @@ async def _check_takeover(subdomain):
         return None
 
 
-@router.post("/api/recon/subdomain_takeover")
-async def recon_subdomain_takeover(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    all_subs = set()
-    try:
-        r = requests.get(f"https://crt.sh/?q=%25.{host}&output=json", timeout=15,
-                         headers={"User-Agent": "VulnusLab/1.0"})
-        if r.status_code == 200:
-            for entry in r.json():
-                for line in str(entry.get("name_value", "")).split("\n"):
-                    line = line.strip().lower().lstrip("*.")
-                    if line and line.endswith(host) and not line.startswith("*"):
-                        all_subs.add(line)
-    except Exception:
-        pass
-    all_subs.add(host)
-    subs_to_check = sorted(all_subs)[:150]
-    if not subs_to_check:
-        return {"ok": True, "vulnerable": [], "checked": 0,
-                "skipped_reason": "No subdomains discovered",
-                "engine": "pure-Python (CNAME + HTTP fingerprint)"}
-    results = await asyncio.gather(*[_check_takeover(s) for s in subs_to_check])
-    vulnerable = [v for v in results if v is not None]
-    return {
-        "ok": True, "vulnerable": vulnerable,
-        "total_vulnerable": len(vulnerable), "checked": len(subs_to_check),
-        "services_checked": len(_TAKEOVER_SIGS),
-        "engine": f"pure-Python (CNAME + HTTP fingerprint, {len(_TAKEOVER_SIGS)} services)",
-    }
 
 
 # ── WAF / CDN Fingerprint ─────────────────────────────────────
@@ -1511,51 +634,6 @@ _WAF_CDN_SIGS = [
 ]
 
 
-@router.post("/api/recon/waf_cdn")
-async def recon_waf_cdn(req: ScanRequest, _=Depends(verify_scan_quota)):
-    url = web_url(req.target)
-    r = safe_get(url, req=req, allow_redirects=True)
-    if r is None:
-        return {"ok": False, "detected": [], "skipped_reason": f"Could not reach {url}",
-                "engine": "pure-Python (40 signatures)"}
-
-    headers_lower = {k.lower(): str(v) for k, v in r.headers.items()}
-    cookies_lower = {c.name.lower(): c.value for c in r.cookies}
-    body = (r.text or "")[:50000]
-
-    detected = []
-    for vendor, category, checks in _WAF_CDN_SIGS:
-        matched_check = None
-        for field, pattern in checks:
-            if field.startswith("header:"):
-                hname = field.split(":", 1)[1].lower()
-                for hk, hv in headers_lower.items():
-                    if hk == hname or (hname.endswith("-") and hk.startswith(hname)):
-                        if re.search(pattern, hv, re.I):
-                            matched_check = f"{field}: {hv[:60]}"
-                            break
-                if matched_check: break
-            elif field.startswith("cookie:"):
-                cname = field.split(":", 1)[1].lower()
-                for ck, cv in cookies_lower.items():
-                    if ck == cname or (cname.endswith("-") and ck.startswith(cname)):
-                        matched_check = f"{field}: {(cv or '')[:40] if cv else 'set'}"
-                        break
-                if matched_check: break
-            elif field == "body":
-                if re.search(pattern, body, re.I):
-                    matched_check = f"body matched: {pattern[:40]}"
-                    break
-        if matched_check:
-            detected.append({"vendor": vendor, "category": category, "evidence": matched_check})
-
-    return {
-        "ok": True,
-        "detected": detected,
-        "total_detected": len(detected),
-        "signatures_checked": len(_WAF_CDN_SIGS),
-        "engine": f"pure-Python (passive: headers + cookies + body, {len(_WAF_CDN_SIGS)} signatures)",
-    }
 
 
 # ── SSL / TLS Deep Scan ────────────────────────────────────────
@@ -1576,122 +654,6 @@ def _test_protocol(host, port, version_enum):
         return False
 
 
-@router.post("/api/recon/ssl_deep")
-async def recon_ssl_deep(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    port = 443
-    try:
-        ctx = _ssl_mod.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = _ssl_mod.CERT_NONE
-        with socket.create_connection((host, port), timeout=10) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                cert_der = ssock.getpeercert(binary_form=True)
-                cert_dict = ssock.getpeercert()
-                cipher = ssock.cipher()
-                current_proto = ssock.version()
-    except Exception as e:
-        return {"ok": False, "skipped_reason": f"TLS handshake failed on {host}:{port} — {e}",
-                "engine": "pure-Python SSL/TLS deep scan"}
-
-    protocol_tests = [
-        ("TLSv1.0", _ssl_mod.TLSVersion.TLSv1),
-        ("TLSv1.1", _ssl_mod.TLSVersion.TLSv1_1),
-        ("TLSv1.2", _ssl_mod.TLSVersion.TLSv1_2),
-        ("TLSv1.3", _ssl_mod.TLSVersion.TLSv1_3),
-    ]
-    protocols_supported = {}
-    for name, ver in protocol_tests:
-        protocols_supported[name] = _test_protocol(host, port, ver)
-
-    cert_details = {
-        "subject": cert_dict.get("subject"),
-        "issuer": cert_dict.get("issuer"),
-        "not_before": cert_dict.get("notBefore"),
-        "not_after": cert_dict.get("notAfter"),
-        "san": [v for k, v in cert_dict.get("subjectAltName", []) if k == "DNS"],
-    }
-    try:
-        from cryptography import x509
-        from cryptography.hazmat.backends import default_backend
-        cert = x509.load_der_x509_certificate(cert_der, default_backend())
-        cert_details["signature_algorithm"] = cert.signature_hash_algorithm.name.lower()
-        pub = cert.public_key()
-        cert_details["public_key_type"] = type(pub).__name__
-        cert_details["public_key_bits"] = pub.key_size
-    except Exception:
-        pass
-
-    not_after_str = cert_dict.get("notAfter")
-    days_until_expiry = None
-    if not_after_str:
-        try:
-            not_after = datetime.datetime.strptime(not_after_str, "%b %d %H:%M:%S %Y %Z")
-            days_until_expiry = (not_after - datetime.datetime.utcnow()).days
-            cert_details["days_until_expiry"] = days_until_expiry
-        except Exception:
-            pass
-
-    vulnerabilities = []
-    if protocols_supported.get("TLSv1.0"):
-        vulnerabilities.append({"name": "TLS 1.0 enabled", "severity": "MEDIUM",
-                                "cve": "CVE-2011-3389 (BEAST)",
-                                "description": "TLS 1.0 is deprecated (RFC 8996) and vulnerable to BEAST attacks via CBC ciphers.",
-                                "remediation": "Disable TLS 1.0 in server config. Enforce TLS 1.2+ minimum."})
-    if protocols_supported.get("TLSv1.1"):
-        vulnerabilities.append({"name": "TLS 1.1 enabled", "severity": "MEDIUM", "cve": "N/A",
-                                "description": "TLS 1.1 is deprecated by RFC 8996.",
-                                "remediation": "Disable TLS 1.1 in server config."})
-    if not protocols_supported.get("TLSv1.2") and not protocols_supported.get("TLSv1.3"):
-        vulnerabilities.append({"name": "Modern TLS not supported", "severity": "CRITICAL", "cve": "N/A",
-                                "description": "Neither TLS 1.2 nor TLS 1.3 supported — only deprecated protocols.",
-                                "remediation": "Enable TLS 1.2 and TLS 1.3."})
-    sa = (cert_details.get("signature_algorithm") or "").lower()
-    if sa in ("md5", "sha1"):
-        vulnerabilities.append({"name": f"Weak certificate signature: {sa.upper()}",
-                                "severity": "HIGH", "cve": "CWE-327",
-                                "description": f"Certificate signed with {sa.upper()} — cryptographically broken.",
-                                "remediation": "Reissue with SHA-256+ signature."})
-    pk_type = cert_details.get("public_key_type", "")
-    pk_bits = cert_details.get("public_key_bits", 0) or 0
-    if "RSA" in pk_type and 0 < pk_bits < 2048:
-        vulnerabilities.append({"name": f"Weak RSA key ({pk_bits} bits)",
-                                "severity": "HIGH", "cve": "CWE-326",
-                                "description": f"RSA key only {pk_bits} bits — below 2048-bit minimum.",
-                                "remediation": "Reissue with 2048-bit+ RSA or ECDSA."})
-    if days_until_expiry is not None and days_until_expiry < 0:
-        vulnerabilities.append({"name": "Certificate expired", "severity": "CRITICAL", "cve": "CWE-298",
-                                "description": f"TLS certificate expired {abs(days_until_expiry)} days ago.",
-                                "remediation": "Renew the certificate immediately."})
-    elif days_until_expiry is not None and days_until_expiry <= 30:
-        vulnerabilities.append({"name": f"Certificate expires in {days_until_expiry} days",
-                                "severity": "HIGH", "cve": "N/A",
-                                "description": f"TLS certificate expires in {days_until_expiry} days.",
-                                "remediation": "Renew within two weeks."})
-
-    hsts = None
-    try:
-        hr = requests.get(f"https://{host}", timeout=8, verify=False,
-                          headers={"User-Agent": "VulnusLab/1.0"}, allow_redirects=False)
-        hsts = hr.headers.get("Strict-Transport-Security")
-    except Exception:
-        pass
-    if not hsts:
-        vulnerabilities.append({"name": "HSTS header missing", "severity": "MEDIUM", "cve": "CWE-319",
-                                "description": "Strict-Transport-Security header not set — TLS downgrade possible.",
-                                "remediation": "Add 'Strict-Transport-Security: max-age=31536000; includeSubDomains'."})
-
-    return {
-        "ok": True, "host": host, "port": port,
-        "current_protocol": current_proto,
-        "current_cipher": list(cipher) if cipher else None,
-        "protocols_supported": protocols_supported,
-        "certificate": cert_details,
-        "hsts": hsts,
-        "vulnerabilities": vulnerabilities,
-        "total_vulnerabilities": len(vulnerabilities),
-        "engine": "pure-Python SSL/TLS deep scan (cert + 4 protocol tests + HSTS + vuln synthesis)",
-    }
 
 
 def register(app):
