@@ -14,6 +14,16 @@ from jose import jwt
 
 from tools.auth._db import get_db, hash_password
 
+# Multi-tenant zone bootstrap — every new user gets a walled-off data dir.
+# Defensive import so a bug in userzone.py never blocks registration.
+try:
+    from tools._core.userzone import init_zone as _init_zone
+except Exception:
+    _init_zone = None
+
+import logging
+_log = logging.getLogger("vulnuslab.register")
+
 router = APIRouter()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "")
@@ -53,6 +63,15 @@ async def auth_register(req: RegisterRequest):
             (user_id, req.username, req.email, hash_password(req.password),
              "user", "trial", "active", now),
         )
+
+    # Provision the user's zone: /data/users/<user_id>/ with default files.
+    # Failure here is logged but does NOT block registration.
+    if _init_zone is not None:
+        try:
+            _init_zone(user_id)
+            _log.info("user zone initialised for %s", user_id)
+        except Exception as exc:
+            _log.warning("init_zone failed for %s: %s", user_id, exc)
 
     payload = {
         "sub":      user_id,

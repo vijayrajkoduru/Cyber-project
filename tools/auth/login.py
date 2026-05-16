@@ -13,6 +13,15 @@ from jose import jwt
 
 from tools.auth._db import get_db, verify_password
 
+# Lazy zone init — covers existing users who registered before USERZONE shipped.
+try:
+    from tools._core.userzone import init_zone as _init_zone
+except Exception:
+    _init_zone = None
+
+import logging
+_log = logging.getLogger("vulnuslab.login")
+
 router = APIRouter()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "")
@@ -48,6 +57,13 @@ async def auth_login(req: LoginRequest):
         "exp":      datetime.datetime.utcnow() + datetime.timedelta(hours=TOKEN_TTL_HOURS),
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+    # Ensure this user has a zone (idempotent — no-op if it already exists).
+    if _init_zone is not None:
+        try:
+            _init_zone(user["id"])
+        except Exception as exc:
+            _log.warning("zone lazy-init failed for %s: %s", user["id"], exc)
 
     return {
         "token":        token,
