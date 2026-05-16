@@ -61,6 +61,10 @@ const MODULES = [
   { id:"mobile",    icon:"📱", label:"Mobile Application Testing",         cat:"advanced",free:false, comingSoon:true },
   { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false, comingSoon:true },
 
+  // ── DATA PROTECTION ──────────────────────────────────────────
+  { id:"backups",   icon:"📦", label:"My Backups",                          cat:"data",    free:true  },
+  { id:"vault",     icon:"🔐", label:"VAULT — Master Archive",              cat:"admin",   free:false, admin:true },
+
   // ── TOOLS ────────────────────────────────────────────────────
   { id:"tools",     icon:"🛠️", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
 ];
@@ -10683,6 +10687,242 @@ function AdminPanel({ token }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// USER BACKUPS MODULE — Phase E
+// ═══════════════════════════════════════════════════════════════════
+function UserBackupsModule({token}) {
+  const [snapshots, setSnapshots] = useState([]);
+  const [zoneSize, setZoneSize] = useState(0);
+  const [snapshotCount, setSnapshotCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const refresh = async () => {
+    try {
+      const data = await api("/api/user/backups", "GET", null, token);
+      setSnapshots(data.snapshots || []);
+      setZoneSize(data.zone_size || 0);
+      setSnapshotCount(data.snapshot_count || 0);
+    } catch(e) { setMsg({type:"error", text: e.message}); }
+  };
+
+  useEffect(() => { refresh(); }, []);
+
+  const takeSnapshot = async () => {
+    setLoading(true); setMsg(null);
+    try {
+      const r = await api("/api/user/backups/snapshot", "POST", {}, token);
+      setMsg({type:"success", text:`Snapshot created: ${r.snapshot_name}`});
+      await refresh();
+    } catch(e) { setMsg({type:"error", text: e.message}); }
+    finally { setLoading(false); }
+  };
+
+  const restoreSnapshot = async (snap) => {
+    if (!window.confirm(`Restore from ${snap}?\n\nYour CURRENT data will be REPLACED. Other snapshots stay available.`)) return;
+    setLoading(true); setMsg(null);
+    try {
+      await api("/api/user/backups/restore", "POST", {snapshot_name: snap}, token);
+      setMsg({type:"success", text:`Restored from ${snap}`});
+      await refresh();
+    } catch(e) { setMsg({type:"error", text: e.message}); }
+    finally { setLoading(false); }
+  };
+
+  const fmt = b => !b ? "0 B" : b < 1024 ? b+" B" : b < 1048576 ? (b/1024).toFixed(1)+" KB" : (b/1048576).toFixed(1)+" MB";
+
+  return (
+    <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
+      <div style={{maxWidth:1200, margin:"0 auto"}}>
+        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>📦 My Backups</h1>
+        <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
+          Your data is private and auto-snapshotted. Take manual snapshots before risky changes; restore any of them with one click.
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>SNAPSHOTS</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{snapshotCount}</div>
+          </div>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>ZONE SIZE</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{fmt(zoneSize)}</div>
+          </div>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>RETENTION</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>10 max</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:12,marginBottom:20}}>
+          <button onClick={takeSnapshot} disabled={loading}
+            style={{padding:"10px 18px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
+            {loading ? "Working..." : "+ Take Snapshot Now"}
+          </button>
+          <button onClick={refresh} disabled={loading}
+            style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
+            ↻ Refresh
+          </button>
+        </div>
+        {msg && (
+          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "#14532d", color:"#fff",fontSize:14}}>
+            {msg.text}
+          </div>
+        )}
+        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",fontWeight:600,fontSize:14}}>
+            Your Snapshots (newest first)
+          </div>
+          {snapshots.length === 0 ? (
+            <div style={{padding:32,color:"#94a3b8",textAlign:"center",fontSize:14}}>
+              No snapshots yet. Click "+ Take Snapshot Now" to create your first one.
+            </div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#1e293b"}}>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>NAME</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>CREATED (UTC)</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>SIZE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshots.map(s => (
+                  <tr key={s.name} style={{borderTop:"1px solid #1e293b"}}>
+                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:13}}>{s.name}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,color:"#94a3b8"}}>{s.created_iso}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{fmt(s.size_bytes)}</td>
+                    <td style={{padding:"10px 16px",textAlign:"right"}}>
+                      <button onClick={()=>restoreSnapshot(s.name)} disabled={loading}
+                        style={{padding:"6px 12px",background:"#dc2626",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                        Restore
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ADMIN VAULT MODULE — Phase E
+// ═══════════════════════════════════════════════════════════════════
+function AdminVaultModule({token}) {
+  const [status, setStatus] = useState(null);
+  const [days, setDays] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const refresh = async () => {
+    try {
+      const s = await api("/api/admin/vault/status", "GET", null, token);
+      const l = await api("/api/admin/vault/list",   "GET", null, token);
+      setStatus(s);
+      setDays(l.days || []);
+    } catch(e) { setMsg({type:"error", text: e.message}); }
+  };
+
+  useEffect(() => { refresh(); }, []);
+
+  const forceSync = async () => {
+    if (!window.confirm("Force-run VAULT sync now?\n\nNormally runs nightly at 02:30 UTC.")) return;
+    setLoading(true); setMsg(null);
+    try {
+      const r = await api("/api/admin/vault/sync", "POST", {}, token);
+      setMsg({type: r.ok ? "success" : "error",
+        text: r.ok ? `Synced — ${r.users} users, ${r.tools} tools, db=${r.db}` : `Sync had ${r.errors.length} error(s)`});
+      await refresh();
+    } catch(e) { setMsg({type:"error", text: e.message}); }
+    finally { setLoading(false); }
+  };
+
+  const fmt = b => !b ? "0 B" : b < 1024 ? b+" B" : b < 1048576 ? (b/1024).toFixed(1)+" KB" : (b/1048576).toFixed(1)+" MB";
+
+  return (
+    <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
+      <div style={{maxWidth:1200,margin:"0 auto"}}>
+        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>🔐 VAULT — Master Archive</h1>
+        <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
+          Encrypted nightly archive of every user's snapshots + tool last-known-good + users.db. Auto-runs at 02:30 UTC. AES-128 + HMAC via Fernet.
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>ARCHIVED DAYS</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{status?.archived_days ?? "—"}</div>
+          </div>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>VAULT SIZE</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{fmt(status?.total_size_bytes)}</div>
+          </div>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>LAST SYNC (UTC)</div>
+            <div style={{fontSize:13,fontWeight:600,color:"#3b82f6",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
+              {status?.last_sync_iso || "never"}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:12,marginBottom:20}}>
+          <button onClick={forceSync} disabled={loading}
+            style={{padding:"10px 18px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
+            {loading ? "Syncing..." : "🔄 Sync VAULT Now"}
+          </button>
+          <button onClick={refresh}
+            style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
+            ↻ Refresh
+          </button>
+        </div>
+        {msg && (
+          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "#14532d", color:"#fff",fontSize:14}}>
+            {msg.text}
+          </div>
+        )}
+        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",fontWeight:600,fontSize:14}}>
+            Archive Days — kept 30 days, then auto-pruned
+          </div>
+          {days.length === 0 ? (
+            <div style={{padding:32,color:"#94a3b8",textAlign:"center",fontSize:14}}>
+              No archives yet. Click "Sync VAULT Now" to create the first one.
+            </div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#1e293b"}}>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>DATE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>USERS</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>TOOLS</th>
+                  <th style={{padding:"10px 16px",textAlign:"center",fontSize:11,color:"#94a3b8",letterSpacing:1}}>DB</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ERRORS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {days.map(d => (
+                  <tr key={d.date} style={{borderTop:"1px solid #1e293b"}}>
+                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:13}}>{d.date}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.users?.length ?? 0}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.tools?.length ?? 0}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"center",color:d.manifest?.db?"#22c55e":"#94a3b8"}}>
+                      {d.manifest?.db ? "✓" : "—"}
+                    </td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:d.manifest?.errors?.length ? "#dc2626" : "#94a3b8"}}>
+                      {d.manifest?.errors?.length ?? 0}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [token,setToken]       = useState(() => localStorage.getItem("cyberToken") || null);
   const [role,setRole]         = useState(() => localStorage.getItem("cyberRole") || "");
@@ -10951,6 +11191,12 @@ export default function App() {
         <div style={{display: active==="adminpanel" ? "block" : "none"}}>
           <AdminPanel token={token}/>
         </div>
+        <div style={{display: active==="backups" ? "block" : "none"}}>
+          <UserBackupsModule token={token}/>
+        </div>
+        <div style={{display: active==="vault" ? "block" : "none"}}>
+          <AdminVaultModule token={token}/>
+        </div>
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
@@ -10959,7 +11205,7 @@ export default function App() {
         {!["webapp","recon","vuln","password","auth","network","sysexploit","cloud","buffer","exploit",
             "osint","wireless","ad","privesc","tunnel","post","av","se","malware","supply","persist",
             "client","mobile","api","pivot","report","tools","history","settings",
-            "dashboard","health","msf","guide","adminpanel"].includes(active) && <ComingSoon topic={topic}/>}
+            "dashboard","health","msf","guide","adminpanel","backups","vault"].includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
   };
