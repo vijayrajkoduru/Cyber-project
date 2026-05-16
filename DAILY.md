@@ -34,3 +34,6 @@ Run `vlhelp` to see the list any time.
 | `vlusers` | List all users + snapshot counts |
 | `vlhelp` | Print this cheat sheet |
 
+
+
+_Added 2026-05-16:_ `vltoolsync` — explicit tier-1 sync (restart backend → re-snapshot all tools).
