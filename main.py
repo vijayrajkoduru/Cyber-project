@@ -20,6 +20,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Healing autoloader — wraps importlib with snapshot/restore.
+# Imported defensively so a bug in healing.py never crashes boot.
+try:
+    from tools._core.healing import load_with_healing as _heal_load
+    _HEAL_AVAILABLE = True
+except Exception:
+    _HEAL_AVAILABLE = False
+    _heal_load = None
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("vulnuslab")
 
@@ -62,6 +71,8 @@ async def health():
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         "tools_loaded": getattr(app.state, "tools_loaded", 0),
         "tools_failed": getattr(app.state, "tools_failed", []),
+        "tools_healed": getattr(app.state, "tools_healed", []),
+        "healing_engine": "active" if _HEAL_AVAILABLE else "unavailable",
     }
 
 # ── Tool + endpoint auto-discovery ──────────────────────────────────
@@ -72,41 +83,57 @@ async def health():
 def _autoload(directory: str, label: str) -> None:
     root = Path(__file__).parent / directory
     if not root.exists():
-        log.warning("%s/ directory missing — skipping autoload", directory)
+        log.warning("%s/ directory missing -- skipping autoload", directory)
         return
 
     loaded = 0
+    healed: list[str] = []
     failed: list[str] = []
-    # Walk tools/<category>/<tool>.py AND endpoints/<module>.py
     for module_path in root.rglob("*.py"):
-        if module_path.name.startswith("_"):
-            continue  # skip __init__.py and _shared.py
-        # Compute import path: tools/recon/whois.py → tools.recon.whois
+        # Skip anything in an underscore- or dot-prefixed path component.
+        if any(part.startswith("_") or part.startswith(".") for part in module_path.parts):
+            continue
         rel = module_path.relative_to(Path(__file__).parent)
         import_path = ".".join(rel.with_suffix("").parts)
-        try:
-            module = importlib.import_module(import_path)
-            if hasattr(module, "register"):
+
+        if _HEAL_AVAILABLE:
+            module, status = _heal_load(import_path, module_path)
+        else:
+            try:
+                module = importlib.import_module(import_path)
+                status = "loaded"
+            except Exception as exc:
+                log.error("Failed to load %s %s: %s", label, import_path, exc)
+                module, status = None, "quarantined"
+
+        if module is None:
+            failed.append(import_path)
+            continue
+        if status == "healed":
+            healed.append(import_path)
+
+        if hasattr(module, "register"):
+            try:
                 module.register(app)
                 loaded += 1
-                log.info("Loaded %s: %s", label, import_path)
-            else:
-                log.warning("%s has no register(app) — skipped: %s", label, import_path)
-        except Exception as exc:
-            failed.append(import_path)
-            log.error("Failed to load %s %s: %s", label, import_path, exc)
+                log.info("Loaded %s: %s (%s)", label, import_path, status)
+            except Exception as exc:
+                failed.append(import_path)
+                log.error("register(app) failed for %s: %s", import_path, exc)
+        else:
+            log.warning("%s has no register(app) -- skipped: %s", label, import_path)
 
-    # Stash counts so /api/health can surface them
     app.state.tools_loaded = getattr(app.state, "tools_loaded", 0) + loaded
-    failed_total = getattr(app.state, "tools_failed", [])
-    failed_total.extend(failed)
-    app.state.tools_failed = failed_total
-    log.info("%s autoload complete: %d loaded, %d failed", label, loaded, len(failed))
+    app.state.tools_failed = getattr(app.state, "tools_failed", []) + failed
+    app.state.tools_healed = getattr(app.state, "tools_healed", []) + healed
+    log.info("%s autoload: %d loaded, %d auto-healed, %d quarantined",
+             label, loaded, len(healed), len(failed))
 
 
 # Initial state for /api/health before autoload runs
 app.state.tools_loaded = 0
 app.state.tools_failed = []
+app.state.tools_healed = []
 
 # Discover atomic tool cores first, then module orchestrators
 _autoload("tools", "tool")

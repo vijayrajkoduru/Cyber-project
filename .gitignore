@@ -49,3 +49,6 @@ ruff
 *.env
 users.db
 *.db
+
+# Self-healing autoloader snapshots
+.last_known_good/
