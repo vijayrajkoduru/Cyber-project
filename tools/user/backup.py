@@ -6,6 +6,7 @@ from tools._shared import verify_scan_quota
 from tools._core.userzone import init_zone, zone_size_bytes
 from tools._core.userbackup import (
     snapshot_user, list_snapshots, restore_snapshot, restore_latest,
+    delete_snapshot,
 )
 
 router = APIRouter()
@@ -52,6 +53,18 @@ async def restore_most_recent(payload=Depends(verify_scan_quota)):
     if not ok:
         raise HTTPException(404, "No snapshots available")
     return {"ok": True, "restored": "latest"}
+
+
+@router.delete("/api/user/backups/{snapshot_name}")
+async def delete_named(snapshot_name: str, payload=Depends(verify_scan_quota)):
+    """Permanently delete a snapshot. User can only delete their own."""
+    user_id = payload["sub"]
+    if not snapshot_name or "/" in snapshot_name or ".." in snapshot_name:
+        raise HTTPException(400, "Invalid snapshot_name")
+    ok = delete_snapshot(user_id, snapshot_name)
+    if not ok:
+        raise HTTPException(404, "Snapshot not found")
+    return {"ok": True, "deleted": snapshot_name}
 
 
 def register(app):

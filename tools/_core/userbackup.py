@@ -95,3 +95,19 @@ def _prune_old_snapshots(user_id):
             old.unlink()
         except Exception:
             pass
+
+
+def delete_snapshot(user_id, snap_name):
+    """Delete a specific snapshot. Returns True if removed."""
+    _validate_user_id(user_id)
+    bdir = _backup_dir(user_id)
+    snap = bdir / snap_name
+    if not snap.exists():
+        return False
+    try:
+        snap.unlink()
+        log.info("snapshot deleted for %s: %s", user_id, snap_name)
+        return True
+    except Exception as exc:
+        log.error("delete_snapshot FAILED for %s/%s: %s", user_id, snap_name, exc)
+        return False
