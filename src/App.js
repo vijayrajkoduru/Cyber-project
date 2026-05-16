@@ -10705,36 +10705,35 @@ function UserBackupsModule({token}) {
       setSnapshotCount(data.snapshot_count || 0);
     } catch(e) { setMsg({type:"error", text: e.message}); }
   };
-
   useEffect(() => { refresh(); }, []);
 
   const takeSnapshot = async () => {
     setLoading(true); setMsg(null);
     try {
       const r = await api("/api/user/backups/snapshot", "POST", {}, token);
-      setMsg({type:"success", text:`Snapshot created: ${r.snapshot_name}`});
+      setMsg({type:"success", text: "Snapshot created: " + r.snapshot_name});
       await refresh();
     } catch(e) { setMsg({type:"error", text: e.message}); }
     finally { setLoading(false); }
   };
 
   const deleteSnapshot = async (snap) => {
-    if (!window.confirm(`PERMANENTLY DELETE snapshot ${snap}?\n\nThis cannot be undone.`)) return;
+    if (!window.confirm("Permanently delete " + snap + "? This cannot be undone.")) return;
     setLoading(true); setMsg(null);
     try {
-      await api(`/api/user/backups/${snap}`, "DELETE", null, token);
-      setMsg({type:"success", text:`Deleted ${snap}`});
+      await api("/api/user/backups/" + snap, "DELETE", null, token);
+      setMsg({type:"success", text: "Deleted " + snap});
       await refresh();
     } catch(e) { setMsg({type:"error", text: e.message}); }
     finally { setLoading(false); }
   };
 
   const restoreSnapshot = async (snap) => {
-    if (!window.confirm(`Restore from ${snap}?\n\nYour CURRENT data will be REPLACED. Other snapshots stay available.`)) return;
+    if (!window.confirm("Restore from " + snap + "? Your current data will be replaced.")) return;
     setLoading(true); setMsg(null);
     try {
       await api("/api/user/backups/restore", "POST", {snapshot_name: snap}, token);
-      setMsg({type:"success", text:`Restored from ${snap}`});
+      setMsg({type:"success", text: "Restored from " + snap});
       await refresh();
     } catch(e) { setMsg({type:"error", text: e.message}); }
     finally { setLoading(false); }
@@ -10747,7 +10746,7 @@ function UserBackupsModule({token}) {
       <div style={{maxWidth:1200, margin:"0 auto"}}>
         <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>📦 My Backups</h1>
         <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
-          Your data is private and auto-snapshotted. Take manual snapshots before risky changes; restore any of them with one click.
+          Your data is private and auto-snapshotted. Take manual snapshots before risky changes; restore or delete any of them.
         </p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
           <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
@@ -10793,7 +10792,7 @@ function UserBackupsModule({token}) {
                   <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>NAME</th>
                   <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>CREATED (UTC)</th>
                   <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>SIZE</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ACTION</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -10802,10 +10801,14 @@ function UserBackupsModule({token}) {
                     <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:13}}>{s.name}</td>
                     <td style={{padding:"10px 16px",fontSize:13,color:"#94a3b8"}}>{s.created_iso}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{fmt(s.size_bytes)}</td>
-                    <td style={{padding:"10px 16px",textAlign:"right"}}>
+                    <td style={{padding:"10px 16px",textAlign:"right",whiteSpace:"nowrap"}}>
                       <button onClick={()=>restoreSnapshot(s.name)} disabled={loading}
-                        style={{padding:"6px 12px",background:"#dc2626",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                        style={{padding:"6px 12px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",marginRight:6}}>
                         Restore
+                      </button>
+                      <button onClick={()=>deleteSnapshot(s.name)} disabled={loading}
+                        style={{padding:"6px 12px",background:"#dc2626",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                        Delete
                       </button>
                     </td>
                   </tr>
@@ -10819,8 +10822,7 @@ function UserBackupsModule({token}) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// ADMIN VAULT MODULE — Phase E
+
 // ═══════════════════════════════════════════════════════════════════
 function AdminVaultModule({token}) {
   const [status, setStatus] = useState(null);
