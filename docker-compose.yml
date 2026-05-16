@@ -17,6 +17,7 @@ services:
       - ./data:/data            # USERZONE  — per-user data isolation
       - ./backups:/backups      # VAULT     — encrypted master archive
       - ./users.db:/app/data/users.db  # the real customer DB (auth uses this path)
+      - ./last_known_good:/app/.last_known_good  # tool snapshots survive container rebuilds
     restart: unless-stopped
     networks:
       - vulnuslab

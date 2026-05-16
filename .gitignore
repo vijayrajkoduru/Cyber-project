@@ -54,3 +54,4 @@ users.db
 .last_known_good/
 backups/
 data/
+last_known_good/
