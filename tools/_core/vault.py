@@ -51,7 +51,13 @@ def decrypt_vault_file(enc_path, output_path):
 
 def nightly_sync(users_data_root=Path("/data/users"),
                  tool_backup_root=Path(".last_known_good"),
-                 users_db=Path("users.db")):
+                 users_db=None):
+    # Honour the same USERS_DB env var auth uses, so vault encrypts
+    # the SAME DB the application reads — not the stale empty file
+    # at /app/users.db. Bind-mount fix on 2026-05-16 moved real DB
+    # to /app/data/users.db.
+    if users_db is None:
+        users_db = Path(os.getenv("USERS_DB", "/app/data/users.db"))
     started = datetime.datetime.utcnow()
     target = _today_dir()
     manifest = {"started_iso": started.isoformat() + "Z",
