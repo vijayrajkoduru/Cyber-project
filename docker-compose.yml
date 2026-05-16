@@ -16,6 +16,7 @@ services:
       # and so customer data survives `docker compose down`.
       - ./data:/data            # USERZONE  — per-user data isolation
       - ./backups:/backups      # VAULT     — encrypted master archive
+      - ./users.db:/app/users.db  # so VAULT can encrypt the live customer DB
     restart: unless-stopped
     networks:
       - vulnuslab
