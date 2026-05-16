@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 DATA_ROOT = Path("/data/users")
-_VALID_USER_ID = re.compile(r"^[a-zA-Z0-9_]{1,64}$")
+_VALID_USER_ID = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 
 class UserZoneError(Exception):
