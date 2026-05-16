@@ -12,6 +12,10 @@ services:
       - WORKERS=2
     volumes:
       - scan_data:/app/data
+      # Bind mounts so host cron can read/write these paths directly,
+      # and so customer data survives `docker compose down`.
+      - ./data:/data            # USERZONE  — per-user data isolation
+      - ./backups:/backups      # VAULT     — encrypted master archive
     restart: unless-stopped
     networks:
       - vulnuslab
