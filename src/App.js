@@ -11058,6 +11058,8 @@ export default function App() {
     { key:"post",     label:"POST-EXPLOITATION", color:"#f59e0b" },
     { key:"network",  label:"NETWORK & INFRA",   color:"#22c55e" },
     { key:"advanced", label:"ADVANCED",          color:"#a855f7" },
+    { key:"data",     label:"DATA PROTECTION",   color:"#10b981" },
+    { key:"admin",    label:"ADMIN",             color:"#dc2626" },
     { key:"tools",    label:"TOOLS & REPORTS",   color:"#64748b" },
   ];
 
