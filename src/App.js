@@ -2216,6 +2216,15 @@ function WebAppModule(props) {
   const [authCookie, setAuthCookie]         = useState(() => localStorage.getItem("cyberAuthCookie")||"");
   const [authBearer, setAuthBearer]         = useState(() => localStorage.getItem("cyberAuthBearer")||"");
   const [showAuthPanel, setShowAuthPanel]   = useState(false);
+  // ── Auto-login fields. When the user fills these in and clicks the
+  // "Auto-login" button, we POST to /api/scan/login, capture the session
+  // cookie, and stash it in authCookie so every downstream scanner uses
+  // it automatically (existing plumbing handles the rest). ──
+  const [loginUrl, setLoginUrl]             = useState("");
+  const [loginUser, setLoginUser]           = useState("");
+  const [loginPass, setLoginPass]           = useState("");
+  const [autoLoginBusy, setAutoLoginBusy]   = useState(false);
+  const [autoLoginStatus, setAutoLoginStatus] = useState(null); // null | "ok" | "fail" | msg
   const [customWordlist, setCustomWordlist] = useState(null);
   const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
   const [showHistory, setShowHistory]       = useState(false);
@@ -2908,6 +2917,67 @@ function WebAppModule(props) {
                 Copy the value of <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>PHPSESSID</code>, <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>JSESSIONID</code>, <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>session</code>, or <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>connect.sid</code> →
                 Paste below as <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>name=value</code> (multiple cookies separated by <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>;</code>).
               </div>
+
+              {/* ── Auto-login: easier alternative for customers who don't
+                  want to fish through DevTools. Fills authCookie for them. */}
+              <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
+                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>
+                  🔐 Auto-login (recommended) — give us a username & password and we'll log in for you
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                  <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
+                    placeholder="Login URL (e.g. /login or /login.php)" autoComplete="off"
+                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
+                    placeholder="Username / email" autoComplete="off"
+                    name="vl-scan-login-user" data-form-type="other"
+                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
+                    type="password" placeholder="Password" autoComplete="new-password"
+                    name="vl-scan-login-pass" data-form-type="other"
+                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                  <button
+                    onClick={async ()=>{
+                      if(!target.trim()){ setAutoLoginStatus("Enter a target first"); return; }
+                      if(!loginUrl.trim()||!loginUser.trim()||!loginPass.trim()){
+                        setAutoLoginStatus("Login URL + username + password are all required"); return;
+                      }
+                      setAutoLoginBusy(true); setAutoLoginStatus(null);
+                      try {
+                        const lr = await api("/api/scan/login","POST",{
+                          target, login_url: loginUrl,
+                          username: loginUser, password: loginPass,
+                          auth_type: "form",
+                        }, token);
+                        if (lr && lr.login_verified) {
+                          setAuthCookie(lr.auth_cookie || "");
+                          localStorage.setItem("cyberAuthCookie", lr.auth_cookie || "");
+                          setAutoLoginStatus("ok");
+                        } else {
+                          setAutoLoginStatus(lr?.hint || "Login could not be verified");
+                        }
+                      } catch(e){
+                        setAutoLoginStatus("Login request failed: "+(e.message||e));
+                      } finally {
+                        setAutoLoginBusy(false);
+                      }
+                    }}
+                    disabled={autoLoginBusy}
+                    style={{background:autoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
+                    {autoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
+                  </button>
+                  {autoLoginStatus==="ok" && (
+                    <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured, ready to scan</span>
+                  )}
+                  {autoLoginStatus && autoLoginStatus!=="ok" && (
+                    <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {autoLoginStatus}</span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{fontSize:10,color:"#475569",textAlign:"center",margin:"2px 0"}}>— OR paste cookie / bearer manually —</div>
               <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                 <div style={{flex:1,minWidth:240}}>
                   <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
