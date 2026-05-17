@@ -9616,22 +9616,82 @@ function VulnModule(props) {
   const [lines,setLines]       = useState(["Ready — enter target and click Run All Scans"]);
   const [finished,setFinished] = useState(false);
   const [activeTab,setActiveTab] = useState(null);
+  // ── Authenticated-scan state ──
+  // When the user fills in login URL + creds, we hit /api/scan/login first,
+  // capture the session cookie, and inject it into every downstream scanner.
+  // Empty fields = unauthenticated scan (existing behaviour).
+  const [authOpen,setAuthOpen]       = useState(false);
+  const [loginUrl,setLoginUrl]       = useState("");
+  const [loginUser,setLoginUser]     = useState("");
+  const [loginPass,setLoginPass]     = useState("");
+  const [loginUserField,setLoginUserField] = useState("");
+  const [loginPassField,setLoginPassField] = useState("");
+  const [loginSuccessUrl,setLoginSuccessUrl] = useState("");
+  const [authCookie,setAuthCookie]   = useState("");
+  const [authBearer,setAuthBearer]   = useState("");
+  const [authType,setAuthType]       = useState("form");
+  const [authStatus,setAuthStatus]   = useState(null); // null | "ok" | "fail"
   const add = l => setLines(p=>[...p,l]);
 
   const runAll = async () => {
     if(!target.trim()) return;
     setRunning(true); _notifyRunning(true); setFinished(false); setDone([]); setAllResults({}); setCurrent(-1);
     setLines([`[*] Starting full vulnerability scan on ${target} — ${VULN_PHASES.length} scanners, all enabled`]);
+
+    // ── Step 0: authenticate to the target if the user gave us creds ──
+    // Captures a session cookie (or bearer token) and reuses it across every
+    // downstream scanner. Failure here is non-fatal: we continue with an
+    // unauthenticated scan but log the reason so the user knows why
+    // post-login surface wasn't covered.
+    let sessionCookie = authCookie;
+    let sessionBearer = authBearer;
+    const wantsAuth = (authType==="form"   && loginUrl.trim() && loginUser.trim() && loginPass.trim()) ||
+                      (authType==="basic"  && loginUser.trim() && loginPass.trim()) ||
+                      (authType==="bearer" && authBearer.trim());
+    if(wantsAuth && !sessionCookie && !sessionBearer){
+      add(`[*] Step 0: authenticating to target (${authType}) ...`);
+      try {
+        const loginBody = {
+          target, login_url: loginUrl, username: loginUser, password: loginPass,
+          username_field: loginUserField || undefined,
+          password_field: loginPassField || undefined,
+          success_indicator: loginSuccessUrl || undefined,
+          auth_type: authType,
+          bearer_token: authType==="bearer" ? authBearer : undefined,
+        };
+        const lr = await api("/api/scan/login","POST",loginBody,token);
+        if(lr && lr.login_verified){
+          sessionCookie = lr.auth_cookie || "";
+          sessionBearer = lr.auth_bearer || "";
+          setAuthCookie(sessionCookie); setAuthBearer(sessionBearer);
+          setAuthStatus("ok");
+          add(`[✓] Logged in as ${loginUser} — session captured (${(lr.cookie_names||[]).join(", ")||"bearer"})`);
+        } else {
+          setAuthStatus("fail");
+          add(`[!] Login could not be verified — ${lr?.hint || "continuing unauthenticated"}`);
+        }
+      } catch(e){
+        setAuthStatus("fail");
+        add(`[!] Login call failed — continuing unauthenticated: ${e.message||e}`);
+      }
+    }
+
     const results = {};
     // Single-retry-on-failure (same pattern as Recon module). Transient
     // 429s / network glitches no longer permanently drop a phase.
+    const _scanBody = () => {
+      const b = {target, scan_type:"full"};
+      if(sessionCookie) b.auth_cookie = sessionCookie;
+      if(sessionBearer) b.auth_bearer = sessionBearer;
+      return b;
+    };
     const _callWithRetry = async (ph) => {
       try {
-        return await api(ph.endpoint,"POST",{target,scan_type:"full"},token);
+        return await api(ph.endpoint,"POST",_scanBody(),token);
       } catch(e1) {
         add(`  ↻ ${ph.name} failed once — retrying in 3s...`);
         await new Promise(r=>setTimeout(r,3000));
-        return await api(ph.endpoint,"POST",{target,scan_type:"full"},token);
+        return await api(ph.endpoint,"POST",_scanBody(),token);
       }
     };
     for(let i=0;i<VULN_PHASES.length;i++){
@@ -9714,6 +9774,84 @@ function VulnModule(props) {
           {icon:"🐙",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)"},
           {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)"},
         ]}/>
+        {/* ── Authenticated-scan panel (collapsible) ──
+            When filled, the scanner logs in BEFORE the scan phases and
+            attaches the captured session to every scanner request.
+            Without this, ~70% of real vulns (IDOR, priv-esc, mass
+            assignment, stored XSS in profiles, etc.) stay invisible. */}
+        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+          <div onClick={()=>setAuthOpen(o=>!o)}
+            style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
+              <span style={{fontSize:10,color:"#64748b"}}>— finds IDOR, priv-esc, mass-assignment, stored XSS</span>
+            </div>
+            {authStatus==="ok"  && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
+            {authStatus==="fail"&& <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
+          </div>
+          {authOpen && (
+            <div style={{padding:"4px 12px 12px",borderTop:"1px solid #1e293b"}}>
+              <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>Auth type:</span>
+                {["form","basic","bearer"].map(t=>(
+                  <button key={t} onClick={()=>{setAuthType(t); setAuthStatus(null); setAuthCookie(""); setAuthBearer("");}}
+                    style={{background:authType===t?"#1e3a8a":"#0f172a",border:"1px solid "+(authType===t?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 10px",color:authType===t?"#93c5fd":"#94a3b8",fontSize:10,fontWeight:600,cursor:"pointer"}}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+              {authType==="form" && (
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
+                      placeholder="Login URL (e.g. /login)"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                    <input value={loginSuccessUrl} onChange={e=>setLoginSuccessUrl(e.target.value)}
+                      placeholder="Post-login URL to verify (e.g. /dashboard)"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
+                      placeholder="Username / email"
+                      autoComplete="off"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
+                      type="password" placeholder="Password" autoComplete="off"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <input value={loginUserField} onChange={e=>setLoginUserField(e.target.value)}
+                      placeholder="(optional) username field name"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}/>
+                    <input value={loginPassField} onChange={e=>setLoginPassField(e.target.value)}
+                      placeholder="(optional) password field name"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}/>
+                  </div>
+                </>
+              )}
+              {authType==="basic" && (
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
+                    placeholder="Username" autoComplete="off"
+                    style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
+                    type="password" placeholder="Password" autoComplete="off"
+                    style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                </div>
+              )}
+              {authType==="bearer" && (
+                <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)}
+                  placeholder="Paste bearer token (JWT or API key)" autoComplete="off"
+                  style={{width:"100%",boxSizing:"border-box",background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+              )}
+              <div style={{fontSize:10,color:"#64748b",marginTop:6}}>
+                Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.
+              </div>
+            </div>
+          )}
+        </div>
+
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&runAll()}
