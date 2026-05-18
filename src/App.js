@@ -7100,6 +7100,9 @@ const RECON_PHASES = [
   {name:"Subdomain Takeover",     tool:"subdomain_takeover", endpoint:"/api/recon/subdomain_takeover", icon:"🎯"},
   {name:"WAF / CDN Fingerprint",  tool:"waf_cdn",   endpoint:"/api/recon/waf_cdn",    icon:"🛡️"},
   {name:"SSL / TLS Deep Scan",    tool:"ssl_deep",  endpoint:"/api/recon/ssl_deep",   icon:"🔐"},
+  {name:"Email Security",     tool:"email_audit",    endpoint:"/api/recon/email_audit",   icon:"✉️"},
+  {name:"WAF/CDN Detect",     tool:"waf_detect",    endpoint:"/api/recon/waf_detect",   icon:"🛡️"},
+  {name:"Subdomain Takeover",     tool:"takeover_check",    endpoint:"/api/recon/takeover_check",   icon:"🎯"}
 ];
 
 function ReconModule({token, onRunningChange}) {
