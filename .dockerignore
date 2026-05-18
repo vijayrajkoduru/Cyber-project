@@ -1,35 +1,34 @@
+# Secrets — NEVER in any Docker image
 .env
 .env.*
-.git/
+*.env
+
+# VCS — never publicly accessible
+.git
 .gitignore
-.gdb_history
-.react-server.pid
-.claude/
+.gitattributes
+.github
+.gitlab-ci.yml
 
-# Frontend artifacts (rebuilt inside Dockerfile.frontend)
-node_modules/
-build/
-
-# Frontend source — only Dockerfile.frontend needs it; backend doesn't
-
-# Python compile cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Editor / OS junk
-.DS_Store
-.vscode/
-.idea/
+# IDE / editor
+.vscode
+.idea
 *.swp
+*.swo
+.DS_Store
 
-# Project docs / scripts — not needed at runtime
-README.md
-*.md
-landing-page/
-deploy.sh
+# Build artifacts (will be regenerated)
+node_modules
+build
+dist
+__pycache__
+*.pyc
+.pytest_cache
 
-# Backups (just in case any local backup files exist)
+# Logs
+*.log
+logs/
+
+# Backups
+*.backup
 *.bak
-*.broken
