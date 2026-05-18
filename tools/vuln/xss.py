@@ -4,6 +4,7 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools._spa_state import load_spa_state
 router = APIRouter()
 
 def _extract_param_urls(base_url, html):
@@ -34,6 +35,13 @@ async def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
         return standard_response(tool="xss", target=req.target, findings=[],
             tests_performed=1, vulnerable=False, skipped_reason=f"Could not reach {base}")
     urls = _extract_param_urls(base, r.text or "")
+
+    # Augment with SPA-discovered URLs that have query params
+    spa = load_spa_state(req.target)
+    for spa_url in spa.get("urls", []):
+        if "?" in spa_url and spa_url not in urls:
+            urls.append(spa_url)
+
     if not urls:
         return standard_response(tool="xss", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,

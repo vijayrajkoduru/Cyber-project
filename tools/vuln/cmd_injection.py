@@ -4,6 +4,7 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools._spa_state import load_spa_state
 router = APIRouter()
 _PAYLOADS = [
     ("Linux semicolon", ";sleep {N}"),
@@ -25,26 +26,39 @@ def _time_get(url, req, timeout):
 async def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     parsed = urlparse(base)
-    params = parse_qs(parsed.query)
-    if not params:
+    params_base = parse_qs(parsed.query)
+    test_urls = []
+    if params_base:
+        test_urls.append((base, parsed, params_base))
+    spa = load_spa_state(req.target)
+    for u in spa.get("urls", []):
+        try:
+            up = urlparse(u)
+            ps = parse_qs(up.query)
+            if ps:
+                test_urls.append((u, up, ps))
+        except Exception:
+            continue
+    if not test_urls:
         return standard_response(tool="cmd_injection", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
-            skipped_reason="No URL parameters present — append ?cmd=ls (or similar) to test")
+            skipped_reason="No URL parameters present on base or SPA-discovered endpoints")
     findings, tests = [], 0
     _, t0 = _time_get(base, req, timeout=20)
-    for key in list(params.keys())[:3]:
+    for tu_url, tu_parsed, params in test_urls[:8]:
+      for key in list(params.keys())[:3]:
         original = params[key][0]
         for name, tmpl in _PAYLOADS:
             tests += 1
             inj5 = tmpl.replace("{N}", "5")
             new_params = {k: v[0] for k, v in params.items()}
             new_params[key] = original + inj5
-            url1 = urlunparse(parsed._replace(query=urlencode(new_params)))
+            url1 = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
             _, t1 = _time_get(url1, req, timeout=25)
             if t1 < t0 + 4: continue
             inj2 = tmpl.replace("{N}", "2")
             new_params[key] = original + inj2
-            url2 = urlunparse(parsed._replace(query=urlencode(new_params)))
+            url2 = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
             _, t2 = _time_get(url2, req, timeout=15)
             if t2 > t0 + 1 and t1 > t2:
                 findings.append(wrap_finding(

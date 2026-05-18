@@ -37,6 +37,7 @@ from urllib.parse import urlparse, urljoin
 
 from fastapi import APIRouter, Depends
 
+from tools._spa_state import save_spa_state
 from tools._shared import (
     ScanRequest, verify_scan_quota, standard_response, web_url, recon_host,
 )
@@ -99,7 +100,14 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
     try:
         from playwright.async_api import async_playwright  # type: ignore
     except ImportError:
-        return standard_response(
+        # Persist for downstream scanners (sqli, xss, lfi, idor, ...)
+    try:
+        save_spa_state(req.target, sorted(discovered_urls),
+                        api_summary, sorted(discovered_params))
+    except Exception:
+        pass
+
+    return standard_response(
             tool="spa_crawler",
             target=req.target,
             findings=[],
@@ -303,6 +311,14 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
         },
     )
 
+
+
+
+
+@router.post("/api/scan/spa_crawler")
+async def scan_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    """Alias so the WebApp module's /api/scan/* tile grid can call us."""
+    return await webapp_spa_crawler(req, payload)
 
 def register(app):
     app.include_router(router)

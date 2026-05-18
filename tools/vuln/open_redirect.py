@@ -72,6 +72,9 @@ def _redirects_to_attacker(location: str, target_host: str) -> bool:
     return False
 
 
+_CANARY_HOST = "benign-canary-vulnuslab.example"
+
+
 @router.post("/api/scan/open_redirect")
 async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
@@ -80,6 +83,21 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
     params = parse_qs(parsed.query)
     candidates = set(params.keys()) | set(_COMMON_KEYS)
     findings, tests, confirmed = [], 0, []
+
+    canary_redirects = False
+    canary_location = ""
+    canary_params = {k: v[0] for k, v in params.items()}
+    canary_params["__vl_canary"] = f"https://{_CANARY_HOST}/canary"
+    canary_url = urlunparse(parsed._replace(query=urlencode(canary_params)))
+    cr = safe_get(canary_url, req=req, allow_redirects=False, timeout=10)
+    if cr is not None and cr.status_code in (301, 302, 303, 307, 308):
+        canary_location = cr.headers.get("Location", "") or cr.headers.get("location", "") or ""
+        if _CANARY_HOST in canary_location.lower():
+            canary_redirects = True
+
+    location_counts = {}
+    MAX_PER_LOCATION = 1
+
     for key in candidates:
         for inj in _PAYLOADS:
             tests += 1
@@ -89,16 +107,38 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
             r = safe_get(test_url, req=req, allow_redirects=False, timeout=10)
             if r is None or r.status_code not in (301, 302, 303, 307, 308): continue
             location = r.headers.get("Location", "") or r.headers.get("location", "") or ""
-            if _redirects_to_attacker(location, target_host):
-                findings.append(wrap_finding(
-                    f"Open Redirect via {key!r}",
-                    "MEDIUM", cvss="6.1", cwe="CWE-601", owasp="A01:2021",
-                    remediation="Validate redirect destinations against an internal allow-list.",
-                    evidence_marker=f"{key}={inj} -> HTTP {r.status_code} Location: {location}"))
-                confirmed.append({"param": key, "payload": inj, "location": location})
+            if not _redirects_to_attacker(location, target_host):
+                continue
+            loc_key = location.split("?", 1)[0].split("#", 1)[0]
+            location_counts[loc_key] = location_counts.get(loc_key, 0) + 1
+            if location_counts[loc_key] > MAX_PER_LOCATION:
+                confirmed.append({"param": key, "payload": inj, "location": location,
+                                   "suppressed": "duplicate destination"})
                 break
+            confidence = "SUSPECTED" if canary_redirects else "CONFIRMED"
+            f = wrap_finding(
+                f"Open Redirect via {key!r}",
+                "MEDIUM", cvss="6.1", cwe="CWE-601", owasp="A01:2021",
+                remediation="Validate redirect destinations against an internal allow-list.",
+                evidence_marker=f"{key}={inj} -> HTTP {r.status_code} Location: {location}")
+            f["confidence"] = confidence
+            findings.append(f)
+            confirmed.append({"param": key, "payload": inj, "location": location,
+                               "confidence": confidence})
+            break
+
+    summary = (f"Open redirect: {tests} probes across {len(candidates)} candidate params "
+               f"(host-verified, dedupe-by-destination)")
+    if canary_redirects:
+        summary += " — canary baseline redirected to off-host, findings marked SUSPECTED"
+
     return standard_response(tool="open_redirect", target=req.target, findings=findings,
         tests_performed=tests,
-        tests_summary=f"Open redirect: {tests} probes across {len(candidates)} candidate params (host-verified)",
-        raw_data={"open_redirect": {"confirmed": confirmed}})
+        tests_summary=summary,
+        raw_data={"open_redirect": {
+            "confirmed": confirmed,
+            "canary_redirects": canary_redirects,
+            "canary_location": canary_location,
+            "unique_destinations": len(location_counts),
+        }})
 def register(app): app.include_router(router)

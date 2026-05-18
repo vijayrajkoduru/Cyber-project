@@ -4,6 +4,7 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools._spa_state import load_spa_state
 router = APIRouter()
 _PAYLOADS = [
     ("../../../../etc/passwd",                  r"root:x:0:0:",     "/etc/passwd"),
@@ -34,18 +35,31 @@ def _check_marker(body, marker):
 async def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     parsed = urlparse(base)
-    params = parse_qs(parsed.query)
-    if not params:
+    params_base = parse_qs(parsed.query)
+    test_urls = []
+    if params_base:
+        test_urls.append((base, parsed, params_base))
+    spa = load_spa_state(req.target)
+    for u in spa.get("urls", []):
+        try:
+            up = urlparse(u)
+            ps = parse_qs(up.query)
+            if ps:
+                test_urls.append((u, up, ps))
+        except Exception:
+            continue
+    if not test_urls:
         return standard_response(tool="lfi", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
-            skipped_reason="No URL parameters present — append ?page=index (or similar) to test")
+            skipped_reason="No URL parameters present on base or SPA-discovered endpoints")
     findings, tests, confirmed = [], 0, []
-    for key in list(params.keys())[:3]:
+    for tu_url, tu_parsed, params in test_urls[:8]:
+      for key in list(params.keys())[:3]:
         for traversal, marker, desc in _PAYLOADS:
             tests += 1
             new_params = {k: v[0] for k, v in params.items()}
             new_params[key] = traversal
-            test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
+            test_url = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
             r = safe_get(test_url, req=req, allow_redirects=True, timeout=12)
             if r is None or r.status_code != 200: continue
             if _check_marker((r.text or "")[:50000], marker):
