@@ -13,6 +13,7 @@ import socket
 import datetime
 from fastapi import APIRouter, Depends
 
+from tools._payloads.cert_intelligence import CERT_INTELLIGENCE
 from tools._shared import (
     ScanRequest, verify_scan_quota, recon_host,
     wrap_finding, standard_response,
