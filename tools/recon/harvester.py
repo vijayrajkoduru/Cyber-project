@@ -65,7 +65,6 @@ _CONTACT_PAGES = [
 async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
     emails = set()
-    emails = _filter_template_emails(emails, target)
     hosts = set()
     sources_hit = {}
     sources_failed = {}
