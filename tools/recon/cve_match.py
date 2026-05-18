@@ -61,12 +61,81 @@ def _match_cves(tech, version):
     return matches
 
 
+
+
+import socket
+
+_BANNER_PORTS = [(22, "SSH"), (21, "FTP"), (25, "SMTP"), (110, "POP3"), (143, "IMAP")]
+
+
+def _grab_banner(host, port, timeout=4):
+    """Open TCP socket, read first response. Used for SSH/SMTP/etc banner CVE matching."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as s:
+            s.settimeout(timeout)
+            data = s.recv(1024)
+            return data.decode("utf-8", errors="ignore")[:300]
+    except Exception:
+        return ""
+
+
+def _match_banner_cves(banner, service):
+    """Given a service banner, try to find matching CVEs via TECH_CVE_MAP."""
+    if not banner:
+        return []
+    import re as _re
+    matches = []
+    # Extract a version string from common banner patterns
+    # SSH: SSH-2.0-OpenSSH_6.6.1p1 Ubuntu-...
+    # SMTP: 220 mail.example.com ESMTP Postfix (Debian/Ubuntu)
+    version = None
+    for pat in (r"OpenSSH[_\s](\d+\.\d+(?:\.\d+)?p?\d*)",
+                 r"Apache[/\s](\d+\.\d+\.\d+)",
+                 r"nginx[/\s](\d+\.\d+\.\d+)",
+                 r"Postfix[/\s](\d+\.\d+\.\d+)",
+                 r"Exim[/\s](\d+\.\d+(?:\.\d+)?)"):
+        m = _re.search(pat, banner)
+        if m:
+            version = m.group(1); break
+    if not version:
+        return []
+    # Look up in TECH_CVE_MAP
+    tech_map = {"SSH": "OpenSSH", "SMTP": "Postfix"}
+    tech_name = tech_map.get(service, service)
+    for entry in TECH_CVE_MAP:
+        if entry.get("tech", "").lower() not in tech_name.lower():
+            continue
+        try:
+            if _re.search(entry.get("version_match", ""), version):
+                matches.append((entry, version))
+        except _re.error:
+            continue
+    return matches
+
+
 @router.post("/api/recon/cve_match")
 async def recon_cve_match(req: ScanRequest, _=Depends(verify_scan_quota)):
     url = web_url(req.target)
     r = safe_get(url, req=req, allow_redirects=True, timeout=12)
     if r is None:
-        return standard_response(tool="cve_match", target=req.target,
+            # Also probe service banners (SSH/SMTP/etc.) for additional CVE matches
+    from urllib.parse import urlparse as _up
+    host = _up(url).netloc.split(":")[0]
+    banner_matches = []
+    for port, service in _BANNER_PORTS:
+        banner = _grab_banner(host, port)
+        if banner:
+            for cve, ver in _match_banner_cves(banner, service):
+                findings.append(wrap_finding(
+                    f"{service} {ver} vulnerable to {cve['cve']}: {cve.get('description', '')}",
+                    cve.get("severity", "MEDIUM"),
+                    cvss=str(cve.get("cvss", "5.0")),
+                    cwe="CWE-1395", owasp="A06:2021",
+                    remediation=f"Upgrade {service} service on port {port} past the vulnerable version range.",
+                    evidence_marker=f"Port {port} banner: {banner.strip()[:80]}"))
+                banner_matches.append({"port": port, "service": service, "version": ver, "cve": cve["cve"]})
+
+    return standard_response(tool="cve_match", target=req.target,
             findings=[], tests_performed=1, vulnerable=False,
             skipped_reason=f"Could not reach {url}")
     headers_str = "\n".join(f"{k}: {v}" for k, v in r.headers.items())

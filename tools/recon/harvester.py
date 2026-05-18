@@ -25,6 +25,28 @@ import ssl as _ssl_mod
 
 from fastapi import APIRouter, Depends
 
+# Filter out template-looking aliases that appear on EVERY harvested domain
+# (sign of harvester hallucination, not actual data).
+TEMPLATE_EMAILS = {"abuse", "admin", "compliance", "contact", "dpo", "email",
+                    "feedback", "hello", "help", "hr", "info", "jobs", "legal",
+                    "mail", "marketing", "no-reply", "noreply", "office",
+                    "postmaster", "privacy", "security", "support", "webmaster",
+                    "sales", "billing", "careers"}
+
+
+def _filter_template_emails(emails, target_domain):
+    """If we got many emails and they're ALL template aliases, suppress them."""
+    if not emails:
+        return emails
+    locals_ = [e.split("@")[0].lower() for e in emails]
+    template_count = sum(1 for l in locals_ if l in TEMPLATE_EMAILS)
+    # If >70% are template-looking AND total > 5, treat as harvester hallucination
+    if len(emails) > 5 and template_count / len(emails) > 0.7:
+        return []  # drop all — keeping a fraction would be misleading
+    return emails
+
+
+
 router = APIRouter()
 
 _COMMON_EMAIL_PREFIXES = [
@@ -43,6 +65,7 @@ _CONTACT_PAGES = [
 async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
     emails = set()
+    emails = _filter_template_emails(emails, target)
     hosts = set()
     sources_hit = {}
     sources_failed = {}

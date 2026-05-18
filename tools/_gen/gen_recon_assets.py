@@ -69,25 +69,32 @@ OUTPUT: ONLY JSON array. Start [ end ]."""
     },
     "tech_cve_map": {
         "max_tokens": 28000, "var": "TECH_CVE_MAP",
-        "prompt": """Generate 400 tech-version-to-CVE mappings. Focus on CVEs with public exploits or commonly scanned.
+        "prompt": """Generate 400 tech-version-to-CVE mappings — STRONG bias toward CVEs in OLDER, STILL-COMMON deployed versions (not just famous 2021-2024 ones).
 
-Cover:
-- Apache CVE families (CVE-2021-41773 path traversal, CVE-2021-42013, etc.)
-- nginx CVEs
-- WordPress core + top 30 plugins
-- Drupal (Drupalgeddon2 etc.)
-- Joomla, Magento
-- PHP version CVE families
-- Spring (Log4Shell, Spring4Shell)
-- Jenkins, GitLab, Confluence (CVE-2022-26134)
-- Exchange (ProxyShell)
-- Apache Struts, Tomcat, WebLogic
-- Cisco ASA, Palo Alto, Fortinet
+REQUIRED coverage across these ages:
+- Apache 2.0.x, 2.2.x, 2.4.0-2.4.40 (older but still deployed everywhere) — 60 CVEs
+- Apache 2.4.41+ recent CVEs (path traversal etc.) — 20 CVEs
+- nginx 0.x, 1.0-1.20 — 30 CVEs
+- OpenSSH 5.x, 6.x, 7.x (still in Ubuntu 14/16/18 installs) — 40 CVEs
+- PHP 5.4-5.6, 7.0-7.4 (legacy installs) — 40 CVEs
+- WordPress core (3.x, 4.x, 5.x, 6.x) + top 30 plugins — 60 CVEs
+- Drupal 6, 7, 8, 9, 10 (Drupalgeddon family) — 20 CVEs
+- Joomla 1.5, 2.5, 3.x, 4.x — 15 CVEs
+- Magento 1.x, 2.x — 15 CVEs
+- Spring (Log4Shell, Spring4Shell, older Spring CVEs) — 15 CVEs
+- Jenkins (older versions with public exploits) — 15 CVEs
+- GitLab, Confluence, Bitbucket — 15 CVEs
+- Tomcat 6.x, 7.x, 8.x, 9.x — 15 CVEs
+- Old Microsoft IIS 6, 7.5 — 10 CVEs
+- Exim, sendmail, Postfix legacy — 10 CVEs
 
 Each item EXACTLY 6 keys:
-  tech (string), version_match (Python regex matching vulnerable version),
+  tech (string), version_match (Python regex matching vulnerable version with appropriate breadth),
   cve (CVE-XXXX-XXXXX), severity (CRITICAL|HIGH|MEDIUM),
   cvss (numeric score string), description (1-line summary)
+
+CRITICAL: version_match regex should be PERMISSIVE enough to match real-world version strings.
+Example for Apache 2.4.7: '2\\.4\\.(?:[0-9]|[1-3][0-9]|40)$' or '^2\\.[0-4]\\.'
 
 OUTPUT: ONLY JSON array. Start [ end ]."""
     },
