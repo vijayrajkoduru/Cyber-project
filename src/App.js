@@ -1084,7 +1084,7 @@ function generatePDF(reportData) {
         dnsrecon:    ["DNS Reconnaissance","FREE"],
         dirb:        ["Directory Brute Force","FREE"],
         wfuzz:       ["Web Application Fuzzing","FREE"],
-        nuclei:       ["Template-Based Vulnerability Scanning","FREE"],
+        nuclei: ["Community Vuln Templates (15k+ checks)","FREE"],
         ffuf:         ["Fast Web Fuzzer / Directory Brute Force","FREE"],
         wpscan:       ["WordPress Vulnerability Scanning","FREE"],
         arjun:        ["HTTP Parameter Discovery","FREE"],
@@ -1382,7 +1382,11 @@ function generatePDF(reportData) {
       const COOKIE_META = new Set(["target","url","error","status","vulnerable","findings","scan_type","output"]);
       let rawCookies = [];
       if(cookies){
-        if(cookies.cookies){
+        // New scanner shape: cookies.cookies = {analyzed:[...], is_https:bool, suppressed_fps:[...]}
+        // Legacy shape:      cookies.cookies = [{name,secure,...}, ...]
+        if (cookies.cookies && Array.isArray(cookies.cookies.analyzed)) {
+          rawCookies = cookies.cookies.analyzed;
+        } else if (Array.isArray(cookies.cookies)) {
           rawCookies = cookies.cookies;
         } else {
           const topEntries = Object.entries(cookies).filter(([k])=>!COOKIE_META.has(k)&&typeof cookies[k]==="object");
@@ -1775,7 +1779,12 @@ function generatePDF(reportData) {
     const sslHighFindings=(ssl&&ssl.findings||[]).filter(f=>f.severity==="HIGH"||f.severity==="CRITICAL");
     if(sslHighFindings.length>0) recs.push({p:"HIGH",  t:"Fix SSL/TLS issue: "+(sslHighFindings[0].detail||"").substring(0,90),a:"Update TLS config"});
     // Cookies
-    const _allRawCookies = cookies&&cookies.cookies ? (Array.isArray(cookies.cookies)?cookies.cookies:Object.values(cookies.cookies)) : [];
+    const _allRawCookies = (() => {
+      if (!cookies || !cookies.cookies) return [];
+      if (Array.isArray(cookies.cookies.analyzed)) return cookies.cookies.analyzed;
+      if (Array.isArray(cookies.cookies)) return cookies.cookies;
+      return [];
+    })();
     const insecureCookies=_allRawCookies.filter(c=>!c.secure||(!(c.httponly)&&!(c.http_only)));
     if(insecureCookies.length>0) recs.push({p:"MEDIUM",t:`Set Secure + HttpOnly + SameSite flags on ${insecureCookies.length} session cookie(s)`, a:"Update Set-Cookie"});
     // WAF — only recommend if static-host detection didn't already credit the CDN edge
@@ -2110,68 +2119,43 @@ function generateModuleReport(reportData) {
 // ── Section 7: Modern Web Vulnerabilities (OSWE Focus) ──────────
 // ── Section 8: Infrastructure & Services (OSCP) ─────────────────
 const PHASES = [
-  // ── SECTION 1: Reconnaissance & Fingerprinting ──────────────
-  {name:"WAF Detection",          tool:"wafw00f",       endpoint:"/api/scan/wafw00f",           icon:"🛡"},
-  {name:"Tech Fingerprinting",    tool:"whatweb",       endpoint:"/api/scan/whatweb",           icon:"🔍"},
+  // ── Discovery (runs FIRST — populates scan_state.json for every later scanner)
+  {name:"SPA Crawler",            tool:"spa_crawler",   endpoint:"/api/scan/spa_crawler",       icon:"🕷️"},
+  // ── Reconnaissance & Fingerprinting ─────────────────────────
   {name:"CMS Detection",          tool:"cms",           endpoint:"/api/scan/cms",               icon:"📦"},
-  {name:"Port Scanning",          tool:"nmap",          endpoint:"/api/scan/nmap",              icon:"🔌", body:{scan_type:"quick"}},
-  {name:"Network Vuln Check",     tool:"nmap_vuln",     endpoint:"/api/scan/nmap_vuln",         icon:"⚠️"},
   {name:"SSL/TLS Analysis",       tool:"ssl",           endpoint:"/api/scan/ssl",               icon:"🔒"},
-  {name:"DNS Enumeration",        tool:"dig",           endpoint:"/api/scan/dns",               icon:"🔎"},
-  {name:"Subdomain Discovery",    tool:"subdomains",    endpoint:"/api/scan/subdomains",        icon:"🌍"},
-  {name:"Subdomain Takeover",     tool:"takeover",      endpoint:"/api/scan/takeover",          icon:"🎯"},
-  {name:"DNS Zone Transfer",      tool:"zonetransfer",  endpoint:"/api/scan/zonetransfer",      icon:"🌐"},
-  {name:"Vulnerability Scan",     tool:"nikto",         endpoint:"/api/scan/nikto",             icon:"🎯"},
-  {name:"Nuclei Templates",       tool:"nuclei",        endpoint:"/api/scan/nuclei",            icon:"☢️"},
-  {name:"Sensitive File Exposure",tool:"sensitivefiles",endpoint:"/api/scan/sensitivefiles",    icon:"🗂"},
-  {name:"Exploit Search",         tool:"exploitsearch", endpoint:"/api/scan/exploitsearch",     icon:"🔍"},
-  // ── SECTION 2: Discovery & Fuzzing ──────────────────────────
-  {name:"Directory Enumeration",  tool:"gobuster",      endpoint:"/api/scan/gobuster",          icon:"📁"},
-  {name:"Web Fuzzing (ffuf)",     tool:"ffuf",          endpoint:"/api/scan/ffuf",              icon:"🧪", body:{options:{mode:"dirs"}}},
-  // ── SECTION 3: Injection Attacks ────────────────────────────
+  {name:"DNS Enumeration",        tool:"dns",           endpoint:"/api/scan/dns",               icon:"🔎"},
+  {name:"Tech Fingerprinting",    tool:"techstack",     endpoint:"/api/scan/techstack",         icon:"🔍"},
+  {name:"Port Scanning",          tool:"portscan",      endpoint:"/api/scan/portscan",          icon:"🔌"},
+  {name:"SSL Certificate Audit",  tool:"ssl_cert",      endpoint:"/api/scan/ssl_cert",          icon:"📜"},
+  // ── Injection Attacks ───────────────────────────────────────
   {name:"XSS Testing",            tool:"xss",           endpoint:"/api/scan/xss",               icon:"⚡"},
-  {name:"SQL Injection Test",     tool:"sqlmap",        endpoint:"/api/scan/sqlmap",            icon:"💉"},
-  {name:"NoSQL Injection",        tool:"nosql",         endpoint:"/api/scan/nosql",             icon:"🍃"},
-  {name:"Command Injection",      tool:"commix",        endpoint:"/api/scan/commix",            icon:"💻"},
+  {name:"SQL Injection",          tool:"sqli",          endpoint:"/api/scan/sqli",              icon:"💉"},
+  {name:"Command Injection",      tool:"cmd_injection", endpoint:"/api/scan/cmd_injection",     icon:"💻"},
   {name:"XXE Injection",          tool:"xxe",           endpoint:"/api/scan/xxe",               icon:"📄"},
-  {name:"SSTI Testing",           tool:"ssti",          endpoint:"/api/scan/ssti",              icon:"📝"},
-  {name:"Host Header Injection",  tool:"hostheader",    endpoint:"/api/scan/hostheader",        icon:"🏠"},
-  // ── SECTION 4: Authentication & Session ─────────────────────
-  {name:"Header Security",        tool:"headers",       endpoint:"/api/scan/headers",           icon:"📋"},
+  // ── Authentication & Session ────────────────────────────────
+  {name:"Security Headers",       tool:"headers",       endpoint:"/api/scan/headers",           icon:"📋"},
   {name:"Cookie Analysis",        tool:"cookies",       endpoint:"/api/scan/cookies",           icon:"🍪"},
-  {name:"Session Fixation",       tool:"sessionfixation",endpoint:"/api/scan/sessionfixation",  icon:"📌"},
-  {name:"Auth Brute Force",       tool:"hydra",         endpoint:"/api/scan/hydra",             icon:"🔑"},
   {name:"CSRF Testing",           tool:"csrf",          endpoint:"/api/scan/csrf",              icon:"🛡"},
-  {name:"IDOR / Access Control",  tool:"idor",          endpoint:"/api/scan/idor",              icon:"🔓"},
   {name:"JWT Attacks",            tool:"jwt",           endpoint:"/api/scan/jwt",               icon:"🎟"},
-  {name:"OAuth / SAML Attacks",   tool:"oauth",         endpoint:"/api/scan/oauth",             icon:"🔐"},
-  {name:"2FA / OTP Bypass",       tool:"otp",           endpoint:"/api/scan/otp",               icon:"🔢"},
-  // ── SECTION 5: File & Path Attacks ──────────────────────────
+  // ── File & Path Attacks ─────────────────────────────────────
   {name:"Path Traversal / LFI",   tool:"lfi",           endpoint:"/api/scan/lfi",               icon:"📂"},
-  {name:"Remote File Inclusion",  tool:"rfi",           endpoint:"/api/scan/rfi",               icon:"🌐"},
-  {name:"File Upload Testing",    tool:"fileupload",    endpoint:"/api/scan/fileupload",        icon:"📤"},
-  // ── SECTION 6: Network & Protocol Attacks ───────────────────
+  {name:"Exposed Files",          tool:"exposed_files", endpoint:"/api/scan/exposed_files",     icon:"🗂"},
+  // ── Network & Protocol Attacks ──────────────────────────────
   {name:"CORS Testing",           tool:"cors",          endpoint:"/api/scan/cors",              icon:"🌐"},
   {name:"SSRF Testing",           tool:"ssrf",          endpoint:"/api/scan/ssrf",              icon:"🔄"},
-  {name:"HTTP Request Smuggling", tool:"smuggling",     endpoint:"/api/scan/smuggling",         icon:"🚚"},
-  {name:"HTTP Response Splitting",tool:"responsesplitting",endpoint:"/api/scan/responsesplitting",icon:"✂"},
-  {name:"HTTP Verb Tampering",    tool:"verbtamper",    endpoint:"/api/scan/verbtamper",        icon:"🔀"},
-  {name:"Parameter Pollution",    tool:"pollution",     endpoint:"/api/scan/pollution",         icon:"♾"},
-  {name:"Open Redirect",          tool:"openredirect",  endpoint:"/api/scan/openredirect",      icon:"↩"},
+  {name:"HTTP Methods",           tool:"http_methods",  endpoint:"/api/scan/http_methods",      icon:"🔀"},
+  {name:"Open Redirect",          tool:"open_redirect", endpoint:"/api/scan/open_redirect",     icon:"↩"},
   {name:"Clickjacking",           tool:"clickjacking",  endpoint:"/api/scan/clickjacking",      icon:"🖱"},
-  {name:"Data Exfiltration Check",tool:"dataexfil",     endpoint:"/api/scan/dataexfil",         icon:"📤"},
-  {name:"WebSocket Security",     tool:"websocket",     endpoint:"/api/scan/websocket",         icon:"🔌"},
-  // ── SECTION 7: Modern Web Vulnerabilities (OSWE) ────────────
-  {name:"Insecure Deserialization",tool:"deserial",     endpoint:"/api/scan/deserial",          icon:"📦"},
-  {name:"Prototype Pollution",    tool:"protopollution",endpoint:"/api/scan/protopollution",    icon:"☣"},
-  {name:"PHP Type Juggling",      tool:"typejuggling",  endpoint:"/api/scan/typejuggling",      icon:"🔢"},
-  {name:"GraphQL Security",       tool:"graphql",       endpoint:"/api/scan/graphql",           icon:"◈"},
-  {name:"Race Condition Test",    tool:"racecondition", endpoint:"/api/scan/racecondition",     icon:"⚡"},
-  // ── SECTION 8: Infrastructure & Services (OSCP) ─────────────
-  {name:"SMB Enumeration",        tool:"smb",           endpoint:"/api/scan/smb",               icon:"🗂"},
-  {name:"FTP Enumeration",        tool:"ftp",           endpoint:"/api/scan/ftp",               icon:"📁"},
-  {name:"SMTP User Enum",         tool:"smtp",          endpoint:"/api/scan/smtp",              icon:"📧"},
-  {name:"SNMP Scanner",           tool:"snmp",          endpoint:"/api/scan/snmp",              icon:"📡"},
+  // ── Access Control & Modern API Bugs ────────────────────────
+  {name:"IDOR",                   tool:"idor",            endpoint:"/api/scan/idor",            icon:"🔓"},
+  {name:"Mass Assignment",        tool:"mass_assignment", endpoint:"/api/scan/mass_assignment", icon:"🧬"},
+  {name:"NoSQL Injection",        tool:"nosql",           endpoint:"/api/scan/nosql",           icon:"🍃"},
+  {name:"Broken Access Control",  tool:"access_control",  endpoint:"/api/scan/access_control",  icon:"🚧"},
+  // ── Framework-Specific ──────────────────────────────────────
+  {name:"Nuclei Templates",       tool:"nuclei",        endpoint:"/api/scan/nuclei",            icon:"☢️"},
+  {name:"Force Browse",          tool:"force_browse",  endpoint:"/api/scan/force_browse",     icon:"🔦"},
+  {name:"WordPress Scanner",      tool:"wpscan",        endpoint:"/api/scan/wpscan",            icon:"📝"},
 ];
 
 // Section header definitions — keyed by the first tool in each section
@@ -2228,6 +2212,7 @@ function WebAppModule(props) {
   const [customWordlist, setCustomWordlist] = useState(null);
   const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
   const [showHistory, setShowHistory]       = useState(false);
+  const [authorized, setAuthorized]         = useState(false);
   // Which tile (phase index) is currently expanded showing its result details.
   // Click "Details" on any finished tile to inspect error message + findings;
   // saves the customer from opening DevTools to debug a failed scan.
@@ -2461,6 +2446,7 @@ function WebAppModule(props) {
     // dlPDF runs AFTER scan completes, so "vulnuslab_previousScan_<target>" is
     // the second-most-recent run (the one to diff against). On the first scan
     // this is null and the Remediation Progress section gracefully skips.
+    console.log("[VL] dlPDF entered. target=", target, "allResults keys=", Object.keys(allResults||{}));
     let _prevScan = null;
     try {
       const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)((target || "").trim());
@@ -2510,18 +2496,9 @@ function WebAppModule(props) {
     if (allResults["sqlmap"]?.vulnerable) {
       allFindings.push({_tool:"sqlmap", confidence:"CONFIRMED", detail:"SQL Injection detected",severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",cwe_name:"SQL Injection",owasp:"A03:2021 - Injection",remediation:"Use parameterized queries immediately."});
     }
-    // Cookie issues — directly observed in Set-Cookie response header → CONFIRMED.
-    if (allResults["cookies"]?.cookies) {
-      const seenCookies = new Set();
-      allResults["cookies"].cookies.forEach(c => {
-        const cname = c.name||(c.cookie&&c.cookie.split("=")[0].trim())||"unknown";
-        if(seenCookies.has(cname)) return;
-        seenCookies.add(cname);
-        (c.issues||[]).forEach(issue => {
-          if(issue.severity!=="INFO") allFindings.push({_tool:"cookies", confidence:"CONFIRMED", detail:`Cookie missing ${issue.flag} flag: ${cname}`,severity:issue.severity,cvss:issue.cvss||"5.3",cve:"N/A",cwe:issue.flag==="HttpOnly"?"CWE-1004":"CWE-614",cwe_name:`Cookie without ${issue.flag}`,owasp:"A05:2021 - Security Misconfiguration",remediation:issue.fix});
-        });
-      });
-    }
+    // Cookie findings come through PHASES.forEach loop above (scanner now
+    // returns findings[] directly + raw_data.cookies.analyzed for PDF section).
+    // The old manual iteration crashed because the new shape is an object, not array.
 
     // ─── DEDUP: suppress contradictory + duplicate findings ───────────
     // Different scanners often detect the same underlying issue (e.g. nikto AND sensitivefiles
@@ -2529,7 +2506,14 @@ function WebAppModule(props) {
     // We compute a canonical "fingerprint" per finding and, within each group, keep the
     // MOST SPECIFIC one (scanner-named issue beats generic "Missing X header") so the master
     // findings table surfaces e.g. "Clickjacking" rather than "Missing X-Frame-Options".
-    const _cookiesScannerFoundNone = allResults["cookies"] && (!allResults["cookies"].cookies || allResults["cookies"].cookies.length === 0);
+    const _cookiesScannerFoundNone = (() => {
+      const c = allResults["cookies"];
+      if (!c) return false;
+      // New shape: raw_data.cookies.analyzed[]. Old shape: c.cookies[].
+      const analyzed = c.raw_data?.cookies?.analyzed
+                     ?? (Array.isArray(c.cookies) ? c.cookies : null);
+      return Array.isArray(analyzed) && analyzed.length === 0;
+    })();
     const _fingerprint = (f) => {
       const d = (f.detail || "").toLowerCase();
       const cn = (f.cwe_name || "").toLowerCase();
@@ -2859,20 +2843,36 @@ function WebAppModule(props) {
         <TestTargets targets={[
           {label:"DVWA",       value:"http://lab_dvwa",                   color:"#dc2626", lab:"dvwa"},
           {label:"WebGoat",    value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c", lab:"webgoat"},
-          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:null},
+          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:"juiceshop"},
           {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
           {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
           {label:"testphp",    value:"http://testphp.vulnweb.com",        color:"#0ea5e9", lab:null},
         ]} onSelect={async (t, lab) => {
           setTarget(t);
+          setAuthorized(false);
           setShowHistory(false);
+          const LAB_CREDS = {
+            dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",              pass: "password" },
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "guest",              pass: "guest"    },
+            juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                      user: "admin@juice-sh.op",  pass: "admin123" },
+            mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",              pass: "adminpass"},
+            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",                pass: "bug"      },
+          };
+          const creds = lab && LAB_CREDS[lab];
+          if (creds) {
+            setLoginUrl(creds.url);
+            setLoginUser(creds.user);
+            setLoginPass(creds.pass);
+            setShowAuthPanel(true);
+          }
           if (lab) {
             try {
               const d = await api("/api/lab/autologin","POST",{lab},token);
-              if (d.ok) { setAuthCookie(d.cookie); localStorage.setItem("cyberAuthCookie",d.cookie); }
+              if (d?.ok && d?.cookie) {
+                setAuthCookie(d.cookie);
+                localStorage.setItem("cyberAuthCookie", d.cookie);
+              }
             } catch(e) {}
-          } else {
-            // External target — clear lab cookie but keep any manually entered one
           }
         }}/>
 
@@ -2954,7 +2954,11 @@ function WebAppModule(props) {
                         if (lr && lr.login_verified) {
                           setAuthCookie(lr.auth_cookie || "");
                           localStorage.setItem("cyberAuthCookie", lr.auth_cookie || "");
-                          setAutoLoginStatus("ok");
+                          if (lr.auth_bearer) {
+                            setAuthBearer(lr.auth_bearer);
+                            localStorage.setItem("cyberAuthBearer", lr.auth_bearer);
+                          }
+                          setAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
                         } else {
                           setAutoLoginStatus(lr?.hint || "Login could not be verified");
                         }
@@ -2968,10 +2972,10 @@ function WebAppModule(props) {
                     style={{background:autoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
                     {autoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
                   </button>
-                  {autoLoginStatus==="ok" && (
-                    <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured, ready to scan</span>
+                  {typeof autoLoginStatus === "string" && autoLoginStatus.startsWith("ok") && (
+                    <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ {autoLoginStatus === "ok" ? "Logged in — cookie captured, ready to scan" : "Logged in — " + autoLoginStatus.replace(/^ok\s*/, "")}</span>
                   )}
-                  {autoLoginStatus && autoLoginStatus!=="ok" && (
+                  {typeof autoLoginStatus === "string" && !autoLoginStatus.startsWith("ok") && (
                     <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {autoLoginStatus}</span>
                   )}
                 </div>
@@ -3637,7 +3641,25 @@ function WebAppModule(props) {
           </div>
 
           {/* Generate Button */}
-          <button onClick={()=>{ setShowPDFModal(false); dlPDF(pdfConfig); }}
+          <button onClick={async ()=>{
+            console.log("[VL] Generate clicked. Closing modal & calling dlPDF...");
+            try {
+              setShowPDFModal(false);
+              await new Promise(r => setTimeout(r, 50));   // let React unmount the modal
+              console.log("[VL] About to call dlPDF with config:", pdfConfig);
+              const t0 = Date.now();
+              dlPDF(pdfConfig);
+              console.log("[VL] dlPDF returned after", Date.now()-t0, "ms");
+              // Wait a beat — jsPDF's doc.save fires a synchronous download. If the
+              // browser silently blocked it we never see anything in the UI.
+              setTimeout(() => {
+                console.log("[VL] If you did NOT see a download prompt, downloads are blocked. Click the download icon in the URL bar and allow this site.");
+              }, 800);
+            } catch (e) {
+              console.error("[VL] Generate handler crashed:", e);
+              alert("Report generation failed: " + (e.message || e) + "\n\nOpen DevTools (F12) → Console for the stack trace.");
+            }
+          }}
             style={{width:"100%",background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
             📄 Report
           </button>
@@ -9701,6 +9723,7 @@ function VulnModule(props) {
   const [authBearer,setAuthBearer]   = useState("");
   const [authType,setAuthType]       = useState("form");
   const [authStatus,setAuthStatus]   = useState(null); // null | "ok" | "fail"
+  const [authorized,setAuthorized]   = useState(false);
   const add = l => setLines(p=>[...p,l]);
 
   const runAll = async () => {

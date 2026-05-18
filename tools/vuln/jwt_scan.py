@@ -70,8 +70,21 @@ async def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, confirmed, tokens = [], [], []
     pages = 0
+
+    # ── If the user authenticated (auto-login captured a bearer), test THAT
+    # token directly — it's the real production JWT, complete with the real
+    # signing key/alg. This catches alg=none / weak-secret / missing-exp on
+    # apps like Juice Shop where the JWT is only returned to /rest/user/login
+    # POST and would never be found by passive crawling.
+    if getattr(req, "auth_bearer", None):
+        tok = req.auth_bearer.strip()
+        if tok and tok not in tokens:
+            tokens.append(tok)
+            _analyze(tok, findings, confirmed)
+
     for path in ["/", "/login", "/api/login", "/api/auth/login", "/api/me",
-                 "/profile", "/account", "/settings", "/api/auth/me", "/api/user"]:
+                 "/profile", "/account", "/settings", "/api/auth/me", "/api/user",
+                 "/rest/user/whoami"]:
         pages += 1
         r = safe_get(base + path, req=req, allow_redirects=True, timeout=10)
         if r is None: continue
