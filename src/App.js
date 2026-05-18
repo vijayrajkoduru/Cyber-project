@@ -2155,6 +2155,11 @@ const PHASES = [
   // ── Framework-Specific ──────────────────────────────────────
   {name:"Nuclei Templates",       tool:"nuclei",        endpoint:"/api/scan/nuclei",            icon:"☢️"},
   {name:"Force Browse",          tool:"force_browse",  endpoint:"/api/scan/force_browse",     icon:"🔦"},
+  {name:"File Upload",          tool:"file_upload",      endpoint:"/api/scan/file_upload",       icon:"🗃️"},
+  {name:"SSTI",          tool:"ssti",      endpoint:"/api/scan/ssti",       icon:"📜"},
+  {name:"GraphQL Audit",          tool:"graphql",      endpoint:"/api/scan/graphql",       icon:"◈"},
+  {name:"Sensitive Data",          tool:"sensitive_data",      endpoint:"/api/scan/sensitive_data",       icon:"🔍"},
+  {name:"Stored XSS",          tool:"stored_xss",      endpoint:"/api/scan/stored_xss",       icon:"💾"},
   {name:"WordPress Scanner",      tool:"wpscan",        endpoint:"/api/scan/wpscan",            icon:"📝"},
 ];
 
