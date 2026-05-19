@@ -7929,6 +7929,159 @@ function generateVulnReport({target, allResults, date}) {
     });
     y+=28;
 
+    // ─── OWASP TOP 10 — 2021 COVERAGE SCORECARD ─────
+    const _OWASP_2021 = [
+      ["A01","Broken Access Control"],["A02","Cryptographic Failures"],
+      ["A03","Injection"],["A04","Insecure Design"],
+      ["A05","Security Misconfiguration"],["A06","Vulnerable & Outdated Components"],
+      ["A07","Identification & Authentication Failures"],["A08","Software & Data Integrity Failures"],
+      ["A09","Security Logging & Monitoring Failures"],["A10","Server-Side Request Forgery"]
+    ];
+    const _owaspMap = {};
+    _OWASP_2021.forEach(([code]) => _owaspMap[code] = []);
+    (allFindings || []).forEach(f => {
+      const tag = String(f.owasp || "").toUpperCase();
+      const m = tag.match(/A(\d{1,2})/);
+      if (!m) return;
+      const code = "A" + m[1].padStart(2, "0");
+      if (_owaspMap[code]) _owaspMap[code].push(f);
+    });
+    const _failCats = _OWASP_2021.filter(([c]) => _owaspMap[c].length > 0).length;
+    const _passCats = 10 - _failCats;
+    const _owaspGrade = _passCats >= 9 ? "A" : _passCats >= 7 ? "B" : _passCats >= 5 ? "C" : _passCats >= 3 ? "D" : "F";
+    const _gradeColor = _owaspGrade === "A" ? [15,118,82] : _owaspGrade === "B" ? [22,163,74] :
+                        _owaspGrade === "C" ? [202,138,4] : _owaspGrade === "D" ? [194,65,12] : [162,28,28];
+    chk(95); y += 2;
+    y = sHead("OWASP Top 10 — 2021 Coverage", y);
+    fillR(margin, y, contentW, 16, LIGHT);
+    fillR(margin, y, 4, 16, _gradeColor);
+    doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._gradeColor);
+    doc.text(_owaspGrade, margin+10, y+11);
+    doc.setFont("Arial","bold"); doc.setFontSize(12); doc.setTextColor(...DARK);
+    doc.text(`${_passCats}/10 OWASP categories passing`, margin+28, y+7);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+    doc.text(_failCats === 0 ? "All 10 categories clear — strong security posture." : `${_failCats} category(ies) failing — prioritize fixes below.`, margin+28, y+12);
+    y += 19;
+    y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
+    _OWASP_2021.forEach(([code, name], i) => {
+      const matches = _owaspMap[code];
+      const passing = matches.length === 0;
+      chk(9);
+      fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
+      fillR(margin, y, 1.5, 8, passing ? [15,118,82] : [162,28,28]);
+      doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+      doc.text(code+":2021", margin+4, y+5.5);
+      doc.setFont("Arial","normal"); doc.setFontSize(8);
+      doc.text(name, margin+24, y+5.5);
+      const stBg = passing ? [220,252,231] : [254,226,226];
+      const stFg = passing ? [15,118,82] : [162,28,28];
+      rrect(margin+106, y+1.5, 18, 5, 1, stBg);
+      doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...stFg);
+      doc.text(passing ? "PASS" : "FAIL", margin+(passing?112:111.5), y+5);
+      if (passing) {
+        doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(15,118,82);
+        doc.text("No findings in this category", margin+128, y+5.5);
+      } else {
+        const _sc = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0};
+        matches.forEach(f => { if (_sc[f.severity] !== undefined) _sc[f.severity]++; });
+        const parts = ["CRITICAL","HIGH","MEDIUM","LOW"].filter(s => _sc[s] > 0).map(s => `${_sc[s]} ${s}`);
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+        doc.text(parts.join(" · ") || `${matches.length} finding(s)`, margin+128, y+5.5);
+      }
+      y += 8;
+    });
+    y += 5;
+
+    // ─── COMPLIANCE COVERAGE — 8 frameworks ─────
+    const _CWE_TO_COMPLIANCE_V = {
+      "CWE-79":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10",       "164.312(a)(1)",     "Art. 32 / 25",   "PR.IP-2 / DE.CM-4", "CIS 16.10"],
+      "CWE-89":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10 / AC-3","164.312(a)(1)",     "Art. 32 / 25",   "PR.DS-5 / PR.IP-2", "CIS 16.10 / 16.4"],
+      "CWE-94":   ["6.2.4",        "CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-352":  ["6.2.4",        "CC6.1","A.5.15","SC-23",       "164.312(d)",        "Art. 32",        "PR.AC-7",           "CIS 16.5"],
+      "CWE-1021": ["6.4.3",        "CC6.6","A.8.23","SC-7",        "164.312(a)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-200":  ["3.4.1",        "CC6.1","A.5.10","SC-8 / AC-3", "164.312(e)(1)",     "Art. 32 / 33",   "PR.DS-1 / PR.DS-2", "CIS 3.3 / 16.10"],
+      "CWE-319":  ["4.2.1",        "CC6.7","A.8.24","SC-8 / SC-13","164.312(e)(1)",     "Art. 32",        "PR.DS-2",           "CIS 3.10 / 13.6"],
+      "CWE-942":  ["6.2.4 / 6.4.1","CC6.6","A.8.23","SC-7 / AC-3", "164.312(a)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-639":  ["7.2 / 8.2.5",  "CC6.1","A.5.15","AC-3 / AC-6", "164.312(a)(1)",     "Art. 32 / 25",   "PR.AC-4",           "CIS 16.8"],
+      "CWE-538":  ["2.2.7 / 6.4.1","CC6.1","A.5.10","AC-3 / AC-6", "164.312(a)(1)",     "Art. 32 / 25",   "PR.DS-1 / PR.AC-4", "CIS 3.7 / 13.6"],
+      "CWE-693":  ["6.2.4",        "CC6.6","A.8.23","SC-7 / SI-10","164.312(a)(1)",     "Art. 32",        "PR.IP-1",           "CIS 16.10"],
+      "CWE-1004": ["8.3.10",       "CC6.7","A.8.5", "SC-23 / IA-2","164.312(d)",        "Art. 32",        "PR.AC-7",           "CIS 16.5"],
+      "CWE-614":  ["4.2.1 / 8.3.10","CC6.7","A.8.5","SC-8 / SC-23","164.312(e)(1)",    "Art. 32",        "PR.DS-2",           "CIS 3.10 / 16.5"],
+      "CWE-601":  ["6.2.4",        "CC6.6","A.8.21","SI-10 / SC-7","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-918":  ["6.2.4",        "CC6.6","A.8.23","SC-7 / SI-10","164.312(a)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-611":  ["6.2.4",        "CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-78":   ["6.2.4",        "CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-22":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10 / AC-3","164.312(a)(1)",     "Art. 32 / 25",   "PR.AC-4 / PR.IP-2", "CIS 16.10 / 3.7"],
+      "CWE-434":  ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-287":  ["7.2 / 8.2",    "CC6.1","A.5.15","IA-2 / AC-7", "164.312(d)",        "Art. 32 / 25",   "PR.AC-1 / PR.AC-7", "CIS 6.3 / 16.3"],
+      "CWE-1275": ["8.3.10",       "CC6.7","A.8.5", "SC-23",       "164.312(d)",        "Art. 32",        "PR.AC-7",           "CIS 16.5"],
+      "CWE-16":   ["2.2.4",        "CC6.6","A.8.9", "CM-6 / CM-7", "164.308(a)(1)",     "Art. 32 / 25",   "PR.IP-1",           "CIS 4.1 / 4.2"],
+      "CWE-1395": ["6.3.3 / 6.5.6","CC7.1","A.8.8", "SI-2 / RA-5", "164.308(a)(5)",     "Art. 32",        "ID.RA-1 / PR.IP-12","CIS 7.1 / 7.3"],
+    };
+    const _FW_V = [
+      {n:"PCI-DSS v4.0",             b:"Payment Card Industry — Req 6/8"},
+      {n:"SOC 2 (Trust Services)",   b:"AICPA Common Criteria — CC6"},
+      {n:"ISO 27001:2022",           b:"Annex A.5/8/14 (Org, People, Tech)"},
+      {n:"NIST 800-53 Rev 5",        b:"US federal controls — SI/SC/AC/IA"},
+      {n:"HIPAA Security Rule",      b:"45 CFR 164.308/312"},
+      {n:"GDPR",                     b:"Art. 32 (security), 25 (by-design), 33"},
+      {n:"NIST CSF 2.0",             b:"IDENTIFY/PROTECT/DETECT/RESPOND"},
+      {n:"CIS Controls v8",          b:"18 critical controls"},
+    ];
+    const _SEV_BG_V = {CRITICAL:[254,226,226],HIGH:[255,237,213],MEDIUM:[254,252,232],LOW:[220,252,231]};
+    const _SEV_TX_V = {CRITICAL:[162,28,28],HIGH:[194,65,12],MEDIUM:[133,79,11],LOW:[15,118,82]};
+    const _sevRank_V = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+    const _fwMaps = _FW_V.map(() => new Map());
+    const _pushC = (m, ctrl, f) => {
+      if (!ctrl) return;
+      ctrl.split(/\s*\/\s*/).forEach(c => { if (!m.has(c)) m.set(c, []); m.get(c).push(f); });
+    };
+    (allFindings || []).forEach(f => {
+      const cwe = String(f.cwe || "").trim().toUpperCase();
+      const map = _CWE_TO_COMPLIANCE_V[cwe];
+      if (!map) return;
+      _FW_V.forEach((fw, i) => _pushC(_fwMaps[i], map[i], f));
+    });
+    if (_fwMaps.some(m => m.size > 0)) {
+      chk(70); y += 2;
+      y = sHead("Compliance Coverage — 8 Frameworks", y);
+      doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+      doc.text("Findings mapped onto PCI-DSS, SOC 2, ISO 27001, NIST 800-53, HIPAA, GDPR, NIST CSF, CIS v8.", margin+2, y);
+      doc.setFont("Arial","normal");
+      y += 4;
+      const _renderFwV = (name, blurb, controlsMap) => {
+        if (controlsMap.size === 0) return;
+        chk(controlsMap.size * 7 + 14);
+        fillR(margin, y, contentW, 7, [30,64,175]);
+        doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor(...WHITE);
+        doc.text(name, margin+3, y+5);
+        doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(218,234,254);
+        doc.text(blurb, margin+62, y+5);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...WHITE);
+        doc.text(`${controlsMap.size} control(s) impacted`, pageW-margin-3, y+5, {align:"right"});
+        y += 7;
+        Array.from(controlsMap.entries()).sort((a,b)=>b[1].length - a[1].length).forEach(([ctrl, fs], i) => {
+          chk(7);
+          fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
+          fillR(margin, y, 1.5, 6.5, [162,28,28]);
+          doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...DARK);
+          doc.text(ctrl, margin+4, y+4.5);
+          const sortedFs = [...fs].sort((a,b) => (_sevRank_V[a.severity]??9) - (_sevRank_V[b.severity]??9));
+          const worst = sortedFs[0].severity || "LOW";
+          rrect(margin+50, y+1.5, 18, 5, 1, _SEV_BG_V[worst] || _SEV_BG_V.LOW);
+          doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...(_SEV_TX_V[worst] || _SEV_TX_V.LOW));
+          doc.text(worst, margin+51, y+5);
+          const uniqueTitles = [...new Set(sortedFs.map(f => (f.detail || "").trim()))].filter(Boolean);
+          const sample = uniqueTitles.length === 1 ? uniqueTitles[0].substring(0, 80) : `${uniqueTitles[0].substring(0, 60)} (+${uniqueTitles.length-1} more)`;
+          doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+          doc.text(`${fs.length} finding(s): ${sample}`, margin+72, y+4.5);
+          y += 6.5;
+        });
+        y += 4;
+      };
+      _FW_V.forEach((fw, i) => _renderFwV(fw.n, fw.b, _fwMaps[i]));
+    }
+
     // ─── SCAN COVERAGE (Trust-First: every tool accounted for) ──
     // Five states: RAN (has data) / EMPTY (ran, no findings) / FAILED
     // (errored) / NOT RUN (tile deselected). No silent skipping.
