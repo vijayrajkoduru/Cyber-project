@@ -895,34 +895,35 @@ function generatePDF(reportData) {
     // The mapping table is intentionally focused on the ~15 CWE classes
     // our scanners actually emit — adding more controls would be noise.
     const CWE_TO_COMPLIANCE = {
-      // CWE         PCI-DSS v4         SOC 2 (TSC)   ISO 27001:2022
-      "CWE-79":    ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // XSS
-      "CWE-89":    ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // SQLi
-      "CWE-94":    ["6.2.4",           "CC6.6",      "A.8.28"],   // Code Injection
-      "CWE-352":   ["6.2.4",           "CC6.1",      "A.5.15"],   // CSRF
-      "CWE-1021":  ["6.4.3",           "CC6.6",      "A.8.23"],   // Clickjacking
-      "CWE-200":   ["3.4.1",           "CC6.1",      "A.5.10"],   // Info Exposure
-      "CWE-319":   ["4.2.1",           "CC6.7",      "A.8.24"],   // Cleartext Transmission
-      "CWE-942":   ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.23"],   // CORS Misconfig
-      "CWE-639":   ["7.2 / 8.2.5",     "CC6.1",      "A.5.15"],   // IDOR
-      "CWE-444":   ["6.2.4",           "CC6.6",      "A.8.21"],   // HTTP Smuggling
-      "CWE-538":   ["2.2.7 / 6.4.1",   "CC6.1",      "A.5.10"],   // Sensitive Files
-      "CWE-693":   ["6.2.4",           "CC6.6",      "A.8.23"],   // Protection Mechanism Failure
-      "CWE-650":   ["6.2.4",           "CC6.1",      "A.8.21"],   // Verb Tampering
-      "CWE-1004":  ["8.3.10",          "CC6.7",      "A.8.5"],    // Cookie HttpOnly missing
-      "CWE-614":   ["4.2.1 / 8.3.10",  "CC6.7",      "A.8.5"],    // Cookie Secure missing
-      "CWE-601":   ["6.2.4",           "CC6.6",      "A.8.21"],   // Open Redirect
-      "CWE-918":   ["6.2.4",           "CC6.6",      "A.8.23"],   // SSRF
-      "CWE-611":   ["6.2.4",           "CC6.6",      "A.8.28"],   // XXE
-      "CWE-78":    ["6.2.4",           "CC6.6",      "A.8.28"],   // Command Injection
-      "CWE-22":    ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // Path Traversal
-      "CWE-434":   ["6.2.4 / 6.4.1",   "CC6.6",      "A.8.28"],   // Unrestricted Upload
-      "CWE-502":   ["6.2.4",           "CC6.6",      "A.8.28"],   // Deserialization
-      "CWE-287":   ["7.2 / 8.2",       "CC6.1",      "A.5.15"],   // Auth Bypass
-      "CWE-307":   ["8.3.4",           "CC6.1",      "A.5.17"],   // Brute Force Possible
-      "CWE-384":   ["8.3.10",          "CC6.7",      "A.5.15"],   // Session Fixation
-      "CWE-1275":  ["8.3.10",          "CC6.7",      "A.8.5"],    // SameSite missing
-      "CWE-16":    ["2.2.4",           "CC6.6",      "A.8.9"],    // Config
+      // CWE -> [PCI-DSS v4, SOC2, ISO27001, NIST 800-53, HIPAA, GDPR, NIST CSF 2.0, CIS v8]
+      "CWE-79":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10",       "164.312(a)(1)",     "Art. 32 / 25",   "PR.IP-2 / DE.CM-4", "CIS 16.10"],
+      "CWE-89":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10 / AC-3","164.312(a)(1)",     "Art. 32 / 25",   "PR.DS-5 / PR.IP-2", "CIS 16.10 / 16.4"],
+      "CWE-94":   ["6.2.4",        "CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-352":  ["6.2.4",        "CC6.1","A.5.15","SC-23",       "164.312(d)",        "Art. 32",        "PR.AC-7",           "CIS 16.5"],
+      "CWE-1021": ["6.4.3",        "CC6.6","A.8.23","SC-7",        "164.312(a)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-200":  ["3.4.1",        "CC6.1","A.5.10","SC-8 / AC-3", "164.312(e)(1)",     "Art. 32 / 33",   "PR.DS-1 / PR.DS-2", "CIS 3.3 / 16.10"],
+      "CWE-319":  ["4.2.1",        "CC6.7","A.8.24","SC-8 / SC-13","164.312(e)(1)",     "Art. 32",        "PR.DS-2",           "CIS 3.10 / 13.6"],
+      "CWE-942":  ["6.2.4 / 6.4.1","CC6.6","A.8.23","SC-7 / AC-3", "164.312(a)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-639":  ["7.2 / 8.2.5",  "CC6.1","A.5.15","AC-3 / AC-6", "164.312(a)(1)",     "Art. 32 / 25",   "PR.AC-4",           "CIS 16.8"],
+      "CWE-444":  ["6.2.4",        "CC6.6","A.8.21","SC-7 / SI-10","164.312(e)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-538":  ["2.2.7 / 6.4.1","CC6.1","A.5.10","AC-3 / AC-6", "164.312(a)(1)",     "Art. 32 / 25",   "PR.DS-1 / PR.AC-4", "CIS 3.7 / 13.6"],
+      "CWE-693":  ["6.2.4",        "CC6.6","A.8.23","SC-7 / SI-10","164.312(a)(1)",     "Art. 32",        "PR.IP-1",           "CIS 16.10"],
+      "CWE-650":  ["6.2.4",        "CC6.1","A.8.21","AC-3 / SC-7", "164.312(a)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-1004": ["8.3.10",       "CC6.7","A.8.5", "SC-23 / IA-2","164.312(d)",        "Art. 32",        "PR.AC-7",           "CIS 16.5"],
+      "CWE-614":  ["4.2.1 / 8.3.10","CC6.7","A.8.5","SC-8 / SC-23","164.312(e)(1)",    "Art. 32",        "PR.DS-2",           "CIS 3.10 / 16.5"],
+      "CWE-601":  ["6.2.4",        "CC6.6","A.8.21","SI-10 / SC-7","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-918":  ["6.2.4",        "CC6.6","A.8.23","SC-7 / SI-10","164.312(a)(1)",     "Art. 32",        "PR.AC-5",           "CIS 16.10"],
+      "CWE-611":  ["6.2.4",        "CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-78":   ["6.2.4",        "CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-22":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10 / AC-3","164.312(a)(1)",     "Art. 32 / 25",   "PR.AC-4 / PR.IP-2", "CIS 16.10 / 3.7"],
+      "CWE-434":  ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-502":  ["6.2.4",        "CC6.6","A.8.28","SI-10 / SI-3","164.312(a)(1)",     "Art. 32",        "PR.IP-2",           "CIS 16.10"],
+      "CWE-287":  ["7.2 / 8.2",    "CC6.1","A.5.15","IA-2 / AC-7", "164.312(d)",        "Art. 32 / 25",   "PR.AC-1 / PR.AC-7", "CIS 6.3 / 16.3"],
+      "CWE-307":  ["8.3.4",        "CC6.1","A.5.17","AC-7 / IA-5", "164.312(a)(2)(i)",  "Art. 32",        "PR.AC-7",           "CIS 6.6"],
+      "CWE-384":  ["8.3.10",       "CC6.7","A.5.15","SC-23 / IA-2","164.312(d)",        "Art. 32",        "PR.AC-7",           "CIS 16.5"],
+      "CWE-1275": ["8.3.10",       "CC6.7","A.8.5", "SC-23",       "164.312(d)",        "Art. 32",        "PR.AC-7",           "CIS 16.5"],
+      "CWE-16":   ["2.2.4",        "CC6.6","A.8.9", "CM-6 / CM-7", "164.308(a)(1)",     "Art. 32 / 25",   "PR.IP-1",           "CIS 4.1 / 4.2"],
+      "CWE-1395": ["6.3.3 / 6.5.6","CC7.1","A.8.8", "SI-2 / RA-5", "164.308(a)(5)",     "Art. 32",        "ID.RA-1 / PR.IP-12","CIS 7.1 / 7.3"],
     };
     // Walk current findings, collect which controls are touched per framework.
     const _pci = new Map(), _soc = new Map(), _iso = new Map();
@@ -934,14 +935,25 @@ function generatePDF(reportData) {
         m.get(c).push(f);
       });
     };
+    const _FRAMEWORKS = [
+      {name:"PCI-DSS v4.0",          blurb:"Payment Card Industry — Req 6 (Secure Systems) & Req 8 (Access)"},
+      {name:"SOC 2 (Trust Services)", blurb:"AICPA Common Criteria — CC6 (Logical & Physical Access)"},
+      {name:"ISO 27001:2022",        blurb:"Annex A controls — A.5/8/14 (Org, People, Tech)"},
+      {name:"NIST 800-53 Rev 5",     blurb:"US federal security controls — SI/SC/AC/IA control families"},
+      {name:"HIPAA Security Rule",   blurb:"45 CFR 164.308/312 — administrative & technical safeguards"},
+      {name:"GDPR",                  blurb:"EU privacy — Art. 32 (security), 25 (by-design), 33 (breach)"},
+      {name:"NIST CSF 2.0",          blurb:"Cybersecurity Framework — IDENTIFY/PROTECT/DETECT/RESPOND"},
+      {name:"CIS Controls v8",       blurb:"Center for Internet Security — 18 critical controls"},
+    ];
+    const _frameworkMaps = _FRAMEWORKS.map(() => new Map());
     (findings || []).forEach(f => {
       const cwe = String(f.cwe || "").trim().toUpperCase();
       const map = CWE_TO_COMPLIANCE[cwe];
       if (!map) return;
-      _push(_pci, map[0], f);
-      _push(_soc, map[1], f);
-      _push(_iso, map[2], f);
+      _FRAMEWORKS.forEach((fw, i) => _push(_frameworkMaps[i], map[i], f));
     });
+    // Keep _pci/_soc/_iso aliases for backward compat with code below
+    const _pci = _frameworkMaps[0], _soc = _frameworkMaps[1], _iso = _frameworkMaps[2];
 
     // Render only when something maps — empty section is just noise.
     const _hasAny = _pci.size + _soc.size + _iso.size > 0;
@@ -949,7 +961,7 @@ function generatePDF(reportData) {
       chk(70); y += 2;
       y = sectionHead("Compliance Coverage",y);
       doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
-      doc.text("Findings mapped onto PCI-DSS v4.0, SOC 2 (Trust Services Criteria), and ISO 27001:2022 controls. Forward to your compliance team.", margin+2, y);
+      doc.text("Findings mapped onto 8 frameworks: PCI-DSS v4.0, SOC 2, ISO 27001:2022, NIST 800-53, HIPAA, GDPR, NIST CSF 2.0, CIS Controls v8.", margin+2, y);
       doc.setFont("Arial","normal");
       y += 4;
 
@@ -990,9 +1002,7 @@ function generatePDF(reportData) {
         y += 4;
       };
 
-      _renderFw("PCI-DSS v4.0",       "Payment Card Industry — Req 6 (Secure Systems) & Req 8 (Access)", _pci);
-      _renderFw("SOC 2 (Trust Services)", "AICPA Common Criteria — CC6 (Logical & Physical Access)",       _soc);
-      _renderFw("ISO 27001:2022",     "Annex A controls — A.5/8/14 (Org, People, Tech)",                _iso);
+      _FRAMEWORKS.forEach((fw, i) => _renderFw(fw.name, fw.blurb, _frameworkMaps[i]));
     }
 
     // ─── REMEDIATION PROGRESS — diff vs previous scan ───────────
