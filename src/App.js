@@ -1985,9 +1985,10 @@ function generateModuleReport(reportData) {
 
     // Risk summary bar
     const visFinds = (findings||[]).filter(f=>f.severity!=="INFO");
-    const riskScore = Math.min(100, visFinds.reduce((s,f)=>s+({CRITICAL:25,HIGH:15,MEDIUM:8,LOW:3}[f.severity]||0),0));
-    const rColor = riskScore>=75?RED:riskScore>=50?ORANGE:riskScore>=25?[133,100,0]:GREEN;
-    const rDisp = riskScore>=75?"CRITICAL RISK":riskScore>=50?"HIGH RISK":riskScore>=25?"MEDIUM RISK":riskScore>0?"LOW RISK":"SECURE";
+    const _riskPenalty = visFinds.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
+    const riskScore = Math.max(0, 100 - _riskPenalty);
+    const rColor = riskScore<40?RED:riskScore<70?ORANGE:riskScore<90?[133,100,0]:GREEN;
+    const rDisp = riskScore<40?"CRITICAL RISK":riskScore<70?"HIGH RISK":riskScore<90?"MEDIUM RISK":riskScore<100?"LOW RISK":"SECURE";
     if(iy < 225){
       iy+=6;
       fillR(margin,iy,contentW,14,LIGHT.map(v=>Math.round(v*0.12)));
@@ -2582,8 +2583,9 @@ function WebAppModule(props) {
 
     // Tools used list for cover page
     const toolsUsed = Object.keys(allResults).filter(k=>allResults[k]);
-    const riskScore = Math.min(100, allFindings.reduce((s,f)=>s+({CRITICAL:25,HIGH:15,MEDIUM:8,LOW:3}[f.severity]||0),0));
-    const riskLabel = riskScore>=75?"CRITICAL":riskScore>=50?"HIGH":riskScore>=25?"MEDIUM":riskScore>0?"LOW":"SAFE";
+    const _riskPenalty = allFindings.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
+    const riskScore = Math.max(0, 100 - _riskPenalty);
+    const riskLabel = riskScore<40?"CRITICAL":riskScore<70?"HIGH":riskScore<90?"MEDIUM":riskScore<100?"LOW":"SAFE";
 
     // ─── REMEDIATION DIFF vs previous scan ──────────────────────
     // Compute fixed / new / persisting buckets by hashing each finding to
@@ -3054,8 +3056,9 @@ function WebAppModule(props) {
               if(allResults["xss"]?.vulnerable)   allF.push({severity:"CRITICAL"});
               if(allResults["cors"]?.vulnerable)   allF.push({severity:"HIGH"});
               if(allResults["sqlmap"]?.vulnerable) allF.push({severity:"CRITICAL"});
-              const sc=Math.min(100,allF.reduce((s,f)=>s+({CRITICAL:25,HIGH:15,MEDIUM:8,LOW:3}[f.severity]||0),0));
-              const lb=sc>=75?"CRITICAL":sc>=50?"HIGH":sc>=25?"MEDIUM":sc>0?"LOW":"SAFE";
+              const _pen=allF.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
+              const sc=Math.max(0,100-_pen);
+              const lb=sc<40?"CRITICAL":sc<70?"HIGH":sc<90?"MEDIUM":sc<100?"LOW":"SAFE";
               const col={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",SAFE:"#16a34a"}[lb];
               return <>
                 <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>⚠ RISK: {lb} ({sc}/100)</div>
