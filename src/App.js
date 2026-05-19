@@ -742,7 +742,7 @@ function generatePDF(reportData) {
     fillR(margin,y,contentW,12,[239,246,255]);
     fillR(margin,y,3,12,[37,99,235]);
     doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(37,99,235);
-    doc.text("✓ VERIFIED BY VULNUSLAB",margin+6,y+5);
+    doc.text("[VERIFIED]  VULNUSLAB",margin+6,y+5);
     doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
     doc.text("Every finding in this report was independently triggered and re-confirmed by the VulnusLab engine.",margin+6,y+9.5);
     doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
@@ -1868,7 +1868,7 @@ function generatePDF(reportData) {
         // Found count
         const foundColor = a.found > 0 ? [162,28,28] : [15,118,82];
         doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...foundColor);
-        doc.text(a.found > 0 ? `${a.found} ✗` : "0 ✓", pageW-margin-15, y+5);
+        doc.text(a.found > 0 ? `${a.found} HIT` : "0 OK", pageW-margin-15, y+5);
         y += h;
       });
       y += 6;
@@ -7850,15 +7850,25 @@ function generateVulnReport({target, allResults, date}) {
 
     // Tools used — Vuln-module scanner set
     const VULN_TOOLS=[
-      {tool:"nikto",   label:"Nikto",           desc:"Web vulnerability scanner"},
-      {tool:"nuclei",  label:"Nuclei",          desc:"Template-based scanner (13,099 templates)"},
-      {tool:"wpscan",  label:"WPScan",          desc:"WordPress scanner"},
-      {tool:"ssl",     label:"SSLScan",         desc:"SSL/TLS configuration analysis"},
-      {tool:"headers", label:"Security Headers",desc:"HTTP security headers (10-header check + A-F grade)"},
-      {tool:"cors",    label:"CORS",            desc:"Cross-origin resource sharing"},
-      {tool:"cookies", label:"Cookie Security", desc:"Cookie attribute analysis (Secure / HttpOnly / SameSite)"},
-      {tool:"cms",     label:"CMS Detection",   desc:"CMS fingerprinting (WordPress / Drupal / Joomla)"},
-      {tool:"xss",     label:"XSS Testing",     desc:"Cross-site scripting active probe"},
+      {tool:"nikto",         label:"Nikto",            desc:"Web vulnerability scanner (6700+ checks)"},
+      {tool:"nuclei",        label:"Nuclei",           desc:"Template-based scanner (13,099 templates)"},
+      {tool:"wpscan",        label:"WPScan",           desc:"WordPress core / plugin / theme scanner"},
+      {tool:"ssl",           label:"SSLScan",          desc:"SSL/TLS configuration analysis"},
+      {tool:"headers",       label:"Security Headers", desc:"HTTP security headers (10-header check + A-F grade)"},
+      {tool:"cors",          label:"CORS",             desc:"Cross-origin resource sharing misconfiguration"},
+      {tool:"cookies",       label:"Cookie Security",  desc:"Cookie attribute analysis (Secure / HttpOnly / SameSite)"},
+      {tool:"cms",           label:"CMS Detection",    desc:"CMS fingerprinting (WordPress / Drupal / Joomla)"},
+      {tool:"xss",           label:"XSS Testing",      desc:"Reflected XSS active probe (canary + payload library)"},
+      {tool:"sqli",          label:"SQL Injection",    desc:"Error-based + boolean-based + time-based SQLi"},
+      {tool:"cmd_injection", label:"Cmd Injection",    desc:"OS command injection via out-of-band canary"},
+      {tool:"lfi",           label:"Path Traversal",   desc:"Local file inclusion / directory traversal"},
+      {tool:"open_redirect", label:"Open Redirect",    desc:"Location-header attacker-host verification"},
+      {tool:"ssrf",          label:"SSRF",             desc:"Server-side request forgery (out-of-band callback)"},
+      {tool:"xxe",           label:"XXE Injection",    desc:"XML external entity injection"},
+      {tool:"csrf",          label:"CSRF",             desc:"Anti-CSRF token / SameSite analysis"},
+      {tool:"jwt",           label:"JWT Security",     desc:"alg=none, weak-secret, kid traversal, JWKS confusion"},
+      {tool:"exposed_files", label:"Exposed Files",    desc:".env / .git / backup / config file exposure"},
+      {tool:"http_methods",  label:"HTTP Methods",     desc:"Dangerous HTTP verbs (TRACE / PUT / DELETE)"},
     ];
     chk(30); y=sHead("Tools Used",y);
     y=tHead(["TOOL","DESCRIPTION","FINDINGS"],[35,110,35],y);
@@ -7960,7 +7970,7 @@ function generateVulnReport({target, allResults, date}) {
       if(findings.length===0){
         fillR(margin,y,contentW,8,LIGHT);txt("No significant findings detected.",margin+4,y+5.5,8.5,GRAY);y+=12;
       } else {
-        y=tHead(["SEV","FINDING","REMEDIATION"],[20,96,70],y);
+        y=tHead(["SEV","FINDING","CVSS","CWE / OWASP","REMEDIATION"],[16,76,14,30,50],y);
         const SEV_ABBR={CRITICAL:"CRIT",HIGH:"HIGH",MEDIUM:"MED",LOW:"LOW",INFO:"INFO"};
         const filteredFindings = findings.filter(f => !String(f.detail||"").toLowerCase().includes("no cgi dir") && !String(f.detail||"").toLowerCase().includes("cgi tests skipped"));
         filteredFindings.forEach((f,i)=>{
@@ -7969,23 +7979,28 @@ function generateVulnReport({target, allResults, date}) {
             .replace(/\s*See:\s*https?:\/\/\S+/gi,"")
             .replace(/^\[\d+\]\s*/,"")
             .trim();
-          const fLines=doc.splitTextToSize(cleanDetail,90);
-          const rLines=doc.splitTextToSize(String(f.remediation||"—"),68);
-          const rh=Math.max(8,Math.max(fLines.length,rLines.length)*4.3+3);
+          const cvss = String(f.cvss || f.cvss_score || "-");
+          const cwe  = String(f.cwe || "-");
+          const owasp= String(f.owasp || "-");
+          const cweOwasp = (cwe!=="-" && owasp!=="-") ? `${cwe}\n${owasp}` : (cwe!=="-" ? cwe : owasp);
+          const fLines=doc.splitTextToSize(cleanDetail,72);
+          const rLines=doc.splitTextToSize(String(f.remediation||"-"),48);
+          const cwLines=doc.splitTextToSize(cweOwasp,28);
+          const rh=Math.max(9,Math.max(fLines.length,rLines.length,cwLines.length)*3.8+3);
           chk(rh+2);
           fillR(margin,y,contentW,rh,i%2===0?LIGHT:WHITE);
           fillR(margin,y,3,rh,col);
-          rrect(margin+4,y+2,14,4,1,col);
-          doc.setFont("Arial","bold");doc.setFontSize(6);doc.setTextColor(...WHITE);
-          doc.text(SEV_ABBR[f.severity]||String(f.severity||"").substring(0,4),margin+5.5,y+5.2);
-          doc.setFont("Arial","normal");doc.setFontSize(7.5);doc.setTextColor(...DARK);
-          doc.text(fLines,margin+21,y+5);
-          doc.setFont("Arial","normal");doc.setFontSize(7);doc.setTextColor(22,163,74);
-          doc.text(rLines,margin+117,y+5);
-          // VERIFIED badge — every finding shipped here is actively verified
-          rrect(pageW-margin-15,y+2,13,4.5,1,[220,252,231]);
-          doc.setFont("Arial","bold"); doc.setFontSize(5); doc.setTextColor(15,118,82);
-          doc.text("VERIFIED",pageW-margin-13.5,y+5);
+          rrect(margin+4,y+2,10,4,1,col);
+          doc.setFont("Arial","bold");doc.setFontSize(5.5);doc.setTextColor(...WHITE);
+          doc.text(SEV_ABBR[f.severity]||String(f.severity||"").substring(0,4),margin+5.2,y+5);
+          doc.setFont("Arial","normal");doc.setFontSize(7.2);doc.setTextColor(...DARK);
+          doc.text(fLines,margin+17,y+4.8);
+          doc.setFont("Arial","bold");doc.setFontSize(7.5);doc.setTextColor(...col);
+          doc.text(cvss,margin+95,y+4.8);
+          doc.setFont("Arial","normal");doc.setFontSize(6.5);doc.setTextColor(...GRAY);
+          doc.text(cwLines,margin+109,y+4.8);
+          doc.setFont("Arial","normal");doc.setFontSize(6.8);doc.setTextColor(22,163,74);
+          doc.text(rLines,margin+140,y+4.8);
           y+=rh;
         });
         y+=6;
@@ -8028,6 +8043,61 @@ function generateVulnReport({target, allResults, date}) {
       });
       y += 6;
     }
+
+    // ─── APPENDIX (Methodology / Severity / Tools / References) ─
+    chk(40); y += 3; y = sHead("Appendix",y);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("A. Methodology",margin+2,y); y += 5;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    const _methLines = doc.splitTextToSize(
+      "Every scanner performs an active two-stage probe: (1) canary or fingerprint request, (2) confirmation with context-matched payloads. "+
+      "Findings are emitted only when stage 2 returns un-encoded reflection, attacker-host redirect, out-of-band callback, server-side error, or confirmed version banner. "+
+      "No passive heuristics or static fingerprints alone.",
+      contentW-4);
+    _methLines.forEach((ln,i)=>doc.text(ln,margin+2,y+i*3.6));
+    y += _methLines.length*3.6 + 4;
+    chk(40);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("B. Severity Definitions (CVSS v3.1)",margin+2,y); y += 4;
+    y = tHead(["SEVERITY","CVSS","RESPONSE","CHARACTERISTIC"],[24,18,42,96],y);
+    const _sevBands=[
+      ["CRITICAL","9.0-10.0","Patch within 24 hours",     "Remote compromise without authentication",[220,38,38]],
+      ["HIGH",    "7.0-8.9", "Patch within 7 days",        "Material security impact / data exposure",[234,88,12]],
+      ["MEDIUM",  "4.0-6.9", "Hardening recommended",      "No direct vector / requires chaining",     [202,138,4]],
+      ["LOW",     "0.1-3.9", "Defense-in-depth improvement","Minor info leak / config drift",          [22,163,74]],
+    ];
+    _sevBands.forEach(([sev,cvss,resp,desc,col],i)=>{
+      fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+      rrect(margin+2,y+1.5,20,4,1,col);
+      doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(...WHITE);
+      doc.text(sev,margin+12,y+4.5,{align:"center"});
+      doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+      doc.text(cvss,margin+27,y+5);
+      doc.text(resp,margin+45,y+5);
+      doc.setTextColor(...GRAY);
+      doc.text(desc,margin+87,y+5);
+      y += 7;
+    });
+    y += 5;
+    chk(40);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("C. References",margin+2,y); y += 4;
+    const _refs=[
+      ["OWASP Top 10 2021",               "https://owasp.org/Top10/"],
+      ["CWE - Common Weakness Enumeration","https://cwe.mitre.org/"],
+      ["CVSS v3.1 Calculator",            "https://www.first.org/cvss/calculator/3.1"],
+      ["NIST National Vulnerability DB",  "https://nvd.nist.gov/"],
+      ["CISA Known Exploited Vulns",      "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"],
+    ];
+    _refs.forEach((row,i)=>{
+      fillR(margin,y,contentW,6,i%2===0?LIGHT:WHITE);
+      doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+      doc.text(row[0],margin+3,y+4.3);
+      doc.setTextColor(...BLUE);
+      doc.text(row[1],margin+85,y+4.3);
+      y += 6;
+    });
+    y += 6;
 
     // END OF REPORT — extended block with VulnusLab contact
     if(y+32 > 284){doc.addPage();y=18;drawHeader();}
