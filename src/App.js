@@ -7323,6 +7323,16 @@ function ReconModule({token, onRunningChange}) {
   const [tab,            setTab]      = useState("phases");
   const [stopped,        setStopped]  = useState(false);
   const [selectedPhases, setSelected] = useState(() => new Set(RECON_PHASES.map((_,i)=>i)));
+  // RECON-AUTH-STATE-V1
+  const [authOpen,setAuthOpen]                   = useState(false);
+  const [loginUrl,setLoginUrl]                   = useState("");
+  const [loginUser,setLoginUser]                 = useState("");
+  const [loginPass,setLoginPass]                 = useState("");
+  const [authCookie,setAuthCookie]               = useState("");
+  const [authBearer,setAuthBearer]               = useState("");
+  const [authStatus,setAuthStatus]               = useState(null);
+  const [rAutoLoginBusy,setRAutoLoginBusy]       = useState(false);
+  const [rAutoLoginStatus,setRAutoLoginStatus]   = useState(null);
   const stopRef = useRef(false);
   const logRef  = useRef(null);
 
@@ -7355,6 +7365,32 @@ function ReconModule({token, onRunningChange}) {
     } else {
       setLines([`[*] Starting recon on: ${target} (${active.length} phases, all enabled)`]);
     }
+    // RECON-AUTH-RUN-V1 — Step 0: authenticate to target before recon phases
+    let sessionCookie = authCookie;
+    let sessionBearer = authBearer;
+    if (loginUrl.trim() && loginUser.trim() && loginPass.trim() && !sessionCookie && !sessionBearer) {
+      add(`[*] Step 0: authenticating to target ...`);
+      try {
+        const lr = await api("/api/scan/login","POST",{
+          target, login_url: loginUrl,
+          username: loginUser, password: loginPass,
+          auth_type: "form",
+        }, token);
+        if (lr && lr.login_verified) {
+          sessionCookie = lr.auth_cookie || "";
+          sessionBearer = lr.auth_bearer || "";
+          setAuthCookie(sessionCookie); setAuthBearer(sessionBearer);
+          setAuthStatus("ok");
+          add(`[\u2713] Logged in as ${loginUser} \u2014 session captured`);
+        } else {
+          setAuthStatus("fail");
+          add(`[!] Login could not be verified \u2014 continuing unauthenticated`);
+        }
+      } catch(e){
+        setAuthStatus("fail");
+        add(`[!] Login call failed \u2014 continuing unauthenticated: ${e.message||e}`);
+      }
+    }
     const results = {};
     // Single-retry-on-failure helper — most transient errors (429, network
     // glitch, brief origin 502) clear on a 3-second pause. Without this, a
@@ -7375,6 +7411,8 @@ function ReconModule({token, onRunningChange}) {
       add("[*] Phase "+(idx+1)+"/"+active.length+": "+ph.name+" ...");
       try {
         const body = {target};
+        if (sessionCookie) body.auth_cookie = sessionCookie;  // RECON-AUTH-BODY-V1
+        if (sessionBearer) body.auth_bearer = sessionBearer;
         if (ph.tool==="shodan") body.api_key = localStorage.getItem("shodanApiKey")||"";
         if (ph.tool==="shodan" && !body.api_key) {
           add("⚠ Shodan: no API key — set it in Settings");
@@ -7758,6 +7796,110 @@ function ReconModule({token, onRunningChange}) {
           {icon:"🌐",label:"example.com",         value:"example.com",          desc:"IANA test domain — public WHOIS/DNS"},
           {icon:"🔍",label:"google.com",          value:"google.com",           desc:"Demo target — full report"},
         ]}/>
+        {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
+        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+          <div onClick={()=>setAuthOpen(o=>!o)}
+            style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated recon (optional)</span>
+              <span style={{fontSize:10,color:"#64748b"}}>— lets crawl/gobuster/jsendpoints/params see behind-login URLs</span>
+            </div>
+            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
+            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
+            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ credentials ready</span>}
+          </div>
+          {authOpen && (
+            <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
+                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> External recon (WHOIS, DNS, crt.sh, Shodan, OSINT) doesn't need login. Only fill this in if your target has a login system AND you want the crawler / directory enum / secrets scanner to walk behind-login pages.
+              </div>
+              <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
+                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>
+                  🔐 Auto-login (recommended)
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                  <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
+                    placeholder="Login URL (e.g. /login)" autoComplete="off"
+                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
+                    placeholder="Username / email" autoComplete="off"
+                    name="vl-recon-login-user" data-form-type="other"
+                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
+                    type="password" placeholder="Password" autoComplete="new-password"
+                    name="vl-recon-login-pass" data-form-type="other"
+                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                  <button
+                    onClick={async ()=>{
+                      if(!target.trim()){ setRAutoLoginStatus("Enter a target first"); return; }
+                      if(!loginUrl.trim()||!loginUser.trim()||!loginPass.trim()){
+                        setRAutoLoginStatus("Login URL + username + password are all required"); return;
+                      }
+                      setRAutoLoginBusy(true); setRAutoLoginStatus(null);
+                      try {
+                        const lr = await api("/api/scan/login","POST",{
+                          target, login_url: loginUrl,
+                          username: loginUser, password: loginPass,
+                          auth_type: "form",
+                        }, token);
+                        if (lr && lr.login_verified) {
+                          setAuthCookie(lr.auth_cookie || "");
+                          if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
+                          setAuthStatus("ok");
+                          setRAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
+                        } else {
+                          setAuthStatus("fail");
+                          setRAutoLoginStatus(lr?.hint || "Login could not be verified");
+                        }
+                      } catch(e){
+                        setAuthStatus("fail");
+                        setRAutoLoginStatus("Login request failed: "+(e.message||e));
+                      } finally {
+                        setRAutoLoginBusy(false);
+                      }
+                    }}
+                    disabled={rAutoLoginBusy}
+                    style={{background:rAutoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
+                    {rAutoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
+                  </button>
+                  {rAutoLoginStatus==="ok" && (
+                    <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured</span>
+                  )}
+                  {rAutoLoginStatus && rAutoLoginStatus!=="ok" && (
+                    <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {rAutoLoginStatus}</span>
+                  )}
+                </div>
+              </div>
+              <div style={{fontSize:10,color:"#475569",textAlign:"center",margin:"2px 0"}}>— OR paste cookie / bearer manually —</div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                  <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)}
+                    placeholder="PHPSESSID=abc123; sid=xyz"
+                    style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
+                  <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiJ9..."
+                    style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+              {(authCookie||authBearer) && (
+                <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAuthStatus(null);setRAutoLoginStatus(null);}}
+                  style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>
+                  ✕ Clear auth credentials
+                </button>
+              )}
+              <div style={{fontSize:10,color:"#64748b",marginTop:2}}>
+                Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.
+              </div>
+            </div>
+          )}
+        </div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
@@ -10299,12 +10441,24 @@ function VulnModule(props) {
           </div>
           <span style={{background:"#1e3a8a",color:"#93c5fd",fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:4}}>{VULN_PHASES.length} SCANS</span>
         </div>
-        <TestTargets onSelect={setTarget} targets={[
-          {icon:"🏠",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)"},
-          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)"},
-          {icon:"🧃",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)"},
-          {icon:"🐙",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)"},
-          {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)"},
+        <TestTargets onSelect={async (t, lab) => {
+          setTarget(t);
+          setAuthorized(false);
+          const LAB_CREDS = {
+            dvwa:       { url: "http://lab_dvwa/login.php",                          user: "admin",             pass: "password" },
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",              user: "guest",             pass: "guest"    },
+            juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                  user: "admin@juice-sh.op", pass: "admin123" },
+            mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",     user: "admin",             pass: "adminpass"},
+            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                   user: "bee",               pass: "bug"      },
+          };
+          const creds = lab && LAB_CREDS[lab];
+          if (creds) { setLoginUrl(creds.url); setLoginUser(creds.user); setLoginPass(creds.pass); setAuthOpen(true); }
+        }} /*VULN-TT-V2*/ targets={[
+          {icon:"🏠",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)", lab:"dvwa"},
+          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)", lab:"webgoat"},
+          {icon:"🧃",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)", lab:"juiceshop"},
+          {icon:"🐙",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)", lab:"mutillidae"},
+          {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)", lab:null},
         ]}/>
         {/* ── Authenticated-scan panel (collapsible) ──
             When filled, the scanner logs in BEFORE the scan phases and
