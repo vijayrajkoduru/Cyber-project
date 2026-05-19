@@ -7583,20 +7583,23 @@ function ReconModule({token, onRunningChange}) {
             <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#64748b",fontSize:11,cursor:"pointer"}}>None</button>
           </div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+        <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%"}}>
           {RECON_PHASES.map((ph,i)=>{
-            const sel = selectedPhases.has(i);
-            const isDone   = done.includes(i);
-            const isFailed = failed.includes(i);
-            const isActive = curPhase===i;
+            const sel       = selectedPhases.has(i);
+            const isDone    = done.includes(i);
+            const isFailed  = failed.includes(i);
+            const isActive  = curPhase===i;
+            const leftCol   = isActive?"#3b82f6":isDone?(isFailed?"#ef4444":"#22c55e"):"#334155";
+            const borderCol = isActive?"#1e3a8a":isDone?(isFailed?"#450a0a":"#052e16"):"#1e293b";
             return (
-              <button key={i} onClick={()=>!running&&togglePhase(i)}
-                style={{background:isActive?"#1e3a8a":sel?"#0f172a":"#020617",border:"1px solid "+(isActive?"#3b82f6":sel?"#1e3a8a":"#1e293b"),borderRadius:6,padding:"8px 6px",cursor:running?"default":"pointer",textAlign:"center",transition:"all .15s",opacity:sel?1:0.4}}>
-                <div style={{fontSize:16,marginBottom:2}}>{ph.icon}</div>
-                <div style={{fontSize:9,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#94a3b8":"#475569",fontWeight:600,lineHeight:1.3}}>{ph.name}</div>
-                {isDone && <div style={{fontSize:9,marginTop:2,color:isFailed?"#f87171":"#4ade80"}}>{isFailed?"✗":"✓"}</div>}
-                {isActive && <div style={{fontSize:9,marginTop:2,color:"#93c5fd"}}>Running…</div>}
-              </button>
+              <div key={i} onClick={()=>!running&&togglePhase(i)}
+                style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`4px solid ${leftCol}`,borderRadius:6,padding:"10px 16px",display:"flex",alignItems:"center",gap:12,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.4,transition:"all 0.2s",boxSizing:"border-box"}}>
+                <span style={{fontSize:18,flexShrink:0,width:24,textAlign:"center"}}>{ph.icon}</span>
+                <span style={{flex:1,fontSize:13,fontWeight:600,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#cbd5e1":"#64748b"}}>{ph.name}</span>
+                <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"2px 8px"}}>{ph.tool}</span>
+                {isActive && <span style={{fontSize:10,color:"#93c5fd",fontWeight:600,minWidth:60,textAlign:"right"}}>Running…</span>}
+                {isDone && <span style={{fontSize:14,color:isFailed?"#f87171":"#4ade80",fontWeight:700,minWidth:60,textAlign:"right"}}>{isFailed?"✗ ERROR":"✓ DONE"}</span>}
+              </div>
             );
           })}
         </div>
