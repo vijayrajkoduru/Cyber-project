@@ -6526,13 +6526,24 @@ function generateReconReport({target, allResults, date}) {
       if (!map) return;
       _R_FW.forEach((fw, i) => _R_pushC(_R_fwMaps[i], map[i], f));
     });
-    if (_R_fwMaps.some(m => m.size > 0)) {
+    {
       chk(70); y += 2;
       y = sHead("Compliance Coverage — 8 Frameworks (Recon)", y);
       doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor.apply(doc, GRAY);
       doc.text("Recon-side findings mapped onto PCI-DSS, SOC 2, ISO 27001, NIST 800-53, HIPAA, GDPR, NIST CSF, CIS v8.", margin+2, y);
       doc.setFont("Arial","normal");
       y += 4;
+      if (!_R_fwMaps.some(m => m.size > 0)) {
+        chk(20);
+        fillR(margin, y, contentW, 18, LIGHT);
+        fillR(margin, y, 3, 18, [22,163,74]);
+        doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor(15,118,82);
+        doc.text("No compliance violations detected", margin+6, y+7);
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor.apply(doc, GRAY);
+        doc.text("Recon findings (whois, DNS, ports) carry no CWE tags that map to the 8 framework controls.", margin+6, y+12);
+        doc.text("Compliance section populates when cve_match, secrets, or sensitive-file scanners produce tagged findings.", margin+6, y+16);
+        y += 22;
+      }
       const _R_renderFw = (name, blurb, controlsMap) => {
         if (controlsMap.size === 0) return;
         chk(controlsMap.size * 7 + 14);
@@ -6603,6 +6614,11 @@ function generateReconReport({target, allResults, date}) {
         case "internetdb": return d.found ? `${(d.ports||[]).length} port(s) · ${(d.vulns||[]).length} CVE(s) · ${(d.tags||[]).length} tag(s)` : (d.skipped_reason || "No Shodan record");
         case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) found · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high · ${d.summary.medium_cves||0} medium` : (d.skipped_reason || "No CVEs matched");
         case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} takeover-vulnerable subdomain(s) on ${d.checked||0} checked` : `${d.checked||0} subdomain(s) checked, none vulnerable`;
+        case "waf_cdn":      return (d.detected||[]).length > 0 ? `${d.detected.length} WAF/CDN sig: ${(d.detected||[]).map(x=>x.vendor||x).slice(0,2).join(", ")}` : "no WAF/CDN detected";
+        case "ssl_deep":     return d.current_protocol ? `${d.current_protocol}${(d.total_vulnerabilities||0)>0 ? ` · ${d.total_vulnerabilities} TLS issue(s)` : " · clean"}` : (d.skipped_reason || "TLS deep scan complete");
+        case "email_audit":  return (d.spf?.found || d.dmarc?.found || d.dkim?.found) ? `SPF=${d.spf?.found?"yes":"no"} · DMARC=${d.dmarc?.found?"yes":"no"} · DKIM=${d.dkim?.found?"yes":"no"}` : (d.skipped_reason || "no email security records");
+        case "waf_detect":   return (d.detected||[]).length > 0 ? `${d.detected.length} WAF fingerprint(s)` : "no WAF detected";
+        case "takeover_check": return (d.vulnerable||[]).length > 0 ? `${d.vulnerable.length} VULN takeover(s) on ${d.checked||0} subs` : `${d.checked||0} subdomain(s) checked`;
         default:           return "Completed";
       }
     };
@@ -6716,7 +6732,7 @@ function generateReconReport({target, allResults, date}) {
   }
 
   // ── Subdomains ─────────────────────────────────────────────
-  const allSubs = [...new Set([...(r.subdomains?.subdomains||[]),...(r.crtsh?.subdomains||[]),...(r.amass?.subdomains||[])])];
+  const allSubs = [...new Set([...(r.subdomains?.subdomains||[]),...(r.crtsh?.subdomains||[]),...(r.amass?.subdomains||[])])].filter(s => !String(s).includes("@") && !String(s).includes(" "));
   if(allSubs.length>0){ chk(30); y = sHead("Subdomain Enumeration",y);
     y = tHead(["SUBDOMAIN","SOURCE"],[120,60],y);
     const subSrc={};
