@@ -5735,7 +5735,7 @@ function ReportModule({token, apiUrl}) {
       </div>
 
       {/* Risk overview */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:16}}>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {SEVS.map(s=>({ s, n:findings.filter(f=>f.severity===s).length })).map(({s,n})=>(
           <div key={s} style={{background:"#0a1628",border:`1px solid ${sev[s]}33`,borderRadius:8,padding:"10px",textAlign:"center"}}>
             <div style={{fontSize:20,fontWeight:800,color:sev[s]}}>{n}</div>
@@ -7580,7 +7580,7 @@ function ReconModule({token, onRunningChange}) {
             <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#64748b",fontSize:11,cursor:"pointer"}}>None</button>
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {RECON_PHASES.map((ph,i)=>{
             const sel = selectedPhases.has(i);
             const isDone   = done.includes(i);
@@ -9972,7 +9972,7 @@ function VulnModule(props) {
       </div>
 
       {/* Phase progress */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:6,marginBottom:16}}>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
         {VULN_PHASES.map((ph,i)=>{
           const isDone=done.includes(i), isActive=current===i;
           const hasData=allResults[ph.tool];
