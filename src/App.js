@@ -952,8 +952,6 @@ function generatePDF(reportData) {
       if (!map) return;
       _FRAMEWORKS.forEach((fw, i) => _push(_frameworkMaps[i], map[i], f));
     });
-    // Keep _pci/_soc/_iso aliases for backward compat with code below
-    const _pci = _frameworkMaps[0], _soc = _frameworkMaps[1], _iso = _frameworkMaps[2];
 
     // Render only when something maps — empty section is just noise.
     const _hasAny = _pci.size + _soc.size + _iso.size > 0;
