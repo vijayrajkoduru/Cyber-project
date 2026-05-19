@@ -64,17 +64,18 @@ _CONTACT_PAGES = [
 @router.post("/api/recon/harvester")
 async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
-    emails = set()
+    emails = set()          # real emails discovered from external sources
+    emails_pattern = set()  # pattern-generated synthesis (not actual findings)
     hosts = set()
     sources_hit = {}
     sources_failed = {}
     email_pattern = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
-    # 1. Pattern generation — common business email prefixes for the domain
-    pre_count = len(emails)
+    # 1. Pattern generation — common business email prefixes (kept SEPARATE
+    # from real-discovered emails so customer reports don't show synthesis as findings)
     for p in _COMMON_EMAIL_PREFIXES:
-        emails.add(f"{p}@{host}")
-    sources_hit["pattern_generation"] = len(emails) - pre_count
+        emails_pattern.add(f"{p}@{host}")
+    sources_hit["pattern_generation"] = len(emails_pattern)
 
     # 2. Scrape target's own pages for real emails
     try:
@@ -164,13 +165,15 @@ async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
 
     return {
         "ok": True,
-        "emails": sorted(emails),
+        "emails": sorted(emails),                    # REAL emails discovered
+        "emails_pattern": sorted(emails_pattern),    # pattern-generated (NOT findings)
         "hosts": sorted(hosts),
-        "total_emails": len(emails),
+        "total_emails": len(emails),                 # count of REAL emails
+        "total_emails_pattern": len(emails_pattern), # count of synthetic emails
         "total_hosts": len(hosts),
         "sources": sources_hit,
         "sources_failed": sources_failed,
-        "engine": "pure-Python (pattern gen + target scrape + Wayback + HackerTarget + GitHub code search)",
+        "engine": "pure-Python (real-only emails: target scrape + Wayback + GitHub; pattern gen kept separate)",
     }
 
 
