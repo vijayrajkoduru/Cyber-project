@@ -1134,6 +1134,25 @@ function generatePDF(reportData) {
         websocket:    ["WebSocket Security Assessment","FREE"],
         takeover:     ["Subdomain Takeover Detection","FREE"],
         otp:          ["2FA / OTP Bypass Testing","FREE"],
+        // Vuln scanner backend tools (newer additions)
+        dns:              ["DNS Records & Configuration Lookup","FREE"],
+        techstack:        ["Technology Stack Fingerprinting","FREE"],
+        portscan:         ["TCP Port Scanning","FREE"],
+        ssl_cert:         ["SSL/TLS Certificate Audit","FREE"],
+        sqli:             ["SQL Injection (error/boolean/time-based)","FREE"],
+        cmd_injection:    ["OS Command Injection (OOB canary)","FREE"],
+        exposed_files:    [".env / .git / backup / config exposure","FREE"],
+        http_methods:     ["Dangerous HTTP Verbs (TRACE/PUT/DELETE)","FREE"],
+        open_redirect:    ["Open Redirect (host-verified)","FREE"],
+        mass_assignment:  ["Mass Assignment / Param Allow-list Bypass","FREE"],
+        access_control:   ["Access Control / Authorization Bypass","FREE"],
+        force_browse:     ["Forced Browsing / Hidden Paths","FREE"],
+        file_upload:      ["File Upload Validation Bypass","FREE"],
+        sensitive_data:   ["Sensitive Data Exposure (PII/secrets in responses)","FREE"],
+        stored_xss:       ["Stored XSS via Persistence Endpoints","FREE"],
+        spa_crawler:      ["SPA Endpoint Crawler (React/Vue/Angular)","FREE"],
+        headers:          ["HTTP Security Headers (CSP/HSTS/XFO)","FREE"],
+        cookies:          ["Cookie Attribute Audit (Secure/HttpOnly/SameSite)","FREE"],
       };
       for(let i=0;i<toolsUsed.length;i++){
         const t=toolsUsed[i];
@@ -1163,8 +1182,8 @@ function generatePDF(reportData) {
       y+=6;
       y = sectionHead("Overall Risk Assessment",y);
       const rBar = riskScore||0;
-      const rColor = rBar>=75?RED:rBar>=50?ORANGE:rBar>=25?[133,100,0]:GREEN;
-      const rDisp = rBar>=75?"CRITICAL RISK":rBar>=50?"HIGH RISK":rBar>=25?"MEDIUM RISK":rBar>0?"LOW RISK":"SECURE";
+      const rColor = rBar<40?RED:rBar<70?ORANGE:rBar<90?[133,100,0]:GREEN;
+      const rDisp = rBar<40?"CRITICAL":rBar<70?"HIGH":rBar<90?"MEDIUM":rBar<100?"LOW":"SECURE";
       // Track
       fillR(margin,y,contentW,14,LIGHT);
       hline(margin,y,margin,y+14,rColor,2);
