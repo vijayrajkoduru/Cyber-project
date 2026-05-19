@@ -929,10 +929,13 @@ function generatePDF(reportData) {
     const _pci = new Map(), _soc = new Map(), _iso = new Map();
     const _push = (m, ctrl, f) => {
       if (!ctrl) return;
-      // Split on " / " so a CWE that maps to multiple controls registers each one.
-      ctrl.split(/\s*\/\s*/).forEach(c => {
-        if (!m.has(c)) m.set(c, []);
-        m.get(c).push(f);
+      const _parts = ctrl.split(/\s*\/\s*/);
+      const _pm = _parts[0].match(/^([A-Za-z][A-Za-z.\s]+?\s+)\d/);
+      const _prefix = _pm ? _pm[1] : "";
+      _parts.forEach((c, i) => {
+        const label = (i > 0 && _prefix && !/^[A-Za-z]/.test(c)) ? _prefix + c : c;
+        if (!m.has(label)) m.set(label, []);
+        m.get(label).push(f);
       });
     };
     const _FRAMEWORKS = [
@@ -6515,7 +6518,14 @@ function generateReconReport({target, allResults, date}) {
     const _R_fwMaps = _R_FW.map(() => new Map());
     const _R_pushC = (m, ctrl, f) => {
       if (!ctrl) return;
-      ctrl.split(/\s*\/\s*/).forEach(c => { if (!m.has(c)) m.set(c, []); m.get(c).push(f); });
+      const _parts = ctrl.split(/\s*\/\s*/);
+      const _pm = _parts[0].match(/^([A-Za-z][A-Za-z.\s]+?\s+)\d/);
+      const _prefix = _pm ? _pm[1] : "";
+      _parts.forEach((c, i) => {
+        const label = (i > 0 && _prefix && !/^[A-Za-z]/.test(c)) ? _prefix + c : c;
+        if (!m.has(label)) m.set(label, []);
+        m.get(label).push(f);
+      });
     };
     _findings.forEach(f => {
       const refs = String(f.references || "");
@@ -8035,7 +8045,7 @@ function generateVulnReport({target, allResults, date}) {
     fillR(margin,y,contentW,12,[239,246,255]);
     fillR(margin,y,3,12,[37,99,235]);
     doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(37,99,235);
-    doc.text("✓ VERIFIED BY VULNUSLAB",margin+6,y+5);
+    doc.text("[VERIFIED]  VULNUSLAB",margin+6,y+5);
     doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
     doc.text("Every finding in this report was independently triggered and re-confirmed by the VulnusLab engine.",margin+6,y+9.5);
     y += 15;
@@ -8383,7 +8393,7 @@ function generateVulnReport({target, allResults, date}) {
         lines.forEach((ln,li)=>doc.text(ln, margin+48, y+5 + li*3.6));
         const foundColor = a.found > 0 ? [162,28,28] : [15,118,82];
         doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...foundColor);
-        doc.text(a.found > 0 ? `${a.found} ✗` : "0 ✓", pageW-margin-15, y+5);
+        doc.text(a.found > 0 ? `${a.found} HIT` : "0 OK", pageW-margin-15, y+5);
         y += h;
       });
       y += 6;
