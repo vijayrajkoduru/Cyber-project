@@ -100,17 +100,27 @@ async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
     found = []
 
     # Build soft-404 fingerprint from 3 randomized non-existent paths.
-    # Each fingerprint entry is (status, content_length, Location_header_prefix).
-    # A real hit must differ from ALL entries on at least one axis — this
-    # handles both 404 catch-alls AND 302-to-login catch-alls (DVWA, WordPress, etc).
-    fingerprints = []
-    for i in range(3):
-        probe_key = hashlib.sha1(f"{req.target}-{i}-vlfp".encode()).hexdigest()[:16]
-        rp = safe_get(f"{base}/{probe_key}-nonexistent-zzz", req=req, allow_redirects=False)
-        if rp is None:
-            continue
-        loc = (rp.headers.get("Location", "") or "")[:200]
-        fingerprints.append((rp.status_code, len(rp.content), loc))
+    # If the target uniformly returns 400 (Apache Host-mismatch on some lab
+    # containers), retry with Host: localhost — real customer targets don't
+    # need this fallback because their Host matches the URL.
+    def _probe_set(extra_headers):
+        results = []
+        for i in range(3):
+            probe_key = hashlib.sha1(f"{req.target}-{i}-vlfp".encode()).hexdigest()[:16]
+            rp = safe_get(f"{base}/{probe_key}-nonexistent-zzz",
+                          req=req, headers=extra_headers or {},
+                          allow_redirects=False)
+            if rp is None:
+                continue
+            loc = (rp.headers.get("Location", "") or "")[:200]
+            results.append((rp.status_code, len(rp.content), loc))
+        return results
+
+    headers_used = {}
+    fingerprints = _probe_set(headers_used)
+    if fingerprints and all(s == 400 for s, _, _ in fingerprints):
+        headers_used = {"Host": "localhost"}
+        fingerprints = _probe_set(headers_used)
 
     if not fingerprints:
         return {"ok": False, "found": [], "skipped_reason": f"Could not reach {base}"}
@@ -123,7 +133,8 @@ async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
 
     wordlist = (_AI_PATHS or _COMMON_DIRS)
     for path in wordlist:
-        r = safe_get(f"{base}/{path}", req=req, allow_redirects=False)
+        r = safe_get(f"{base}/{path}", req=req,
+                     headers=headers_used or {}, allow_redirects=False)
         if r is None:
             continue
         if r.status_code == 404:
@@ -141,7 +152,8 @@ async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
         "found":             found,
         "tested":            len(wordlist),
         "fingerprint_probes": len(fingerprints),
-        "engine":            "python-fuzz (3-probe soft-404 baseline)",
+        "host_override":     headers_used.get("Host"),
+        "engine":            "python-fuzz (3-probe soft-404 baseline + Host fallback)",
     }
 
 
