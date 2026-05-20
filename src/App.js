@@ -14,6 +14,50 @@ export const getApiUrl = () => {
 export const getAuthToken = () => localStorage.getItem("cyberToken") || "";
 const API = getApiUrl();
 
+// ─── COMPLIANCE_MAP — CWE → 8 compliance framework controls ───────────
+const COMPLIANCE_MAP = {
+  "CWE-79":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-89":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-94":   ["6.2.4","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-352":  ["6.2.4","CC6.1","A.5.15","AC-3","164.312(a)","Art. 32","PR.AC-4","5.4"],
+  "CWE-1021": ["6.4.3","CC6.6","A.8.23","SC-7","164.312(e)","Art. 32","PR.DS-2","9.7"],
+  "CWE-200":  ["3.4.1","CC6.1","A.5.10","AC-21","164.312(b)","Art. 32","PR.DS-5","3.13"],
+  "CWE-319":  ["4.2.1","CC6.7","A.8.24","SC-8 / SC-13","164.312(e)(1)","Art. 32","PR.DS-2","3.10"],
+  "CWE-942":  ["6.2.4 / 6.4.1","CC6.6","A.8.23","SC-7","164.312(e)","Art. 32","PR.AC-5","12.2"],
+  "CWE-639":  ["7.2 / 8.2.5","CC6.1","A.5.15","AC-3","164.312(a)","Art. 32","PR.AC-4","6.7"],
+  "CWE-444":  ["6.2.4","CC6.6","A.8.21","SI-3","164.312(c)","Art. 32","PR.PT-3","16.10"],
+  "CWE-538":  ["2.2.7 / 6.4.1","CC6.1","A.5.10","CM-7","164.312(b)","Art. 32","PR.IP-1","4.1"],
+  "CWE-693":  ["6.2.4","CC6.6","A.8.23","SC-7","164.312(c)","Art. 32","PR.PT-4","9.7"],
+  "CWE-650":  ["6.2.4","CC6.1","A.8.21","CM-7","164.312(c)","Art. 32","PR.PT-3","4.8"],
+  "CWE-1004": ["8.3.10","CC6.7","A.8.5","AC-12","164.312(a)","Art. 32","PR.AC-7","6.3"],
+  "CWE-614":  ["4.2.1 / 8.3.10","CC6.7","A.8.5","SC-23","164.312(e)","Art. 32","PR.DS-2","3.10"],
+  "CWE-601":  ["6.2.4","CC6.6","A.8.21","SI-10","164.312(c)","Art. 32","PR.PT-3","16.10"],
+  "CWE-918":  ["6.2.4","CC6.6","A.8.23","SC-7","164.312(c)","Art. 32","PR.AC-5","12.2"],
+  "CWE-611":  ["6.2.4","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-78":   ["6.2.4","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-22":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-434":  ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-502":  ["6.2.4","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
+  "CWE-287":  ["7.2 / 8.2","CC6.1","A.5.15","IA-2","164.312(a)","Art. 32","PR.AC-1","6.7"],
+  "CWE-307":  ["8.3.4","CC6.1","A.5.17","AC-7","164.312(a)","Art. 32","PR.AC-7","6.5"],
+  "CWE-384":  ["8.3.10","CC6.7","A.5.15","AC-12","164.312(a)","Art. 32","PR.AC-7","6.3"],
+  "CWE-1275": ["8.3.10","CC6.7","A.8.5","AC-12","164.312(a)","Art. 32","PR.AC-7","6.3"],
+  "CWE-16":   ["2.2.4","CC6.6","A.8.9","CM-6","164.312(c)","Art. 32","PR.IP-1","4.1"],
+  "CWE-613":  ["8.3.10","CC6.7","A.5.15","AC-12","164.312(a)","Art. 32","PR.AC-7","6.3"],
+  "CWE-749":  ["6.2.4","CC6.1","A.8.21","CM-7","164.312(c)","Art. 32","PR.PT-3","4.8"],
+  "CWE-668":  ["1.4.4 / 2.2.4","CC6.1","A.8.20","CM-7","164.308(a)","Art. 32","PR.AC-5","4.4"],
+};
+const COMPLIANCE_FRAMEWORKS = [
+  {name:"PCI-DSS v4.0",       blurb:"Payment Card Industry — Req 6/8",          idx:0},
+  {name:"SOC 2 (Trust Services)", blurb:"AICPA Common Criteria — CC6",          idx:1},
+  {name:"ISO 27001:2022",     blurb:"Annex A.5/8/14 (Org, People, Tech)",       idx:2},
+  {name:"NIST 800-53 Rev 5",  blurb:"US federal controls — SI/SC/AC/IA",        idx:3},
+  {name:"HIPAA Security Rule",blurb:"45 CFR 164.308/312",                       idx:4},
+  {name:"GDPR",               blurb:"Art. 32 (security), 25 (by-design), 33",  idx:5},
+  {name:"NIST CSF 2.0",       blurb:"IDENTIFY/PROTECT/DETECT/RESPOND",          idx:6},
+  {name:"CIS Controls v8",    blurb:"18 critical controls",                     idx:7},
+];
+
 // PDF filename helpers — used by all report generators
 const _pdfFn = t => (t||"target").replace(/https?:\/\//,"").replace(/[^a-zA-Z0-9.\-]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"");
 const _pdfDt = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`; };

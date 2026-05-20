@@ -143,6 +143,17 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
             info["params"].add(p)
             discovered_params.add(p)
 
+    # Host-header pre-flight: lab Apache/Tomcat vhosts reject Host:
+    # container-hostname with 400. Detect + switch Playwright to Host: localhost.
+    extra_headers = {}
+    try:
+        import requests as _requests
+        _r = _requests.get(target_url, timeout=5, allow_redirects=False)
+        if _r.status_code == 400:
+            extra_headers["Host"] = "localhost"
+    except Exception:
+        pass
+
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(
@@ -153,6 +164,7 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
                 user_agent=VULNUSLAB_UA,
                 ignore_https_errors=True,
                 viewport={"width": 1280, "height": 800},
+                extra_http_headers=extra_headers,
             )
             page = await context.new_page()
 
