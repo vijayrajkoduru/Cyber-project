@@ -7918,6 +7918,22 @@ function ReconModule({token, onRunningChange}) {
         </div>
       </div>
 
+      {/* Badge Legend — explains the tile status colors */}
+      <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,flexWrap:"wrap",marginBottom:10}}>
+        <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
+        {[
+          {label:"DATA",       color:"#4ade80", bg:"#052e16", desc:"Tool returned findings"},
+          {label:"EMPTY",      color:"#94a3b8", bg:"#0f172a", desc:"Ran cleanly — no data for this target"},
+          {label:"SKIPPED",    color:"#fb923c", bg:"#1c0a00", desc:"Not applicable for this target"},
+          {label:"ERROR",      color:"#f87171", bg:"#1c0000", desc:"Tool had a problem"},
+        ].map((b,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:5}}>
+            <span style={{background:b.bg,border:`1px solid ${b.color}`,color:b.color,fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:4,letterSpacing:0.5}}>{b.label}</span>
+            <span style={{fontSize:11,color:"#64748b"}}>{b.desc}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Phase selector */}
       <div style={{background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,padding:14,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
