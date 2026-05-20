@@ -51,10 +51,15 @@ async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
     async def _fetch(session, url):
         try:
             h = {"User-Agent": "Mozilla/5.0 VulnusLab", **extra_headers}
-            async with session.get(url,
-                                   timeout=_aiohttp_crawl.ClientTimeout(total=6),
-                                   allow_redirects=True,
-                                   headers=h) as r:
+            # aiohttp auto-generates Host from URL — if we set a custom Host
+            # we MUST also pass skip_auto_headers, otherwise aiohttp raises
+            # ValueError("Header value is invalid") and the fetch silently
+            # returns None.
+            kwargs = dict(timeout=_aiohttp_crawl.ClientTimeout(total=6),
+                          allow_redirects=True, headers=h)
+            if "Host" in extra_headers:
+                kwargs["skip_auto_headers"] = ["Host"]
+            async with session.get(url, **kwargs) as r:
                 text = await r.text()
                 return r.status, text
         except Exception:
