@@ -10495,78 +10495,7 @@ function VulnModule(props) {
             attaches the captured session to every scanner request.
             Without this, ~70% of real vulns (IDOR, priv-esc, mass
             assignment, stored XSS in profiles, etc.) stay invisible. */}
-        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
-          <div onClick={()=>setAuthOpen(o=>!o)}
-            style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
-              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
-              <span style={{fontSize:10,color:"#64748b"}}>— finds IDOR, priv-esc, mass-assignment, stored XSS</span>
-            </div>
-            {authStatus==="ok"  && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
-            {authStatus==="fail"&& <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
-          </div>
-          {authOpen && (
-            <div style={{padding:"4px 12px 12px",borderTop:"1px solid #1e293b"}}>
-              <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
-                <span style={{fontSize:11,color:"#94a3b8"}}>Auth type:</span>
-                {["form","basic","bearer"].map(t=>(
-                  <button key={t} onClick={()=>{setAuthType(t); setAuthStatus(null); setAuthCookie(""); setAuthBearer("");}}
-                    style={{background:authType===t?"#1e3a8a":"#0f172a",border:"1px solid "+(authType===t?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 10px",color:authType===t?"#93c5fd":"#94a3b8",fontSize:10,fontWeight:600,cursor:"pointer"}}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-              {authType==="form" && (
-                <>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
-                      placeholder="Login URL (e.g. /login)"
-                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
-                    <input value={loginSuccessUrl} onChange={e=>setLoginSuccessUrl(e.target.value)}
-                      placeholder="Post-login URL to verify (e.g. /dashboard)"
-                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
-                      placeholder="Username / email"
-                      autoComplete="off"
-                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
-                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
-                      type="password" placeholder="Password" autoComplete="off"
-                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <input value={loginUserField} onChange={e=>setLoginUserField(e.target.value)}
-                      placeholder="(optional) username field name"
-                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}/>
-                    <input value={loginPassField} onChange={e=>setLoginPassField(e.target.value)}
-                      placeholder="(optional) password field name"
-                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}/>
-                  </div>
-                </>
-              )}
-              {authType==="basic" && (
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
-                    placeholder="Username" autoComplete="off"
-                    style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
-                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
-                    type="password" placeholder="Password" autoComplete="off"
-                    style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
-                </div>
-              )}
-              {authType==="bearer" && (
-                <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)}
-                  placeholder="Paste bearer token (JWT or API key)" autoComplete="off"
-                  style={{width:"100%",boxSizing:"border-box",background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
-              )}
-              <div style={{fontSize:10,color:"#64748b",marginTop:6}}>
-                Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.
-              </div>
-            </div>
-          )}
-        </div>
+        
 
         
 
