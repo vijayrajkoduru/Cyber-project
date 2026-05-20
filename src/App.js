@@ -2545,7 +2545,7 @@ function WebAppModule(props) {
       setDone(p => [...p.filter(x => x !== i), i]);
       add("✓ " + ph.name + " complete");
     } catch(e) {
-      const msg = e.message || "unknown error";
+      const msg = e.message || "unknown error (check backend logs)";
       // Save error to allResults so the tile's Details panel can render it.
       const suggested_action =
         msg.includes("404") ? "Endpoint missing from backend." :
@@ -6296,7 +6296,7 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
     if (!d) return {...p, status:"NOT RUN",  detail:"Phase tile was deselected before this scan"};
-    if (d._failed) return {...p, status:"FAILED", detail:String(d.error||"unknown error").substring(0,90)};
+    if (d._failed) return {...p, status:"FAILED", detail:String(d.error||d.detail||d.suggested_action||d.message||"unknown error (no detail returned by scanner)").substring(0,90)};
     if (d._skipped) return {...p, status:"SKIPPED",detail:String(d.skipped_reason||"skipped").substring(0,90)};
     if (d.skipped_reason) return {...p, status:"SKIPPED",detail:String(d.skipped_reason).substring(0,90)};
     if (p.isEmpty(d)) return {...p, status:"EMPTY",  detail:"Ran successfully — target returned no data for this check"};
@@ -10449,7 +10449,7 @@ function VulnModule(props) {
         // render FAILED with reason — NOT a silent "not run" omission.
         // (User directive: "no silent skipping. everything has to be in
         // the report under the tool.")
-        const msg = e.message || "unknown error";
+        const msg = e.message || "unknown error (check backend logs)";
         results[ph.tool] = {ok:false, _failed:true, error:msg};
         setAllResults({...results});
         add(`[✗] ${ph.name}: ${msg}`);
