@@ -27,6 +27,18 @@ from fastapi import APIRouter, Depends
 
 router = APIRouter()
 
+# === GOBUSTER-AI-WORDLIST-V2 ===
+import pathlib as _pl
+_AI_PATHS = None
+try:
+    _p = _pl.Path(__file__).resolve().parent.parent / "_payloads" / "recon" / "consolidated_paths.txt"
+    if _p.exists():
+        _AI_PATHS = [ln.strip() for ln in _p.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")]
+except Exception:
+    _AI_PATHS = None
+# === /GOBUSTER-AI-WORDLIST-V2 ===
+
+
 _COMMON_DIRS = [
     "admin","administrator","admin.php","admin/login","admin/index","login","login.php","signin",
     "cpanel","wp-admin","wp-login.php","phpmyadmin","pma","adminer","myadmin","manage","management","manager",
@@ -86,17 +98,51 @@ _COMMON_DIRS = [
 async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     found = []
-    baseline = safe_get(f"{base}/{hashlib.sha1(req.target.encode()).hexdigest()[:12]}-404probe", req=req)
-    if baseline is None:
+
+    # Build soft-404 fingerprint from 3 randomized non-existent paths.
+    # Each fingerprint entry is (status, content_length, Location_header_prefix).
+    # A real hit must differ from ALL entries on at least one axis — this
+    # handles both 404 catch-alls AND 302-to-login catch-alls (DVWA, WordPress, etc).
+    fingerprints = []
+    for i in range(3):
+        probe_key = hashlib.sha1(f"{req.target}-{i}-vlfp".encode()).hexdigest()[:16]
+        rp = safe_get(f"{base}/{probe_key}-nonexistent-zzz", req=req, allow_redirects=False)
+        if rp is None:
+            continue
+        loc = (rp.headers.get("Location", "") or "")[:200]
+        fingerprints.append((rp.status_code, len(rp.content), loc))
+
+    if not fingerprints:
         return {"ok": False, "found": [], "skipped_reason": f"Could not reach {base}"}
-    bs, bl = baseline.status_code, len(baseline.content)
-    for path in _COMMON_DIRS:
+
+    def _is_soft_404(status, length, loc):
+        for fs, fl, floc in fingerprints:
+            if status == fs and abs(length - fl) < 96 and loc == floc:
+                return True
+        return False
+
+    wordlist = (_AI_PATHS or _COMMON_DIRS)
+    for path in wordlist:
         r = safe_get(f"{base}/{path}", req=req, allow_redirects=False)
         if r is None:
             continue
-        if r.status_code != 404 and (r.status_code != bs or abs(len(r.content) - bl) > 64):
-            found.append({"path": "/" + path, "status": r.status_code, "length": len(r.content)})
-    return {"ok": True, "found": found, "engine": "python-fuzz"}
+        if r.status_code == 404:
+            continue
+        loc = (r.headers.get("Location", "") or "")[:200]
+        if _is_soft_404(r.status_code, len(r.content), loc):
+            continue
+        hit = {"path": "/" + path, "status": r.status_code, "length": len(r.content)}
+        if loc:
+            hit["redirect_to"] = loc
+        found.append(hit)
+
+    return {
+        "ok":                True,
+        "found":             found,
+        "tested":            len(wordlist),
+        "fingerprint_probes": len(fingerprints),
+        "engine":            "python-fuzz (3-probe soft-404 baseline)",
+    }
 
 
 def register(app):
