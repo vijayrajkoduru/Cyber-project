@@ -726,7 +726,7 @@ function generatePDF(reportData) {
     txt("PENETRATION TEST REPORT",pageW/2,y,18,DARK,true,"center"); y+=10;
 
     // Info table on cover
-    const irows=[["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Prepared By","__REPORTER__"]];
+    const irows=[["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Authenticated", (reportData && reportData.authenticated) ? "Yes - scanned with captured session" : "No - public surface only"],["Prepared By","__REPORTER__"]]; /*PENTEST-AUTH-ROW-V3-REAL*/
     y = tableHeader(["FIELD","VALUE"],[45,135],y);
     irows.forEach((r,i)=>{
       const rh = r[1]==="__REPORTER__" ? 11 : 7;
@@ -4103,7 +4103,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
   doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
   const coverInfo=[["Target",target||"—"],["Date",new Date().toLocaleDateString()],
     ["Time",new Date().toLocaleTimeString()],["Prepared By","VulnusLab Automated Pentest"],
-    ["Classification","CONFIDENTIAL"],["Report Type","Security Assessment"],["Authenticated", (reportData && reportData.authenticated) ? "Yes - scanned with captured session" : "No - public surface only"]]; /*PENTEST-AUTH-ROW-V2*/
+    ["Classification","CONFIDENTIAL"],["Report Type","Security Assessment"]];
   coverInfo.forEach(([k,v],i)=>{
     doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
     doc.text(k+":",M+4,128+i*7);
