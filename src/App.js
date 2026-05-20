@@ -7820,7 +7820,7 @@ function ReconModule({token, onRunningChange}) {
                           target, login_url: loginUrl,
                           username: loginUser, password: loginPass,
                           auth_type: "form",
-                        }, token);
+                        }, token, { timeoutMs: 35000, signal: (window.__loginAbort = new AbortController()).signal });
                         const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
                         if (lr && (lr.login_verified || _got)) {
                           // COOKIE-PRAGMATIC-V1 — if we got a session cookie/bearer, USE IT
