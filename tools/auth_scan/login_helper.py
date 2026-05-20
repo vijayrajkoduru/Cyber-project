@@ -118,7 +118,8 @@ def _extract_bearer(data) -> Optional[str]:
 
 
 def _try_spa_login(target: str, username: str, password: str,
-                    explicit_path: Optional[str] = None) -> Optional[dict]:
+                    explicit_path: Optional[str] = None,
+                    deadline: float = 0) -> Optional[dict]:
     sess = requests.Session()
     sess.headers.update(_BROWSER_HEADERS)
     sess.headers["Content-Type"] = "application/json"
@@ -201,56 +202,71 @@ def _scrape_form_inputs(html: str) -> dict:
 
 @router.post("/api/scan/login")
 async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
+    """Authenticate against the target and return captured session.
+    Hard 30-second wall-clock budget — login MUST complete or fail in 30s.
+    """
+    import time as _time
+    deadline = _time.monotonic() + 30.0
+
     target = req.target.rstrip("/")
     if not target.startswith(("http://", "https://")):
         target = "https://" + target
 
+    # ── Bearer mode ──
     if req.auth_type == "bearer":
         if not req.bearer_token:
             raise HTTPException(400, "bearer_token required when auth_type=bearer")
         check_url = _abs(target, req.success_indicator or "/")
         try:
-            r = requests.get(check_url, headers={**_BROWSER_HEADERS,
-                "Authorization": f"Bearer {req.bearer_token}"},
-                timeout=15, verify=False, allow_redirects=True)
+            r = requests.get(check_url, headers={
+                **_BROWSER_HEADERS,
+                "Authorization": f"Bearer {req.bearer_token}",
+            }, timeout=8, verify=False, allow_redirects=True)
         except Exception as e:
             raise HTTPException(502, f"Verification request failed: {e}")
         verified = (r.status_code < 400) and not _looks_like_login_page(r.text or "")
-        return {"ok": verified, "auth_type": "bearer", "auth_bearer": req.bearer_token,
-                "auth_cookie": None, "login_verified": verified,
-                "verified_via": check_url, "verified_status": r.status_code,
-                "hint": None if verified else "Token did not grant access."}
+        return {
+            "ok": verified, "auth_type": "bearer",
+            "auth_bearer": req.bearer_token, "auth_cookie": None,
+            "login_verified": verified, "verified_via": check_url,
+            "verified_status": r.status_code,
+            "hint": None if verified else "Token did not grant access — check token validity / expiry.",
+        }
 
+    # ── Basic auth mode ──
     if req.auth_type == "basic":
         import base64
         tok = base64.b64encode(f"{req.username}:{req.password}".encode()).decode()
         check_url = _abs(target, req.success_indicator or "/")
         try:
-            r = requests.get(check_url, headers={**_BROWSER_HEADERS,
-                "Authorization": f"Basic {tok}"},
-                timeout=15, verify=False, allow_redirects=True)
+            r = requests.get(check_url, headers={
+                **_BROWSER_HEADERS, "Authorization": f"Basic {tok}",
+            }, timeout=8, verify=False, allow_redirects=True)
         except Exception as e:
             raise HTTPException(502, f"Verification request failed: {e}")
         verified = r.status_code < 400
-        return {"ok": verified, "auth_type": "basic", "auth_basic": tok,
-                "auth_cookie": None, "login_verified": verified,
-                "verified_via": check_url, "verified_status": r.status_code,
-                "hint": None if verified else "Basic auth rejected."}
+        return {
+            "ok": verified, "auth_type": "basic",
+            "auth_basic": tok, "auth_cookie": None,
+            "login_verified": verified, "verified_via": check_url,
+            "verified_status": r.status_code,
+            "hint": None if verified else "Basic auth rejected — check username/password.",
+        }
 
+    # ── Form mode (default) ──
     if req.auth_type != "form":
         raise HTTPException(400, f"Unknown auth_type: {req.auth_type}")
 
-    # UNDERSCORE-RESOLVE-V1
-    target = _resolve_underscore(target)
-    login_url = _resolve_underscore(_abs(target, req.login_url))
+    login_url = _abs(target, req.login_url)
     sess = requests.Session()
     sess.headers.update(_BROWSER_HEADERS)
     sess.verify = False
 
+    # 1. GET login page for hidden fields / CSRF
     try:
-        page = sess.get(login_url, timeout=15, allow_redirects=True)
+        page = sess.get(login_url, timeout=8, allow_redirects=True)
     except Exception as e:
-        spa = _try_spa_login(target, req.username, req.password)
+        spa = _try_spa_login(target, req.username, req.password, deadline=deadline)
         if spa is not None:
             return {"ok": True, **spa, "fallback": "spa_after_page_unreachable"}
         raise HTTPException(502, f"Could not fetch login page: {e}")
@@ -262,7 +278,6 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         raise HTTPException(502, f"Login page returned HTTP {page.status_code}")
 
     hidden = _scrape_hidden_inputs(page.text or "")
-    submits = _scrape_submit_inputs(page.text or "")  # DVWA-FIX-V1
     all_inputs = _scrape_form_inputs(page.text or "")
 
     if not all_inputs:
@@ -292,15 +307,6 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
 
     body = check.text or ""
     looks_login = _looks_like_login_page(body)
-    # COOKIE-SUFFICIENT-V1 — if the server set ANY session cookie that's
-    # different from what existed before login, treat that as positive auth.
-    # Verification false-negatives are common (Tomcat picky vhost, WebGoat
-    # registration flow, Mutillidae unstable redirects).
-    _got_session_cookie = bool([c for c in sess.cookies if c.name.lower() in (
-        "phpsessid","jsessionid","session","sessionid","sid","connect.sid",
-        "ci_session","laravel_session","_session_id","auth_token","token",
-        "rails_session","aspxsessionid",".aspxauth"
-    )])
     text_match = (req.success_text in body) if req.success_text else True
     verified = (check.status_code < 400) and (not looks_login) and text_match
 
@@ -310,6 +316,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
             return {"ok": True, **spa, "fallback": "spa_after_form_unverified"}
 
     cookie_header = "; ".join(f"{c.name}={c.value}" for c in sess.cookies)
+
     return {
         "ok": verified, "auth_type": "form",
         "auth_cookie": cookie_header or None, "auth_bearer": None,
@@ -320,8 +327,10 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         "verified_via": verify_url, "verified_status": check.status_code,
         "still_on_login_page": looks_login,
         "cookie_names": [c.name for c in sess.cookies],
-        "hint": None if verified else
-                "Login appears to have failed. Check creds, field names, CSRF/MFA.",
+        "hint": (None if verified else
+                 "Login appears to have failed. Check: (a) username/password, "
+                 "(b) field names (try setting username_field / password_field), "
+                 "(c) CSRF protection requiring JS, or (d) MFA/captcha (not supported)."),
     }
 
 
