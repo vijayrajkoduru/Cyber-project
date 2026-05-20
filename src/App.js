@@ -2936,7 +2936,6 @@ function WebAppModule(props) {
               📋 Wordlist {customWordlist?`(${customWordlist.length})`:""}
               <input type="file" accept=".txt" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const lines=ev.target.result.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);setCustomWordlist(lines);};r.readAsText(f);}}/>
             </label>
-            {customWordlist && <button onClick={()=>setCustomWordlist(null)} style={{background:"none",border:"none",color:"#ef4444",fontSize:10,cursor:"pointer"}}>✕ clear</button>}
           </div>
           {showHistory && targetHistory.length>0 && (
             <div style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
