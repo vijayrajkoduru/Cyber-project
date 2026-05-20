@@ -55,10 +55,10 @@ async def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
 
     target = web_url(req.target)
     cmd = [_which(), "-target", target, "-jsonl",
-           "-severity", "medium,high,critical",
+           "-severity", "high,critical", "-tags", "exposure,cve,misconfig",
            "-exclude-tags", "dos,intrusive,fuzz",
            "-disable-update-check",
-           "-rate-limit", "30",
+           "-rate-limit", "50",
            "-timeout", "10",
            "-stats=false", "-silent", "-no-color"]
 
@@ -68,7 +68,7 @@ async def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
         cmd.extend(["-H", f"Cookie: {req.auth_cookie}"])
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         return standard_response(tool="nuclei", target=req.target, findings=[],
             tests_performed=0, vulnerable=False,

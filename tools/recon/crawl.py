@@ -42,15 +42,25 @@ async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
     pages = []
     interesting = set()
 
+    # CRAWL-AUTH-V1 — honor auth_cookie / auth_bearer so BFS walks behind-login URLs
+    _crawl_headers = {"User-Agent": "Mozilla/5.0 VulnusLab"}
+    if getattr(req, "auth_cookie", None):
+        _crawl_headers["Cookie"] = req.auth_cookie
+    if getattr(req, "auth_bearer", None):
+        _crawl_headers["Authorization"] = f"Bearer {req.auth_bearer}"
+
+    # CRAWL-ERR-V1 — record exception types so failures aren't silent
+    errors = []
     async def _fetch(session, url):
         try:
             async with session.get(url,
                                    timeout=_aiohttp_crawl.ClientTimeout(total=6),
                                    allow_redirects=True,
-                                   headers={"User-Agent": "Mozilla/5.0 VulnusLab"}) as r:
+                                   headers=_crawl_headers) as r:
                 text = await r.text()
                 return r.status, text
-        except Exception:
+        except Exception as e:
+            errors.append({"url": url, "error": f"{type(e).__name__}: {str(e)[:120]}"})
             return None, None
 
     async with _aiohttp_crawl.ClientSession() as session:
@@ -84,6 +94,11 @@ async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
                         except Exception:
                             continue
 
+    # CRAWL-ERR-V1 — surface fetch failures so the UI doesn't show "unknown error"
+    err_summary = {}
+    for e in errors[:200]:
+        k = e["error"].split(":")[0]
+        err_summary[k] = err_summary.get(k, 0) + 1
     return {
         "ok": True,
         "urls": [p["url"] for p in pages],
@@ -93,6 +108,9 @@ async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
         "interesting_total": len(interesting),
         "depth_reached": max((p["depth"] for p in pages), default=0),
         "engine": f"pure-Python BFS crawler (depth {MAX_DEPTH}, parallel async, same-origin)",
+        "fetch_errors":      len(errors),
+        "fetch_error_types": err_summary,
+        "fetch_error_sample": errors[:5],
     }
 
 

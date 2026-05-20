@@ -34,7 +34,7 @@ RUN apt-get update -q -o Acquire::Retries=3 \
  && chmod +x /usr/local/bin/nuclei \
  && rm -rf /tmp/nuclei* \
  && apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
- && /usr/local/bin/nuclei -update-templates -silent 2>/dev/null || echo "templates download deferred to first scan"
+ && /usr/local/bin/nuclei -update-templates -silent && find /root/nuclei-templates -name "*.yaml" | wc -l
 
 
 # ── SecLists — community wordlists for force-browse, brute force, fuzzing ──

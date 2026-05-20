@@ -175,14 +175,27 @@ const CSS = `
 `;
 
 async function api(path, method, body, token) {
+  // API-TIMEOUT-V2-SCOPED — scan endpoints need long timeouts (Nuclei = 13k templates,
+  // WPScan enumeration, XSS canary fuzzing). Auth/general endpoints stay tight.
   method = method || "GET";
   const headers = { "Content-Type":"application/json" };
   if (token) headers["Authorization"] = "Bearer " + token;
-  const res = await fetch(API + path, {
-    method: method,
-    headers: headers,
-    body: body ? JSON.stringify(body) : null
-  });
+  const isScan = path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/");
+  const timeoutMs = isScan ? 300000 : 30000;  // 5 min for scans, 30s otherwise
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(API + path, {
+      method: method, headers: headers, signal: ctrl.signal,
+      body: body ? JSON.stringify(body) : null
+    });
+  } catch(e) {
+    clearTimeout(t);
+    if (e.name === "AbortError") throw new Error("Request timed out after " + Math.round(timeoutMs/1000) + "s on " + path);
+    throw new Error("Network error on " + path + ": " + (e.message || e));
+  }
+  clearTimeout(t);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || res.statusText);
@@ -348,7 +361,8 @@ function Login(props) {
               onFocus={()=>setUF(true)} onBlur={()=>setUF(false)}
               onKeyDown={e=>e.key==="Enter"&&submit(e)}
               placeholder="Enter your username"
-              autoComplete="username"
+              autoComplete="off" name="vl-dashboard-username" data-form-type="other"
+              autoCorrect="off" autoCapitalize="off" spellCheck={false} /*LOGIN-NO-AUTOFILL-V1*/
               style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
           </div>
         </div>
@@ -3254,12 +3268,12 @@ function WebAppModule(props) {
                 {isDone ? (isSkipped?"⚠":isFailed?"✗":isSQLi?"✗":"✓") : isActive ? (
                   <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
                 ) : (
-                  <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{String(i+1).padStart(2,"0")}</span>
+                  <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{String(i+1).padStart(2,"0")}</span>
                 )}
               </div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:13,fontWeight:600,color:toolLocked?"#64748b":isDone?"#f1f5f9":isActive?"#93c5fd":"#475569"}}>{ph.name}</span>
+                  <span style={{fontSize:13,fontWeight:600,color:isActive?"#93c5fd":"#f1f5f9"}}>{ph.name}</span>
                   {toolLocked && <span style={{fontSize:10}}>🔒</span>}
                   {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
                   {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="SECURE"     color="green"  size="xs"/>}
@@ -3268,7 +3282,7 @@ function WebAppModule(props) {
                   {isDone && isSkipped && <Badge label="SKIPPED"   color="orange" size="xs"/>}
                   {isDone && isSkipped && <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic",marginLeft:4}}>Not applicable for this target</span>}
                 </div>
-                <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"1px 6px"}}>{ph.tool}</span>
+                <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"1px 6px" /*TILE-CHIP-V1*/}}>{ph.tool}</span>
               </div>
               {isDone && res && (
                 <div style={{textAlign:"right"}}>
@@ -3736,7 +3750,7 @@ function SystemHealth() {
             <div key={name} style={{background:"#020617",border:"1px solid "+(info.available?"#166534":"#7f1d1d"),borderRadius:6,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:12,fontWeight:600,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",marginBottom:2}}>{name}</div>
-                <div style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace"}}>{info.path||"not found"}</div>
+                <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{info.path||"not found"}</div>
               </div>
               <div style={{width:8,height:8,borderRadius:"50%",background:info.available?"#22c55e":"#ef4444",flexShrink:0}}/>
             </div>
@@ -6170,7 +6184,7 @@ function synthesizeReconFindings(r) {
 // ═══════════════════════════════════════════════════════════════
 //  RECON PDF REPORT
 // ═══════════════════════════════════════════════════════════════
-function generateReconReport({target, allResults, date}) {
+function generateReconReport({target, allResults, date, authenticated}) { /*RECON-AUTH-PDF-SIG-V1*/
   const r = allResults || {};
   const _doGen = () => {
   const doc    = new jsPDF({unit:"mm",format:"a4"});
@@ -6216,7 +6230,7 @@ function generateReconReport({target, allResults, date}) {
 
   // Info table
   fillR(margin,y,contentW,8,DARK); txt("FIELD",margin+3,y+5.5,8,WHITE,true); txt("VALUE",margin+55,y+5.5,8,WHITE,true); y+=8;
-  [["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Report Type","Reconnaissance Assessment"]].forEach((row,i)=>{
+  [["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Report Type","Reconnaissance Assessment"],["Authenticated", authenticated ? "Yes - scanned with captured session" : "No - public surface only"]].forEach((row,i)=>{ /*RECON-AUTH-ROW-V1*/
     fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
     txt(row[0],margin+3,y+5.5,8.5,GRAY,true); txt(String(row[1]),margin+55,y+5.5,8.5,DARK); y+=8;
   });
@@ -6253,13 +6267,10 @@ function generateReconReport({target, allResults, date}) {
     {tool:"params",      name:"Parameter Discovery",   isEmpty:d=>!d.params || d.params.length===0},
     {tool:"favicon",     name:"Favicon Fingerprint",   isEmpty:d=>!d.found},
     {tool:"cloudbuckets",name:"Cloud Bucket Finder",   isEmpty:d=>(!d.open_buckets||d.open_buckets.length===0) && (!d.existing_buckets||d.existing_buckets.length===0)},
-    {tool:"secrets",     name:"JS Secret Scanner",     isEmpty:d=>!d.findings || d.findings.length===0},
     {tool:"asn",         name:"ASN / IP Ownership",    isEmpty:d=>!d.asn && !d.ip},
     {tool:"internetdb",  name:"Free Shodan (InternetDB)",isEmpty:d=>!d.found},
     {tool:"cve_match",   name:"CVE Matching (NVD)", isEmpty:d=>!d.summary || (d.summary.total_cves||0)===0},
-    {tool:"subdomain_takeover", name:"Subdomain Takeover", isEmpty:d=>!d.vulnerable || d.vulnerable.length===0},
     {tool:"waf_cdn",     name:"WAF / CDN Fingerprint", isEmpty:d=>!d.detected || d.detected.length===0},
-    {tool:"ssl_deep",    name:"SSL / TLS Deep Scan", isEmpty:d=>!d.vulnerabilities && !d.certificate},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -7265,6 +7276,7 @@ function generateReconReport({target, allResults, date}) {
 // ═══════════════════════════════════════════════════════════════
 //  RECON MODULE
 // ═══════════════════════════════════════════════════════════════
+// RECON-CANON-V2 — pruned 6 vuln/duplicate phases per PTES/NIST 800-115 Recon scope
 const RECON_PHASES = [
   {name:"WHOIS Lookup",          tool:"whois",      endpoint:"/api/recon/whois",      icon:"🌐"},
   {name:"DNS Records",           tool:"dns",        endpoint:"/api/recon/dns",        icon:"🔎"},
@@ -7295,19 +7307,13 @@ const RECON_PHASES = [
   {name:"Parameter Discovery",   tool:"params",     endpoint:"/api/recon/params",     icon:"❓"},
   {name:"Favicon Fingerprint",   tool:"favicon",    endpoint:"/api/recon/favicon",    icon:"🎯"},
   {name:"Cloud Bucket Finder",   tool:"cloudbuckets",endpoint:"/api/recon/cloudbuckets",icon:"☁"},
-  {name:"JS Secret Scanner",     tool:"secrets",    endpoint:"/api/recon/secrets",    icon:"🔑"},
   {name:"ASN / IP Ownership",    tool:"asn",        endpoint:"/api/recon/asn",        icon:"🌐"},
   // Free Shodan alternative — InternetDB API requires NO API key, so every
   // customer gets Shodan-equivalent CVE + port + tag intel for any internet-
   // resolvable target. Pairs with the keyed Shodan tile above.
   {name:"Free Shodan (InternetDB)",tool:"internetdb",endpoint:"/api/recon/internetdb",icon:"🆓"},
   {name:"CVE Matching (NVD)",     tool:"cve_match", endpoint:"/api/recon/cve_match",  icon:"🚨"},
-  {name:"Subdomain Takeover",     tool:"subdomain_takeover", endpoint:"/api/recon/subdomain_takeover", icon:"🎯"},
   {name:"WAF / CDN Fingerprint",  tool:"waf_cdn",   endpoint:"/api/recon/waf_cdn",    icon:"🛡️"},
-  {name:"SSL / TLS Deep Scan",    tool:"ssl_deep",  endpoint:"/api/recon/ssl_deep",   icon:"🔐"},
-  {name:"Email Security",     tool:"email_audit",    endpoint:"/api/recon/email_audit",   icon:"✉️"},
-  {name:"WAF/CDN Detect",     tool:"waf_detect",    endpoint:"/api/recon/waf_detect",   icon:"🛡️"},
-  {name:"Subdomain Takeover",     tool:"takeover_check",    endpoint:"/api/recon/takeover_check",   icon:"🎯"}
 ];
 
 function ReconModule({token, onRunningChange}) {
@@ -7506,7 +7512,7 @@ function ReconModule({token, onRunningChange}) {
                   </div>
                   <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.4,marginBottom:6}}>{f.description}</div>
                   {f.evidence && (
-                    <div style={{fontSize:10,color:"#64748b",fontFamily:"JetBrains Mono,monospace",marginBottom:4}}>
+                    <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",marginBottom:4}}>
                       <span style={{color:"#94a3b8",fontWeight:700}}>Evidence: </span>{f.evidence}
                     </div>
                   )}
@@ -7772,7 +7778,7 @@ function ReconModule({token, onRunningChange}) {
   };
 
   // ── PDF export ─────────────────────────────────────────────────
-  const dlReconPDF = () => generateReconReport({target, allResults, date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})});
+  const dlReconPDF = () => generateReconReport({target, allResults, authenticated:!!(authCookie||authBearer), date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}) /*RECON-AUTH-PDF-FLAG-V1*/+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})});
 
   return (
     <div className="fade">
@@ -7790,11 +7796,32 @@ function ReconModule({token, onRunningChange}) {
         </p>
 
         {/* Target + controls */}
-        <TestTargets onSelect={setTarget} targets={[
-          {icon:"📡",label:"Scanme (nmap)",       value:"scanme.nmap.org",      desc:"nmap test server — safe to scan"},
-          {icon:"💀",label:"Metasploitable",      value:"lab_metasploitable",   desc:"🟢 Live Docker — many open ports"},
-          {icon:"🌐",label:"example.com",         value:"example.com",          desc:"IANA test domain — public WHOIS/DNS"},
-          {icon:"🔍",label:"google.com",          value:"google.com",           desc:"Demo target — full report"},
+        {/* RECON-TT-AUTH-V1 — auth-aware test targets; clicking a lab pre-fills creds */}
+        <TestTargets onSelect={async (t, lab) => {
+          setTarget(t);
+          const LAB_CREDS = {
+            dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",             pass: "password" },
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "guest",             pass: "guest"    },
+            juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                      user: "admin@juice-sh.op", pass: "admin123" },
+            mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",             pass: "admin"     /*FIX-V1: was adminpass*/},
+            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",               pass: "bug"      },
+          };
+          const creds = lab && LAB_CREDS[lab];
+          if (creds) {
+            setLoginUrl(creds.url);
+            setLoginUser(creds.user);
+            setLoginPass(creds.pass);
+            setAuthOpen(true);
+          }
+        }} targets={[
+          {icon:"📡",label:"Scanme (nmap)",       value:"scanme.nmap.org",                desc:"nmap test server — safe public baseline",                lab:null},
+          {icon:"💀",label:"Metasploitable",      value:"lab_metasploitable",             desc:"🟢 Live Docker — old services + many CVEs",              lab:null},
+          {icon:"🏠",label:"DVWA",                value:"http://lab_dvwa/dvwa",            desc:"🟢 Apache 2.4 + PHP + /vulnerabilities/*",                lab:"dvwa"},
+          {icon:"🐐",label:"WebGoat",             value:"http://lab_webgoat:8080/WebGoat", desc:"🟢 Tomcat + huge path tree + JS endpoints",              lab:"webgoat"},
+          {icon:"🧃",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"🟢 Node/Express + /rest/* API + JS bundle",              lab:"juiceshop"},
+          {icon:"🐙",label:"Mutillidae",          value:"http://lab_mutillidae",           desc:"🟢 PHP + many paths + LFI/SQLi probes",                  lab:"mutillidae"},
+          {icon:"🐞",label:"bWAPP",               value:"http://lab_bwapp/bWAPP/",         desc:"🟢 Apache + PHP + 100+ vulns",                            lab:"bwapp"},
+          {icon:"🌐",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",       desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
         <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
@@ -7845,7 +7872,10 @@ function ReconModule({token, onRunningChange}) {
                           username: loginUser, password: loginPass,
                           auth_type: "form",
                         }, token);
-                        if (lr && lr.login_verified) {
+                        const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
+                        if (lr && (lr.login_verified || _got)) {
+                          // COOKIE-PRAGMATIC-V1 — if we got a session cookie/bearer, USE IT
+                          // even if verification was uncertain (Tomcat/WebGoat false-negatives)
                           setAuthCookie(lr.auth_cookie || "");
                           if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
                           setAuthStatus("ok");
@@ -7865,10 +7895,10 @@ function ReconModule({token, onRunningChange}) {
                     style={{background:rAutoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
                     {rAutoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
                   </button>
-                  {rAutoLoginStatus==="ok" && (
+                  {rAutoLoginStatus && rAutoLoginStatus.startsWith("ok") && (
                     <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured</span>
                   )}
-                  {rAutoLoginStatus && rAutoLoginStatus!=="ok" && (
+                  {rAutoLoginStatus && !rAutoLoginStatus.startsWith("ok") && (
                     <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {rAutoLoginStatus}</span>
                   )}
                 </div>
@@ -7939,8 +7969,8 @@ function ReconModule({token, onRunningChange}) {
               <div key={i} onClick={()=>!running&&togglePhase(i)}
                 style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`4px solid ${leftCol}`,borderRadius:6,padding:"10px 16px",display:"flex",alignItems:"center",gap:12,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.4,transition:"all 0.2s",boxSizing:"border-box"}}>
                 <span style={{fontSize:18,flexShrink:0,width:24,textAlign:"center"}}>{ph.icon}</span>
-                <span style={{flex:1,fontSize:13,fontWeight:600,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#cbd5e1":"#64748b"}}>{ph.name}</span>
-                <span style={{fontSize:10,color:"#334155",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"2px 8px"}}>{ph.tool}</span>
+                <span style={{flex:1,fontSize:13,fontWeight:600,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#f1f5f9":"#64748b"}}>{ph.name}</span>
+                <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"2px 8px"}}>{ph.tool}</span>
                 {isActive && <span style={{fontSize:10,color:"#93c5fd",fontWeight:600,minWidth:60,textAlign:"right"}}>Running…</span>}
                 {isDone && <span style={{fontSize:14,color:isFailed?"#f87171":"#4ade80",fontWeight:700,minWidth:60,textAlign:"right"}}>{isFailed?"✗ ERROR":"✓ DONE"}</span>}
               </div>
@@ -8134,7 +8164,7 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
 // ═══════════════════════════════════════════════════════════════
 //  VULNERABILITY SCAN PDF REPORT
 // ═══════════════════════════════════════════════════════════════
-function generateVulnReport({target, allResults, date}) {
+function generateVulnReport({target, allResults, date, authenticated}) { /*VULN-AUTH-PDF-SIG-V1*/
   const r = allResults || {};
   const _doGen = () => {
     const doc = new jsPDF({unit:"mm",format:"a4"});
@@ -8177,7 +8207,7 @@ function generateVulnReport({target, allResults, date}) {
     txt("Web Application Security Assessment",pageW/2,y,10,GRAY,false,"center"); y+=22;
 
     // Info table
-    const rows=[["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Report Type","Vulnerability Assessment"]];
+    const rows=[["Target",target],["Scan Date",date],["Classification","CONFIDENTIAL"],["Report Type","Vulnerability Assessment"],["Authenticated", authenticated ? "Yes - scanned with captured session" : "No - public surface only"]]; /*VULN-AUTH-ROW-V2*/
     y=tHead(["FIELD","VALUE"],[45,135],y);
     rows.forEach(([f,v],i)=>{fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);txt(f,margin+3,y+5.5,9,GRAY,true);txt(String(v||""),margin+48,y+5.5,9,DARK);y+=8;});
     y+=10;
@@ -10548,7 +10578,7 @@ function VulnModule(props) {
             {running?"Scanning...":"▶ Run All Scans"}
           </button>
           {finished&&(
-            <button onClick={()=>generateVulnReport({target,allResults,date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})})}
+            <button onClick={()=>generateVulnReport({target,allResults,authenticated:!!(authCookie||authBearer),date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})})} /*VULN-AUTH-PDF-FLAG-V1*/
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               📄 Report
             </button>
@@ -10568,11 +10598,11 @@ function VulnModule(props) {
               style={{background:isActive?"#1e3a5f":isDone?"#0f172a":"#0a0f1a",border:`1px solid ${isActive?"#3b82f6":isDone?"#1e293b":"#0f172a"}`,borderRadius:6,padding:"8px 10px",cursor:isDone?"pointer":"default",transition:"all 0.2s"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                 <span style={{fontSize:14}}>{ph.icon}</span>
-                <span style={{fontSize:10,color:isActive?"#60a5fa":isDone?(hi>0?"#f87171":"#4ade80"):"#334155",fontWeight:700}}>
+                <span style={{fontSize:10,color:isActive?"#60a5fa":isDone?(hi>0?"#f87171":"#4ade80"):"#94a3b8",fontWeight:700}}>
                   {isActive?"⟳":isDone?(hi>0?"⚠":"✓"):"○"}
                 </span>
               </div>
-              <div style={{fontSize:10,color:isActive?"#93c5fd":isDone?"#cbd5e1":"#334155",fontWeight:600,lineHeight:1.3}}>{ph.name}</div>
+              <div style={{fontSize:13,color:isActive?"#93c5fd":"#f1f5f9",fontWeight:600,lineHeight:1.3}}>{ph.name}</div>
               {isDone&&findings.length>0&&<div style={{fontSize:9,color:hi>0?"#f87171":"#94a3b8",marginTop:2}}>{findings.length} finding{findings.length!==1?"s":""}</div>}
             </div>
           );

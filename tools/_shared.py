@@ -117,7 +117,18 @@ def safe_request(method: str, url: str, *,
     Returns the requests.Response on success, or None after final
     failure (callers do `if r is None: ...`).
     """
-    h = headers if headers is not None else make_req_headers(req)
+    # Always merge auth from req into explicit headers (AUTH-MERGE-V1).
+    # Previous behaviour: explicit headers={"Origin":...} silently REPLACED
+    # the Cookie/Authorization header set by req — so cors/ssrf/xxe scanners
+    # ran unauthenticated even with a captured session.
+    if headers is not None:
+        h = dict(headers)
+        if req is not None:
+            if getattr(req, "auth_cookie", None): h.setdefault("Cookie", req.auth_cookie)
+            if getattr(req, "auth_bearer", None): h.setdefault("Authorization", f"Bearer {req.auth_bearer}")
+        for k, v in _BROWSER_HEADERS.items(): h.setdefault(k, v)
+    else:
+        h = make_req_headers(req)
     for attempt in range(retries + 1):
         effective_timeout = min(60, int(timeout * (1.5 ** attempt)))
         try:
@@ -153,10 +164,38 @@ def safe_request(method: str, url: str, *,
 
 
 def safe_get(url, **kw):
+    _req = kw.get('req')
+    if _req is not None:
+        _h = dict(kw.get('headers') or {})
+        _ac = getattr(_req, 'auth_cookie', None)
+        _ab = getattr(_req, 'auth_bearer', None)
+        if _ac:
+            _ex = _h.get('Cookie', '')
+            _h['Cookie'] = (_ex.rstrip('; ') + '; ' + _ac) if _ex else _ac
+        if _ab:
+            _h['Authorization'] = f'Bearer {_ab}'
+        if _h:
+            kw['headers'] = _h
+    # AUTH INJECTION END
+
     return safe_request("GET", url, **kw)
 
 
 def safe_post(url, **kw):
+    _req = kw.get('req')
+    if _req is not None:
+        _h = dict(kw.get('headers') or {})
+        _ac = getattr(_req, 'auth_cookie', None)
+        _ab = getattr(_req, 'auth_bearer', None)
+        if _ac:
+            _ex = _h.get('Cookie', '')
+            _h['Cookie'] = (_ex.rstrip('; ') + '; ' + _ac) if _ex else _ac
+        if _ab:
+            _h['Authorization'] = f'Bearer {_ab}'
+        if _h:
+            kw['headers'] = _h
+    # AUTH INJECTION END
+
     return safe_request("POST", url, **kw)
 
 
