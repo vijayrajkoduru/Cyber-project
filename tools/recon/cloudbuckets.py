@@ -18,6 +18,17 @@ import dns.asyncresolver
 import whois as whois_lib
 from fastapi import APIRouter, Depends
 from tools._shared import (
+
+# CLOUDBUCKETS-AI-PATTERNS-V1
+import pathlib as _pl, json as _json
+def _load_ai_patterns():
+    try:
+        f = _pl.Path(__file__).parent.parent / "_payloads" / "recon" / "cloud_bucket_patterns.json"
+        if f.exists(): return _json.loads(f.read_text())
+    except Exception: pass
+    return None
+_AI_BUCKET_PATTERNS = _load_ai_patterns()
+
     ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
 )
 import aiohttp as _aiohttp_crawl
