@@ -2893,10 +2893,10 @@ function WebAppModule(props) {
 
         <TestTargets targets={[
           {label:"DVWA",       value:"http://lab_dvwa",                   color:"#dc2626", lab:"dvwa"},
-          {label:"WebGoat",    value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c", lab:"webgoat"},
+          {label:"WebGoat",    value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c", lab:null},
           {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:"juiceshop"},
           {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
-          {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
+          {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:null},
           {label:"testphp",    value:"http://testphp.vulnweb.com",        color:"#0ea5e9", lab:null},
         ]} onSelect={async (t, lab) => {
           setTarget(t);
@@ -2904,10 +2904,8 @@ function WebAppModule(props) {
           setShowHistory(false);
           const LAB_CREDS = {
             dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",              pass: "password" },
-            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "guest",              pass: "guest"    },
             juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                      user: "admin@juice-sh.op",  pass: "admin123" },
             mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",              pass: "adminpass"},
-            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",                pass: "bug"      },
           };
           const creds = lab && LAB_CREDS[lab];
           if (creds) {
@@ -7801,10 +7799,8 @@ function ReconModule({token, onRunningChange}) {
           setTarget(t);
           const LAB_CREDS = {
             dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",             pass: "password" },
-            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "guest",             pass: "guest"    },
             juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                      user: "admin@juice-sh.op", pass: "admin123" },
             mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",             pass: "admin"     /*FIX-V1: was adminpass*/},
-            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",               pass: "bug"      },
           };
           const creds = lab && LAB_CREDS[lab];
           if (creds) {
@@ -10476,16 +10472,14 @@ function VulnModule(props) {
           setAuthorized(false);
           const LAB_CREDS = {
             dvwa:       { url: "http://lab_dvwa/login.php",                          user: "admin",             pass: "password" },
-            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",              user: "guest",             pass: "guest"    },
             juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                  user: "admin@juice-sh.op", pass: "admin123" },
             mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",     user: "admin",             pass: "adminpass"},
-            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                   user: "bee",               pass: "bug"      },
           };
           const creds = lab && LAB_CREDS[lab];
           if (creds) { setLoginUrl(creds.url); setLoginUser(creds.user); setLoginPass(creds.pass); setAuthOpen(true); }
         }} /*VULN-TT-V2*/ targets={[
           {icon:"🏠",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)", lab:"dvwa"},
-          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)", lab:"webgoat"},
+          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)", lab:null},
           {icon:"🧃",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)", lab:"juiceshop"},
           {icon:"🐙",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)", lab:"mutillidae"},
           {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)", lab:null},
