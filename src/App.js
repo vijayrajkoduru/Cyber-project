@@ -7813,10 +7813,8 @@ function ReconModule({token, onRunningChange}) {
           {icon:"📡",label:"Scanme (nmap)",       value:"scanme.nmap.org",                desc:"nmap test server — safe public baseline",                lab:null},
           {icon:"💀",label:"Metasploitable",      value:"lab_metasploitable",             desc:"🟢 Live Docker — old services + many CVEs",              lab:null},
           {icon:"🏠",label:"DVWA",                value:"http://lab_dvwa/dvwa",            desc:"🟢 Apache 2.4 + PHP + /vulnerabilities/*",                lab:"dvwa"},
-          {icon:"🐐",label:"WebGoat",             value:"http://lab_webgoat:8080/WebGoat", desc:"🟢 Tomcat + huge path tree + JS endpoints",              lab:"webgoat"},
           {icon:"🧃",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"🟢 Node/Express + /rest/* API + JS bundle",              lab:"juiceshop"},
           {icon:"🐙",label:"Mutillidae",          value:"http://lab_mutillidae",           desc:"🟢 PHP + many paths + LFI/SQLi probes",                  lab:"mutillidae"},
-          {icon:"🐞",label:"bWAPP",               value:"http://lab_bwapp/bWAPP/",         desc:"🟢 Apache + PHP + 100+ vulns",                            lab:"bwapp"},
           {icon:"🌐",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",       desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
@@ -8072,10 +8070,8 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
         {/* Controls */}
         <TestTargets onSelect={setTarget} targets={[
           {icon:"🔴",label:"DVWA",          value:"http://lab_dvwa",                    desc:"🟢 Live Docker — SQLi, XSS, CSRF, File Upload, LFI. Login: admin/password"},
-          {icon:"🐐",label:"WebGoat",        value:"http://lab_webgoat:8080/WebGoat",       desc:"🟢 Live Docker — OWASP WebGoat guided lessons"},
           {icon:"🧃",label:"Juice Shop",     value:"http://lab_juiceshop:3000",               desc:"🟢 Live Docker — 100+ challenges. Login: admin@juice-sh.op/admin123"},
           {icon:"🧩",label:"Mutillidae",     value:"http://lab_mutillidae",                  desc:"🟢 Live Docker — SQLi, XXE, CSRF. Login: admin/adminpass"},
-          {icon:"🐛",label:"bWAPP",          value:"http://lab_bwapp/bWAPP/login.php",      desc:"🟢 Live Docker — 100+ bugs. Login: bee/bug"},
           {icon:"🌐",label:"Acunetix TestPHP",value:"http://testphp.vulnweb.com",           desc:"Public test site — safe to scan"},
         ]}/>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -10479,7 +10475,6 @@ function VulnModule(props) {
           if (creds) { setLoginUrl(creds.url); setLoginUser(creds.user); setLoginPass(creds.pass); setAuthOpen(true); }
         }} /*VULN-TT-V2*/ targets={[
           {icon:"🏠",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)", lab:"dvwa"},
-          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)", lab:null},
           {icon:"🧃",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)", lab:"juiceshop"},
           {icon:"🐙",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)", lab:"mutillidae"},
           {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)", lab:null},
