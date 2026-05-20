@@ -18,6 +18,27 @@ const API = getApiUrl();
 const _pdfFn = t => (t||"target").replace(/https?:\/\//,"").replace(/[^a-zA-Z0-9.\-]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"");
 const _pdfDt = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}-${String(d.getMinutes()).padStart(2,"0")}`; };
 
+// ─── PRIVACY MODE: auto-clear scan data after every PDF download ───────
+(function installPrivacyAutoClear() {
+  if (typeof window === "undefined" || window.__vlAutoClearInstalled) return;
+  window.__vlAutoClearInstalled = true;
+  const _origSave = jsPDF.prototype.save;
+  jsPDF.prototype.save = function() {
+    const result = _origSave.apply(this, arguments);
+    setTimeout(() => {
+      try {
+        for (const key of ["cyberAuthCookie", "cyberAuthBearer", "cyberAuthBasic",
+                            "cyberLastTarget", "cyberLastLoginUrl"]) {
+          localStorage.removeItem(key);
+        }
+        sessionStorage.clear();
+        window.dispatchEvent(new CustomEvent("vl:scanComplete", { detail: { ts: Date.now() } }));
+      } catch (e) {}
+    }, 1000);
+    return result;
+  };
+})();
+
 const LOGO = "/logo.svg";
 
 
