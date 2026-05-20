@@ -2932,10 +2932,6 @@ function WebAppModule(props) {
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
             <label style={{fontSize:11,color:"#64748b",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
             {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:10,cursor:"pointer"}}>🕐 History ({targetHistory.length})</button>}
-            <label style={{background:"#1e293b",border:"1px solid "+(customWordlist?"#22c55e":"#334155"),borderRadius:4,padding:"2px 8px",color:customWordlist?"#4ade80":"#64748b",fontSize:10,cursor:"pointer"}}>
-              📋 Wordlist {customWordlist?`(${customWordlist.length})`:""}
-              <input type="file" accept=".txt" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const lines=ev.target.result.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);setCustomWordlist(lines);};r.readAsText(f);}}/>
-            </label>
           </div>
           {showHistory && targetHistory.length>0 && (
             <div style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
