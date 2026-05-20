@@ -7784,14 +7784,12 @@ function ReconModule({token, onRunningChange}) {
             setAuthOpen(true);
           }
         }} targets={[
+          // Pruned to verified-working targets only. DVWA/WebGoat/Mutillidae/bWAPP
+          // removed — their auto-login was unreliable on Recon tests.
           {icon:"📡",label:"Scanme (nmap)",       value:"scanme.nmap.org",                desc:"nmap test server — safe public baseline",                lab:null},
           {icon:"💀",label:"Metasploitable",      value:"lab_metasploitable",             desc:"🟢 Live Docker — old services + many CVEs",              lab:null},
-          {icon:"🏠",label:"DVWA",                value:"http://lab_dvwa/dvwa",            desc:"🟢 Apache 2.4 + PHP + /vulnerabilities/*",                lab:"dvwa"},
-          {icon:"🐐",label:"WebGoat",             value:"http://lab_webgoat:8080/WebGoat", desc:"🟢 Tomcat + huge path tree + JS endpoints",              lab:"webgoat"},
-          {icon:"🧃",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"🟢 Node/Express + /rest/* API + JS bundle",              lab:"juiceshop"},
-          {icon:"🐙",label:"Mutillidae",          value:"http://lab_mutillidae",           desc:"🟢 PHP + many paths + LFI/SQLi probes",                  lab:"mutillidae"},
-          {icon:"🐞",label:"bWAPP",               value:"http://lab_bwapp/bWAPP/",         desc:"🟢 Apache + PHP + 100+ vulns",                            lab:"bwapp"},
-          {icon:"🌐",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",       desc:"Acunetix public PHP demo — Internet target",             lab:null},
+          {icon:"🧃",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"🟢 Node/Express + /rest/* API + JS bundle. admin@juice-sh.op/admin123", lab:"juiceshop"},
+          {icon:"🌐",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",     desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
         <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
