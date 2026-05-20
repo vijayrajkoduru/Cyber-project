@@ -3271,7 +3271,7 @@ function WebAppModule(props) {
               </div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:13,fontWeight:600,color:isActive?"#93c5fd":"#f1f5f9"}}>{ph.name}</span>
+                  <span style={{fontSize:13,fontWeight:400,color:isActive?"#93c5fd":"#f1f5f9"}}>{ph.name}</span>
                   {toolLocked && <span style={{fontSize:10}}>🔒</span>}
                   {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
                   {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="SECURE"     color="green"  size="xs"/>}
@@ -7963,7 +7963,7 @@ function ReconModule({token, onRunningChange}) {
               <div key={i} onClick={()=>!running&&togglePhase(i)}
                 style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`4px solid ${leftCol}`,borderRadius:6,padding:"10px 16px",display:"flex",alignItems:"center",gap:12,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.4,transition:"all 0.2s",boxSizing:"border-box"}}>
                 <span style={{fontSize:18,flexShrink:0,width:24,textAlign:"center"}}>{ph.icon}</span>
-                <span style={{flex:1,fontSize:13,fontWeight:600,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#f1f5f9":"#64748b"}}>{ph.name}</span>
+                <span style={{flex:1,fontSize:13,fontWeight:400,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#f1f5f9":"#64748b"}}>{ph.name}</span>
                 <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"2px 8px"}}>{ph.tool}</span>
                 {isActive && <span style={{fontSize:10,color:"#93c5fd",fontWeight:600,minWidth:60,textAlign:"right"}}>Running…</span>}
                 {isDone && <span style={{fontSize:14,color:isFailed?"#f87171":"#4ade80",fontWeight:700,minWidth:60,textAlign:"right"}}>{isFailed?"✗ ERROR":"✓ DONE"}</span>}
@@ -10591,7 +10591,7 @@ function VulnModule(props) {
                   {isActive?"⟳":isDone?(hi>0?"⚠":"✓"):"○"}
                 </span>
               </div>
-              <div style={{fontSize:13,color:isActive?"#93c5fd":"#f1f5f9",fontWeight:600,lineHeight:1.3}}>{ph.name}</div>
+              <div style={{fontSize:13,color:isActive?"#93c5fd":"#f1f5f9",fontWeight:400,lineHeight:1.3}}>{ph.name}</div>
               {isDone&&findings.length>0&&<div style={{fontSize:9,color:hi>0?"#f87171":"#94a3b8",marginTop:2}}>{findings.length} finding{findings.length!==1?"s":""}</div>}
             </div>
           );
