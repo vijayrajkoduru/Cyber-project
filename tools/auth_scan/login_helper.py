@@ -256,7 +256,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         raise HTTPException(502, f"Could not fetch login page: {e}")
 
     if page.status_code >= 400:
-        spa = _try_spa_login(target, req.username, req.password)
+        spa = _try_spa_login(target, req.username, req.password, deadline=deadline)
         if spa is not None:
             return {"ok": True, **spa, "fallback": f"spa_after_page_{page.status_code}"}
         raise HTTPException(502, f"Login page returned HTTP {page.status_code}")
@@ -266,7 +266,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     all_inputs = _scrape_form_inputs(page.text or "")
 
     if not all_inputs:
-        spa = _try_spa_login(target, req.username, req.password)
+        spa = _try_spa_login(target, req.username, req.password, deadline=deadline)
         if spa is not None:
             return {"ok": True, **spa, "fallback": "spa_no_form_on_page"}
 
@@ -280,13 +280,13 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         payload.update(req.extra_fields)
 
     try:
-        resp = sess.post(login_url, data=payload, timeout=15, allow_redirects=True)
+        resp = sess.post(login_url, data=payload, timeout=8, allow_redirects=True)
     except Exception as e:
         raise HTTPException(502, f"Login POST failed: {e}")
 
     verify_url = _abs(target, req.success_indicator or "/")
     try:
-        check = sess.get(verify_url, timeout=15, allow_redirects=True)
+        check = sess.get(verify_url, timeout=8, allow_redirects=True)
     except Exception as e:
         raise HTTPException(502, f"Verification request failed: {e}")
 
@@ -305,7 +305,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     verified = (check.status_code < 400) and (not looks_login) and text_match
 
     if not verified:
-        spa = _try_spa_login(target, req.username, req.password)
+        spa = _try_spa_login(target, req.username, req.password, deadline=deadline)
         if spa is not None:
             return {"ok": True, **spa, "fallback": "spa_after_form_unverified"}
 
