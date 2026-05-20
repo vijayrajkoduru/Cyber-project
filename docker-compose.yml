@@ -5,25 +5,28 @@ services:
       dockerfile: Dockerfile
     container_name: vulnuslab_backend
     ports:
-      - "8000:8000"
+    - 8000:8000
     env_file:
-      - .env
+    - .env
     environment:
-      - WORKERS=2
+    - WORKERS=4
     volumes:
-      - scan_data:/app/data
-      # Bind mounts so host cron can read/write these paths directly,
-      # and so customer data survives `docker compose down`.
-      - ./data:/data            # USERZONE  — per-user data isolation
-      - ./backups:/backups      # VAULT     — encrypted master archive
-      - ./users.db:/app/data/users.db  # the real customer DB (auth uses this path)
-      - ./last_known_good:/app/.last_known_good  # tool snapshots survive container rebuilds
-
+    - scan_data:/app/data
+    - ./data:/data
+    - ./backups:/backups
+    - ./users.db:/app/data/users.db
+    - ./last_known_good:/app/.last_known_good
+    - ./tools/_payloads:/app/tools/_payloads:ro
     networks:
-      - vulnuslab
+    - vulnuslab
     restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 256m
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)\" || exit 1"]
+      test:
+      - CMD-SHELL
+      - python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)" || exit
+        1
       interval: 15s
       timeout: 5s
       retries: 3
@@ -34,65 +37,49 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: vulnuslab_frontend
     ports:
-      - "80:80"
-      - "443:443"
+    - 80:80
+    - 443:443
     depends_on:
       backend:
         condition: service_healthy
     networks:
-      - vulnuslab
+    - vulnuslab
     restart: unless-stopped
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./extra_nginx_conf:/etc/nginx/extra_nginx_conf:ro
-
-  # ── Bundled vulnerable lab targets ─────────────────────────────
-  # Customers test the scanner against these BEFORE pointing it at
-  # their own production. Each is a single Docker container that
-  # exposes a known-vulnerable web app on the internal network.
-
+    - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    - ./extra_nginx_conf:/etc/nginx/extra_nginx_conf:ro
   lab_dvwa:
     image: vulnerables/web-dvwa
     container_name: lab_dvwa
     networks:
-      - vulnuslab
-
+    - vulnuslab
   lab_juiceshop:
     image: bkimminich/juice-shop
     container_name: lab_juiceshop
     networks:
-      - vulnuslab
-
+    - vulnuslab
   lab_bwapp:
     image: raesene/bwapp
     container_name: lab_bwapp
     networks:
-      - vulnuslab
-
+    - vulnuslab
   lab_mutillidae:
     image: citizenstig/nowasp
     container_name: lab_mutillidae
     networks:
-      - vulnuslab
-
+    - vulnuslab
   lab_webgoat:
     image: webgoat/webgoat
     container_name: lab_webgoat
     networks:
-      - vulnuslab
-
+    - vulnuslab
   lab_metasploitable:
     image: tleemcjr/metasploitable2
     container_name: lab_metasploitable
     networks:
-      - vulnuslab
-
+    - vulnuslab
 volumes:
-  scan_data:
-    # Persistent volume — survives container restarts.
-    # Contains SQLite DB (users.db), scan history, snapshot store.
-    # NEVER delete this volume unless you intend to wipe all customer data.
-
+  scan_data: null
 networks:
   vulnuslab:
     driver: bridge
