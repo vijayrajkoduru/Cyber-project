@@ -215,8 +215,9 @@ async def recon_amass(req: ScanRequest, _=Depends(verify_scan_quota)):
 
     return {
         "ok": True,
-        "subdomains": sorted(all_subs),
-        "total_subdomains": len(all_subs),
+        # AMASS-SELF-FILTER-V1 — the apex host is not its own subdomain
+        "subdomains": sorted(x for x in all_subs if x != host),
+        "total_subdomains": len([x for x in all_subs if x != host]),
         "sources": sources_hit,
         "sources_failed": sources_failed,
         "engine": "pure-Python (6 passive sources + DNS brute, parallel)",

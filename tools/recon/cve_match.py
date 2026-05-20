@@ -15,6 +15,67 @@ from tools._payloads.tech_cve_map import TECH_CVE_MAP
 
 router = APIRouter()
 
+
+# CVE-KEV-EPSS-V1 — enrichment helpers
+_KEV_CACHE = {"data": None, "ts": 0}
+_KEV_TTL_SEC = 3600  # refresh KEV catalog hourly
+
+def _load_kev():
+    """Fetch CISA Known Exploited Vulnerabilities catalog (cached 1h).
+    Returns dict cve_id -> {due_date, vendor_project, product, vuln_name, ransomware}."""
+    import time as _t
+    if _KEV_CACHE["data"] is not None and (_t.time() - _KEV_CACHE["ts"]) < _KEV_TTL_SEC:
+        return _KEV_CACHE["data"]
+    try:
+        r = requests.get(
+            "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+            timeout=15, headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code != 200:
+            return {}
+        idx = {}
+        for v in r.json().get("vulnerabilities", []) or []:
+            cid = v.get("cveID")
+            if cid:
+                idx[cid] = {
+                    "due_date":       v.get("dueDate", ""),
+                    "vendor_project": v.get("vendorProject", ""),
+                    "product":        v.get("product", ""),
+                    "vuln_name":      v.get("vulnerabilityName", "")[:160],
+                    "ransomware":     v.get("knownRansomwareCampaignUse", "Unknown"),
+                }
+        _KEV_CACHE["data"] = idx
+        _KEV_CACHE["ts"] = _t.time()
+        return idx
+    except Exception:
+        return {}
+
+
+def _fetch_epss(cve_ids):
+    """Batch-fetch EPSS scores from FIRST.org. Returns dict cve_id -> {score, percentile}.
+    EPSS = Exploit Prediction Scoring System (0.0-1.0 probability of exploitation in next 30d)."""
+    if not cve_ids: return {}
+    out = {}
+    # FIRST.org accepts ~100 CVEs per request; chunk just in case
+    chunks = [cve_ids[i:i+100] for i in range(0, len(cve_ids), 100)]
+    for chunk in chunks:
+        try:
+            r = requests.get(
+                "https://api.first.org/data/v1/epss",
+                params={"cve": ",".join(chunk)},
+                timeout=15, headers={"User-Agent": "VulnusLab/1.0"})
+            if r.status_code != 200: continue
+            for row in r.json().get("data", []) or []:
+                cid = row.get("cve")
+                if cid:
+                    try: score = float(row.get("epss", 0))
+                    except Exception: score = 0.0
+                    try: pct = float(row.get("percentile", 0))
+                    except Exception: pct = 0.0
+                    out[cid] = {"score": round(score, 4), "percentile": round(pct, 4)}
+        except Exception:
+            continue
+    return out
+
 _BANNER_PORTS = [(22, "OpenSSH"), (21, "FTP"), (25, "SMTP"),
                   (110, "POP3"), (143, "IMAP"), (3306, "MySQL"),
                   (5432, "PostgreSQL")]

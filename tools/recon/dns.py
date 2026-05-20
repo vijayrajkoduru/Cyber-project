@@ -43,6 +43,31 @@ async def scan_dns(req: ScanRequest, _=Depends(verify_scan_quota)):
     tests = 0
     raw = {}
 
+    # Skip checks that only make sense for PUBLIC, internet-routed domains.
+    # Email-auth (SPF/DMARC) + CA-issuance (CAA) checks against an internal
+    # Docker host like "lab_juiceshop" or an RFC1918 IP produce nothing but
+    # false-positive HIGH findings. We bail out cleanly with skipped_reason.
+    import re as _re
+    _t = (target or "").strip().lower()
+    _is_internal = (
+        _re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", _t) is not None  # IPv4
+        or _t in ("localhost", "")
+        or "." not in _t                                       # single-label (Docker)
+        or _t.endswith((".local", ".internal", ".test", ".lan",
+                         ".home", ".localhost", ".example"))
+        or _t.startswith(("10.", "127.", "192.168.", "169.254."))
+        or _re.match(r"^172\.(1[6-9]|2\d|3[01])\.", _t) is not None
+    )
+    if _is_internal:
+        return standard_response(
+            tool="dns", target=target, findings=[],
+            tests_performed=1, vulnerable=False,
+            skipped_reason=(f"Target {target!r} is not a public internet domain "
+                           "(internal hostname / private IP / reserved TLD); "
+                           "SPF/DMARC/CAA checks skipped — they only apply to "
+                           "publicly routed domains."),
+        )
+
     # Sanity gate — does the domain resolve at all?
     a_records = _query(target, "A")
     if not a_records:

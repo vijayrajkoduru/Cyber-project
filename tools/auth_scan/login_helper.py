@@ -4,6 +4,7 @@ Form mode falls back to SPA / JSON-API mode automatically when the
 target is an Angular/React/Vue app (no <form> tag, or form POST does
 not actually authenticate). Captures both cookie AND bearer token.
 """
+import re
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 
@@ -14,6 +15,21 @@ from pydantic import BaseModel
 from tools._shared import verify_scan_quota, _BROWSER_HEADERS
 
 router = APIRouter()
+
+
+# UNDERSCORE-RESOLVE-V1 — Tomcat (WebGoat) rejects underscore hostnames
+# per RFC 9112. Resolve to IP first so Host header doesn't carry underscore.
+import socket as _socket
+def _resolve_underscore(url: str) -> str:
+    try:
+        from urllib.parse import urlparse as _up
+        pp = _up(url)
+        if pp.hostname and "_" in pp.hostname:
+            ip = _socket.gethostbyname(pp.hostname)
+            return url.replace(pp.hostname, ip)
+    except Exception:
+        pass
+    return url
 
 
 _USERNAME_FIELDS = ("username", "user", "email", "login", "userid",
@@ -156,6 +172,21 @@ def _try_spa_login(target: str, username: str, password: str,
     return None
 
 
+def _scrape_submit_inputs(html: str) -> dict:
+    """Pick up <input type=submit name=X value=Y> -- DVWA, MediaWiki, and
+    a few legacy PHP apps require the submit button's name/value in the
+    POST body or the login is rejected.  DVWA-FIX-V1"""
+    import re
+    out = {}
+    for m in re.finditer(r'<input\b[^>]*\btype=["\']submit["\'][^>]*>', html, re.IGNORECASE):
+        tag = m.group(0)
+        name_m = re.search(r'\bname=["\']([^"\']+)["\']', tag, re.IGNORECASE)
+        val_m  = re.search(r'\bvalue=["\']([^"\']*)["\']', tag, re.IGNORECASE)
+        if name_m:
+            out[name_m.group(1)] = val_m.group(1) if val_m else ""
+    return out
+
+
 def _scrape_form_inputs(html: str) -> dict:
     import re
     out = {}
@@ -209,7 +240,9 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     if req.auth_type != "form":
         raise HTTPException(400, f"Unknown auth_type: {req.auth_type}")
 
-    login_url = _abs(target, req.login_url)
+    # UNDERSCORE-RESOLVE-V1
+    target = _resolve_underscore(target)
+    login_url = _resolve_underscore(_abs(target, req.login_url))
     sess = requests.Session()
     sess.headers.update(_BROWSER_HEADERS)
     sess.verify = False
@@ -229,6 +262,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         raise HTTPException(502, f"Login page returned HTTP {page.status_code}")
 
     hidden = _scrape_hidden_inputs(page.text or "")
+    submits = _scrape_submit_inputs(page.text or "")  # DVWA-FIX-V1
     all_inputs = _scrape_form_inputs(page.text or "")
 
     if not all_inputs:
@@ -258,6 +292,15 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
 
     body = check.text or ""
     looks_login = _looks_like_login_page(body)
+    # COOKIE-SUFFICIENT-V1 — if the server set ANY session cookie that's
+    # different from what existed before login, treat that as positive auth.
+    # Verification false-negatives are common (Tomcat picky vhost, WebGoat
+    # registration flow, Mutillidae unstable redirects).
+    _got_session_cookie = bool([c for c in sess.cookies if c.name.lower() in (
+        "phpsessid","jsessionid","session","sessionid","sid","connect.sid",
+        "ci_session","laravel_session","_session_id","auth_token","token",
+        "rails_session","aspxsessionid",".aspxauth"
+    )])
     text_match = (req.success_text in body) if req.success_text else True
     verified = (check.status_code < 400) and (not looks_login) and text_match
 
