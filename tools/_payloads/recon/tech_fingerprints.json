@@ -1,0 +1,598 @@
+{
+  "WordPress": {
+    "headers": [
+      "X-Powered-By: WordPress"
+    ],
+    "cookies": [
+      "wordpress_logged_in",
+      "wordpress_sec",
+      "wp-settings"
+    ],
+    "paths": [
+      "/wp-admin",
+      "/wp-includes",
+      "/wp-content"
+    ],
+    "html_markers": [
+      "wp-content",
+      "wp_nonce",
+      "wp-json"
+    ],
+    "js_globals": [
+      "wp",
+      "wpApiSettings",
+      "wpData"
+    ]
+  },
+  "Drupal": {
+    "headers": [
+      "X-Generator: Drupal"
+    ],
+    "cookies": [
+      "SESS",
+      "Drupal.visitor"
+    ],
+    "paths": [
+      "/sites/default",
+      "/modules",
+      "/themes",
+      "/drupal.js"
+    ],
+    "html_markers": [
+      "Drupal.settings",
+      "drupal-ajax",
+      "drupal.js"
+    ],
+    "js_globals": [
+      "Drupal",
+      "drupalSettings"
+    ]
+  },
+  "Joomla": {
+    "headers": [
+      "X-Content-Encoded-By: Joomla"
+    ],
+    "cookies": [
+      "joomla_user_state",
+      "ade965fbc7e45ae09cedd0e374e2bfade"
+    ],
+    "paths": [
+      "/administrator",
+      "/components",
+      "/modules",
+      "/templates"
+    ],
+    "html_markers": [
+      "Joomla.submitform",
+      "com_",
+      "option=com_"
+    ],
+    "js_globals": [
+      "Joomla",
+      "JoomlaCore"
+    ]
+  },
+  "Magento": {
+    "headers": [
+      "X-Magento-Vary"
+    ],
+    "cookies": [
+      "frontend_sid",
+      "frontend",
+      "PHPSESSID"
+    ],
+    "paths": [
+      "/admin",
+      "/catalog",
+      "/checkout",
+      "/customer"
+    ],
+    "html_markers": [
+      "skin/frontend",
+      "app/design",
+      "mage.cookies"
+    ],
+    "js_globals": [
+      "Mage",
+      "BLANK_IMG_SRC"
+    ]
+  },
+  "Shopify": {
+    "headers": [
+      "X-Shopify-Shop-Api-Call-Limit"
+    ],
+    "cookies": [
+      "_shopify_session",
+      "_shopify_y"
+    ],
+    "paths": [
+      "/cdn/shop",
+      "/admin",
+      "/apps",
+      "/cart"
+    ],
+    "html_markers": [
+      "Shopify.shop",
+      "Shopify.currency",
+      "ShopifyAnalytics"
+    ],
+    "js_globals": [
+      "Shopify",
+      "ShopifyAnalytics",
+      "ShopifyBuy"
+    ]
+  },
+  "Laravel": {
+    "headers": [
+      "X-Powered-By: Laravel"
+    ],
+    "cookies": [
+      "XSRF-TOKEN",
+      "laravel_session"
+    ],
+    "paths": [
+      "/app",
+      "/public",
+      "/storage",
+      "/routes"
+    ],
+    "html_markers": [
+      "csrf_token",
+      "Laravel",
+      "artisan"
+    ],
+    "js_globals": [
+      "Laravel",
+      "csrf_token"
+    ]
+  },
+  "Symfony": {
+    "headers": [
+      "X-Powered-By: Symfony"
+    ],
+    "cookies": [
+      "PHPSESSID",
+      "symfony"
+    ],
+    "paths": [
+      "/app",
+      "/src",
+      "/var",
+      "/web"
+    ],
+    "html_markers": [
+      "_token",
+      "symfony/"
+    ],
+    "js_globals": [
+      "Symfony"
+    ]
+  },
+  "Rails": {
+    "headers": [
+      "X-Frame-Options: SAMEORIGIN",
+      "X-Content-Type-Options: nosniff"
+    ],
+    "cookies": [
+      "_rails_session"
+    ],
+    "paths": [
+      "/app",
+      "/config",
+      "/public",
+      "/assets"
+    ],
+    "html_markers": [
+      "csrf-token",
+      "authenticity_token",
+      "data-rails"
+    ],
+    "js_globals": [
+      "Rails",
+      "Turbolinks"
+    ]
+  },
+  "Django": {
+    "headers": [
+      "X-CSRFToken"
+    ],
+    "cookies": [
+      "csrftoken",
+      "sessionid"
+    ],
+    "paths": [
+      "/static",
+      "/media",
+      "/admin"
+    ],
+    "html_markers": [
+      "csrfmiddlewaretoken",
+      "Django"
+    ],
+    "js_globals": [
+      "django"
+    ]
+  },
+  "Flask": {
+    "headers": [
+      "Server: Werkzeug"
+    ],
+    "cookies": [
+      "session"
+    ],
+    "paths": [
+      "/static",
+      "/templates"
+    ],
+    "html_markers": [
+      "flask",
+      "werkzeug"
+    ],
+    "js_globals": []
+  },
+  "FastAPI": {
+    "headers": [
+      "Server: uvicorn"
+    ],
+    "cookies": [
+      "session"
+    ],
+    "paths": [
+      "/docs",
+      "/openapi.json"
+    ],
+    "html_markers": [
+      "FastAPI",
+      "Swagger UI"
+    ],
+    "js_globals": []
+  },
+  "Express": {
+    "headers": [
+      "X-Powered-By: Express"
+    ],
+    "cookies": [
+      "express.sid",
+      "connect.sid"
+    ],
+    "paths": [
+      "/api",
+      "/public"
+    ],
+    "html_markers": [
+      "express"
+    ],
+    "js_globals": [
+      "express"
+    ]
+  },
+  "NextJS": {
+    "headers": [
+      "X-Powered-By: Next.js"
+    ],
+    "cookies": [
+      "__Secure-next-auth.session-token"
+    ],
+    "paths": [
+      "/_next",
+      "/.next"
+    ],
+    "html_markers": [
+      "__NEXT_DATA__",
+      "__NEXT_PAGE__",
+      "next/router"
+    ],
+    "js_globals": [
+      "__NEXT_DATA__",
+      "next"
+    ]
+  },
+  "NuxtJS": {
+    "headers": [
+      "X-Powered-By: Nuxt"
+    ],
+    "cookies": [
+      "nuxt-session"
+    ],
+    "paths": [
+      "/.nuxt",
+      "/static"
+    ],
+    "html_markers": [
+      "__NUXT__",
+      "__NUXT_LOADING__",
+      "nuxt-link"
+    ],
+    "js_globals": [
+      "__NUXT__",
+      "$nuxt"
+    ]
+  },
+  "Angular": {
+    "headers": [],
+    "cookies": [
+      "ng-cookies"
+    ],
+    "paths": [],
+    "html_markers": [
+      "ng-app",
+      "ng-controller",
+      "ng-model",
+      "angular.js"
+    ],
+    "js_globals": [
+      "angular",
+      "ng"
+    ]
+  },
+  "React": {
+    "headers": [],
+    "cookies": [
+      "react-session"
+    ],
+    "paths": [],
+    "html_markers": [
+      "root",
+      "react-",
+      "data-react"
+    ],
+    "js_globals": [
+      "React",
+      "ReactDOM"
+    ]
+  },
+  "Vue": {
+    "headers": [],
+    "cookies": [
+      "vue-session"
+    ],
+    "paths": [],
+    "html_markers": [
+      "v-app",
+      "v-bind",
+      "v-model",
+      "vue"
+    ],
+    "js_globals": [
+      "Vue",
+      "__vue__"
+    ]
+  },
+  "Svelte": {
+    "headers": [],
+    "cookies": [
+      "svelte-session"
+    ],
+    "paths": [
+      "/build"
+    ],
+    "html_markers": [
+      "svelte"
+    ],
+    "js_globals": [
+      "svelte"
+    ]
+  },
+  "SpringBoot": {
+    "headers": [
+      "X-Application-Context"
+    ],
+    "cookies": [
+      "JSESSIONID"
+    ],
+    "paths": [
+      "/actuator",
+      "/swagger-ui",
+      "/api-docs"
+    ],
+    "html_markers": [
+      "Spring",
+      "Actuator"
+    ],
+    "js_globals": []
+  },
+  "ASPNet": {
+    "headers": [
+      "Server: Microsoft-IIS",
+      "X-AspNet-Version"
+    ],
+    "cookies": [
+      "ASP.NET_SessionId",
+      "__RequestVerificationToken"
+    ],
+    "paths": [
+      "/bin",
+      "/App_Data",
+      "/Content"
+    ],
+    "html_markers": [
+      "__VIEWSTATE",
+      "__EVENTVALIDATION"
+    ],
+    "js_globals": [
+      "Page_ClientValidate"
+    ]
+  },
+  "Tomcat": {
+    "headers": [
+      "Server: Apache Tomcat"
+    ],
+    "cookies": [
+      "JSESSIONID"
+    ],
+    "paths": [
+      "/manager",
+      "/host-manager"
+    ],
+    "html_markers": [
+      "Tomcat"
+    ],
+    "js_globals": []
+  },
+  "Wildfly": {
+    "headers": [
+      "Server: WildFly"
+    ],
+    "cookies": [
+      "JSESSIONID"
+    ],
+    "paths": [
+      "/console",
+      "/management"
+    ],
+    "html_markers": [
+      "WildFly"
+    ],
+    "js_globals": []
+  },
+  "Ghost": {
+    "headers": [
+      "X-Powered-By: Ghost"
+    ],
+    "cookies": [
+      "ghost-admin-api"
+    ],
+    "paths": [
+      "/ghost",
+      "/content",
+      "/api/v3"
+    ],
+    "html_markers": [
+      "ghost",
+      "Ghost.settings"
+    ],
+    "js_globals": [
+      "Ghost",
+      "ghostApi"
+    ]
+  },
+  "Strapi": {
+    "headers": [
+      "X-Powered-By: Strapi"
+    ],
+    "cookies": [
+      "strapi-session"
+    ],
+    "paths": [
+      "/admin",
+      "/api",
+      "/content"
+    ],
+    "html_markers": [
+      "strapi"
+    ],
+    "js_globals": [
+      "strapi"
+    ]
+  },
+  "Gatsby": {
+    "headers": [
+      "X-Powered-By: Gatsby"
+    ],
+    "cookies": [
+      "gatsby-session"
+    ],
+    "paths": [
+      "/static",
+      "/.cache"
+    ],
+    "html_markers": [
+      "__gatsby",
+      "gatsby"
+    ],
+    "js_globals": [
+      "__GATSBY_INTERNAL_PLUGINS__"
+    ]
+  },
+  "Hugo": {
+    "headers": [
+      "X-Powered-By: Hugo"
+    ],
+    "cookies": [],
+    "paths": [
+      "/public",
+      "/content"
+    ],
+    "html_markers": [
+      "Hugo",
+      "hugo"
+    ],
+    "js_globals": []
+  },
+  "Jekyll": {
+    "headers": [
+      "X-Powered-By: Jekyll"
+    ],
+    "cookies": [],
+    "paths": [
+      "/_posts",
+      "/_layouts"
+    ],
+    "html_markers": [
+      "Jekyll",
+      "site.title"
+    ],
+    "js_globals": []
+  },
+  "Webflow": {
+    "headers": [
+      "X-Powered-By: Webflow"
+    ],
+    "cookies": [
+      "webflow-session"
+    ],
+    "paths": [
+      "/api",
+      "/cms"
+    ],
+    "html_markers": [
+      "webflow",
+      "data-w-",
+      "w-"
+    ],
+    "js_globals": [
+      "Webflow",
+      "w"
+    ]
+  },
+  "Wix": {
+    "headers": [
+      "X-Powered-By: Wix"
+    ],
+    "cookies": [
+      "wix-session"
+    ],
+    "paths": [
+      "/api",
+      "/_api"
+    ],
+    "html_markers": [
+      "wix",
+      "data-wix"
+    ],
+    "js_globals": [
+      "Wix",
+      "wixData"
+    ]
+  },
+  "Squarespace": {
+    "headers": [
+      "X-Powered-By: Squarespace"
+    ],
+    "cookies": [
+      "squarespace-session"
+    ],
+    "paths": [
+      "/api",
+      "/s"
+    ],
+    "html_markers": [
+      "squarespace",
+      "data-sqs"
+    ],
+    "js_globals": [
+      "Squarespace",
+      "Static"
+    ]
+  }
+}
