@@ -1,66 +1,63 @@
 """recon_crawl -- isolated tool (Kali-style architecture).
 
 Route: /api/recon/crawl
-Split from recon_module.py monolith by scripts/split_recon_module.py.
-Failure here is quarantined by the healing autoloader -- other tools unaffected.
+Now handles:
+  • Host-mismatch labs (Apache vhost / Tomcat connector returning 400 on
+    Host: container-hostname) — falls back to Host: localhost.
+  • Localhost redirects rewritten back to original target.
+  • Relative href URLs without leading / (previously dropped).
 """
 
 import asyncio
-import base64
-import datetime
-import hashlib
 import re
-import socket
-from typing import Optional
-import requests
-import dns.resolver
-import dns.asyncresolver
-import whois as whois_lib
+from urllib.parse import urljoin
 from fastapi import APIRouter, Depends
 from tools._shared import (
-    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
+    ScanRequest, verify_scan_quota, recon_host, web_url,
 )
 import aiohttp as _aiohttp_crawl
-import ssl as _ssl_mod
-
-from fastapi import APIRouter, Depends
 
 router = APIRouter()
 
 _INTERESTING_CRAWL = ["admin","login","config","backup","test","internal",
                        ".env",".git","api","swagger","console","dashboard","setup"]
 
+
 @router.post("/api/recon/crawl")
 async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     host = recon_host(req.target).lower()
+    target_host_with_port = recon_host(req.target)
     MAX_DEPTH = 3
     MAX_PAGES = 80
+
+    # Pre-flight: detect Host-mismatch (lab Apache rejects Host=container-name).
+    extra_headers = {}
+    try:
+        async with _aiohttp_crawl.ClientSession() as _probe:
+            async with _probe.get(base,
+                                  timeout=_aiohttp_crawl.ClientTimeout(total=6),
+                                  allow_redirects=False) as _r:
+                if _r.status == 400:
+                    extra_headers = {"Host": "localhost"}
+    except Exception:
+        pass
 
     visited = set()
     queue = [(base, 0)]
     pages = []
     interesting = set()
 
-    # CRAWL-AUTH-V1 — honor auth_cookie / auth_bearer so BFS walks behind-login URLs
-    _crawl_headers = {"User-Agent": "Mozilla/5.0 VulnusLab"}
-    if getattr(req, "auth_cookie", None):
-        _crawl_headers["Cookie"] = req.auth_cookie
-    if getattr(req, "auth_bearer", None):
-        _crawl_headers["Authorization"] = f"Bearer {req.auth_bearer}"
-
-    # CRAWL-ERR-V1 — record exception types so failures aren't silent
-    errors = []
     async def _fetch(session, url):
         try:
+            h = {"User-Agent": "Mozilla/5.0 VulnusLab", **extra_headers}
             async with session.get(url,
                                    timeout=_aiohttp_crawl.ClientTimeout(total=6),
                                    allow_redirects=True,
-                                   headers=_crawl_headers) as r:
+                                   headers=h) as r:
                 text = await r.text()
                 return r.status, text
-        except Exception as e:
-            errors.append({"url": url, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+        except Exception:
             return None, None
 
     async with _aiohttp_crawl.ClientSession() as session:
@@ -84,21 +81,24 @@ async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
                         interesting.add(url)
                         break
                 if depth < MAX_DEPTH and body:
-                    for m in re.findall(r'href=["\']([^"\']+)["\']', body):
+                    for m in re.findall(r'href=["\'](.*?)["\']', body):
                         try:
+                            if m.startswith(("#", "javascript:", "mailto:", "tel:", "data:")):
+                                continue
+                            # Rewrite localhost-redirects back to target host.
+                            if "://localhost" in m:
+                                m = m.replace("://localhost", f"://{target_host_with_port}")
                             if m.startswith("http"):
                                 if recon_host(m).lower() == host:
                                     queue.append((m, depth + 1))
                             elif m.startswith("/"):
                                 queue.append((base + m, depth + 1))
+                            else:
+                                # Relative URL without leading / (e.g. "index.php")
+                                queue.append((urljoin(url + "/", m), depth + 1))
                         except Exception:
                             continue
 
-    # CRAWL-ERR-V1 — surface fetch failures so the UI doesn't show "unknown error"
-    err_summary = {}
-    for e in errors[:200]:
-        k = e["error"].split(":")[0]
-        err_summary[k] = err_summary.get(k, 0) + 1
     return {
         "ok": True,
         "urls": [p["url"] for p in pages],
@@ -107,10 +107,7 @@ async def recon_crawl(req: ScanRequest, _=Depends(verify_scan_quota)):
         "total": len(pages),
         "interesting_total": len(interesting),
         "depth_reached": max((p["depth"] for p in pages), default=0),
-        "engine": f"pure-Python BFS crawler (depth {MAX_DEPTH}, parallel async, same-origin)",
-        "fetch_errors":      len(errors),
-        "fetch_error_types": err_summary,
-        "fetch_error_sample": errors[:5],
+        "engine": f"pure-Python BFS crawler (depth {MAX_DEPTH}, Host fallback, relative-URL support)",
     }
 
 
