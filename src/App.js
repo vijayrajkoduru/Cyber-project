@@ -2949,22 +2949,8 @@ function WebAppModule(props) {
           )}
           {showAuthPanel && (
             <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:6,padding:"14px",marginBottom:8,display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{fontSize:11,color:"#60a5fa",fontWeight:700,marginBottom:2,letterSpacing:0.5}}>
-                🔓 AUTHENTICATED SCANNING — OPTIONAL bonus feature
-              </div>
-              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.7,background:"#020617",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
-                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> The scanner already
-                tests every public page, API, and form on your target.
-                {" "}<br/><br/>
-                <b style={{color:"#fbbf24"}}>Only fill this in if BOTH are true:</b>
-                {" "}(1) Your target has a login system (SaaS app, dashboard, member portal), AND
-                {" "}(2) you want the scanner to test the pages that appear only AFTER login (admin areas, /api/*, user dashboards).
-                {" "}<br/><br/>
-                <b style={{color:"#fbbf24"}}>How to get your session cookie:</b>
-                {" "}Login to your target site in Chrome/Firefox →
-                Press F12 → Application/Storage tab → Cookies → your domain →
-                Copy the value of <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>PHPSESSID</code>, <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>JSESSIONID</code>, <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>session</code>, or <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>connect.sid</code> →
-                Paste below as <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>name=value</code> (multiple cookies separated by <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>;</code>).
+              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
+                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want the scanner to walk behind-login pages (admin areas, /api/*, user dashboards).
               </div>
 
               {/* ── Auto-login: easier alternative for customers who don't
