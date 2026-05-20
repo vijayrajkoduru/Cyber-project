@@ -7910,6 +7910,69 @@ function ReconModule({token, onRunningChange}) {
             </div>
           )}
         </div>
+        {/* VULN-AUTH-PANEL-V4-RECON-STYLE */}
+        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+          <div onClick={()=>setAuthOpen(o=>!o)}
+            style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
+              <span style={{fontSize:10,color:"#64748b"}}>— finds IDOR, priv-esc, mass-assignment, stored XSS</span>
+            </div>
+            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
+            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
+          </div>
+          {authOpen && (
+            <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
+                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
+              </div>
+              <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
+                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>🔐 Auto-login (recommended)</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                  <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-vuln-login-user" data-form-type="other" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-vuln-login-pass" data-form-type="other" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                  <button onClick={async ()=>{
+                      if(!target.trim()){ setVAutoLoginStatus("Enter a target first"); return; }
+                      if(!loginUrl.trim()||!loginUser.trim()||!loginPass.trim()){ setVAutoLoginStatus("Login URL + username + password are all required"); return; }
+                      setVAutoLoginBusy(true); setVAutoLoginStatus(null);
+                      try {
+                        const lr = await api("/api/scan/login","POST",{target, login_url: loginUrl, username: loginUser, password: loginPass, auth_type: "form"}, token);
+                        const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
+                        if (lr && (lr.login_verified || _got)) {
+                          setAuthCookie(lr.auth_cookie || "");
+                          if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
+                          setAuthStatus("ok");
+                          setVAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
+                        } else { setAuthStatus("fail"); setVAutoLoginStatus(lr?.hint || "Login could not be verified"); }
+                      } catch(e){ setAuthStatus("fail"); setVAutoLoginStatus("Login request failed: "+(e.message||e)); }
+                      finally { setVAutoLoginBusy(false); }
+                    }} disabled={vAutoLoginBusy}
+                    style={{background:vAutoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:vAutoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:vAutoLoginBusy?"not-allowed":"pointer"}}>
+                    {vAutoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
+                  </button>
+                  {(vAutoLoginStatus && vAutoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured</span>}
+                  {(vAutoLoginStatus && !vAutoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {vAutoLoginStatus}</span>}
+                </div>
+              </div>
+              <div style={{fontSize:10,color:"#475569",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                  <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)} placeholder="PHPSESSID=abc123; sid=xyz" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
+                  <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiJ9..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
