@@ -2893,10 +2893,10 @@ function WebAppModule(props) {
 
         <TestTargets targets={[
           {label:"DVWA",       value:"http://lab_dvwa",                   color:"#dc2626", lab:"dvwa"},
-          {label:"WebGoat",    value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c", lab:null},
+          {label:"WebGoat",    value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c", lab:"webgoat"},
           {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:"juiceshop"},
           {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
-          {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:null},
+          {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
           {label:"testphp",    value:"http://testphp.vulnweb.com",        color:"#0ea5e9", lab:null},
         ]} onSelect={async (t, lab) => {
           setTarget(t);
@@ -2904,8 +2904,10 @@ function WebAppModule(props) {
           setShowHistory(false);
           const LAB_CREDS = {
             dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",              pass: "password" },
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "guest",              pass: "guest"    },
             juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                      user: "admin@juice-sh.op",  pass: "admin123" },
             mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",              pass: "adminpass"},
+            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",                pass: "bug"      },
           };
           const creds = lab && LAB_CREDS[lab];
           if (creds) {
@@ -2949,8 +2951,22 @@ function WebAppModule(props) {
           )}
           {showAuthPanel && (
             <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:6,padding:"14px",marginBottom:8,display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
-                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want the scanner to walk behind-login pages (admin areas, /api/*, user dashboards).
+              <div style={{fontSize:11,color:"#60a5fa",fontWeight:700,marginBottom:2,letterSpacing:0.5}}>
+                🔓 AUTHENTICATED SCANNING — OPTIONAL bonus feature
+              </div>
+              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.7,background:"#020617",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
+                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> The scanner already
+                tests every public page, API, and form on your target.
+                {" "}<br/><br/>
+                <b style={{color:"#fbbf24"}}>Only fill this in if BOTH are true:</b>
+                {" "}(1) Your target has a login system (SaaS app, dashboard, member portal), AND
+                {" "}(2) you want the scanner to test the pages that appear only AFTER login (admin areas, /api/*, user dashboards).
+                {" "}<br/><br/>
+                <b style={{color:"#fbbf24"}}>How to get your session cookie:</b>
+                {" "}Login to your target site in Chrome/Firefox →
+                Press F12 → Application/Storage tab → Cookies → your domain →
+                Copy the value of <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>PHPSESSID</code>, <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>JSESSIONID</code>, <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>session</code>, or <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>connect.sid</code> →
+                Paste below as <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>name=value</code> (multiple cookies separated by <code style={{color:"#86efac",background:"#0c1a3d",padding:"1px 4px",borderRadius:2}}>;</code>).
               </div>
 
               {/* ── Auto-login: easier alternative for customers who don't
@@ -3257,7 +3273,7 @@ function WebAppModule(props) {
               </div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:13,fontWeight:400,color:isActive?"#93c5fd":"#f1f5f9"}}>{ph.name}</span>
+                  <span style={{fontSize:13,fontWeight:600,color:isActive?"#93c5fd":"#f1f5f9"}}>{ph.name}</span>
                   {toolLocked && <span style={{fontSize:10}}>🔒</span>}
                   {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
                   {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="SECURE"     color="green"  size="xs"/>}
@@ -7785,8 +7801,10 @@ function ReconModule({token, onRunningChange}) {
           setTarget(t);
           const LAB_CREDS = {
             dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",             pass: "password" },
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "guest",             pass: "guest"    },
             juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                      user: "admin@juice-sh.op", pass: "admin123" },
             mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",             pass: "admin"     /*FIX-V1: was adminpass*/},
+            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",               pass: "bug"      },
           };
           const creds = lab && LAB_CREDS[lab];
           if (creds) {
@@ -7799,8 +7817,10 @@ function ReconModule({token, onRunningChange}) {
           {icon:"📡",label:"Scanme (nmap)",       value:"scanme.nmap.org",                desc:"nmap test server — safe public baseline",                lab:null},
           {icon:"💀",label:"Metasploitable",      value:"lab_metasploitable",             desc:"🟢 Live Docker — old services + many CVEs",              lab:null},
           {icon:"🏠",label:"DVWA",                value:"http://lab_dvwa/dvwa",            desc:"🟢 Apache 2.4 + PHP + /vulnerabilities/*",                lab:"dvwa"},
+          {icon:"🐐",label:"WebGoat",             value:"http://lab_webgoat:8080/WebGoat", desc:"🟢 Tomcat + huge path tree + JS endpoints",              lab:"webgoat"},
           {icon:"🧃",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"🟢 Node/Express + /rest/* API + JS bundle",              lab:"juiceshop"},
           {icon:"🐙",label:"Mutillidae",          value:"http://lab_mutillidae",           desc:"🟢 PHP + many paths + LFI/SQLi probes",                  lab:"mutillidae"},
+          {icon:"🐞",label:"bWAPP",               value:"http://lab_bwapp/bWAPP/",         desc:"🟢 Apache + PHP + 100+ vulns",                            lab:"bwapp"},
           {icon:"🌐",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",       desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
@@ -7910,69 +7930,6 @@ function ReconModule({token, onRunningChange}) {
             </div>
           )}
         </div>
-        {/* VULN-AUTH-PANEL-V4-RECON-STYLE */}
-        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
-          <div onClick={()=>setAuthOpen(o=>!o)}
-            style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
-              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
-              <span style={{fontSize:10,color:"#64748b"}}>— finds IDOR, priv-esc, mass-assignment, stored XSS</span>
-            </div>
-            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
-            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
-          </div>
-          {authOpen && (
-            <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
-                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
-              </div>
-              <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
-                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>🔐 Auto-login (recommended)</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                  <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-vuln-login-user" data-form-type="other" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-vuln-login-pass" data-form-type="other" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
-                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-                  <button onClick={async ()=>{
-                      if(!target.trim()){ setVAutoLoginStatus("Enter a target first"); return; }
-                      if(!loginUrl.trim()||!loginUser.trim()||!loginPass.trim()){ setVAutoLoginStatus("Login URL + username + password are all required"); return; }
-                      setVAutoLoginBusy(true); setVAutoLoginStatus(null);
-                      try {
-                        const lr = await api("/api/scan/login","POST",{target, login_url: loginUrl, username: loginUser, password: loginPass, auth_type: "form"}, token);
-                        const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
-                        if (lr && (lr.login_verified || _got)) {
-                          setAuthCookie(lr.auth_cookie || "");
-                          if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
-                          setAuthStatus("ok");
-                          setVAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
-                        } else { setAuthStatus("fail"); setVAutoLoginStatus(lr?.hint || "Login could not be verified"); }
-                      } catch(e){ setAuthStatus("fail"); setVAutoLoginStatus("Login request failed: "+(e.message||e)); }
-                      finally { setVAutoLoginBusy(false); }
-                    }} disabled={vAutoLoginBusy}
-                    style={{background:vAutoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:vAutoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:vAutoLoginBusy?"not-allowed":"pointer"}}>
-                    {vAutoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
-                  </button>
-                  {(vAutoLoginStatus && vAutoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured</span>}
-                  {(vAutoLoginStatus && !vAutoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {vAutoLoginStatus}</span>}
-                </div>
-              </div>
-              <div style={{fontSize:10,color:"#475569",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
-              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                  <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)} placeholder="PHPSESSID=abc123; sid=xyz" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
-                <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
-                  <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiJ9..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
@@ -8012,7 +7969,7 @@ function ReconModule({token, onRunningChange}) {
               <div key={i} onClick={()=>!running&&togglePhase(i)}
                 style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`4px solid ${leftCol}`,borderRadius:6,padding:"10px 16px",display:"flex",alignItems:"center",gap:12,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.4,transition:"all 0.2s",boxSizing:"border-box"}}>
                 <span style={{fontSize:18,flexShrink:0,width:24,textAlign:"center"}}>{ph.icon}</span>
-                <span style={{flex:1,fontSize:13,fontWeight:400,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#f1f5f9":"#64748b"}}>{ph.name}</span>
+                <span style={{flex:1,fontSize:13,fontWeight:600,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#f1f5f9":"#64748b"}}>{ph.name}</span>
                 <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"2px 8px"}}>{ph.tool}</span>
                 {isActive && <span style={{fontSize:10,color:"#93c5fd",fontWeight:600,minWidth:60,textAlign:"right"}}>Running…</span>}
                 {isDone && <span style={{fontSize:14,color:isFailed?"#f87171":"#4ade80",fontWeight:700,minWidth:60,textAlign:"right"}}>{isFailed?"✗ ERROR":"✓ DONE"}</span>}
@@ -8119,8 +8076,10 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
         {/* Controls */}
         <TestTargets onSelect={setTarget} targets={[
           {icon:"🔴",label:"DVWA",          value:"http://lab_dvwa",                    desc:"🟢 Live Docker — SQLi, XSS, CSRF, File Upload, LFI. Login: admin/password"},
+          {icon:"🐐",label:"WebGoat",        value:"http://lab_webgoat:8080/WebGoat",       desc:"🟢 Live Docker — OWASP WebGoat guided lessons"},
           {icon:"🧃",label:"Juice Shop",     value:"http://lab_juiceshop:3000",               desc:"🟢 Live Docker — 100+ challenges. Login: admin@juice-sh.op/admin123"},
           {icon:"🧩",label:"Mutillidae",     value:"http://lab_mutillidae",                  desc:"🟢 Live Docker — SQLi, XXE, CSRF. Login: admin/adminpass"},
+          {icon:"🐛",label:"bWAPP",          value:"http://lab_bwapp/bWAPP/login.php",      desc:"🟢 Live Docker — 100+ bugs. Login: bee/bug"},
           {icon:"🌐",label:"Acunetix TestPHP",value:"http://testphp.vulnweb.com",           desc:"Public test site — safe to scan"},
         ]}/>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -10517,18 +10476,155 @@ function VulnModule(props) {
           setAuthorized(false);
           const LAB_CREDS = {
             dvwa:       { url: "http://lab_dvwa/login.php",                          user: "admin",             pass: "password" },
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",              user: "guest",             pass: "guest"    },
             juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                  user: "admin@juice-sh.op", pass: "admin123" },
             mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",     user: "admin",             pass: "adminpass"},
+            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                   user: "bee",               pass: "bug"      },
           };
           const creds = lab && LAB_CREDS[lab];
           if (creds) { setLoginUrl(creds.url); setLoginUser(creds.user); setLoginPass(creds.pass); setAuthOpen(true); }
         }} /*VULN-TT-V2*/ targets={[
           {icon:"🏠",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)", lab:"dvwa"},
+          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)", lab:"webgoat"},
           {icon:"🧃",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)", lab:"juiceshop"},
           {icon:"🐙",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)", lab:"mutillidae"},
           {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)", lab:null},
         ]}/>
+        {/* ── Authenticated-scan panel (collapsible) ──
+            When filled, the scanner logs in BEFORE the scan phases and
+            attaches the captured session to every scanner request.
+            Without this, ~70% of real vulns (IDOR, priv-esc, mass
+            assignment, stored XSS in profiles, etc.) stay invisible. */}
+        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+          <div onClick={()=>setAuthOpen(o=>!o)}
+            style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
+              <span style={{fontSize:10,color:"#64748b"}}>— finds IDOR, priv-esc, mass-assignment, stored XSS</span>
+            </div>
+            {authStatus==="ok"  && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
+            {authStatus==="fail"&& <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
+          </div>
+          {authOpen && (
+            <div style={{padding:"4px 12px 12px",borderTop:"1px solid #1e293b"}}>
+              <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>Auth type:</span>
+                {["form","basic","bearer"].map(t=>(
+                  <button key={t} onClick={()=>{setAuthType(t); setAuthStatus(null); setAuthCookie(""); setAuthBearer("");}}
+                    style={{background:authType===t?"#1e3a8a":"#0f172a",border:"1px solid "+(authType===t?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 10px",color:authType===t?"#93c5fd":"#94a3b8",fontSize:10,fontWeight:600,cursor:"pointer"}}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+              {authType==="form" && (
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
+                      placeholder="Login URL (e.g. /login)"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                    <input value={loginSuccessUrl} onChange={e=>setLoginSuccessUrl(e.target.value)}
+                      placeholder="Post-login URL to verify (e.g. /dashboard)"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
+                      placeholder="Username / email"
+                      autoComplete="off"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
+                      type="password" placeholder="Password" autoComplete="off"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <input value={loginUserField} onChange={e=>setLoginUserField(e.target.value)}
+                      placeholder="(optional) username field name"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}/>
+                    <input value={loginPassField} onChange={e=>setLoginPassField(e.target.value)}
+                      placeholder="(optional) password field name"
+                      style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}/>
+                  </div>
+                </>
+              )}
+              {authType==="basic" && (
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
+                    placeholder="Username" autoComplete="off"
+                    style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
+                    type="password" placeholder="Password" autoComplete="off"
+                    style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+                </div>
+              )}
+              {authType==="bearer" && (
+                <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)}
+                  placeholder="Paste bearer token (JWT or API key)" autoComplete="off"
+                  style={{width:"100%",boxSizing:"border-box",background:"#0f172a",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",color:"#e2e8f0",fontSize:12,fontFamily:"JetBrains Mono,monospace"}}/>
+              )}
+              <div style={{fontSize:10,color:"#64748b",marginTop:6}}>
+                Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.
+              </div>
+            </div>
+          )}
+        </div>
+
         
+
+        {/* VULN-AUTH-PANEL-V5 */}
+        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+          <div onClick={()=>setAuthOpen(o=>!o)} style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
+              <span style={{fontSize:10,color:"#64748b"}}>— finds IDOR, priv-esc, mass-assignment, stored XSS</span>
+            </div>
+            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
+            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
+          </div>
+          {authOpen && (
+            <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
+                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
+              </div>
+              <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
+                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>🔐 Auto-login (recommended)</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                  <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-vuln-u" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-vuln-p" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <button onClick={async ()=>{
+                    if(!target.trim()){ setAuthStatus("fail"); return; }
+                    if(!loginUrl.trim()||!loginUser.trim()||!loginPass.trim()){ setAuthStatus("fail"); return; }
+                    setAuthStatus(null);
+                    try {
+                      const lr = await api("/api/scan/login","POST",{target, login_url: loginUrl, username: loginUser, password: loginPass, auth_type: "form"}, token);
+                      const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
+                      if (lr && (lr.login_verified || _got)) {
+                        setAuthCookie(lr.auth_cookie || "");
+                        if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
+                        setAuthStatus("ok");
+                      } else { setAuthStatus("fail"); }
+                    } catch(e){ setAuthStatus("fail"); }
+                  }}
+                  style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:"#0f172a",fontSize:11,fontWeight:700,cursor:"pointer",alignSelf:"flex-start"}}>
+                  🔐 Auto-login & capture cookie
+                </button>
+              </div>
+              <div style={{fontSize:10,color:"#475569",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                  <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token</div>
+                  <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)} placeholder="eyJhbG..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
@@ -10564,7 +10660,7 @@ function VulnModule(props) {
                   {isActive?"⟳":isDone?(hi>0?"⚠":"✓"):"○"}
                 </span>
               </div>
-              <div style={{fontSize:13,color:isActive?"#93c5fd":"#f1f5f9",fontWeight:400,lineHeight:1.3}}>{ph.name}</div>
+              <div style={{fontSize:13,color:isActive?"#93c5fd":"#f1f5f9",fontWeight:600,lineHeight:1.3}}>{ph.name}</div>
               {isDone&&findings.length>0&&<div style={{fontSize:9,color:hi>0?"#f87171":"#94a3b8",marginTop:2}}>{findings.length} finding{findings.length!==1?"s":""}</div>}
             </div>
           );
