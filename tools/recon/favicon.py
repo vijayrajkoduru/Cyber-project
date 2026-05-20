@@ -62,19 +62,37 @@ def _murmur3_32(data, seed=0):
 @router.post("/api/recon/favicon")
 async def recon_favicon(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    r = safe_get(f"{base}/favicon.ico", req=req)
-    if r is None or r.status_code != 200 or not r.content:
-        return {"ok": True, "favicon": None, "skipped_reason": "No favicon found at /favicon.ico"}
+    # Probe 12 common favicon locations — modern frameworks (React, Vue, Next)
+    # rarely serve at the default /favicon.ico path.
+    _PATHS = [
+        "/favicon.ico", "/favicon.png",
+        "/static/favicon.ico", "/static/favicon.png",
+        "/static/img/favicon.ico", "/static/images/favicon.ico",
+        "/assets/favicon.ico", "/assets/favicon.png",
+        "/assets/img/favicon.ico", "/img/favicon.ico",
+        "/images/favicon.ico", "/public/favicon.ico",
+    ]
+    found_at, favicon_content = None, None
+    for _p in _PATHS:
+        rr = safe_get(f"{base}{_p}", req=req)
+        if rr is not None and rr.status_code == 200 and rr.content and len(rr.content) > 100:
+            found_at, favicon_content = _p, rr.content
+            break
+    if not favicon_content:
+        return {"ok": True, "favicon": None,
+                "skipped_reason": f"No favicon found ({len(_PATHS)} paths probed)"}
     import base64 as _b64
-    b64_content = _b64.encodebytes(r.content)
+    b64_content = _b64.encodebytes(favicon_content)
     shodan_hash = _murmur3_32(b64_content)
     return {"ok": True,
             "found": True,
             "favicon": {
-                "md5": hashlib.md5(r.content).hexdigest(),
+                "path": found_at,
+                "url": f"{base}{found_at}",
+                "md5": hashlib.md5(favicon_content).hexdigest(),
                 "shodan_hash": shodan_hash,
                 "shodan_query": f"http.favicon.hash:{shodan_hash}",
-                "size": len(r.content),
+                "size": len(favicon_content),
             }}
 
 
