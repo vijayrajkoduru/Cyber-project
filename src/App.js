@@ -4103,7 +4103,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
   doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","normal");
   const coverInfo=[["Target",target||"—"],["Date",new Date().toLocaleDateString()],
     ["Time",new Date().toLocaleTimeString()],["Prepared By","VulnusLab Automated Pentest"],
-    ["Classification","CONFIDENTIAL"],["Report Type","Security Assessment"]];
+    ["Classification","CONFIDENTIAL"],["Report Type","Security Assessment"],["Authenticated", (reportData && reportData.authenticated) ? "Yes - scanned with captured session" : "No - public surface only"]]; /*PENTEST-AUTH-ROW-V2*/
   coverInfo.forEach(([k,v],i)=>{
     doc.setTextColor(100,116,139); doc.setFont("helvetica","bold");
     doc.text(k+":",M+4,128+i*7);
