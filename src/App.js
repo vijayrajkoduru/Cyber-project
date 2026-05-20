@@ -537,6 +537,13 @@ function Terminal(props) {
 
 // ── Reusable test-target picker ──────────────────────────────
 function TestTargets({targets, onSelect}) {
+  // Test Targets dropdown disabled across all modules — customers
+  // enter their own target URL manually. Bundled lab targets caused
+  // confusion (broken auto-login, container availability churn) so
+  // they're hidden until per-customer lab provisioning ships.
+  return null;
+  /* eslint-disable */
+  // The original body is preserved below for one-edit re-enabling.
   const [open,    setOpen]    = useState(false);
   const [closing, setClosing] = useState(false);
   const [copied,  setCopied]  = useState(null);
