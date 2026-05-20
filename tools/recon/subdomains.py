@@ -18,6 +18,17 @@ import dns.asyncresolver
 import whois as whois_lib
 from fastapi import APIRouter, Depends
 from tools._shared import (
+
+# SUBDOMAINS-AI-WORDLIST-V1
+import pathlib as _pl, json as _json
+def _load_ai_subs():
+    try:
+        f = _pl.Path(__file__).parent.parent / "_payloads" / "recon" / "subdomain_wordlist.json"
+        if f.exists(): return _json.loads(f.read_text())
+    except Exception: pass
+    return None
+_AI_SUBS = _load_ai_subs()
+
     ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
 )
 import aiohttp as _aiohttp_crawl

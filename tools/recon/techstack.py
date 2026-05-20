@@ -8,6 +8,17 @@ import re
 from fastapi import APIRouter, Depends
 
 from tools._shared import (
+
+# TECHSTACK-AI-FINGERPRINTS-V1
+import pathlib as _pl, json as _json
+def _load_ai_fp():
+    try:
+        f = _pl.Path(__file__).parent.parent / "_payloads" / "recon" / "tech_fingerprints.json"
+        if f.exists(): return _json.loads(f.read_text())
+    except Exception: pass
+    return {}
+_AI_FP = _load_ai_fp()
+
     ScanRequest, verify_scan_quota, web_url,
     safe_get, wrap_finding, standard_response,
 )
