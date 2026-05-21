@@ -239,6 +239,15 @@ const CSS = `
   }
 `;
 
+// Tracks all in-flight AbortControllers so handleLogout can cancel them all
+// in one shot — prevents zombie scan requests from hammering the backend
+// after the user logs out (the "can't re-login after logout" bug).
+const _activeAborts = new Set();
+function abortAllInFlight() {
+  for (const c of _activeAborts) { try { c.abort(); } catch(_){} }
+  _activeAborts.clear();
+}
+
 async function api(path, method, body, token) {
   // API-TIMEOUT-V2-SCOPED — scan endpoints need long timeouts (Nuclei = 13k templates,
   // WPScan enumeration, XSS canary fuzzing). Auth/general endpoints stay tight.
@@ -248,6 +257,7 @@ async function api(path, method, body, token) {
   const isScan = path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/");
   const timeoutMs = isScan ? 300000 : 30000;  // 5 min for scans, 30s otherwise
   const ctrl = new AbortController();
+  _activeAborts.add(ctrl);
   const t = setTimeout(()=>ctrl.abort(), timeoutMs);
   let res;
   try {
@@ -256,11 +266,11 @@ async function api(path, method, body, token) {
       body: body ? JSON.stringify(body) : null
     });
   } catch(e) {
-    clearTimeout(t);
+    clearTimeout(t); _activeAborts.delete(ctrl);
     if (e.name === "AbortError") throw new Error("Request timed out after " + Math.round(timeoutMs/1000) + "s on " + path);
     throw new Error("Network error on " + path + ": " + (e.message || e));
   }
-  clearTimeout(t);
+  clearTimeout(t); _activeAborts.delete(ctrl);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || res.statusText);
@@ -1844,7 +1854,13 @@ function generatePDF(reportData) {
       realF.forEach((f,idx)=>{
         const dl=doc.splitTextToSize(String(f.detail||""),contentW-8);
         const rl=doc.splitTextToSize(String(f.remediation||"Apply security hardening."),contentW-22);
-        const needed=Math.max(28, 19+(dl.length+rl.length)*4.5);
+        // EVIDENCE block: the actual HTTP exchange / payload that triggered
+        // the finding. Backend scanners populate this via `evidence_marker`
+        // (e.g. "GET /?family=<canary> → reflected in HTML body").
+        const evidenceText = f.evidence_marker || f.evidence || f.payload || "";
+        const el = evidenceText ? doc.splitTextToSize(String(evidenceText), contentW-22) : [];
+        const evidenceH = el.length > 0 ? (el.length * 3.6 + 7) : 0;
+        const needed=Math.max(28, 19+(dl.length+rl.length)*4.5+evidenceH);
         chk(needed);
         const [bg,lt]=sevColor(f.severity);
         fillR(margin,y,contentW,needed,idx%2===0?LIGHT:WHITE);
@@ -1894,6 +1910,20 @@ function generatePDF(reportData) {
         doc.text("Fix:",margin+5,fixY+4.5);
         doc.setFont("Arial","normal"); doc.setTextColor(...DARK);
         doc.text(rl,margin+16,fixY+4.5);
+
+        // Row 4 — EVIDENCE (request/response that triggered this finding).
+        // Acunetix/Burp Pro both show this; the VulnusLab differentiator is
+        // every entry comes from a live, re-confirmed probe.
+        if (evidenceH > 0) {
+          const evY = fixY + fixH + 1;
+          fillR(margin+3, evY, contentW-6, evidenceH, [248,250,252]);
+          hline(margin+3, evY, margin+3, evY+evidenceH, [100,116,139], 1);
+          doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(100,116,139);
+          doc.text("EVIDENCE", margin+5, evY+4);
+          doc.setFont("Courier","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
+          doc.text(el, margin+5, evY+8);
+          doc.setFont("Arial","normal");
+        }
 
         y+=needed+2;
       });
@@ -11090,6 +11120,9 @@ function VulnModule(props) {
   const _notifyRunning = props.onRunningChange || (() => {});
   const [target,setTarget]     = useState("");
   const [showPDFModal, setShowPDFModal] = useState(false);
+  const stopRef = useRef(false);
+  const abortRef = useRef(null);
+  const [stopped, setStopped] = useState(false);
   const [running,setRunning]   = useState(false);
   const [current,setCurrent]   = useState(-1);
   const [done,setDone]         = useState([]);
@@ -11177,6 +11210,10 @@ function VulnModule(props) {
       }
     };
     for(let i=0;i<VULN_PHASES.length;i++){
+      if (stopRef.current) {
+        add(`[!] Scan stopped by user at phase ${i+1}/${VULN_PHASES.length}`);
+        break;
+      }
       const ph = VULN_PHASES[i];
       setCurrent(i);
       add(`[*] Phase ${i+1}/${VULN_PHASES.length}: ${ph.name}...`);
@@ -11188,10 +11225,6 @@ function VulnModule(props) {
         const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
         add(`[✓] ${ph.name}: ${findings.length} finding(s)${hi>0?" — "+hi+" HIGH/CRITICAL":""}`);
       } catch(e){
-        // CRITICAL: save the error so the PDF Scan Coverage table can
-        // render FAILED with reason — NOT a silent "not run" omission.
-        // (User directive: "no silent skipping. everything has to be in
-        // the report under the tool.")
         const msg = e.message || "unknown error (check backend logs)";
         results[ph.tool] = {ok:false, _failed:true, error:msg};
         setAllResults({...results});
@@ -11201,9 +11234,19 @@ function VulnModule(props) {
     }
     const okCount     = Object.values(results).filter(x=>x && !x._failed).length;
     const failedCount = Object.values(results).filter(x=>x && x._failed).length;
+    const wasStopped = stopRef.current;
     setCurrent(-1); setRunning(false); _notifyRunning(false); setFinished(true);
     setActiveTab(VULN_PHASES[0].tool);
-    add(`[✓] Vulnerability scan complete — ${okCount} ok, ${failedCount} failed (${VULN_PHASES.length} attempted)`);
+    stopRef.current = false; setStopped(false);
+    add(wasStopped
+      ? `[!] Scan stopped — partial results: ${okCount} ok, ${failedCount} failed`
+      : `[✓] Vulnerability scan complete — ${okCount} ok, ${failedCount} failed (${VULN_PHASES.length} attempted)`);
+  };
+
+  const stopScan = () => {
+    stopRef.current = true;
+    setStopped(true);
+    if (abortRef.current) { try { abortRef.current.abort(); } catch(_){} }
   };
 
   const sevColor = s => ({CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",INFO:"#64748b"}[s]||"#64748b");
@@ -11342,6 +11385,12 @@ function VulnModule(props) {
             style={{background:running?"#1e293b":"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:6,padding:"10px 22px",color:running?"#475569":"#0f172a",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
             {running?"Scanning...":"▶ Run All Scans"}
           </button>
+          {running && (
+            <button onClick={stopScan} disabled={stopped}
+              style={{background:stopped?"#1e293b":"linear-gradient(135deg,#dc2626,#991b1b)",border:"none",borderRadius:6,padding:"10px 20px",color:stopped?"#475569":"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",whiteSpace:"nowrap"}}>
+              {stopped?"Stopping...":"■ Stop Scan"}
+            </button>
+          )}
           {finished&&(
             <button onClick={()=>setShowPDFModal(true)} /*VULN-AUTH-PDF-FLAG-V1*/
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
@@ -12605,24 +12654,20 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    // Nuclear logout — wipe ALL local state so the next user on this browser
-    // starts with a completely fresh dashboard. No scan caches, no target history,
-    // no module state, no auth tokens, no API keys persist between sessions.
+    // Nuclear logout — abort every in-flight scan request, then wipe ALL local state.
+    // Without the abort step, zombie scan requests keep hitting the backend after
+    // logout, which prevented the user from logging back in (timeout on /api/auth/login).
+    try { abortAllInFlight(); } catch {}
     try {
-      // Wipe localStorage entirely except cyberApiUrl (deployment-level setting,
-      // not user-specific — used by the app to know which backend to talk to)
       const preserve = {};
       const apiUrlSaved = localStorage.getItem("cyberApiUrl");
       if (apiUrlSaved) preserve.cyberApiUrl = apiUrlSaved;
       localStorage.clear();
       Object.entries(preserve).forEach(([k, v]) => localStorage.setItem(k, v));
-      // Also wipe sessionStorage (any one-tab cached scan results)
       sessionStorage.clear();
     } catch {}
     setToken(null); setRole(""); setUsername(""); setPlan("trial");
     // Force a full page reload so every React component remounts with empty state.
-    // This guarantees no in-memory scan results, history, or module state leak
-    // to the next user on the same browser.
     setTimeout(() => { window.location.replace("/"); }, 30);
   };
 
