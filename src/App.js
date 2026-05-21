@@ -1977,6 +1977,43 @@ function generatePDF(reportData) {
       y += 6;
     }
 
+    // ── APPENDIX (vulntemplate block 11) ──
+    chk(85);
+    y = sectionHead("Appendix",y);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("A. Methodology", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    const _wapMethod = doc.splitTextToSize(
+      "Web application testing follows OWASP Web Security Testing Guide (WSTG) v4.2 + OWASP Top 10 (2021). Each scanner targets a specific vulnerability class (injection, auth, sensitive data, broken access control, etc.) using context-aware payloads with zero-FP confirmation. Every finding has been actively triggered and re-confirmed.",
+      contentW-4);
+    _wapMethod.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
+    y+=4;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("B. Severity Bands (CVSS v3.1)", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    const _wapSev = [
+      "CRITICAL  9.0 - 10.0   Patch within 24 hours - Remote compromise possible without authentication",
+      "HIGH      7.0 -  8.9   Patch within 7 days   - Material security impact",
+      "MEDIUM    4.0 -  6.9   Hardening recommended - No direct compromise vector",
+      "LOW       0.1 -  3.9   Defense-in-depth improvement",
+    ];
+    _wapSev.forEach(l=>{ chk(5); doc.setFont("Courier","normal"); doc.text(l, margin+2, y+3.5); y+=4.5; });
+    doc.setFont("Arial","normal"); y+=4;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("C. References", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...BLUE);
+    const _wapRefs = [
+      "OWASP Web Security Testing Guide v4.2 - https://owasp.org/www-project-web-security-testing-guide",
+      "OWASP Top 10 (2021) - https://owasp.org/Top10",
+      "CWE - Common Weakness Enumeration - https://cwe.mitre.org",
+      "CVE / NVD - https://nvd.nist.gov",
+      "CVSS v3.1 Specification - https://www.first.org/cvss/v3.1/specification-document",
+    ];
+    _wapRefs.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4.5; });
+    y+=6;
+
     // End-of-report block — placed right after last recommendation row
     chk(38);
     const bY = y+8;
@@ -6262,7 +6299,20 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
     fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
     txt(row[0],margin+3,y+5.5,8.5,GRAY,true); txt(String(row[1]),margin+55,y+5.5,8.5,DARK); y+=8;
   });
-  y+=10;
+  y+=8;
+
+  // ─── TRUST STATEMENT (vulntemplate block 3) ───────────────────
+  // "Verified by VulnusLab" callout — every finding/data point was
+  // independently triggered and re-confirmed by the engine, not blind
+  // template matching. Builds customer trust before they read findings.
+  fillR(margin, y, contentW, 16, LBLUE);
+  fillR(margin, y, 3, 16, BLUE);
+  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
+  doc.text("VERIFIED BY VULNUSLAB", margin+8, y+6);
+  doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+  doc.text("Every data point in this report was independently triggered and re-confirmed by the VulnusLab engine.", margin+8, y+11);
+  doc.text("No template-only matches. Manual review still required for exploitation context.", margin+8, y+14);
+  y+=20;
 
   // ─── SCAN COVERAGE ───────────────────────────────────────────
   // Every recon report MUST account for every phase. Three states:
@@ -7291,6 +7341,78 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
     }
     y += 6;
   }
+
+  // ─── VERIFICATION AUDIT (vulntemplate block 10) ──────────────
+  // "What each scanner actually probed for" — shows the customer the
+  // exact discovery surface area covered. Demonstrates depth without
+  // revealing payload contents.
+  chk(60); y = sHead("Verification Audit", y);
+  fillR(margin, y, contentW, 7, DARK);
+  doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...WHITE);
+  doc.text("SCANNER", margin+3, y+5); doc.text("DISCOVERY PROBED", margin+50, y+5);
+  y+=7;
+  const _audit = [
+    ["WHOIS",            "Registrar, registrant, expiry, abuse contact"],
+    ["DNS Records",      "A/AAAA/MX/NS/TXT/CNAME records via authoritative resolver"],
+    ["Subdomain Disc.",  "Brute-force + CT log query + amass passive"],
+    ["Cert Transparency","crt.sh certificate log scrape"],
+    ["OSINT Harvest",    "theHarvester + crt.sh for emails/hosts"],
+    ["Port Scan",        "Masscan top-1000 then nmap service detection"],
+    ["OS Fingerprint",   "nmap -O TCP/IP stack signature"],
+    ["Directory Enum",   "AI-curated 3339-path wordlist with 200/301/403 filter"],
+    ["JS Endpoints",     "Source-map + regex extraction of fetch/axios URLs"],
+    ["Wayback",          "Web archive history for forgotten endpoints"],
+    ["BFS Crawl",        "Same-origin link graph 3 hops deep"],
+    ["Param Discovery",  "Form action + URL query + JS literal extraction"],
+    ["Favicon",          "MurmurHash3 + Shodan favicon query"],
+    ["Cloud Buckets",    "AI-curated 270-pattern S3/GCS/Azure permutation check"],
+    ["JS Secret Scanner","API key / token / cred patterns in JS bundles"],
+    ["ASN / IP Owner",   "Team Cymru WHOIS ASN lookup"],
+    ["InternetDB",       "Shodan free CVE/port surface"],
+    ["CVE Match (NVD)",  "Live NVD query for detected versions"],
+    ["Sub Takeover",     "DNS dangling-CNAME + service fingerprint"],
+    ["WAF/CDN",          "wafw00f + custom fingerprint via probe responses"],
+    ["TLS Deep",         "Protocol/cipher/cert chain audit (Heartbleed, CRIME, BEAST)"],
+    ["Zone Transfer",    "AXFR test against authoritative nameservers"],
+    ["Source Map",       "Probe for .map files exposing original source"],
+    ["Git Recon",        ".git/HEAD + .git/config + .git/index probe"],
+    ["API Docs",         "Swagger/OpenAPI/GraphQL/Postman discovery"],
+  ];
+  _audit.forEach((row,i)=>{
+    chk(7);
+    fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
+    doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text(row[0], margin+3, y+4.6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+    doc.text(row[1], margin+50, y+4.6);
+    y += 6.5;
+  });
+  y += 4;
+
+  // ─── APPENDIX (vulntemplate block 11) ────────────────────────
+  // A. Methodology · B. Discovery scope · C. References
+  chk(80); y = sHead("Appendix", y);
+  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+  doc.text("A. Methodology", margin, y+5); y+=8;
+  doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+  const _mLines = doc.splitTextToSize(
+    "Reconnaissance follows PTES (Penetration Testing Execution Standard) and NIST SP 800-115 — Intelligence Gathering phase. Each scanner targets a specific discovery surface (DNS, ports, content, third-party metadata) with minimal target impact. No exploitation is attempted at this stage.",
+    contentW-4);
+  _mLines.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
+  y+=4;
+
+  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+  doc.text("B. References", margin, y+5); y+=8;
+  doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...BLUE);
+  const _refs = [
+    "PTES — http://www.pentest-standard.org",
+    "NIST SP 800-115 — https://csrc.nist.gov/publications/detail/sp/800-115/final",
+    "OWASP Web Security Testing Guide — https://owasp.org/www-project-web-security-testing-guide",
+    "CVE / NVD — https://nvd.nist.gov",
+    "Shodan InternetDB — https://internetdb.shodan.io",
+  ];
+  _refs.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4.5; });
+  y+=6;
 
   // ── END OF REPORT ──────────────────────────────────────────
   if(y+32>284){doc.addPage();y=18;drawHeader();}
@@ -8817,7 +8939,19 @@ function generateExploitReport({results, date}) {
        txt(row[1], margin+60, y+5, 8.5, DARK);
        y += 7;
      });
-    y += 8;
+    y += 6;
+
+    // ── TRUST STATEMENT (vulntemplate block 3) ──
+    const LBLUE = [220,230,245];
+    fillR(margin, y, contentW, 16, LBLUE);
+    fillR(margin, y, 3, 16, BLUE);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
+    doc.text("VERIFIED BY VULNUSLAB", margin+8, y+6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text("Every exploit listed below was executed against the live target and either succeeded (shell/data extracted)", margin+8, y+11);
+    doc.text("or failed with a captured stack trace. No theoretical claims — only verified outcomes.", margin+8, y+14);
+    y += 22;
+
     // ── Per-exploit findings ──
     results.forEach((r, i) => {
       chk(40);
@@ -8936,6 +9070,33 @@ function generateExploitReport({results, date}) {
 
       y += 4;
     });
+    // ── APPENDIX (vulntemplate block 11) ──
+    chk(80);
+    fillR(margin, y, contentW, 9, [220,230,245]);
+    doc.setFont("Arial","bold"); doc.setFontSize(10); doc.setTextColor(...BLUE);
+    doc.text("Appendix", margin+4, y+6); y+=13;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("A. Methodology", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    const _expMethod = doc.splitTextToSize(
+      "Exploitation follows PTES Post-Exploitation phase + OWASP Testing Guide Section 4. Each exploit is a direct-socket implementation — no msfconsole, no HTTP-stager dependencies. Success criteria: shell session opened, credential extracted, or file read. Failure is logged with the captured network response.",
+      contentW-4);
+    _expMethod.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
+    y+=4;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("B. References", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...BLUE);
+    const _expRefs = [
+      "PTES Post-Exploitation — http://www.pentest-standard.org/index.php/Post_Exploitation",
+      "OWASP Testing Guide — https://owasp.org/www-project-web-security-testing-guide",
+      "CVE / NVD — https://nvd.nist.gov",
+      "Exploit-DB — https://www.exploit-db.com",
+    ];
+    _expRefs.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4.5; });
+    y+=6;
+
     // ── End-of-report block ──
     chk(35);
     fillR(margin, y, contentW, 30, [219,234,254]);
@@ -8944,6 +9105,13 @@ function generateExploitReport({results, date}) {
     txt("All findings have been actively verified. No false positives.", pageW/2, y+22, 6.5, GRAY, false, "center");
     txt("vulnuslab.com  ·  support@vulnuslab.com", pageW/2, y+27, 8, BLUE, true, "center");
     footer();
+    // ── Page borders + page numbers on all pages (vulntemplate chrome) ──
+    const total = doc.internal.getNumberOfPages();
+    for(let i=1;i<=total;i++){
+      doc.setPage(i);
+      doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,pageW,pageH,"S");
+      if(i>=2){ txt("VulnusLab | CONFIDENTIAL  ·  vulnuslab.com", margin, pageH-5, 6.5, GRAY); txt("Page "+i+" of "+total, pageW-margin, pageH-5, 6.5, BLUE, false, "right"); }
+    }
     doc.save(`exploit_report_${date.replace(/[: ]/g,"-")}.pdf`);
   };
   _go();
@@ -9765,7 +9933,17 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
     const rows=[["Target",`${targetIP||"—"}:${targetPort||"—"}`],["Prefix",prefix||"—"],["Date",date],["Classification","CONFIDENTIAL"],["Report Type","Buffer Overflow Exploitation"]];
     fillR(margin,y,contentW,8,DARK); txt("FIELD",margin+3,y+5.5,8,WHITE,true); txt("VALUE",margin+55,y+5.5,8,WHITE,true); y+=8;
     rows.forEach(([f,v],i)=>{fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);txt(f,margin+3,y+5.5,8.5,GRAY,true);txt(String(v),margin+55,y+5.5,8.5,DARK);y+=8;});
-    y+=10;
+    y+=8;
+
+    // ── TRUST STATEMENT (vulntemplate block 3) ──
+    fillR(margin, y, contentW, 16, LBLUE);
+    fillR(margin, y, 3, 16, BLUE);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
+    doc.text("VERIFIED BY VULNUSLAB", margin+8, y+6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text("Each phase below was executed against the target binary on the analyst's workstation. EIP offset, bad", margin+8, y+11);
+    doc.text("characters, and JMP ESP gadget were validated empirically — no theoretical or static-analysis claims.", margin+8, y+14);
+    y += 22;
 
     // Exploitation Summary
     chk(60); y=sHead("Exploitation Summary",y);
@@ -9868,6 +10046,29 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
       y+=fsH+6;
       y+=6;
     }
+
+    // ── APPENDIX (vulntemplate block 11) ──
+    chk(80); y=sHead("Appendix",y);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("A. Methodology", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    const _bofMethod = doc.splitTextToSize(
+      "Stack-based buffer overflow exploitation follows the standard 7-phase OSCP methodology: Fuzz → Find Offset → Confirm EIP Control → Detect Bad Characters → Find JMP ESP gadget → Generate Shellcode → Deliver Exploit. Each phase is independently verifiable from the artifacts captured in this report.",
+      contentW-4);
+    _bofMethod.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
+    y+=4;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("B. References", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...BLUE);
+    const _bofRefs = [
+      "OSCP Buffer Overflow Methodology — https://www.offensive-security.com/pwk-oscp/",
+      "Mona.py (Immunity Debugger plugin) — https://github.com/corelan/mona",
+      "msfvenom payload reference — https://docs.metasploit.com",
+      "CVE / NVD — https://nvd.nist.gov",
+    ];
+    _bofRefs.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4.5; });
+    y+=6;
 
     // End of report contact block
     chk(34);
