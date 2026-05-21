@@ -3710,14 +3710,28 @@ function WebAppModule(props) {
     {showPDFModal && (
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>📄 Customize PDF Report</div>
             <button onClick={()=>setShowPDFModal(false)} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}>✕</button>
           </div>
+          <div style={{color:"#64748b",fontSize:11,marginBottom:14,fontStyle:"italic"}}>
+            All fields are optional — fill only what you need. Empty fields use sensible defaults.
+          </div>
+
+          {/* Quick-Skip path — generate with current defaults, no customization */}
+          <button onClick={()=>{
+              try {
+                setShowPDFModal(false);
+                setTimeout(()=>dlPDF({...pdfConfig, encrypt:false}), 50);
+              } catch(e){ alert("PDF error: "+(e.message||e)); }
+            }}
+            style={{width:"100%",background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 14px",color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:16}}>
+            ⚡ Skip & Generate with Defaults (no password, no watermark)
+          </button>
 
           {/* Company Name */}
           <div style={{marginBottom:16}}>
-            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company / Client Name</label>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company / Client Name (optional)</label>
             <input value={pdfConfig.companyName} onChange={e=>setPDFConfig(p=>({...p,companyName:e.target.value}))}
               placeholder="e.g. Acme Corporation"
               style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
@@ -3726,22 +3740,22 @@ function WebAppModule(props) {
           {/* Reporter Name + Role */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Prepared By (Name)</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Prepared By (optional)</label>
               <input value={pdfConfig.reporterName} onChange={e=>setPDFConfig(p=>({...p,reporterName:e.target.value}))}
                 placeholder="e.g. John Smith"
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
             </div>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Job Title / Role</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Job Title / Role (optional)</label>
               <input value={pdfConfig.reporterRole||""} onChange={e=>setPDFConfig(p=>({...p,reporterRole:e.target.value}))}
                 placeholder="e.g. Senior Penetration Tester"
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
             </div>
           </div>
 
-          {/* Report Date */}
+          {/* Report Date (optional) */}
           <div style={{marginBottom:16}}>
-            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Report Date</label>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Report Date (optional)</label>
             <input type="date" onChange={e=>{
               const d = new Date(e.target.value);
               setPDFConfig(p=>({...p,date:d.toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}));
@@ -3752,7 +3766,7 @@ function WebAppModule(props) {
 
           {/* Logo Upload */}
           <div style={{marginBottom:20}}>
-            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (PNG/JPG)</label>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               <label style={{background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 18px",color:"#93c5fd",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
                 📁 Upload Logo
@@ -3774,24 +3788,24 @@ function WebAppModule(props) {
             </div>
           </div>
 
-          {/* ── Prepared For (Client Recipient) ── */}
+          {/* ── Prepared For — Client Recipient (optional) ── */}
           <div style={{marginBottom:16}}>
-            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Prepared For (Client Recipient)</label>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Prepared For — Client Recipient (optional)</label>
             <input value={pdfConfig.preparedFor||""} onChange={e=>setPDFConfig(p=>({...p,preparedFor:e.target.value}))}
               placeholder="e.g. CISO, Acme Corp"
               style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
           </div>
 
-          {/* ── Engagement ID + Version ── */}
+          {/* ── Engagement ID (optional) + Version ── */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Engagement ID</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Engagement ID (optional)</label>
               <input value={pdfConfig.engagementId||""} onChange={e=>setPDFConfig(p=>({...p,engagementId:e.target.value}))}
                 placeholder="VL-2026-0521"
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"JetBrains Mono,monospace"}}/>
             </div>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Version Label</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Version Label (optional)</label>
               <input value={pdfConfig.version||""} onChange={e=>setPDFConfig(p=>({...p,version:e.target.value}))}
                 placeholder="v1.0 — FINAL"
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
@@ -3801,12 +3815,12 @@ function WebAppModule(props) {
           {/* ── Engagement Window ── */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Test Start</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Test Start (optional)</label>
               <input type="date" value={pdfConfig.engagementStart||""} onChange={e=>setPDFConfig(p=>({...p,engagementStart:e.target.value}))}
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
             </div>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Test End</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Test End (optional)</label>
               <input type="date" value={pdfConfig.engagementEnd||""} onChange={e=>setPDFConfig(p=>({...p,engagementEnd:e.target.value}))}
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
             </div>
@@ -3815,7 +3829,7 @@ function WebAppModule(props) {
           {/* ── Confidentiality + Watermark ── */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Confidentiality Level</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Confidentiality (optional)</label>
               <select value={pdfConfig.confidentiality||"CONFIDENTIAL"} onChange={e=>setPDFConfig(p=>({...p,confidentiality:e.target.value}))}
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}>
                 <option value="INTERNAL">INTERNAL</option>
@@ -3825,7 +3839,7 @@ function WebAppModule(props) {
               </select>
             </div>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Watermark (diagonal)</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Watermark (optional)</label>
               <select value={pdfConfig.watermark||""} onChange={e=>setPDFConfig(p=>({...p,watermark:e.target.value}))}
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}>
                 <option value="">None</option>
@@ -3839,24 +3853,24 @@ function WebAppModule(props) {
 
           {/* ── Custom Executive Summary ── */}
           <div style={{marginBottom:16}}>
-            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional)</label>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional — overrides default)</label>
             <textarea value={pdfConfig.customExecSummary||""} onChange={e=>setPDFConfig(p=>({...p,customExecSummary:e.target.value}))}
               placeholder="Override the auto-generated executive summary. Leave blank to use the default."
               rows={3}
               style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
           </div>
 
-          {/* ── Custom Disclaimer + Footer ── */}
+          {/* ── Custom Disclaimer (optional) + Footer ── */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer (optional)</label>
               <textarea value={pdfConfig.customDisclaimer||""} onChange={e=>setPDFConfig(p=>({...p,customDisclaimer:e.target.value}))}
                 placeholder="Legal/CYA text at the end of the report"
                 rows={2}
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"8px 12px",color:"#e2e8f0",fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
             </div>
             <div>
-              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Footer Text</label>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Footer Text (optional)</label>
               <input value={pdfConfig.customFooterText||""} onChange={e=>setPDFConfig(p=>({...p,customFooterText:e.target.value}))}
                 placeholder="Override default footer"
                 style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 12px",color:"#e2e8f0",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
@@ -3868,7 +3882,7 @@ function WebAppModule(props) {
             <label style={{display:"flex",alignItems:"center",gap:8,color:"#93c5fd",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
               <input type="checkbox" checked={pdfConfig.encrypt!==false} onChange={e=>setPDFConfig(p=>({...p,encrypt:e.target.checked}))}
                 style={{accentColor:"#3b82f6",cursor:"pointer"}}/>
-              🔒 PASSWORD-PROTECT THIS PDF
+              🔒 PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
             </label>
             {pdfConfig.encrypt!==false && (
               <>
@@ -3898,7 +3912,7 @@ function WebAppModule(props) {
 
           {/* Template Selector */}
           <div style={{marginBottom:24}}>
-            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Report Color Theme</label>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Report Color Theme (optional)</label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               {[
                 {id:"standard",  label:"Standard",    accent:"#22c55e", desc:"Green — Default"},
