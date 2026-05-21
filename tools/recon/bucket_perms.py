@@ -6,8 +6,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host
 router = APIRouter()
 
 
-@router.post("/api/recon/bucket_perms")
-async def recon_bucket_perms(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_bucket_perms_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     name = recon_host(req.target).split(".")[0]
     findings, perm_results = [], []
     suffixes = ["", "-prod", "-staging", "-dev", "-backup", "-uploads",
@@ -58,6 +57,17 @@ async def recon_bucket_perms(req: ScanRequest, _=Depends(verify_scan_quota)):
             "details": perm_results[:30],
             "engine": f"async aiohttp bucket ACL probe ({len(candidates)} candidates)"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/bucket_perms")
+async def recon_bucket_perms(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_bucket_perms_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"bucket_perms scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

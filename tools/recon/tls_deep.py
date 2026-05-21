@@ -10,8 +10,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host
 router = APIRouter()
 
 
-@router.post("/api/recon/tls_deep")
-async def recon_tls_deep(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_tls_deep_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
     port = 443
     findings, supported_protocols, cert_info = [], [], None
@@ -97,6 +96,17 @@ async def recon_tls_deep(req: ScanRequest, _=Depends(verify_scan_quota)):
             "total_findings": len(findings),
             "engine": "Python ssl/socket TLS deep audit (protocols + ciphers + cert)"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/tls_deep")
+async def recon_tls_deep(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_tls_deep_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"tls_deep scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

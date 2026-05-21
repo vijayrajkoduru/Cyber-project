@@ -17,8 +17,7 @@ GIT_PATHS = [
 ]
 
 
-@router.post("/api/recon/git_recon")
-async def recon_git_recon(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_git_recon_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, exposed_files, metadata = [], [], {}
 
@@ -85,6 +84,17 @@ async def recon_git_recon(req: ScanRequest, _=Depends(verify_scan_quota)):
             "total_exposed": len(exposed_files),
             "engine": f".git/ probe ({len(GIT_PATHS)} core files) + metadata parser"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/git_recon")
+async def recon_git_recon(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_git_recon_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"git_recon scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

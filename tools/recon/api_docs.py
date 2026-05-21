@@ -19,8 +19,7 @@ CATEGORIES = {
 }
 
 
-@router.post("/api/recon/api_docs")
-async def recon_api_docs(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_api_docs_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, exposed = [], []
     for category, paths in CATEGORIES.items():
@@ -52,6 +51,17 @@ async def recon_api_docs(req: ScanRequest, _=Depends(verify_scan_quota)):
             "paths_probed": sum(len(v) for v in CATEGORIES.values()),
             "engine": f"API doc discovery ({sum(len(v) for v in CATEGORIES.values())} paths probed)"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/api_docs")
+async def recon_api_docs(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_api_docs_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"api_docs scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

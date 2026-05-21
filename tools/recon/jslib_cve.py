@@ -59,8 +59,7 @@ def _version_lt(a, b):
         return False
 
 
-@router.post("/api/recon/jslib_cve")
-async def recon_jslib_cve(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_jslib_cve_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, libs_detected = [], []
     r = safe_get(base, req=req)
@@ -111,6 +110,17 @@ async def recon_jslib_cve(req: ScanRequest, _=Depends(verify_scan_quota)):
             "engine": f"retire.js-style detector ({len(VULN_DB)} libs, "
                       f"{sum(len(v[2]) for v in VULN_DB)} CVEs in DB)"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/jslib_cve")
+async def recon_jslib_cve(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_jslib_cve_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"jslib_cve scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

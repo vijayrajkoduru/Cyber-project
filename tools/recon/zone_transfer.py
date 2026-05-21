@@ -6,8 +6,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host
 router = APIRouter()
 
 
-@router.post("/api/recon/zone_transfer")
-async def recon_zone_transfer(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_zone_transfer_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     domain = recon_host(req.target)
     findings, transfers, ns_attempted = [], [], []
     try:
@@ -41,6 +40,17 @@ async def recon_zone_transfer(req: ScanRequest, _=Depends(verify_scan_quota)):
             "total_transfers": len(transfers),
             "engine": "pure-Python AXFR probe across all NS records"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/zone_transfer")
+async def recon_zone_transfer(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_zone_transfer_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"zone_transfer scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)
