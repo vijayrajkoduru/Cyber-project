@@ -6286,6 +6286,9 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
     {tool:"tls_deep",      name:"TLS Deep Audit",         isEmpty:d=>!d.findings||d.findings.length===0},
     {tool:"wpjson_enum",   name:"WordPress wp-json Enum", isEmpty:d=>(!d.users||d.users.length===0) && !d.wp_version},
     {tool:"default_creds", name:"Admin Panel Exposure",   isEmpty:d=>!d.panels_found||d.panels_found.length===0},
+    {tool:"jslib_cve",  name:"JS Library CVE",       isEmpty:d=>(!d.libs_detected||d.libs_detected.length===0)},
+    {tool:"git_recon",  name:"Git Repo Exposure",    isEmpty:d=>!d.exposed_files||d.exposed_files.length===0},
+    {tool:"cdn_origin", name:"CDN Origin Discovery", isEmpty:d=>!d.cdn_detected||d.cdn_detected.length===0},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -7336,6 +7339,9 @@ const RECON_PHASES = [
           {name:"TLS Deep Audit",         tool:"tls_deep",      endpoint:"/api/recon/tls_deep",      desc:"Heartbleed/POODLE/weak ciphers/expired certs"},
           {name:"WordPress wp-json Enum", tool:"wpjson_enum",   endpoint:"/api/recon/wpjson_enum",   desc:"WP user enumeration via REST API"},
           {name:"Admin Panel Exposure",   tool:"default_creds", endpoint:"/api/recon/default_creds", desc:"Jenkins/Tomcat/phpMyAdmin/Grafana detected"},
+          {name:"JS Library CVE",         tool:"jslib_cve",  endpoint:"/api/recon/jslib_cve",  desc:"Outdated jQuery/React/Angular with known CVEs"},
+          {name:"Git Repo Exposure",      tool:"git_recon",  endpoint:"/api/recon/git_recon",  desc:".git/ directory exposed → source code leak"},
+          {name:"CDN Origin Discovery",   tool:"cdn_origin", endpoint:"/api/recon/cdn_origin", desc:"Real IP behind Cloudflare/AWS WAF"},
 ];
 
 function ReconModule({token, onRunningChange}) {
