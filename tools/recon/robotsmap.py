@@ -27,7 +27,6 @@ from fastapi import APIRouter, Depends
 
 router = APIRouter()
 
-@router.post("/api/recon/robotsmap")
 async def recon_robotsmap_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     disallow, sitemaps, well_known = [], [], []

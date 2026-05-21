@@ -59,7 +59,6 @@ def _murmur3_32(data, seed=0):
         h1 = -(0x100000000 - h1)
     return h1
 
-@router.post("/api/recon/favicon")
 async def recon_favicon_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     # Probe 12 common favicon locations — modern frameworks (React, Vue, Next)
