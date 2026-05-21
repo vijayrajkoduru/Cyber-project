@@ -1283,6 +1283,48 @@ function generatePDF(reportData) {
       doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...rColor);
       doc.text(rDisp,trackX+trackW+2,y+9);
       y+=18;
+
+      // ─── SEVERITY BREAKDOWN ─── horizontal bars per severity tier showing
+      // share of total findings. Fills the otherwise empty page-3 area.
+      const _sevCounts = {
+        CRITICAL: allFindings.filter(f=>f.severity==="CRITICAL").length,
+        HIGH:     allFindings.filter(f=>f.severity==="HIGH").length,
+        MEDIUM:   allFindings.filter(f=>f.severity==="MEDIUM").length,
+        LOW:      allFindings.filter(f=>f.severity==="LOW").length,
+      };
+      const _totalF = _sevCounts.CRITICAL + _sevCounts.HIGH + _sevCounts.MEDIUM + _sevCounts.LOW;
+      if (_totalF > 0) {
+        y += 2;
+        doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+        doc.text("Severity Breakdown", margin+2, y+4);
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+        doc.text(`${_totalF} confirmed finding(s) across 4 severity tiers`, margin+50, y+4);
+        y += 7;
+        const _sevColorMap = {CRITICAL:RED, HIGH:ORANGE, MEDIUM:[202,138,4], LOW:GREEN};
+        const _sevSlaMap = {CRITICAL:"24 hrs", HIGH:"7 days", MEDIUM:"30 days", LOW:"90 days"};
+        const _trackX = margin + 28, _trackW = contentW - 62;
+        ["CRITICAL","HIGH","MEDIUM","LOW"].forEach(sev => {
+          const n = _sevCounts[sev];
+          const pct = _totalF > 0 ? (n / _totalF) : 0;
+          const col = _sevColorMap[sev];
+          // Label
+          doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...col);
+          doc.text(sev, margin+2, y+4.5);
+          // Track + filled bar
+          doc.setFillColor(230,235,240); doc.rect(_trackX, y+1, _trackW, 6, "F");
+          if (pct > 0) {
+            doc.setFillColor(...col);
+            doc.rect(_trackX, y+1, Math.max(_trackW*pct, 3), 6, "F");
+          }
+          // Count + SLA
+          doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...col);
+          doc.text(String(n), _trackX + _trackW + 4, y+5);
+          doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+          doc.text(`SLA ${_sevSlaMap[sev]}`, _trackX + _trackW + 14, y+5);
+          y += 9;
+        });
+        y += 4;
+      }
     }
 
     // Footer cover
@@ -1673,11 +1715,26 @@ function generatePDF(reportData) {
         y+=7;
       });
       if(advNotRun.length>0){
-        y+=2;
-        fillR(margin,y,contentW,8,[248,250,252]);
-        hline(margin,y,margin+3,y,[100,116,139],1.5);
-        txt(advNotRun.length+" phase(s) not executed in this scan: "+advNotRun.slice(0,5).map(c=>c.label).join(", ")+(advNotRun.length>5?"...":""),margin+4,y+5.5,7,[100,116,139]);
+        y+=4;
+        // Section header
+        fillR(margin,y,contentW,7,[241,245,249]);
+        hline(margin,y,margin+3,y+7,[100,116,139],1.5);
+        txt(advNotRun.length+" phase(s) not executed in this scan",margin+5,y+5,8,[71,85,105],true);
         y+=9;
+        // Render as 3-column grid: 8 per row max so the full list fits
+        const _colW = contentW / 3;
+        for (let ri=0; ri<advNotRun.length; ri+=3) {
+          chk(6);
+          for (let ci=0; ci<3; ci++) {
+            const item = advNotRun[ri+ci];
+            if (!item) continue;
+            const cx = margin + ci*_colW;
+            fillR(cx, y, _colW-2, 5.5, [248,250,252]);
+            txt("• "+String(item.label||"").substring(0,32), cx+3, y+4, 7, [71,85,105]);
+          }
+          y += 6;
+        }
+        y += 2;
       }
     } else {
       fillR(margin,y,contentW,8,LIGHT);
@@ -2831,8 +2888,13 @@ function WebAppModule(props) {
       }
     });
     // XSS — returns {vulnerable:true} not findings array. Verified by active probe.
+    // ONLY push synthetic finding if the scanner did NOT also return a structured findings[]
+    // array. Otherwise we duplicate ("XSS detected on target" + "Reflected XSS — param 'family'").
     if (allResults["xss"]?.vulnerable) {
-      allFindings.push({_tool:"xss", confidence:"CONFIRMED", detail:"XSS vulnerability detected on target",severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",cwe_name:"Cross-Site Scripting",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
+      const _xssScannerFindings = (allResults["xss"]?.findings || []).filter(f => f.severity !== "INFO");
+      if (_xssScannerFindings.length === 0) {
+        allFindings.push({_tool:"xss", confidence:"CONFIRMED", detail:"XSS vulnerability detected on target",severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",cwe_name:"Cross-Site Scripting",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
+      }
     }
     // CORS — backend's /api/scan/cors already returns a proper finding in its findings[] array,
     // which is collected by the loop above. We do NOT add a synthetic finding here — that would
@@ -2869,6 +2931,10 @@ function WebAppModule(props) {
       if (d.includes("x-frame-options") || d.includes("clickjacking") || cn.includes("clickjacking") || d.includes("frame-ancestors")) return "header:x-frame";
       if (d.includes("x-content-type-options")) return "header:x-content-type";
       if (d.includes("permissions-policy")) return "header:permissions-policy";
+      // XSS — every XSS variant (reflected, stored, DOM) collapses to one fingerprint
+      // so the generic "XSS detected on target" + specific "Reflected XSS in param" don't both ship.
+      if ((f.cwe || "").toUpperCase() === "CWE-79" || cn.includes("cross-site scripting") || /\bxss\b/.test(d)) return "vuln:xss";
+      if ((f.cwe || "").toUpperCase() === "CWE-89" || cn.includes("sql injection")) return "vuln:sqli";
       // File-based: collapse same file detected by different scanners.
       // Match with OR without leading slash — nikto says "robots.txt exposes hidden paths"
       // while sensitivefiles says "Accessible: /robots.txt" — both refer to same file.
@@ -2916,6 +2982,27 @@ function WebAppModule(props) {
       if (!cur || sc > cur.score) _best.set(fp, {finding: f, score: sc});
     });
     allFindings = Array.from(_best.values()).map(v => v.finding);
+    // ─── CVSS BACKFILL ─── replace 0.0 with a sane CWE-mapped score so the
+    // PDF doesn't show "CVSS 0.0" for findings that obviously have impact
+    // (CWE-290 SPF/DMARC, CWE-295 CAA, CWE-693 missing headers, etc.).
+    // Backend may legitimately omit CVSS for some checks — we backfill here.
+    const _cvssByCwe = {
+      "CWE-79": "7.5", "CWE-89": "9.8", "CWE-78": "9.8", "CWE-22": "7.5",
+      "CWE-918": "8.1", "CWE-611": "8.1", "CWE-352": "6.8", "CWE-601": "6.1",
+      "CWE-264": "5.5", "CWE-284": "5.3", "CWE-200": "5.3", "CWE-538": "5.3",
+      "CWE-290": "5.3", "CWE-295": "3.1", "CWE-310": "5.3", "CWE-319": "7.4",
+      "CWE-326": "5.3", "CWE-345": "5.3", "CWE-358": "5.0", "CWE-384": "6.8",
+      "CWE-614": "4.3", "CWE-693": "4.3", "CWE-749": "5.3", "CWE-798": "9.8",
+      "CWE-1021": "6.1", "CWE-1004": "4.3", "CWE-307": "5.3",
+    };
+    const _sevDefaultCvss = {CRITICAL:"9.0", HIGH:"7.5", MEDIUM:"5.0", LOW:"3.1", INFO:"0.0"};
+    allFindings.forEach(f => {
+      const cv = parseFloat(f.cvss);
+      if (!isFinite(cv) || cv <= 0) {
+        const cwe = (f.cwe || "").toUpperCase();
+        f.cvss = _cvssByCwe[cwe] || _sevDefaultCvss[f.severity] || "5.0";
+      }
+    });
     // Sort final findings by severity so master table reads CRITICAL → INFO
     const _sevOrder = {CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3, INFO:4};
     allFindings.sort((a, b) => (_sevOrder[a.severity] ?? 5) - (_sevOrder[b.severity] ?? 5));
