@@ -2301,6 +2301,7 @@ function WebAppModule(props) {
   const stopRef                = useRef(false);
   const [selectedPhases, setSelectedPhases] = useState(() => new Set(PHASES.map((_,i)=>i)));
   const [showPDFModal, setShowPDFModal]     = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [pdfConfig, setPDFConfig]           = useState({
     companyName:"VulnusLab", reporterName:"VulnusLab Automated Pentest", reporterRole:"Security Assessment Engine · vulnuslab.com",
     date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
@@ -3115,9 +3116,37 @@ function WebAppModule(props) {
               return <>
                 <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>⚠ RISK: {lb} ({sc}/100)</div>
                 <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>📄 Report</button>
-                <button onClick={dlCSV} style={{background:"#166534",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>📊 CSV</button>
-                <button onClick={dlJSON} style={{background:"#1e3a8a",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>🗃 JSON</button>
-                <button onClick={dlSARIF} title="GitHub Code Scanning / GitLab SAST / Defender for Cloud compatible" style={{background:"#7c3aed",border:"none",borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>⚡ SARIF</button>
+                <div style={{position:"relative"}}>
+                  <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"11px 16px",color:"#cbd5e1",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                    Export <span style={{fontSize:10,opacity:0.8}}>{showExportMenu?"▴":"▾"}</span>
+                  </button>
+                  {showExportMenu && (
+                    <>
+                      <div onClick={()=>setShowExportMenu(false)} style={{position:"fixed",inset:0,zIndex:50}}/>
+                      <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"#0f172a",border:"1px solid #334155",borderRadius:6,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",zIndex:51,overflow:"hidden"}}>
+                        <button onClick={()=>{setShowExportMenu(false);dlCSV();}}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1e293b"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>CSV</span>
+                          <span style={{fontSize:10,color:"#64748b"}}>spreadsheet</span>
+                        </button>
+                        <button onClick={()=>{setShowExportMenu(false);dlJSON();}}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1e293b"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>JSON</span>
+                          <span style={{fontSize:10,color:"#64748b"}}>API / scripts</span>
+                        </button>
+                        <button onClick={()=>{setShowExportMenu(false);dlSARIF();}}
+                          title="GitHub Code Scanning / GitLab SAST / Defender for Cloud compatible"
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>SARIF</span>
+                          <span style={{fontSize:10,color:"#64748b"}}>GitHub / SIEM</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </>;
             })()}
           </div>
