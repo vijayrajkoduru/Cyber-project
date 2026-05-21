@@ -2067,6 +2067,159 @@ function generatePDF(reportData) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SHARED PDF CONFIG MODAL — used by Vuln/Recon/Exploit/BOF Report btns
+// ═══════════════════════════════════════════════════════════════
+// Self-contained: manages its own state. Caller passes `moduleLabel`
+// and `onGenerate(config)`. All fields are optional — Skip & Generate
+// button delivers a sensible default PDF instantly.
+function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
+  const _genPwd = () => Array.from(crypto.getRandomValues(new Uint8Array(9)))
+    .map(b=>"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"[b%55]).join("");
+  const [cfg, setCfg] = useState(() => ({
+    companyName:"", customLogo:null, logoName:null,
+    reporterName:"", reporterRole:"",
+    preparedFor:"",
+    engagementId: "VL-" + new Date().getFullYear() + "-" + Math.random().toString(36).substring(2,7).toUpperCase(),
+    engagementStart:"", engagementEnd:"",
+    version:"v1.0 — FINAL",
+    confidentiality:"CONFIDENTIAL",
+    watermark:"",
+    date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
+    customExecSummary:"",
+    customDisclaimer:"",
+    customFooterText:"",
+    template:"standard",
+    encrypt:true,
+    password: _genPwd(),
+  }));
+  if(!open) return null;
+  const fld = (label,value,setKey,placeholder,extra) => (
+    <div style={{marginBottom:14}}>
+      <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
+      <input value={value||""} onChange={e=>setCfg(p=>({...p,[setKey]:e.target.value}))}
+        placeholder={placeholder} {...(extra||{})}
+        style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:extra&&extra.mono?"JetBrains Mono,monospace":"inherit"}}/>
+    </div>
+  );
+  const sel = (label,value,setKey,opts) => (
+    <div style={{marginBottom:14}}>
+      <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
+      <select value={value||""} onChange={e=>setCfg(p=>({...p,[setKey]:e.target.value}))}
+        style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}>
+        {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+      </select>
+    </div>
+  );
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>📄 Customize {moduleLabel||"Report"}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{color:"#64748b",fontSize:11,marginBottom:14,fontStyle:"italic"}}>
+          All fields are optional — fill only what you need. Empty fields use sensible defaults.
+        </div>
+        <button onClick={()=>{ onClose(); setTimeout(()=>onGenerate({...cfg, encrypt:false}), 50); }}
+          style={{width:"100%",background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 14px",color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:16}}>
+          ⚡ Skip & Generate with Defaults (no password, no watermark)
+        </button>
+        {fld("Company / Client Name (optional)", cfg.companyName, "companyName", "e.g. Acme Corporation")}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {fld("Prepared By (optional)", cfg.reporterName, "reporterName", "John Smith")}
+          {fld("Job Title / Role (optional)", cfg.reporterRole, "reporterRole", "Senior Pentester")}
+        </div>
+        {fld("Report Date (optional)", cfg.date, "date", "")}
+        {/* Logo */}
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <label style={{background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 18px",color:"#93c5fd",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+              📁 Upload Logo
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+                const file = e.target.files[0]; if(!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => setCfg(p=>({...p,customLogo:ev.target.result,logoName:file.name}));
+                reader.readAsDataURL(file);
+              }}/>
+            </label>
+            {cfg.customLogo
+              ? <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <img src={cfg.customLogo} alt="logo" style={{height:36,objectFit:"contain",borderRadius:4,background:"#fff",padding:2}}/>
+                  <button onClick={()=>setCfg(p=>({...p,customLogo:null,logoName:null}))} style={{background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:11}}>Remove</button>
+                </div>
+              : <span style={{color:"#334155",fontSize:11}}>No logo — default badge used</span>
+            }
+          </div>
+        </div>
+        {fld("Prepared For — Client Recipient (optional)", cfg.preparedFor, "preparedFor", "e.g. CISO, Acme Corp")}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {fld("Engagement ID (optional)", cfg.engagementId, "engagementId", "VL-2026-XXXXX", {mono:true})}
+          {fld("Version Label (optional)", cfg.version, "version", "v1.0 — FINAL")}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {fld("Test Start (optional)", cfg.engagementStart, "engagementStart", "", {type:"date"})}
+          {fld("Test End (optional)", cfg.engagementEnd, "engagementEnd", "", {type:"date"})}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {sel("Confidentiality (optional)", cfg.confidentiality, "confidentiality", [
+            {v:"INTERNAL", l:"INTERNAL"}, {v:"CONFIDENTIAL", l:"CONFIDENTIAL"},
+            {v:"RESTRICTED", l:"RESTRICTED"}, {v:"PUBLIC", l:"PUBLIC"}
+          ])}
+          {sel("Watermark (optional)", cfg.watermark, "watermark", [
+            {v:"", l:"None"}, {v:"DRAFT", l:"DRAFT"},
+            {v:"DO NOT DISTRIBUTE", l:"DO NOT DISTRIBUTE"},
+            {v:"INTERNAL USE ONLY", l:"INTERNAL USE ONLY"},
+            {v:"PRIVILEGED", l:"PRIVILEGED"}
+          ])}
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional — overrides default)</label>
+          <textarea value={cfg.customExecSummary||""} onChange={e=>setCfg(p=>({...p,customExecSummary:e.target.value}))}
+            placeholder="Override the auto-generated executive summary."
+            rows={3}
+            style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{marginBottom:14}}>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer (optional)</label>
+            <textarea value={cfg.customDisclaimer||""} onChange={e=>setCfg(p=>({...p,customDisclaimer:e.target.value}))}
+              placeholder="Legal/CYA text" rows={2}
+              style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"8px 12px",color:"#e2e8f0",fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+          </div>
+          {fld("Custom Footer Text (optional)", cfg.customFooterText, "customFooterText", "Override default footer")}
+        </div>
+        {/* Password */}
+        <div style={{marginBottom:18,background:"#0a1224",border:"1px solid #1e3a8a",borderRadius:8,padding:14}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,color:"#93c5fd",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
+            <input type="checkbox" checked={cfg.encrypt!==false} onChange={e=>setCfg(p=>({...p,encrypt:e.target.checked}))}
+              style={{accentColor:"#3b82f6",cursor:"pointer"}}/>
+            🔒 PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
+          </label>
+          {cfg.encrypt!==false && (
+            <>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <input value={cfg.password||""} onChange={e=>setCfg(p=>({...p,password:e.target.value}))}
+                  style={{flex:1,background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,padding:"8px 12px",color:"#fbbf24",fontFamily:"JetBrains Mono,monospace",fontSize:13,fontWeight:700,outline:"none",boxSizing:"border-box"}}/>
+                <button onClick={()=>setCfg(p=>({...p,password:_genPwd()}))}
+                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>🎲 Regenerate</button>
+                <button onClick={()=>navigator.clipboard.writeText(cfg.password).then(()=>alert("Password copied:\n\n"+cfg.password+"\n\nSave it — you'll need it to open the PDF."))}
+                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#22c55e",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>📋 Copy</button>
+              </div>
+              <div style={{color:"#64748b",fontSize:10,marginTop:8,fontStyle:"italic"}}>Recipient prompted for this password when opening the PDF. Cannot be recovered if lost.</div>
+            </>
+          )}
+        </div>
+        <button onClick={()=>{ onClose(); setTimeout(()=>onGenerate(cfg), 50); }}
+          style={{width:"100%",background:"#ef4444",border:"none",borderRadius:7,padding:"12px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+          📄 Generate Report
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Lightweight per-module PDF (VulnModule, PasswordModule, etc.)
 function generateModuleReport(reportData) {
   const { moduleName, tool, toolLabel, target, findings, cracked, summary,
@@ -7687,6 +7840,7 @@ const RECON_PHASES = [
 function ReconModule({token, onRunningChange}) {
   const _notifyRunning = onRunningChange || (() => {});
   const [target,         setTarget]   = useState("");
+  const [showPDFModal, setShowPDFModal] = useState(false);
   const [running,        setRunning]  = useState(false);
   const [curPhase,       setCurPhase] = useState(-1);
   const [done,           setDone]     = useState([]);
@@ -8146,7 +8300,13 @@ function ReconModule({token, onRunningChange}) {
   };
 
   // ── PDF export ─────────────────────────────────────────────────
-  const dlReconPDF = () => generateReconReport({target, allResults, authenticated:!!(authCookie||authBearer), date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}) /*RECON-AUTH-PDF-FLAG-V1*/+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})});
+  const dlReconPDF = () => setShowPDFModal(true);
+  const _generateReconPDFWithCfg = (cfg) => generateReconReport({
+    target, allResults,
+    authenticated: !!(authCookie||authBearer),
+    date: (cfg && cfg.date) || (new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})),
+    pdfConfig: cfg || {},
+  });
 
   return (
     <div className="fade">
@@ -8397,6 +8557,9 @@ function ReconModule({token, onRunningChange}) {
           {tab==="results" && renderResults()}
         </div>
       </div>
+      <PDFConfigModal open={showPDFModal} onClose={()=>setShowPDFModal(false)}
+        moduleLabel="Reconnaissance Report"
+        onGenerate={cfg => { try { _generateReconPDFWithCfg(cfg); } catch(e){ alert("PDF error: "+(e.message||e)); } }}/>
     </div>
   );
 }
@@ -10064,54 +10227,71 @@ function ShellPanel({
    module gives us a single source of truth for the form+log+shell UI.
 */
 function ExploitationModule({token, apiUrl}) {
-  return <ShellPanel
-    title="Exploitation Techniques"
-    subtitle="direct-socket exploits · vsftpd · DVWA cmdi · DVWA SQLi · Juice Shop · bWAPP · zero false positives"
-    icon="💥"
-    color="#dc2626"
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const [_pendingResults, setPendingResults] = useState(null);
+  return (
+    <>
+      <ShellPanel
+        title="Exploitation Techniques"
+        subtitle="direct-socket exploits · vsftpd · DVWA cmdi · DVWA SQLi · Juice Shop · bWAPP · zero false positives"
+        icon="💥"
+        color="#dc2626"
 
-    catalogFetchUrl="/api/exploit/catalog"
-    catalogKey="exploits"
+        catalogFetchUrl="/api/exploit/catalog"
+        catalogKey="exploits"
 
-    configFields={[
-      {id: "target",      label: "Target IP / Host",      catalogKey: "target"},
-      {id: "port",        label: "Port",                  catalogKey: "port",  width: "half"},
-      {id: "lport",       label: "LPORT (listener)",      defaultValue: 4444, width: "half", disabledKey: "lport_needed"},
-      {id: "lhost",       label: "LHOST (callback host)", defaultValue: "c2.vulnuslab.com", disabledKey: "lhost_needed"},
-      {id: "cve",         label: "CVE / Reference",       catalogKey: "cve",   readOnly: true, color: "#fbbf24",  width: "half"},
-      {id: "cvss",        label: "CVSS",                  catalogKey: "cvss",  readOnly: true, width: "half"},
-      {id: "format",      label: "Result Type",           computedFrom: (c) => c.interactive ? "Interactive shell" : "Data extraction", readOnly: true, color: "#86efac"},
-    ]}
+        configFields={[
+          {id: "target",      label: "Target IP / Host",      catalogKey: "target"},
+          {id: "port",        label: "Port",                  catalogKey: "port",  width: "half"},
+          {id: "lport",       label: "LPORT (listener)",      defaultValue: 4444, width: "half", disabledKey: "lport_needed"},
+          {id: "lhost",       label: "LHOST (callback host)", defaultValue: "c2.vulnuslab.com", disabledKey: "lhost_needed"},
+          {id: "cve",         label: "CVE / Reference",       catalogKey: "cve",   readOnly: true, color: "#fbbf24",  width: "half"},
+          {id: "cvss",        label: "CVSS",                  catalogKey: "cvss",  readOnly: true, width: "half"},
+          {id: "format",      label: "Result Type",           computedFrom: (c) => c.interactive ? "Interactive shell" : "Data extraction", readOnly: true, color: "#86efac"},
+        ]}
 
-    phases={[
-      {n: 1, name: "Pre-Flight Check",   tool: "DNS + port reachability"},
-      {n: 2, name: "Send Exploit",       tool: "trigger payload"},
-      {n: 3, name: "Verify Compromise",  tool: "validate response / id"},
-      {n: 4, name: "Capture Output",     tool: "shell or data exfil"},
-    ]}
+        phases={[
+          {n: 1, name: "Pre-Flight Check",   tool: "DNS + port reachability"},
+          {n: 2, name: "Send Exploit",       tool: "trigger payload"},
+          {n: 3, name: "Verify Compromise",  tool: "validate response / id"},
+          {n: 4, name: "Capture Output",     tool: "shell or data exfil"},
+        ]}
 
-    runEndpoint="/api/exploit/run"
-    buildRunBody={(selected, values) => {
-      const body = {exploit_id: selected.id};
-      const defaultTgt = String(selected.target);
-      const defaultPort = selected.port;
-      if (values.target && String(values.target) !== defaultTgt)        body.target = String(values.target);
-      if (values.port   && parseInt(values.port, 10) !== defaultPort)   body.port   = parseInt(values.port, 10);
-      return body;
-    }}
+        runEndpoint="/api/exploit/run"
+        buildRunBody={(selected, values) => {
+          const body = {exploit_id: selected.id};
+          const defaultTgt = String(selected.target);
+          const defaultPort = selected.port;
+          if (values.target && String(values.target) !== defaultTgt)        body.target = String(values.target);
+          if (values.port   && parseInt(values.port, 10) !== defaultPort)   body.port   = parseInt(values.port, 10);
+          return body;
+        }}
 
-    hasInteractiveShell
-    shellEndpoints={{
-      output: (sid) => `/api/exploit/shell/${sid}/output`,
-      cmd:    (sid) => `/api/exploit/shell/${sid}/cmd`,
-      close:  (sid) => `/api/exploit/shell/${sid}/close`,
-    }}
-    isInteractiveFor={(c) => c?.interactive === true}
+        hasInteractiveShell
+        shellEndpoints={{
+          output: (sid) => `/api/exploit/shell/${sid}/output`,
+          cmd:    (sid) => `/api/exploit/shell/${sid}/cmd`,
+          close:  (sid) => `/api/exploit/shell/${sid}/close`,
+        }}
+        isInteractiveFor={(c) => c?.interactive === true}
 
-    onDownloadReport={(all) => generateExploitReport({results: all, date: new Date().toLocaleString()})}
+        onDownloadReport={(all) => { setPendingResults(all); setShowPDFModal(true); }}
 
-    token={token} apiUrl={apiUrl}
-  />;
+        token={token} apiUrl={apiUrl}
+      />
+      <PDFConfigModal open={showPDFModal} onClose={()=>setShowPDFModal(false)}
+        moduleLabel="Exploitation Report"
+        onGenerate={cfg => {
+          try {
+            generateExploitReport({
+              results: _pendingResults || [],
+              date: cfg.date || new Date().toLocaleString(),
+              pdfConfig: cfg,
+            });
+          } catch(e){ alert("PDF error: "+(e.message||e)); }
+        }}/>
+    </>
+  );
 }
 
 
@@ -10822,6 +11002,7 @@ function VulnModule(props) {
   const token = props.token;
   const _notifyRunning = props.onRunningChange || (() => {});
   const [target,setTarget]     = useState("");
+  const [showPDFModal, setShowPDFModal] = useState(false);
   const [running,setRunning]   = useState(false);
   const [current,setCurrent]   = useState(-1);
   const [done,setDone]         = useState([]);
@@ -11075,7 +11256,7 @@ function VulnModule(props) {
             {running?"Scanning...":"▶ Run All Scans"}
           </button>
           {finished&&(
-            <button onClick={()=>generateVulnReport({target,allResults,authenticated:!!(authCookie||authBearer),date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})})} /*VULN-AUTH-PDF-FLAG-V1*/
+            <button onClick={()=>setShowPDFModal(true)} /*VULN-AUTH-PDF-FLAG-V1*/
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               📄 Report
             </button>
@@ -11150,6 +11331,18 @@ function VulnModule(props) {
           <div>{renderFindings(activeTab)}</div>
         </div>
       )}
+      <PDFConfigModal open={showPDFModal} onClose={()=>setShowPDFModal(false)}
+        moduleLabel="Vulnerability Scan Report"
+        onGenerate={cfg => {
+          try {
+            generateVulnReport({
+              target, allResults,
+              authenticated: !!(authCookie||authBearer),
+              date: cfg.date || (new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})),
+              pdfConfig: cfg,
+            });
+          } catch(e){ alert("PDF error: "+(e.message||e)); }
+        }}/>
     </div>
   );
 }
