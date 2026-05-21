@@ -20,8 +20,8 @@ services:
     networks:
     - vulnuslab
     restart: unless-stopped
-    mem_limit: 6g
-    mem_reservation: 1g
+    mem_limit: 4g
+    mem_reservation: 768m
     healthcheck:
       test:
       - CMD-SHELL
