@@ -3238,7 +3238,7 @@ function WebAppModule(props) {
             ))}
           </div>
         )}
-        <div style={{display:"flex",flexDirection:"column",gap:0,border:"1px solid #1e293b",borderRadius:8,overflow:"hidden",background:"#0f172a"}}>
+        <div style={{border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
         {PHASES.map((ph,i) => {
           const isActive   = curPhase === i;
           const isDone     = done.includes(i);
@@ -3247,70 +3247,61 @@ function WebAppModule(props) {
           const res        = allResults[ph.tool];
           const isSQLi     = ph.tool === "sqlmap" && res && res.vulnerable;
           const isVuln     = res && res.vulnerable && !isSQLi;
-          const dotCol     = isActive?"#3b82f6":isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):"#334155";
           const isSelected   = selectedPhases.has(i);
           const toolLocked   = isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin;
           const secHdr       = SECTION_HEADERS[ph.tool];
-          const rowBg        = toolLocked?"#0a0f1e":i%2===0?"#0f172a":"#0b1424";
+          const statusCol = isActive?"#3b82f6":isFailed?"#ef4444":isSQLi||isVuln?"#ef4444":isSkipped?"#f59e0b":isDone?"#10b981":"#334155";
+          const statusLabel = isActive?"RUNNING":isFailed?"ERROR":isSQLi||isVuln?"VULNERABLE":isSkipped?"SKIPPED":isDone?"SECURE":toolLocked?"LOCKED":isSelected?"QUEUED":"DISABLED";
+          const detail = !isDone||!res?"":isFailed?"scan failed":isSkipped?"not applicable":(
+            res.total_findings!==undefined?`${res.total_findings} findings`:
+            res.total_open!==undefined?`${res.total_open} ports`:
+            res.total!==undefined?`${res.total} items`:
+            res.vulnerable!==undefined?(res.vulnerable?"vulnerable":"clean"):"complete"
+          );
           return (
             <React.Fragment key={i}>
             {secHdr && (
-              <div style={{display:"flex",alignItems:"center",gap:10,marginTop:i===0?0:14,marginBottom:4,paddingLeft:4}}>
-                <div style={{width:3,height:24,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px 6px",borderTop:i===0?"none":"1px solid #1e293b",background:"#0a0f1c"}}>
+                <div style={{width:3,height:18,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:11,fontWeight:700,color:secHdr.color,letterSpacing:"0.05em",textTransform:"uppercase"}}>{secHdr.label}</div>
-                  <div style={{fontSize:9,color:"#475569",fontFamily:"JetBrains Mono,monospace"}}>{secHdr.sub}</div>
+                  <div style={{fontSize:10,fontWeight:700,color:secHdr.color,letterSpacing:"0.1em",textTransform:"uppercase"}}>{secHdr.label}</div>
+                  <div style={{fontSize:10,color:"#64748b"}}>{secHdr.sub}</div>
                 </div>
-                {isTrial && secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"2px 6px",borderRadius:3}}>TRIAL</span>}
-                {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#6b7280",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3}}>🔒 PRO</span>}
+                {isTrial && secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>TRIAL</span>}
+                {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#6b7280",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>PRO</span>}
               </div>
             )}
-            <div key={i} onClick={()=>{
+            <div onClick={()=>{
                 if(running) return;
                 if(toolLocked){ alert("Upgrade to Pro to access this scanner."); return; }
                 setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; });
               }}
-              style={{background:rowBg,borderLeft:`3px solid ${toolLocked?"#374151":dotCol}`,padding:"6px 12px",display:"flex",alignItems:"center",gap:10,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.55:isSelected?1:0.4,transition:"background 0.15s,opacity 0.15s",minHeight:34}}>
-              <span style={{width:8,height:8,borderRadius:"50%",background:dotCol,flexShrink:0,boxShadow:isActive?`0 0 6px ${dotCol}`:"none"}}/>
-              <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",fontWeight:600,flexShrink:0,width:22,textAlign:"center"}}>
-                {isActive?(
-                  <span style={{display:"inline-block",width:10,height:10,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
-                ):isDone?(
-                  <span style={{color:dotCol,fontSize:12,fontWeight:700}}>{isSkipped?"⚠":isFailed?"✗":isSQLi?"✗":"✓"}</span>
-                ):String(i+1).padStart(2,"0")}
-              </span>
-              <span style={{fontSize:12,fontWeight:600,color:toolLocked?"#64748b":"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                {ph.name}
-                {toolLocked && <span style={{fontSize:10,marginLeft:6}}>🔒</span>}
-              </span>
-              <span style={{fontSize:9,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",flexShrink:0,opacity:0.8}}>{ph.tool}</span>
-              <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
-                {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
-                {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="SECURE"     color="green"  size="xs"/>}
-                {isDone && !isFailed && !isSkipped && (isSQLi||isVuln)   && <Badge label="VULNERABLE" color="red"    size="xs"/>}
-                {isDone && isFailed  && <Badge label="ERROR"   color="red"    size="xs"/>}
-                {isDone && isSkipped && <Badge label="SKIPPED" color="orange" size="xs"/>}
-                {isDone && res && (
-                  <span style={{fontSize:10,fontFamily:"JetBrains Mono,monospace",minWidth:90,textAlign:"right"}}>
-                    {res.total_open !== undefined && <span style={{color:"#60a5fa"}}>{res.total_open}p</span>}
-                    {res.total_findings !== undefined && <span style={{color:res.total_findings>0?"#f87171":"#4ade80"}}>{res.total_findings}f</span>}
-                    {res.total !== undefined && res.total_findings===undefined && <span style={{color:"#a78bfa"}}>{res.total}</span>}
-                    {res.vulnerable !== undefined && res.total_findings===undefined && res.total===undefined && <span style={{color:res.vulnerable?"#f87171":"#4ade80",fontWeight:700}}>{res.vulnerable?"VULN":"OK"}</span>}
-                  </span>
-                )}
-                {isDone && res && (
-                  <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
-                    style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"2px 8px",color:"#93c5fd",fontSize:9,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-                    {expandedTile===i?"Hide":"Details"}
-                  </button>
-                )}
-                {!running && target && (
-                  <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
-                    style={{background:"transparent",border:"1px solid #1e293b",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:9,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-                    {isDone?"Re-run":"Run"}
-                  </button>
-                )}
-              </div>
+              onMouseEnter={e=>{ if(!toolLocked&&!running) e.currentTarget.style.background="#111c33"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
+              style={{background:"transparent",borderTop:(i===0||secHdr)?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.45:isSelected?1:0.5,transition:"background 0.12s,opacity 0.12s"}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
+              {isActive ? (
+                <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+              ) : (
+                <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
+                  {isDone?(isSkipped?"⚠":isFailed?"✗":isSQLi||isVuln?"!":"✓"):"○"}
+                </span>
+              )}
+              <span style={{fontSize:13,fontWeight:500,color:toolLocked?"#64748b":"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
+              <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
+              <span style={{fontSize:11,color:"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
+              {isDone && res && (
+                <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
+                  style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 10px",color:"#94a3b8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                  {expandedTile===i?"Hide":"Details"}
+                </button>
+              )}
+              {!running && target && (
+                <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
+                  style={{background:"transparent",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#94a3b8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                  {isDone?"Re-run":"Run"}
+                </button>
+              )}
             </div>
             {/* Expansion panel — surfaces real-world error/success details
                 so the customer never has to crack open DevTools or SSH into
@@ -8001,32 +7992,29 @@ function ReconModule({token, onRunningChange}) {
             <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#64748b",fontSize:11,cursor:"pointer"}}>None</button>
           </div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:2,width:"100%",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden",background:"#0f172a"}}>
+        <div style={{width:"100%",border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
           {RECON_PHASES.map((ph,i)=>{
             const sel       = selectedPhases.has(i);
             const isDone    = done.includes(i);
             const isFailed  = failed.includes(i);
             const isActive  = curPhase===i;
-            const dotCol    = isActive?"#3b82f6":isDone?(isFailed?"#ef4444":"#22c55e"):"#334155";
-            const rowBg     = i%2===0?"#0f172a":"#0b1424";
+            const statusCol = isActive?"#3b82f6":isFailed?"#ef4444":isDone?"#10b981":"#334155";
+            const statusLabel = isActive?"RUNNING":isFailed?"ERROR":isDone?"COMPLETE":sel?"QUEUED":"DISABLED";
             return (
               <div key={i} onClick={()=>!running&&togglePhase(i)}
-                style={{background:rowBg,borderLeft:`3px solid ${dotCol}`,padding:"6px 14px",display:"flex",alignItems:"center",gap:10,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.4,transition:"background 0.15s,opacity 0.15s",minHeight:32,boxSizing:"border-box"}}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:dotCol,flexShrink:0,boxShadow:isActive?`0 0 6px ${dotCol}`:"none"}}/>
-                <span style={{fontSize:13,flexShrink:0,width:20,textAlign:"center"}}>
-                  {isActive?(
-                    <span style={{display:"inline-block",width:10,height:10,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
-                  ):isDone?(
-                    <span style={{color:dotCol,fontSize:12,fontWeight:700}}>{isFailed?"✗":"✓"}</span>
-                  ):ph.icon}
-                </span>
-                <span style={{flex:1,fontSize:12,fontWeight:600,color:"#f1f5f9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ph.name}</span>
-                <span style={{fontSize:9,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",flexShrink:0,opacity:0.8}}>{ph.tool}</span>
-                <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,minWidth:120,justifyContent:"flex-end"}}>
-                  {isActive && <Badge label="RUNNING" color="blue" size="xs"/>}
-                  {isDone && !isFailed && <Badge label="DONE" color="green" size="xs"/>}
-                  {isDone && isFailed && <Badge label="ERROR" color="red" size="xs"/>}
-                </div>
+                onMouseEnter={e=>{ if(!running) e.currentTarget.style.background="#111c33"; }}
+                onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
+                style={{background:"transparent",borderTop:i===0?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.45,transition:"background 0.12s,opacity 0.12s",boxSizing:"border-box"}}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
+                {isActive ? (
+                  <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+                ) : (
+                  <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
+                    {isDone?(isFailed?"✗":"✓"):"○"}
+                  </span>
+                )}
+                <span style={{flex:1,fontSize:13,fontWeight:500,color:"#f1f5f9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
+                <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:90,textAlign:"right"}}>{statusLabel}</span>
               </div>
             );
           })}
@@ -10627,43 +10615,36 @@ function VulnModule(props) {
         </div>
       </div>
 
-      {/* Phase progress — dense single-row list */}
-      <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:16,border:"1px solid #1e293b",borderRadius:8,overflow:"hidden",background:"#0f172a"}}>
+      {/* Phase progress — professional dense list */}
+      <div style={{marginBottom:16,border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
         {VULN_PHASES.map((ph,i)=>{
           const isDone=done.includes(i), isActive=current===i;
           const hasData=allResults[ph.tool];
           const findings=hasData?(allResults[ph.tool]?.findings||[]).filter(f=>f.severity!=="INFO"):[];
           const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
           const med=findings.filter(f=>f.severity==="MEDIUM").length;
-          const isVuln=isDone&&findings.length>0;
-          const isCrit=isDone&&hi>0;
+          const low=findings.filter(f=>f.severity==="LOW").length;
           const isFailed=isDone&&(hasData?.error||hasData?.ok===false);
           const isSelected=activeTab===ph.tool;
-          const dotCol=isActive?"#3b82f6":isDone?(isFailed?"#ef4444":isCrit?"#f97316":isVuln?"#eab308":"#22c55e"):"#334155";
-          const rowBg=isSelected?"#0f1d3a":i%2===0?"#0f172a":"#0b1424";
+          const statusCol = isActive ? "#3b82f6" : isFailed ? "#ef4444" : hi>0 ? "#ef4444" : med>0 ? "#f59e0b" : isDone ? "#10b981" : "#334155";
+          const statusLabel = isActive ? "RUNNING" : isFailed ? "ERROR" : hi>0 ? "VULNERABLE" : med>0 ? "REVIEW" : isDone ? "SECURE" : "PENDING";
+          const detail = !isDone ? "" : isFailed ? "scan failed" : hi>0 ? `${hi} High/Critical` : med>0 ? `${med} Medium` : low>0 ? `${low} Low` : "No findings";
           return(
             <div key={i} onClick={()=>isDone&&setActiveTab(ph.tool)}
-              style={{background:rowBg,borderLeft:`3px solid ${dotCol}`,padding:"6px 14px",display:"flex",alignItems:"center",gap:10,cursor:isDone?"pointer":"default",transition:"background 0.15s",minHeight:32}}>
-              <span style={{width:8,height:8,borderRadius:"50%",background:dotCol,flexShrink:0,boxShadow:isActive?`0 0 6px ${dotCol}`:"none"}}/>
-              <span style={{fontSize:13,flexShrink:0,width:20,textAlign:"center"}}>
-                {isActive?(
-                  <span style={{display:"inline-block",width:10,height:10,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
-                ):ph.icon}
-              </span>
-              <span style={{fontSize:12,fontWeight:600,color:"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ph.name}</span>
-              <span style={{fontSize:9,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",flexShrink:0,opacity:0.8}}>{ph.tool}</span>
-              <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,minWidth:140,justifyContent:"flex-end"}}>
-                {isActive&&<Badge label="RUNNING" color="blue" size="xs"/>}
-                {isDone&&isFailed&&<Badge label="ERROR" color="red" size="xs"/>}
-                {isDone&&!isFailed&&isCrit&&<Badge label="VULNERABLE" color="red" size="xs"/>}
-                {isDone&&!isFailed&&!isCrit&&isVuln&&<Badge label="REVIEW" color="yellow" size="xs"/>}
-                {isDone&&!isFailed&&!isVuln&&<Badge label="SECURE" color="green" size="xs"/>}
-                {isDone&&(
-                  <span style={{fontSize:10,color:isFailed?"#f87171":hi>0?"#f87171":med>0?"#eab308":"#4ade80",fontFamily:"JetBrains Mono,monospace",fontWeight:hi>0?700:400,minWidth:80,textAlign:"right"}}>
-                    {isFailed?"error":hi>0?`${hi} crit/high`:med>0?`${med} medium`:findings.length>0?`${findings.length} finding${findings.length!==1?"s":""}`:"0 findings"}
-                  </span>
-                )}
-              </div>
+              onMouseEnter={e=>{ if(isDone) e.currentTarget.style.background="#111c33"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background=isSelected?"#0f1d3a":"transparent"; }}
+              style={{background:isSelected?"#0f1d3a":"transparent",borderTop:i===0?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,cursor:isDone?"pointer":"default",transition:"background 0.12s"}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
+              {isActive ? (
+                <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+              ) : (
+                <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
+                  {isDone?(isFailed?"✗":hi>0?"!":"✓"):"○"}
+                </span>
+              )}
+              <span style={{fontSize:13,fontWeight:500,color:"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
+              <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
+              <span style={{fontSize:11,color:"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:110,textAlign:"right",flexShrink:0}}>{detail}</span>
             </div>
           );
         })}
