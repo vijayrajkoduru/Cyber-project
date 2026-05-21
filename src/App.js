@@ -6283,6 +6283,9 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
     {tool:"sourcemap",     name:"Source Map Exposure",  isEmpty:d=>!d.maps_found||d.maps_found.length===0},
     {tool:"bucket_perms",  name:"Bucket Permissions",   isEmpty:d=>!d.buckets_exist},
     {tool:"api_docs",      name:"API Docs Discovery",   isEmpty:d=>!d.exposed_endpoints||d.exposed_endpoints.length===0},
+    {tool:"tls_deep",      name:"TLS Deep Audit",         isEmpty:d=>!d.findings||d.findings.length===0},
+    {tool:"wpjson_enum",   name:"WordPress wp-json Enum", isEmpty:d=>(!d.users||d.users.length===0) && !d.wp_version},
+    {tool:"default_creds", name:"Admin Panel Exposure",   isEmpty:d=>!d.panels_found||d.panels_found.length===0},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -7330,6 +7333,9 @@ const RECON_PHASES = [
           {name:"Source Map Exposure",    tool:"sourcemap",     endpoint:"/api/recon/sourcemap",     desc:".js.map files leaking source + secrets"},
           {name:"Bucket Permission Audit",tool:"bucket_perms",  endpoint:"/api/recon/bucket_perms",  desc:"Public-listable S3/GCS/Azure buckets"},
           {name:"API Docs Discovery",     tool:"api_docs",      endpoint:"/api/recon/api_docs",      desc:"Swagger/GraphQL/Actuator exposed"},
+          {name:"TLS Deep Audit",         tool:"tls_deep",      endpoint:"/api/recon/tls_deep",      desc:"Heartbleed/POODLE/weak ciphers/expired certs"},
+          {name:"WordPress wp-json Enum", tool:"wpjson_enum",   endpoint:"/api/recon/wpjson_enum",   desc:"WP user enumeration via REST API"},
+          {name:"Admin Panel Exposure",   tool:"default_creds", endpoint:"/api/recon/default_creds", desc:"Jenkins/Tomcat/phpMyAdmin/Grafana detected"},
 ];
 
 function ReconModule({token, onRunningChange}) {
