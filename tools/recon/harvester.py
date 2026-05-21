@@ -62,7 +62,7 @@ _CONTACT_PAGES = [
 ]
 
 @router.post("/api/recon/harvester")
-async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_harvester_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
     emails = set()          # real emails discovered from external sources
     emails_pattern = set()  # pattern-generated synthesis (not actual findings)
@@ -176,6 +176,17 @@ async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
         "engine": "pure-Python (real-only emails: target scrape + Wayback + GitHub; pattern gen kept separate)",
     }
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/harvester")
+async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_harvester_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"harvester scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": str(_e)[:300]}
 
 def register(app):
     app.include_router(router)
