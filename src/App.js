@@ -248,6 +248,26 @@ function abortAllInFlight() {
   _activeAborts.clear();
 }
 
+// Concurrency limiter on /scan/ + /recon/ endpoints — caps client-side
+// scan requests at 6 so the backend's 4 workers never get a queue >2.
+// When the cap is hit, the 7th scan call WAITS for an in-flight one to
+// finish instead of slamming uvicorn and triggering 30s timeouts. Auth
+// + general endpoints bypass the limiter so login never queues.
+const _SCAN_MAX_CONCURRENT = 6;
+let _scanInFlight = 0;
+const _scanQueue = [];
+function _scanAcquire() {
+  return new Promise(resolve => {
+    if (_scanInFlight < _SCAN_MAX_CONCURRENT) { _scanInFlight++; resolve(); }
+    else _scanQueue.push(() => { _scanInFlight++; resolve(); });
+  });
+}
+function _scanRelease() {
+  _scanInFlight = Math.max(0, _scanInFlight - 1);
+  const next = _scanQueue.shift();
+  if (next) next();
+}
+
 async function api(path, method, body, token) {
   // API-TIMEOUT-V2-SCOPED — scan endpoints need long timeouts (Nuclei = 13k templates,
   // WPScan enumeration, XSS canary fuzzing). Auth/general endpoints stay tight.
@@ -256,6 +276,7 @@ async function api(path, method, body, token) {
   if (token) headers["Authorization"] = "Bearer " + token;
   const isScan = path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/");
   const timeoutMs = isScan ? 300000 : 30000;  // 5 min for scans, 30s otherwise
+  if (isScan) await _scanAcquire();   // Wait if 6 scans already in flight
   const ctrl = new AbortController();
   _activeAborts.add(ctrl);
   const t = setTimeout(()=>ctrl.abort(), timeoutMs);
@@ -267,10 +288,12 @@ async function api(path, method, body, token) {
     });
   } catch(e) {
     clearTimeout(t); _activeAborts.delete(ctrl);
+    if (isScan) _scanRelease();
     if (e.name === "AbortError") throw new Error("Request timed out after " + Math.round(timeoutMs/1000) + "s on " + path);
     throw new Error("Network error on " + path + ": " + (e.message || e));
   }
   clearTimeout(t); _activeAborts.delete(ctrl);
+  if (isScan) _scanRelease();
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || res.statusText);
@@ -3634,7 +3657,8 @@ function WebAppModule(props) {
           const secHdr       = SECTION_HEADERS[ph.tool];
           const statusCol = isActive?"#3b82f6":isFailed?"#ef4444":isSQLi||isVuln?"#ef4444":isSkipped?"#f59e0b":isDone?"#10b981":"#334155";
           const statusLabel = isActive?"RUNNING":isFailed?"ERROR":isSQLi||isVuln?"VULNERABLE":isSkipped?"SKIPPED":isDone?"SECURE":toolLocked?"LOCKED":isSelected?"QUEUED":"DISABLED";
-          const detail = !isDone||!res?"":isFailed?"scan failed":isSkipped?"not applicable":(
+          const _failDetail = (res && (res.skipped_reason || res.error || res.detail)) || "scan failed";
+          const detail = !isDone||!res?"":isFailed?String(_failDetail).substring(0,48):isSkipped?"not applicable":(
             res.total_findings!==undefined?`${res.total_findings} findings`:
             res.total_open!==undefined?`${res.total_open} ports`:
             res.total!==undefined?`${res.total} items`:
@@ -8042,13 +8066,19 @@ function ReconModule({token, onRunningChange}) {
     // glitch, brief origin 502) clear on a 3-second pause. Without this, a
     // bad blip permanently drops a phase from the PDF.
     const _callWithRetry = async (ph, body) => {
-      try {
-        return await api(ph.endpoint,"POST",body,token);
-      } catch(e1) {
-        add(`  ↻ ${ph.name} failed once — retrying in 3s...`);
-        await new Promise(r=>setTimeout(r,3000));
-        return await api(ph.endpoint,"POST",body,token);
+      // 3 attempts with exponential backoff (1s, 3s, 8s).
+      const delays = [1000, 3000, 8000];
+      let lastErr;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) {
+            add(`  ↻ ${ph.name} retry ${attempt}/2 (waited ${delays[attempt-1]/1000}s)...`);
+            await new Promise(r=>setTimeout(r,delays[attempt-1]));
+          }
+          return await api(ph.endpoint,"POST",body,token);
+        } catch(e) { lastErr = e; }
       }
+      throw lastErr;
     };
     for (let idx=0; idx<active.length; idx++) {
       if (stopRef.current) { add("[!] Scan stopped by user after "+idx+" phase(s)."); break; }
@@ -11202,13 +11232,21 @@ function VulnModule(props) {
       return b;
     };
     const _callWithRetry = async (ph) => {
-      try {
-        return await api(ph.endpoint,"POST",_scanBody(),token);
-      } catch(e1) {
-        add(`  ↻ ${ph.name} failed once — retrying in 3s...`);
-        await new Promise(r=>setTimeout(r,3000));
-        return await api(ph.endpoint,"POST",_scanBody(),token);
+      // 3 attempts with exponential backoff (1s, 3s, 8s) — handles target-side WAF
+      // rate-limiting, transient backend saturation, and brief network blips
+      // without surfacing as user-visible "scan failed".
+      const delays = [1000, 3000, 8000];
+      let lastErr;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) {
+            add(`  ↻ ${ph.name} retry ${attempt}/2 (waited ${delays[attempt-1]/1000}s)...`);
+            await new Promise(r=>setTimeout(r,delays[attempt-1]));
+          }
+          return await api(ph.endpoint,"POST",_scanBody(),token);
+        } catch(e) { lastErr = e; }
       }
+      throw lastErr;
     };
     for(let i=0;i<VULN_PHASES.length;i++){
       if (stopRef.current) {
@@ -11414,7 +11452,8 @@ function VulnModule(props) {
           const isSelected=activeTab===ph.tool;
           const statusCol = isActive ? "#3b82f6" : isFailed ? "#ef4444" : hi>0 ? "#ef4444" : med>0 ? "#f59e0b" : isDone ? "#10b981" : "#334155";
           const statusLabel = isActive ? "RUNNING" : isFailed ? "ERROR" : hi>0 ? "VULNERABLE" : med>0 ? "REVIEW" : isDone ? "SECURE" : "PENDING";
-          const detail = !isDone ? "" : isFailed ? "scan failed" : hi>0 ? `${hi} High/Critical` : med>0 ? `${med} Medium` : low>0 ? `${low} Low` : "No findings";
+          const _vFailDetail = (hasData && (hasData.skipped_reason || hasData.error || hasData.detail)) || "scan failed";
+          const detail = !isDone ? "" : isFailed ? String(_vFailDetail).substring(0,48) : hi>0 ? `${hi} High/Critical` : med>0 ? `${med} Medium` : low>0 ? `${low} Low` : "No findings";
           return(
             <div key={i} onClick={()=>isDone&&setActiveTab(ph.tool)}
               onMouseEnter={e=>{ if(isDone) e.currentTarget.style.background="#111c33"; }}
