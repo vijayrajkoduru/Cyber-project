@@ -20,17 +20,17 @@ services:
     networks:
     - vulnuslab
     restart: unless-stopped
-    mem_limit: 1g
-    mem_reservation: 256m
+    mem_limit: 6g
+    mem_reservation: 1g
     healthcheck:
       test:
       - CMD-SHELL
-      - python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)" || exit
+      - python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=5)" || exit
         1
-      interval: 15s
-      timeout: 15s
-      retries: 10
-      start_period: 60s
+      interval: 30s
+      timeout: 20s
+      retries: 15
+      start_period: 120s
   frontend:
     build:
       context: .
