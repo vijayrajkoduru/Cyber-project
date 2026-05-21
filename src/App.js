@@ -6474,6 +6474,8 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
     const _R_gradeColor = _R_grade === "A" ? [15,118,82] : _R_grade === "B" ? [22,163,74] :
                           _R_grade === "C" ? [202,138,4] : _R_grade === "D" ? [194,65,12] : [162,28,28];
     chk(95); y += 2;
+  // ALWAYS-RENDER-OWASP-V1: OWASP + Compliance sections render even with 0 findings (industry-standard)
+
     y = sHead("OWASP Top 10 — 2021 Coverage (Recon)", y);
     fillR(margin, y, contentW, 16, LIGHT);
     fillR(margin, y, 4, 16, _R_gradeColor);
