@@ -94,7 +94,6 @@ _COMMON_DIRS = [
     "git","cvs","backup_db","backup-db","tmp/install.php","install","install.php","setup","setup.php","update.php",
 ]
 
-@router.post("/api/recon/gobuster")
 async def recon_gobuster_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     found = []

@@ -61,7 +61,6 @@ _CONTACT_PAGES = [
     "/people","/imprint","/legal","/privacy","/terms","/support",
 ]
 
-@router.post("/api/recon/harvester")
 async def recon_harvester_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
     emails = set()          # real emails discovered from external sources
