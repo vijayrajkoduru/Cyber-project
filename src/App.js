@@ -1296,11 +1296,12 @@ function generatePDF(reportData) {
 
       // ─── SEVERITY BREAKDOWN ─── horizontal bars per severity tier showing
       // share of total findings. Fills the otherwise empty page-3 area.
+      const _allF = Array.isArray(findings) ? findings : [];
       const _sevCounts = {
-        CRITICAL: allFindings.filter(f=>f.severity==="CRITICAL").length,
-        HIGH:     allFindings.filter(f=>f.severity==="HIGH").length,
-        MEDIUM:   allFindings.filter(f=>f.severity==="MEDIUM").length,
-        LOW:      allFindings.filter(f=>f.severity==="LOW").length,
+        CRITICAL: _allF.filter(f=>f.severity==="CRITICAL").length,
+        HIGH:     _allF.filter(f=>f.severity==="HIGH").length,
+        MEDIUM:   _allF.filter(f=>f.severity==="MEDIUM").length,
+        LOW:      _allF.filter(f=>f.severity==="LOW").length,
       };
       const _totalF = _sevCounts.CRITICAL + _sevCounts.HIGH + _sevCounts.MEDIUM + _sevCounts.LOW;
       if (_totalF > 0) {
