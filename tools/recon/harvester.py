@@ -1,191 +1,101 @@
-"""recon_harvester -- isolated tool (Kali-style architecture).
+"""recon_harvester — OSINT email + host harvesting (defensive).
 
-Route: /api/recon/harvester
-Split from recon_module.py monolith by scripts/split_recon_module.py.
-Failure here is quarantined by the healing autoloader -- other tools unaffected.
+Tries theHarvester binary first; falls back to pure-Python DNS-based
+host enumeration. ALWAYS returns a valid response — never raises an
+uncaught exception to the wrapper.
 """
-
-import asyncio
-import base64
-import datetime
-import hashlib
-import re
-import socket
-from typing import Optional
-import requests
-import dns.resolver
-import dns.asyncresolver
-import whois as whois_lib
+import asyncio, subprocess, re, shutil
 from fastapi import APIRouter, Depends
-from tools._shared import (
-    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
-)
-import aiohttp as _aiohttp_crawl
-import ssl as _ssl_mod
-
-from fastapi import APIRouter, Depends
-
-# Filter out template-looking aliases that appear on EVERY harvested domain
-# (sign of harvester hallucination, not actual data).
-TEMPLATE_EMAILS = {"abuse", "admin", "compliance", "contact", "dpo", "email",
-                    "feedback", "hello", "help", "hr", "info", "jobs", "legal",
-                    "mail", "marketing", "no-reply", "noreply", "office",
-                    "postmaster", "privacy", "security", "support", "webmaster",
-                    "sales", "billing", "careers"}
-
-
-def _filter_template_emails(emails, target_domain):
-    """If we got many emails and they're ALL template aliases, suppress them."""
-    if not emails:
-        return emails
-    locals_ = [e.split("@")[0].lower() for e in emails]
-    template_count = sum(1 for l in locals_ if l in TEMPLATE_EMAILS)
-    # If >70% are template-looking AND total > 5, treat as harvester hallucination
-    if len(emails) > 5 and template_count / len(emails) > 0.7:
-        return []  # drop all — keeping a fraction would be misleading
-    return emails
-
-
+from tools._shared import ScanRequest, verify_scan_quota, recon_host
 
 router = APIRouter()
 
-_COMMON_EMAIL_PREFIXES = [
-    "info","contact","admin","support","sales","security","webmaster",
-    "noreply","no-reply","hello","mail","email","abuse","postmaster",
-    "team","office","press","hr","careers","jobs","help","feedback",
-    "marketing","privacy","legal","dpo","compliance",
-]
 
-_CONTACT_PAGES = [
-    "","/contact","/contact-us","/about","/about-us","/team","/staff",
-    "/people","/imprint","/legal","/privacy","/terms","/support",
-]
+async def recon_harvester_impl(req: ScanRequest):
+    domain = recon_host(req.target)
+    emails, hosts = [], []
+    binary_attempted, binary_succeeded = False, False
+    binary_error = None
 
-async def recon_harvester_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    emails = set()          # real emails discovered from external sources
-    emails_pattern = set()  # pattern-generated synthesis (not actual findings)
-    hosts = set()
-    sources_hit = {}
-    sources_failed = {}
-    email_pattern = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+    # Method 1: theHarvester binary (if present)
+    if shutil.which("theHarvester"):
+        binary_attempted = True
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "theHarvester", "-d", domain, "-b", "duckduckgo,bing,crtsh", "-l", "50",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                limit=4*1024*1024,
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=45)
+                output = (stdout or b"").decode("utf-8", errors="ignore")
+                for m in re.finditer(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b", output):
+                    e = m.group(0).lower()
+                    if e not in emails and domain.lower() in e:
+                        emails.append(e)
+                for m in re.finditer(rf"\b([a-zA-Z0-9-]+\.{re.escape(domain)})\b", output):
+                    h = m.group(0).lower()
+                    if h not in hosts and h != domain.lower():
+                        hosts.append(h)
+                binary_succeeded = True
+            except asyncio.TimeoutError:
+                try: proc.kill()
+                except: pass
+                binary_error = "theHarvester subprocess timed out after 45s"
+        except Exception as e:
+            binary_error = f"{type(e).__name__}: {str(e)[:100]}"
 
-    # 1. Pattern generation — common business email prefixes (kept SEPARATE
-    # from real-discovered emails so customer reports don't show synthesis as findings)
-    for p in _COMMON_EMAIL_PREFIXES:
-        emails_pattern.add(f"{p}@{host}")
-    sources_hit["pattern_generation"] = len(emails_pattern)
-
-    # 2. Scrape target's own pages for real emails
+    # Method 2: crt.sh fallback (always run — augments binary results)
     try:
-        base = web_url(req.target).rstrip("/")
-        pre_count = len(emails)
-        for p in _CONTACT_PAGES:
-            r = safe_get(base + p, req=req, allow_redirects=True)
-            if r is not None and r.status_code == 200:
-                for match in email_pattern.findall(r.text or ""):
-                    m = match.lower()
-                    if host in m or m.endswith(f".{host}"):
-                        emails.add(m)
-        sources_hit["target_scrape"] = len(emails) - pre_count
-    except Exception as e:
-        sources_failed["target_scrape"] = str(e)[:80]
+        import requests
+        r = requests.get(f"https://crt.sh/?q={domain}&output=json", timeout=10)
+        if r.status_code == 200:
+            try:
+                certs = r.json()
+                for c in certs[:200]:
+                    nv = c.get("name_value", "")
+                    for line in nv.split("\n"):
+                        line = line.strip().lower()
+                        if domain.lower() in line and "*" not in line and line not in hosts:
+                            hosts.append(line)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
-    # 3. Wayback Machine — fetch archived homepage and extract emails
-    try:
-        wb = requests.get(
-            f"http://web.archive.org/cdx/search/cdx?url={host}&output=json&limit=5&filter=statuscode:200",
-            timeout=10, headers={"User-Agent": "VulnusLab/1.0"},
-        )
-        if wb.status_code == 200:
-            rows = wb.json()
-            pre_count = len(emails)
-            for row in rows[1:3]:
-                if len(row) >= 3:
-                    archive_url = f"http://web.archive.org/web/{row[1]}/{row[2]}"
-                    try:
-                        ar = requests.get(archive_url, timeout=10,
-                                          headers={"User-Agent": "VulnusLab/1.0"})
-                        if ar.status_code == 200:
-                            for match in email_pattern.findall(ar.text):
-                                m = match.lower()
-                                if host in m:
-                                    emails.add(m)
-                    except Exception:
-                        continue
-            sources_hit["wayback"] = len(emails) - pre_count
-    except Exception as e:
-        sources_failed["wayback"] = str(e)[:80]
-
-    # 4. HackerTarget hostsearch for hosts (hostname + ip pairs)
-    try:
-        r = requests.get(
-            f"https://api.hackertarget.com/hostsearch/?q={host}",
-            timeout=10, headers={"User-Agent": "VulnusLab/1.0"},
-        )
-        if r.status_code == 200 and "API count exceeded" not in r.text:
-            pre_count = len(hosts)
-            for line in r.text.splitlines():
-                parts = line.split(",")
-                if len(parts) >= 2:
-                    hostname = parts[0].strip().lower()
-                    if hostname.endswith(host):
-                        hosts.add(hostname)
-            sources_hit["hackertarget_hosts"] = len(hosts) - pre_count
-        elif "API count exceeded" in (r.text or ""):
-            sources_failed["hackertarget_hosts"] = "rate limit"
-    except Exception as e:
-        sources_failed["hackertarget_hosts"] = str(e)[:80]
-
-    # 5. GitHub code search — find emails in public repositories mentioning the domain
-    # Free API, rate-limited (10 req/min unauthenticated; 30/min with PAT).
-    try:
-        gh_r = requests.get(
-            f"https://api.github.com/search/code?q=%22@{host}%22+in:file&per_page=30",
-            timeout=10,
-            headers={"User-Agent": "VulnusLab/1.0",
-                     "Accept": "application/vnd.github.v3.text-match+json"},
-        )
-        if gh_r.status_code == 200:
-            pre_count = len(emails)
-            for item in gh_r.json().get("items", []):
-                for tm in item.get("text_matches", []):
-                    for m in email_pattern.findall(tm.get("fragment", "")):
-                        ml = m.lower()
-                        if host in ml:
-                            emails.add(ml)
-            sources_hit["github_code"] = len(emails) - pre_count
-        elif gh_r.status_code == 403:
-            sources_failed["github_code"] = "rate-limited (10/min unauthenticated)"
+    skipped_reason = None
+    if not emails and not hosts:
+        if binary_attempted and not binary_succeeded:
+            skipped_reason = f"theHarvester failed: {binary_error or 'no output'}; crt.sh also empty"
+        elif not binary_attempted:
+            skipped_reason = "theHarvester binary not installed; crt.sh returned no hosts"
         else:
-            sources_failed["github_code"] = f"status {gh_r.status_code}"
-    except Exception as e:
-        sources_failed["github_code"] = str(e)[:80]
+            skipped_reason = "No emails or hosts discovered for this domain"
 
     return {
         "ok": True,
-        "emails": sorted(emails),                    # REAL emails discovered
-        "emails_pattern": sorted(emails_pattern),    # pattern-generated (NOT findings)
-        "hosts": sorted(hosts),
-        "total_emails": len(emails),                 # count of REAL emails
-        "total_emails_pattern": len(emails_pattern), # count of synthetic emails
-        "total_hosts": len(hosts),
-        "sources": sources_hit,
-        "sources_failed": sources_failed,
-        "engine": "pure-Python (real-only emails: target scrape + Wayback + GitHub; pattern gen kept separate)",
+        "vulnerable": False,
+        "emails": sorted(set(emails))[:50],
+        "hosts": sorted(set(hosts))[:100],
+        "binary_attempted": binary_attempted,
+        "binary_succeeded": binary_succeeded,
+        "binary_error": binary_error,
+        "skipped_reason": skipped_reason,
+        "engine": "theHarvester (if installed) + crt.sh fallback, both with strict timeouts",
     }
-
 
 
 # VLERR-WRAP-V1
 @router.post("/api/recon/harvester")
 async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
     try:
-        return await recon_harvester_impl(req, _)
+        return await recon_harvester_impl(req)
     except Exception as _e:
         return {"ok": False,
-                 "skipped_reason": f"harvester scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                 "error": str(_e)[:300]}
+                "skipped_reason": f"harvester scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
+
 
 def register(app):
     app.include_router(router)
