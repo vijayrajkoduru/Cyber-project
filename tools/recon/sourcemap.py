@@ -16,8 +16,7 @@ SECRET_PATTERNS = [
 ]
 
 
-@router.post("/api/recon/sourcemap")
-async def recon_sourcemap(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_sourcemap_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, maps_found, secrets_found = [], [], []
     r = safe_get(base, req=req)
@@ -73,6 +72,17 @@ async def recon_sourcemap(req: ScanRequest, _=Depends(verify_scan_quota)):
             "total_maps": len(maps_found), "total_secrets": len(seen),
             "engine": f"source map probe + {len(SECRET_PATTERNS)}-pattern secret scanner"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/sourcemap")
+async def recon_sourcemap(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_sourcemap_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"sourcemap scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

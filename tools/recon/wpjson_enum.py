@@ -6,8 +6,7 @@ from tools._shared import ScanRequest, verify_scan_quota, safe_get, web_url
 router = APIRouter()
 
 
-@router.post("/api/recon/wpjson_enum")
-async def recon_wpjson_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_wpjson_enum_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, users, posts, wp_version = [], [], [], None
 
@@ -92,6 +91,17 @@ async def recon_wpjson_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
             "users_count": len(users), "posts_sample_count": len(posts),
             "engine": "WordPress wp-json REST API + ?author= redirect enumeration"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/wpjson_enum")
+async def recon_wpjson_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_wpjson_enum_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"wpjson_enum scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

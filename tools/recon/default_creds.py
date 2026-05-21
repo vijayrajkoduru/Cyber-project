@@ -51,8 +51,7 @@ PANELS = [
 ]
 
 
-@router.post("/api/recon/default_creds")
-async def recon_default_creds(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_default_creds_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, panels_found = [], []
 
@@ -89,6 +88,17 @@ async def recon_default_creds(req: ScanRequest, _=Depends(verify_scan_quota)):
             "total_panels_found": len(panels_found),
             "engine": f"admin panel exposure probe ({len(PANELS)} panels) — credential test deliberately skipped to avoid lockout"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/default_creds")
+async def recon_default_creds(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_default_creds_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"default_creds scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

@@ -29,8 +29,7 @@ BYPASS_SUBDOMAINS = ["direct", "origin", "real", "backend", "internal",
                       "staging", "old", "legacy", "api-internal", "backup"]
 
 
-@router.post("/api/recon/cdn_origin")
-async def recon_cdn_origin(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_cdn_origin_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     domain = recon_host(req.target)
     base = web_url(req.target).rstrip("/")
     findings = []
@@ -123,6 +122,17 @@ async def recon_cdn_origin(req: ScanRequest, _=Depends(verify_scan_quota)):
             "subdomains_probed": len(BYPASS_SUBDOMAINS),
             "engine": f"CDN origin discovery — {len(BYPASS_SUBDOMAINS)}-subdomain DNS sweep + MX lookup"}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/cdn_origin")
+async def recon_cdn_origin(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_cdn_origin_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"cdn_origin scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
 
 def register(app):
     app.include_router(router)

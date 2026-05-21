@@ -2541,7 +2541,7 @@ function WebAppModule(props) {
         msg.includes("429") || msg.includes("Too Many") ? "Rate-limited by target. Wait and retry." :
         msg.includes("timeout") || msg.includes("Timeout") || msg.includes("504") ? "Scan took too long." :
         "Click Re-run to retry.";
-      setAll(prev => ({...prev, [ph.tool]: {ok: false, error: msg, suggested_action, findings: [], total: 0}}));
+      setAll(prev => ({...prev, [ph.tool]: {ok: false, _failed: true, error: msg || (e && (e.message || e.name)) || "Network/fetch error (no exception message)", suggested_action, findings: [], total: 0}}));
       setFailed(p => [...p.filter(x => x !== i), i]);
       setDone(p => [...p.filter(x => x !== i), i]);
       add("✗ " + ph.name + " failed: " + msg);
