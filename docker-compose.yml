@@ -28,9 +28,9 @@ services:
       - python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)" || exit
         1
       interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 60s
   frontend:
     build:
       context: .
