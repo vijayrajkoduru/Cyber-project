@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends
 router = APIRouter()
 
 @router.post("/api/recon/robotsmap")
-async def recon_robotsmap(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_robotsmap_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     disallow, sitemaps, well_known = [], [], []
     r = safe_get(f"{base}/robots.txt", req=req)
@@ -50,6 +50,17 @@ async def recon_robotsmap(req: ScanRequest, _=Depends(verify_scan_quota)):
         well_known.append("/.well-known/security.txt")
     return {"ok": True, "disallow": disallow, "sitemaps": sitemaps, "well_known": well_known}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/robotsmap")
+async def recon_robotsmap(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_robotsmap_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"robotsmap scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": str(_e)[:300]}
 
 def register(app):
     app.include_router(router)

@@ -60,7 +60,7 @@ def _murmur3_32(data, seed=0):
     return h1
 
 @router.post("/api/recon/favicon")
-async def recon_favicon(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_favicon_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     # Probe 12 common favicon locations — modern frameworks (React, Vue, Next)
     # rarely serve at the default /favicon.ico path.
@@ -95,6 +95,17 @@ async def recon_favicon(req: ScanRequest, _=Depends(verify_scan_quota)):
                 "size": len(favicon_content),
             }}
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/favicon")
+async def recon_favicon(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_favicon_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"favicon scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": str(_e)[:300]}
 
 def register(app):
     app.include_router(router)

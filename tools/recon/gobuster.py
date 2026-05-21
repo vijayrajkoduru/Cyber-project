@@ -95,7 +95,7 @@ _COMMON_DIRS = [
 ]
 
 @router.post("/api/recon/gobuster")
-async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def recon_gobuster_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     found = []
 
@@ -156,6 +156,17 @@ async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
         "engine":            "python-fuzz (3-probe soft-404 baseline + Host fallback)",
     }
 
+
+
+# VLERR-WRAP-V1
+@router.post("/api/recon/gobuster")
+async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await recon_gobuster_impl(req, _)
+    except Exception as _e:
+        return {"ok": False,
+                 "skipped_reason": f"gobuster scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
+                 "error": str(_e)[:300]}
 
 def register(app):
     app.include_router(router)
