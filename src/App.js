@@ -8066,13 +8066,13 @@ function ReconModule({token, onRunningChange}) {
     // glitch, brief origin 502) clear on a 3-second pause. Without this, a
     // bad blip permanently drops a phase from the PDF.
     const _callWithRetry = async (ph, body) => {
-      // 3 attempts with exponential backoff (1s, 3s, 8s).
-      const delays = [1000, 3000, 8000];
+      // 2 attempts with quick backoff (2s).
+      const delays = [2000];
       let lastErr;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         try {
           if (attempt > 0) {
-            add(`  ↻ ${ph.name} retry ${attempt}/2 (waited ${delays[attempt-1]/1000}s)...`);
+            add(`  ↻ ${ph.name} retry (waited ${delays[attempt-1]/1000}s)...`);
             await new Promise(r=>setTimeout(r,delays[attempt-1]));
           }
           return await api(ph.endpoint,"POST",body,token);
@@ -11232,15 +11232,14 @@ function VulnModule(props) {
       return b;
     };
     const _callWithRetry = async (ph) => {
-      // 3 attempts with exponential backoff (1s, 3s, 8s) — handles target-side WAF
-      // rate-limiting, transient backend saturation, and brief network blips
-      // without surfacing as user-visible "scan failed".
-      const delays = [1000, 3000, 8000];
+      // 2 attempts with quick backoff (2s) — handles transient WAF/network blips
+      // without dragging each failure out 12s as the 3-retry chain did.
+      const delays = [2000];
       let lastErr;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         try {
           if (attempt > 0) {
-            add(`  ↻ ${ph.name} retry ${attempt}/2 (waited ${delays[attempt-1]/1000}s)...`);
+            add(`  ↻ ${ph.name} retry (waited ${delays[attempt-1]/1000}s)...`);
             await new Promise(r=>setTimeout(r,delays[attempt-1]));
           }
           return await api(ph.endpoint,"POST",_scanBody(),token);
