@@ -645,7 +645,16 @@ function generatePDF(reportData) {
   const _toolSet = new Set(toolsUsed||[]);
   const wasRun = key => _toolSet.size === 0 || _toolSet.has(key);
 
-  const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  // PDF encryption (vulntemplate password protection). When the user
+  // checks "Password-protect" in the modal, jsPDF embeds the password
+  // into the PDF — recipient prompted on open. AES-128 standard.
+  const _pwd = reportData && reportData.password;
+  const _encrypt = reportData && reportData.encrypt !== false && _pwd;
+  const doc = new jsPDF({
+    orientation:"portrait", unit:"mm", format:"a4",
+    ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+      userPermissions: ["print", "modify", "copy", "annot-forms"]}} : {})
+  });
     const pageW=210, margin=15, contentW=180;
     let y=0;
 
@@ -2025,16 +2034,29 @@ function generatePDF(reportData) {
     txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,bY+25,7,BLUE,true,"center");
     y=bY+30;
 
-    // ─── BORDER + FOOTER ALL PAGES ───────────────────────────────
+    // ─── BORDER + FOOTER + WATERMARK ALL PAGES ───────────────────
+    const _wm = reportData && reportData.watermark;
+    const _conf = (reportData && reportData.confidentiality) || "CONFIDENTIAL";
+    const _customFooter = (reportData && reportData.customFooterText) || ((companyName||"VulnusLab")+" | "+_conf+"  ·  vulnuslab.com");
     const total=doc.internal.getNumberOfPages();
     for(let i=1;i<=total;i++){
       doc.setPage(i);
+      // Diagonal watermark (drawn FIRST so border + text sit on top)
+      if(_wm){
+        doc.saveGraphicsState();
+        try {
+          doc.setGState(new doc.GState({opacity: 0.10}));
+        } catch(_){}
+        doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+        doc.text(_wm, 105, 150, {align:"center", angle:30});
+        doc.restoreGraphicsState();
+      }
       // Blue border on every page
       doc.setDrawColor(59,130,246); doc.setLineWidth(1.2);
       doc.rect(0,0,210,297,'S');
       if(i>=2){
-        txt((companyName||"VulnusLab")+" | CONFIDENTIAL  ·  vulnuslab.com",margin,290,6.5,GRAY);
-        txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
+        txt(_customFooter, margin, 290, 6.5, GRAY);
+        txt("Page "+i+" of "+total, pageW-margin, 290, 6.5, BLUE, false, "right");
       }
     }
 
@@ -2340,9 +2362,32 @@ function WebAppModule(props) {
   const [showPDFModal, setShowPDFModal]     = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [pdfConfig, setPDFConfig]           = useState({
-    companyName:"VulnusLab", reporterName:"VulnusLab Automated Pentest", reporterRole:"Security Assessment Engine · vulnuslab.com",
+    // Identity
+    companyName:"VulnusLab",
+    customLogo:null, logoName:null,
+    // Reporter
+    reporterName:"VulnusLab Automated Pentest",
+    reporterRole:"Security Assessment Engine · vulnuslab.com",
+    // Recipient
+    preparedFor:"",
+    // Engagement
+    engagementId: "VL-" + new Date().getFullYear() + "-" + Math.random().toString(36).substring(2,7).toUpperCase(),
+    engagementStart:"", engagementEnd:"",
+    version:"v1.0 — FINAL",
+    // Classification
+    confidentiality:"CONFIDENTIAL",  // INTERNAL | CONFIDENTIAL | RESTRICTED
+    watermark:"",                     // "" | "DRAFT" | "DO NOT DISTRIBUTE" | custom
+    // Date
     date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
-    template:"standard", customLogo:null
+    // Content overrides
+    customExecSummary:"",
+    customDisclaimer:"",
+    customFooterText:"",
+    // Theme
+    template:"standard",
+    // Security
+    encrypt:true,
+    password: Array.from(crypto.getRandomValues(new Uint8Array(9))).map(b=>"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"[b%55]).join(""),
   });
   const [authCookie, setAuthCookie]         = useState(() => localStorage.getItem("cyberAuthCookie")||"");
   const [authBearer, setAuthBearer]         = useState(() => localStorage.getItem("cyberAuthBearer")||"");
@@ -3727,6 +3772,128 @@ function WebAppModule(props) {
                 : <span style={{color:"#334155",fontSize:11}}>No logo — default CS badge will be used</span>
               }
             </div>
+          </div>
+
+          {/* ── Prepared For (Client Recipient) ── */}
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Prepared For (Client Recipient)</label>
+            <input value={pdfConfig.preparedFor||""} onChange={e=>setPDFConfig(p=>({...p,preparedFor:e.target.value}))}
+              placeholder="e.g. CISO, Acme Corp"
+              style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          {/* ── Engagement ID + Version ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Engagement ID</label>
+              <input value={pdfConfig.engagementId||""} onChange={e=>setPDFConfig(p=>({...p,engagementId:e.target.value}))}
+                placeholder="VL-2026-0521"
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"JetBrains Mono,monospace"}}/>
+            </div>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Version Label</label>
+              <input value={pdfConfig.version||""} onChange={e=>setPDFConfig(p=>({...p,version:e.target.value}))}
+                placeholder="v1.0 — FINAL"
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          {/* ── Engagement Window ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Test Start</label>
+              <input type="date" value={pdfConfig.engagementStart||""} onChange={e=>setPDFConfig(p=>({...p,engagementStart:e.target.value}))}
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Test End</label>
+              <input type="date" value={pdfConfig.engagementEnd||""} onChange={e=>setPDFConfig(p=>({...p,engagementEnd:e.target.value}))}
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          {/* ── Confidentiality + Watermark ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Confidentiality Level</label>
+              <select value={pdfConfig.confidentiality||"CONFIDENTIAL"} onChange={e=>setPDFConfig(p=>({...p,confidentiality:e.target.value}))}
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}>
+                <option value="INTERNAL">INTERNAL</option>
+                <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+                <option value="RESTRICTED">RESTRICTED</option>
+                <option value="PUBLIC">PUBLIC</option>
+              </select>
+            </div>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Watermark (diagonal)</label>
+              <select value={pdfConfig.watermark||""} onChange={e=>setPDFConfig(p=>({...p,watermark:e.target.value}))}
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}>
+                <option value="">None</option>
+                <option value="DRAFT">DRAFT</option>
+                <option value="DO NOT DISTRIBUTE">DO NOT DISTRIBUTE</option>
+                <option value="INTERNAL USE ONLY">INTERNAL USE ONLY</option>
+                <option value="PRIVILEGED">PRIVILEGED</option>
+              </select>
+            </div>
+          </div>
+
+          {/* ── Custom Executive Summary ── */}
+          <div style={{marginBottom:16}}>
+            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional)</label>
+            <textarea value={pdfConfig.customExecSummary||""} onChange={e=>setPDFConfig(p=>({...p,customExecSummary:e.target.value}))}
+              placeholder="Override the auto-generated executive summary. Leave blank to use the default."
+              rows={3}
+              style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+          </div>
+
+          {/* ── Custom Disclaimer + Footer ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer</label>
+              <textarea value={pdfConfig.customDisclaimer||""} onChange={e=>setPDFConfig(p=>({...p,customDisclaimer:e.target.value}))}
+                placeholder="Legal/CYA text at the end of the report"
+                rows={2}
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"8px 12px",color:"#e2e8f0",fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+            </div>
+            <div>
+              <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Footer Text</label>
+              <input value={pdfConfig.customFooterText||""} onChange={e=>setPDFConfig(p=>({...p,customFooterText:e.target.value}))}
+                placeholder="Override default footer"
+                style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 12px",color:"#e2e8f0",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          {/* ── PASSWORD PROTECTION ── */}
+          <div style={{marginBottom:20,background:"#0a1224",border:"1px solid #1e3a8a",borderRadius:8,padding:14}}>
+            <label style={{display:"flex",alignItems:"center",gap:8,color:"#93c5fd",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
+              <input type="checkbox" checked={pdfConfig.encrypt!==false} onChange={e=>setPDFConfig(p=>({...p,encrypt:e.target.checked}))}
+                style={{accentColor:"#3b82f6",cursor:"pointer"}}/>
+              🔒 PASSWORD-PROTECT THIS PDF
+            </label>
+            {pdfConfig.encrypt!==false && (
+              <>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <input value={pdfConfig.password||""} onChange={e=>setPDFConfig(p=>({...p,password:e.target.value}))}
+                    style={{flex:1,background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,padding:"8px 12px",color:"#fbbf24",fontFamily:"JetBrains Mono,monospace",fontSize:13,fontWeight:700,letterSpacing:"0.05em",outline:"none",boxSizing:"border-box"}}/>
+                  <button type="button" onClick={()=>{
+                      const newPwd = Array.from(crypto.getRandomValues(new Uint8Array(9))).map(b=>"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"[b%55]).join("");
+                      setPDFConfig(p=>({...p,password:newPwd}));
+                    }}
+                    style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+                    🎲 Regenerate
+                  </button>
+                  <button type="button" onClick={()=>{
+                      navigator.clipboard.writeText(pdfConfig.password).then(()=>{
+                        alert("Password copied to clipboard:\n\n" + pdfConfig.password + "\n\nKeep it safe — you'll need it to open the PDF.");
+                      });
+                    }}
+                    style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#22c55e",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+                    📋 Copy
+                  </button>
+                </div>
+                <div style={{color:"#64748b",fontSize:10,marginTop:8,fontStyle:"italic"}}>The recipient will be prompted for this password when they open the PDF. Cannot be recovered if lost.</div>
+              </>
+            )}
           </div>
 
           {/* Template Selector */}
@@ -6249,10 +6416,15 @@ function synthesizeReconFindings(r) {
 // ═══════════════════════════════════════════════════════════════
 //  RECON PDF REPORT
 // ═══════════════════════════════════════════════════════════════
-function generateReconReport({target, allResults, date, authenticated}) { /*RECON-AUTH-PDF-SIG-V1*/
+function generateReconReport({target, allResults, date, authenticated, pdfConfig}) { /*RECON-AUTH-PDF-SIG-V1*/
   const r = allResults || {};
+  const _cfg = pdfConfig || {};
   const _doGen = () => {
-  const doc    = new jsPDF({unit:"mm",format:"a4"});
+  const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
+  const doc    = new jsPDF({unit:"mm",format:"a4",
+    ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+      userPermissions: ["print","modify","copy","annot-forms"]}} : {})
+  });
   const pageW  = 210, pageH = 297, margin = 12, contentW = pageW - margin*2;
   const BLUE   = [59,130,246], DARK = [15,23,42], GRAY = [100,116,139];
   const LIGHT  = [241,245,249], WHITE = [255,255,255], BORDER = [203,213,225];
@@ -7423,12 +7595,22 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
   txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,bY+18,6,GRAY,false,"center");
   txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,bY+25,7,BLUE,true,"center");
 
-  // ── BORDER ALL PAGES ───────────────────────────────────────
+  // ── BORDER + WATERMARK ALL PAGES ───────────────────────────
+  const _wm = _cfg.watermark;
+  const _conf = _cfg.confidentiality || "CONFIDENTIAL";
+  const _ftr = _cfg.customFooterText || ("VulnusLab | "+_conf+"  ·  vulnuslab.com");
   const total = doc.internal.getNumberOfPages();
   for(let i=1;i<=total;i++){
     doc.setPage(i);
+    if(_wm){
+      doc.saveGraphicsState();
+      try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
+      doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+      doc.text(_wm, 105, 150, {align:"center", angle:30});
+      doc.restoreGraphicsState();
+    }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
-    if(i>=2){ txt("VulnusLab | CONFIDENTIAL  ·  vulnuslab.com",margin,290,6.5,GRAY); txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right"); }
+    if(i>=2){ txt(_ftr,margin,290,6.5,GRAY); txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right"); }
   }
   doc.save(`recon_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   }; // end _doGen
@@ -8357,10 +8539,15 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
 // ═══════════════════════════════════════════════════════════════
 //  VULNERABILITY SCAN PDF REPORT
 // ═══════════════════════════════════════════════════════════════
-function generateVulnReport({target, allResults, date, authenticated}) { /*VULN-AUTH-PDF-SIG-V1*/
+function generateVulnReport({target, allResults, date, authenticated, pdfConfig}) { /*VULN-AUTH-PDF-SIG-V1*/
+  const _cfg = pdfConfig || {};
   const r = allResults || {};
   const _doGen = () => {
-    const doc = new jsPDF({unit:"mm",format:"a4"});
+    const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
+    const doc = new jsPDF({unit:"mm",format:"a4",
+      ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+        userPermissions: ["print","modify","copy","annot-forms"]}} : {})
+    });
     const pageW=210, margin=12, contentW=pageW-margin*2;
     const BLUE=[59,130,246], DARK=[15,23,42], GRAY=[100,116,139];
     const LIGHT=[241,245,249], WHITE=[255,255,255], LBLUE=[220,230,245];
@@ -8828,12 +9015,21 @@ function generateVulnReport({target, allResults, date, authenticated}) { /*VULN-
     txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,bY+18,6,GRAY,false,"center");
     txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,bY+25,7,BLUE,true,"center");
 
-    // Border + footer
+    // Border + watermark + footer
+    const _wmV = _cfg.watermark;
+    const _ftrV = _cfg.customFooterText || ("VulnusLab | "+((_cfg.confidentiality)||"CONFIDENTIAL")+"  ·  vulnuslab.com");
     const total=doc.internal.getNumberOfPages();
     for(let i=1;i<=total;i++){
       doc.setPage(i);
+      if(_wmV){
+        doc.saveGraphicsState();
+        try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
+        doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+        doc.text(_wmV, 105, 150, {align:"center", angle:30});
+        doc.restoreGraphicsState();
+      }
       doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
-      if(i>=2){txt("VulnusLab | CONFIDENTIAL  ·  vulnuslab.com",margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
+      if(i>=2){txt(_ftrV,margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
     }
     doc.save(`vuln_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   };
@@ -8893,9 +9089,14 @@ const BOF_PHASES = [
 // no HTTP-stager dependencies, no timing races. They either succeed
 // reliably or return a clear actionable error.
 
-function generateExploitReport({results, date}) {
+function generateExploitReport({results, date, pdfConfig}) {
+  const _cfg = pdfConfig || {};
   const _go = () => {
-    const doc = new jsPDF({unit:"mm", format:"a4"});
+    const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
+    const doc = new jsPDF({unit:"mm", format:"a4",
+      ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+        userPermissions: ["print","modify","copy","annot-forms"]}} : {})
+    });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const margin = 15;
@@ -9105,12 +9306,21 @@ function generateExploitReport({results, date}) {
     txt("All findings have been actively verified. No false positives.", pageW/2, y+22, 6.5, GRAY, false, "center");
     txt("vulnuslab.com  ·  support@vulnuslab.com", pageW/2, y+27, 8, BLUE, true, "center");
     footer();
-    // ── Page borders + page numbers on all pages (vulntemplate chrome) ──
+    // ── Page borders + watermark + page numbers (vulntemplate chrome) ──
+    const _wmE = _cfg.watermark;
+    const _ftrE = _cfg.customFooterText || ("VulnusLab | "+((_cfg.confidentiality)||"CONFIDENTIAL")+"  ·  vulnuslab.com");
     const total = doc.internal.getNumberOfPages();
     for(let i=1;i<=total;i++){
       doc.setPage(i);
+      if(_wmE){
+        doc.saveGraphicsState();
+        try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
+        doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+        doc.text(_wmE, pageW/2, pageH/2, {align:"center", angle:30});
+        doc.restoreGraphicsState();
+      }
       doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,pageW,pageH,"S");
-      if(i>=2){ txt("VulnusLab | CONFIDENTIAL  ·  vulnuslab.com", margin, pageH-5, 6.5, GRAY); txt("Page "+i+" of "+total, pageW-margin, pageH-5, 6.5, BLUE, false, "right"); }
+      if(i>=2){ txt(_ftrE, margin, pageH-5, 6.5, GRAY); txt("Page "+i+" of "+total, pageW-margin, pageH-5, 6.5, BLUE, false, "right"); }
     }
     doc.save(`exploit_report_${date.replace(/[: ]/g,"-")}.pdf`);
   };
@@ -9891,9 +10101,14 @@ function ExploitationModule({token, apiUrl}) {
 }
 
 
-function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, offset, badChars, jmpEsp, jmpModule, lhost, lport, payload, shellcode, notes, scripts, date}) {
+function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, offset, badChars, jmpEsp, jmpModule, lhost, lport, payload, shellcode, notes, scripts, date, pdfConfig}) {
+  const _cfg = pdfConfig || {};
   const _doGen = () => {
-    const doc = new jsPDF({unit:"mm", format:"a4"});
+    const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
+    const doc = new jsPDF({unit:"mm", format:"a4",
+      ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+        userPermissions: ["print","modify","copy","annot-forms"]}} : {})
+    });
     const pageW=210, margin=12, contentW=pageW-margin*2;
     const BLUE=[59,130,246], DARK=[15,23,42], GRAY=[100,116,139];
     const LIGHT=[241,245,249], WHITE=[255,255,255], LBLUE=[220,230,245];
@@ -10080,12 +10295,21 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
     txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.", pageW/2, eY+18, 6, GRAY, false, "center");
     txt("vulnuslab.com  ·  support@vulnuslab.com", pageW/2, eY+25, 7, BLUE, true, "center");
 
-    // Footer on all pages
+    // Border + watermark + footer on all pages
+    const _wmB = _cfg.watermark;
+    const _ftrB = _cfg.customFooterText || ("VulnusLab | "+((_cfg.confidentiality)||"CONFIDENTIAL")+"  ·  vulnuslab.com");
     const total=doc.internal.getNumberOfPages();
     for(let i=1;i<=total;i++){
       doc.setPage(i);
+      if(_wmB){
+        doc.saveGraphicsState();
+        try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
+        doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+        doc.text(_wmB, 105, 150, {align:"center", angle:30});
+        doc.restoreGraphicsState();
+      }
       doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
-      if(i>=2){txt("VulnusLab | CONFIDENTIAL  ·  vulnuslab.com",margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
+      if(i>=2){txt(_ftrB,margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
     }
     doc.save(`bof_${_pdfFn(targetIP)}_${_pdfDt()}.pdf`);
   };
