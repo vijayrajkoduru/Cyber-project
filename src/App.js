@@ -3238,6 +3238,7 @@ function WebAppModule(props) {
             ))}
           </div>
         )}
+        <div style={{display:"flex",flexDirection:"column",gap:0,border:"1px solid #1e293b",borderRadius:8,overflow:"hidden",background:"#0f172a"}}>
         {PHASES.map((ph,i) => {
           const isActive   = curPhase === i;
           const isDone     = done.includes(i);
@@ -3246,18 +3247,16 @@ function WebAppModule(props) {
           const res        = allResults[ph.tool];
           const isSQLi     = ph.tool === "sqlmap" && res && res.vulnerable;
           const isVuln     = res && res.vulnerable && !isSQLi;
-          const leftCol    = isActive?"#3b82f6":isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):"#1e293b";
-          const borderCol  = isActive?"#1e3a8a":isDone?(isSkipped?"#451a03":isFailed?"#450a0a":isSQLi||isVuln?"#431407":"#052e16"):"#1e293b";
-          const circBg     = isDone?(isSkipped?"#1c1000":isFailed?"#1c0505":isSQLi?"#1c0a0a":"#052e16"):isActive?"#0c1a3d":"#020617";
-          const circBord   = isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):isActive?"#3b82f6":"#1e293b";
+          const dotCol     = isActive?"#3b82f6":isDone?(isSkipped?"#f59e0b":isFailed?"#ef4444":isSQLi||isVuln?"#f97316":"#22c55e"):"#334155";
           const isSelected   = selectedPhases.has(i);
           const toolLocked   = isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin;
           const secHdr       = SECTION_HEADERS[ph.tool];
+          const rowBg        = toolLocked?"#0a0f1e":i%2===0?"#0f172a":"#0b1424";
           return (
             <React.Fragment key={i}>
             {secHdr && (
-              <div style={{display:"flex",alignItems:"center",gap:10,marginTop:i===0?0:10,marginBottom:6,paddingLeft:4}}>
-                <div style={{width:3,height:32,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginTop:i===0?0:14,marginBottom:4,paddingLeft:4}}>
+                <div style={{width:3,height:24,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,fontWeight:700,color:secHdr.color,letterSpacing:"0.05em",textTransform:"uppercase"}}>{secHdr.label}</div>
                   <div style={{fontSize:9,color:"#475569",fontFamily:"JetBrains Mono,monospace"}}>{secHdr.sub}</div>
@@ -3271,47 +3270,47 @@ function WebAppModule(props) {
                 if(toolLocked){ alert("Upgrade to Pro to access this scanner."); return; }
                 setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; });
               }}
-              style={{background:toolLocked?"#0a0f1e":"#0f172a",border:"1px solid "+(toolLocked?"#1e293b":borderCol),borderLeft:`3px solid ${toolLocked?"#374151":leftCol}`,borderRadius:8,padding:"12px 18px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.75:isSelected?1:0.35,transition:"all 0.2s"}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:circBg,border:"2px solid "+circBord,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>
-                {isDone ? (isSkipped?"⚠":isFailed?"✗":isSQLi?"✗":"✓") : isActive ? (
-                  <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
-                ) : (
-                  <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{String(i+1).padStart(2,"0")}</span>
+              style={{background:rowBg,borderLeft:`3px solid ${toolLocked?"#374151":dotCol}`,padding:"6px 12px",display:"flex",alignItems:"center",gap:10,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.55:isSelected?1:0.4,transition:"background 0.15s,opacity 0.15s",minHeight:34}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:dotCol,flexShrink:0,boxShadow:isActive?`0 0 6px ${dotCol}`:"none"}}/>
+              <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",fontWeight:600,flexShrink:0,width:22,textAlign:"center"}}>
+                {isActive?(
+                  <span style={{display:"inline-block",width:10,height:10,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
+                ):isDone?(
+                  <span style={{color:dotCol,fontSize:12,fontWeight:700}}>{isSkipped?"⚠":isFailed?"✗":isSQLi?"✗":"✓"}</span>
+                ):String(i+1).padStart(2,"0")}
+              </span>
+              <span style={{fontSize:12,fontWeight:600,color:toolLocked?"#64748b":"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                {ph.name}
+                {toolLocked && <span style={{fontSize:10,marginLeft:6}}>🔒</span>}
+              </span>
+              <span style={{fontSize:9,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",flexShrink:0,opacity:0.8}}>{ph.tool}</span>
+              <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
+                {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
+                {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="SECURE"     color="green"  size="xs"/>}
+                {isDone && !isFailed && !isSkipped && (isSQLi||isVuln)   && <Badge label="VULNERABLE" color="red"    size="xs"/>}
+                {isDone && isFailed  && <Badge label="ERROR"   color="red"    size="xs"/>}
+                {isDone && isSkipped && <Badge label="SKIPPED" color="orange" size="xs"/>}
+                {isDone && res && (
+                  <span style={{fontSize:10,fontFamily:"JetBrains Mono,monospace",minWidth:90,textAlign:"right"}}>
+                    {res.total_open !== undefined && <span style={{color:"#60a5fa"}}>{res.total_open}p</span>}
+                    {res.total_findings !== undefined && <span style={{color:res.total_findings>0?"#f87171":"#4ade80"}}>{res.total_findings}f</span>}
+                    {res.total !== undefined && res.total_findings===undefined && <span style={{color:"#a78bfa"}}>{res.total}</span>}
+                    {res.vulnerable !== undefined && res.total_findings===undefined && res.total===undefined && <span style={{color:res.vulnerable?"#f87171":"#4ade80",fontWeight:700}}>{res.vulnerable?"VULN":"OK"}</span>}
+                  </span>
+                )}
+                {isDone && res && (
+                  <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
+                    style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"2px 8px",color:"#93c5fd",fontSize:9,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+                    {expandedTile===i?"Hide":"Details"}
+                  </button>
+                )}
+                {!running && target && (
+                  <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
+                    style={{background:"transparent",border:"1px solid #1e293b",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:9,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+                    {isDone?"Re-run":"Run"}
+                  </button>
                 )}
               </div>
-              <div style={{flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:13,fontWeight:600,color:isActive?"#93c5fd":"#f1f5f9"}}>{ph.name}</span>
-                  {toolLocked && <span style={{fontSize:10}}>🔒</span>}
-                  {isActive  && <Badge label="RUNNING"   color="blue"   size="xs"/>}
-                  {isDone && !isFailed && !isSkipped && !isSQLi && !isVuln && <Badge label="SECURE"     color="green"  size="xs"/>}
-                  {isDone && !isFailed && !isSkipped && (isSQLi||isVuln)   && <Badge label="VULNERABLE" color="red"   size="xs"/>}
-                  {isDone && isFailed  && <Badge label="ERROR"     color="red"    size="xs"/>}
-                  {isDone && isSkipped && <Badge label="SKIPPED"   color="orange" size="xs"/>}
-                  {isDone && isSkipped && <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic",marginLeft:4}}>Not applicable for this target</span>}
-                </div>
-                <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"1px 6px" /*TILE-CHIP-V1*/}}>{ph.tool}</span>
-              </div>
-              {isDone && res && (
-                <div style={{textAlign:"right"}}>
-                  {res.total_open !== undefined && <div style={{fontSize:11,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{res.total_open} ports</div>}
-                  {res.total_findings !== undefined && <div style={{fontSize:11,color:res.total_findings>0?"#f87171":"#4ade80",fontFamily:"JetBrains Mono,monospace"}}>{res.total_findings} findings</div>}
-                  {res.total !== undefined && <div style={{fontSize:11,color:"#a78bfa",fontFamily:"JetBrains Mono,monospace"}}>{res.total} paths</div>}
-                  {res.vulnerable !== undefined && <div style={{fontSize:11,color:res.vulnerable?"#f87171":"#4ade80",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>{res.vulnerable?"VULNERABLE":"SECURE"}</div>}
-                </div>
-              )}
-              {isDone && res && (
-                <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
-                  style={{background:expandedTile===i?"#1e3a8a":"#1e293b",border:"1px solid "+(expandedTile===i?"#3b82f6":"#334155"),borderRadius:5,padding:"4px 10px",color:"#93c5fd",fontSize:10,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-                  {expandedTile===i?"Hide":"Details"}
-                </button>
-              )}
-              {!running && target && (
-                <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
-                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 10px",color:"#60a5fa",fontSize:10,fontWeight:600,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-                  {isDone?"Re-run":"Run"}
-                </button>
-              )}
             </div>
             {/* Expansion panel — surfaces real-world error/success details
                 so the customer never has to crack open DevTools or SSH into
@@ -3402,6 +3401,7 @@ function WebAppModule(props) {
             </React.Fragment>
           );
         })}
+        </div>
       </div>
       )}
 
@@ -8001,22 +8001,32 @@ function ReconModule({token, onRunningChange}) {
             <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#64748b",fontSize:11,cursor:"pointer"}}>None</button>
           </div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:2,width:"100%",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden",background:"#0f172a"}}>
           {RECON_PHASES.map((ph,i)=>{
             const sel       = selectedPhases.has(i);
             const isDone    = done.includes(i);
             const isFailed  = failed.includes(i);
             const isActive  = curPhase===i;
-            const leftCol   = isActive?"#3b82f6":isDone?(isFailed?"#ef4444":"#22c55e"):"#334155";
-            const borderCol = isActive?"#1e3a8a":isDone?(isFailed?"#450a0a":"#052e16"):"#1e293b";
+            const dotCol    = isActive?"#3b82f6":isDone?(isFailed?"#ef4444":"#22c55e"):"#334155";
+            const rowBg     = i%2===0?"#0f172a":"#0b1424";
             return (
               <div key={i} onClick={()=>!running&&togglePhase(i)}
-                style={{background:"#0f172a",border:"1px solid "+borderCol,borderLeft:`4px solid ${leftCol}`,borderRadius:6,padding:"10px 16px",display:"flex",alignItems:"center",gap:12,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.4,transition:"all 0.2s",boxSizing:"border-box"}}>
-                <span style={{fontSize:18,flexShrink:0,width:24,textAlign:"center"}}>{ph.icon}</span>
-                <span style={{flex:1,fontSize:13,fontWeight:600,color:isActive?"#93c5fd":isDone&&!isFailed?"#4ade80":isFailed?"#f87171":sel?"#f1f5f9":"#64748b"}}>{ph.name}</span>
-                <span style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",background:"#020617",border:"1px solid #1e293b",borderRadius:3,padding:"2px 8px"}}>{ph.tool}</span>
-                {isActive && <span style={{fontSize:10,color:"#93c5fd",fontWeight:600,minWidth:60,textAlign:"right"}}>Running…</span>}
-                {isDone && <span style={{fontSize:14,color:isFailed?"#f87171":"#4ade80",fontWeight:700,minWidth:60,textAlign:"right"}}>{isFailed?"✗ ERROR":"✓ DONE"}</span>}
+                style={{background:rowBg,borderLeft:`3px solid ${dotCol}`,padding:"6px 14px",display:"flex",alignItems:"center",gap:10,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.4,transition:"background 0.15s,opacity 0.15s",minHeight:32,boxSizing:"border-box"}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:dotCol,flexShrink:0,boxShadow:isActive?`0 0 6px ${dotCol}`:"none"}}/>
+                <span style={{fontSize:13,flexShrink:0,width:20,textAlign:"center"}}>
+                  {isActive?(
+                    <span style={{display:"inline-block",width:10,height:10,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
+                  ):isDone?(
+                    <span style={{color:dotCol,fontSize:12,fontWeight:700}}>{isFailed?"✗":"✓"}</span>
+                  ):ph.icon}
+                </span>
+                <span style={{flex:1,fontSize:12,fontWeight:600,color:"#f1f5f9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ph.name}</span>
+                <span style={{fontSize:9,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",flexShrink:0,opacity:0.8}}>{ph.tool}</span>
+                <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,minWidth:120,justifyContent:"flex-end"}}>
+                  {isActive && <Badge label="RUNNING" color="blue" size="xs"/>}
+                  {isDone && !isFailed && <Badge label="DONE" color="green" size="xs"/>}
+                  {isDone && isFailed && <Badge label="ERROR" color="red" size="xs"/>}
+                </div>
               </div>
             );
           })}
@@ -10617,24 +10627,43 @@ function VulnModule(props) {
         </div>
       </div>
 
-      {/* Phase progress */}
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+      {/* Phase progress — dense single-row list */}
+      <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:16,border:"1px solid #1e293b",borderRadius:8,overflow:"hidden",background:"#0f172a"}}>
         {VULN_PHASES.map((ph,i)=>{
           const isDone=done.includes(i), isActive=current===i;
           const hasData=allResults[ph.tool];
           const findings=hasData?(allResults[ph.tool]?.findings||[]).filter(f=>f.severity!=="INFO"):[];
           const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
+          const med=findings.filter(f=>f.severity==="MEDIUM").length;
+          const isVuln=isDone&&findings.length>0;
+          const isCrit=isDone&&hi>0;
+          const isFailed=isDone&&(hasData?.error||hasData?.ok===false);
+          const isSelected=activeTab===ph.tool;
+          const dotCol=isActive?"#3b82f6":isDone?(isFailed?"#ef4444":isCrit?"#f97316":isVuln?"#eab308":"#22c55e"):"#334155";
+          const rowBg=isSelected?"#0f1d3a":i%2===0?"#0f172a":"#0b1424";
           return(
             <div key={i} onClick={()=>isDone&&setActiveTab(ph.tool)}
-              style={{background:isActive?"#1e3a5f":isDone?"#0f172a":"#0a0f1a",border:`1px solid ${isActive?"#3b82f6":isDone?"#1e293b":"#0f172a"}`,borderRadius:6,padding:"8px 10px",cursor:isDone?"pointer":"default",transition:"all 0.2s"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                <span style={{fontSize:14}}>{ph.icon}</span>
-                <span style={{fontSize:10,color:isActive?"#60a5fa":isDone?(hi>0?"#f87171":"#4ade80"):"#94a3b8",fontWeight:700}}>
-                  {isActive?"⟳":isDone?(hi>0?"⚠":"✓"):"○"}
-                </span>
+              style={{background:rowBg,borderLeft:`3px solid ${dotCol}`,padding:"6px 14px",display:"flex",alignItems:"center",gap:10,cursor:isDone?"pointer":"default",transition:"background 0.15s",minHeight:32}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:dotCol,flexShrink:0,boxShadow:isActive?`0 0 6px ${dotCol}`:"none"}}/>
+              <span style={{fontSize:13,flexShrink:0,width:20,textAlign:"center"}}>
+                {isActive?(
+                  <span style={{display:"inline-block",width:10,height:10,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
+                ):ph.icon}
+              </span>
+              <span style={{fontSize:12,fontWeight:600,color:"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ph.name}</span>
+              <span style={{fontSize:9,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",flexShrink:0,opacity:0.8}}>{ph.tool}</span>
+              <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,minWidth:140,justifyContent:"flex-end"}}>
+                {isActive&&<Badge label="RUNNING" color="blue" size="xs"/>}
+                {isDone&&isFailed&&<Badge label="ERROR" color="red" size="xs"/>}
+                {isDone&&!isFailed&&isCrit&&<Badge label="VULNERABLE" color="red" size="xs"/>}
+                {isDone&&!isFailed&&!isCrit&&isVuln&&<Badge label="REVIEW" color="yellow" size="xs"/>}
+                {isDone&&!isFailed&&!isVuln&&<Badge label="SECURE" color="green" size="xs"/>}
+                {isDone&&(
+                  <span style={{fontSize:10,color:isFailed?"#f87171":hi>0?"#f87171":med>0?"#eab308":"#4ade80",fontFamily:"JetBrains Mono,monospace",fontWeight:hi>0?700:400,minWidth:80,textAlign:"right"}}>
+                    {isFailed?"error":hi>0?`${hi} crit/high`:med>0?`${med} medium`:findings.length>0?`${findings.length} finding${findings.length!==1?"s":""}`:"0 findings"}
+                  </span>
+                )}
               </div>
-              <div style={{fontSize:13,color:isActive?"#93c5fd":"#f1f5f9",fontWeight:600,lineHeight:1.3}}>{ph.name}</div>
-              {isDone&&findings.length>0&&<div style={{fontSize:9,color:hi>0?"#f87171":"#94a3b8",marginTop:2}}>{findings.length} finding{findings.length!==1?"s":""}</div>}
             </div>
           );
         })}
