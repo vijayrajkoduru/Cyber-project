@@ -581,51 +581,38 @@ function Terminal(props) {
 
 // ── Reusable test-target picker ──────────────────────────────
 function TestTargets({targets, onSelect}) {
-  // Test Targets dropdown disabled across all modules — customers
-  // enter their own target URL manually. Bundled lab targets caused
-  // confusion (broken auto-login, container availability churn) so
-  // they're hidden until per-customer lab provisioning ships.
-  return null;
-  /* eslint-disable */
-  // The original body is preserved below for one-edit re-enabling.
   const [open,    setOpen]    = useState(false);
   const [closing, setClosing] = useState(false);
   const [copied,  setCopied]  = useState(null);
-
-  const close = () => {
-    setClosing(true);
-    setTimeout(()=>{ setOpen(false); setClosing(false); }, 300);
-  };
-
-  const copy = (val,lab,i) => {
+  const close = () => { setClosing(true); setTimeout(()=>{ setOpen(false); setClosing(false); }, 300); };
+  const copy = (val, lab, i) => {
     if (navigator.clipboard) navigator.clipboard.writeText(val).catch(()=>{});
     onSelect(val, lab);
     setCopied(i);
     setTimeout(()=>{ setCopied(null); close(); }, 600);
   };
-
   return (
     <div style={{marginBottom:10}}>
       <button onClick={()=>open ? close() : setOpen(true)}
         style={{background:"none",border:"1px solid #1e3a8a",borderRadius:5,padding:"4px 12px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
         🎯 Test Targets {open?"▲":"▼"}
       </button>
-      {open&&(
+      {open && (
         <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,marginTop:6,overflow:"hidden",
           animation: closing ? "fadeOut .3s ease forwards" : "fadeIn .2s ease"}}>
           <div style={{background:"#0f172a",padding:"6px 12px",borderBottom:"1px solid #1e293b",fontSize:10,color:"#475569",fontWeight:600,letterSpacing:1}}>
-            INTENTIONALLY VULNERABLE — LEGAL TO TEST
+            INTENTIONALLY VULNERABLE — CREDENTIALS AUTO-FILL ON CLICK
           </div>
-          {targets.map((t,i)=>(
-            <div key={i} onClick={()=>copy(t.value,t.lab||null,i)}
-              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid #0f172a",cursor:"pointer",background:copied===i?"#1e3a5f":"transparent",transition:"background .15s"}}
-              onMouseEnter={e=>e.currentTarget.style.background="#0f172a"}
-              onMouseLeave={e=>e.currentTarget.style.background=copied===i?"#1e3a5f":"transparent"}>
+          {(targets || []).map((t, i) => (
+            <div key={i} onClick={() => copy(t.value, t.lab || null, i)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid #0f172a",cursor:"pointer",background:copied===i?"#1e3a5f":"transparent",transition:"background .15s"}}>
               <span style={{fontSize:14}}>{t.icon}</span>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:11,fontWeight:600,color:"#93c5fd"}}>{t.label}</div>
-                <div style={{fontSize:10,color:"#475569",fontFamily:"JetBrains Mono,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
-                {t.desc&&<div style={{fontSize:9,color:"#334155",marginTop:1}}>{t.desc}</div>}
+                <div style={{fontSize:11,fontWeight:600,color:"#f1f5f9"}}>{t.label}
+                  {t.lab && <span style={{fontSize:9,color:"#4ade80",marginLeft:8,fontWeight:700,background:"#052e16",padding:"1px 5px",borderRadius:3}}>AUTO-LOGIN ✓</span>}
+                </div>
+                <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
+                {t.desc && <div style={{fontSize:9,color:"#64748b",marginTop:1}}>{t.desc}</div>}
               </div>
               <span style={{fontSize:10,color:copied===i?"#4ade80":"#334155",fontWeight:700,flexShrink:0}}>{copied===i?"✓ Selected":"Click"}</span>
             </div>
@@ -6292,6 +6279,10 @@ function generateReconReport({target, allResults, date, authenticated}) { /*RECO
     {tool:"internetdb",  name:"Free Shodan (InternetDB)",isEmpty:d=>!d.found},
     {tool:"cve_match",   name:"CVE Matching (NVD)", isEmpty:d=>!d.summary || (d.summary.total_cves||0)===0},
     {tool:"waf_cdn",     name:"WAF / CDN Fingerprint", isEmpty:d=>!d.detected || d.detected.length===0},
+    {tool:"zone_transfer", name:"DNS Zone Transfer",    isEmpty:d=>!d.vulnerable && (!d.transfers||d.transfers.length===0)},
+    {tool:"sourcemap",     name:"Source Map Exposure",  isEmpty:d=>!d.maps_found||d.maps_found.length===0},
+    {tool:"bucket_perms",  name:"Bucket Permissions",   isEmpty:d=>!d.buckets_exist},
+    {tool:"api_docs",      name:"API Docs Discovery",   isEmpty:d=>!d.exposed_endpoints||d.exposed_endpoints.length===0},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -7335,6 +7326,10 @@ const RECON_PHASES = [
   {name:"Free Shodan (InternetDB)",tool:"internetdb",endpoint:"/api/recon/internetdb",icon:"🆓"},
   {name:"CVE Matching (NVD)",     tool:"cve_match", endpoint:"/api/recon/cve_match",  icon:"🚨"},
   {name:"WAF / CDN Fingerprint",  tool:"waf_cdn",   endpoint:"/api/recon/waf_cdn",    icon:"🛡️"},
+          {name:"DNS Zone Transfer",      tool:"zone_transfer", endpoint:"/api/recon/zone_transfer", desc:"AXFR — leaks full DNS zone if misconfigured"},
+          {name:"Source Map Exposure",    tool:"sourcemap",     endpoint:"/api/recon/sourcemap",     desc:".js.map files leaking source + secrets"},
+          {name:"Bucket Permission Audit",tool:"bucket_perms",  endpoint:"/api/recon/bucket_perms",  desc:"Public-listable S3/GCS/Azure buckets"},
+          {name:"API Docs Discovery",     tool:"api_docs",      endpoint:"/api/recon/api_docs",      desc:"Swagger/GraphQL/Actuator exposed"},
 ];
 
 function ReconModule({token, onRunningChange}) {
