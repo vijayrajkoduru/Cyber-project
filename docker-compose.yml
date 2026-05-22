@@ -13,10 +13,14 @@ services:
     volumes:
     - scan_data:/app/data
     - ./data:/data
-    - ./backups:/backups
+    - /root/backups:/backups
     - ./users.db:/app/data/users.db
     - ./last_known_good:/app/.last_known_good
     - ./tools/_payloads:/app/tools/_payloads:ro
+    # ── Host project mounted read-only so /api/admin/backups can tar
+    #    real host files (main.py, src/, docker-compose.yml, etc.).
+    #    Without this the backup endpoint sees /app (container fs) not the host repo.
+    - ./:/host-project:ro
     networks:
     - vulnuslab
     restart: unless-stopped

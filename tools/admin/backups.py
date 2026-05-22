@@ -23,8 +23,12 @@ from tools._shared import verify_admin
 
 router = APIRouter()
 
-BACKUP_DIR = Path("/root/backups")
-PROJECT_ROOT = Path("/root/Cyber-project")
+# Paths from INSIDE the backend Docker container:
+#   /backups        = host's ./backups (mounted in docker-compose.yml)
+#   /host-project   = host's project root (./:/host-project:ro) — read-only mount
+#                     so we can tar real host files (main.py, src/, configs, etc.)
+BACKUP_DIR = Path("/backups")
+PROJECT_ROOT = Path("/host-project")
 # Complete end-to-end coverage: backend + frontend + infra + data + secrets.
 # Restore from this single bundle should produce a working VPS deployment.
 INCLUDE_PATHS = [
