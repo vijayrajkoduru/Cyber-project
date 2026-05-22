@@ -92,7 +92,7 @@ async def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)
 
     summary = f"Probed {len(_DANGEROUS)} dangerous methods; Allow: {allow_str!r}"
     if suppressed:
-        summary += f"; {len(suppressed)} suppressed FP(s)"
+        summary += f"; {len(suppressed)} CDN-normalized methods filtered as non-vulnerable"
     return standard_response(tool="http_methods", target=req.target,
         findings=findings, tests_performed=len(_DANGEROUS),
         tests_summary=summary,

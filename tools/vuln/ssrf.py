@@ -100,7 +100,7 @@ async def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return standard_response(tool="ssrf", target=req.target, findings=findings,
         tests_performed=tests,
         tests_summary=(f"SSRF: {tests} probes across {len(candidates)} params; "
-                       f"SPA-baseline suppressed {len(suppressed)} FP(s); "
+                       f"{len(suppressed)} SPA matches filtered as non-vulnerable; "
                        f"AWS/GCP/Azure/DO + localhost markers"),
         raw_data={"ssrf": {"confirmed": confirmed,
                             "suppressed_fps": suppressed,

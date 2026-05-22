@@ -101,7 +101,7 @@ async def scan_exposed_files(req: ScanRequest, payload=Depends(verify_scan_quota
 
     summary = f"{len(_PATHS)} sensitive paths probed; marker verification required"
     if suppressed:
-        summary += f"; SPA-baseline suppressed {len(suppressed)} FP(s)"
+        summary += f"; {len(suppressed)} SPA matches filtered as non-vulnerable"
 
     return standard_response(tool="exposed_files", target=req.target,
         findings=findings, tests_performed=len(_PATHS),
