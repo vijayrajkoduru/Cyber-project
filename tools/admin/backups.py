@@ -92,18 +92,32 @@ async def list_backups(_=Depends(verify_admin)):
     files = []
     for f in sorted(BACKUP_DIR.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True):
         if not f.is_file(): continue
+        # Hide sidecar manifest .txt files from the UI list — they're audit
+        # trail metadata for each .tar.gz, not separate backups themselves.
+        # Still written/readable on disk for compliance; just not surfaced here.
+        if f.name.endswith(".manifest.txt"): continue
         st = f.stat()
+        # Attach manifest size if its sidecar exists (so we report true total).
+        manifest_size = 0
+        manifest = f.with_suffix("").with_suffix(".manifest.txt")
+        if manifest.exists() and manifest.is_file():
+            manifest_size = manifest.stat().st_size
         files.append({
             "name": f.name,
             "size_bytes": st.st_size,
             "size_human": _human(st.st_size),
+            "has_manifest": manifest_size > 0,
             "modified_iso": datetime.datetime.utcfromtimestamp(st.st_mtime).isoformat() + "Z",
             "is_archive": f.suffix in (".gz", ".tar", ".zip", ".bundle"),
         })
+    # Total includes the (hidden) manifests so disk usage reporting stays honest.
+    total_disk_bytes = sum(
+        ff.stat().st_size for ff in BACKUP_DIR.glob("*") if ff.is_file()
+    )
     return {
         "count": len(files),
-        "total_bytes": sum(f["size_bytes"] for f in files),
-        "total_human": _human(sum(f["size_bytes"] for f in files)),
+        "total_bytes": total_disk_bytes,
+        "total_human": _human(total_disk_bytes),
         "backup_dir": str(BACKUP_DIR),
         "files": files,
     }
@@ -174,17 +188,22 @@ class DeleteBody(BaseModel):
 
 @router.delete("/api/admin/backups/{filename}")
 async def delete_backup(filename: str, _=Depends(verify_admin)):
-    """Delete one backup. Filename must be a basename (no path traversal allowed)."""
+    """Delete one backup PLUS its sidecar manifest (if present)."""
     if "/" in filename or "\\" in filename or filename.startswith("."):
         raise HTTPException(status_code=400, detail="Invalid filename")
     target = BACKUP_DIR / filename
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Backup not found")
+    also_deleted = []
     try:
         target.unlink()
+        # Sweep sidecar manifest .txt (same stem) so deletes leave no orphans.
+        manifest = target.with_suffix("").with_suffix(".manifest.txt")
+        if manifest.exists() and manifest.is_file():
+            manifest.unlink(); also_deleted.append(manifest.name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
-    return {"ok": True, "deleted": filename}
+    return {"ok": True, "deleted": filename, "also_deleted": also_deleted}
 
 
 @router.post("/api/admin/backups/wipe")
