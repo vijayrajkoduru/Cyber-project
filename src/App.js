@@ -7588,6 +7588,16 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   renderToolFindingsAndIntel("OS Fingerprinting", r.os);
   renderToolFindingsAndIntel("Banner Grabbing",   r.banner);
 
+  // ── Tier 2 — Web-content discovery (VL-FORGE) ──
+  // Each tool returns {findings[], intel{}, sources_used[]} per framework.
+  renderToolFindingsAndIntel("Directory Enumeration", r.gobuster);
+  renderToolFindingsAndIntel("JS Endpoint Extractor", r.jsendpoints);
+  renderToolFindingsAndIntel("Wayback Machine",       r.wayback);
+  renderToolFindingsAndIntel("robots + sitemap",      r.robotsmap);
+  renderToolFindingsAndIntel("BFS Crawler",           r.crawl);
+  renderToolFindingsAndIntel("Parameter Discovery",   r.params);
+  renderToolFindingsAndIntel("Favicon Fingerprint",   r.favicon);
+
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];
     chk(30); y = sHead("OSINT Harvesting (theHarvester)",y);
