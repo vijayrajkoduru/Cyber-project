@@ -115,6 +115,45 @@ Anything beyond these 7 = future polish, NOT a blocker.
 | **Re-forge X** | Re-apply pattern to an existing tool (polish) |
 | **Forge status** | Show which tools done + remaining |
 
+## Forge SCOPE hierarchy (small → big)
+
+| Command | Scope | Calendar time | What you get per session |
+|---|---|---|---|
+| **Forge `<tool>`** | 1 tool | 30-90 min | 1 tool fully verified + shipped |
+| **Forge family `<name>`** | 3-6 related tools, shared infra | 1-2 days | All tools in family, batched |
+| **Forge tier `<N>`** | 5-7 tools in same impact tier | 2-4 days | One PDF after the batch completes |
+| **Forge module `<name>`** | ALL remaining tools in a module | 2-4 weeks | Multiple batches with checkpoints |
+| **Forge all** | Every remaining tool across every module | 6-10 weeks | Big commitment — multi-month roadmap |
+
+## What "Forge module Recon" actually means
+
+It commits to building all 32 remaining Recon tools but executed as 5 batches:
+
+```
+Batch 1 (Tier 1, 5 tools)  →  ship checkpoint  →  you say "next" or "pause"
+Batch 2 (Tier 2, 7 tools)  →  ship checkpoint  →  you say "next" or "pause"
+Batch 3 (Tier 3, 5 tools)  →  ship checkpoint
+Batch 4 (Tier 4, 5 tools)  →  ship checkpoint
+Batch 5 (Tier 5, 6 tools)  →  module complete
+```
+
+Each batch = self-verified 7/7 per tool + one PDF showing the batch result.
+
+## Recommended starting points
+
+- **Today**: `Forge tier 1` — 9 high-impact tools in 2-3 days
+- **This week**: `Forge family DNS` — Subdomains + Cert Trans + Zone Transfer + Amass
+- **This month**: `Forge module Recon` — finish all 32 tools
+
+## Module list for Forge module commands
+
+- `Forge module Recon`    — 32 tools remaining (3 done)
+- `Forge module Webapp`   — 54 tools to re-forge through framework
+- `Forge module Vuln`     — 9 tools (already AI-wired, light polish)
+- `Forge module OSINT`    — 11 tools, framework-wrap
+- `Forge module Exploit`  — 7 tools (already complete)
+- `Forge module BOF`      — 7 phases (already complete)
+
 ## Tools already FORGED (3 — done)
 
 - WHOIS Lookup       (2026-05-22) — 6 sources, 29 rules
