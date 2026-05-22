@@ -29,6 +29,10 @@ _MAIL_PROVIDERS = {
     "Postmark":          [r"postmarkapp\.com"],
     "SendGrid":          [r"sendgrid\.net"],
     "Hostinger":         [r"\.hostinger\.com$"],
+    "Cloudflare Email":  [r"\.mx\.cloudflare\.net", r"route\d+\.mx\.cloudflare"],
+    "Tutanota":          [r"\.tutanota\.de$"],
+    "Migadu":            [r"\.migadu\.com$"],
+    "Mxroute":           [r"\.mxroute\.com$"],
 }
 
 # CDN A-record patterns (IP ranges + reverse-DNS hints)

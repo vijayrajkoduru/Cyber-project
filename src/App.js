@@ -7466,6 +7466,12 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     y += 6;
   }
 
+  // ── DNS Recon Findings + DNS Recon Intelligence (framework-rendered) ──
+  // Renders the 13-rule findings library output (DNSSEC chain, cross-resolver
+  // consistency, PTR posture, NSEC walking, SRV services discovered) plus the
+  // structured intel dict and Sources Gathered footer.
+  renderToolFindingsAndIntel("DNS Recon", r.dnsrecon);
+
   // ── Subdomains ─────────────────────────────────────────────
   const allSubs = [...new Set([...(r.subdomains?.subdomains||[]),...(r.crtsh?.subdomains||[]),...(r.amass?.subdomains||[])])].filter(s => !String(s).includes("@") && !String(s).includes(" "));
   if(allSubs.length>0){ chk(30); y = sHead("Subdomain Enumeration",y);
