@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # so the image stays small if a customer only uses pure-Python scanners.
 RUN apt-get update -q -o Acquire::Retries=3 \
  && apt-get install -y -q --no-install-recommends \
-        curl wget ca-certificates git iputils-ping \
+        curl wget ca-certificates git iputils-ping whois dnsutils \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
