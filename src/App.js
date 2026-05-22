@@ -12764,9 +12764,23 @@ function BackupOperationsModule({token}) {
 
         {/* Action buttons */}
         <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+          <button onClick={async ()=>{
+              if (!window.confirm(`Reset to present?\n\nThis will:\n  1. DELETE all ${data?.count||0} existing backup(s)\n  2. Create ONE fresh backup of the current state\n\nProceed?`)) return;
+              setCreating(true); setMsg(null);
+              try {
+                const r = await api("/api/admin/backups/reset", "POST", {}, token);
+                setMsg({type:"success", text:`Wiped ${r.wiped} old · Created ${r.new_file} (${r.new_size_human})`});
+                await refresh();
+              } catch(e) { setMsg({type:"error", text:e.message}); }
+              finally { setCreating(false); }
+            }}
+            disabled={creating}
+            style={{padding:"10px 18px",background:creating?"#1e293b":"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
+            {creating ? "Processing..." : "🔄 Reset to Present (wipe all + take new)"}
+          </button>
           <button onClick={takeBackup} disabled={creating}
-            style={{padding:"10px 18px",background:creating?"#1e293b":"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
-            {creating ? "Creating..." : "📦 Take Backup Now"}
+            style={{padding:"10px 18px",background:creating?"#1e293b":"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:creating?"wait":"pointer",fontSize:14}}>
+            📦 Take Backup Now
           </button>
           <button onClick={refresh}
             style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
