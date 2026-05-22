@@ -36,4 +36,126 @@ Run `vlhelp` to see the list any time.
 
 
 
-_Added 2026-05-16:_ `vltoolsync` — explicit tier-1 sync (restart backend → re-snapshot all tools).
+_Added 2026-05-16:_ `vltoolsync` — explicit tier-1 sync (restart backend → re-snapshot all tools)
+
+SERVER SLOW 
+
+# 1. See what's eating resources
+docker stats --no-stream
+
+# 2. If backend memory >3GB or CPU >150% sustained → restart it
+docker compose restart backend
+
+# 3. If load avg >3.0 on 2-core VPS → too many concurrent scans
+uptime
+
+# 4. If disk full → clean docker
+docker system prune -af --volumes
+
+# 5. If frontend slow but backend healthy → restart nginx
+docker compose restart frontend
+
+---
+
+# 🔨 VL-FORGE — Tool Building Process
+
+**Named 2026-05-23 after shipping WHOIS + DNS Records + DNS Recon through the pattern.**
+
+To build any new VulnusLab scanner tool, say to Claude: **"Forge X"** where X is the tool name. Claude runs the full pattern below + self-verifies 7/7 silently + only shows you a PDF that already passes all checks.
+
+## What "Forge X" triggers (5 components)
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                      VL-FORGE                            │
+│                                                          │
+│  1. FRAMEWORK   tools/_framework/                        │
+│                 scanner.py · gathering.py · parsers.py   │
+│                 · findings.py — write once, reuse        │
+│                                                          │
+│  2. PATTERN     Per-tool file = gather() + INTEL_FIELDS  │
+│                                + run_scanner()           │
+│                 ~80-200 lines per tool                   │
+│                                                          │
+│  3. RULES LIB   tools/_payloads/<tool>_findings.py       │
+│                 Declarative findings library             │
+│                                                          │
+│  4. RENDERER    renderToolFindingsAndIntel() in App.js   │
+│                 PDF section auto-generated               │
+│                                                          │
+│  5. 7-CHECK     Self-verify BEFORE showing you the PDF   │
+└──────────────────────────────────────────────────────────┘
+```
+
+## The 7-Check (Definition of Done)
+
+A tool is DONE (ships, no more polish) when it ticks all 7:
+
+| # | Criterion |
+|---|---|
+| 1 | Endpoint returns 200 in <30s on a public domain |
+| 2 | ≥3 distinct data sources fired in parallel |
+| 3 | ≥5 findings rules in library |
+| 4 | Response shape: `{findings[], intel{}, sources_used[]}` + flat fields |
+| 5 | PDF section renders without errors |
+| 6 | Graceful degrade on IP / lab target (`skipped_reason`) |
+| 7 | Real-world scan returns sensible output |
+
+Anything beyond these 7 = future polish, NOT a blocker.
+
+## Commands you can give Claude
+
+| You say | Claude does |
+|---|---|
+| **Forge Subdomain Discovery** | Build one tool through full VL-FORGE |
+| **Forge TLS + WAF** | Batch 2 related tools (shared infra) |
+| **Forge Port-Scan family** | Build Fast/Deep/Service/OS/Banner as one batch |
+| **Forge DNS family** | Subdomains + Cert Trans + Zone Transfer + Amass |
+| **Forge all Tier 1** | All 5 high-impact tools (1-2 day batch) |
+| **Re-forge X** | Re-apply pattern to an existing tool (polish) |
+| **Forge status** | Show which tools done + remaining |
+
+## Tools already FORGED (3 — done)
+
+- WHOIS Lookup       (2026-05-22) — 6 sources, 29 rules
+- DNS Records        (2026-05-23) — 11 sources, 22 rules
+- DNS Recon          (2026-05-23) — 8 sources, 13 rules
+
+## Tools REMAINING (32) — by Tier
+
+**Tier 1 (high customer value):**
+Subdomain Discovery · Cert Transparency · WAF/CDN Fingerprint · TLS Deep Audit · Port-Scan family (Fast/Deep/Service/OS/Banner)
+
+**Tier 2 (web content discovery):**
+Directory Enumeration · JS Endpoint Extractor · Wayback Machine · robots+sitemap · BFS Crawler · Parameter Discovery · Favicon Fingerprint
+
+**Tier 3 (cloud + infra):**
+Cloud Bucket Finder · Bucket Permissions · ASN/IP Ownership · CDN Origin Discovery · DNS Zone Transfer
+
+**Tier 4 (threat intel + passive):**
+OSINT Harvesting · Shodan Lookup · Free Shodan (InternetDB) · CVE Matching (NVD) · Deep Subdomain (amass)
+
+**Tier 5 (app-specific):**
+Source Map Exposure · API Docs Discovery · WordPress wp-json Enum · Admin Panel Exposure · JS Library CVE · Git Repo Exposure
+
+## Deploy pattern after a Forge
+
+After Claude pushes a Forged tool:
+
+```bash
+cd /root/Cyber-project && git pull
+docker compose build backend frontend
+docker compose up -d --force-recreate backend frontend
+```
+
+Then in browser: hard refresh (Ctrl+Shift+R) → run scan → download PDF.
+
+## Per-tool file layout (the template)
+
+```
+tools/recon/<tool>.py                  scanner — ~30-200 lines
+tools/_payloads/<tool>_findings.py     rules — declarative library
+src/App.js                             one line added — renderToolFindingsAndIntel call
+```
+
+That's everything. After Forge, you get one PDF, decide ship or next tool, no gap-spotting required.
