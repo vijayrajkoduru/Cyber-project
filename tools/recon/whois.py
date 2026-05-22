@@ -94,13 +94,23 @@ def _days_between(d1: datetime.datetime, d2: datetime.datetime) -> int:
 
 # ───────────────────────── ASYNC SUBPROCESS ─────────────────────────
 
-async def _whois_cli(target: str, timeout: int = 12) -> str:
-    """Async subprocess to system `whois`. Returns raw text or empty."""
+async def _whois_cli(target: str, timeout: int = 12, server: str | None = None,
+                      query_prefix: str = "") -> str:
+    """Async subprocess to system `whois`. Returns raw text or empty.
+
+    server: optional WHOIS server (passed via -h flag)
+    query_prefix: optional prefix prepended to the query (e.g. " -v" for
+                  Team Cymru verbose output)
+    """
     if not _WHOIS_BIN:
         return ""
+    args = [_WHOIS_BIN]
+    if server:
+        args += ["-h", server]
+    args.append(f"{query_prefix}{target}" if query_prefix else target)
     try:
         proc = await asyncio.create_subprocess_exec(
-            _WHOIS_BIN, target,
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -114,6 +124,40 @@ async def _whois_cli(target: str, timeout: int = 12) -> str:
         return out + err
     except Exception:
         return ""
+
+
+async def _team_cymru_asn(ip: str) -> dict:
+    """Authoritative ASN lookup via Team Cymru WHOIS service.
+
+    Returns dict {asn, bgp_prefix, country, registry, allocated, info}.
+    Always more reliable than ARIN's OriginAS field which is often empty
+    for AWS / large-cloud direct allocations.
+
+    Output format (after header):
+        AS      | IP                | BGP Prefix          | CC | Registry | Allocated  | AS Name
+        14618   | 18.208.88.157     | 18.208.0.0/13       | US | arin     | 2017-06-23 | AMAZON-AES, US
+    """
+    raw = await _whois_cli(ip, timeout=10, server="whois.cymru.com",
+                            query_prefix=" -v ")
+    if not raw:
+        return {}
+    # Parse the data line (skip header that starts with "Bulk mode" or "AS  |")
+    for line in raw.splitlines():
+        if "|" not in line: continue
+        if line.strip().lower().startswith("as ") or "bulk mode" in line.lower():
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) >= 7 and parts[0].isdigit():
+            return {
+                "asn":        f"AS{parts[0]}",
+                "ip":         parts[1],
+                "bgp_prefix": parts[2],
+                "country":    parts[3].upper(),
+                "registry":   parts[4],
+                "allocated":  parts[5],
+                "info":       parts[6],
+            }
+    return {}
 
 
 # ───────────────────────── HTTP HELPERS ─────────────────────────
@@ -387,19 +431,47 @@ async def recon_whois(req: ScanRequest, _=Depends(verify_scan_quota)):
     if not parsed.get("name_servers") and dns_rec.get("ns"):
         parsed["name_servers"] = [n.lower() for n in dns_rec["ns"]]
 
-    # 2. IP whois + RDAP IP for each resolved IP (parallel)
+    # 2. IP whois + Team Cymru ASN lookup for each resolved IP (parallel)
+    #
+    # Team Cymru is authoritative for ASN data. ARIN's OriginAS field is
+    # often empty for AWS/large-cloud direct allocations, leaving us with
+    # "?" in the ASN column. Team Cymru always returns the real announced AS.
     ips = (dns_rec.get("a") or []) + (dns_rec.get("aaaa") or [])
     ips = list(dict.fromkeys(ips))[:4]  # dedupe, cap at 4 to bound time
     ip_whois_list = []
     if ips:
-        ip_tasks = [_whois_cli(ip, timeout=10) for ip in ips]
-        ip_raws = await asyncio.gather(*ip_tasks)
-        for ip, raw in zip(ips, ip_raws):
-            if not raw: continue
-            entry = _parse_ip_whois(raw)
+        # Fire ARIN/RIPE whois AND Team Cymru in parallel for every IP
+        arin_tasks  = [_whois_cli(ip, timeout=10) for ip in ips]
+        cymru_tasks = [_team_cymru_asn(ip)         for ip in ips]
+        ip_raws, cymru_results = await asyncio.gather(
+            asyncio.gather(*arin_tasks),
+            asyncio.gather(*cymru_tasks),
+        )
+        seen_combo = set()  # (asn, org) — dedupe duplicate hosting entries
+        for ip, raw, cymru in zip(ips, ip_raws, cymru_results):
+            entry = _parse_ip_whois(raw) if raw else {"org": "", "asn": "",
+                                                       "country": "", "netblock": ""}
             entry["ip"] = ip
+            # Team Cymru wins for ASN (authoritative) and fills gaps
+            if cymru.get("asn"):
+                entry["asn"] = cymru["asn"]
+            if not entry.get("country") and cymru.get("country"):
+                entry["country"] = cymru["country"]
+            if not entry.get("org") and cymru.get("info"):
+                # Cymru "info" looks like "AMAZON-AES, US" — strip trailing country
+                info = cymru["info"]
+                m = re.match(r"^(.+?),\s*[A-Z]{2}\s*$", info)
+                entry["org"] = m.group(1) if m else info
+            if not entry.get("netblock") and cymru.get("bgp_prefix"):
+                entry["netblock"] = cymru["bgp_prefix"]
+            # Dedupe: only add if this (asn, org) combo is new
+            combo = (entry.get("asn", ""), entry.get("org", ""))
+            if combo in seen_combo and combo != ("", ""):
+                continue
+            seen_combo.add(combo)
             ip_whois_list.append(entry)
         if ip_whois_list: sources_used.append("ip-whois-cli")
+        if any(c.get("asn") for c in cymru_results): sources_used.append("team-cymru-asn")
 
     # 3. RDAP domain (parallel with everything below)
     # 6. crt.sh subdomain count
