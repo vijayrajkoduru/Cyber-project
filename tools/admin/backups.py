@@ -120,6 +120,45 @@ async def wipe_backups(_=Depends(verify_admin)):
     return {"ok": len(errors) == 0, "removed": removed, "errors": errors}
 
 
+@router.post("/api/admin/backups/reset")
+async def reset_backups(_=Depends(verify_admin)):
+    """Reset = wipe ALL old backups + create ONE fresh full backup. Single atomic op.
+    The "present-only" backup the user wants — clears history and replaces with current state.
+    """
+    _ensure_backup_dir()
+    # Step 1: wipe everything
+    removed = 0
+    wipe_errors = []
+    for f in BACKUP_DIR.glob("*"):
+        if f.is_file():
+            try:
+                f.unlink(); removed += 1
+            except Exception as e:
+                wipe_errors.append(f"{f.name}: {e}")
+    # Step 2: take fresh backup
+    ts = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    out = BACKUP_DIR / f"vulnuslab-{ts}.tar.gz"
+    cmd = ["tar", "-czf", str(out), "-C", str(PROJECT_ROOT)] + [
+        p for p in INCLUDE_PATHS if (PROJECT_ROOT / p).exists()
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500,
+            detail=f"Wiped {removed} old, but new backup timed out at 180s")
+    if r.returncode != 0:
+        raise HTTPException(status_code=500,
+            detail=f"Wiped {removed} old, but tar failed: {r.stderr[:300]}")
+    sz = out.stat().st_size
+    return {"ok": True,
+            "wiped": removed,
+            "wipe_errors": wipe_errors,
+            "new_file": out.name,
+            "new_size_bytes": sz,
+            "new_size_human": _human(sz),
+            "created_iso": datetime.datetime.utcnow().isoformat() + "Z"}
+
+
 @router.get("/api/admin/backups/download/{filename}")
 async def download_backup(filename: str, _=Depends(verify_admin)):
     if "/" in filename or "\\" in filename or filename.startswith("."):
