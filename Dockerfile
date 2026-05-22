@@ -39,8 +39,13 @@ RUN apt-get update -q -o Acquire::Retries=3 \
 
 # ── SecLists — community wordlists for force-browse, brute force, fuzzing ──
 # Free alternative to AI-generated payloads where volume matters more than metadata.
-RUN cd /opt && git clone --depth 1 https://github.com/danielmiessler/SecLists.git seclists \
- && rm -rf /opt/seclists/.git \
+# Tarball download (~300MB) is ~10× faster than git clone (which fetches metadata too)
+# and avoids GitHub clone-throttling on the VPS.
+RUN cd /opt \
+ && curl -sL https://github.com/danielmiessler/SecLists/archive/refs/heads/master.tar.gz -o seclists.tar.gz \
+ && tar -xzf seclists.tar.gz \
+ && mv SecLists-master seclists \
+ && rm seclists.tar.gz \
  && du -sh /opt/seclists
 
 # Application code — preserves the Kali-style tools/ directory structure
