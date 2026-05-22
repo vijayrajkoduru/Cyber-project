@@ -7271,22 +7271,43 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       cx += 34;
     });
     y += 10;
-    y = tHead(["SEV","FINDING","EVIDENCE"], [22, 68, 90], y);
+    y = tHead(["SEV","FINDING / EVIDENCE / REMEDIATION","CWE"], [22, 138, 20], y);
     r.whois.findings.forEach((f, i) => {
-      chk(11);
       const sev = String(f.severity||"INFO").toUpperCase();
       const sevColor = SEV[sev] || SEV.INFO;
       const name = String(f.detail||"");
       const evidence = String(f.evidence_marker||f.evidence||"");
-      fillR(margin, y, contentW, 10, i%2===0 ? LIGHT : WHITE);
+      const remediation = String(f.remediation||"");
+      const cwe = String(f.cwe||"").trim();
+      // Compute total row height based on text content (multi-line evidence + remediation)
+      const evLines = doc.splitTextToSize(evidence, 134);
+      const remLines = remediation ? doc.splitTextToSize(remediation, 134) : [];
+      const rowH = 6 /* name */ + (evLines.length * 3.5) + (remLines.length ? (remLines.length * 3.5 + 1) : 0) + 3;
+      chk(rowH + 2);
+      fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
+      // Severity pill (top-left)
       rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
       txt(sev, margin+12, y+5.8, 6.5, WHITE, true, "center");
-      const nameLines = doc.splitTextToSize(name, 64);
-      txt(nameLines[0]||"", margin+25, y+5, 8, DARK, true);
-      const evLines = doc.splitTextToSize(evidence, 86);
-      txt(evLines[0]||"", margin+95, y+4.5, 7, GRAY);
-      if(evLines.length > 1) txt(String(evLines[1]||"").substring(0,55), margin+95, y+8, 7, GRAY);
-      y += 10;
+      // CWE badge (right side) only if non-N/A
+      if(cwe && cwe !== "N/A"){
+        rrect(margin+contentW-18, y+2, 16, 5.5, 1, DARK);
+        txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 6.5, WHITE, true, "center");
+      }
+      // Finding name (bold)
+      txt(name, margin+25, y+5, 8.5, DARK, true);
+      // Evidence (gray, indented)
+      let textY = y + 8.5;
+      evLines.forEach(ln => { txt(ln, margin+25, textY, 7.5, GRAY); textY += 3.5; });
+      // Remediation (blue accent, italic-looking via slightly smaller)
+      if(remLines.length){
+        textY += 1;
+        txt("Fix:", margin+25, textY, 7, BLUE, true);
+        remLines.forEach((ln, idx) => {
+          txt(ln, margin+33, textY, 7, BLUE);
+          textY += 3.5;
+        });
+      }
+      y += rowH;
     });
     y += 4;
   }
