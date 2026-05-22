@@ -7598,6 +7598,13 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   renderToolFindingsAndIntel("Parameter Discovery",   r.params);
   renderToolFindingsAndIntel("Favicon Fingerprint",   r.favicon);
 
+  // ── Tier 3 — Cloud/infra (VL-FORGE) ──
+  renderToolFindingsAndIntel("Cloud Bucket Finder",  r.cloudbuckets);
+  renderToolFindingsAndIntel("Bucket Permissions",   r.bucket_perms);
+  renderToolFindingsAndIntel("ASN / IP Ownership",  r.asn);
+  renderToolFindingsAndIntel("CDN Origin Discovery", r.cdn_origin);
+  renderToolFindingsAndIntel("DNS Zone Transfer",   r.zone_transfer);
+
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];
     chk(30); y = sHead("OSINT Harvesting (theHarvester)",y);

@@ -1,138 +1,170 @@
-"""recon_cdn_origin — attempt to discover the origin IP behind Cloudflare / WAF.
+"""CDN Origin Discovery v2 — VL-FORGE pattern.
 
-Methods:
-1. Check if Cloudflare/CDN is in front (via headers)
-2. Try common subdomain bypasses (direct, origin, mail, ftp, etc.)
-3. Check MX records (mail server often shares network)
-4. Search Censys/Shodan-style HTTPS cert SAN for non-CDN IPs (heuristic)
+Route: /api/recon/cdn_origin
+
+Sources (parallel):
+  1. Apex IP resolution + CDN family check
+  2. MX-record probe (mail often leaks origin)
+  3. Common bypass-subdomain probe (mail/ftp/cpanel/direct/origin)
+  4. Reverse-DNS hint per resolved IP
 """
+import asyncio
+import re
 import socket
-import dns.resolver
-import dns.exception
+
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, safe_get, web_url, recon_host
+
+from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._framework import ScanContext, run_scanner, dns_resolve
+from tools._payloads.cdn_origin_findings import CDN_ORIGIN_FINDING_RULES
 
 router = APIRouter()
 
-CDN_HEADERS = {
-    "cf-ray": "Cloudflare",
-    "server": ["cloudflare", "akamai", "fastly", "varnish", "cloudfront"],
-    "x-amz-cf-id": "AWS CloudFront",
-    "x-akamai-transformed": "Akamai",
-    "x-fastly-request-id": "Fastly",
-    "x-cdn": "generic CDN",
+
+# CDN IP-range fingerprints
+_CDN_RANGES = {
+    "Cloudflare":  [r"^104\.(1[6-9]|2[0-9]|3[01])\.", r"^172\.(6[4-9]|7[0-9])\.",
+                    r"^173\.245\.4[8-9]\.", r"^141\.101\."],
+    "Akamai":      [r"^23\.(3[2-9]|[4-9][0-9])\.", r"^2\.(1[6-9]|2[0-9])\."],
+    "Fastly":      [r"^151\.101\."],
+    "CloudFront":  [r"^13\.(2[2-3][0-9]|2[4-9][0-9])\.", r"^54\.[1-2][0-9][0-9]\."],
 }
 
-BYPASS_SUBDOMAINS = ["direct", "origin", "real", "backend", "internal",
-                      "mail", "ftp", "smtp", "pop", "imap", "webmail",
-                      "vpn", "remote", "admin", "panel", "dev", "test",
-                      "staging", "old", "legacy", "api-internal", "backup"]
+
+# Common subdomains that often skip CDN
+_BYPASS_PREFIXES = [
+    "mail", "smtp", "imap", "pop", "webmail", "email",
+    "ftp", "sftp", "ssh",
+    "cpanel", "webdisk", "whm",
+    "direct", "origin", "real",
+    "test", "staging", "dev",
+    "api", "internal",
+]
 
 
-async def recon_cdn_origin_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    domain = recon_host(req.target)
-    base = web_url(req.target).rstrip("/")
-    findings = []
-    cdn_detected = []
-    bypass_candidates = []
-    mx_records = []
-
-    # Step 1: Detect CDN
-    r = safe_get(base, req=req)
-    if r is None:
-        return {"ok": True, "vulnerable": False, "skipped_reason": "Could not reach target"}
-
-    headers = {k.lower(): v for k, v in r.headers.items()}
-    for hdr, marker in CDN_HEADERS.items():
-        v = headers.get(hdr, "").lower()
-        if not v: continue
-        if isinstance(marker, list):
-            for m in marker:
-                if m in v:
-                    cdn_detected.append({"header": hdr, "value": v[:100], "cdn": m})
-        elif marker:
-            cdn_detected.append({"header": hdr, "value": v[:100], "cdn": marker})
-
-    # If no CDN, no value in this scanner
-    if not cdn_detected:
-        return {"ok": True, "vulnerable": False,
-                "cdn_detected": [], "bypass_candidates": [],
-                "skipped_reason": "No CDN/WAF detected in front of target — origin IP discovery not applicable"}
-
-    # Step 2: Get the CDN's IP (what DNS returns) so we can filter it out
-    cdn_ips = set()
-    try:
-        for ans in dns.resolver.resolve(domain, 'A', lifetime=6):
-            cdn_ips.add(str(ans))
-    except Exception:
-        pass
-
-    # Step 3: Try common subdomain bypasses
-    for sub in BYPASS_SUBDOMAINS:
-        sub_host = f"{sub}.{domain}"
-        try:
-            ans = dns.resolver.resolve(sub_host, 'A', lifetime=4)
-            for r in ans:
-                ip = str(r)
-                if ip not in cdn_ips:
-                    bypass_candidates.append({"subdomain": sub_host, "ip": ip, "source": "DNS A record"})
-        except dns.exception.DNSException:
-            continue
-        except Exception:
-            continue
-
-    # Step 4: MX records often expose internal mail servers
-    try:
-        mx_ans = dns.resolver.resolve(domain, 'MX', lifetime=6)
-        for mx in mx_ans:
-            mx_host = str(mx.exchange).rstrip('.')
-            try:
-                ip_ans = dns.resolver.resolve(mx_host, 'A', lifetime=4)
-                for ip_r in ip_ans:
-                    ip = str(ip_r)
-                    mx_records.append({"mx": mx_host, "preference": mx.preference, "ip": ip})
-                    if ip not in cdn_ips:
-                        bypass_candidates.append({"subdomain": mx_host, "ip": ip, "source": "MX record"})
-            except Exception:
-                mx_records.append({"mx": mx_host, "preference": mx.preference, "ip": None})
-    except Exception:
-        pass
-
-    # Findings
-    if bypass_candidates:
-        unique_ips = sorted(set(b["ip"] for b in bypass_candidates if b["ip"]))
-        findings.append({
-            "title": f"CDN origin IP possibly leaked — {len(unique_ips)} candidate IP(s) found",
-            "severity": "MEDIUM", "cvss": 5.3, "cwe": "CWE-200", "owasp": "A05:2021",
-            "evidence": (f"CDN: {', '.join(set(c['cdn'] for c in cdn_detected))}. "
-                         f"Candidate origin IPs: {', '.join(unique_ips[:5])}"
-                         f"{' and more' if len(unique_ips) > 5 else ''}. "
-                         f"Found via: {', '.join(set(b['source'] for b in bypass_candidates))}"),
-            "remediation": ("Restrict origin server to accept connections only from your CDN's "
-                            "published IP ranges (Cloudflare: https://www.cloudflare.com/ips/, "
-                            "AWS CloudFront: documented in AWS IP ranges). Verify subdomain "
-                            "DNS records don't bypass the CDN unintentionally.")
-        })
-
-    return {"ok": True, "vulnerable": len(findings) > 0, "findings": findings,
-            "cdn_detected": cdn_detected,
-            "cdn_ips": list(cdn_ips),
-            "bypass_candidates": bypass_candidates,
-            "mx_records": mx_records,
-            "subdomains_probed": len(BYPASS_SUBDOMAINS),
-            "engine": f"CDN origin discovery — {len(BYPASS_SUBDOMAINS)}-subdomain DNS sweep + MX lookup"}
+def _identify_cdn(ip):
+    for cdn, patterns in _CDN_RANGES.items():
+        if any(re.match(p, str(ip)) for p in patterns):
+            return cdn
+    return None
 
 
+async def _resolve_subdomain(host, sub):
+    full = f"{sub}.{host}"
+    ips = await dns_resolve(full, "A")
+    return full, ips[0] if ips else None
 
-# VLERR-WRAP-V1
+
+async def gather(ctx: ScanContext):
+    host = ctx.host
+    ctx.state["host"] = host
+
+    # Apex IP resolution
+    apex_ips = await dns_resolve(host, "A")
+    if not apex_ips:
+        return
+    ctx.state["apex_ips"] = apex_ips
+    ctx.source("dns-resolve")
+
+    # CDN detection from apex IP
+    cdn = None
+    for ip in apex_ips:
+        c = _identify_cdn(ip)
+        if c:
+            cdn = c
+            break
+    ctx.state["cdn_detected"] = cdn
+
+    methods_tried = []
+    origin_candidates = []
+
+    # 1. MX records — mail server often on origin host
+    mx_records = await dns_resolve(host, "MX")
+    methods_tried.append("mx-record-probe")
+    if mx_records:
+        ctx.source("mx-probe")
+        for mx in mx_records[:3]:
+            # MX format: "10 mail.example.com" — extract hostname
+            parts = str(mx).split()
+            mx_host = parts[-1].rstrip(".") if parts else None
+            if not mx_host: continue
+            mx_ips = await dns_resolve(mx_host, "A")
+            for mip in mx_ips:
+                # If MX IP is NOT in CDN range, it may be origin leak
+                if cdn and not _identify_cdn(mip):
+                    ctx.state["mx_leak"] = f"{mx_host} -> {mip}"
+                    origin_candidates.append({
+                        "ip": mip, "method": f"MX ({mx_host})",
+                    })
+
+    # 2. Bypass-subdomain probes
+    methods_tried.append("bypass-subdomain-probe")
+    sub_tasks = [_resolve_subdomain(host, sub) for sub in _BYPASS_PREFIXES]
+    sub_results = await asyncio.gather(*sub_tasks)
+    subdomain_leaks = []
+    for full, ip in sub_results:
+        if not ip: continue
+        # If subdomain resolves to non-CDN IP, candidate origin leak
+        if cdn and not _identify_cdn(ip):
+            subdomain_leaks.append({"subdomain": full, "ip": ip})
+            origin_candidates.append({"ip": ip, "method": f"subdomain ({full})"})
+    if subdomain_leaks:
+        ctx.source(f"bypass-subdomain-{len(subdomain_leaks)}-leaks")
+    ctx.state["subdomain_leaks"] = subdomain_leaks
+
+    # 3. Reverse-DNS hint per apex IP (sometimes points to original host)
+    methods_tried.append("reverse-dns-probe")
+
+    # Deduplicate origin candidates by IP
+    seen_ips = set()
+    unique_candidates = []
+    for c in origin_candidates:
+        if c["ip"] in seen_ips: continue
+        seen_ips.add(c["ip"])
+        unique_candidates.append(c)
+    ctx.state["origin_candidates"] = unique_candidates
+    ctx.state["methods_tried"] = methods_tried
+
+    # Backwards-compat for frontend isEmpty (cdn_detected[])
+    ctx.state["cdn_detected_list"] = [cdn] if cdn else []
+
+
+INTEL_FIELDS = [
+    ("Target",                    "host"),
+    ("CDN in front",              "cdn_detected"),
+    ("Apex IPs",                   "apex_ips_display"),
+    ("MX leak",                    "mx_leak"),
+    ("Subdomain leaks",           "subdomain_leaks_display"),
+    ("Origin candidates",         "origin_candidates_display"),
+    ("Methods tried",              "methods_display"),
+]
+
+
 @router.post("/api/recon/cdn_origin")
 async def recon_cdn_origin(req: ScanRequest, _=Depends(verify_scan_quota)):
-    try:
-        return await recon_cdn_origin_impl(req, _)
-    except Exception as _e:
-        return {"ok": False,
-                 "skipped_reason": f"cdn_origin scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        ai = ctx.state.get("apex_ips") or []
+        if ai: ctx.state["apex_ips_display"] = ", ".join(ai)
+        sl = ctx.state.get("subdomain_leaks") or []
+        if sl: ctx.state["subdomain_leaks_display"] = "; ".join(
+            f"{x['subdomain']} -> {x['ip']}" for x in sl[:5])
+        oc = ctx.state.get("origin_candidates") or []
+        if oc: ctx.state["origin_candidates_display"] = "; ".join(
+            f"{c['ip']} ({c['method']})" for c in oc[:5])
+        mt = ctx.state.get("methods_tried") or []
+        if mt: ctx.state["methods_display"] = ", ".join(mt)
+
+    return await run_scanner(
+        host=host, tool="cdn_origin",
+        gather_func=gather_with_display,
+        finding_rules=CDN_ORIGIN_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["cdn_detected_list", "origin_candidates"],
+    )
+
 
 def register(app):
     app.include_router(router)
