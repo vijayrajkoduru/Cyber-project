@@ -129,6 +129,7 @@ const MODULES = [
   // ── DATA PROTECTION ──────────────────────────────────────────
   { id:"backups",   icon:"📦", label:"My Backups",                          cat:"data",    free:true  },
   { id:"vault",     icon:"🔐", label:"VAULT — Master Archive",              cat:"admin",   free:false, admin:true },
+  { id:"backupops", icon:"💾", label:"BACKUP Operations",                   cat:"admin",   free:false, admin:true },
 
   // ── TOOLS ────────────────────────────────────────────────────
   { id:"tools",     icon:"🛠️", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
@@ -12667,6 +12668,184 @@ function AdminVaultModule({token}) {
 }
 
 
+function BackupOperationsModule({token}) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const r = await api("/api/admin/backups/list", "GET", null, token);
+      setData(r);
+    } catch(e) { setMsg({type:"error", text: e.message}); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { refresh(); /* eslint-disable-next-line */ }, [token]);
+
+  const takeBackup = async () => {
+    setCreating(true); setMsg(null);
+    try {
+      const r = await api("/api/admin/backups/create", "POST", {}, token);
+      setMsg({type:"success", text:`Created ${r.file} (${r.size_human})`});
+      await refresh();
+    } catch(e) { setMsg({type:"error", text:e.message}); }
+    finally { setCreating(false); }
+  };
+
+  const deleteOne = async (filename) => {
+    if (!window.confirm(`Delete backup "${filename}"? This cannot be undone.`)) return;
+    try {
+      await api(`/api/admin/backups/${encodeURIComponent(filename)}`, "DELETE", null, token);
+      setMsg({type:"success", text:`Deleted ${filename}`});
+      await refresh();
+    } catch(e) { setMsg({type:"error", text:e.message}); }
+  };
+
+  const wipeAll = async () => {
+    if (!window.confirm(`Delete ALL ${data?.count||0} backup file(s)? This wipes the entire /root/backups folder. Cannot be undone.`)) return;
+    if (!window.confirm(`Really? You'll lose every historical backup. Type-confirm by clicking OK only if you're sure.`)) return;
+    try {
+      const r = await api("/api/admin/backups/wipe", "POST", {}, token);
+      setMsg({type:"success", text:`Wiped ${r.removed} backup(s)`});
+      await refresh();
+    } catch(e) { setMsg({type:"error", text:e.message}); }
+  };
+
+  const downloadOne = (filename) => {
+    const apiUrl = localStorage.getItem("cyberApiUrl") || "";
+    // Browser download — direct GET with auth header isn't trivial via fetch, so we open in new tab.
+    // The endpoint requires admin auth — we'll inject token via a temporary form POST or use the
+    // window.open approach with a one-time auth query param if backend supports it.
+    // For simplicity, fetch the file as blob and trigger client-side download.
+    fetch((apiUrl||"") + `/api/admin/backups/download/${encodeURIComponent(filename)}`, {
+      headers: {"Authorization": "Bearer " + token}
+    })
+      .then(r => r.ok ? r.blob() : r.json().then(j => { throw new Error(j.detail || "Download failed"); }))
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch(e => setMsg({type:"error", text: e.message}));
+  };
+
+  return (
+    <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
+      <div style={{maxWidth:1200,margin:"0 auto"}}>
+        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>💾 BACKUP Operations</h1>
+        <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
+          On-demand backup of users.db + .env + data + tools + src + Docker/nginx config.
+          Click <b>Take Backup Now</b> to snapshot the present state.
+          Delete individual backups or wipe all old ones to free disk space.
+        </p>
+
+        {/* Stat cards */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUPS ON DISK</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{data?.count ?? "—"}</div>
+          </div>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>TOTAL SIZE</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{data?.total_human ?? "—"}</div>
+          </div>
+          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUP DIR</div>
+            <div style={{fontSize:13,fontWeight:600,color:"#3b82f6",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
+              {data?.backup_dir || "/root/backups"}
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+          <button onClick={takeBackup} disabled={creating}
+            style={{padding:"10px 18px",background:creating?"#1e293b":"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
+            {creating ? "Creating..." : "📦 Take Backup Now"}
+          </button>
+          <button onClick={refresh}
+            style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
+            ↻ Refresh
+          </button>
+          {data?.count > 0 && (
+            <button onClick={wipeAll}
+              style={{padding:"10px 18px",background:"#7f1d1d",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,marginLeft:"auto"}}>
+              🗑 Wipe All
+            </button>
+          )}
+        </div>
+
+        {/* Status message */}
+        {msg && (
+          <div style={{padding:"10px 16px",borderRadius:8,marginBottom:16,background: msg.type==="error" ? "#7f1d1d" : "#14532d", color:"#fff",fontSize:14}}>
+            {msg.text}
+          </div>
+        )}
+
+        {/* Backup list table */}
+        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",fontWeight:600,fontSize:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>All Backups</span>
+            <span style={{color:"#64748b",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}>
+              {data?.count || 0} file(s)
+            </span>
+          </div>
+          {loading ? (
+            <div style={{padding:40,textAlign:"center",color:"#94a3b8"}}>Loading…</div>
+          ) : !data || data.count === 0 ? (
+            <div style={{padding:40,color:"#94a3b8",textAlign:"center",fontSize:14}}>
+              No backups yet. Click <b>Take Backup Now</b> to create the first one.
+            </div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#1e293b"}}>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>FILE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>SIZE</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>MODIFIED (UTC)</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.files.map(f => (
+                  <tr key={f.name} style={{borderTop:"1px solid #1e293b"}}>
+                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"#e2e8f0"}}>
+                      {f.is_archive && <span style={{marginRight:6}}>📦</span>}
+                      {f.name}
+                    </td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{f.size_human}</td>
+                    <td style={{padding:"10px 16px",fontSize:12,fontFamily:"JetBrains Mono,monospace",color:"#64748b"}}>{f.modified_iso.replace("T"," ").substring(0,19)}</td>
+                    <td style={{padding:"10px 16px",textAlign:"right"}}>
+                      <button onClick={()=>downloadOne(f.name)}
+                        style={{padding:"5px 12px",background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
+                        ⬇ Download
+                      </button>
+                      <button onClick={()=>deleteOne(f.name)}
+                        style={{padding:"5px 12px",background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                        🗑 Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={{marginTop:20,color:"#475569",fontSize:11,fontStyle:"italic"}}>
+          💡 Each backup includes: users.db · .env · data/ · tools/ · src/ · docker-compose.yml · Dockerfile(s) · nginx.conf · requirements.txt
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [token,setToken]       = useState(() => localStorage.getItem("cyberToken") || null);
   const [role,setRole]         = useState(() => localStorage.getItem("cyberRole") || "");
@@ -12939,6 +13118,9 @@ export default function App() {
         <div style={{display: active==="vault" ? "block" : "none"}}>
           <AdminVaultModule token={token}/>
         </div>
+        <div style={{display: active==="backupops" ? "block" : "none"}}>
+          <BackupOperationsModule token={token}/>
+        </div>
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
@@ -12947,7 +13129,7 @@ export default function App() {
         {!["webapp","recon","vuln","password","auth","network","sysexploit","cloud","buffer","exploit",
             "osint","wireless","ad","privesc","tunnel","post","av","se","malware","supply","persist",
             "client","mobile","api","pivot","report","tools","history","settings",
-            "dashboard","health","msf","guide","adminpanel","backups","vault"].includes(active) && <ComingSoon topic={topic}/>}
+            "dashboard","health","msf","guide","adminpanel","backups","vault","backupops"].includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
   };
