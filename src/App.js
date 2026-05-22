@@ -7252,6 +7252,92 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     fields.forEach((f,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(f[0],margin+3,y+5,8.5,GRAY,true); const vl=doc.splitTextToSize(String(f[1]),128); doc.setFont("Arial","normal");doc.setFontSize(8.5);doc.setTextColor(...DARK);doc.text(vl[0],margin+48,y+5); y+=7; });
     y+=6; }
 
+  // ── WHOIS Findings (severity-tagged from 29-rule engine) ─────
+  if(r.whois && Array.isArray(r.whois.findings) && r.whois.findings.length > 0){
+    chk(30); y = sHead("WHOIS Findings", y);
+    const SEV = {
+      CRITICAL: [185,28,28], HIGH: [220,38,38], MEDIUM: [217,119,6],
+      LOW: [202,138,4], INFO: [59,130,246], POSITIVE: [22,163,74],
+    };
+    // Severity-count summary chips above the table
+    const counts = {};
+    r.whois.findings.forEach(f => { const s = String(f.severity||"INFO").toUpperCase(); counts[s] = (counts[s]||0)+1; });
+    chk(10); let cx = margin;
+    ["CRITICAL","HIGH","MEDIUM","LOW","INFO","POSITIVE"].forEach(s => {
+      if(!counts[s]) return;
+      const col = SEV[s] || SEV.INFO;
+      rrect(cx, y, 32, 7, 1, col);
+      txt(`${s} ${counts[s]}`, cx+16, y+4.8, 7.5, WHITE, true, "center");
+      cx += 34;
+    });
+    y += 10;
+    y = tHead(["SEV","FINDING","EVIDENCE"], [22, 68, 90], y);
+    r.whois.findings.forEach((f, i) => {
+      chk(11);
+      const sev = String(f.severity||"INFO").toUpperCase();
+      const sevColor = SEV[sev] || SEV.INFO;
+      const name = String(f.detail||"");
+      const evidence = String(f.evidence_marker||f.evidence||"");
+      fillR(margin, y, contentW, 10, i%2===0 ? LIGHT : WHITE);
+      rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
+      txt(sev, margin+12, y+5.8, 6.5, WHITE, true, "center");
+      const nameLines = doc.splitTextToSize(name, 64);
+      txt(nameLines[0]||"", margin+25, y+5, 8, DARK, true);
+      const evLines = doc.splitTextToSize(evidence, 86);
+      txt(evLines[0]||"", margin+95, y+4.5, 7, GRAY);
+      if(evLines.length > 1) txt(String(evLines[1]||"").substring(0,55), margin+95, y+8, 7, GRAY);
+      y += 10;
+    });
+    y += 4;
+  }
+
+  // ── WHOIS Intelligence (enriched fields from multi-source gather) ──
+  if(r.whois && r.whois.intel){
+    chk(30); y = sHead("WHOIS Intelligence", y);
+    const intel = r.whois.intel || {};
+    const hosting = intel.hosting || [];
+    const hostingStr = hosting.length > 0
+      ? hosting.map(h => `${h.asn||"?"} (${(h.org||"?").substring(0,30)}, ${h.country||"?"})`).join("; ")
+      : null;
+    const rows = [
+      ["IANA ID", intel.registrar_iana_id],
+      ["Registrar URL", intel.registrar_url],
+      ["Abuse Email", intel.abuse_email],
+      ["Abuse Phone", intel.abuse_phone],
+      ["Domain Age", intel.domain_age_days != null ? `${intel.domain_age_days} days` : null],
+      ["Expires In", intel.expires_in_days != null ? `${intel.expires_in_days} days` : null],
+      ["Status Codes", (intel.status_codes||[]).join(", ") || null],
+      ["DNSSEC", intel.dnssec],
+      ["Registrant Org", intel.registrant_org],
+      ["Resolved IPs", (intel.resolved_ips||[]).join(", ") || null],
+      ["Hosting", hostingStr],
+      ["CDN Detected", intel.cdn],
+      ["Cloud Provider", intel.cloud_provider],
+      ["crt.sh Subdomains", intel.crt_sh_subdomains],
+      ["Privacy Proxied", intel.privacy_proxied ? "Yes" : null],
+      ["IDN/Punycode", intel.is_idn ? "Yes" : null],
+    ].filter(([,v]) => v !== null && v !== undefined && v !== "");
+    if(rows.length > 0){
+      y = tHead(["FIELD","VALUE"], [45,135], y);
+      rows.forEach((row, i) => {
+        chk(7);
+        fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
+        txt(row[0], margin+3, y+5, 8.5, GRAY, true);
+        const vl = doc.splitTextToSize(String(row[1]), 128);
+        doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+        doc.text(vl[0], margin+48, y+5);
+        y += 7;
+      });
+    }
+    if(Array.isArray(r.whois.sources_used) && r.whois.sources_used.length > 0){
+      chk(9);
+      fillR(margin, y, contentW, 7, LBLUE);
+      txt(`Sources gathered: ${r.whois.sources_used.join(", ")}`, margin+3, y+5, 8, BLUE);
+      y += 9;
+    }
+    y += 4;
+  }
+
   // ── DNS ────────────────────────────────────────────────────
   // Backend returns records as an ARRAY of {type, value} objects.
   // Older callers may pass an OBJECT keyed by record type ({A:[...], MX:[...]}) —
