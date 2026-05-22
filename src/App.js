@@ -7484,6 +7484,9 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     if(allSubs.length>50){ fillR(margin,y,contentW,7,LIGHT); txt("... and "+(allSubs.length-50)+" more subdomains",margin+4,y+5,8,GRAY); y+=7; }
     y+=6; }
 
+  // ── Subdomain Discovery Findings + Intel (VL-FORGE) ──
+  renderToolFindingsAndIntel("Subdomain Discovery", r.subdomains);
+
   // ── Cert Transparency (crt.sh) ─────────────────────────────
   // Surfaces the certificate metadata that drives subdomain discovery —
   // total certs seen, who issued them, and the date range. Useful for the
@@ -7528,6 +7531,35 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }
     y += 6;
   }
+
+  // ── Cert Transparency Findings + Intel (VL-FORGE) ──
+  renderToolFindingsAndIntel("Cert Transparency", r.crtsh);
+
+  // ── WAF / CDN Fingerprint section (VL-FORGE) ──
+  // Renders detected vendor list as a table, then findings + intel sections.
+  if(r.waf_cdn && Array.isArray(r.waf_cdn.detected) && r.waf_cdn.detected.length > 0){
+    chk(30); y = sHead("WAF / CDN Fingerprint", y);
+    y = tHead(["VENDOR","CATEGORY","EVIDENCE"], [55, 30, contentW-90], y);
+    r.waf_cdn.detected.slice(0, 20).forEach((v, i) => {
+      chk(7);
+      fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
+      txt(String(v.vendor || "?").substring(0, 30), margin+3, y+5, 8, DARK, true);
+      const cat = String(v.category || "?");
+      const catColor = cat.includes("WAF") ? [22,163,74] : [59,130,246];
+      rrect(margin+58, y+1.5, 26, 4, 1, catColor);
+      txt(cat.substring(0,12), margin+71, y+4.6, 6.5, WHITE, true, "center");
+      const ev = String(v.evidence || "").substring(0, 70);
+      txt(ev, margin+92, y+5, 7.5, GRAY);
+      y += 7;
+    });
+    if(r.waf_cdn.detected.length > 20){
+      chk(7); fillR(margin, y, contentW, 7, LIGHT);
+      txt("... and " + (r.waf_cdn.detected.length - 20) + " more matches", margin+4, y+5, 8, GRAY);
+      y += 7;
+    }
+    y += 6;
+  }
+  renderToolFindingsAndIntel("WAF / CDN Fingerprint", r.waf_cdn);
 
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];
