@@ -12716,10 +12716,6 @@ function BackupOperationsModule({token}) {
 
   const downloadOne = (filename) => {
     const apiUrl = localStorage.getItem("cyberApiUrl") || "";
-    // Browser download — direct GET with auth header isn't trivial via fetch, so we open in new tab.
-    // The endpoint requires admin auth — we'll inject token via a temporary form POST or use the
-    // window.open approach with a one-time auth query param if backend supports it.
-    // For simplicity, fetch the file as blob and trigger client-side download.
     fetch((apiUrl||"") + `/api/admin/backups/download/${encodeURIComponent(filename)}`, {
       headers: {"Authorization": "Bearer " + token}
     })
@@ -12732,6 +12728,15 @@ function BackupOperationsModule({token}) {
         URL.revokeObjectURL(url);
       })
       .catch(e => setMsg({type:"error", text: e.message}));
+  };
+
+  const [inspectData, setInspectData] = useState(null);
+  const inspectOne = async (filename) => {
+    setMsg(null);
+    try {
+      const r = await api(`/api/admin/backups/inspect/${encodeURIComponent(filename)}`, "GET", null, token);
+      setInspectData(r);
+    } catch(e) { setMsg({type:"error", text:e.message}); }
   };
 
   return (
@@ -12835,6 +12840,12 @@ function BackupOperationsModule({token}) {
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{f.size_human}</td>
                     <td style={{padding:"10px 16px",fontSize:12,fontFamily:"JetBrains Mono,monospace",color:"#64748b"}}>{f.modified_iso.replace("T"," ").substring(0,19)}</td>
                     <td style={{padding:"10px 16px",textAlign:"right"}}>
+                      {f.name.endsWith(".tar.gz") && (
+                        <button onClick={()=>inspectOne(f.name)}
+                          style={{padding:"5px 12px",background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
+                          🔍 Inspect
+                        </button>
+                      )}
                       <button onClick={()=>downloadOne(f.name)}
                         style={{padding:"5px 12px",background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
                         ⬇ Download
@@ -12851,10 +12862,53 @@ function BackupOperationsModule({token}) {
           )}
         </div>
 
-        <div style={{marginTop:20,color:"#475569",fontSize:11,fontStyle:"italic"}}>
-          💡 Each backup includes: users.db · .env · data/ · tools/ · src/ · docker-compose.yml · Dockerfile(s) · nginx.conf · requirements.txt
+        <div style={{marginTop:20,color:"#475569",fontSize:11,fontStyle:"italic",lineHeight:1.6}}>
+          💡 <b>Each backup includes (end-to-end):</b><br/>
+          <span style={{color:"#94a3b8"}}>Backend</span>: main.py · tools/ (150 scanners) · endpoints/ · profiles/ · requirements.txt<br/>
+          <span style={{color:"#94a3b8"}}>Frontend</span>: src/ · public/ · package.json · package-lock.json<br/>
+          <span style={{color:"#94a3b8"}}>Data + secrets</span>: users.db · .env · data/ (scan history, consent log)<br/>
+          <span style={{color:"#94a3b8"}}>Infrastructure</span>: docker-compose.yml · Dockerfile · Dockerfile.frontend · nginx.conf · .gitignore<br/>
+          <span style={{color:"#94a3b8"}}>Excluded</span>: __pycache__ · node_modules · .git · build/ · *.bak (auto-regenerated on restore)<br/>
+          <span style={{color:"#10b981"}}>✓ Single bundle restores a fully working VPS</span>
         </div>
       </div>
+
+      {/* Inspect modal — shows contents of a backup without extracting */}
+      {inspectData && (
+        <div onClick={()=>setInspectData(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:720,maxHeight:"85vh",overflowY:"auto",padding:24}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{color:"#e2e8f0",fontWeight:700,fontSize:16}}>🔍 Inspecting: <span style={{fontFamily:"JetBrains Mono,monospace",color:"#a78bfa"}}>{inspectData.file}</span></div>
+              <button onClick={()=>setInspectData(null)} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}>✕</button>
+            </div>
+            <div style={{color:"#94a3b8",fontSize:12,marginBottom:14}}>
+              {inspectData.total_entries} total entries · grouped by top-level path
+            </div>
+            <table style={{width:"100%",borderCollapse:"collapse",marginBottom:14}}>
+              <thead>
+                <tr style={{background:"#1e293b"}}>
+                  <th style={{padding:"8px 14px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>PATH</th>
+                  <th style={{padding:"8px 14px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>FILES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inspectData.top_level.map(t => (
+                  <tr key={t.name} style={{borderTop:"1px solid #1e293b"}}>
+                    <td style={{padding:"7px 14px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"#e2e8f0"}}>{t.name}</td>
+                    <td style={{padding:"7px 14px",textAlign:"right",fontSize:12,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{t.files}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <details style={{color:"#94a3b8",fontSize:12}}>
+              <summary style={{cursor:"pointer",padding:"6px 0",color:"#60a5fa"}}>Show first 50 paths (raw)</summary>
+              <pre style={{background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:12,fontSize:10,lineHeight:1.4,fontFamily:"JetBrains Mono,monospace",color:"#cbd5e1",maxHeight:240,overflowY:"auto"}}>
+{inspectData.first_50_paths.join("\n")}
+              </pre>
+            </details>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

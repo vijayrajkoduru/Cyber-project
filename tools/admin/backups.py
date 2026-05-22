@@ -25,10 +25,49 @@ router = APIRouter()
 
 BACKUP_DIR = Path("/root/backups")
 PROJECT_ROOT = Path("/root/Cyber-project")
+# Complete end-to-end coverage: backend + frontend + infra + data + secrets.
+# Restore from this single bundle should produce a working VPS deployment.
 INCLUDE_PATHS = [
-    "users.db", ".env", "data", "tools", "src",
-    "docker-compose.yml", "Dockerfile", "Dockerfile.frontend",
-    "nginx.conf", "requirements.txt",
+    # ─── Data + secrets (highest criticality) ─────────────────────
+    "users.db",
+    ".env",
+    "data",                       # scan history, consent log, user state
+
+    # ─── Backend ─────────────────────────────────────────────────
+    "main.py",                    # FastAPI entry point + healing autoloader
+    "tools",                      # 150 scanners + payloads + shared utils
+    "endpoints",                  # admin/user/billing routes
+    "profiles",                   # compliance.yaml mappings
+    "requirements.txt",           # Python deps lockfile
+
+    # ─── Frontend ────────────────────────────────────────────────
+    "src",                        # App.js + components
+    "public",                     # index.html, manifest, favicon
+    "package.json",               # npm deps
+    "package-lock.json",          # npm lockfile
+
+    # ─── Infrastructure / deploy ─────────────────────────────────
+    "docker-compose.yml",
+    "Dockerfile",
+    "Dockerfile.frontend",
+    "nginx.conf",
+    ".gitignore",
+    ".dockerignore",
+
+    # ─── Auxiliary ───────────────────────────────────────────────
+    "scripts",                    # any backup / deploy helpers
+    "DAILY.md",                   # session notes
+    "STANDARDIZATION-SPEC.md",    # arch reference
+]
+EXCLUDE_PATTERNS = [
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    "node_modules",
+    ".git",
+    "build",
+    "*.bak",
+    "_legacy_quarantine",
 ]
 
 
@@ -66,23 +105,62 @@ async def list_backups(_=Depends(verify_admin)):
     }
 
 
+def _build_tar_cmd(out_path: Path) -> list:
+    """Build the tar command with excludes + only-existing paths.
+    Single source of truth used by both /create and /reset.
+    """
+    cmd = ["tar", "-czf", str(out_path)]
+    for pat in EXCLUDE_PATTERNS:
+        cmd += ["--exclude", pat]
+    cmd += ["-C", str(PROJECT_ROOT)]
+    cmd += [p for p in INCLUDE_PATHS if (PROJECT_ROOT / p).exists()]
+    return cmd
+
+
+def _write_manifest(out_path: Path, included: list) -> Path:
+    """Sidecar manifest .txt next to each backup — auditable list of what's in it."""
+    manifest = out_path.with_suffix("").with_suffix(".manifest.txt")
+    lines = [
+        f"VulnusLab Backup Manifest",
+        f"Created (UTC): {datetime.datetime.utcnow().isoformat()}Z",
+        f"Bundle: {out_path.name}",
+        f"Size: {_human(out_path.stat().st_size)}",
+        f"",
+        f"=== Included paths ({len(included)}) ===",
+    ]
+    for p in included:
+        full = PROJECT_ROOT / p
+        if full.is_dir():
+            file_count = sum(1 for _ in full.rglob("*") if _.is_file())
+            lines.append(f"  {p}/ ({file_count} files)")
+        else:
+            lines.append(f"  {p}")
+    lines.append("")
+    lines.append(f"=== Excluded patterns ===")
+    for pat in EXCLUDE_PATTERNS:
+        lines.append(f"  {pat}")
+    manifest.write_text("\n".join(lines))
+    return manifest
+
+
 @router.post("/api/admin/backups/create")
 async def create_backup(_=Depends(verify_admin)):
     """Take a fresh full backup right now. Returns name + size of new file."""
     _ensure_backup_dir()
     ts = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     out = BACKUP_DIR / f"vulnuslab-{ts}.tar.gz"
-    cmd = ["tar", "-czf", str(out), "-C", str(PROJECT_ROOT)] + [
-        p for p in INCLUDE_PATHS if (PROJECT_ROOT / p).exists()
-    ]
+    included = [p for p in INCLUDE_PATHS if (PROJECT_ROOT / p).exists()]
+    cmd = _build_tar_cmd(out)
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Backup timed out after 180s")
+        raise HTTPException(status_code=500, detail="Backup timed out after 300s")
     if r.returncode != 0:
         raise HTTPException(status_code=500, detail=f"tar failed: {r.stderr[:300]}")
     sz = out.stat().st_size
+    _write_manifest(out, included)
     return {"ok": True, "file": out.name, "size_bytes": sz, "size_human": _human(sz),
+            "included_count": len(included),
             "created_iso": datetime.datetime.utcnow().isoformat() + "Z"}
 
 
@@ -138,24 +216,25 @@ async def reset_backups(_=Depends(verify_admin)):
     # Step 2: take fresh backup
     ts = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     out = BACKUP_DIR / f"vulnuslab-{ts}.tar.gz"
-    cmd = ["tar", "-czf", str(out), "-C", str(PROJECT_ROOT)] + [
-        p for p in INCLUDE_PATHS if (PROJECT_ROOT / p).exists()
-    ]
+    included = [p for p in INCLUDE_PATHS if (PROJECT_ROOT / p).exists()]
+    cmd = _build_tar_cmd(out)
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=500,
-            detail=f"Wiped {removed} old, but new backup timed out at 180s")
+            detail=f"Wiped {removed} old, but new backup timed out at 300s")
     if r.returncode != 0:
         raise HTTPException(status_code=500,
             detail=f"Wiped {removed} old, but tar failed: {r.stderr[:300]}")
     sz = out.stat().st_size
+    _write_manifest(out, included)
     return {"ok": True,
             "wiped": removed,
             "wipe_errors": wipe_errors,
             "new_file": out.name,
             "new_size_bytes": sz,
             "new_size_human": _human(sz),
+            "included_count": len(included),
             "created_iso": datetime.datetime.utcnow().isoformat() + "Z"}
 
 
@@ -168,6 +247,35 @@ async def download_backup(filename: str, _=Depends(verify_admin)):
         raise HTTPException(status_code=404, detail="Backup not found")
     return FileResponse(path=str(target), filename=filename,
                          media_type="application/gzip")
+
+
+@router.get("/api/admin/backups/inspect/{filename}")
+async def inspect_backup(filename: str, _=Depends(verify_admin)):
+    """Peek inside a backup without extracting — lists what would restore."""
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    target = BACKUP_DIR / filename
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Backup not found")
+    if not filename.endswith(".tar.gz"):
+        raise HTTPException(status_code=400, detail="Only .tar.gz archives can be inspected")
+    try:
+        r = subprocess.run(["tar", "-tzf", str(target)], capture_output=True,
+                           text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Inspect timed out at 30s")
+    if r.returncode != 0:
+        raise HTTPException(status_code=500, detail=f"tar -tzf failed: {r.stderr[:200]}")
+    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    # Group by top-level path component for a clean summary
+    top_dirs = {}
+    for path in lines:
+        top = path.split("/", 1)[0] if "/" in path else path
+        top_dirs[top] = top_dirs.get(top, 0) + 1
+    return {"ok": True, "file": filename,
+            "total_entries": len(lines),
+            "top_level": [{"name": k, "files": v} for k, v in sorted(top_dirs.items())],
+            "first_50_paths": lines[:50]}
 
 
 def register(app):
