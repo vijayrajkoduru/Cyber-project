@@ -1,128 +1,122 @@
-"""recon_gobuster -- isolated tool (Kali-style architecture).
+"""Directory Enumeration v2 — VL-FORGE pattern.
 
 Route: /api/recon/gobuster
-Split from recon_module.py monolith by scripts/split_recon_module.py.
-Failure here is quarantined by the healing autoloader -- other tools unaffected.
+
+Sources (parallel):
+  1. AI-curated wordlist (~3339 paths) — if tools/_payloads/recon/consolidated_paths.txt exists
+  2. Built-in fallback wordlist (~200 high-impact paths)
+  3. Soft-404 fingerprint (3 random probes — calibrates baseline)
+  4. Host header fallback (handles Apache Host-mismatch on lab containers)
+
+Findings (~9 rules in tools/_payloads/directory_findings.py):
+  CRITICAL: secrets/credential files exposed (.env / .aws / SSH keys)
+  HIGH    : git/svn exposed, config files exposed, backup files
+  MEDIUM  : admin panels discovered
+  LOW     : IDE files (.vscode/.idea/.DS_Store)
+  INFO    : total count, soft-404 warning
+  POSITIVE: no paths found (strong content security)
 """
-
 import asyncio
-import base64
-import datetime
 import hashlib
-import re
-import socket
-from typing import Optional
-import requests
-import dns.resolver
-import dns.asyncresolver
-import whois as whois_lib
-from fastapi import APIRouter, Depends
-from tools._shared import (
-    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
-)
-import aiohttp as _aiohttp_crawl
-import ssl as _ssl_mod
+import pathlib
 
 from fastapi import APIRouter, Depends
+
+from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
+                            safe_get, web_url)
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.directory_findings import (
+    DIRECTORY_FINDING_RULES, classify_path,
+)
 
 router = APIRouter()
 
-# === GOBUSTER-AI-WORDLIST-V2 ===
-import pathlib as _pl
-_AI_PATHS = None
-try:
-    _p = _pl.Path(__file__).resolve().parent.parent / "_payloads" / "recon" / "consolidated_paths.txt"
-    if _p.exists():
-        _AI_PATHS = [ln.strip() for ln in _p.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")]
-except Exception:
-    _AI_PATHS = None
-# === /GOBUSTER-AI-WORDLIST-V2 ===
 
-
-_COMMON_DIRS = [
-    "admin","administrator","admin.php","admin/login","admin/index","login","login.php","signin",
-    "cpanel","wp-admin","wp-login.php","phpmyadmin","pma","adminer","myadmin","manage","management","manager",
-    "panel","controlpanel","dashboard","moderator","webadmin","sysadmin","admin1","admin2","admincp","admins",
-    "admin-area","admin-portal","admin/dashboard","admin/users","admin/system","admin/config",
-    "administracao","administracion","backend","backstage","console","control","cpadmin","cms","cms/admin",
-    ".env",".env.local",".env.production",".env.development",".env.staging",".env.backup",".env.example",".env.test",
-    "config.php","config.json","config.yaml","config.yml","config.xml","configuration.php","configuration.json",
-    "settings.php","settings.json","settings.py","appsettings.json","web.config","wp-config.php","db.config",
-    ".aws/credentials",".aws/config",".ssh/id_rsa",".ssh/authorized_keys",".docker/config.json",
-    "secrets.json","secrets.yml","secrets.yaml","credentials.json","credentials.txt","credentials.yml",
-    "config/database.yml","config/secrets.yml","config/master.key",
-    ".git/config",".git/HEAD",".git/index",".git/logs/HEAD",".gitignore",".gitconfig",".gitlab-ci.yml",".github/workflows",
-    ".svn/entries",".svn/wc.db",".svn/format",".hg/hgrc",".bzr/README",".DS_Store",
-    ".vscode/settings.json",".idea/workspace.xml",".idea/dataSources.xml","Thumbs.db",
-    "backup","backup.zip","backup.tar.gz","backup.tar","backup.tar.bz2","backup.sql","backup.rar","backup.7z","backup.tgz",
-    "backup-old","backups","backup_old","backup/index.html","site-backup.zip","www.zip","www.tar.gz",
-    "html.zip","public.zip","sql.zip","db.zip","old.zip","old.tar.gz","prod.zip","prod.tar.gz",
-    "dump.sql","db.sql","database.sql","mysql.sql","postgres.sql","mongodump","data.sql","data.zip",
-    "wp-config.php.bak","wp-config.php~","wp-config.bak","config.php.bak","config.php~",
-    "index.php.bak","index.php~","index.html.bak","login.php.bak","login.bak",
-    "phpinfo.php","info.php","test.php","p.php","i.php","x.php","debug.php","trace.php","testing.php",
-    "server-status","server-info","status","stats","statistics","metrics","monitor","monitoring","health","healthcheck","healthz",
-    "ping","heartbeat","alive","ready","probe","liveness","readiness",
-    "api","api/v1","api/v2","api/v3","api/v4","api/docs","api-docs","api-doc","swagger","swagger.json","swagger.yaml","swagger-ui",
-    "openapi.json","openapi.yaml","redoc","graphql","graphql-playground","graphiql","apollo-explorer",
-    "rest","rest/v1","actuator","actuator/health","actuator/env","actuator/metrics","actuator/info","actuator/heapdump",
-    "actuator/threaddump","actuator/beans","actuator/configprops","actuator/mappings",
-    "dev","development","develop","staging","stage","beta","test","testing","preview","sandbox","sandbox/admin",
-    "demo","tmp","temp","old","new","backup-old","internal","intranet","extranet","private","portal",
-    "uploads","upload","files","file","download","downloads","docs","documents","document","papers",
-    "images","img","media","assets","static","public","data","resources","resource","content",
-    "wp-content","wp-includes","wp-content/uploads","wp-content/plugins","wp-content/themes","wp-content/debug.log",
-    "wp-content/backup-db","wp-cron.php","wp-config.php","xmlrpc.php","wp-json","wp-json/wp/v2",
-    "sites/default","sites/default/files","sites/default/settings.php","sites/all","sites/all/modules",
-    "administrator/index.php","administrator/components","joomla","drupal","drupal/install.php",
-    "robots.txt","sitemap.xml","sitemap_index.xml","sitemap.xml.gz","humans.txt","ads.txt","security.txt",
-    ".well-known/security.txt",".well-known/openid-configuration",".well-known/change-password",
-    ".well-known/openid-credential-issuer",".well-known/oauth-authorization-server",
-    ".htaccess",".htpasswd",".bash_history",".profile",".bashrc",".zshrc","crossdomain.xml","clientaccesspolicy.xml",
-    "logs","log","error.log","access.log","debug.log","application.log","app.log","system.log","auth.log","trace.log",
-    "phpunit.xml","composer.json","composer.lock","package.json","package-lock.json","yarn.lock","pnpm-lock.yaml",
-    "Gemfile","Gemfile.lock","requirements.txt","Pipfile","Pipfile.lock","go.mod","go.sum","Cargo.toml","Cargo.lock",
-    "Dockerfile","docker-compose.yml","docker-compose.yaml","Vagrantfile","Makefile","Procfile",
-    "README.md","README.txt","CHANGELOG.md","LICENSE","TODO.txt","NOTES.md","HISTORY.md","CONTRIBUTING.md",
-    "console","actuator","jolokia","prometheus","grafana","kibana","kibana/app/kibana","jenkins","jenkins/script",
-    "users","user","accounts","account","profile","profiles","settings","preferences","preferences.php",
-    "register","signup","sign-up","forgot-password","reset-password","change-password","password-reset",
-    "logout","signout","sign-out","oauth","oauth/authorize","oauth/token","saml","saml/login","sso",
-    "search","search.php","find","query","report","reports","report.php","export","import","feed","rss",
-    "errors","error","404","403","500","error.html","error.php",
-    "node_modules","vendor","build","dist","coverage","target","out",
-    "git","cvs","backup_db","backup-db","tmp/install.php","install","install.php","setup","setup.php","update.php",
+# Built-in fallback wordlist (used if AI-curated payload not present)
+_BUILTIN_WORDLIST = [
+    # Auth
+    "admin", "administrator", "wp-admin", "wp-login.php", "phpmyadmin", "pma",
+    "adminer", "manage", "manager", "dashboard", "console", "control", "panel",
+    # Secrets / config
+    ".env", ".env.local", ".env.production", ".env.dev", ".env.backup",
+    "config.php", "config.json", "config.yaml", "config.xml",
+    "configuration.php", "settings.php", "wp-config.php", "web.config",
+    "appsettings.json", "db.config", "secrets.json", "credentials.json",
+    ".aws/credentials", ".aws/config", ".ssh/id_rsa", ".docker/config.json",
+    "master.key",
+    # Source control
+    ".git/HEAD", ".git/config", ".git/index", ".git/logs/HEAD",
+    ".svn/entries", ".hg/hgrc", ".bzr/README",
+    # Backups
+    "backup", "backup.zip", "backup.tar.gz", "backup.sql", "backup.bak",
+    "site.zip", "www.zip", "old.zip", "old.tar.gz",
+    "dump.sql", "db.sql", "database.sql", "data.sql",
+    # IDE / OS
+    ".vscode/settings.json", ".idea/workspace.xml", ".DS_Store", "Thumbs.db",
+    # Logs
+    "logs", "log", "error.log", "access.log", "debug.log",
+    # Common
+    "robots.txt", "sitemap.xml", "security.txt", ".well-known/security.txt",
+    "phpinfo.php", "info.php", "test.php", "test.html", "test",
+    # API / docs
+    "api", "api/v1", "api/v2", "swagger", "api-docs", "openapi.json",
+    "graphql", "graphiql",
+    # Framework
+    "console", "actuator", "jolokia", "prometheus", "grafana", "kibana",
+    "jenkins", "jenkins/script",
+    # Install / setup
+    "install", "install.php", "setup", "setup.php", "update.php",
+    "tmp/install.php",
 ]
 
-async def recon_gobuster_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    found = []
 
-    # Build soft-404 fingerprint from 3 randomized non-existent paths.
-    # If the target uniformly returns 400 (Apache Host-mismatch on some lab
-    # containers), retry with Host: localhost — real customer targets don't
-    # need this fallback because their Host matches the URL.
-    def _probe_set(extra_headers):
+def _load_ai_wordlist():
+    """Load AI-curated path wordlist if present."""
+    try:
+        p = pathlib.Path(__file__).resolve().parent.parent / "_payloads" / "recon" / "consolidated_paths.txt"
+        if p.exists():
+            return [ln.strip() for ln in p.read_text(encoding="utf-8").splitlines()
+                    if ln.strip() and not ln.startswith("#")]
+    except Exception:
+        pass
+    return None
+
+
+_AI_WORDLIST = _load_ai_wordlist()
+_ACTIVE_WORDLIST = _AI_WORDLIST or _BUILTIN_WORDLIST
+
+
+async def gather(ctx: ScanContext):
+    base = web_url(ctx.host).rstrip("/")
+
+    # Soft-404 fingerprint — probe 3 random paths to calibrate baseline
+    def _probe_random(extra_headers):
         results = []
         for i in range(3):
-            probe_key = hashlib.sha1(f"{req.target}-{i}-vlfp".encode()).hexdigest()[:16]
+            probe_key = hashlib.sha1(f"{ctx.host}-{i}-vlfp".encode()).hexdigest()[:16]
             rp = safe_get(f"{base}/{probe_key}-nonexistent-zzz",
-                          req=req, headers=extra_headers or {},
-                          allow_redirects=False)
-            if rp is None:
-                continue
+                          headers=extra_headers or {}, allow_redirects=False)
+            if rp is None: continue
             loc = (rp.headers.get("Location", "") or "")[:200]
             results.append((rp.status_code, len(rp.content), loc))
         return results
 
     headers_used = {}
-    fingerprints = _probe_set(headers_used)
+    fingerprints = _probe_random(headers_used)
+    # Apache lab fallback — retry with Host: localhost if Host-mismatch
     if fingerprints and all(s == 400 for s, _, _ in fingerprints):
         headers_used = {"Host": "localhost"}
-        fingerprints = _probe_set(headers_used)
+        fingerprints = _probe_random(headers_used)
 
     if not fingerprints:
-        return {"ok": False, "found": [], "skipped_reason": f"Could not reach {base}"}
+        return  # framework's skip_if_empty will mark as failed-reach
+
+    ctx.source("soft-404-baseline")
+    ctx.state["soft_404_baseline"] = fingerprints
+
+    # Detect custom-404 condition (server returns 200 with custom error page)
+    custom_404 = any(s == 200 for s, _, _ in fingerprints)
+    ctx.state["custom_404_detected"] = custom_404
 
     def _is_soft_404(status, length, loc):
         for fs, fl, floc in fingerprints:
@@ -130,27 +124,28 @@ async def recon_gobuster_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
                 return True
         return False
 
-    wordlist = (_AI_PATHS or _COMMON_DIRS)
+    wordlist = _ACTIVE_WORDLIST
+    found = []
 
-    # Concurrent fetch via threadpool — sync requests was taking ~5min+ on
-    # the 3338-path AI list and tripping the frontend's 300s timeout.
-    # 40 in-flight requests keeps origins happy while finishing in ~30-60s.
     def _probe(path):
-        r = safe_get(f"{base}/{path}", req=req,
-                     headers=headers_used or {}, allow_redirects=False)
+        r = safe_get(f"{base}/{path}", headers=headers_used or {},
+                     allow_redirects=False)
         if r is None or r.status_code == 404:
             return None
         loc = (r.headers.get("Location", "") or "")[:200]
         if _is_soft_404(r.status_code, len(r.content), loc):
             return None
-        hit = {"path": "/" + path, "status": r.status_code, "length": len(r.content)}
+        hit = {"path": "/" + path, "status": r.status_code,
+                "length": len(r.content),
+                "category": classify_path(path)}
         if loc:
             hit["redirect_to"] = loc
         return hit
 
+    # 40 in-flight requests via threadpool
     BATCH = 40
     for i in range(0, len(wordlist), BATCH):
-        batch = wordlist[i:i + BATCH]
+        batch = wordlist[i:i+BATCH]
         results = await asyncio.gather(
             *[asyncio.to_thread(_probe, p) for p in batch],
             return_exceptions=False,
@@ -159,26 +154,59 @@ async def recon_gobuster_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
             if hit is not None:
                 found.append(hit)
 
-    return {
-        "ok":                True,
-        "found":             found,
-        "tested":            len(wordlist),
-        "fingerprint_probes": len(fingerprints),
-        "host_override":     headers_used.get("Host"),
-        "engine":            "python-fuzz (3-probe soft-404 baseline + Host fallback, 40x concurrent)",
-    }
+    ctx.state["found"] = found
+    ctx.state["found_count"] = len(found)
+    ctx.state["paths_probed"] = len(wordlist)
+    if wordlist:
+        ctx.source(f"wordlist-{len(wordlist)}-paths")
+
+    # Category counts for intel
+    cat_counts = {}
+    for f in found:
+        cat = f.get("category") or "other"
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    ctx.state["category_counts"] = cat_counts
 
 
+INTEL_FIELDS = [
+    ("Paths probed",       "paths_probed_display"),
+    ("Paths found",        "found_count_display"),
+    ("Category breakdown", "category_breakdown_display"),
+    ("Soft-404 detected",  "custom_404_display"),
+    ("Wordlist source",    "wordlist_source_display"),
+]
 
-# VLERR-WRAP-V1
+
 @router.post("/api/recon/gobuster")
 async def recon_gobuster(req: ScanRequest, _=Depends(verify_scan_quota)):
-    try:
-        return await recon_gobuster_impl(req, _)
-    except Exception as _e:
-        return {"ok": False,
-                 "skipped_reason": f"gobuster scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                 "error": str(_e)[:300]}
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        ctx.state["paths_probed_display"] = (
+            f"{ctx.state.get('paths_probed', 0)} paths probed")
+        n = ctx.state.get("found_count", 0)
+        if n > 0:
+            ctx.state["found_count_display"] = f"{n} accessible paths"
+        cc = ctx.state.get("category_counts") or {}
+        if cc:
+            ctx.state["category_breakdown_display"] = ", ".join(
+                f"{cat}: {cnt}" for cat, cnt in sorted(
+                    cc.items(), key=lambda kv: -kv[1])[:5])
+        if ctx.state.get("custom_404_detected"):
+            ctx.state["custom_404_display"] = "Yes — results may include false positives"
+        ctx.state["wordlist_source_display"] = (
+            f"AI-curated ({len(_ACTIVE_WORDLIST)} paths)" if _AI_WORDLIST
+            else f"built-in ({len(_ACTIVE_WORDLIST)} paths)")
+
+    return await run_scanner(
+        host=host, tool="gobuster",
+        gather_func=gather_with_display,
+        finding_rules=DIRECTORY_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["found", "found_count"],
+    )
+
 
 def register(app):
     app.include_router(router)

@@ -1,91 +1,120 @@
-"""recon_params -- isolated tool (Kali-style architecture).
+"""Parameter Discovery v2 — VL-FORGE pattern.
 
 Route: /api/recon/params
-Split from recon_module.py monolith by scripts/split_recon_module.py.
-Failure here is quarantined by the healing autoloader -- other tools unaffected.
+
+Sources (parallel):
+  1. HTML form input names extraction
+  2. URL query string params from anchor hrefs
+  3. JS literal extraction (potential ?param= references)
 """
-
 import asyncio
-import base64
-import datetime
-import hashlib
 import re
-import socket
-from typing import Optional
+from urllib.parse import urlparse, parse_qs
+
 import requests
-import dns.resolver
-import dns.asyncresolver
-import whois as whois_lib
-from fastapi import APIRouter, Depends
-from tools._shared import (
-    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
-)
-import aiohttp as _aiohttp_crawl
-import ssl as _ssl_mod
 
 from fastapi import APIRouter, Depends
+
+from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
+                            web_url)
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.params_findings import (
+    PARAMS_FINDING_RULES, is_sensitive_param,
+)
 
 router = APIRouter()
 
-_COMMON_PARAMS = [
-    "id","user","username","page","query","search","q","url","redirect","return","next","filename",
-    "file","path","name","email","type","category","action","method","token","key","api_key","auth",
-    "session","sid","lang","locale","language","country","region","format","view","tab","sort","order",
-    "limit","offset","start","end","from","to","since","until","date","callback","jsonp","output","debug",
-    "test","admin","cmd","command","exec","system","data","value","param","arg","input","content",
-    "title","message","comment","body","subject","ref","source","src","dest","destination",
+
+def _fetch(url, timeout=10):
+    try:
+        r = requests.get(url, timeout=timeout, verify=False, allow_redirects=True,
+                          headers={"User-Agent": "VulnusLab/1.0"})
+        return r.text or "" if r.status_code == 200 else ""
+    except Exception:
+        return ""
+
+
+async def gather(ctx: ScanContext):
+    base = web_url(ctx.host).rstrip("/")
+    text = await asyncio.to_thread(_fetch, base)
+    if not text:
+        return
+    ctx.source("html-fetch")
+
+    params = set()
+
+    # Form input names
+    form_count = 0
+    for m in re.finditer(r'<form[^>]*>(.*?)</form>', text, re.I | re.S):
+        form_html = m.group(0)
+        form_count += 1
+        for im in re.finditer(r'name=["\']([a-zA-Z][\w\-]*)["\']', form_html):
+            params.add(im.group(1))
+    if form_count:
+        ctx.source(f"form-extract-{form_count}")
+
+    # URL query params from anchor hrefs
+    href_params_found = 0
+    for hm in re.finditer(r'href=["\']([^"\']+\?[^"\']+)["\']', text):
+        try:
+            q = urlparse(hm.group(1)).query
+            for name in parse_qs(q).keys():
+                params.add(name)
+                href_params_found += 1
+        except Exception:
+            continue
+    if href_params_found:
+        ctx.source("url-query-extract")
+
+    # JS literal extraction (e.g. {param: 'foo'} or 'foo='+value)
+    js_literal_count = 0
+    for m in re.finditer(r"[\"\']([a-zA-Z][\w\-]{1,30})[\"\']:\s*", text):
+        name = m.group(1)
+        if len(name) >= 3 and not name.isupper():
+            params.add(name)
+            js_literal_count += 1
+            if js_literal_count >= 100: break
+    if js_literal_count:
+        ctx.source(f"js-literal-extract-{js_literal_count}")
+
+    # Sort + classify sensitive
+    sorted_params = sorted(params)
+    sensitive = [p for p in sorted_params if is_sensitive_param(p)]
+
+    ctx.state["params"] = sorted_params
+    ctx.state["sensitive_params"] = sensitive
+    ctx.state["forms_count"] = form_count
+
+
+INTEL_FIELDS = [
+    ("Parameters found",     "params_count_display"),
+    ("Sensitive parameters", "sensitive_display"),
+    ("Forms analyzed",       "forms_count"),
+    ("Sample parameters",    "sample_params_display"),
 ]
+
 
 @router.post("/api/recon/params")
 async def recon_params(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    r = safe_get(base, req=req)
-    if r is None:
-        return {"ok": False, "params": [], "skipped_reason": f"Could not reach {base}"}
+    host = recon_host(req.target)
 
-    # Step 1 — regex extract from HTML (passive, fast)
-    params = set()
-    sources = {"query": 0, "form": 0, "js": 0, "reflected": 0}
-    for m in re.findall(r'<input[^>]+name=["\']([^"\']+)', r.text or "", re.I):
-        if m not in params:
-            params.add(m); sources["form"] += 1
-    for m in re.findall(r'[?&]([a-zA-Z_][a-zA-Z0-9_]{0,30})=', r.text or ""):
-        if m not in params:
-            params.add(m); sources["query"] += 1
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        params = ctx.state.get("params") or []
+        if params:
+            ctx.state["params_count_display"] = f"{len(params)} unique"
+            ctx.state["sample_params_display"] = ", ".join(params[:10])
+        sp = ctx.state.get("sensitive_params") or []
+        if sp:
+            ctx.state["sensitive_display"] = ", ".join(sp)
 
-    # Step 2 — Arjun-style reflection probe (active, slower)
-    # Inject each common param with a unique canary, look for reflection.
-    import uuid
-    reflection_params = []
-    baseline_body = (r.text or "")[:50000]
-    baseline_len = len(baseline_body)
-
-    for pname in _COMMON_PARAMS:
-        canary = f"arjncan{uuid.uuid4().hex[:10]}xy"
-        probe_url = f"{base}?{pname}={canary}"
-        pr = safe_get(probe_url, req=req, timeout=6)
-        if pr is None:
-            continue
-        body = pr.text or ""
-        # Reflection found?
-        if canary in body and pname not in params:
-            params.add(pname)
-            sources["reflected"] += 1
-            reflection_params.append(pname)
-        # Significant length diff also suggests param is processed
-        elif abs(len(body) - baseline_len) > 200 and pname not in params:
-            # softer signal — add but mark as probable
-            params.add(pname)
-            sources["js"] += 1
-
-    return {
-        "ok": True,
-        "params": sorted(params)[:200],
-        "sources": sources,
-        "reflected_params": reflection_params,
-        "wordlist_size": len(_COMMON_PARAMS),
-        "engine": "pure-Python regex extract + Arjun-style reflection probe",
-    }
+    return await run_scanner(
+        host=host, tool="params",
+        gather_func=gather_with_display,
+        finding_rules=PARAMS_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["params"],
+    )
 
 
 def register(app):
