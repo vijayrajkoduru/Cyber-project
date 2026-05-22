@@ -474,6 +474,21 @@ async def recon_whois(req: ScanRequest, _=Depends(verify_scan_quota)):
                        f"{len(WHOIS_FINDING_RULES)} rules evaluated; "
                        f"{len(findings)} findings emitted."),
         raw_data={
+            # ── Backwards-compat: PDF generator + dashboard tile readers
+            # expect these as top-level fields on the whois response.
+            "domain":             host,
+            "registrar":          state["registrar"],
+            "created":            state["created"],
+            "updated":            state["updated"],
+            "expires":            state["expires"],
+            "name_servers":       state["name_servers"],
+            "registrant":         state["registrant_org"],
+            "country":            state["registrant_country"],
+            "status_codes":       state["status_codes"],
+            "dnssec":             state["dnssec"],
+            "abuse_email":        state["abuse_email"],
+            "raw_output":         (raw_whois[:2000] if raw_whois else None),
+            # ── New v2 fields (richer + the engine output) ──
             "intel":              intel,
             "sources_used":       sources_used,
             "whois_raw_excerpt":  (raw_whois[:2000] if raw_whois else None),
