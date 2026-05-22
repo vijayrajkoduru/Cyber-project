@@ -1042,7 +1042,6 @@ function generatePDF(reportData) {
       "CWE-1395": ["6.3.3 / 6.5.6","CC7.1","A.8.8", "SI-2 / RA-5", "164.308(a)(5)",     "Art. 32",        "ID.RA-1 / PR.IP-12","CIS 7.1 / 7.3"],
     };
     // Walk current findings, collect which controls are touched per framework.
-    const _pci = new Map(), _soc = new Map(), _iso = new Map();
     const _push = (m, ctrl, f) => {
       if (!ctrl) return;
       const _parts = ctrl.split(/\s*\/\s*/);
@@ -1073,7 +1072,10 @@ function generatePDF(reportData) {
     });
 
     // Render only when something maps — empty section is just noise.
-    const _hasAny = _pci.size + _soc.size + _iso.size > 0;
+    // BUG-FIX 2026-05-22: previously checked dead _pci/_soc/_iso maps (never populated
+    // after 3→8 framework migration), so the section never rendered. Now uses the
+    // actual _frameworkMaps array that gets populated above.
+    const _hasAny = _frameworkMaps.some(m => m.size > 0);
     if (_hasAny) {
       chk(70); y += 2;
       y = sectionHead("Compliance Coverage",y);
