@@ -131,20 +131,33 @@ async def recon_gobuster_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
         return False
 
     wordlist = (_AI_PATHS or _COMMON_DIRS)
-    for path in wordlist:
+
+    # Concurrent fetch via threadpool — sync requests was taking ~5min+ on
+    # the 3338-path AI list and tripping the frontend's 300s timeout.
+    # 40 in-flight requests keeps origins happy while finishing in ~30-60s.
+    def _probe(path):
         r = safe_get(f"{base}/{path}", req=req,
                      headers=headers_used or {}, allow_redirects=False)
-        if r is None:
-            continue
-        if r.status_code == 404:
-            continue
+        if r is None or r.status_code == 404:
+            return None
         loc = (r.headers.get("Location", "") or "")[:200]
         if _is_soft_404(r.status_code, len(r.content), loc):
-            continue
+            return None
         hit = {"path": "/" + path, "status": r.status_code, "length": len(r.content)}
         if loc:
             hit["redirect_to"] = loc
-        found.append(hit)
+        return hit
+
+    BATCH = 40
+    for i in range(0, len(wordlist), BATCH):
+        batch = wordlist[i:i + BATCH]
+        results = await asyncio.gather(
+            *[asyncio.to_thread(_probe, p) for p in batch],
+            return_exceptions=False,
+        )
+        for hit in results:
+            if hit is not None:
+                found.append(hit)
 
     return {
         "ok":                True,
@@ -152,7 +165,7 @@ async def recon_gobuster_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
         "tested":            len(wordlist),
         "fingerprint_probes": len(fingerprints),
         "host_override":     headers_used.get("Host"),
-        "engine":            "python-fuzz (3-probe soft-404 baseline + Host fallback)",
+        "engine":            "python-fuzz (3-probe soft-404 baseline + Host fallback, 40x concurrent)",
     }
 
 

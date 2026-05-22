@@ -100,14 +100,7 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
     try:
         from playwright.async_api import async_playwright  # type: ignore
     except ImportError:
-        # Persist for downstream scanners (sqli, xss, lfi, idor, ...)
-    try:
-        save_spa_state(req.target, sorted(discovered_urls),
-                        api_summary, sorted(discovered_params))
-    except Exception:
-        pass
-
-    return standard_response(
+        return standard_response(
             tool="spa_crawler",
             target=req.target,
             findings=[],
@@ -295,6 +288,13 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
         }
         for ep, info in discovered_api.items()
     }
+
+    # Persist for downstream scanners (sqli, xss, lfi, idor, ...)
+    try:
+        save_spa_state(req.target, sorted(discovered_urls),
+                        api_summary, sorted(discovered_params))
+    except Exception:
+        pass
 
     return standard_response(
         tool="spa_crawler",

@@ -8,6 +8,9 @@ import re
 from fastapi import APIRouter, Depends
 
 from tools._shared import (
+    ScanRequest, verify_scan_quota, web_url,
+    safe_get, wrap_finding, standard_response,
+)
 
 # TECHSTACK-AI-FINGERPRINTS-V1
 import pathlib as _pl, json as _json
@@ -18,10 +21,6 @@ def _load_ai_fp():
     except Exception: pass
     return {}
 _AI_FP = _load_ai_fp()
-
-    ScanRequest, verify_scan_quota, web_url,
-    safe_get, wrap_finding, standard_response,
-)
 
 router = APIRouter()
 
