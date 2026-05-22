@@ -1,100 +1,183 @@
-"""recon_harvester — OSINT email + host harvesting (defensive).
+"""OSINT Harvesting v2 — VL-FORGE pattern.
 
-Tries theHarvester binary first; falls back to pure-Python DNS-based
-host enumeration. ALWAYS returns a valid response — never raises an
-uncaught exception to the wrapper.
+Route: /api/recon/harvester
+
+Sources (parallel):
+  1. theHarvester binary (if installed — uses duckduckgo+bing+crtsh)
+  2. crt.sh cert-transparency host extraction
+  3. HackerTarget passive DNS reverse-lookup
+  4. AlienVault OTX passive DNS
 """
-import asyncio, subprocess, re, shutil
+import asyncio
+import re
+import shutil
+
+import requests
+
 from fastapi import APIRouter, Depends
+
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.harvester_findings import HARVESTER_FINDING_RULES
 
 router = APIRouter()
 
 
-async def recon_harvester_impl(req: ScanRequest):
-    domain = recon_host(req.target)
-    emails, hosts = [], []
-    binary_attempted, binary_succeeded = False, False
-    binary_error = None
-
-    # Method 1: theHarvester binary (if present)
-    if shutil.which("theHarvester"):
-        binary_attempted = True
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "theHarvester", "-d", domain, "-b", "duckduckgo,bing,crtsh", "-l", "50",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                limit=4*1024*1024,
-            )
-            try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=45)
-                output = (stdout or b"").decode("utf-8", errors="ignore")
-                for m in re.finditer(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b", output):
-                    e = m.group(0).lower()
-                    if e not in emails and domain.lower() in e:
-                        emails.append(e)
-                for m in re.finditer(rf"\b([a-zA-Z0-9-]+\.{re.escape(domain)})\b", output):
-                    h = m.group(0).lower()
-                    if h not in hosts and h != domain.lower():
-                        hosts.append(h)
-                binary_succeeded = True
-            except asyncio.TimeoutError:
-                try: proc.kill()
-                except: pass
-                binary_error = "theHarvester subprocess timed out after 45s"
-        except Exception as e:
-            binary_error = f"{type(e).__name__}: {str(e)[:100]}"
-
-    # Method 2: crt.sh fallback (always run — augments binary results)
+async def _theharvester(domain):
+    """Run theHarvester binary if available. Returns (emails, hosts)."""
+    if not shutil.which("theHarvester"):
+        return [], [], False
     try:
-        import requests
-        r = requests.get(f"https://crt.sh/?q={domain}&output=json", timeout=10)
-        if r.status_code == 200:
-            try:
-                certs = r.json()
-                for c in certs[:200]:
-                    nv = c.get("name_value", "")
-                    for line in nv.split("\n"):
-                        line = line.strip().lower()
-                        if domain.lower() in line and "*" not in line and line not in hosts:
-                            hosts.append(line)
-            except Exception:
-                pass
+        proc = await asyncio.create_subprocess_exec(
+            "theHarvester", "-d", domain, "-b", "duckduckgo,bing,crtsh",
+            "-l", "50",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            limit=4 * 1024 * 1024,
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=45)
+            output = (stdout or b"").decode("utf-8", errors="ignore")
+        except asyncio.TimeoutError:
+            try: proc.kill()
+            except: pass
+            return [], [], False
+        emails = set()
+        hosts = set()
+        for m in re.finditer(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b", output):
+            e = m.group(0).lower()
+            if domain.lower() in e: emails.add(e)
+        for m in re.finditer(rf"\b([a-zA-Z0-9-]+\.{re.escape(domain)})\b", output):
+            h = m.group(0).lower()
+            if h != domain.lower(): hosts.add(h)
+        return sorted(emails), sorted(hosts), True
     except Exception:
-        pass
+        return [], [], False
 
-    skipped_reason = None
-    if not emails and not hosts:
-        if binary_attempted and not binary_succeeded:
-            skipped_reason = f"theHarvester failed: {binary_error or 'no output'}; crt.sh also empty"
-        elif not binary_attempted:
-            skipped_reason = "theHarvester binary not installed; crt.sh returned no hosts"
-        else:
-            skipped_reason = "No emails or hosts discovered for this domain"
 
-    return {
-        "ok": True,
-        "vulnerable": False,
-        "emails": sorted(set(emails))[:50],
-        "hosts": sorted(set(hosts))[:100],
-        "binary_attempted": binary_attempted,
-        "binary_succeeded": binary_succeeded,
-        "binary_error": binary_error,
-        "skipped_reason": skipped_reason,
-        "engine": "theHarvester (if installed) + crt.sh fallback, both with strict timeouts",
+def _crtsh_hosts(domain):
+    try:
+        r = requests.get(f"https://crt.sh/?q={domain}&output=json", timeout=15,
+                          verify=False, headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code != 200: return []
+        hosts = set()
+        for cert in r.json()[:300]:
+            nv = (cert.get("name_value") or "").lower()
+            for line in nv.split("\n"):
+                line = line.strip().lstrip("*.")
+                if line.endswith(domain) and "*" not in line:
+                    hosts.add(line)
+        return sorted(hosts)
+    except Exception:
+        return []
+
+
+def _hackertarget(domain):
+    try:
+        r = requests.get(f"https://api.hackertarget.com/hostsearch/?q={domain}",
+                          timeout=12, verify=False,
+                          headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code != 200: return []
+        hosts = set()
+        for line in r.text.splitlines():
+            if "," in line:
+                h = line.split(",", 1)[0].strip().lower()
+                if h.endswith(domain): hosts.add(h)
+        return sorted(hosts)
+    except Exception:
+        return []
+
+
+def _alienvault(domain):
+    try:
+        r = requests.get(
+            f"https://otx.alienvault.com/api/v1/indicators/domain/{domain}/passive_dns",
+            timeout=12, verify=False,
+            headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code != 200: return []
+        data = r.json()
+        hosts = set()
+        for entry in (data.get("passive_dns") or [])[:500]:
+            h = (entry.get("hostname") or "").lower()
+            if h.endswith(domain): hosts.add(h)
+        return sorted(hosts)
+    except Exception:
+        return []
+
+
+async def gather(ctx: ScanContext):
+    domain = ctx.host
+
+    # Fire all sources in parallel
+    th_emails, th_hosts, th_succeeded = await _theharvester(domain)
+    crt_hosts, ht_hosts, av_hosts = await asyncio.gather(
+        asyncio.to_thread(_crtsh_hosts, domain),
+        asyncio.to_thread(_hackertarget, domain),
+        asyncio.to_thread(_alienvault, domain),
+    )
+
+    sources_used_internal = []
+    all_hosts = set(th_hosts)
+    if th_succeeded:
+        ctx.source("theHarvester (DDG+Bing+crtsh)")
+        sources_used_internal.append("theHarvester")
+    if crt_hosts:
+        all_hosts.update(crt_hosts)
+        ctx.source(f"crt.sh ({len(crt_hosts)})")
+        sources_used_internal.append("crt.sh")
+    if ht_hosts:
+        all_hosts.update(ht_hosts)
+        ctx.source(f"hackertarget ({len(ht_hosts)})")
+        sources_used_internal.append("hackertarget")
+    if av_hosts:
+        all_hosts.update(av_hosts)
+        ctx.source(f"alienvault-otx ({len(av_hosts)})")
+        sources_used_internal.append("alienvault-otx")
+
+    ctx.state["emails"] = sorted(set(th_emails))[:50]
+    ctx.state["hosts"] = sorted(all_hosts)[:200]
+    ctx.state["sources_used_internal"] = sources_used_internal
+    ctx.state["host_count_per_source"] = {
+        "theHarvester": len(th_hosts), "crt.sh": len(crt_hosts),
+        "hackertarget": len(ht_hosts), "alienvault-otx": len(av_hosts),
     }
 
 
-# VLERR-WRAP-V1
+INTEL_FIELDS = [
+    ("Emails found",       "email_count_display"),
+    ("Hosts found",         "host_count_display"),
+    ("Sources contributed", "sources_breakdown_display"),
+    ("Sample emails",       "sample_emails_display"),
+    ("Sample hosts",        "sample_hosts_display"),
+]
+
+
 @router.post("/api/recon/harvester")
 async def recon_harvester(req: ScanRequest, _=Depends(verify_scan_quota)):
-    try:
-        return await recon_harvester_impl(req)
-    except Exception as _e:
-        return {"ok": False,
-                "skipped_reason": f"harvester scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        emails = ctx.state.get("emails") or []
+        if emails:
+            ctx.state["email_count_display"] = f"{len(emails)} unique"
+            ctx.state["sample_emails_display"] = ", ".join(emails[:5])
+        hosts = ctx.state.get("hosts") or []
+        if hosts:
+            ctx.state["host_count_display"] = f"{len(hosts)} unique"
+            ctx.state["sample_hosts_display"] = ", ".join(hosts[:5])
+        sb = ctx.state.get("host_count_per_source") or {}
+        if sb:
+            ctx.state["sources_breakdown_display"] = ", ".join(
+                f"{k}({v})" for k, v in sb.items() if v)
+
+    return await run_scanner(
+        host=host, tool="harvester",
+        gather_func=gather_with_display,
+        finding_rules=HARVESTER_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["emails", "hosts"],
+    )
 
 
 def register(app):

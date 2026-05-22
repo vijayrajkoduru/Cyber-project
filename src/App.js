@@ -7605,6 +7605,15 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   renderToolFindingsAndIntel("CDN Origin Discovery", r.cdn_origin);
   renderToolFindingsAndIntel("DNS Zone Transfer",   r.zone_transfer);
 
+  // ── Tier 4 — Threat intel (VL-FORGE) ──
+  // CVE Matching (NVD) keeps its complex existing scanner — already has
+  // findings[] via wrap_finding, KEV/EPSS enrichment, summary{}.
+  renderToolFindingsAndIntel("OSINT Harvesting",   r.harvester);
+  renderToolFindingsAndIntel("Shodan Lookup",     r.shodan);
+  renderToolFindingsAndIntel("Free Shodan (InternetDB)", r.internetdb);
+  renderToolFindingsAndIntel("CVE Matching (NVD)", r.cve_match);
+  renderToolFindingsAndIntel("Deep Subdomain (amass)",   r.amass);
+
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];
     chk(30); y = sHead("OSINT Harvesting (theHarvester)",y);

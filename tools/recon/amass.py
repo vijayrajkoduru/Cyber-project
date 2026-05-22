@@ -54,8 +54,7 @@ async def _resolve_brute(host, prefix):
     except Exception:
         return None
 
-@router.post("/api/recon/amass")
-async def recon_amass(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def _recon_amass_impl(req: ScanRequest, _=None):
     host = recon_host(req.target)
     all_subs = set()
     sources_hit = {}
@@ -222,6 +221,53 @@ async def recon_amass(req: ScanRequest, _=Depends(verify_scan_quota)):
         "sources_failed": sources_failed,
         "engine": "pure-Python (6 passive sources + DNS brute, parallel)",
     }
+
+
+# ── VL-FORGE wrapper around the existing implementation ────────────────
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.amass_findings import AMASS_FINDING_RULES
+
+
+@router.post("/api/recon/amass")
+async def recon_amass(req: ScanRequest, _=Depends(verify_scan_quota)):
+    host = recon_host(req.target)
+
+    async def gather(ctx: ScanContext):
+        # Call existing implementation; populate state from result
+        result = await _recon_amass_impl(req)
+        ctx.state["subdomains"] = result.get("subdomains") or []
+        ctx.state["total_subdomains"] = result.get("total_subdomains") or 0
+        ctx.state["sources"] = result.get("sources") or {}
+        ctx.state["sources_failed"] = result.get("sources_failed") or {}
+        # Source tracking for VL-FORGE
+        for src, count in (ctx.state["sources"] or {}).items():
+            if count > 0:
+                ctx.source(f"{src} ({count})")
+        # Display helpers
+        if ctx.state["subdomains"]:
+            ctx.state["sample_subs_display"] = ", ".join(ctx.state["subdomains"][:8])
+        sources = ctx.state["sources"] or {}
+        if sources:
+            ctx.state["sources_breakdown_display"] = ", ".join(
+                f"{k}({v})" for k, v in sources.items() if v > 0)
+        failed = ctx.state["sources_failed"] or {}
+        if failed:
+            ctx.state["failed_sources_display"] = ", ".join(failed.keys())
+
+    INTEL_FIELDS = [
+        ("Total subdomains",     "total_subdomains"),
+        ("Sample subdomains",   "sample_subs_display"),
+        ("Sources breakdown",   "sources_breakdown_display"),
+        ("Failed sources",       "failed_sources_display"),
+    ]
+
+    return await run_scanner(
+        host=host, tool="amass",
+        gather_func=gather,
+        finding_rules=AMASS_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["subdomains", "total_subdomains", "sources"],
+    )
 
 
 def register(app):
