@@ -57,8 +57,12 @@ async def gather(ctx: ScanContext):
     base = await dns_resolve_many(host, ["A", "AAAA", "MX", "NS", "TXT",
                                           "CNAME", "SOA", "CAA"])
     ctx.state.update(base)
-    if any(base.values()):
-        ctx.source("dig")
+    # Granular sources — each record type that actually returned data counts
+    # as a discrete data source. Surfaces in the report's Sources Gathered
+    # footer as "dig-A, dig-MX, dig-NS, dig-TXT" instead of one bulk "dig".
+    for rtype, vals in base.items():
+        if vals:
+            ctx.source(f"dig-{rtype}")
 
     # Phase 2: DMARC + DKIM probes + wildcard probe — all parallel
     import asyncio
@@ -111,7 +115,8 @@ async def gather(ctx: ScanContext):
     if wc_resp:
         ctx.state["wildcard_evidence"] = f"{wc_name} resolved to {wc_resp[0]}"
 
-    # Verification debt — count TXT records that look like verification tokens
+    # Verification debt — count TXT records that look like verification tokens.
+    # Only surfaces as intel when >0 (filtered out in INTEL_FIELDS via 0 -> falsy).
     verification_patterns = [
         r"google-site-verification=",
         r"facebook-domain-verification=",
@@ -135,7 +140,10 @@ async def gather(ctx: ScanContext):
             if re.search(p, str(t), re.I):
                 count += 1
                 break
-    ctx.state["verification_count"] = count
+    # Only surface in intel when there ARE verification tokens — a "0"
+    # row in the Intel table is just noise.
+    if count > 0:
+        ctx.state["verification_count"] = count
 
     # Build a unified records[] list at top level for backwards-compat with
     # the existing dashboard tile + PDF renderer.
