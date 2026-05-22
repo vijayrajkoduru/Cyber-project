@@ -1,4 +1,9 @@
-"""Open Redirect -- Location-header attacker-host verification.
+"""Open Redirect — Location-header attacker-host verification.
+
+Payload source: tools/_payloads/open_redirect.py (OPEN_REDIRECT_PAYLOADS,
+~50 entries across absolute / schemeless / backslash / userinfo / subdomain /
+url-encoded / double-encoded / whitespace / null-byte / scheme-bypass /
+fragment / unicode / protocol-rel).
 
 Zero-FP rule: the Location header must actually REDIRECT to the attacker
 host. Earlier substring matching produced false positives on sites that
@@ -9,15 +14,38 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools._payloads.open_redirect import OPEN_REDIRECT_PAYLOADS, ATTACKER_HOST
+
 router = APIRouter()
-_ATTACKER = "evil-attacker.example"
-_PAYLOADS = [
-    f"https://{_ATTACKER}", f"//{_ATTACKER}", f"/\\{_ATTACKER}", _ATTACKER,
-    f"https://target.com.{_ATTACKER}", f"https://target.com@{_ATTACKER}",
-    f"//{_ATTACKER}/path", f"https:%2f%2f{_ATTACKER}", f"//{_ATTACKER}#",
-]
 _COMMON_KEYS = ["url", "next", "redirect", "return", "returnTo", "return_url",
-                "goto", "rurl", "dest", "destination", "redir", "u"]
+                "goto", "rurl", "dest", "destination", "redir", "u",
+                "continue", "forward", "site", "view", "image_url"]
+
+
+def _build_payload_set():
+    """Interleave by category so the per-param burst exercises every
+    bypass family (absolute / schemeless / backslash / userinfo / subdomain /
+    url-encoded / double-encoded / whitespace / scheme-bypass / etc.)
+    before exhausting any one. The most-effective patterns lead.
+    """
+    order = ["schemeless", "absolute", "backslash", "userinfo", "subdomain",
+             "url-encoded", "double-encoded", "whitespace", "null-byte",
+             "protocol-rel", "scheme-bypass", "fragment", "unicode"]
+    buckets = {cat: [] for cat in order}
+    for p in OPEN_REDIRECT_PAYLOADS:
+        cat = p.get("category")
+        if cat not in buckets: continue
+        buckets[cat].append(p)
+    out, idx = [], 0
+    while any(idx < len(buckets[cat]) for cat in order):
+        for cat in order:
+            if idx < len(buckets[cat]):
+                out.append(buckets[cat][idx])
+        idx += 1
+    return out
+
+
+_PAYLOAD_SET = _build_payload_set()
 
 
 def _redirects_to_attacker(location: str, target_host: str) -> bool:
@@ -37,17 +65,14 @@ def _redirects_to_attacker(location: str, target_host: str) -> bool:
     if not location:
         return False
     loc = location.strip()
-    low_attacker = _ATTACKER.lower()
+    low_attacker = ATTACKER_HOST.lower()
 
-    # Schemeless //host/path  (most common open-redirect form)
     if loc.startswith("//"):
         host = loc[2:].split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
-        # Strip user-info portion if present (user@host)
         if "@" in host:
             host = host.split("@", 1)[1]
         return low_attacker in host.lower()
 
-    # Backslash-prefixed (browsers normalize \\ -> //)
     if loc.startswith(("/\\", "\\\\", "\\")):
         rest = loc.lstrip("/\\")
         host = rest.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
@@ -55,20 +80,16 @@ def _redirects_to_attacker(location: str, target_host: str) -> bool:
             host = host.split("@", 1)[1]
         return low_attacker in host.lower()
 
-    # Absolute URL -- parse and check the netloc only
     try:
         parsed_loc = urlparse(loc)
         if parsed_loc.netloc:
             host = parsed_loc.netloc.lower()
             if "@" in host:
                 host = host.split("@", 1)[1]
-            # host equals attacker, OR target.com.evil-attacker.example,
-            # OR target.com@evil-attacker.example (already stripped)
             return low_attacker in host
     except Exception:
         pass
 
-    # Pure relative ("/login", "page.html"...) cannot be open-redirect
     return False
 
 
@@ -82,6 +103,9 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
     target_host = (parsed.netloc or "").lower()
     params = parse_qs(parsed.query)
     candidates = set(params.keys()) | set(_COMMON_KEYS)
+    # Per-param cap: 24 covers every interesting bypass family while keeping
+    # the per-param probe budget bounded.
+    payload_set = _PAYLOAD_SET[:24]
     findings, tests, confirmed = [], 0, []
 
     canary_redirects = False
@@ -99,8 +123,10 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
     MAX_PER_LOCATION = 1
 
     for key in candidates:
-        for inj in _PAYLOADS:
+        for entry in payload_set:
             tests += 1
+            inj = entry["payload"]
+            cat = entry.get("category", "?")
             new_params = {k: v[0] for k, v in params.items()}
             new_params[key] = inj
             test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
@@ -112,23 +138,24 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
             loc_key = location.split("?", 1)[0].split("#", 1)[0]
             location_counts[loc_key] = location_counts.get(loc_key, 0) + 1
             if location_counts[loc_key] > MAX_PER_LOCATION:
-                confirmed.append({"param": key, "payload": inj, "location": location,
-                                   "suppressed": "duplicate destination"})
+                confirmed.append({"param": key, "payload": inj, "category": cat,
+                                   "location": location, "suppressed": "duplicate destination"})
                 break
             confidence = "SUSPECTED" if canary_redirects else "CONFIRMED"
             f = wrap_finding(
-                f"Open Redirect via {key!r}",
+                f"Open Redirect via {key!r} ({cat} bypass)",
                 "MEDIUM", cvss="6.1", cwe="CWE-601", owasp="A01:2021",
                 remediation="Validate redirect destinations against an internal allow-list.",
                 evidence_marker=f"{key}={inj} -> HTTP {r.status_code} Location: {location}")
             f["confidence"] = confidence
             findings.append(f)
-            confirmed.append({"param": key, "payload": inj, "location": location,
-                               "confidence": confidence})
+            confirmed.append({"param": key, "payload": inj, "category": cat,
+                               "location": location, "confidence": confidence})
             break
 
     summary = (f"Open redirect: {tests} probes across {len(candidates)} candidate params "
-               f"(host-verified, dedupe-by-destination)")
+               f"using {len(payload_set)}-entry payload set (OPEN_REDIRECT_PAYLOADS library, "
+               f"13 bypass categories; host-verified, dedupe-by-destination)")
     if canary_redirects:
         summary += " — canary baseline redirected to off-host, findings marked SUSPECTED"
 
@@ -140,5 +167,9 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
             "canary_redirects": canary_redirects,
             "canary_location": canary_location,
             "unique_destinations": len(location_counts),
+            "library_size": len(OPEN_REDIRECT_PAYLOADS),
         }})
-def register(app): app.include_router(router)
+
+
+def register(app):
+    app.include_router(router)

@@ -1,4 +1,14 @@
-"""SSRF — cloud-metadata + localhost markers with SPA-baseline FP suppression."""
+"""SSRF — multi-cloud metadata + localhost markers with SPA-baseline FP suppression.
+
+Payload source: tools/_payloads/ssrf.py (SSRF_PAYLOADS, ~50 entries across
+aws-imds / gcp-metadata / azure-imds / do-metadata / oracle-imds /
+alibaba-imds / tencent-imds / ibm-imds / kubelet / docker-api / localhost /
+internal-net / schema-bypass / dns-rebind).
+
+SPA-baseline FP suppression preserved: each param gets a benign canary
+fingerprinted first; any SSRF probe that returns the IDENTICAL response
+is dropped (the site is ignoring the param — typical SPA behaviour).
+"""
 import hashlib
 import re
 import secrets
@@ -6,31 +16,40 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools._payloads.ssrf import SSRF_PAYLOADS
+
 router = APIRouter()
 
-_PAYLOADS = [
-    ("http://169.254.169.254/latest/meta-data/",
-     r"ami-id|instance-id|local-ipv4|public-keys/", "AWS IMDS"),
-    ("http://169.254.169.254/latest/meta-data/iam/security-credentials/",
-     r"AccessKeyId|SecretAccessKey|SessionToken", "AWS IAM creds"),
-    ("http://metadata.google.internal/computeMetadata/v1/",
-     r"compute-engine|service-accounts/default", "GCP metadata"),
-    ("http://169.254.169.254/metadata/instance?api-version=2021-02-01",
-     r"\"vmId\"|\"resourceGroupName\"", "Azure metadata"),
-    ("http://169.254.169.254/metadata/v1/",
-     r"\"droplet_id\"|\"interfaces\"", "DigitalOcean metadata"),
-    # Localhost probes use a STRICT marker only valid for real localhost servers,
-    # NOT generic HTML. Without a SPA-baseline match they cannot fire on Angular/
-    # React/Vue apps that 200-on-everything.
-    ("http://localhost/",
-     r"It works!|Welcome to nginx|Apache.*Server.*at.*localhost|<title>Index of /",
-     "localhost reachable"),
-    ("http://127.0.0.1/",
-     r"It works!|Welcome to nginx|Apache.*Server.*at.*127\.0\.0\.1|<title>Index of /",
-     "127.0.0.1 reachable"),
-]
-_COMMON_KEYS = ["url","uri","src","fetch","image","img","avatar","callback",
-                "redirect","webhook","proxy","host"]
+_COMMON_KEYS = ["url", "uri", "src", "fetch", "image", "img", "avatar",
+                "callback", "redirect", "webhook", "proxy", "host",
+                "next", "return", "site", "feed", "import"]
+
+
+def _build_payload_set():
+    """Interleave by category so the per-param HTTP burst exercises every
+    cloud family (AWS / GCP / Azure / DO / Oracle / Alibaba / Tencent / IBM)
+    plus k8s / docker / localhost / internal-net before exhausting any one.
+    Schema-bypass + dns-rebind go last (lower expected hit-rate).
+    """
+    order = ["aws-imds", "gcp-metadata", "azure-imds", "do-metadata",
+             "oracle-imds", "alibaba-imds", "tencent-imds", "ibm-imds",
+             "kubelet", "docker-api", "localhost", "internal-net",
+             "schema-bypass", "dns-rebind"]
+    buckets = {cat: [] for cat in order}
+    for p in SSRF_PAYLOADS:
+        cat = p.get("category")
+        if cat not in buckets: continue
+        buckets[cat].append(p)
+    out, idx = [], 0
+    while any(idx < len(buckets[cat]) for cat in order):
+        for cat in order:
+            if idx < len(buckets[cat]):
+                out.append(buckets[cat][idx])
+        idx += 1
+    return out
+
+
+_PAYLOAD_SET = _build_payload_set()
 
 
 def _resp_fingerprint(r):
@@ -40,6 +59,15 @@ def _resp_fingerprint(r):
     body = (r.text or "")[:2000]
     h = hashlib.md5(body.encode("utf-8", errors="ignore")).hexdigest()
     return f"{r.status_code}:{len(r.content)}:{h}"
+
+
+def _extra_headers_for(ssrf_url):
+    """Some cloud metadata endpoints require a specific header to respond."""
+    if "metadata.google" in ssrf_url:
+        return {"Metadata-Flavor": "Google"}
+    if "metadata/instance" in ssrf_url and "169.254.169.254" in ssrf_url:
+        return {"Metadata": "true"}  # Azure IMDS
+    return {}
 
 
 @router.post("/api/scan/ssrf")
@@ -53,11 +81,12 @@ async def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
             tests_performed=1, vulnerable=False,
             skipped_reason="No URL parameters — append ?url=http://... to test")
 
+    # Per-param cap: 24 covers AWS+GCP+Azure+DO+Oracle+Alibaba+k8s+docker+
+    # localhost+internal+schema while keeping the per-param probe budget bounded.
+    payload_set = _PAYLOAD_SET[:24]
+
     findings, tests, confirmed, suppressed = [], 0, [], []
 
-    # ── Per-param SPA baseline: send a benign value and fingerprint the response.
-    # If a real SSRF payload returns the IDENTICAL fingerprint, the site is
-    # ignoring the param (typical SPA behaviour). We suppress those findings.
     baselines = {}
     canary_token = "vlcanary" + secrets.token_hex(4)
     for key in candidates:
@@ -69,17 +98,20 @@ async def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
 
     for key in candidates:
         baseline_fp = baselines.get(key)
-        for ssrf_url, marker, cloud in _PAYLOADS:
+        for entry in payload_set:
             tests += 1
+            ssrf_url = entry["url"]
+            marker = entry["matcher"]
+            cloud = entry.get("name", entry.get("category", "internal"))
+            cat = entry.get("category", "internal")
+
             new_params = {k: v[0] for k, v in existing.items()}
             new_params[key] = ssrf_url
             test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
-            extra = {"Metadata-Flavor": "Google"} if "metadata.google" in ssrf_url else {}
+            extra = _extra_headers_for(ssrf_url)
             r = safe_get(test_url, headers=extra, req=req, allow_redirects=False, timeout=10)
             if r is None or r.status_code != 200:
                 continue
-            # SPA-baseline gate — if response fingerprint matches the benign canary,
-            # the site treats this param as a no-op (no SSRF).
             probe_fp = _resp_fingerprint(r)
             if baseline_fp is not None and probe_fp == baseline_fp:
                 suppressed.append({"param": key, "cloud": cloud,
@@ -87,24 +119,30 @@ async def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 continue
             try:
                 if re.search(marker, (r.text or "")[:8000], re.IGNORECASE):
+                    sev = str(entry.get("severity", "CRITICAL")).upper()
+                    cvss = str(entry.get("cvss", "9.1"))
                     findings.append(wrap_finding(
-                        f"SSRF — param {key!r} reaches {cloud}",
-                        "CRITICAL", cvss="9.1", cwe="CWE-918", owasp="A10:2021",
-                        remediation="Validate URLs against allow-list. Reject private IP ranges (10/8, 172.16/12, 192.168/16, 169.254/16, 127/8).",
+                        f"SSRF — param {key!r} reaches {cloud} ({cat})",
+                        sev, cvss=cvss, cwe="CWE-918", owasp="A10:2021",
+                        remediation=("Validate URLs against allow-list. Reject private IP ranges "
+                                     "(10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, ::1, fc00::/7). "
+                                     "Block file://, gopher://, dict://, ldap:// schemes."),
                         evidence_marker=f"param={key} payload {ssrf_url!r} returned content matching {marker!r} ({cloud})"))
-                    confirmed.append({"param": key, "payload": ssrf_url, "cloud": cloud})
+                    confirmed.append({"param": key, "payload": ssrf_url,
+                                       "cloud": cloud, "category": cat})
                     break
             except re.error:
                 continue
 
     return standard_response(tool="ssrf", target=req.target, findings=findings,
         tests_performed=tests,
-        tests_summary=(f"SSRF: {tests} probes across {len(candidates)} params; "
-                       f"{len(suppressed)} SPA matches filtered as non-vulnerable; "
-                       f"AWS/GCP/Azure/DO + localhost markers"),
+        tests_summary=(f"SSRF: {tests} probes across {len(candidates)} params using "
+                       f"{len(payload_set)}-entry payload set (SSRF_PAYLOADS library, "
+                       f"14 categories); {len(suppressed)} SPA matches filtered as non-vulnerable"),
         raw_data={"ssrf": {"confirmed": confirmed,
                             "suppressed_fps": suppressed,
-                            "baseline_fingerprints": len([b for b in baselines.values() if b])}})
+                            "baseline_fingerprints": len([b for b in baselines.values() if b]),
+                            "library_size": len(SSRF_PAYLOADS)}})
 
 
 def register(app):

@@ -18,6 +18,8 @@ import dns.asyncresolver
 import whois as whois_lib
 from fastapi import APIRouter, Depends
 from tools._shared import (
+    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
+)
 
 # SUBDOMAINS-AI-WORDLIST-V1
 import pathlib as _pl, json as _json
@@ -28,9 +30,6 @@ def _load_ai_subs():
     except Exception: pass
     return None
 _AI_SUBS = _load_ai_subs()
-
-    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
-)
 import aiohttp as _aiohttp_crawl
 import ssl as _ssl_mod
 
