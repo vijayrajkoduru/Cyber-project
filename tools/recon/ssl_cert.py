@@ -128,9 +128,14 @@ async def scan_ssl_cert(req: ScanRequest, _=Depends(verify_scan_quota)):
         ))
 
     # Test 3 — Hostname mismatch
+    # If cert parse returned NULL CN + empty SAN, the chain wasn't fully retrieved —
+    # almost always because target is behind a CDN (Cloudflare, CloudFront, Fastly)
+    # that terminates TLS at the edge. Skip instead of flagging FALSE-POSITIVE.
     tests += 1
     all_names = set(san_dns) | ({cn} if cn else set())
-    if not _hostname_in_names(target.lower(), {n.lower() for n in all_names if n}):
+    if cn is None and len(san_dns) == 0:
+        pass  # Cert chain unreadable (CDN edge TLS) — no false-positive mismatch
+    elif not _hostname_in_names(target.lower(), {n.lower() for n in all_names if n}):
         findings.append(wrap_finding(
             f"Hostname mismatch — '{target}' not present in certificate CN or SAN",
             "HIGH", cwe="CWE-297", owasp="A02:2021",

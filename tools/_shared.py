@@ -88,6 +88,68 @@ _BROWSER_HEADERS = {
 }
 
 
+# ── WAF / CDN detection ──────────────────────────────────────────────
+# When a target is fronted by a WAF, aggressive scanners (gobuster, nuclei,
+# force_browse) get blocked after a few hundred requests. We detect the WAF
+# vendor early so individual scanners can:
+#   - Slow down (sleep between requests)
+#   - Skip cleanly with a clear "blocked by WAF" message
+#   - Avoid false positives (e.g. cert chain validation on CDN)
+# Cache results per-target for the duration of a scan (1 probe = full scan).
+_WAF_CACHE: dict[str, dict] = {}
+
+
+def detect_waf(url: str, *, req=None) -> dict:
+    """One-shot HEAD probe to detect WAF/CDN. Returns {'vendor': str, 'detected': bool}.
+    Cached per-host so subsequent scanners don't re-probe.
+    Idempotent on failure — returns {'vendor': None, 'detected': False, 'reason': ...}.
+    """
+    from urllib.parse import urlparse
+    host = urlparse(url).netloc or url
+    if host in _WAF_CACHE:
+        return _WAF_CACHE[host]
+    result = {"vendor": None, "detected": False, "host": host}
+    try:
+        r = _req_lib.head(url, timeout=8, allow_redirects=True,
+                          headers=_BROWSER_HEADERS, verify=False)
+        h = {k.lower(): v.lower() for k, v in r.headers.items()}
+        server = h.get("server", "")
+        if "cloudflare" in server or "cf-ray" in h or h.get("cf-cache-status"):
+            result.update(vendor="Cloudflare", detected=True)
+        elif "akamai" in server or h.get("x-akamai-transformed"):
+            result.update(vendor="Akamai", detected=True)
+        elif "awselb" in server or "cloudfront" in server or h.get("x-amz-cf-id"):
+            result.update(vendor="AWS CloudFront", detected=True)
+        elif "fastly" in server or h.get("fastly-debug-digest"):
+            result.update(vendor="Fastly", detected=True)
+        elif "imperva" in server or "incap_ses" in h.get("set-cookie", ""):
+            result.update(vendor="Imperva", detected=True)
+        elif "sucuri" in server or h.get("x-sucuri-id"):
+            result.update(vendor="Sucuri", detected=True)
+        elif "barracuda" in server or "barra" in h.get("set-cookie", ""):
+            result.update(vendor="Barracuda", detected=True)
+        elif "f5" in server or "bigip" in h.get("set-cookie", ""):
+            result.update(vendor="F5 BIG-IP", detected=True)
+        elif "nginx" in server and r.status_code in (403, 406, 429):
+            # Generic WAF blocking via nginx (likely ModSec / NAXSI)
+            result.update(vendor="Generic WAF (nginx)", detected=True)
+    except Exception as e:
+        result["reason"] = f"Probe failed: {type(e).__name__}"
+    _WAF_CACHE[host] = result
+    return result
+
+
+def waf_skip_reason(waf_info: dict, scanner_name: str) -> str:
+    """Generate a user-friendly skipped_reason when a scanner can't run due to WAF.
+    Pass the result of detect_waf() and the scanner's display name.
+    """
+    if not waf_info.get("detected"):
+        return ""
+    return (f"{scanner_name} requires direct backend access. "
+            f"Target is fronted by {waf_info['vendor']} — aggressive probing will be blocked. "
+            f"Whitelist your scanner IP in {waf_info['vendor']} to enable this check.")
+
+
 def make_req_headers(req: Optional[ScanRequest] = None) -> dict:
     """Merge browser headers with optional auth from a ScanRequest."""
     h = dict(_BROWSER_HEADERS)
