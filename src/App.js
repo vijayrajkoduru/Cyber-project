@@ -7993,6 +7993,7 @@ function ReconModule({token, onRunningChange}) {
   const [lines,          setLines]    = useState(["Ready — enter a domain or IP and click Start Recon"]);
   const [tab,            setTab]      = useState("phases");
   const [stopped,        setStopped]  = useState(false);
+  const [expandedTile,   setExpandedTile] = useState(null);
   const [selectedPhases, setSelected] = useState(() => new Set(RECON_PHASES.map((_,i)=>i)));
   // RECON-AUTH-STATE-V1
   const [authOpen,setAuthOpen]                   = useState(false);
@@ -8654,10 +8655,23 @@ function ReconModule({token, onRunningChange}) {
             const isDone    = done.includes(i);
             const isFailed  = failed.includes(i);
             const isActive  = curPhase===i;
+            const res       = allResults[ph.tool];
             const statusCol = isActive?"#3b82f6":isFailed?"#ef4444":isDone?"#10b981":"#334155";
             const statusLabel = isActive?"RUNNING":isFailed?"ERROR":isDone?"COMPLETE":sel?"QUEUED":"DISABLED";
+            // Compute items count (varies per recon tool — be flexible about shape)
+            let itemsCount = 0;
+            if (res && !isFailed) {
+              itemsCount = (res.subdomains||[]).length || (res.ports||[]).length ||
+                           (res.found||[]).length || (res.records||[]).length ||
+                           (res.discovered||[]).length || (res.paths||[]).length ||
+                           (res.emails||[]).length || (res.vulns||[]).length ||
+                           (res.findings||[]).length || (res.total||0) || 0;
+            }
+            const itemsLabel = !isDone ? "" : isFailed ? "error" : itemsCount === 0 ? "0 items" : `${itemsCount} item${itemsCount===1?"":"s"}`;
+            const _failReason = (res && (res.skipped_reason || res.error || res.detail)) || "scan failed";
             return (
-              <div key={i} onClick={()=>!running&&togglePhase(i)}
+              <React.Fragment key={i}>
+              <div onClick={()=>!running&&togglePhase(i)}
                 onMouseEnter={e=>{ if(!running) e.currentTarget.style.background="#111c33"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
                 style={{background:"transparent",borderTop:i===0?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.45,transition:"background 0.12s,opacity 0.12s",boxSizing:"border-box"}}>
@@ -8671,7 +8685,34 @@ function ReconModule({token, onRunningChange}) {
                 )}
                 <span style={{flex:1,fontSize:13,fontWeight:500,color:"#f1f5f9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
                 <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:90,textAlign:"right"}}>{statusLabel}</span>
+                <span style={{fontSize:11,color:isFailed?"#f87171":itemsCount>0?"#60a5fa":"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
+                {isDone && (
+                  <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
+                    style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 12px",color:"#94a3b8",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                    {expandedTile===i?"Hide":"Details"}
+                  </button>
+                )}
               </div>
+              {expandedTile === i && isDone && (
+                <div style={{padding:"14px 18px",background:"#0a1224",borderTop:"1px solid #1e293b",borderLeft:`3px solid ${statusCol}`,fontSize:12,lineHeight:1.55,color:"#cbd5e1"}}>
+                  {isFailed ? (
+                    <div>
+                      <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:6,fontWeight:600}}>ERROR REASON</div>
+                      <div style={{color:"#fca5a5",fontFamily:"ui-monospace,SFMono-Regular,monospace",fontSize:11}}>{String(_failReason).substring(0,300)}</div>
+                    </div>
+                  ) : itemsCount === 0 ? (
+                    <div style={{color:"#86efac"}}>✓ {ph.name} completed. No data discovered for this target.</div>
+                  ) : (
+                    <div>
+                      <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:8,fontWeight:600}}>{itemsCount} ITEM{itemsCount===1?"":"S"} DISCOVERED</div>
+                      <pre style={{margin:0,padding:10,background:"#020617",border:"1px solid #1e293b",borderRadius:4,fontSize:10,color:"#cbd5e1",fontFamily:"ui-monospace,SFMono-Regular,monospace",maxHeight:240,overflowY:"auto",whiteSpace:"pre-wrap"}}>
+                        {JSON.stringify(res, null, 2).substring(0, 2000)}{JSON.stringify(res).length > 2000 ? "\n\n... (truncated — click row for full results)" : ""}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+              </React.Fragment>
             );
           })}
         </div>
@@ -11192,6 +11233,7 @@ function VulnModule(props) {
   const [lines,setLines]       = useState(["Ready — enter target and click Run All Scans"]);
   const [finished,setFinished] = useState(false);
   const [activeTab,setActiveTab] = useState(null);
+  const [expandedTile, setExpandedTile] = useState(null);
   // ── Authenticated-scan state ──
   // When the user fills in login URL + creds, we hit /api/scan/login first,
   // capture the session cookie, and inject it into every downstream scanner.
@@ -11483,9 +11525,11 @@ function VulnModule(props) {
           const statusCol = isActive ? "#3b82f6" : isFailed ? "#ef4444" : hi>0 ? "#ef4444" : med>0 ? "#f59e0b" : isDone ? "#10b981" : "#334155";
           const statusLabel = isActive ? "RUNNING" : isFailed ? "ERROR" : hi>0 ? "VULNERABLE" : med>0 ? "REVIEW" : isDone ? "SECURE" : "PENDING";
           const _vFailDetail = (hasData && (hasData.skipped_reason || hasData.error || hasData.detail)) || "scan failed";
-          const detail = !isDone ? "" : isFailed ? String(_vFailDetail).substring(0,48) : hi>0 ? `${hi} High/Critical` : med>0 ? `${med} Medium` : low>0 ? `${low} Low` : "No findings";
+          const itemsCount = findings.length;
+          const itemsLabel = !isDone ? "" : isFailed ? "error" : itemsCount === 0 ? "0 items" : `${itemsCount} item${itemsCount===1?"":"s"}`;
           return(
-            <div key={i} onClick={()=>isDone&&setActiveTab(ph.tool)}
+            <React.Fragment key={i}>
+            <div onClick={()=>isDone&&setActiveTab(ph.tool)}
               onMouseEnter={e=>{ if(isDone) e.currentTarget.style.background="#111c33"; }}
               onMouseLeave={e=>{ e.currentTarget.style.background=isSelected?"#0f1d3a":"transparent"; }}
               style={{background:isSelected?"#0f1d3a":"transparent",borderTop:i===0?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,cursor:isDone?"pointer":"default",transition:"background 0.12s"}}>
@@ -11499,8 +11543,39 @@ function VulnModule(props) {
               )}
               <span style={{fontSize:13,fontWeight:500,color:"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
               <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
-              <span style={{fontSize:11,color:"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:110,textAlign:"right",flexShrink:0}}>{detail}</span>
+              <span style={{fontSize:11,color:isFailed?"#f87171":itemsCount>0?"#fbbf24":"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
+              {isDone && (
+                <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
+                  style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 12px",color:"#94a3b8",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                  {expandedTile===i?"Hide":"Details"}
+                </button>
+              )}
             </div>
+            {/* Expansion panel — surfaces error reason / per-finding list */}
+            {expandedTile === i && isDone && (
+              <div style={{padding:"14px 18px",background:"#0a1224",borderTop:"1px solid #1e293b",borderLeft:`3px solid ${statusCol}`,fontSize:12,lineHeight:1.55,color:"#cbd5e1"}}>
+                {isFailed ? (
+                  <div>
+                    <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:6,fontWeight:600}}>ERROR REASON</div>
+                    <div style={{color:"#fca5a5",fontFamily:"ui-monospace,SFMono-Regular,monospace",fontSize:11}}>{_vFailDetail}</div>
+                  </div>
+                ) : itemsCount === 0 ? (
+                  <div style={{color:"#86efac"}}>✓ Scanner ran successfully. No vulnerabilities detected in {ph.name}.</div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:8,fontWeight:600}}>{itemsCount} FINDING{itemsCount===1?"":"S"}</div>
+                    {findings.slice(0,5).map((f,fi)=>(
+                      <div key={fi} style={{marginBottom:6,paddingLeft:10,borderLeft:`2px solid ${f.severity==="CRITICAL"?"#dc2626":f.severity==="HIGH"?"#ea580c":f.severity==="MEDIUM"?"#ca8a04":"#16a34a"}`}}>
+                        <span style={{fontSize:9,fontWeight:700,color:f.severity==="CRITICAL"?"#f87171":f.severity==="HIGH"?"#fb923c":f.severity==="MEDIUM"?"#fbbf24":"#4ade80",letterSpacing:1,marginRight:8}}>{f.severity}</span>
+                        <span style={{fontSize:12,color:"#e2e8f0"}}>{(f.detail||"").substring(0,140)}</span>
+                      </div>
+                    ))}
+                    {findings.length > 5 && <div style={{fontSize:11,color:"#64748b",fontStyle:"italic",marginTop:6}}>+ {findings.length-5} more — click row to see all</div>}
+                  </div>
+                )}
+              </div>
+            )}
+            </React.Fragment>
           );
         })}
       </div>
