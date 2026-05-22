@@ -39,14 +39,17 @@ RUN apt-get update -q -o Acquire::Retries=3 \
 
 # ── SecLists — community wordlists for force-browse, brute force, fuzzing ──
 # Free alternative to AI-generated payloads where volume matters more than metadata.
-# Tarball download (~300MB) is ~10× faster than git clone (which fetches metadata too)
-# and avoids GitHub clone-throttling on the VPS.
-RUN cd /opt \
- && curl -sL https://github.com/danielmiessler/SecLists/archive/refs/heads/master.tar.gz -o seclists.tar.gz \
- && tar -xzf seclists.tar.gz \
- && mv SecLists-master seclists \
- && rm seclists.tar.gz \
- && du -sh /opt/seclists
+# Resilient fetch: wget with 5 retries + 120s timeout + non-fatal failure so a
+# transient GitHub-throttle doesn't block the whole image build. If the download
+# fails the tools fall back to AI-curated wordlists in tools/_payloads/recon/.
+RUN cd /opt && mkdir -p seclists \
+ && ( wget --tries=5 --waitretry=30 --timeout=120 -q \
+        https://codeload.github.com/danielmiessler/SecLists/tar.gz/refs/heads/master \
+        -O seclists.tar.gz \
+      && tar -xzf seclists.tar.gz --strip-components=1 -C seclists \
+      && rm seclists.tar.gz \
+      && du -sh /opt/seclists ) \
+    || echo "WARNING: SecLists download failed; brute-force tools will use AI-curated fallback wordlists"
 
 # Application code — preserves the Kali-style tools/ directory structure
 COPY main.py .
