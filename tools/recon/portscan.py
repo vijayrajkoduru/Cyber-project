@@ -1,151 +1,106 @@
-"""Port scan — TCP connect scan against common service ports.
+"""Fast Port Scan — VL-FORGE pattern.
 
-Active verification: full TCP handshake to each catalog port. A port
-is reported OPEN only on successful connect. Severity reflects the
-risk of internet exposure for the identified service:
+Route: /api/recon/masscan  (frontend tool key: "masscan")
 
-  CRITICAL — exposed databases / cache / queues / Docker API / Telnet
-  HIGH     — remote admin (SSH/RDP/VNC), file shares (SMB/FTP/NFS)
-  MEDIUM   — message brokers / IoT protocols
-  LOW      — mail / auxiliary
-  INFO     — public web (80,443,8080,8443) — excluded from findings
+Probes the top 40 most security-relevant ports via TCP connect.
+Faster than Deep Port Scan (~5 sec vs ~30 sec). Returns named findings
+covering: databases exposed, admin ports exposed, DevOps panels, file-
+shares, cleartext legacy protocols.
+
+Sources (parallel):
+  1. TCP probe per port (~40 in parallel)
+  2. DNS resolution to IP
+
+Findings (~12 rules from tools/_payloads/portscan_findings.py):
+  CRITICAL: databases exposed
+  HIGH    : admin ports exposed, DevOps panels, file-shares, legacy cleartext
+  MEDIUM  : HTTP without HTTPS
+  POSITIVE: HTTPS available, no ports open (filtered)
+  INFO    : total open count
 """
 import asyncio
 import socket
+
 from fastapi import APIRouter, Depends
 
-from tools._shared import (
-    ScanRequest, verify_scan_quota, recon_host,
-    wrap_finding, standard_response,
+from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.portscan_findings import (
+    PORTSCAN_FINDING_RULES, PORT_CATALOG,
 )
+from tools.recon._portscan_engine import tcp_probe
 
 router = APIRouter()
 
 
-PORT_CATALOG = {
-    21:    ("FTP",            "HIGH",     "CWE-200"),
-    22:    ("SSH",            "HIGH",     "CWE-200"),
-    23:    ("Telnet",         "CRITICAL", "CWE-319"),
-    25:    ("SMTP",           "LOW",      "CWE-200"),
-    53:    ("DNS",            "INFO",     "CWE-200"),
-    80:    ("HTTP",           "INFO",     None),
-    110:   ("POP3",           "LOW",      "CWE-200"),
-    135:   ("MS RPC",         "HIGH",     "CWE-200"),
-    139:   ("NetBIOS",        "HIGH",     "CWE-200"),
-    143:   ("IMAP",           "LOW",      "CWE-200"),
-    443:   ("HTTPS",          "INFO",     None),
-    445:   ("SMB",            "HIGH",     "CWE-200"),
-    465:   ("SMTPS",          "LOW",      None),
-    587:   ("SMTP-submit",    "LOW",      None),
-    993:   ("IMAPS",          "LOW",      None),
-    995:   ("POP3S",          "LOW",      None),
-    1433:  ("MSSQL",          "CRITICAL", "CWE-668"),
-    1521:  ("Oracle",         "CRITICAL", "CWE-668"),
-    1883:  ("MQTT",           "MEDIUM",   "CWE-306"),
-    2049:  ("NFS",            "HIGH",     "CWE-668"),
-    2375:  ("Docker API",     "CRITICAL", "CWE-306"),
-    2376:  ("Docker API TLS", "CRITICAL", "CWE-306"),
-    3306:  ("MySQL",          "CRITICAL", "CWE-668"),
-    3389:  ("RDP",            "HIGH",     "CWE-200"),
-    5432:  ("PostgreSQL",     "CRITICAL", "CWE-668"),
-    5601:  ("Kibana",         "HIGH",     "CWE-200"),
-    5672:  ("AMQP",           "MEDIUM",   "CWE-306"),
-    5900:  ("VNC",            "HIGH",     "CWE-306"),
-    5984:  ("CouchDB",        "CRITICAL", "CWE-668"),
-    6379:  ("Redis",          "CRITICAL", "CWE-668"),
-    7474:  ("Neo4j",          "CRITICAL", "CWE-668"),
-    8000:  ("HTTP-alt",       "INFO",     None),
-    8080:  ("HTTP-proxy",     "INFO",     None),
-    8443:  ("HTTPS-alt",      "INFO",     None),
-    8888:  ("HTTP-alt",       "INFO",     None),
-    9000:  ("HTTP-alt",       "INFO",     None),
-    9200:  ("Elasticsearch",  "CRITICAL", "CWE-668"),
-    9300:  ("ES transport",   "HIGH",     "CWE-668"),
-    11211: ("Memcached",      "CRITICAL", "CWE-668"),
-    15672: ("RabbitMQ UI",    "HIGH",     "CWE-200"),
-    27017: ("MongoDB",        "CRITICAL", "CWE-668"),
-    27018: ("MongoDB shard",  "CRITICAL", "CWE-668"),
-}
+async def gather(ctx: ScanContext):
+    host = ctx.host
 
-
-async def _probe(host: str, port: int, timeout: float = 2.0) -> bool:
+    # Resolve to IP
     try:
-        fut = asyncio.open_connection(host, port)
-        _, writer = await asyncio.wait_for(fut, timeout=timeout)
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass
-        return True
+        ip = socket.gethostbyname(host)
     except Exception:
-        return False
+        return
+    ctx.state["ip"] = ip
+    ctx.source("dns-resolve")
 
-
-@router.post("/api/scan/portscan")
-async def scan_portscan(req: ScanRequest, _=Depends(verify_scan_quota)):
-    target = recon_host(req.target)
-
-    try:
-        ip = socket.gethostbyname(target)
-    except Exception as e:
-        return standard_response(
-            tool="portscan", target=target, findings=[],
-            tests_performed=1, vulnerable=False,
-            skipped_reason=f"DNS resolution failed for {target}: {e}",
-        )
-
+    # Probe the top ~40 catalog ports in parallel
     ports = sorted(PORT_CATALOG.keys())
-    results = await asyncio.gather(*[_probe(ip, p) for p in ports])
-    open_ports = [p for p, ok in zip(ports, results) if ok]
-
-    findings = []
-    for port in open_ports:
+    results = await asyncio.gather(*[tcp_probe(ip, p, timeout=2.0) for p in ports])
+    open_ports = []
+    for port, is_open in zip(ports, results):
+        if not is_open: continue
         svc, sev, cwe = PORT_CATALOG[port]
-        if sev == "INFO":
-            continue
-        kw = {
-            "evidence_marker": f"{target} ({ip}):{port}/tcp OPEN",
-            "tests_performed": 1,
-        }
-        if cwe:
-            kw["cwe"] = cwe
-        if sev == "CRITICAL":
-            kw["owasp"] = "A05:2021"
-            kw["remediation"] = (
-                f"{svc} on port {port}/tcp is exposed to the public internet. "
-                "Bind to localhost or restrict access via firewall / security group; "
-                "require authentication and TLS for management interfaces."
-            )
-        elif sev == "HIGH":
-            kw["remediation"] = (
-                f"{svc} on port {port}/tcp is reachable from the internet. "
-                "Restrict access to a bastion / VPN and enforce MFA."
-            )
-        else:
-            kw["remediation"] = (
-                f"{svc} on port {port}/tcp is reachable. "
-                "Confirm exposure is intentional and protected."
-            )
-        findings.append(wrap_finding(
-            f"{svc} exposed on port {port}/tcp",
-            sev, **kw,
-        ))
+        open_ports.append({"port": port, "service": svc, "severity": sev, "cwe": cwe})
 
-    return standard_response(
-        tool="portscan", target=target, findings=findings,
-        tests_performed=len(ports),
-        tests_summary=f"Probed {len(ports)} common service ports; {len(open_ports)} open",
-        raw_data={
-            "ip": ip,
-            "ports_probed": ports,
-            "ports_open": [
-                {"port": p, "service": PORT_CATALOG[p][0],
-                 "severity": PORT_CATALOG[p][1]}
-                for p in open_ports
-            ],
-        },
+    ctx.state["ports_open"] = open_ports
+    ctx.state["ports_probed"] = len(ports)
+    ctx.state["http_present"] = any(p["port"] in (80, 8080, 8000) for p in open_ports)
+    ctx.state["https_present"] = any(p["port"] in (443, 8443) for p in open_ports)
+
+    if ports:
+        ctx.source(f"tcp-connect-{len(ports)}-ports")
+
+    # Backwards-compat: top-level ports[] list for existing PDF section
+    ctx.state["ports"] = [{"port": p["port"], "proto": "tcp", "state": "open",
+                            "service": p["service"]} for p in open_ports]
+
+
+INTEL_FIELDS = [
+    ("IP address",          "ip"),
+    ("Ports probed",         "ports_probed"),
+    ("Open ports",           "open_ports_display"),
+    ("HTTP / HTTPS",         "http_https_display"),
+]
+
+
+@router.post("/api/recon/masscan")
+async def recon_masscan(req: ScanRequest, _=Depends(verify_scan_quota)):
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        op = ctx.state.get("ports_open") or []
+        if op:
+            ctx.state["open_ports_display"] = ", ".join(
+                f"{p['port']}/{p['service']}" for p in op[:10])
+        ctx.state["http_https_display"] = (
+            f"HTTP={ctx.state.get('http_present')}, "
+            f"HTTPS={ctx.state.get('https_present')}")
+
+    return await run_scanner(
+        host=host, tool="masscan",
+        gather_func=gather_with_display,
+        finding_rules=PORTSCAN_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["ports", "ip", "ports_open"],
     )
+
+
+# Also register under /api/scan/portscan for legacy callers
+@router.post("/api/scan/portscan")
+async def legacy_scan_portscan(req: ScanRequest, _=Depends(verify_scan_quota)):
+    return await recon_masscan(req, _)
 
 
 def register(app):

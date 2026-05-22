@@ -1,71 +1,100 @@
-"""recon_nmap -- isolated tool (Kali-style architecture).
+"""Deep Port Scan — VL-FORGE pattern.
 
-Route: /api/recon/nmap
-Split from recon_module.py monolith by scripts/split_recon_module.py.
-Failure here is quarantined by the healing autoloader -- other tools unaffected.
+Route: /api/recon/nmap  (frontend tool key: "nmap")
+
+Probes the top 1000 most common service ports via TCP connect.
+Significantly slower than Fast Port Scan (~30 sec) but much wider
+coverage. Same findings rules apply but on broader port surface.
+
+Sources (parallel):
+  1. TCP probe per port (1000 ports, batched to avoid resolver flooding)
+  2. DNS resolution to IP
 """
-
 import asyncio
-import base64
-import datetime
-import hashlib
-import re
 import socket
-from typing import Optional
-import requests
-import dns.resolver
-import dns.asyncresolver
-import whois as whois_lib
-from fastapi import APIRouter, Depends
-from tools._shared import (
-    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
-)
-import aiohttp as _aiohttp_crawl
-import ssl as _ssl_mod
 
 from fastapi import APIRouter, Depends
+
+from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.portscan_findings import (
+    PORTSCAN_FINDING_RULES, PORT_CATALOG,
+)
+from tools.recon._portscan_engine import tcp_probe, TOP_1000_PORTS
 
 router = APIRouter()
 
-_PORT_CATALOG = {
-    21:"FTP",22:"SSH",23:"Telnet",25:"SMTP",53:"DNS",80:"HTTP",110:"POP3",
-    135:"MS RPC",139:"NetBIOS",143:"IMAP",443:"HTTPS",445:"SMB",
-    587:"SMTP-submit",993:"IMAPS",995:"POP3S",1433:"MSSQL",1521:"Oracle",
-    2375:"Docker API",3306:"MySQL",3389:"RDP",5432:"PostgreSQL",5672:"AMQP",
-    5900:"VNC",6379:"Redis",8000:"HTTP-alt",8080:"HTTP-proxy",8443:"HTTPS-alt",
-    8888:"HTTP-alt",9200:"Elasticsearch",11211:"Memcached",15672:"RabbitMQ UI",
-    27017:"MongoDB",
-}
 
-async def _scan_open_ports(host):
-    ports = sorted(_PORT_CATALOG.keys())
-    results = await asyncio.gather(*[_tcp_probe(host, p) for p in ports])
-    return [p for p, ok in zip(ports, results) if ok]
-
-async def _tcp_probe(host, port, timeout=1.5):
+async def gather(ctx: ScanContext):
+    host = ctx.host
     try:
-        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass
-        return True
+        ip = socket.gethostbyname(host)
     except Exception:
-        return False
+        return
+    ctx.state["ip"] = ip
+    ctx.source("dns-resolve")
+
+    # Top 1000 ports, batched 50 at a time to avoid socket exhaustion
+    ports = TOP_1000_PORTS
+    BATCH = 50
+    open_ports_raw = []
+    for i in range(0, len(ports), BATCH):
+        chunk = ports[i:i+BATCH]
+        results = await asyncio.gather(*[
+            tcp_probe(ip, p, timeout=1.5) for p in chunk
+        ])
+        for port, is_open in zip(chunk, results):
+            if is_open:
+                open_ports_raw.append(port)
+
+    # Annotate with catalog metadata where available
+    open_ports = []
+    for port in sorted(open_ports_raw):
+        if port in PORT_CATALOG:
+            svc, sev, cwe = PORT_CATALOG[port]
+        else:
+            svc, sev, cwe = "unknown", "INFO", None
+        open_ports.append({"port": port, "service": svc, "severity": sev, "cwe": cwe})
+
+    ctx.state["ports_open"] = open_ports
+    ctx.state["ports_probed"] = len(ports)
+    ctx.state["http_present"] = any(p["port"] in (80, 8080, 8000) for p in open_ports)
+    ctx.state["https_present"] = any(p["port"] in (443, 8443) for p in open_ports)
+
+    if ports:
+        ctx.source(f"tcp-connect-top-{len(ports)}")
+
+    ctx.state["ports"] = [{"port": p["port"], "proto": "tcp", "state": "open",
+                            "service": p["service"]} for p in open_ports]
+
+
+INTEL_FIELDS = [
+    ("IP address",      "ip"),
+    ("Ports probed",     "ports_probed"),
+    ("Open ports",       "open_ports_display"),
+    ("Scan engine",      "scan_engine_display"),
+]
+
 
 @router.post("/api/recon/nmap")
 async def recon_nmap(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "ports": [], "skipped_reason": f"Could not resolve {host}: {e}"}
-    open_ports = await _scan_open_ports(ip)
-    return {"ok": True, "ip": ip,
-            "ports": [{"port": p, "proto": "tcp", "state": "open",
-                       "service": _PORT_CATALOG.get(p, "unknown")} for p in open_ports],
-            "engine": "python-asyncio"}
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        op = ctx.state.get("ports_open") or []
+        if op:
+            ctx.state["open_ports_display"] = ", ".join(
+                f"{p['port']}/{p['service']}" for p in op[:20])
+        ctx.state["scan_engine_display"] = "Python asyncio TCP connect (top 1000)"
+
+    return await run_scanner(
+        host=host, tool="nmap",
+        gather_func=gather_with_display,
+        finding_rules=PORTSCAN_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["ports", "ip", "ports_open"],
+    )
 
 
 def register(app):
