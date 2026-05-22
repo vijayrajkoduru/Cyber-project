@@ -137,24 +137,43 @@ async def _fetch_rdap_ip(ip: str) -> Optional[dict]:
 
 
 async def _fetch_crt_sh(domain: str) -> int:
-    """Return count of unique subdomains seen in cert-transparency logs."""
-    def _do():
+    """Return count of unique subdomains seen in cert-transparency logs.
+
+    Strict match: domain must equal `domain` itself OR end with ".domain" —
+    prevents "supervulnuslab.com" counting as a vulnuslab.com subdomain.
+    Tries wildcard query first; if 0 results, tries bare-domain query
+    (catches base cert without SANs). Longer timeout (30s) because crt.sh
+    can be slow.
+    """
+    def _do(query_url):
         try:
-            r = requests.get(f"https://crt.sh/?q=%25.{domain}&output=json",
-                              timeout=_REQ_TIMEOUT, verify=False)
-            if r.status_code != 200: return 0
+            r = requests.get(query_url, timeout=30, verify=False,
+                              headers={"User-Agent": "VulnusLab/1.0"})
+            if r.status_code != 200: return set()
             data = r.json()
             names = set()
-            for row in data[:500]:
+            for row in data[:1000]:
                 nv = (row.get("name_value") or "").lower()
                 for part in nv.split("\n"):
                     part = part.strip().lstrip("*.")
-                    if part and part.endswith(domain):
+                    if not part: continue
+                    # Strict suffix match: equals domain OR endswith ".domain"
+                    if part == domain or part.endswith("." + domain):
                         names.add(part)
-            return len(names)
+            return names
         except Exception:
-            return 0
-    return await asyncio.to_thread(_do)
+            return set()
+
+    def _run():
+        d = domain.lower().strip()
+        # Wildcard query: any cert covering *.<domain> or sub.<domain>
+        names = _do(f"https://crt.sh/?q=%25.{d}&output=json")
+        if not names:
+            # Bare-domain query: cert for the apex domain itself
+            names = _do(f"https://crt.sh/?q={d}&output=json")
+        return len(names)
+
+    return await asyncio.to_thread(_run)
 
 
 # ───────────────────────── DNS RESOLUTION ─────────────────────────
@@ -250,22 +269,56 @@ def _parse_domain_whois(text: str) -> dict:
 
 
 def _parse_ip_whois(text: str) -> dict:
-    """Extract ASN + netblock owner + country from an IP whois response."""
+    """Extract ASN + netblock owner + country from an IP whois response.
+
+    Handles ARIN/RIPE/APNIC/AFRINIC/LACNIC quirks. Earlier version was
+    parsing "AS88" from OrgId "AT-88-Z" — the new logic requires AS
+    followed by 3+ digits OR a 4+ digit number after the OriginAS label.
+    """
     if not text: return {}
-    # ARIN: OrgName, ASN; RIPE: org-name + origin; APNIC similar
+
+    # ── Org name: prefer OrgName, fall back to others. Strip any label leak. ──
     org = (_grab(text, "OrgName", "org-name", "owner", "Organization",
                  "descr", "netname") or "")
-    asn = (_grab(text, "OriginAS", "origin", "aut-num", "ASNumber") or "")
-    country = (_grab(text, "Country", "country") or "")
-    netblock = (_grab(text, "NetRange", "CIDR", "inetnum", "route") or "")
-    abuse = _grab(text, "OrgAbuseEmail", "abuse-mailbox", "abuse-c")
-    # Normalize ASN
-    if asn:
-        m = re.search(r"(AS\d+|\d{2,7})", asn)
+    # Sometimes the grab catches a follow-up line — keep only the first line
+    org = (org.split("\n")[0] or "").strip()
+    # Remove redundant "Organization:" / "OrgName:" prefix if it leaked in
+    org = re.sub(r"^(Organization|OrgName|Owner|Org|descr|netname)\s*:\s*",
+                  "", org, flags=re.IGNORECASE)
+    org = org.strip().rstrip(";").rstrip(",").strip()
+
+    # ── ASN extraction with stricter validation ──
+    # Step 1: try the labelled field
+    asn_raw = (_grab(text, "OriginAS", "origin", "aut-num", "ASNumber") or "")
+    asn = ""
+    if asn_raw:
+        # Require AS-prefix with 3+ digits, OR a bare 3+ digit number
+        m = re.search(r"\bAS\s*(\d{3,7})\b", asn_raw, re.IGNORECASE)
         if m:
-            asn_val = m.group(1)
-            asn = asn_val if asn_val.upper().startswith("AS") else f"AS{asn_val}"
-    return {"org": org, "asn": asn, "country": country.upper(),
+            asn = f"AS{m.group(1)}"
+        else:
+            m2 = re.fullmatch(r"\s*(\d{3,7})\s*", asn_raw)
+            if m2:
+                asn = f"AS{m2.group(1)}"
+    # Step 2: scan whole text as fallback (Amazon IPs sometimes have empty OriginAS)
+    if not asn:
+        for line_re in (r"^\s*OriginAS\s*:\s*AS?\s*(\d{3,7})\s*$",
+                        r"^\s*origin\s*:\s*AS?\s*(\d{3,7})\s*$",
+                        r"^\s*aut-num\s*:\s*AS?\s*(\d{3,7})\s*$"):
+            m = re.search(line_re, text, re.IGNORECASE | re.MULTILINE)
+            if m:
+                asn = f"AS{m.group(1)}"
+                break
+
+    country = (_grab(text, "Country", "country") or "").strip().upper()
+    # Country can sometimes have explanatory text — keep only first 2-letter ISO code
+    m = re.match(r"^([A-Z]{2})\b", country)
+    if m: country = m.group(1)
+
+    netblock = (_grab(text, "NetRange", "CIDR", "inetnum", "route") or "").strip()
+    abuse = _grab(text, "OrgAbuseEmail", "abuse-mailbox", "abuse-c")
+
+    return {"org": org, "asn": asn, "country": country,
             "netblock": netblock, "abuse": abuse}
 
 
