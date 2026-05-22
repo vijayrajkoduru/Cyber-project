@@ -13275,7 +13275,11 @@ export default function App() {
 
           {/* Dynamic sections */}
           {SECTIONS.map(sec => {
-            const mods = MODULES.filter(m => m.cat === sec.key);
+            // Hide admin-only modules from non-admin users entirely (not just
+            // greyed-out). Other restrictions (trial/pro) still render as
+            // locked items because we want to upsell trial users.
+            const mods = MODULES.filter(m => m.cat === sec.key)
+                                .filter(m => !(m.admin && !isSuperAdmin));
             if (!mods.length) return null;
             return (
               <div key={sec.key}>
