@@ -7339,13 +7339,22 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       chk(30); y = sHead(`${toolKey} Intelligence`, y);
       y = tHead(["FIELD","VALUE"], [45,135], y);
       rows.forEach((row, i) => {
-        chk(7);
-        fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
-        txt(row[0], margin+3, y+5, 8.5, GRAY, true);
+        // Multi-line wrap — long values (PTR records, resolver answers,
+        // hosting blocks) need to span multiple lines instead of being
+        // truncated at the first line. Compute dynamic row height.
         const vl = doc.splitTextToSize(String(row[1]), 128);
+        const lineH = 4;             // mm per wrapped line
+        const padding = 3;           // top+bottom padding (approx)
+        const rowH = Math.max(7, vl.length * lineH + padding);
+        chk(rowH);
+        fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
+        txt(row[0], margin+3, y+5, 8.5, GRAY, true);
         doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
-        doc.text(vl[0], margin+48, y+5);
-        y += 7;
+        // Render ALL wrapped lines, not just vl[0]
+        vl.forEach((line, idx) => {
+          doc.text(line, margin+48, y + 5 + (idx * lineH));
+        });
+        y += rowH;
       });
     }
     // ── Sources footer ──
@@ -7566,6 +7575,18 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   // Pure framework rendering — protocol enum, cipher mix, cert details,
   // HSTS, ALPN, OCSP, vuln indicators all show up in the Intel block.
   renderToolFindingsAndIntel("TLS Deep Audit", r.tls_deep);
+
+  // ── Port-Scan family (VL-FORGE — Batch 1C, 5 tools) ──
+  // Fast Port Scan (masscan key)   : top-40 ports quick probe
+  // Deep Port Scan (nmap key)      : top-1000 ports
+  // Service Detection (services)   : version identification per port
+  // OS Fingerprinting (os key)     : OS family inference
+  // Banner Grabbing (banner key)   : banner extraction per port
+  renderToolFindingsAndIntel("Fast Port Scan",   r.masscan);
+  renderToolFindingsAndIntel("Deep Port Scan",   r.nmap);
+  renderToolFindingsAndIntel("Service Detection", r.services);
+  renderToolFindingsAndIntel("OS Fingerprinting", r.os);
+  renderToolFindingsAndIntel("Banner Grabbing",   r.banner);
 
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];

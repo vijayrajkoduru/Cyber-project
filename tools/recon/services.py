@@ -1,70 +1,116 @@
-"""recon_services -- isolated tool (Kali-style architecture).
+"""Service Detection — VL-FORGE pattern.
 
-Route: /api/recon/services
-Split from recon_module.py monolith by scripts/split_recon_module.py.
-Failure here is quarantined by the healing autoloader -- other tools unaffected.
+Route: /api/recon/services  (frontend tool key: "services")
+
+Identifies service VERSIONS on open ports via banner grabbing +
+signature matching. Pure-Python equivalent of nmap -sV.
+
+Sources (parallel):
+  1. TCP probe top-40 ports
+  2. Banner grab + version-pattern extraction per open port
 """
-
 import asyncio
-import base64
-import datetime
-import hashlib
-import re
 import socket
-from typing import Optional
-import requests
-import dns.resolver
-import dns.asyncresolver
-import whois as whois_lib
-from fastapi import APIRouter, Depends
-from tools._shared import (
-    ScanRequest, verify_scan_quota, recon_host, safe_get, web_url,
-)
-import aiohttp as _aiohttp_crawl
-import ssl as _ssl_mod
 
 from fastapi import APIRouter, Depends
+
+from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.portscan_findings import (
+    PORTSCAN_FINDING_RULES, PORT_CATALOG,
+)
+from tools.recon._portscan_engine import (
+    tcp_probe, grab_banner, parse_version_from_banner,
+)
 
 router = APIRouter()
 
-_PORT_CATALOG = {
-    21:"FTP",22:"SSH",23:"Telnet",25:"SMTP",53:"DNS",80:"HTTP",110:"POP3",
-    135:"MS RPC",139:"NetBIOS",143:"IMAP",443:"HTTPS",445:"SMB",
-    587:"SMTP-submit",993:"IMAPS",995:"POP3S",1433:"MSSQL",1521:"Oracle",
-    2375:"Docker API",3306:"MySQL",3389:"RDP",5432:"PostgreSQL",5672:"AMQP",
-    5900:"VNC",6379:"Redis",8000:"HTTP-alt",8080:"HTTP-proxy",8443:"HTTPS-alt",
-    8888:"HTTP-alt",9200:"Elasticsearch",11211:"Memcached",15672:"RabbitMQ UI",
-    27017:"MongoDB",
-}
 
-async def _scan_open_ports(host):
-    ports = sorted(_PORT_CATALOG.keys())
-    results = await asyncio.gather(*[_tcp_probe(host, p) for p in ports])
-    return [p for p, ok in zip(ports, results) if ok]
-
-async def _tcp_probe(host, port, timeout=1.5):
+async def gather(ctx: ScanContext):
+    host = ctx.host
     try:
-        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass
-        return True
+        ip = socket.gethostbyname(host)
     except Exception:
-        return False
+        return
+    ctx.state["ip"] = ip
+    ctx.source("dns-resolve")
+
+    ports = sorted(PORT_CATALOG.keys())
+    probe_results = await asyncio.gather(*[tcp_probe(ip, p, timeout=2.0) for p in ports])
+    open_ports = [p for p, ok in zip(ports, probe_results) if ok]
+
+    if open_ports:
+        ctx.source(f"tcp-probe-{len(ports)}")
+
+    # Grab banners + parse versions in parallel
+    banner_results = await asyncio.gather(*[
+        grab_banner(ip, p, timeout=3.0) for p in open_ports
+    ])
+
+    banners, versions, ports_data = {}, {}, []
+    for port, banner in zip(open_ports, banner_results):
+        if banner:
+            banners[port] = banner[:200]
+            ver = parse_version_from_banner(banner)
+            if ver:
+                versions[port] = ver
+        svc, sev, cwe = PORT_CATALOG.get(port, ("unknown", "INFO", None))
+        ports_data.append({
+            "port": port, "service": svc, "severity": sev, "cwe": cwe,
+            "banner": banners.get(port), "version": versions.get(port),
+        })
+
+    ctx.state["ports_open"] = ports_data
+    ctx.state["ports_probed"] = len(ports)
+    ctx.state["banners"] = banners
+    ctx.state["versions"] = versions
+    ctx.state["http_present"] = any(p["port"] in (80, 8080, 8000) for p in ports_data)
+    ctx.state["https_present"] = any(p["port"] in (443, 8443) for p in ports_data)
+
+    if banners: ctx.source(f"banner-grab-{len(banners)}")
+    if versions: ctx.source(f"version-extract-{len(versions)}")
+
+    ctx.state["ports"] = [{"port": p["port"], "service": p["service"],
+                            "version": p.get("version"), "banner": p.get("banner")}
+                          for p in ports_data]
+
+
+INTEL_FIELDS = [
+    ("IP address",       "ip"),
+    ("Open ports",        "open_ports_display"),
+    ("Versions detected", "versions_display"),
+    ("Banner samples",    "banners_display"),
+]
+
 
 @router.post("/api/recon/services")
 async def recon_services(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
-    try:
-        ip = socket.gethostbyname(host)
-    except Exception as e:
-        return {"ok": False, "ports": [], "skipped_reason": f"Could not resolve {host}: {e}"}
-    open_ports = await _scan_open_ports(ip)
-    return {"ok": True,
-            "ports": [{"port": p, "service": _PORT_CATALOG.get(p, "unknown"),
-                       "version": None} for p in open_ports]}
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        op = ctx.state.get("ports_open") or []
+        if op:
+            ctx.state["open_ports_display"] = ", ".join(
+                f"{p['port']}/{p['service']}" for p in op[:10])
+        versions = ctx.state.get("versions") or {}
+        if versions:
+            ctx.state["versions_display"] = "; ".join(
+                f"{p}: {v}" for p, v in list(versions.items())[:6])
+        banners = ctx.state.get("banners") or {}
+        if banners:
+            sample = next(iter(banners.items()))
+            ctx.state["banners_display"] = (
+                f"port {sample[0]}: {sample[1][:80]}"
+                + (f" (+ {len(banners)-1} more)" if len(banners) > 1 else ""))
+
+    return await run_scanner(
+        host=host, tool="services",
+        gather_func=gather_with_display,
+        finding_rules=PORTSCAN_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["ports", "ip", "versions", "banners"],
+    )
 
 
 def register(app):
