@@ -7252,93 +7252,90 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     fields.forEach((f,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(f[0],margin+3,y+5,8.5,GRAY,true); const vl=doc.splitTextToSize(String(f[1]),128); doc.setFont("Arial","normal");doc.setFontSize(8.5);doc.setTextColor(...DARK);doc.text(vl[0],margin+48,y+5); y+=7; });
     y+=6; }
 
-  // ── WHOIS Findings (severity-tagged from 29-rule engine) ─────
-  if(r.whois && Array.isArray(r.whois.findings) && r.whois.findings.length > 0){
-    chk(30); y = sHead("WHOIS Findings", y);
+  // ── Reusable renderer: any tool that returns {findings[], intel{}, sources_used[]} ──
+  // Renders 3 things:
+  //   1. "<Tool> Findings"      severity-chips header + per-finding rows (sev pill, name,
+  //                              evidence, Fix: remediation, CWE badge)
+  //   2. "<Tool> Intelligence"  field/value table (custom rows fn OR generic intel{} iter)
+  //   3. Sources footer         "Sources gathered: ..." chip
+  // Returns nothing — mutates outer y via closure (used inline as a statement, not assignment).
+  const renderToolFindingsAndIntel = (toolKey, toolData, opts = {}) => {
+    if (!toolData) return;
     const SEV = {
       CRITICAL: [185,28,28], HIGH: [220,38,38], MEDIUM: [217,119,6],
       LOW: [202,138,4], INFO: [59,130,246], POSITIVE: [22,163,74],
     };
-    // Severity-count summary chips above the table
-    const counts = {};
-    r.whois.findings.forEach(f => { const s = String(f.severity||"INFO").toUpperCase(); counts[s] = (counts[s]||0)+1; });
-    chk(10); let cx = margin;
-    ["CRITICAL","HIGH","MEDIUM","LOW","INFO","POSITIVE"].forEach(s => {
-      if(!counts[s]) return;
-      const col = SEV[s] || SEV.INFO;
-      rrect(cx, y, 32, 7, 1, col);
-      txt(`${s} ${counts[s]}`, cx+16, y+4.8, 7.5, WHITE, true, "center");
-      cx += 34;
-    });
-    y += 10;
-    y = tHead(["SEV","FINDING / EVIDENCE / REMEDIATION","CWE"], [22, 138, 20], y);
-    r.whois.findings.forEach((f, i) => {
-      const sev = String(f.severity||"INFO").toUpperCase();
-      const sevColor = SEV[sev] || SEV.INFO;
-      const name = String(f.detail||"");
-      const evidence = String(f.evidence_marker||f.evidence||"");
-      const remediation = String(f.remediation||"");
-      const cwe = String(f.cwe||"").trim();
-      // Compute total row height based on text content (multi-line evidence + remediation)
-      const evLines = doc.splitTextToSize(evidence, 134);
-      const remLines = remediation ? doc.splitTextToSize(remediation, 134) : [];
-      const rowH = 6 /* name */ + (evLines.length * 3.5) + (remLines.length ? (remLines.length * 3.5 + 1) : 0) + 3;
-      chk(rowH + 2);
-      fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
-      // Severity pill (top-left)
-      rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
-      txt(sev, margin+12, y+5.8, 6.5, WHITE, true, "center");
-      // CWE badge (right side) only if non-N/A
-      if(cwe && cwe !== "N/A"){
-        rrect(margin+contentW-18, y+2, 16, 5.5, 1, DARK);
-        txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 6.5, WHITE, true, "center");
-      }
-      // Finding name (bold)
-      txt(name, margin+25, y+5, 8.5, DARK, true);
-      // Evidence (gray, indented)
-      let textY = y + 8.5;
-      evLines.forEach(ln => { txt(ln, margin+25, textY, 7.5, GRAY); textY += 3.5; });
-      // Remediation (blue accent, italic-looking via slightly smaller)
-      if(remLines.length){
-        textY += 1;
-        txt("Fix:", margin+25, textY, 7, BLUE, true);
-        remLines.forEach((ln, idx) => {
-          txt(ln, margin+33, textY, 7, BLUE);
-          textY += 3.5;
-        });
-      }
-      y += rowH;
-    });
-    y += 4;
-  }
-
-  // ── WHOIS Intelligence (enriched fields from multi-source gather) ──
-  if(r.whois && r.whois.intel){
-    chk(30); y = sHead("WHOIS Intelligence", y);
-    const intel = r.whois.intel || {};
-    const hosting = intel.hosting || [];
-    const hostingStr = hosting.length > 0
-      ? hosting.map(h => `${h.asn||"?"} (${(h.org||"?").substring(0,30)}, ${h.country||"?"})`).join("; ")
-      : null;
-    const rows = [
-      ["IANA ID", intel.registrar_iana_id],
-      ["Registrar URL", intel.registrar_url],
-      ["Abuse Email", intel.abuse_email],
-      ["Abuse Phone", intel.abuse_phone],
-      ["Domain Age", intel.domain_age_days != null ? `${intel.domain_age_days} days` : null],
-      ["Expires In", intel.expires_in_days != null ? `${intel.expires_in_days} days` : null],
-      ["Status Codes", (intel.status_codes||[]).join(", ") || null],
-      ["DNSSEC", intel.dnssec],
-      ["Registrant Org", intel.registrant_org],
-      ["Resolved IPs", (intel.resolved_ips||[]).join(", ") || null],
-      ["Hosting", hostingStr],
-      ["CDN Detected", intel.cdn],
-      ["Cloud Provider", intel.cloud_provider],
-      ["crt.sh Subdomains", intel.crt_sh_subdomains],
-      ["Privacy Proxied", intel.privacy_proxied ? "Yes" : null],
-      ["IDN/Punycode", intel.is_idn ? "Yes" : null],
-    ].filter(([,v]) => v !== null && v !== undefined && v !== "");
-    if(rows.length > 0){
+    // ── Findings table ──
+    const findings = Array.isArray(toolData.findings) ? toolData.findings : [];
+    if (findings.length > 0) {
+      chk(30); y = sHead(`${toolKey} Findings`, y);
+      const counts = {};
+      findings.forEach(f => { const s = String(f.severity||"INFO").toUpperCase(); counts[s] = (counts[s]||0)+1; });
+      chk(10); let cx = margin;
+      ["CRITICAL","HIGH","MEDIUM","LOW","INFO","POSITIVE"].forEach(s => {
+        if(!counts[s]) return;
+        const col = SEV[s] || SEV.INFO;
+        rrect(cx, y, 32, 7, 1, col);
+        txt(`${s} ${counts[s]}`, cx+16, y+4.8, 7.5, WHITE, true, "center");
+        cx += 34;
+      });
+      y += 10;
+      y = tHead(["SEV","FINDING / EVIDENCE / REMEDIATION","CWE"], [22, 138, 20], y);
+      findings.forEach((f, i) => {
+        const sev = String(f.severity||"INFO").toUpperCase();
+        const sevColor = SEV[sev] || SEV.INFO;
+        const name = String(f.detail||"");
+        const evidence = String(f.evidence_marker||f.evidence||"");
+        const remediation = String(f.remediation||"");
+        const cwe = String(f.cwe||"").trim();
+        const evLines = doc.splitTextToSize(evidence, 134);
+        const remLines = remediation ? doc.splitTextToSize(remediation, 134) : [];
+        const rowH = 6 + (evLines.length * 3.5) + (remLines.length ? (remLines.length * 3.5 + 1) : 0) + 3;
+        chk(rowH + 2);
+        fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
+        rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
+        txt(sev, margin+12, y+5.8, 6.5, WHITE, true, "center");
+        if(cwe && cwe !== "N/A"){
+          rrect(margin+contentW-18, y+2, 16, 5.5, 1, DARK);
+          txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 6.5, WHITE, true, "center");
+        }
+        txt(name, margin+25, y+5, 8.5, DARK, true);
+        let textY = y + 8.5;
+        evLines.forEach(ln => { txt(ln, margin+25, textY, 7.5, GRAY); textY += 3.5; });
+        if(remLines.length){
+          textY += 1;
+          txt("Fix:", margin+25, textY, 7, BLUE, true);
+          remLines.forEach(ln => { txt(ln, margin+33, textY, 7, BLUE); textY += 3.5; });
+        }
+        y += rowH;
+      });
+      y += 4;
+    }
+    // ── Intelligence table (custom rows fn or generic intel{} iteration) ──
+    const intel = toolData.intel || {};
+    let rows = [];
+    if (typeof opts.customIntelRows === "function") {
+      rows = opts.customIntelRows(intel) || [];
+    } else {
+      rows = Object.entries(intel).map(([k, v]) => {
+        let s;
+        if (Array.isArray(v)) {
+          s = v.length === 0 ? null : v.map(String).join(", ");
+        } else if (v && typeof v === "object") {
+          s = JSON.stringify(v).substring(0, 150);
+        } else if (v === true) {
+          s = "Yes";
+        } else if (v === false) {
+          s = null;  // hide false flags (no useful intel)
+        } else {
+          s = (v === null || v === undefined || v === "") ? null : String(v);
+        }
+        return [k, s];
+      });
+    }
+    rows = rows.filter(([,v]) => v !== null && v !== undefined && v !== "");
+    if (rows.length > 0) {
+      chk(30); y = sHead(`${toolKey} Intelligence`, y);
       y = tHead(["FIELD","VALUE"], [45,135], y);
       rows.forEach((row, i) => {
         chk(7);
@@ -7350,14 +7347,44 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         y += 7;
       });
     }
-    if(Array.isArray(r.whois.sources_used) && r.whois.sources_used.length > 0){
+    // ── Sources footer ──
+    if (Array.isArray(toolData.sources_used) && toolData.sources_used.length > 0) {
       chk(9);
       fillR(margin, y, contentW, 7, LBLUE);
-      txt(`Sources gathered: ${r.whois.sources_used.join(", ")}`, margin+3, y+5, 8, BLUE);
+      txt(`Sources gathered: ${toolData.sources_used.join(", ")}`, margin+3, y+5, 8, BLUE);
       y += 9;
     }
-    y += 4;
-  }
+    if (findings.length > 0 || rows.length > 0) y += 4;
+  };
+
+  // ── WHOIS Findings + WHOIS Intelligence ────────────────────────
+  // Uses customIntelRows for the rich hosting[] formatting WHOIS needs.
+  renderToolFindingsAndIntel("WHOIS", r.whois, {
+    customIntelRows: (intel) => {
+      const hosting = intel.hosting || [];
+      const hostingStr = hosting.length > 0
+        ? hosting.map(h => `${h.asn||"?"} (${(h.org||"?").substring(0,30)}, ${h.country||"?"})`).join("; ")
+        : null;
+      return [
+        ["IANA ID", intel.registrar_iana_id],
+        ["Registrar URL", intel.registrar_url],
+        ["Abuse Email", intel.abuse_email],
+        ["Abuse Phone", intel.abuse_phone],
+        ["Domain Age", intel.domain_age_days != null ? `${intel.domain_age_days} days` : null],
+        ["Expires In", intel.expires_in_days != null ? `${intel.expires_in_days} days` : null],
+        ["Status Codes", (intel.status_codes||[]).join(", ") || null],
+        ["DNSSEC", intel.dnssec],
+        ["Registrant Org", intel.registrant_org],
+        ["Resolved IPs", (intel.resolved_ips||[]).join(", ") || null],
+        ["Hosting", hostingStr],
+        ["CDN Detected", intel.cdn],
+        ["Cloud Provider", intel.cloud_provider],
+        ["crt.sh Subdomains", intel.crt_sh_subdomains],
+        ["Privacy Proxied", intel.privacy_proxied ? "Yes" : null],
+        ["IDN/Punycode", intel.is_idn ? "Yes" : null],
+      ];
+    },
+  });
 
   // ── DNS ────────────────────────────────────────────────────
   // Backend returns records as an ARRAY of {type, value} objects.
@@ -7401,6 +7428,12 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       y += 10;
     }
     y += 6; }
+
+  // ── DNS Findings + DNS Intelligence (framework-rendered) ───
+  // Uses the generic intel-iteration path (no customIntelRows needed).
+  // Backend's intel{} dict supplies labelled fields: A records, MX servers,
+  // SPF record, DMARC record, DKIM selectors, Wildcard DNS, etc.
+  renderToolFindingsAndIntel("DNS", r.dns);
 
   // ── DNS Recon ──────────────────────────────────────────────
   // Long TXT records (SPF, domain-verification, BIMI) are too wide for a
