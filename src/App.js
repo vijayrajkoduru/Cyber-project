@@ -8104,6 +8104,17 @@ function ReconModule({token, onRunningChange}) {
         const data = await _callWithRetry(ph, body);
         // Stop was clicked while this phase's request was in flight — discard the result.
         if (stopRef.current) { add("[!] Scan stopped by user during phase "+(idx+1)+"."); break; }
+        // Backend returned ok:false (e.g. VLERR-WRAP from gobuster after WAF block).
+        // Treat as failed but preserve the REAL reason from the backend so the
+        // user sees "gobuster failed: ConnectionError" instead of generic "unknown error".
+        if (data && data.ok === false && !data._skipped) {
+          const realReason = data.skipped_reason || data.error || data.detail || "Backend returned ok:false with no reason";
+          results[ph.tool] = {...data, _failed: true, error: realReason};
+          add("✗ "+ph.name+" failed: "+realReason);
+          setAll(Object.assign({},results));
+          setFailed(p=>[...p,i]); setDone(p=>[...p,i]);
+          continue;
+        }
         results[ph.tool] = data;
         if      (ph.tool==="whois"      && data.registrar)   add("✓ Registrar: "+data.registrar);
         else if (ph.tool==="dns"        && data.records)     add("✓ DNS: "+Object.values(data.records).flat().length+" record(s) found");
@@ -8126,11 +8137,19 @@ function ReconModule({token, onRunningChange}) {
         else add("✓ "+ph.name+" complete");
         setDone(p=>[...p,i]); setAll(Object.assign({},results));
       } catch(e) {
-        const msg = e.message||"unknown error";
-        const hint = msg.includes("404")?" (endpoint missing — add to main.py)":msg.includes("Failed to fetch")||msg.includes("NetworkError")?" (backend offline)":"";
+        // Build a HUMAN-READABLE error message instead of falling back to "unknown error".
+        // The previous fallback fired when e.message was empty (rare but happens with
+        // certain network failures), leaving users with no diagnostic info.
+        let msg = e?.message || e?.toString() || "";
+        if (!msg || msg === "[object Object]") {
+          msg = "Network error — target may be unreachable or scanner request was rejected by WAF/firewall.";
+        }
+        const hint = msg.includes("404") ? " (endpoint missing — add to main.py)"
+                   : msg.includes("Failed to fetch") || msg.includes("NetworkError") ? " (backend offline)"
+                   : msg.includes("timed out") ? " (target took too long — WAF/CDN may be slowing requests)"
+                   : msg.includes("403") || msg.includes("429") ? " (target blocked scanner — WAF detected)"
+                   : "";
         add("✗ "+ph.name+" failed: "+msg+hint);
-        // CRITICAL: save the error to results so the PDF coverage section
-        // can render a FAILED row instead of silently omitting the tool.
         results[ph.tool] = {ok:false, _failed:true, error:msg};
         setAll(Object.assign({},results));
         setFailed(p=>[...p,i]); setDone(p=>[...p,i]);
@@ -11332,13 +11351,26 @@ function VulnModule(props) {
       add(`[*] Phase ${i+1}/${VULN_PHASES.length}: ${ph.name}...`);
       try {
         const data = await _callWithRetry(ph);
-        results[ph.tool] = data;
-        setAllResults({...results});
-        const findings=(data.findings||[]).filter(f=>f.severity!=="INFO");
-        const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
-        add(`[✓] ${ph.name}: ${findings.length} finding(s)${hi>0?" — "+hi+" HIGH/CRITICAL":""}`);
+        // Detect backend-returned ok:false (VLERR-WRAP from scanner) → preserve real reason.
+        if (data && data.ok === false) {
+          const realReason = data.skipped_reason || data.error || data.detail || "scanner returned ok:false with no reason";
+          results[ph.tool] = {...data, _failed: true, error: realReason};
+          setAllResults({...results});
+          add(`[✗] ${ph.name}: ${realReason}`);
+        } else {
+          results[ph.tool] = data;
+          setAllResults({...results});
+          const findings=(data.findings||[]).filter(f=>f.severity!=="INFO");
+          const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
+          add(`[✓] ${ph.name}: ${findings.length} finding(s)${hi>0?" — "+hi+" HIGH/CRITICAL":""}`);
+        }
       } catch(e){
-        const msg = e.message || "unknown error (check backend logs)";
+        let msg = e?.message || e?.toString() || "";
+        if (!msg || msg === "[object Object]") {
+          msg = "Network error — target unreachable or scanner request rejected by WAF/firewall.";
+        }
+        if (msg.includes("timed out")) msg += " (target slow or WAF stalling requests)";
+        else if (msg.includes("403") || msg.includes("429")) msg += " (target blocked scanner — WAF detected)";
         results[ph.tool] = {ok:false, _failed:true, error:msg};
         setAllResults({...results});
         add(`[✗] ${ph.name}: ${msg}`);
