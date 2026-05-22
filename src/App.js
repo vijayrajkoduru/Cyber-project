@@ -8964,8 +8964,34 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     });
     y+=8;
 
-    // Summary
-    const allFindings=VULN_TOOLS.flatMap(t=>(r[t.tool]?.findings||[]).filter(f=>f.severity!=="INFO").map(f=>({...f,source:t.label,_tool:t.tool})));
+    // Summary — dedupe BEFORE counting. Nikto is a deprecated aggregator that
+    // re-emits sub-scanner findings (CSP from headers, /metrics from exposed_files,
+    // etc.). Without dedup, every header/exposed-file issue gets counted twice and
+    // compliance frameworks inflate (e.g. GDPR "8 finding(s)" when 5 actual).
+    const _rawF = VULN_TOOLS.flatMap(t=>(r[t.tool]?.findings||[])
+      .filter(f=>f.severity!=="INFO")
+      .map(f=>({...f,source:t.label,_tool:t.tool})));
+    // Fingerprint = CWE + first 60 chars of detail. Collapses "CSP missing" from
+    // Nikto + Security Headers into one finding. Specificity rule: a finding from
+    // a NAMED scanner (security_headers, exposed_files) beats one from Nikto (the
+    // aggregator stub), so the sub-scanner's version wins.
+    const _fpKey = f => (String(f.cwe||"").toUpperCase()) + "|" + String(f.detail||"").toLowerCase().substring(0,60);
+    const _specScore = f => {
+      // Higher = more specific. Sub-scanner names beat "nikto" aggregator.
+      const t = String(f._tool||"").toLowerCase();
+      if (t === "nikto" || t === "nuclei") return 0;          // aggregators
+      if (t === "headers" || t === "security_headers") return 80;
+      if (t === "exposed_files" || t === "http_methods") return 80;
+      return 60;                                              // specific scanner
+    };
+    const _bestF = new Map();
+    _rawF.forEach(f => {
+      const k = _fpKey(f);
+      const s = _specScore(f);
+      const cur = _bestF.get(k);
+      if (!cur || s > cur.score) _bestF.set(k, {f, score: s});
+    });
+    const allFindings = Array.from(_bestF.values()).map(v => v.f);
     const sevCount={CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0};
     allFindings.forEach(f=>{if(sevCount[f.severity]!==undefined)sevCount[f.severity]++;});
 
@@ -9167,17 +9193,21 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     });
     const _cnt = (s)=>_covRows.filter(p=>p.status===s).length;
     const _ran=_cnt("RAN"), _empty=_cnt("EMPTY"), _failed=_cnt("FAILED"), _notrun=_cnt("NOT RUN"), _skipped=_cnt("SKIPPED");
-    const _completeness = VULN_TOOLS.length - _notrun - _failed;
-    const _covPct = Math.round(_completeness / VULN_TOOLS.length * 100);
+    // "Completed" = ran without error. SKIPPED tools are NOT applicable to this target
+    // (e.g. WPScan on non-WordPress) so they shouldn't drag the completion rate down.
+    // Score = % of APPLICABLE tools that ran successfully (ran + empty).
+    const _completeness = _ran + _empty;
+    const _applicable = VULN_TOOLS.length - _skipped - _notrun;
+    const _covPct = _applicable > 0 ? Math.round(_completeness / _applicable * 100) : 100;
     const _covColor = _covPct >= 90 ? [15,118,82] : _covPct >= 70 ? [202,138,4] : [162,28,28];
     fillR(margin, y, contentW, 16, LIGHT);
     fillR(margin, y, 4, 16, _covColor);
     doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
     doc.text(`${_covPct}%`, margin+10, y+11);
     doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
-    doc.text(`${_completeness}/${VULN_TOOLS.length} tools completed cleanly`, margin+30, y+7);
+    doc.text(`${_completeness}/${_applicable} applicable scanners ran successfully`, margin+30, y+7);
     doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-    doc.text(`${_ran} ran with data · ${_empty} empty · ${_failed} failed · ${_skipped} skipped · ${_notrun} not selected`, margin+30, y+12);
+    doc.text(`${_ran} found data · ${_empty} clean · ${_failed} failed · ${_skipped} not applicable · ${_notrun} not selected`, margin+30, y+12);
     y += 19;
     y = tHead(["TOOL","STATUS","DETAIL"],[55,25,100],y);
     _covRows.forEach((p,i)=>{
