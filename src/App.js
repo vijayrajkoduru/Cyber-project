@@ -7561,6 +7561,11 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   }
   renderToolFindingsAndIntel("WAF / CDN Fingerprint", r.waf_cdn);
 
+  // ── TLS Deep Audit (VL-FORGE — Batch 1B) ──
+  // Pure framework rendering — protocol enum, cipher mix, cert details,
+  // HSTS, ALPN, OCSP, vuln indicators all show up in the Intel block.
+  renderToolFindingsAndIntel("TLS Deep Audit", r.tls_deep);
+
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];
     chk(30); y = sHead("OSINT Harvesting (theHarvester)",y);
