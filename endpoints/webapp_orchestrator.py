@@ -27,62 +27,62 @@ router = APIRouter()
 WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     # Discovery — runs FIRST so other scanners can use scan_state.json
     "tier1_discovery": [
-        ("spa_crawler", "/api/scan/spa_crawler"),
+        ("spa_crawler", "/api/webapp/scan/spa_crawler"),
     ],
     # Recon & Fingerprinting
     # (dns / techstack / ssl_cert removed — they live in tools/recon/, not
     #  tools/webapp/ — the Recon module already handles them. Keeping the
     #  webapp module focused on app-layer tests only.)
     "tier2_recon": [
-        ("cms",      "/api/scan/cms"),
-        ("ssl",      "/api/scan/ssl"),
-        ("portscan", "/api/scan/portscan"),
+        ("cms",      "/api/webapp/scan/cms"),
+        ("ssl",      "/api/webapp/scan/ssl"),
+        ("portscan", "/api/webapp/scan/portscan"),
     ],
     # Injection Attacks (highest customer impact)
     "tier3_injection": [
-        ("xss",            "/api/scan/xss"),
-        ("sqli",           "/api/scan/sqli"),
-        ("cmd_injection",  "/api/scan/cmd_injection"),
-        ("xxe",            "/api/scan/xxe"),
+        ("xss",            "/api/webapp/scan/xss"),
+        ("sqli",           "/api/webapp/scan/sqli"),
+        ("cmd_injection",  "/api/webapp/scan/cmd_injection"),
+        ("xxe",            "/api/webapp/scan/xxe"),
     ],
     # Authentication & Session
     "tier4_auth": [
-        ("headers", "/api/scan/headers"),     # security_headers route alias
-        ("cookies", "/api/scan/cookies"),
-        ("csrf",    "/api/scan/csrf"),
-        ("jwt",     "/api/scan/jwt"),
+        ("headers", "/api/webapp/scan/headers"),     # security_headers route alias
+        ("cookies", "/api/webapp/scan/cookies"),
+        ("csrf",    "/api/webapp/scan/csrf"),
+        ("jwt",     "/api/webapp/scan/jwt"),
     ],
     # File & Path
     "tier5_file_path": [
-        ("lfi",           "/api/scan/lfi"),
-        ("exposed_files", "/api/scan/exposed_files"),
+        ("lfi",           "/api/webapp/scan/lfi"),
+        ("exposed_files", "/api/webapp/scan/exposed_files"),
     ],
     # Network & Protocol
     "tier6_network": [
-        ("cors",          "/api/scan/cors"),
-        ("ssrf",          "/api/scan/ssrf"),
-        ("http_methods",  "/api/scan/http_methods"),
-        ("open_redirect", "/api/scan/open_redirect"),
-        ("clickjacking",  "/api/scan/clickjacking"),
+        ("cors",          "/api/webapp/scan/cors"),
+        ("ssrf",          "/api/webapp/scan/ssrf"),
+        ("http_methods",  "/api/webapp/scan/http_methods"),
+        ("open_redirect", "/api/webapp/scan/open_redirect"),
+        ("clickjacking",  "/api/webapp/scan/clickjacking"),
     ],
     # Access Control & Modern API
     "tier7_access": [
-        ("idor",            "/api/scan/idor"),
-        ("mass_assignment", "/api/scan/mass_assignment"),
-        ("nosql",           "/api/scan/nosql"),
-        ("access_control",  "/api/scan/access_control"),
+        ("idor",            "/api/webapp/scan/idor"),
+        ("mass_assignment", "/api/webapp/scan/mass_assignment"),
+        ("nosql",           "/api/webapp/scan/nosql"),
+        ("access_control",  "/api/webapp/scan/access_control"),
     ],
     # Framework-specific + Heavy
     "tier8_framework": [
-        ("nikto",          "/api/scan/nikto"),
-        ("nuclei",         "/api/scan/nuclei"),
-        ("force_browse",   "/api/scan/force_browse"),
-        ("file_upload",    "/api/scan/file_upload"),
-        ("ssti",           "/api/scan/ssti"),
-        ("graphql",        "/api/scan/graphql"),
-        ("sensitive_data", "/api/scan/sensitive_data"),
-        ("stored_xss",     "/api/scan/stored_xss"),
-        ("wpscan",         "/api/scan/wpscan"),
+        ("nikto",          "/api/webapp/scan/nikto"),
+        ("nuclei",         "/api/webapp/scan/nuclei"),
+        ("force_browse",   "/api/webapp/scan/force_browse"),
+        ("file_upload",    "/api/webapp/scan/file_upload"),
+        ("ssti",           "/api/webapp/scan/ssti"),
+        ("graphql",        "/api/webapp/scan/graphql"),
+        ("sensitive_data", "/api/webapp/scan/sensitive_data"),
+        ("stored_xss",     "/api/webapp/scan/stored_xss"),
+        ("wpscan",         "/api/webapp/scan/wpscan"),
     ],
 }
 
@@ -125,7 +125,7 @@ def _resolve_tools_and_jwt(req: "WebAppRunAllRequest", request: Request):
     return tools, extra, jwt_token
 
 
-@router.post("/api/scan/run_all")
+@router.post("/api/webapp/scan/run_all")
 async def webapp_run_all(req: "WebAppRunAllRequest",
                           request: Request,
                           _=Depends(verify_scan_quota)):
@@ -164,7 +164,7 @@ async def webapp_run_all(req: "WebAppRunAllRequest",
     )
 
 
-@router.post("/api/scan/run_all_buffered")
+@router.post("/api/webapp/scan/run_all_buffered")
 async def webapp_run_all_buffered(req: "WebAppRunAllRequest",
                                     request: Request,
                                     _=Depends(verify_scan_quota)):
@@ -186,7 +186,7 @@ async def webapp_run_all_buffered(req: "WebAppRunAllRequest",
     )
 
 
-@router.get("/api/scan/run_all/tiers")
+@router.get("/api/webapp/scan/run_all/tiers")
 async def webapp_run_all_tiers():
     """Discovery endpoint — list tier IDs the frontend can filter by."""
     return {

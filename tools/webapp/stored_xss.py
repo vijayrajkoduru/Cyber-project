@@ -17,7 +17,7 @@ _TARGETS = [
 ]
 
 
-@router.post("/api/scan/stored_xss")
+@router.post("/api/webapp/scan/stored_xss")
 def scan_stored_xss(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, tests, confirmed = [], 0, []

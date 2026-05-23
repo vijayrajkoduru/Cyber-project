@@ -327,7 +327,7 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
 
 
 
-@router.post("/api/scan/spa_crawler")
+@router.post("/api/webapp/scan/spa_crawler")
 async def scan_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota)):
     """Alias so the WebApp module's /api/scan/* tile grid can call us."""
     return await webapp_spa_crawler(req, payload)

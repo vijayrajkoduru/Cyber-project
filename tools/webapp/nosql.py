@@ -59,7 +59,7 @@ def _is_auth_success(text):
                                    '"bearer"'))
 
 
-@router.post("/api/scan/nosql")
+@router.post("/api/webapp/scan/nosql")
 def scan_nosql(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)

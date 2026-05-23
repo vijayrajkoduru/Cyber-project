@@ -2869,10 +2869,13 @@ function WebAppModule(props) {
     const results = {};
 
     // ── WEBAPP-V2-STREAMING ──────────────────────────────────────────────
-    // When the user selected ALL phases, fire ONE POST to /api/scan/run_all
+    // When the user selected ALL phases, fire ONE POST to /api/webapp/scan/run_all
     // and read the NDJSON stream — backend fans out to all 34 scanners in
     // parallel. ~10 min sequential -> ~60-90 sec parallel. Cloudflare-safe
     // (heartbeats every 15s keep the connection alive).
+    //
+    // ISOLATION-V1: WAP module endpoints are now under /api/webapp/scan/* —
+    // fully separate from Vuln module (/api/scan/* and /api/vuln/run_all).
     if (activePhases.length === PHASES.length) {
       add("[*] v2 streaming: dispatching " + PHASES.length + " phases (NDJSON stream)...");
       const body = {target: normTarget};
@@ -2889,7 +2892,7 @@ function WebAppModule(props) {
       try {
         const headers = {"Content-Type": "application/json"};
         if (token) headers["Authorization"] = "Bearer " + token;
-        const res = await fetch(API + "/api/scan/run_all", {
+        const res = await fetch(API + "/api/webapp/scan/run_all", {
           method: "POST", headers, body: JSON.stringify(body),
         });
         if (!res.ok) {

@@ -4,7 +4,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 router = APIRouter()
 
-@router.post("/api/scan/clickjacking")
+@router.post("/api/webapp/scan/clickjacking")
 def scan_clickjacking(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     r = safe_get(url, req=req, allow_redirects=True)

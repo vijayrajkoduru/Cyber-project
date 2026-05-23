@@ -21,7 +21,7 @@ def _hash(text):
     return hashlib.md5((text or "")[:2000].encode("utf-8", errors="ignore")).hexdigest()
 
 
-@router.post("/api/scan/idor")
+@router.post("/api/webapp/scan/idor")
 def scan_idor(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     has_auth = bool(getattr(req, "auth_cookie", None) or getattr(req, "auth_bearer", None))
