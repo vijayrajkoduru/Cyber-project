@@ -52,9 +52,10 @@ from tools._framework.parsers import (
     grab, grab_all, parse_iso_date, days_between,
 )
 from tools._framework.findings import run_rules, severity_counts
+from tools._framework.orchestrator import run_module_parallel
 
 __all__ = [
-    # scanner.py
+    # scanner.py (v1 — single-tool runner)
     "ScanContext", "run_scanner",
     # gathering.py
     "cli_run", "whois_cli", "team_cymru_asn",
@@ -64,4 +65,6 @@ __all__ = [
     "grab", "grab_all", "parse_iso_date", "days_between",
     # findings.py
     "run_rules", "severity_counts",
+    # orchestrator.py (v2 — parallel multi-tool runner)
+    "run_module_parallel",
 ]
