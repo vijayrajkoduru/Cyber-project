@@ -163,7 +163,7 @@ def parse_version_from_banner(banner: str) -> str | None:
     return None
 
 
-async def os_fingerprint_probe(host: str, port: int = 80) -> dict:
+def os_fingerprint_probe(host: str, port: int = 80) -> dict:
     """Light OS fingerprint via TTL + TCP window size.
 
     Pure Python — uses raw socket TTL inspection. Less accurate than

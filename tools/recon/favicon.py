@@ -105,10 +105,15 @@ async def gather(ctx: ScanContext):
     ctx.state["favicon_path"] = found_path
     ctx.state["favicon_size_bytes"] = len(favicon_data)
 
-    # MurmurHash3 (Shodan favicon hash)
-    mmh3_hash = _mmh3_hash(favicon_data)
-    ctx.state["mmh3_hash"] = mmh3_hash
-    ctx.source("mmh3-fingerprint")
+    # MurmurHash3 (Shodan favicon hash) — wrapped so an obscure binary edge case
+    # in the pure-Python fallback can't kill the whole scanner.
+    mmh3_hash = None
+    try:
+        mmh3_hash = _mmh3_hash(favicon_data)
+        ctx.state["mmh3_hash"] = mmh3_hash
+        ctx.source("mmh3-fingerprint")
+    except Exception:
+        pass
 
     # MD5 + SHA256
     ctx.state["md5_hash"] = hashlib.md5(favicon_data).hexdigest()
@@ -116,14 +121,15 @@ async def gather(ctx: ScanContext):
     ctx.source("md5-sha256-fingerprint")
 
     # Tech-stack lookup
-    tech = FAVICON_HASHES.get(mmh3_hash)
-    if tech:
-        ctx.state["identified_tech"] = tech
-        ctx.source("favicon-tech-match")
+    if mmh3_hash is not None:
+        tech = FAVICON_HASHES.get(mmh3_hash)
+        if tech:
+            ctx.state["identified_tech"] = tech
+            ctx.source("favicon-tech-match")
 
     # Backwards-compat for frontend isEmpty (looks at `d.found`)
     ctx.state["found"] = True
-    ctx.state["shodan_hash"] = mmh3_hash
+    ctx.state["shodan_hash"] = mmh3_hash if mmh3_hash is not None else ctx.state["md5_hash"][:10]
 
 
 INTEL_FIELDS = [
