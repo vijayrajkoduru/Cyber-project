@@ -8313,6 +8313,32 @@ function ReconModule({token, onRunningChange}) {
     return next;
   });
 
+  // ── RECON-REFRESH-V1 ─────────────────────────────────────────────────
+  // "Refresh" button in the module header. Wipes the customer's dashboard
+  // state (results, log, tile statuses) AND calls /api/recon/clear_history
+  // so any persisted scan files in the user's zone are also cleared. Built
+  // to be fast (single backend rmtree, no DB transactions, no confirmation
+  // modal — clicking = committing).
+  const refresh = async () => {
+    if (running) return;   // can't refresh while a scan is in-flight
+    // 1. Clear all React state instantly — UI snaps back to clean state.
+    setAll({}); setDone([]); setFailed([]); setFinished(false);
+    setCurPhase(-1); setStopped(false); setShowPDFModal(false);
+    setLines([`[*] Refresh — clearing dashboard state and backend history...`]);
+    // 2. Call backend to wipe persisted scan files for this user + module.
+    try {
+      const r = await api("/api/recon/clear_history","POST",null,token);
+      if (r && r.ok) {
+        add(`[✓] Backend cleared: ${r.files_deleted||0} file(s), ${r.dirs_deleted||0} dir(s), ${((r.freed_bytes||0)/1024).toFixed(1)} KB freed`);
+      } else {
+        add(`[!] Backend clear partial: ${r && r.error || "unknown error"}`);
+      }
+    } catch(e) {
+      add(`[!] Backend clear failed (UI state cleared anyway): ${e?.message||e}`);
+    }
+    setLines(p => [...p, `Ready — enter a domain or IP and click Start Recon`]);
+  };
+
   const run = async () => {
     if (!target.trim()) return;
     stopRef.current = false; setStopped(false);
@@ -8917,6 +8943,24 @@ function ReconModule({token, onRunningChange}) {
           <Badge label={RECON_PHASES.length+" PHASES"} color="blue"/>
           <Badge label="PASSIVE + ACTIVE" color="green"/>
           {finished && <Badge label="DONE" color="green"/>}
+          {/* RECON-REFRESH-BTN-V1 — clears React state + calls backend clear_history */}
+          <button
+            onClick={refresh}
+            disabled={running}
+            title="Clear all results, log, and backend scan history for this user (recon module)"
+            style={{
+              marginLeft:"auto",
+              background: running ? "#1e293b" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
+              border:"1px solid "+(running?"#334155":"#a78bfa"),
+              color: running?"#64748b":"#fff",
+              padding:"6px 14px", borderRadius:6, fontSize:12, fontWeight:600,
+              cursor: running?"not-allowed":"pointer",
+              opacity: running?0.5:1,
+              display:"inline-flex", alignItems:"center", gap:6,
+            }}
+          >
+            <span style={{fontSize:14}}>↻</span> Refresh
+          </button>
         </div>
         <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>
           WHOIS · DNS · subdomains · cert transparency · OSINT · Shodan · port scan · service detection · OS fingerprinting · banners · directory enum
