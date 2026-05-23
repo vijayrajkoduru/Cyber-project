@@ -123,7 +123,8 @@ async def recon_asn(req: ScanRequest, _=Depends(verify_scan_quota)):
         gather_func=gather_with_display,
         finding_rules=ASN_FINDING_RULES,
         intel_fields=INTEL_FIELDS,
-        flat_field_keys=["ip", "asn", "country"],
+        flat_field_keys=["ip", "asn", "country", "org", "bgp_prefix",
+                          "region", "city", "hostname"],
     )
 
 

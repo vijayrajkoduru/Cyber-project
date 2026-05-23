@@ -286,22 +286,42 @@ async def run_module_streaming(
         timeout=httpx.Timeout(_PER_TOOL_TIMEOUT, connect=10.0),
         verify=False,
     ) as client:
-        tasks = [
-            _dispatch_one(client, tool_name, endpoint, base_body, sem,
-                            headers=internal_headers)
+        # KEEPALIVE-V1 — Cloudflare's idle-connection timeout (~100s between
+        # bytes) was killing scans where the slowest tool (gobuster) finished
+        # >100s after the second-slowest. Emit a heartbeat event every 15s so
+        # the proxy sees data flowing even during long waits.
+        task_objs = [
+            asyncio.create_task(_dispatch_one(
+                client, tool_name, endpoint, base_body, sem,
+                headers=internal_headers))
             for tool_name, endpoint in tools
         ]
-        for coro in asyncio.as_completed(tasks):
-            tool_name, result, dur = await coro
-            results[tool_name] = result
-            timings[tool_name] = round(dur, 2)
-            event = {
-                "event":        "tool_complete",
-                "tool":         tool_name,
-                "duration_sec": round(dur, 2),
-                "result":       result,
-            }
-            yield (json.dumps(event) + "\n").encode("utf-8")
+        pending = set(task_objs)
+        while pending:
+            done_set, pending = await asyncio.wait(
+                pending, timeout=15.0, return_when=asyncio.FIRST_COMPLETED)
+            if not done_set:
+                # 15s elapsed with no tool finishing — emit heartbeat
+                hb = {
+                    "event":        "heartbeat",
+                    "elapsed_sec":  round(time.monotonic() - t0, 2),
+                    "completed":    len(results),
+                    "total":        len(tools),
+                    "in_flight":    len(pending),
+                }
+                yield (json.dumps(hb) + "\n").encode("utf-8")
+                continue
+            for task in done_set:
+                tool_name, result, dur = task.result()
+                results[tool_name] = result
+                timings[tool_name] = round(dur, 2)
+                event = {
+                    "event":        "tool_complete",
+                    "tool":         tool_name,
+                    "duration_sec": round(dur, 2),
+                    "result":       result,
+                }
+                yield (json.dumps(event) + "\n").encode("utf-8")
 
     # Final summary aggregation
     ok_count, failed_count, skipped_count = 0, 0, 0
