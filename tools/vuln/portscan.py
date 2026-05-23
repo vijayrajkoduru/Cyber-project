@@ -74,8 +74,8 @@ INTEL_FIELDS = [
 ]
 
 
-@router.post("/api/vuln/masscan")
-async def recon_masscan(req: ScanRequest, _=Depends(verify_scan_quota)):
+@router.post("/api/vuln/portscan")
+async def vuln_portscan(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
 
     async def gather_with_display(ctx):
@@ -89,7 +89,7 @@ async def recon_masscan(req: ScanRequest, _=Depends(verify_scan_quota)):
             f"HTTPS={ctx.state.get('https_present')}")
 
     return await run_scanner(
-        host=host, tool="masscan",
+        host=host, tool="portscan",
         gather_func=gather_with_display,
         finding_rules=PORTSCAN_FINDING_RULES,
         intel_fields=INTEL_FIELDS,
@@ -97,10 +97,10 @@ async def recon_masscan(req: ScanRequest, _=Depends(verify_scan_quota)):
     )
 
 
-# Also register under /api/scan/portscan for legacy callers
-@router.post("/api/scan/portscan")
-async def legacy_scan_portscan(req: ScanRequest, _=Depends(verify_scan_quota)):
-    return await recon_masscan(req, _)
+# Alias for masscan-style callers within the Vuln module
+@router.post("/api/vuln/masscan")
+async def vuln_masscan(req: ScanRequest, _=Depends(verify_scan_quota)):
+    return await vuln_portscan(req, _)
 
 
 def register(app):

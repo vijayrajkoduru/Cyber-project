@@ -241,11 +241,13 @@ async def gather(ctx: ScanContext):
     host = ctx.host
     port = 443
 
-    # Probe each protocol version separately (parallel)
+    # Probe each protocol version separately (parallel).
+    # SSLv3 deliberately excluded: modern Python's ssl module has no client-side
+    # SSLv3 support, so probing with None/None silently defaults to TLS 1.2/1.3
+    # and a successful handshake would be wrongly labeled "SSLv3" (POODLE FP).
     version_probes = []
     try:
         version_probes = [
-            ("SSLv3",   None, None),  # Modern Python may reject; that's correct
             ("TLSv1",   ssl.TLSVersion.TLSv1, ssl.TLSVersion.TLSv1),
             ("TLSv1.1", ssl.TLSVersion.TLSv1_1, ssl.TLSVersion.TLSv1_1),
             ("TLSv1.2", ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_2),
@@ -274,10 +276,18 @@ async def gather(ctx: ScanContext):
 
     ctx.source("tls-handshake-auto")
 
-    # Build supported_protocols from versioned probes
+    # Build supported_protocols from versioned probes.
+    # Validate detected version matches the requested label — otherwise the
+    # OS/SSL stack silently negotiated something else (which we'd mis-label).
     supported = []
-    for (label, _, _), (ok, _) in zip(version_probes, versioned_results):
-        if ok:
+    for (label, _, _), (ok, det) in zip(version_probes, versioned_results):
+        if not ok:
+            continue
+        negotiated = (det.get("version") or "").replace("v", "v")
+        # Accept exact match or a close prefix (e.g. "TLSv1" vs "TLSv1.0")
+        norm_label = label.replace(".", "")
+        norm_neg = negotiated.replace(".", "")
+        if norm_neg == norm_label or norm_neg.startswith(norm_label):
             supported.append(label)
     # Include the auto-negotiated version in case versioned probes failed
     if auto_ok and auto_det.get("version") and auto_det["version"] not in supported:
