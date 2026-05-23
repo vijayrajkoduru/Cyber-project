@@ -2645,10 +2645,9 @@ const PHASES = [
   // ── Reconnaissance & Fingerprinting ─────────────────────────
   {name:"CMS Detection",          tool:"cms",           endpoint:"/api/scan/cms",               icon:"📦"},
   {name:"SSL/TLS Analysis",       tool:"ssl",           endpoint:"/api/scan/ssl",               icon:"🔒"},
-  {name:"DNS Enumeration",        tool:"dns",           endpoint:"/api/scan/dns",               icon:"🔎"},
-  {name:"Tech Fingerprinting",    tool:"techstack",     endpoint:"/api/scan/techstack",         icon:"🔍"},
   {name:"Port Scanning",          tool:"portscan",      endpoint:"/api/scan/portscan",          icon:"🔌"},
-  {name:"SSL Certificate Audit",  tool:"ssl_cert",      endpoint:"/api/scan/ssl_cert",          icon:"📜"},
+  // dns/techstack/ssl_cert removed — they live in the Recon module (tools/recon/)
+  // and have no /api/scan/<x> backend impl. Keeps webapp focused on app-layer.
   // ── Injection Attacks ───────────────────────────────────────
   {name:"XSS Testing",            tool:"xss",           endpoint:"/api/scan/xss",               icon:"⚡"},
   {name:"SQL Injection",          tool:"sqli",          endpoint:"/api/scan/sqli",              icon:"💉"},
@@ -2828,6 +2827,127 @@ function WebAppModule(props) {
     }
     setLines(p => [...p, "[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "") + (hasAuth?" — authenticated":"") + (customWordlist?" — custom wordlist":"")]);
     const results = {};
+
+    // ── WEBAPP-V2-STREAMING ──────────────────────────────────────────────
+    // When the user selected ALL phases, fire ONE POST to /api/scan/run_all
+    // and read the NDJSON stream — backend fans out to all 34 scanners in
+    // parallel. ~10 min sequential -> ~60-90 sec parallel. Cloudflare-safe
+    // (heartbeats every 15s keep the connection alive).
+    if (activePhases.length === PHASES.length) {
+      add("[*] v2 streaming: dispatching " + PHASES.length + " phases (NDJSON stream)...");
+      const body = {target: normTarget};
+      if (authCookie) body.auth_cookie = authCookie;
+      if (authBearer) body.auth_bearer = authBearer;
+      if (customWordlist) body.options = {wordlist: customWordlist};
+
+      const _toolToIdx = {};
+      PHASES.forEach((ph,i) => { _toolToIdx[ph.tool] = i; });
+
+      let _completedCount = 0;
+      let _finalSummary = null;
+
+      try {
+        const headers = {"Content-Type": "application/json"};
+        if (token) headers["Authorization"] = "Bearer " + token;
+        const res = await fetch(API + "/api/scan/run_all", {
+          method: "POST", headers, body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error("HTTP " + res.status + ": " + (errText.substring(0,160) || res.statusText || "no body"));
+        }
+        if (!res.body) throw new Error("Streaming not supported by browser/proxy");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        while (true) {
+          if (stopRef.current) {
+            try { reader.cancel(); } catch(_) {}
+            add("[!] Scan stopped by user during v2 stream.");
+            break;
+          }
+          const {value, done} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          let nl;
+          while ((nl = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (!line) continue;
+            let evt;
+            try { evt = JSON.parse(line); }
+            catch(parseErr) {
+              console.warn("[webapp-v2-stream] skipped non-JSON", parseErr, "preview:", line.substring(0,200));
+              continue;
+            }
+            if (evt.event === "scan_started") {
+              add("  ⇒ " + evt.total_tools + " scanners dispatched, concurrency=" + evt.concurrency);
+            }
+            else if (evt.event === "heartbeat") {
+              // keep-alive; no UI update needed
+            }
+            else if (evt.event === "tool_complete") {
+              const idx = _toolToIdx[evt.tool];
+              const data = evt.result || {};
+              if (idx !== undefined) {
+                results[evt.tool] = data;
+                if (data._failed === true || data.ok === false) {
+                  setFailed(p => [...p, idx]);
+                }
+                setDone(p => [...p, idx]);
+                setAll(Object.assign({}, results));
+              }
+              _completedCount += 1;
+              const elapsed = ((Date.now() - scanStart)/1000).toFixed(1);
+              const ph = PHASES.find(p => p.tool === evt.tool);
+              const phName = ph ? ph.name : evt.tool;
+              const status = data._failed ? "✗" : (data._skipped || data.skipped_reason) ? "○" : "✓";
+              add("  " + status + " [" + _completedCount + "/" + PHASES.length + "] " + phName + " (" + evt.duration_sec + "s, +" + elapsed + "s)");
+            }
+            else if (evt.event === "scan_complete") {
+              _finalSummary = evt;
+            }
+          }
+        }
+
+        // INCOMPLETE-STREAM-V1 — recover if connection died before scan_complete
+        if (!stopRef.current && !_finalSummary) {
+          const missing = PHASES.filter(ph => !(ph.tool in results));
+          if (missing.length > 0) {
+            add("⚠ stream ended without scan_complete — " + missing.length + " scanner(s) didn't report");
+            missing.forEach(ph => {
+              const idx = _toolToIdx[ph.tool];
+              results[ph.tool] = {ok:false, _failed:true,
+                                   error:"stream interrupted before this scanner completed",
+                                   findings:[], tool:ph.tool};
+              setFailed(p => [...p, idx]);
+              setDone(p => [...p, idx]);
+            });
+            setAll(Object.assign({}, results));
+          }
+        }
+        if (!stopRef.current && _finalSummary) {
+          const sum = _finalSummary.summary || {};
+          add("✓ v2 complete in " + _finalSummary.duration_sec + "s — " + (sum.ok||0) + " ok, " + (sum.failed||0) + " failed, " + (sum.skipped||0) + " skipped, " + (sum.total_findings||0) + " finding(s)");
+          if (sum.by_severity) {
+            const sev = sum.by_severity;
+            add("  Severity: " + (sev.CRITICAL||0) + " CRIT · " + (sev.HIGH||0) + " HIGH · " + (sev.MEDIUM||0) + " MED · " + (sev.LOW||0) + " LOW");
+          }
+          if (_finalSummary.timing) {
+            const slow = Object.entries(_finalSummary.timing).sort((a,b)=>b[1]-a[1]).slice(0,5);
+            add("  Slowest 5: " + slow.map(([k,v]) => k + "=" + v + "s").join(", "));
+          }
+        }
+      } catch(e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        add("✗ v2 stream failed: " + msg);
+      }
+      setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
+      return;
+    }
+    // ── WEBAPP-V2-STREAMING END — partial selections fall through to v1 ──
+
     for (let idx = 0; idx < activePhases.length; idx++) {
       if (stopRef.current) {
         add("[!] Scan stopped by user after " + idx + " phase(s).");
