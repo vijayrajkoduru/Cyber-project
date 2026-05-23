@@ -765,7 +765,7 @@ function generatePDF(reportData) {
           csrf, idor, ssti, fileupload,
           deserial, protopollution, typejuggling, jwt, graphql, nosql, oauth, hostheader, websocket, takeover, otp,
           rfi, smuggling, responsesplitting, sessionfixation, dataexfil, racecondition, smb, ftp, smtp, snmp,
-          companyName, reporterName, reporterRole, customLogo, template, remediation } = reportData;
+          companyName, reporterName, reporterRole, customLogo, template, remediation, webappCoverage } = reportData;
   // wasRun(key): returns true if tool was run or if toolsUsed is empty (show all)
   const _toolSet = new Set(toolsUsed||[]);
   const wasRun = key => _toolSet.size === 0 || _toolSet.has(key);
@@ -1452,6 +1452,46 @@ function generatePDF(reportData) {
           y += 9;
         });
         y += 4;
+      }
+
+      // ─── VL-FORGE: Per-Tier Coverage Matrix ───
+      // Mirrors the Recon module's coverage block. Shows which of the 8
+      // webapp tiers ran, how many tools per tier, how many flagged.
+      if (Array.isArray(webappCoverage) && webappCoverage.length > 0) {
+        chk(50);
+        y += 1;
+        doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+        doc.text("Pentest Coverage Matrix", margin+2, y+4);
+        doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+        const _totRan = webappCoverage.reduce((a,t)=>a+t.ran,0);
+        const _totAll = webappCoverage.reduce((a,t)=>a+t.total,0);
+        const _totFlg = webappCoverage.reduce((a,t)=>a+t.flagged,0);
+        doc.text(`${_totRan}/${_totAll} scanners across 8 tiers · ${_totFlg} flagged`, margin+50, y+4);
+        y += 7;
+        const _labelW = 60, _trackX = margin + _labelW, _trackW = contentW - _labelW - 40;
+        webappCoverage.forEach(t => {
+          const pct = t.total > 0 ? (t.ran / t.total) : 0;
+          const flagged = t.flagged > 0;
+          const col = flagged ? RED : (t.ran === t.total ? GREEN : ORANGE);
+          // Tier label
+          doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+          doc.text(t.label, margin+2, y+4.5);
+          // Track + fill
+          doc.setFillColor(230,235,240); doc.rect(_trackX, y+1, _trackW, 6, "F");
+          if (pct > 0) {
+            doc.setFillColor(...col);
+            doc.rect(_trackX, y+1, Math.max(_trackW*pct, 3), 6, "F");
+          }
+          // Count + flagged
+          doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...col);
+          doc.text(`${t.ran}/${t.total}`, _trackX + _trackW + 3, y+5);
+          if (flagged) {
+            doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...RED);
+            doc.text(`⚑ ${t.flagged}`, _trackX + _trackW + 17, y+5);
+          }
+          y += 8;
+        });
+        y += 3;
       }
     }
 
@@ -3304,6 +3344,8 @@ function WebAppModule(props) {
     generatePDF({
       target, riskScore, riskLabel,
       remediation: _remediation,
+      // VL-FORGE: per-tier coverage matrix (Discovery / Recon / Injection / Auth / File / Network / Access / Framework)
+      webappCoverage: computeWebappCoverage(allResults),
       companyName:  cfg.companyName  || "VulnusLab",
       // Upgrade stale defaults from older app versions automatically — if user has
       // the OLD generic "Security Analyst / Penetration Tester" cached, replace with
@@ -4039,15 +4081,15 @@ function WebAppModule(props) {
       </div>
       )}
 
-      {/* FINDINGS TAB */}
+      {/* FINDINGS TAB — VL-FORGE Web App Pentesting findings synthesis (all 32 tools) */}
       {tab==="findings" && finished && (() => {
-        const allF=[];
-        ["nikto","headers","ssl","cors","cookies","cms","xss"].forEach(p=>{
-          if(allResults[p]?.findings) allResults[p].findings.forEach(f=>{if(f.severity!=="INFO")allF.push({...f,source:p});});
-        });
-        if(allResults["sqlmap"]?.vulnerable) allF.push({severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",detail:"SQL Injection detected",owasp:"A03:2021",remediation:"Use parameterized queries.",source:"sqlmap"});
+        const allF = synthesizeWebappFindings(allResults);
+        const coverage = computeWebappCoverage(allResults);
+        const toolsRan = coverage.reduce((acc,t) => acc + t.ran, 0);
+        const toolsFlagged = coverage.reduce((acc,t) => acc + t.flagged, 0);
         return (
           <div>
+            {/* Severity rollup */}
             <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
               {["CRITICAL","HIGH","MEDIUM","LOW"].map(s=>{
                 const cnt=allF.filter(f=>f.severity===s).length;
@@ -4061,9 +4103,31 @@ function WebAppModule(props) {
                 <div style={{fontSize:22,fontWeight:700,color:"#64748b"}}>{allF.length}</div>
                 <div style={{fontSize:9,color:"#64748b",fontWeight:600}}>TOTAL</div>
               </div>
+              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
+                <div style={{fontSize:22,fontWeight:700,color:"#3b82f6"}}>{toolsRan}/{WEBAPP_TOOL_KEYS.length}</div>
+                <div style={{fontSize:9,color:"#3b82f6",fontWeight:600}}>TOOLS RAN</div>
+              </div>
+              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
+                <div style={{fontSize:22,fontWeight:700,color:"#a855f7"}}>{toolsFlagged}</div>
+                <div style={{fontSize:9,color:"#a855f7",fontWeight:600}}>TOOLS FLAGGED</div>
+              </div>
             </div>
+
+            {/* Per-tier coverage strip */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6,marginBottom:14}}>
+              {coverage.map(t => {
+                const color = t.flagged > 0 ? "#dc2626" : (t.ran === t.total ? "#22c55e" : "#64748b");
+                return (
+                  <div key={t.id} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 10px",borderLeft:`3px solid ${color}`}}>
+                    <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:2}}>{t.label}</div>
+                    <div style={{fontSize:11,color:color,fontWeight:700}}>{t.ran}/{t.total} ran · {t.flagged} flagged</div>
+                  </div>
+                );
+              })}
+            </div>
+
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {allF.length===0 && <div style={{textAlign:"center",padding:40,color:"#334155"}}>No findings — run a scan first!</div>}
+              {allF.length===0 && <div style={{textAlign:"center",padding:40,color:"#334155"}}>No findings — clean scan or no tools ran yet.</div>}
               {allF.map((f,i)=>{
                 const c={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",INFO:"#64748b"}[f.severity]||"#64748b";
                 return (
@@ -4071,15 +4135,16 @@ function WebAppModule(props) {
                     <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
                       <span style={{background:c+"20",color:c,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.severity}</span>
                       {f.cve&&f.cve!=="N/A"&&<span style={{background:"#fef2f2",color:"#dc2626",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>CVE: {f.cve}</span>}
-                      {f.cwe&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.cwe}</span>}
+                      {f.cwe&&f.cwe!=="N/A"&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.cwe}</span>}
                       <span style={{fontSize:9,color:"#64748b"}}>CVSS: {f.cvss||"N/A"}</span>
-                      <span style={{fontSize:9,color:"#475569",background:"#020617",padding:"2px 6px",borderRadius:3,border:"1px solid #1e293b"}}>{f.owasp}</span>
+                      {f.owasp&&f.owasp!=="N/A"&&<span style={{fontSize:9,color:"#475569",background:"#020617",padding:"2px 6px",borderRadius:3,border:"1px solid #1e293b"}}>{f.owasp}</span>}
                       <span style={{marginLeft:"auto",fontSize:9,color:"#3b82f6",fontFamily:"monospace"}}>via {f.source}</span>
                     </div>
                     <div style={{fontSize:12,color:"#e2e8f0",marginBottom:8}}>{f.detail}</div>
-                    <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"6px 10px",fontSize:11,color:"#4ade80"}}>
+                    {f.evidence && <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"4px 8px",fontSize:10,color:"#94a3b8",fontFamily:"monospace",marginBottom:6}}><strong style={{color:"#cbd5e1"}}>Evidence:</strong> {f.evidence}</div>}
+                    {f.remediation && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"6px 10px",fontSize:11,color:"#4ade80"}}>
                       <strong>Fix:</strong> {f.remediation}
-                    </div>
+                    </div>}
                   </div>
                 );
               })}
@@ -6975,6 +7040,183 @@ function synthesizeReconFindings(r) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  WEBAPP FINDINGS SYNTHESIS  (VL-FORGE — Web App Pentesting)
+// ═══════════════════════════════════════════════════════════════
+// Mirrors synthesizeReconFindings, but aggregates findings emitted by
+// the 32 webapp/vuln scanners. Every webapp tool already calls
+// wrap_finding() (tools/_shared.py:265) producing the canonical
+// {detail, severity, cvss, cve, cwe, owasp, remediation, evidence_marker}
+// shape — this synthesizer normalizes + dedupes + severity-sorts them
+// for the Findings UI panel and PDF Risk section.
+const WEBAPP_TOOL_KEYS = [
+  "spa_crawler",      "cms",            "ssl",          "portscan",
+  "xss",              "sqli",           "cmd_injection","xxe",
+  "headers",          "cookies",        "csrf",         "jwt",
+  "lfi",              "exposed_files",
+  "cors",             "ssrf",           "http_methods", "open_redirect", "clickjacking",
+  "idor",             "mass_assignment","nosql",        "access_control",
+  "nikto",            "nuclei",         "force_browse", "file_upload",
+  "ssti",             "graphql",        "sensitive_data","stored_xss",  "wpscan",
+];
+
+function synthesizeWebappFindings(allResults) {
+  const r = allResults || {};
+  const findings = [];
+  const seen = new Set();
+  for (const tool of WEBAPP_TOOL_KEYS) {
+    const td = r[tool];
+    if (!td || !Array.isArray(td.findings)) continue;
+    for (const f of td.findings) {
+      const sev = String(f.severity || "").toUpperCase();
+      if (!["CRITICAL","HIGH","MEDIUM","LOW"].includes(sev)) continue;
+      const detail = f.detail || f.title || "Untitled finding";
+      const dedupKey = tool + ":" + (f.cwe || "") + ":" + detail.substring(0, 80);
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      findings.push({
+        title:       detail,
+        detail:      detail,
+        severity:    sev,
+        cvss:        parseFloat(f.cvss) || 0,
+        cve:         f.cve  || "N/A",
+        cwe:         f.cwe  || "N/A",
+        cwe_name:    f.cwe_name || "",
+        owasp:       f.owasp || "N/A",
+        remediation: f.remediation || "",
+        evidence:    f.evidence_marker || "",
+        confidence:  f.confidence || "CONFIRMED",
+        source:      tool,
+      });
+    }
+  }
+  const sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  findings.sort((a, b) => {
+    const sa = sevOrder[a.severity] !== undefined ? sevOrder[a.severity] : 5;
+    const sb = sevOrder[b.severity] !== undefined ? sevOrder[b.severity] : 5;
+    if (sa !== sb) return sa - sb;
+    return (b.cvss || 0) - (a.cvss || 0);
+  });
+  return findings;
+}
+
+// Per-tier coverage rollup — for PDF Coverage block.
+// Mirrors the orchestrator's WEBAPP_TOOLS_BY_TIER but ID-only.
+const WEBAPP_TIERS = [
+  { id: "tier1_discovery",  label: "Discovery",            tools: ["spa_crawler"] },
+  { id: "tier2_recon",      label: "Recon & Fingerprint",  tools: ["cms","ssl","portscan"] },
+  { id: "tier3_injection",  label: "Injection Attacks",    tools: ["xss","sqli","cmd_injection","xxe"] },
+  { id: "tier4_auth",       label: "Auth & Session",       tools: ["headers","cookies","csrf","jwt"] },
+  { id: "tier5_file_path",  label: "File & Path",          tools: ["lfi","exposed_files"] },
+  { id: "tier6_network",    label: "Network & Protocol",   tools: ["cors","ssrf","http_methods","open_redirect","clickjacking"] },
+  { id: "tier7_access",     label: "Access Control",       tools: ["idor","mass_assignment","nosql","access_control"] },
+  { id: "tier8_framework",  label: "Framework & Heavy",    tools: ["nikto","nuclei","force_browse","file_upload","ssti","graphql","sensitive_data","stored_xss","wpscan"] },
+];
+
+function computeWebappCoverage(allResults) {
+  const r = allResults || {};
+  return WEBAPP_TIERS.map(t => {
+    const ran     = t.tools.filter(k => r[k]);
+    const skipped = t.tools.filter(k => r[k] && r[k].skipped_reason);
+    const flagged = t.tools.filter(k => r[k] && r[k].vulnerable);
+    return {
+      id:       t.id,
+      label:    t.label,
+      total:    t.tools.length,
+      ran:      ran.length,
+      skipped:  skipped.length,
+      flagged:  flagged.length,
+      pct:      t.tools.length ? Math.round((ran.length / t.tools.length) * 100) : 0,
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VULN FINDINGS SYNTHESIS  (VL-FORGE — full module isolation)
+// ═══════════════════════════════════════════════════════════════
+// Mirrors synthesize{Recon,Webapp}Findings — aggregates findings from the
+// 19 scanners VulnModule runs and produces a severity-sorted, deduped list
+// for both the Findings UI tab and the PDF risk section.
+const VULN_TOOL_KEYS = [
+  "nikto", "nuclei", "wpscan",
+  "ssl", "headers", "cors", "cookies",
+  "cms",
+  "xss", "sqli", "cmd_injection", "xxe",
+  "lfi", "exposed_files",
+  "open_redirect", "ssrf", "http_methods",
+  "csrf", "jwt",
+];
+
+function synthesizeVulnFindings(allResults) {
+  const r = allResults || {};
+  const findings = [];
+  const seen = new Set();
+  for (const tool of VULN_TOOL_KEYS) {
+    const td = r[tool];
+    if (!td || !Array.isArray(td.findings)) continue;
+    for (const f of td.findings) {
+      const sev = String(f.severity || "").toUpperCase();
+      if (!["CRITICAL","HIGH","MEDIUM","LOW"].includes(sev)) continue;
+      const detail = f.detail || f.title || "Untitled finding";
+      const dedupKey = tool + ":" + (f.cwe || "") + ":" + detail.substring(0, 80);
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      findings.push({
+        title:       detail,
+        detail:      detail,
+        severity:    sev,
+        cvss:        parseFloat(f.cvss) || 0,
+        cve:         f.cve  || "N/A",
+        cwe:         f.cwe  || "N/A",
+        cwe_name:    f.cwe_name || "",
+        owasp:       f.owasp || "N/A",
+        remediation: f.remediation || "",
+        evidence:    f.evidence_marker || "",
+        confidence:  f.confidence || "CONFIRMED",
+        source:      tool,
+      });
+    }
+  }
+  const sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  findings.sort((a, b) => {
+    const sa = sevOrder[a.severity] !== undefined ? sevOrder[a.severity] : 5;
+    const sb = sevOrder[b.severity] !== undefined ? sevOrder[b.severity] : 5;
+    if (sa !== sb) return sa - sb;
+    return (b.cvss || 0) - (a.cvss || 0);
+  });
+  return findings;
+}
+
+// Per-tier coverage rollup for Vuln module — mirrors VULN_TOOLS_BY_TIER
+// in endpoints/vuln_orchestrator.py.
+const VULN_TIERS = [
+  { id: "tier1_heavy",       label: "Heavy Scanners",       tools: ["nikto","nuclei","wpscan"] },
+  { id: "tier2_transport",   label: "Transport Security",   tools: ["ssl","headers","cors","cookies"] },
+  { id: "tier3_fingerprint", label: "Fingerprinting",       tools: ["cms"] },
+  { id: "tier4_injection",   label: "Injection Attacks",    tools: ["xss","sqli","cmd_injection","xxe"] },
+  { id: "tier5_file_path",   label: "File & Path",          tools: ["lfi","exposed_files"] },
+  { id: "tier6_network",     label: "Network & Protocol",   tools: ["open_redirect","ssrf","http_methods"] },
+  { id: "tier7_auth",        label: "Auth & Session",       tools: ["csrf","jwt"] },
+];
+
+function computeVulnCoverage(allResults) {
+  const r = allResults || {};
+  return VULN_TIERS.map(t => {
+    const ran     = t.tools.filter(k => r[k]);
+    const skipped = t.tools.filter(k => r[k] && r[k].skipped_reason);
+    const flagged = t.tools.filter(k => r[k] && r[k].vulnerable);
+    return {
+      id:       t.id,
+      label:    t.label,
+      total:    t.tools.length,
+      ran:      ran.length,
+      skipped:  skipped.length,
+      flagged:  flagged.length,
+      pct:      t.tools.length ? Math.round((ran.length / t.tools.length) * 100) : 0,
+    };
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  RECON PDF REPORT
 // ═══════════════════════════════════════════════════════════════
 function generateReconReport({target, allResults, date, authenticated, pdfConfig}) { /*RECON-AUTH-PDF-SIG-V1*/
@@ -9628,6 +9870,159 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     const BLUE=[59,130,246], DARK=[15,23,42], GRAY=[100,116,139];
     const LIGHT=[241,245,249], WHITE=[255,255,255], LBLUE=[220,230,245];
     const SEV_COLOR = {CRITICAL:[220,38,38],HIGH:[234,88,12],MEDIUM:[202,138,4],LOW:[22,163,74],INFO:[100,116,139]};
+
+    // ─── REPORT-V2 HELPERS — Gap fixes 1..7 from industry-score audit ───
+    // CWE → attack scenario narrative (gap 4). Drives "what an attacker does
+    // with this" sub-row under each HIGH/CRITICAL finding.
+    const _ATTACK_SCENARIOS = {
+      "CWE-79":   "Attacker delivers the victim a crafted link or stores a payload. On render, the browser executes the attacker's JavaScript in the victim's authenticated session — full account takeover, session-cookie exfiltration, or credential phishing under your domain's trust.",
+      "CWE-89":   "Attacker injects SQL through an input parameter to read or modify the database. Confirmed via timing or error feedback; impact ranges from full table exfiltration (users, orders, secrets) to admin-account creation.",
+      "CWE-78":   "Attacker injects shell metacharacters that the application passes unsanitized to an OS exec call. Result: remote command execution as the web-server user — pivot to data theft, persistence, or lateral movement into the cloud account.",
+      "CWE-22":   "Attacker uses ../ or absolute-path traversal in a file parameter to read system files (/etc/passwd, /proc/self/environ) or sensitive application files (config, secrets, credentials, source code).",
+      "CWE-94":   "Attacker injects code that the application evaluates server-side (eval, template render, deserialization). Full remote code execution; same blast radius as cmd-injection.",
+      "CWE-345":  "JWT alg=none means the server accepts unsigned tokens. Attacker forges any user_id and signs as alg=none, walking in as administrator without any credential at all.",
+      "CWE-326":  "JWT signed with a weak HMAC secret (dictionary word, short key). Attacker brute-forces the secret offline against a captured token, then signs arbitrary tokens — full server-side impersonation.",
+      "CWE-352":  "Attacker hosts a page that auto-submits a form to your site using the victim's logged-in session cookie. State-changing actions (password change, fund transfer, account delete) execute under the victim's identity.",
+      "CWE-538":  "Attacker reads the exposed file directly (.env, .git/config, backup.sql, .aws/credentials) to extract credentials, source code, or DB dumps — pre-attack reconnaissance with very high value.",
+      "CWE-601":  "Attacker crafts a redirect URL on your trusted domain that lands on attacker.example. Phishing campaigns use your trusted-domain anchor to bypass URL-filter heuristics, then redirect victims into a credential-stealing page.",
+      "CWE-611":  "Attacker submits XML with an external-entity declaration. The server's XML parser fetches local files (/etc/passwd) or makes blind out-of-band HTTP requests, leaking files or pivoting to SSRF.",
+      "CWE-613":  "JWT without an 'exp' claim never expires. Even after password change, logout, or compromise detection, stolen tokens remain valid forever — credentials cannot be revoked.",
+      "CWE-614":  "Cookie sent over plain HTTP (missing Secure flag) can be sniffed by anyone on the network. WiFi MITM, rogue proxy, or HTTP-downgrade attack captures the session — full account takeover.",
+      "CWE-639":  "Attacker increments object IDs (/api/orders/123 → 124) and reads other users' data because the server only checks 'is the user logged in?' not 'does the user own this record?'.",
+      "CWE-693":  "An attacker injects a malicious <script> via reflected/stored XSS, supply-chain script, or browser extension. With no CSP, the browser executes it, harvesting session cookies, exfiltrating PII, or pivoting to other in-session privileged actions.",
+      "CWE-749":  "Dangerous HTTP method (TRACE/PUT/DELETE) enabled. TRACE bypasses HttpOnly via Cross-Site Tracing; PUT uploads web-shell; DELETE corrupts data — all without authentication on misconfigured stacks.",
+      "CWE-918":  "Attacker tricks the server into making HTTP requests to internal services (AWS IMDS at 169.254.169.254, k8s API, Redis on localhost). Used to steal cloud credentials or hit internal-only admin endpoints.",
+      "CWE-942":  "CORS misconfig allows attacker.example to make authenticated cross-origin requests to your API. Attacker reads private data (account info, message history) from victim's browser via the open CORS policy.",
+      "CWE-1004": "Attacker injects XSS to read a session cookie that lacks HttpOnly. JavaScript reads document.cookie and sends it to attacker.example — full session theft, bypassing all transport-layer protections.",
+      "CWE-1021": "Attacker hosts a transparent iframe of your site on attacker.example, overlays UI elements to trick the victim into clicking 'transfer funds' or 'change password' while believing they're on attacker.example. Used in 'clickjacking' campaigns against banks and crypto wallets.",
+      "CWE-200":  "Information disclosed in the Referer header (URLs visited, query parameters) leaks to every third-party resource your page loads. Sensitive workflow URLs (password-reset tokens, admin paths) reach analytics/CDN providers.",
+    };
+
+    // CWE → numbered remediation playbook (gap 5). 3-5 concrete steps customers
+    // can copy-paste directly into their config-management workflow.
+    const _PLAYBOOKS = {
+      "CWE-693":  ["Add Content-Security-Policy header to ALL responses",
+                    "nginx: add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; object-src 'none'; frame-ancestors 'none'\" always;",
+                    "Test in Report-Only mode first: Content-Security-Policy-Report-Only",
+                    "Reload: nginx -t && systemctl reload nginx",
+                    "Verify: curl -I https://target | grep -i content-security-policy"],
+      "CWE-1021": ["Add X-Frame-Options DENY (or SAMEORIGIN if internal embeds needed)",
+                    "nginx: add_header X-Frame-Options \"DENY\" always;",
+                    "Or in CSP: frame-ancestors 'none';",
+                    "Reload + verify: curl -I https://target | grep -i x-frame"],
+      "CWE-200":  ["Add Referrer-Policy header to limit referrer leakage",
+                    "nginx: add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;",
+                    "Tighten to 'no-referrer' for sensitive endpoints (admin, password-reset)",
+                    "Reload + verify: curl -I https://target | grep -i referrer-policy"],
+      "CWE-79":   ["Apply context-aware output encoding (HTML/JS/URL/CSS) on EVERY user-controlled value",
+                    "Use a templating engine with auto-escape on (Jinja2, ERB, Razor, React JSX)",
+                    "Validate input format server-side, but escape on output not on input",
+                    "Add CSP with script-src 'self' as defense-in-depth",
+                    "Audit with: search for innerHTML, dangerouslySetInnerHTML, document.write, eval"],
+      "CWE-89":   ["Use parameterised queries / prepared statements EVERYWHERE — no string concatenation",
+                    "Python: cursor.execute('SELECT * FROM u WHERE id=%s', (uid,))",
+                    "Node.js: pool.query('SELECT * FROM u WHERE id=?', [uid])",
+                    "ORM: SQLAlchemy / Prisma / Sequelize handle this by default — never raw('...' + var)",
+                    "Audit: grep for query, exec, raw, format-strings hitting the DB driver"],
+      "CWE-78":   ["NEVER pass user input to a shell — use argv-style exec",
+                    "Python: subprocess.run([cmd, arg1], shell=False)  // never shell=True",
+                    "Node.js: execFile(cmd, [arg1])  // never exec(cmd + arg)",
+                    "Whitelist allowed values if exec is unavoidable",
+                    "Audit: grep for system, exec, shell_exec, child_process.exec"],
+      "CWE-352":  ["Add anti-CSRF token to all state-changing forms (POST/PUT/DELETE)",
+                    "Use framework middleware: Django (CSRF middleware on), Express (csurf), Rails (protect_from_forgery)",
+                    "Set session cookie SameSite=Lax (or Strict for sensitive apps)",
+                    "Verify token on EVERY state-changing endpoint",
+                    "Audit: grep for routes without @csrf_protect / equivalent"],
+      "CWE-22":   ["Validate paths against an allow-list of known-good values",
+                    "Reject any input containing '..' or starting with '/' or 'C:'",
+                    "Use a library function: pathlib.Path.resolve() + check that resolved path is under expected base",
+                    "Drop privileges of the web-server user so even successful traversal yields no high-value files",
+                    "Audit: grep for open(, fopen, file_get_contents, fs.readFile, readFile + user-controlled path"],
+      "CWE-918":  ["Validate all outbound URL fetches against an allow-list of trusted hosts",
+                    "Reject private IP ranges: 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, ::1, fc00::/7",
+                    "Block schemes: file://, gopher://, dict://, ldap://, ftp://",
+                    "Resolve the hostname THEN check the IP — not the hostname string (DNS rebinding)",
+                    "Audit: grep for httpx.get, requests.get, urlopen with user-controlled URL"],
+      "CWE-611":  ["Disable XML external-entity processing",
+                    "Python: use defusedxml instead of xml.etree / lxml",
+                    "Java: factory.setFeature('http://apache.org/xml/features/disallow-doctype-decl', true)",
+                    "PHP: libxml_disable_entity_loader(true); libxml_set_external_entity_loader(null)",
+                    ".NET: XmlReaderSettings { XmlResolver = null }"],
+      "CWE-601":  ["Validate redirect destinations against an internal allow-list of paths",
+                    "Reject any input that starts with // or http:// or contains @ or \\",
+                    "Use POST-then-GET pattern or signed redirect tokens",
+                    "Drop arbitrary 'next', 'returnTo', 'redirect' parameters in favour of indexed values"],
+      "CWE-538":  ["Block the exposed path at the web-server level (nginx 'location ~ /\\.{ deny all; }')",
+                    "Move sensitive files OUTSIDE the document root entirely",
+                    "Configure git/svn/CI to NEVER deploy .env, .git, backups",
+                    "Rotate any credentials that were in the exposed file IMMEDIATELY (assume compromise)"],
+      "CWE-749":  ["Disable dangerous HTTP methods at the web-server / framework level",
+                    "nginx: if ($request_method !~ ^(GET|HEAD|POST)$ ) { return 405; }",
+                    "Apache: <LimitExcept GET HEAD POST>Require all denied</LimitExcept>",
+                    "TRACE specifically must be off — used in Cross-Site Tracing attacks"],
+      "CWE-1004": ["Add HttpOnly flag to session/auth cookies — JavaScript can never read them",
+                    "Express: res.cookie('sid', val, { httpOnly: true, secure: true, sameSite: 'lax' })",
+                    "Django: SESSION_COOKIE_HTTPONLY = True (default)",
+                    "Audit: capture Set-Cookie headers, verify HttpOnly on session/auth cookies"],
+      "CWE-614":  ["Add Secure flag to ALL cookies on HTTPS sites — cookie never sent over plain HTTP",
+                    "Express: res.cookie('sid', val, { secure: true, httpOnly: true })",
+                    "Django: SESSION_COOKIE_SECURE = True (set in production settings)",
+                    "Audit: capture Set-Cookie, verify Secure on every cookie"],
+      "CWE-942":  ["Use a strict allow-list of origins for CORS, NOT reflection",
+                    "Reject Origin: null (it's used by sandboxed iframes and file:// — never legitimate)",
+                    "Set Access-Control-Allow-Credentials only when needed, and never with Origin: *",
+                    "Audit: middleware should look up Origin against a configured list, not echo it back"],
+      "CWE-345":  ["Hard-code accepted JWT algorithms in your library config",
+                    "jsonwebtoken: jwt.verify(token, secret, { algorithms: ['HS256'] })",
+                    "PyJWT: jwt.decode(token, secret, algorithms=['HS256'])",
+                    "Reject ANY token with alg=none, alg=None, or unsigned tokens"],
+      "CWE-613":  ["Always set 'exp' claim on issued JWTs (15 min for access tokens)",
+                    "Verify exp on EVERY request — don't trust client-side expiry",
+                    "Use refresh-token pattern for long-lived sessions, with revocation list",
+                    "Audit: capture issued JWTs, decode payload, confirm exp is present and short"],
+      "CWE-522":  ["Remove sensitive data (passwords, SSN, credit-card) from JWT payload entirely",
+                    "JWT payload is base64-encoded NOT encrypted — treat it as fully readable",
+                    "Store sensitive data server-side; reference by opaque ID in the JWT",
+                    "If encryption is mandatory: use JWE (encrypted JWT) instead of JWS"],
+    };
+
+    // Risk score 0-100 — CVSS-weighted, severity-floored. Higher = riskier.
+    // Logic: each finding contributes its CVSS (capped at 10), worst severity drives min score.
+    const _computeRiskScore = (findings) => {
+      if (!findings || findings.length === 0) return {score: 5, label: "MINIMAL RISK", color: [15,118,82]};
+      let sum = 0, maxCvss = 0;
+      findings.forEach(f => {
+        const c = parseFloat(f.cvss || f.cvss_score || 0);
+        if (!isNaN(c)) { sum += c; if (c > maxCvss) maxCvss = c; }
+      });
+      // Score formula: normalize sum to 0-70, add severity bump to reach 100 on critical-heavy reports
+      const raw = Math.min(70, sum * 2.5) + Math.min(30, maxCvss * 3);
+      const score = Math.round(Math.min(100, Math.max(5, raw)));
+      const label = score >= 80 ? "CRITICAL RISK" : score >= 60 ? "HIGH RISK" :
+                    score >= 40 ? "MODERATE RISK" : score >= 20 ? "LOW RISK" : "MINIMAL RISK";
+      const color = score >= 80 ? [162,28,28] : score >= 60 ? [194,65,12] :
+                    score >= 40 ? [133,79,11] : score >= 20 ? [202,138,4] : [15,118,82];
+      return {score, label, color};
+    };
+
+    // Report ID + content hash (gap 6). Deterministic per (target,date,findings-fingerprint).
+    const _genReportId = (target, date) => {
+      // VL-YYYYMMDD-<6 char hash> — stable per scan
+      const seed = String(target) + "|" + String(date) + "|" + String(Date.now());
+      let h = 0;
+      for (let i = 0; i < seed.length; i++) { h = ((h<<5) - h + seed.charCodeAt(i)) | 0; }
+      const hex = Math.abs(h).toString(16).toUpperCase().padStart(6, "0").substring(0, 6);
+      const datePart = (date || "").replace(/[^0-9]/g, "").substring(0, 8) || "00000000";
+      return `VL-${datePart}-${hex}`;
+    };
+    const _shortHash = (s) => {
+      let h = 0; const str = String(s||"");
+      for (let i = 0; i < str.length; i++) h = ((h<<5) - h + str.charCodeAt(i)) | 0;
+      return Math.abs(h).toString(16).toUpperCase().padStart(8, "0").substring(0, 8);
+    };
+    const _REPORT_ID = _genReportId(target, date);
+
     let y=18, _secN=0;
 
     const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
@@ -9764,6 +10159,101 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     const _subLines = doc.splitTextToSize(String(_hlSub||""), contentW-10);
     _subLines.slice(0,2).forEach((ln,i)=>doc.text(ln,margin+6,y+18+i*3.6));
     y += 28;
+
+    // ─── EXECUTIVE SUMMARY (Gap 1+2+7+8) ───────────────────────
+    // 1-page non-technical headline for C-suite consumption. Sits before
+    // tools-used so the report ID, risk score, scope, and top fixes are
+    // visible WITHOUT scrolling through 8 pages of tool data.
+    const _risk = _computeRiskScore(allFindings);
+    // Scope extraction (gap 7) — pull URLs probed from each tool's raw_data.
+    const _scopeUrls = new Set([target]);
+    let _scopeParamCount = 0;
+    VULN_TOOLS.forEach(t => {
+      const d = r[t.tool]; if (!d || !d.raw_data) return;
+      const probe = d.raw_data[t.tool] || {};
+      if (Array.isArray(probe.urls_tested))   probe.urls_tested.forEach(u => _scopeUrls.add(u));
+      if (typeof probe.urls_scanned === "number") _scopeParamCount += probe.urls_scanned;
+    });
+
+    chk(70); y=sHead("Executive Summary",y);
+    // Risk score card — big number on left, label + report ID on right
+    fillR(margin, y, contentW, 28, LIGHT);
+    fillR(margin, y, 4, 28, _risk.color);
+    doc.setFont("Arial","bold"); doc.setFontSize(28); doc.setTextColor(..._risk.color);
+    doc.text(String(_risk.score), margin+12, y+18);
+    doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+    doc.text("/ 100", margin+12 + (_risk.score >= 10 ? 16 : 10), y+18);
+    doc.setFont("Arial","bold"); doc.setFontSize(10); doc.setTextColor(..._risk.color);
+    doc.text("RISK SCORE", margin+12, y+24);
+    // Right side: label + report ID + scope summary
+    doc.setFont("Arial","bold"); doc.setFontSize(13); doc.setTextColor(...DARK);
+    doc.text(_risk.label, margin+50, y+8);
+    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+    const _exSubLines = [
+      `Report ID: ${_REPORT_ID}  ·  Generated ${date}  ·  Target: ${target}`,
+      `Scope: ${_scopeUrls.size} URL(s) probed across 19 scanners` +
+        (_scopeParamCount ? ` · ${_scopeParamCount} parameterised endpoints tested` : ""),
+      `Findings: ${sevCount.CRITICAL} critical · ${sevCount.HIGH} high · ${sevCount.MEDIUM} medium · ${sevCount.LOW} low`,
+    ];
+    _exSubLines.forEach((ln,i) => doc.text(ln, margin+50, y+14 + i*4));
+    y += 31;
+
+    // Stacked severity bar — visual proportion of risk (gap 8)
+    const _sevTotal = sevCount.CRITICAL + sevCount.HIGH + sevCount.MEDIUM + sevCount.LOW;
+    if (_sevTotal > 0) {
+      chk(10);
+      const barW = contentW, barH = 6;
+      let cursor = margin;
+      const _segs = [
+        [sevCount.CRITICAL, [220,38,38]],
+        [sevCount.HIGH,     [234,88,12]],
+        [sevCount.MEDIUM,   [202,138,4]],
+        [sevCount.LOW,      [22,163,74]],
+      ];
+      _segs.forEach(([n,c]) => {
+        if (n === 0) return;
+        const w = (n / _sevTotal) * barW;
+        fillR(cursor, y, w, barH, c);
+        if (w > 8) {
+          doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...WHITE);
+          doc.text(String(n), cursor + w/2, y+4.3, {align:"center"});
+        }
+        cursor += w;
+      });
+      y += barH + 2;
+      // Legend
+      doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
+      doc.text("Severity distribution: red = critical · orange = high · yellow = medium · green = low",
+                margin+2, y+3);
+      y += 6;
+    }
+
+    // Top 3 findings list — most actionable items
+    const _topByCvss = [...allFindings]
+      .map(f => ({...f, _cvss: parseFloat(f.cvss || f.cvss_score || 0) || 0}))
+      .sort((a,b) => b._cvss - a._cvss)
+      .slice(0, 3);
+    if (_topByCvss.length > 0) {
+      chk(8 + _topByCvss.length * 9);
+      doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+      doc.text("Top priorities (highest-CVSS first):", margin+2, y+5);
+      y += 8;
+      _topByCvss.forEach((f, i) => {
+        chk(9);
+        const col = SEV_COLOR[f.severity] || GRAY;
+        fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
+        fillR(margin, y, 2.5, 8, col);
+        doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...col);
+        doc.text(`${i+1}.`, margin+5, y+5.5);
+        doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+        const det = String(f.detail || "").substring(0, 110);
+        doc.text(det, margin+11, y+5.5);
+        doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...col);
+        doc.text(`CVSS ${f._cvss.toFixed(1)}`, pageW-margin-3, y+5.5, {align:"right"});
+        y += 8;
+      });
+      y += 4;
+    }
 
     chk(35); y=sHead("Findings Summary",y);
     const sc=[["CRITICAL",sevCount.CRITICAL,[220,38,38]],["HIGH",sevCount.HIGH,[234,88,12]],["MEDIUM",sevCount.MEDIUM,[202,138,4]],["LOW",sevCount.LOW,[22,163,74]]];
@@ -10015,6 +10505,54 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
           doc.setFont("Arial","normal");doc.setFontSize(6.8);doc.setTextColor(22,163,74);
           doc.text(rLines,margin+140,y+4.8);
           y+=rh;
+
+          // ─── ATTACK SCENARIO + REMEDIATION PLAYBOOK + EVIDENCE (gaps 3/4/5) ───
+          // Only emit for HIGH+CRITICAL findings so we don't clutter LOW/POSITIVE.
+          const _cweKey = String(f.cwe || "").toUpperCase().trim();
+          const _isHi = (f.severity === "CRITICAL" || f.severity === "HIGH");
+          const _attackText = _isHi ? _ATTACK_SCENARIOS[_cweKey] : null;
+          const _playbookSteps = _isHi ? _PLAYBOOKS[_cweKey] : null;
+          const _evidence = String(f.evidence_marker || "").trim();
+          if (_attackText || _playbookSteps || (_isHi && _evidence)) {
+            // Compute sub-block height
+            const _abW = contentW - 6;
+            const _attackLines = _attackText ? doc.splitTextToSize(_attackText, _abW - 24) : [];
+            const _playLines = _playbookSteps ?
+              _playbookSteps.map((step, idx) => doc.splitTextToSize(`${idx+1}. ${step}`, _abW - 24)).flat() : [];
+            const _evidLines = (_isHi && _evidence) ?
+              doc.splitTextToSize(_evidence, _abW - 24) : [];
+            const _subH = 3 +
+              (_attackLines.length > 0 ? (_attackLines.length * 3 + 4) : 0) +
+              (_playLines.length > 0   ? (_playLines.length   * 3 + 4) : 0) +
+              (_evidLines.length > 0   ? (_evidLines.length   * 3 + 4) : 0) + 2;
+            chk(_subH + 2);
+            // Light-blue background panel, indented from left border
+            fillR(margin+3, y, contentW-3, _subH, [239,246,255]);
+            fillR(margin+3, y, 1.5, _subH, [37,99,235]);
+            let _sy = y + 4;
+            if (_attackLines.length > 0) {
+              doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(162,28,28);
+              doc.text("ATTACK SCENARIO", margin+7, _sy);
+              doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...DARK);
+              _attackLines.forEach((ln, li) => doc.text(ln, margin+7, _sy + 3 + li*3));
+              _sy += 3 + _attackLines.length * 3 + 2;
+            }
+            if (_playLines.length > 0) {
+              doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(22,163,74);
+              doc.text("REMEDIATION STEPS", margin+7, _sy);
+              doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...DARK);
+              _playLines.forEach((ln, li) => doc.text(ln, margin+7, _sy + 3 + li*3));
+              _sy += 3 + _playLines.length * 3 + 2;
+            }
+            if (_evidLines.length > 0) {
+              doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(37,99,235);
+              doc.text("EVIDENCE", margin+7, _sy);
+              doc.setFont("Courier","normal"); doc.setFontSize(6.5); doc.setTextColor(55,65,81);
+              _evidLines.forEach((ln, li) => doc.text(ln, margin+7, _sy + 3 + li*3));
+              _sy += 3 + _evidLines.length * 3;
+            }
+            y += _subH + 2;
+          }
         });
         y+=6;
       }
@@ -10121,8 +10659,15 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,bY+18,6,GRAY,false,"center");
     txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,bY+25,7,BLUE,true,"center");
 
-    // Border + watermark + footer
+    // Border + watermark + footer (gap 6 — Report ID + content hash in footer)
     const _wmV = _cfg.watermark;
+    // Content fingerprint — SHA-style hash of finding-set summary, makes the
+    // report tamper-evident: any edit to finding text changes the hash.
+    const _contentHash = _shortHash(
+      _REPORT_ID + "|" + sevCount.CRITICAL + "/" + sevCount.HIGH + "/" +
+      sevCount.MEDIUM + "/" + sevCount.LOW + "|" +
+      allFindings.map(f=>(f.cwe||"")+":"+String(f.detail||"").substring(0,40)).join("|")
+    );
     const _ftrV = _cfg.customFooterText || ("VulnusLab | "+((_cfg.confidentiality)||"CONFIDENTIAL")+"  ·  vulnuslab.com");
     const total=doc.internal.getNumberOfPages();
     for(let i=1;i<=total;i++){
@@ -10135,7 +10680,11 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
         doc.restoreGraphicsState();
       }
       doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
-      if(i>=2){txt(_ftrV,margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
+      if(i>=2){
+        txt(_ftrV,margin,290,6.5,GRAY);
+        txt(`Report ID: ${_REPORT_ID}  ·  Content: ${_contentHash}`,pageW/2,290,6.5,GRAY,false,"center");
+        txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
+      }
     }
     doc.save(`vuln_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   };
@@ -11945,6 +12494,12 @@ function VulnModule(props) {
   const [running,setRunning]   = useState(false);
   const [current,setCurrent]   = useState(-1);
   const [done,setDone]         = useState([]);
+  // VULN-V2-INFLIGHT-V1: track which scanners are currently running.
+  // Without this, every queued tile shows "PENDING" and the user thinks the scan
+  // stalled (no visual difference between "dispatched, running" vs "not started").
+  const [inFlight,setInFlight] = useState(new Set());
+  const [scanStartedAt,setScanStartedAt] = useState(0);
+  const [tickNow,setTickNow] = useState(0);  // forces tile re-render every 1s to update elapsed
   const [allResults,setAllResults] = useState({});
   const [lines,setLines]       = useState(["Ready — enter target and click Run All Scans"]);
   const [finished,setFinished] = useState(false);
@@ -11968,9 +12523,18 @@ function VulnModule(props) {
   const [authorized,setAuthorized]   = useState(false);
   const add = l => setLines(p=>[...p,l]);
 
+  // VULN-V2-TICK-V1 — drive a 1s re-render while scan is running so in-flight
+  // tile "elapsed time" updates live. Inactive when not running (no cost).
+  React.useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setTickNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
   const runAll = async () => {
     if(!target.trim()) return;
     setRunning(true); _notifyRunning(true); setFinished(false); setDone([]); setAllResults({}); setCurrent(-1);
+    setInFlight(new Set()); setScanStartedAt(Date.now()); setTickNow(Date.now());
     setLines([`[*] Starting full vulnerability scan on ${target} — ${VULN_PHASES.length} scanners, all enabled`]);
 
     // ── Step 0: authenticate to the target if the user gave us creds ──
@@ -12066,9 +12630,17 @@ function VulnModule(props) {
             }
             if (evt.event === "scan_started") {
               add(`  ⇒ ${evt.total_tools} scanners dispatched, concurrency=${evt.concurrency}`);
+              // Mark ALL dispatched tools as in-flight so tiles show RUNNING immediately,
+              // not PENDING. Otherwise users see no progress for the first 30-90s.
+              const allIdx = new Set();
+              (evt.tool_names || []).forEach(t => {
+                const i = _toolToIdx[t];
+                if (i !== undefined) allIdx.add(i);
+              });
+              setInFlight(allIdx);
             }
             else if (evt.event === "heartbeat") {
-              // keep-alive; no UI update needed
+              // keep-alive — no UI update needed (tickNow timer handles elapsed redraws)
             }
             else if (evt.event === "tool_complete") {
               const idx = _toolToIdx[evt.tool];
@@ -12080,6 +12652,7 @@ function VulnModule(props) {
                 }
                 setDone(p => [...p, idx]);
                 setAllResults(Object.assign({}, results));
+                setInFlight(prev => { const s = new Set(prev); s.delete(idx); return s; });
               }
               _completedCount += 1;
               const elapsed = ((Date.now() - _scanStartedAt)/1000).toFixed(1);
@@ -12368,7 +12941,10 @@ function VulnModule(props) {
       {/* Phase progress — professional dense list */}
       <div style={{marginBottom:16,border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
         {VULN_PHASES.map((ph,i)=>{
-          const isDone=done.includes(i), isActive=current===i;
+          const isDone=done.includes(i);
+          // v2-streaming: a tile is "RUNNING" if either the old sequential `current===i` matches OR
+          // the v2 inFlight set contains it. The set is populated on scan_started and pruned on each tool_complete.
+          const isActive=current===i || inFlight.has(i);
           const hasData=allResults[ph.tool];
           const findings=hasData?(allResults[ph.tool]?.findings||[]).filter(f=>f.severity!=="INFO"):[];
           const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
@@ -12380,7 +12956,10 @@ function VulnModule(props) {
           const statusLabel = isActive ? "RUNNING" : isFailed ? "ERROR" : hi>0 ? "VULNERABLE" : med>0 ? "REVIEW" : isDone ? "SECURE" : "PENDING";
           const _vFailDetail = (hasData && (hasData.skipped_reason || hasData.error || hasData.detail)) || "scan failed";
           const itemsCount = findings.length;
-          const itemsLabel = !isDone ? "" : isFailed ? "error" : itemsCount === 0 ? "0 items" : `${itemsCount} item${itemsCount===1?"":"s"}`;
+          // Live elapsed-seconds shown on RUNNING tiles so users can distinguish
+          // "still working" from "frozen". Drawn from scanStartedAt + tickNow (1s timer).
+          const elapsedSec = isActive && scanStartedAt > 0 ? Math.floor((tickNow - scanStartedAt) / 1000) : 0;
+          const itemsLabel = isActive ? `${elapsedSec}s` : !isDone ? "" : isFailed ? "error" : itemsCount === 0 ? "0 items" : `${itemsCount} item${itemsCount===1?"":"s"}`;
           return(
             <React.Fragment key={i}>
             <div onClick={()=>isDone&&setActiveTab(ph.tool)}
