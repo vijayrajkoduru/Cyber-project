@@ -54,13 +54,15 @@ async def _dispatch_one(
     endpoint: str,
     body: dict,
     sem: asyncio.Semaphore,
+    headers: Optional[dict] = None,
 ) -> tuple[str, dict, float]:
     """Send one tool request through the semaphore-limited pool.
     Returns (tool_name, response_json_or_error_dict, duration_sec)."""
     t0 = time.monotonic()
     async with sem:
         try:
-            r = await client.post(endpoint, json=body, timeout=_PER_TOOL_TIMEOUT)
+            r = await client.post(endpoint, json=body, timeout=_PER_TOOL_TIMEOUT,
+                                   headers=headers or None)
             r.raise_for_status()
             return tool_name, r.json(), time.monotonic() - t0
         except httpx.TimeoutException:
@@ -91,6 +93,7 @@ async def run_module_parallel(
     auth_cookie: Optional[str] = None,
     auth_bearer: Optional[str] = None,
     extra_body: Optional[dict] = None,
+    jwt_token: Optional[str] = None,
 ) -> dict:
     """Fan out target to all tool endpoints in parallel; aggregate results.
 
@@ -133,6 +136,14 @@ async def run_module_parallel(
     if auth_bearer: base_body["auth_bearer"] = auth_bearer
     if extra_body:  base_body.update(extra_body)
 
+    # AUTH-FORWARDING-V1 — every tool route has Depends(verify_scan_quota)
+    # so internal calls MUST carry the user's JWT or they return 401 (which is
+    # what caused 41/41 FAILED on the 08:40 juiceshop scan). Forward exactly
+    # the same Authorization header the user sent to /api/recon/run_all.
+    internal_headers: dict = {}
+    if jwt_token:
+        internal_headers["Authorization"] = f"Bearer {jwt_token}"
+
     # Single HTTP/2 connection pool, reused across all 41 calls. Massive win
     # over each tool opening its own socket.
     limits = httpx.Limits(
@@ -152,7 +163,8 @@ async def run_module_parallel(
         verify=False,
     ) as client:
         tasks = [
-            _dispatch_one(client, tool_name, endpoint, base_body, sem)
+            _dispatch_one(client, tool_name, endpoint, base_body, sem,
+                            headers=internal_headers)
             for tool_name, endpoint in tools
         ]
         # As each task completes we record the result so partial progress is
