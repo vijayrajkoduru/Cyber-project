@@ -96,20 +96,25 @@ def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
 
     findings, tests, confirmed, suppressed = [], 0, [], []
 
-    baselines = {}
-    canary_token = "vlcanary" + secrets.token_hex(4)
-    for key in candidates:
-        new_params = {k: v[0] for k, v in existing.items()}
-        new_params[key] = f"https://benign-{canary_token}.example/"
-        canary_url = urlunparse(parsed._replace(query=urlencode(new_params)))
-        cr = safe_get(canary_url, req=req, allow_redirects=False, timeout=10)
-        baselines[key] = _resp_fingerprint(cr)
-
-    # SPEED-V2 — wall-clock cap to prevent 240s orchestrator-timeout cascades.
+    # VL-TURBO wall-clock cap STARTS HERE — covers baseline loop + main loop.
+    # Previous version only capped the main loop, leaving 8 baseline calls ×
+    # 10s × 3 retries (up to 240s) unbounded — which hit orchestrator timeout.
     import time as _time
     _wallclock_start = _time.time()
     _WALLCLOCK_BUDGET = 45.0
     _bailed = False
+
+    baselines = {}
+    canary_token = "vlcanary" + secrets.token_hex(4)
+    for key in candidates:
+        if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
+        new_params = {k: v[0] for k, v in existing.items()}
+        new_params[key] = f"https://benign-{canary_token}.example/"
+        canary_url = urlunparse(parsed._replace(query=urlencode(new_params)))
+        cr = safe_get(canary_url, req=req, allow_redirects=False, timeout=8, retries=0)
+        baselines[key] = _resp_fingerprint(cr)
+
     for key in candidates:
         if _bailed: break
         baseline_fp = baselines.get(key)
@@ -126,7 +131,7 @@ def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
             new_params[key] = ssrf_url
             test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
             extra = _extra_headers_for(ssrf_url)
-            r = safe_get(test_url, headers=extra, req=req, allow_redirects=False, timeout=10)
+            r = safe_get(test_url, headers=extra, req=req, allow_redirects=False, timeout=8, retries=0)
             if r is None or r.status_code != 200:
                 continue
             probe_fp = _resp_fingerprint(r)
