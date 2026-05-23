@@ -6882,7 +6882,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       case "favicon":    return d.found ? `Hash ${d.shodan_hash}` : "no favicon";
       case "cloudbuckets":return `${(d.open_buckets||[]).length} OPEN · ${(d.existing_buckets||[]).length} existing`;
       case "secrets":    return `${(d.findings||[]).length} secret(s)`;
-      case "asn":        return d.asn ? `AS${d.asn} — ${String(d.as_owner||"").substring(0,40)}` : "ASN done";
+      case "asn":        return d.asn ? `${String(d.asn).toUpperCase().startsWith("AS") ? d.asn : "AS"+d.asn} — ${String(d.as_owner||"").substring(0,40)}` : "ASN done";
       case "internetdb": return d.found ? `${(d.ports||[]).length}p · ${(d.vulns||[]).length} CVE` : "no record";
       case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high` : "no match";
       case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} VULN takeover(s) on ${d.checked||0} subs` : `0 takeovers (${d.checked||0} subs checked)`;
@@ -7206,7 +7206,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         case "favicon":    return d.found ? `Hash ${d.shodan_hash} · ${d.matched_service || "unknown service"}` : (d.skipped_reason || "No favicon");
         case "cloudbuckets":return `${(d.open_buckets||[]).length} OPEN · ${(d.existing_buckets||[]).length} existing bucket(s)`;
         case "secrets":    return `${(d.findings||[]).length} secret(s) across ${(d.js_files||[]).length} JS file(s)`;
-        case "asn":        return d.asn ? `AS${d.asn} — ${(d.as_owner||"").substring(0,50)} (${d.country||"?"})` : "ASN lookup completed";
+        case "asn":        return d.asn ? `${String(d.asn).toUpperCase().startsWith("AS") ? d.asn : "AS"+d.asn} — ${(d.as_owner||"").substring(0,50)} (${d.country||"?"})` : "ASN lookup completed";
         case "internetdb": return d.found ? `${(d.ports||[]).length} port(s) · ${(d.vulns||[]).length} CVE(s) · ${(d.tags||[]).length} tag(s)` : (d.skipped_reason || "No Shodan record");
         case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) found · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high · ${d.summary.medium_cves||0} medium` : (d.skipped_reason || "No CVEs matched");
         case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} takeover-vulnerable subdomain(s) on ${d.checked||0} checked` : `${d.checked||0} subdomain(s) checked, none vulnerable`;

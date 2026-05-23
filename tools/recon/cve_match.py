@@ -7,6 +7,9 @@ Returns BOTH shapes:
 import re
 import socket
 from urllib.parse import urlparse
+
+import requests
+
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -158,6 +161,16 @@ def _sev_bucket(sev):
 
 @router.post("/api/recon/cve_match")
 async def recon_cve_match(req: ScanRequest, _=Depends(verify_scan_quota)):
+    try:
+        return await _cve_match_impl(req)
+    except Exception as e:
+        return standard_response(
+            tool="cve_match", target=req.target, findings=[],
+            tests_performed=1, vulnerable=False,
+            skipped_reason=f"cve_match aborted: {type(e).__name__}: {str(e)[:160]}")
+
+
+async def _cve_match_impl(req: ScanRequest):
     url = web_url(req.target)
     findings, detected_techs, ui_cves = [], [], []
     services_ui = []
@@ -190,11 +203,15 @@ async def recon_cve_match(req: ScanRequest, _=Depends(verify_scan_quota)):
                                  "matched_version": tech["version"]})
                 counts[_sev_bucket(sev)] += 1
 
-    # 2. Service-banner CVE matching
+    # 2. Service-banner CVE matching — parallel via asyncio.to_thread
+    # so 7 sequential 4s blocking-socket calls don't stall the event loop.
+    import asyncio
     host = urlparse(url).netloc.split(":")[0]
     banner_results = []
-    for port, service in _BANNER_PORTS:
-        banner = _grab_banner(host, port)
+    banners = await asyncio.gather(*[
+        asyncio.to_thread(_grab_banner, host, port) for port, _ in _BANNER_PORTS
+    ])
+    for (port, service), banner in zip(_BANNER_PORTS, banners):
         if not banner: continue
         version = _extract_version(banner)
         if not version: continue

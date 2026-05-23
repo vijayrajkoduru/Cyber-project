@@ -45,8 +45,11 @@ async def gather(ctx: ScanContext):
     parsed = urlparse(base)
 
     def _fetch(url):
+        # 6s timeout — 20 JS files in parallel, total budget ~6-12s even on slow
+        # targets. Was 10s which combined with secondary .map probes risked hitting
+        # the 300s frontend ceiling on Cloudflare-rate-limited targets.
         try:
-            r = requests.get(url, timeout=10, verify=False,
+            r = requests.get(url, timeout=6, verify=False,
                               headers={"User-Agent": "VulnusLab/1.0"})
             return r if r.status_code == 200 else None
         except Exception:

@@ -83,7 +83,10 @@ def _load_ai_wordlist():
 
 
 _AI_WORDLIST = _load_ai_wordlist()
-_ACTIVE_WORDLIST = _AI_WORDLIST or _BUILTIN_WORDLIST
+# Cap at 800 paths — full 3338-path AI list exceeds frontend's 300s scan budget
+# on Cloudflare-fronted targets that rate-limit. 800 high-impact paths covers
+# the same critical attack surface (secrets/config/admin/backups) in budget.
+_ACTIVE_WORDLIST = (_AI_WORDLIST or _BUILTIN_WORDLIST)[:800]
 
 
 async def gather(ctx: ScanContext):
@@ -128,8 +131,10 @@ async def gather(ctx: ScanContext):
     found = []
 
     def _probe(path):
+        # Aggressive timeout — 3338-path wordlist × 15s default would exceed
+        # the 300s frontend budget. 4s/no-retries fits within budget on slow targets.
         r = safe_get(f"{base}/{path}", headers=headers_used or {},
-                     allow_redirects=False)
+                     allow_redirects=False, timeout=4, retries=0)
         if r is None or r.status_code == 404:
             return None
         loc = (r.headers.get("Location", "") or "")[:200]
