@@ -1,0 +1,11 @@
+[
+  {
+    "label": "JuiceShop",
+    "base": "http://lab_juiceshop:3000",
+    "user": "admin@juice-sh.op",
+    "pw": "admin123",
+    "auth_type": "bearer",
+    "login_path": "/rest/user/login",
+    "host": null
+  }
+]
