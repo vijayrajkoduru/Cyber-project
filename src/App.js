@@ -3905,16 +3905,17 @@ function WebAppModule(props) {
           );
         })}
         </div>
-      </div>
 
-      {/* WAPT-TERMINAL-POSITION-V2 — Live terminal now sits AFTER the tools
-          end (was above the tabs before). Keeps the scan log close to the
-          tools that produced it. */}
-      <div style={{marginTop:18}}>
-        <div style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
-          📡 Live Scan Terminal
+        {/* WAPT-TERMINAL-POSITION-V2 — Live terminal now sits AFTER the tools
+            end (was above the tabs before). Keeps the scan log close to the
+            tools that produced it. INSIDE the outer phases-tab container so
+            the ternary remains a single expression. */}
+        <div style={{marginTop:18}}>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
+            📡 Live Scan Terminal
+          </div>
+          <Terminal lines={lines} height={160}/>
         </div>
-        <Terminal lines={lines} height={160}/>
       </div>
       )}
 
