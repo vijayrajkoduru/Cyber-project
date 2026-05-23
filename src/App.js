@@ -9990,16 +9990,97 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
                     "If encryption is mandatory: use JWE (encrypted JWT) instead of JWS"],
     };
 
-    // Risk score 0-100 — CVSS-weighted, severity-floored. Higher = riskier.
-    // Logic: each finding contributes its CVSS (capped at 10), worst severity drives min score.
+    // CWE → industry-baseline CVSS (NVD median). Used when scanner emits a
+    // finding without an explicit CVSS — Recon-derived scanners often omit it.
+    const _CVSS_DEFAULTS_BY_CWE = {
+      "CWE-79": 6.1, "CWE-89": 9.8, "CWE-78": 9.8, "CWE-22": 7.5,
+      "CWE-94": 9.8, "CWE-345": 9.8, "CWE-326": 7.5, "CWE-352": 6.8,
+      "CWE-538": 7.5, "CWE-601": 6.1, "CWE-611": 8.2, "CWE-613": 5.4,
+      "CWE-614": 5.9, "CWE-639": 6.5, "CWE-693": 5.4, "CWE-749": 5.3,
+      "CWE-918": 8.2, "CWE-942": 6.5, "CWE-1004": 6.1, "CWE-1021": 6.1,
+      "CWE-200": 5.3, "CWE-306": 9.8, "CWE-732": 7.5, "CWE-522": 7.5,
+    };
+    const _SEV_CVSS_FLOOR = {CRITICAL: 9.0, HIGH: 7.0, MEDIUM: 4.5, LOW: 2.5,
+                              INFO: 0, POSITIVE: 0};
+    const _resolveCvss = (f) => {
+      const explicit = parseFloat(f && (f.cvss || f.cvss_score) || 0);
+      if (!isNaN(explicit) && explicit > 0) return explicit;
+      const cwe = String((f && f.cwe) || "").toUpperCase().trim();
+      if (_CVSS_DEFAULTS_BY_CWE[cwe]) return _CVSS_DEFAULTS_BY_CWE[cwe];
+      return _SEV_CVSS_FLOOR[f && f.severity] || 0;
+    };
+
+    // CWE-326 collision: SSL/TLS misconfig AND weak JWT secret share the CWE.
+    // Disambiguate by finding title keyword so the attack narrative matches.
+    const _SSL_SCENARIOS = {
+      sslv3: "Attacker on the network path forces the TLS handshake to downgrade to SSLv3, then runs POODLE (CVE-2014-3566) padding-oracle attack to decrypt authenticated session cookies one byte at a time — leading to full session hijack of legitimate user accounts.",
+      sslv2: "SSLv2 is fundamentally broken. Attacker captures TLS traffic to the host and runs DROWN (CVE-2016-0800) against the SSLv2 endpoint to recover the server's private key, then retroactively decrypts every TLS session that ever used that key.",
+      tls10: "TLS 1.0 has known weaknesses (BEAST against CBC ciphers, RC4 biases). PCI-DSS forbids it since 2018; HIPAA / SOC2 auditors flag it. An on-path attacker can run BEAST (CVE-2011-3389) to recover cookies when CBC suites are negotiated.",
+      tls11: "TLS 1.1 is deprecated by RFC 8996 (March 2021). Compliance auditors (PCI, FedRAMP, SOC2) flag any TLS <1.2 endpoint as a finding. No live attack today, but the deprecation alone fails audit checklists.",
+      cipher: "Weak/legacy cipher suites (RC4, 3DES, EXPORT, NULL, anon-DH) enable known attacks: RC4-biases, SWEET32 (CVE-2016-2183) against 3DES, FREAK/Logjam against EXPORT, MITM via anonymous DH. Attacker on path selects the weakest mutually-supported suite and breaks it.",
+    };
+    const _SSL_PLAYBOOKS = {
+      sslv3: ["nginx: ssl_protocols TLSv1.2 TLSv1.3;",
+               "Apache: SSLProtocol all -SSLv2 -SSLv3 -TLSv1 -TLSv1.1",
+               "AWS ELB / ALB: switch to ELBSecurityPolicy-TLS-1-2-2017-01 or newer",
+               "Cloudflare: SSL/TLS > Edge Certificates > Minimum TLS Version = 1.2",
+               "Verify: nmap --script ssl-enum-ciphers -p 443 <host> (should NOT list SSLv3)"],
+      sslv2: ["Disable SSLv2 in your TLS stack (OpenSSL >= 1.1 compiles it out by default)",
+               "Rotate private keys IMMEDIATELY — DROWN may already have leaked them",
+               "Audit: openssl s_client -ssl2 -connect host:443 (must fail)",
+               "Set minimum protocol = TLSv1.2 across all load balancers / CDN edges"],
+      tls10: ["nginx: ssl_protocols TLSv1.2 TLSv1.3;",
+               "Apache: SSLProtocol all -SSLv2 -SSLv3 -TLSv1",
+               "Mirror change on any reverse proxy / CDN / WAF tier",
+               "Verify: openssl s_client -tls1 -connect host:443 (must fail)"],
+      tls11: ["nginx: ssl_protocols TLSv1.2 TLSv1.3; (omit TLSv1.1)",
+               "Cloudflare / Fastly: set min TLS = 1.2 in the edge config",
+               "Verify: openssl s_client -tls1_1 -connect host:443 (must fail)"],
+      cipher: ["nginx: ssl_ciphers 'ECDHE+AESGCM:ECDHE+CHACHA20:!aNULL:!MD5:!RC4:!3DES:!EXPORT';",
+                "ssl_prefer_server_ciphers on;",
+                "Remove anonymous (aNULL/eNULL) and EXPORT cipher suites",
+                "Verify: testssl.sh <host> — should report 0 weak ciphers"],
+    };
+
+    const _matchSSLKeyword = (name) => {
+      const nm = String(name || "").toLowerCase();
+      if (nm.includes("sslv3") || nm.includes("ssl v3") || nm.includes("poodle")) return "sslv3";
+      if (nm.includes("sslv2") || nm.includes("drown")) return "sslv2";
+      if (nm.includes("tls 1.0") || nm.includes("tlsv1.0") ||
+          (nm.includes("tlsv1") && !nm.includes("tlsv1."))) return "tls10";
+      if (nm.includes("tls 1.1") || nm.includes("tlsv1.1")) return "tls11";
+      if (nm.includes("cipher") || nm.includes("rc4") || nm.includes("3des") ||
+          nm.includes("export") || nm.includes("anon")) return "cipher";
+      if (nm.includes("ssl") || nm.includes("tls")) return "tls10";
+      return null;
+    };
+    const _lookupAttack = (cwe, name) => {
+      if (cwe === "CWE-326") {
+        const k = _matchSSLKeyword(name);
+        if (k && _SSL_SCENARIOS[k]) return _SSL_SCENARIOS[k];
+      }
+      return _ATTACK_SCENARIOS[cwe] || null;
+    };
+    const _lookupPlaybook = (cwe, name) => {
+      if (cwe === "CWE-326") {
+        const k = _matchSSLKeyword(name);
+        if (k && _SSL_PLAYBOOKS[k]) return _SSL_PLAYBOOKS[k];
+      }
+      return _PLAYBOOKS[cwe] || null;
+    };
+
+    // Risk score 0-100 — CVSS-weighted with severity-weight fallback for
+    // findings whose scanner didn't emit an explicit CVSS.
     const _computeRiskScore = (findings) => {
       if (!findings || findings.length === 0) return {score: 5, label: "MINIMAL RISK", color: [15,118,82]};
+      const real = findings.filter(f => ["CRITICAL","HIGH","MEDIUM","LOW"].includes(f && f.severity));
+      if (real.length === 0) return {score: 5, label: "MINIMAL RISK", color: [15,118,82]};
       let sum = 0, maxCvss = 0;
-      findings.forEach(f => {
-        const c = parseFloat(f.cvss || f.cvss_score || 0);
-        if (!isNaN(c)) { sum += c; if (c > maxCvss) maxCvss = c; }
+      real.forEach(f => {
+        const c = _resolveCvss(f);
+        sum += c;
+        if (c > maxCvss) maxCvss = c;
       });
-      // Score formula: normalize sum to 0-70, add severity bump to reach 100 on critical-heavy reports
       const raw = Math.min(70, sum * 2.5) + Math.min(30, maxCvss * 3);
       const score = Math.round(Math.min(100, Math.max(5, raw)));
       const label = score >= 80 ? "CRITICAL RISK" : score >= 60 ? "HIGH RISK" :
@@ -10079,7 +10160,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     // Tools used — Vuln-module scanner set
     const VULN_TOOLS=[
       // Tier 1 — CVE & template scanners
-      {tool:"nuclei",             label:"Nuclei",                 desc:"Community CVE template scanner (15k+ templates, severity≥medium)"},
+      {tool:"nuclei",             label:"Nuclei",                 desc:"Community CVE template scanner (15k+ templates, severity >= medium)"},
       {tool:"wpscan",             label:"WPScan",                 desc:"WordPress core / plugin / theme vulnerability scanner"},
       {tool:"nikto",              label:"Nikto",                  desc:"Web server vulnerability scanner (6700+ checks)"},
       // Tier 2 — Discovery & service detection
@@ -10487,7 +10568,10 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
             .replace(/\s*See:\s*https?:\/\/\S+/gi,"")
             .replace(/^\[\d+\]\s*/,"")
             .trim();
-          const cvss = String(f.cvss || f.cvss_score || "-");
+          const _resolvedCvss = _resolveCvss(f);
+          const cvss = _resolvedCvss > 0
+            ? _resolvedCvss.toFixed(1)
+            : String(f.cvss || f.cvss_score || "-");
           const cwe  = String(f.cwe || "-");
           const owasp= String(f.owasp || "-");
           const cweOwasp = (cwe!=="-" && owasp!=="-") ? `${cwe}\n${owasp}` : (cwe!=="-" ? cwe : owasp);
@@ -10515,8 +10599,8 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
           // Only emit for HIGH+CRITICAL findings so we don't clutter LOW/POSITIVE.
           const _cweKey = String(f.cwe || "").toUpperCase().trim();
           const _isHi = (f.severity === "CRITICAL" || f.severity === "HIGH");
-          const _attackText = _isHi ? _ATTACK_SCENARIOS[_cweKey] : null;
-          const _playbookSteps = _isHi ? _PLAYBOOKS[_cweKey] : null;
+          const _attackText = _isHi ? _lookupAttack(_cweKey, f.name) : null;
+          const _playbookSteps = _isHi ? _lookupPlaybook(_cweKey, f.name) : null;
           const _evidence = String(f.evidence_marker || "").trim();
           if (_attackText || _playbookSteps || (_isHi && _evidence)) {
             // Compute sub-block height
