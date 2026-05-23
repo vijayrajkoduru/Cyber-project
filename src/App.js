@@ -5961,8 +5961,9 @@ function OsintModule({token, apiUrl}) {
 
   return (
     <div style={C.wrap}>
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
       <ToolRefreshButton module="osint" token={token} />
+
 
 
       <div style={{marginBottom:20}}>
@@ -11642,8 +11643,9 @@ function BufferOverflowModule({token}) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#020617",color:"#e2e8f0"}}>
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
       <ToolRefreshButton module="buffer_overflow" token={token} />
+
 
 
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
@@ -11975,10 +11977,6 @@ function VulnModule(props) {
     const findings = (r.findings||[]).filter(f=>f.severity!=="INFO");
     if(findings.length===0) return (
       <div style={{padding:20,textAlign:"center"}}>
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="vuln" token={props.token} />
-
-
         <div style={{fontSize:28,marginBottom:8}}>✅</div>
         <div style={{color:"#4ade80",fontSize:13,fontWeight:600}}>No significant findings</div>
         <div style={{color:"#475569",fontSize:11,marginTop:4}}>Scan completed — target appears clean for this check</div>
@@ -12121,6 +12119,17 @@ function VulnModule(props) {
           )}
         </div>
       </div>
+
+      {/* TOOL-REFRESH-V2 — sits before the Vulnerability Scanning tools */}
+      <ToolRefreshButton
+        module="vuln"
+        token={props.token}
+        disabled={running}
+        onClear={() => {
+          setAllResults({}); setDone([]); setFinished(false); setCurrent(-1);
+          setLines(["Ready — enter target and click Run All Scans"]);
+        }}
+      />
 
       {/* Phase progress — professional dense list */}
       <div style={{marginBottom:16,border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
@@ -12287,8 +12296,9 @@ function PasswordModule(props) {
 
   return (
     <div className="fade">
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
       <ToolRefreshButton module="password" token={props.token} />
+
 
 
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:16}}>
@@ -12412,8 +12422,9 @@ function NetworkAttacksModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
       <ToolRefreshButton module="network" token={token} />
+
 
 
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
@@ -12530,8 +12541,9 @@ function SystemExploitModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
       <ToolRefreshButton module="system_exploit" token={token} />
+
 
 
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
@@ -12644,8 +12656,9 @@ function CloudAttacksModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
       <ToolRefreshButton module="cloud_attacks" token={token} />
+
 
 
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
@@ -12762,8 +12775,9 @@ function AuthAttacksModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
       <ToolRefreshButton module="auth_attacks" token={token} />
+
 
 
       <div style={{marginBottom:24,background:"#0f172a",borderRadius:12,padding:20,border:"1px solid #1e293b"}}>
