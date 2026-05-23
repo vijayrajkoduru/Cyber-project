@@ -109,7 +109,7 @@ def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
 
     return vuln_response(tool="nuclei", target=req.target, findings=findings,
         tested=max(len(parsed), 1),
-        what_checked="community Nuclei templates (CVE / exposure / misconfig, severity ≥ medium)",
+        what_checked="community Nuclei templates (CVE / exposure / misconfig, severity >= medium)",
         tests_summary=(f"Nuclei: {len(findings)} finding(s) from community templates "
                        f"(severity≥medium, safe-only tags, auth headers injected)"),
         raw_data={"nuclei": {"matches": parsed[:50],
