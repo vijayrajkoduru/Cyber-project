@@ -78,6 +78,32 @@ _PANEL_SIGNATURES = [
     ("/oauth2/", "OAuth proxy", r"OAuth", False),
 ]
 
+# AI-curated extra panel paths — 248 entries covering vendor-specific routes
+# the hand-curated _PANEL_SIGNATURES misses. Each gets a generic signature
+# matcher and is flagged as has-default-cred-history=True (conservative).
+try:
+    from tools._payloads.default_cred_paths import DEFAULT_CRED_PATHS as _AI_PATHS
+    _existing_paths = {p[0] for p in _PANEL_SIGNATURES}
+    for _entry in sorted(_AI_PATHS, key=lambda x: -int(x.get("priority", 5))):
+        if not isinstance(_entry, dict): continue
+        path = _entry.get("path")
+        if not path or path in _existing_paths: continue
+        product = _entry.get("category", "panel").replace("_", " ").title()
+        # Build a signature regex from expected_indicators
+        indicators = _entry.get("expected_indicators", [])
+        sig = "|".join(re.escape(i) for i in indicators if isinstance(i, str)) or r"login|sign[\\s-]?in|password"
+        _PANEL_SIGNATURES.append((path, product, sig, True))
+        _existing_paths.add(path)
+except Exception:
+    pass  # Fallback to the hand-curated 33 entries only
+
+# AI-curated credential pairs — exposed for downstream consumers that want
+# to attempt actual login (not used by this scanner itself — we DETECT only).
+try:
+    from tools._payloads.default_cred_pairs import DEFAULT_CRED_PAIRS as _AI_CRED_PAIRS
+except Exception:
+    _AI_CRED_PAIRS = []
+
 
 def _probe(url, signature, base_404_len):
     try:
