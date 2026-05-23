@@ -1,5 +1,6 @@
 """CSRF — passive form + cookie SameSite analysis."""
 import re
+import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -24,15 +25,21 @@ def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
             tested=1, skipped_reason=unreachable)
     findings, tests, forms_seen = [], 0, []
     samesite = "unknown"
-    r0 = safe_get(base, req=req, allow_redirects=True, timeout=10)
+    # VL-TURBO wall-clock cap: 9 calls × 10s × 3 retries = up to 4.5 min worst case.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 30.0
+    _bailed = False
+    r0 = safe_get(base, req=req, allow_redirects=True, timeout=8, retries=0)
     if r0 is not None:
         for c in r0.cookies:
             if hasattr(c, "_rest"):
                 for k, v in c._rest.items():
                     if k.lower() == "samesite": samesite = v.lower(); break
     for path in _PAGES:
+        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
         tests += 1
-        r = safe_get(base + path, req=req, allow_redirects=True, timeout=10)
+        r = safe_get(base + path, req=req, allow_redirects=True, timeout=8, retries=0)
         if r is None or r.status_code != 200: continue
         for method, form_html in _FORM_RE.findall(r.text or "")[:5]:
             method = (method or "GET").upper()
@@ -45,9 +52,13 @@ def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
                     "MEDIUM", cvss="6.5", cwe="CWE-352", owasp="A01:2021",
                     remediation="Add CSRF token to state-changing forms. Use framework CSRF middleware (Django/Rails/Express csurf). Set SameSite=Lax on session cookies.",
                     evidence_marker=f"{method} form at {path} has no CSRF token AND SameSite={samesite}"))
+    summary = f"CSRF: crawled {tests} pages, analysed {len(forms_seen)} state-changing forms in {time.time() - _wallclock_start:.1f}s"
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return vuln_response(tool="csrf", target=req.target, findings=findings,
-        tested=tests,
+        tested=max(tests, 1),
         what_checked="state-changing forms for missing CSRF tokens + cookie SameSite",
-        tests_summary=f"CSRF: crawled {tests} pages, analysed {len(forms_seen)} state-changing forms",
-        raw_data={"csrf": {"forms_seen": forms_seen, "samesite_status": samesite}})
+        tests_summary=summary,
+        raw_data={"csrf": {"forms_seen": forms_seen, "samesite_status": samesite,
+                            "wallclock_bailed": _bailed}})
 def register(app): app.include_router(router)

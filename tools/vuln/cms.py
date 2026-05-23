@@ -6,6 +6,7 @@ CMS, static-site generators, e-commerce, forum, LMS, panel software).
 Falls back to a 14-entry hardcoded baseline if missing.
 """
 import re
+import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -43,10 +44,18 @@ def scan_cms(req: ScanRequest, payload=Depends(verify_scan_quota)):
         return vuln_response(tool="cms", target=req.target, findings=[],
             tested=1, skipped_reason=unreachable)
     findings, tests, detected = [], 0, set()
+    # VL-TURBO wall-clock cap: 89 fingerprints × 8s × 3 retries = up to 35 min
+    # on slow targets. Bail at 30s with whatever we've detected so far.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 30.0
+    _bailed = False
     for name, path, marker, desc in _FINGERPRINTS:
+        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
         if name in detected: continue
         tests += 1
-        r = safe_get(base + path, req=req, allow_redirects=True, timeout=8)
+        # retries=0 — fingerprint scanning is best-effort; one shot per path
+        r = safe_get(base + path, req=req, allow_redirects=True, timeout=6, retries=0)
         if r is None or r.status_code != 200: continue
         body = (r.text or "")[:20000]
         if re.search(marker, body, re.IGNORECASE) or re.search(marker, str(dict(r.headers)), re.IGNORECASE):
@@ -60,16 +69,24 @@ def scan_cms(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 "LOW", cvss="3.1", cwe="CWE-200", owasp="A05:2021",
                 remediation=f"{name} fingerprint exposed publicly. Strip generator meta tags, update plugins/themes, consider WAF.",
                 evidence_marker=f"GET {path} matched: {desc}"))
-    if not detected:
-        return standard_response(tool="cms", target=req.target, findings=[],
-            tests_performed=tests, vulnerable=False,
-            skipped_reason="No CMS fingerprint matched on this target")
     platform_count = len({e[0] for e in _FINGERPRINTS})
+    if not detected:
+        reason = "No CMS fingerprint matched on this target"
+        if _bailed:
+            reason += f" (wall-clock bailed at {_WALLCLOCK_BUDGET}s after {tests} probes — target too slow for full {len(_FINGERPRINTS)}-fingerprint sweep)"
+        return vuln_response(tool="cms", target=req.target, findings=[],
+            tested=max(tests, 1), skipped_reason=reason,
+            raw_data={"cms": {"detected": [], "wordlist_size": len(_FINGERPRINTS),
+                              "platforms_covered": platform_count, "wallclock_bailed": _bailed}})
+    summary = f"CMS fingerprinting: {tests} checks across {platform_count} platforms; detected: {', '.join(sorted(detected))} in {time.time() - _wallclock_start:.1f}s"
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return vuln_response(tool="cms", target=req.target, findings=findings,
         tested=tests,
         what_checked=f"CMS / framework fingerprints ({len(_FINGERPRINTS)}-entry AI-curated wordlist covering ~{platform_count} platforms)",
-        tests_summary=f"CMS fingerprinting: {tests} checks across {platform_count} platforms; detected: {', '.join(sorted(detected))}",
+        tests_summary=summary,
         raw_data={"cms": {"detected": sorted(detected),
                           "wordlist_size": len(_FINGERPRINTS),
-                          "platforms_covered": platform_count}})
+                          "platforms_covered": platform_count,
+                          "wallclock_bailed": _bailed}})
 def register(app): app.include_router(router)

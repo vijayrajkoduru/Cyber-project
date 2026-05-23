@@ -4,7 +4,7 @@ Secret dictionary: AI-curated 695-entry wordlist at
 tools/_payloads/vuln/jwt_secrets.txt (loaded once at import, falls back
 to a 32-entry hardcoded baseline if the file is missing).
 """
-import base64, hashlib, hmac, json, re
+import base64, hashlib, hmac, json, re, time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -78,12 +78,14 @@ def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, confirmed, tokens = [], [], []
     pages = 0
+    # VL-TURBO wall-clock cap: 11 page crawls × 10s × 3 retries = up to ~5 min worst case.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 30.0
+    _bailed = False
 
     # ── If the user authenticated (auto-login captured a bearer), test THAT
     # token directly — it's the real production JWT, complete with the real
-    # signing key/alg. This catches alg=none / weak-secret / missing-exp on
-    # apps like Juice Shop where the JWT is only returned to /rest/user/login
-    # POST and would never be found by passive crawling.
+    # signing key/alg.
     if getattr(req, "auth_bearer", None):
         tok = req.auth_bearer.strip()
         if tok and tok not in tokens:
@@ -93,8 +95,10 @@ def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
     for path in ["/", "/login", "/api/login", "/api/auth/login", "/api/me",
                  "/profile", "/account", "/settings", "/api/auth/me", "/api/user",
                  "/rest/user/whoami"]:
+        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
         pages += 1
-        r = safe_get(base + path, req=req, allow_redirects=True, timeout=10)
+        r = safe_get(base + path, req=req, allow_redirects=True, timeout=6, retries=0)
         if r is None: continue
         haystack = " ".join([str(r.headers.get("Set-Cookie", "")),
                               str(r.headers.get("Authorization", "")),
@@ -104,13 +108,22 @@ def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 tokens.append(tok)
                 _analyze(tok, findings, confirmed)
     if not tokens:
-        return standard_response(tool="jwt", target=req.target, findings=[],
-            tests_performed=pages, vulnerable=False,
-            skipped_reason=f"No JWT tokens found across {pages} crawled endpoints")
+        reason = f"No JWT tokens found across {pages} crawled endpoints"
+        if _bailed:
+            reason += f" (wall-clock bailed at {_WALLCLOCK_BUDGET}s)"
+        return vuln_response(tool="jwt", target=req.target, findings=[],
+            tested=max(pages, 1), skipped_reason=reason,
+            raw_data={"jwt": {"tokens_found": 0, "wallclock_bailed": _bailed}})
+    summary = (f"JWT: crawled {pages} endpoints in {time.time() - _wallclock_start:.1f}s, "
+               f"found {len(tokens)} token(s); checked alg=none + crack against "
+               f"{len(_SECRETS)} secrets + missing exp + PII")
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return vuln_response(tool="jwt", target=req.target, findings=findings,
         tested=pages,
         what_checked=f"JWT tokens for alg=none, weak HMAC secrets ({len(_SECRETS)}-entry AI-curated wordlist), missing exp, PII leakage",
-        tests_summary=f"JWT: crawled {pages} endpoints, found {len(tokens)} token(s); checked alg=none + crack against {len(_SECRETS)} secrets + missing exp + PII",
+        tests_summary=summary,
         raw_data={"jwt": {"tokens_found": len(tokens), "issues_confirmed": confirmed,
-                          "secret_dictionary_size": len(_SECRETS)}})
+                          "secret_dictionary_size": len(_SECRETS),
+                          "wallclock_bailed": _bailed}})
 def register(app): app.include_router(router)
