@@ -1,0 +1,154 @@
+"""Recon module orchestrator endpoint — VL-FORGE v2.
+
+Single POST /api/recon/run_all replaces 41 sequential frontend calls.
+Backend fans out to every /api/recon/<tool> endpoint in parallel via
+the shared orchestrator engine in tools/_framework/orchestrator.py.
+
+Expected speedup: ~5 min (sequential) → ~30-60 sec (parallel) for a
+fresh scan of a Cloudflare-fronted target.
+
+Tier filtering: optional `tiers` field in the request body lets the
+frontend run only a subset — e.g. tiers=["tier1_dns", "tier2_subdomain"]
+for a 30-second smoke check before the full scan.
+"""
+from typing import Optional
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+
+from tools._shared import verify_scan_quota
+from tools._framework.orchestrator import run_module_parallel
+
+router = APIRouter()
+
+
+# Registry of every recon tool and its endpoint path. Tier-tagged so the
+# frontend can run subsets. ORDER MATTERS for display but not execution
+# (orchestrator runs in parallel regardless of list order).
+RECON_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
+    "tier1_dns": [
+        ("whois",         "/api/recon/whois"),
+        ("dns",           "/api/recon/dns"),
+        ("dnsrecon",      "/api/recon/dnsrecon"),
+        ("zone_transfer", "/api/recon/zone_transfer"),
+    ],
+    "tier2_subdomain": [
+        ("subdomains", "/api/recon/subdomains"),
+        ("crtsh",      "/api/recon/crtsh"),
+        ("amass",      "/api/recon/amass"),
+        ("cdn_origin", "/api/recon/cdn_origin"),
+    ],
+    "tier3_network": [
+        ("masscan",  "/api/recon/masscan"),   # portscan.py registers this route
+        ("nmap",     "/api/recon/nmap"),
+        ("services", "/api/recon/services"),
+        ("os",       "/api/recon/os"),
+        ("banner",   "/api/recon/banner"),
+    ],
+    "tier4_web": [
+        ("gobuster",    "/api/recon/gobuster"),
+        ("jsendpoints", "/api/recon/jsendpoints"),
+        ("wayback",     "/api/recon/wayback"),
+        ("robotsmap",   "/api/recon/robotsmap"),
+        ("crawl",       "/api/recon/crawl"),
+        ("params",      "/api/recon/params"),
+        ("favicon",     "/api/recon/favicon"),
+    ],
+    "tier5_cloud": [
+        ("cloudbuckets", "/api/recon/cloudbuckets"),
+        ("bucket_perms", "/api/recon/bucket_perms"),
+        ("asn",          "/api/recon/asn"),
+    ],
+    "tier6_threat": [
+        ("shodan",     "/api/recon/shodan"),
+        ("internetdb", "/api/recon/internetdb"),
+        ("cve_match",  "/api/recon/cve_match"),
+        ("waf_cdn",    "/api/recon/waf_cdn"),
+        ("harvester",  "/api/recon/harvester"),
+    ],
+    "tier7_app": [
+        ("sourcemap",     "/api/recon/sourcemap"),
+        ("api_docs",      "/api/recon/api_docs"),
+        ("tls_deep",      "/api/recon/tls_deep"),
+        ("wpjson_enum",   "/api/recon/wpjson_enum"),
+        ("default_creds", "/api/recon/default_creds"),
+        ("jslib_cve",     "/api/recon/jslib_cve"),
+        ("git_recon",     "/api/recon/git_recon"),
+    ],
+    "tier8_osint": [
+        ("breach_search",      "/api/recon/breach_search"),
+        ("github_leaks",       "/api/recon/github_leaks"),
+        ("graphql_introspect", "/api/recon/graphql_introspect"),
+        ("email_security",     "/api/recon/email_security"),
+        ("dork_harvest",       "/api/recon/dork_harvest"),
+        ("dnssec_validate",    "/api/recon/dnssec_validate"),
+    ],
+}
+
+
+def _all_tools() -> list[tuple[str, str]]:
+    out = []
+    for tier in RECON_TOOLS_BY_TIER.values():
+        out.extend(tier)
+    return out
+
+
+class RunAllRequest(BaseModel):
+    target: str
+    tiers: Optional[list[str]] = None       # subset, e.g. ["tier1_dns","tier2_subdomain"]
+    concurrency: Optional[int] = 8          # max in-flight tool calls
+    auth_cookie: Optional[str] = None       # SPA session cookie (forwarded to each tool)
+    auth_bearer: Optional[str] = None       # JWT bearer (forwarded to each tool)
+    shodan_api_key: Optional[str] = None    # tier6 shodan needs this
+
+
+@router.post("/api/recon/run_all")
+async def recon_run_all(req: RunAllRequest, _=Depends(verify_scan_quota)):
+    """Fan-out scan: dispatch every selected recon tool in parallel.
+
+    Returns the aggregated result + per-tool timing + summary counts.
+    See tools/_framework/orchestrator.py:run_module_parallel for the
+    response shape.
+    """
+    if req.tiers:
+        tools = []
+        for tier in req.tiers:
+            if tier in RECON_TOOLS_BY_TIER:
+                tools.extend(RECON_TOOLS_BY_TIER[tier])
+    else:
+        tools = _all_tools()
+
+    extra = {}
+    if req.shodan_api_key:
+        # Forwarded to every tool body — only the shodan handler reads it.
+        extra["api_key"] = req.shodan_api_key
+
+    return await run_module_parallel(
+        target=req.target,
+        tools=tools,
+        module_name="recon",
+        concurrency=max(1, min(req.concurrency or 8, 16)),
+        auth_cookie=req.auth_cookie,
+        auth_bearer=req.auth_bearer,
+        extra_body=extra or None,
+    )
+
+
+@router.get("/api/recon/run_all/tiers")
+async def recon_run_all_tiers():
+    """Discovery endpoint: list the tier IDs the frontend can select.
+
+    Used by the UI to render tier-filter checkboxes ("Quick scan: Tier 1-2 only").
+    """
+    return {
+        "tiers": [
+            {"id": tier_id, "tools": [name for name, _ in tools],
+              "count": len(tools)}
+            for tier_id, tools in RECON_TOOLS_BY_TIER.items()
+        ],
+        "total_tools": sum(len(t) for t in RECON_TOOLS_BY_TIER.values()),
+    }
+
+
+def register(app):
+    app.include_router(router)
