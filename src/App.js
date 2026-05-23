@@ -333,6 +333,97 @@ function severityColor(sev) {
   return "gray";
 }
 
+// ── TOOL-REFRESH-V2 ──────────────────────────────────────────────────
+// Generic "Tool Refresh" button placed before each module's tools start.
+// Wipes the customer's per-module scan history + report cache, both in
+// React state (via onClear callback) and in the backend (via the generic
+// /api/tool_refresh endpoint). Replaces the v1 module-specific
+// /api/recon/clear_history endpoint with a single allowlisted one.
+//
+// Usage in each module's render, immediately ABOVE the tool tiles:
+//   <ToolRefreshButton
+//     module="recon"
+//     token={token}
+//     disabled={running}
+//     onClear={() => { setAll({}); setDone([]); setFailed([]); ... }}
+//   />
+function ToolRefreshButton({module, token, disabled, onClear, label}) {
+  const [busy, setBusy] = React.useState(false);
+  const [lastMsg, setLastMsg] = React.useState("");
+  const handleClick = async () => {
+    if (busy || disabled) return;
+    setBusy(true);
+    setLastMsg("");
+    // 1. Frontend: clear React state immediately (snappy UX).
+    try { if (typeof onClear === "function") onClear(); }
+    catch(e) { console.error("[tool-refresh] onClear threw", e); }
+    // 2. Backend: wipe the user's scan/report/cache dirs for this module.
+    try {
+      const r = await api("/api/tool_refresh", "POST", {module}, token);
+      if (r && r.ok) {
+        setLastMsg(`✓ Cleared ${r.files_deleted||0} file(s) · ${((r.freed_bytes||0)/1024).toFixed(1)} KB freed`);
+      } else {
+        setLastMsg(`! ${r && r.error || "backend clear failed"}`);
+      }
+    } catch(e) {
+      setLastMsg(`! ${e?.message || "request failed"}`);
+    }
+    setBusy(false);
+    // Fade the confirmation message after 4s
+    setTimeout(() => setLastMsg(""), 4000);
+  };
+  const _disabled = disabled || busy;
+  return (
+    <div data-tool-refresh={module} style={{
+      display:"flex", alignItems:"center", gap:10,
+      padding:"10px 14px",
+      background:"#0a0f1e",
+      border:"1px solid #1e3a8a",
+      borderRadius:8,
+      marginBottom:12,
+    }}>
+      <button
+        onClick={handleClick}
+        disabled={_disabled}
+        title={`Clear all scan results, cache, and history for the ${module} module (this user only)`}
+        style={{
+          background: _disabled ? "#1e293b" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
+          border: "1px solid " + (_disabled ? "#334155" : "#a78bfa"),
+          color: _disabled ? "#64748b" : "#fff",
+          padding: "7px 16px",
+          borderRadius: 6,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: _disabled ? "not-allowed" : "pointer",
+          opacity: _disabled ? 0.5 : 1,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          letterSpacing: 0.3,
+        }}
+      >
+        <span style={{fontSize:14}}>{busy ? "⟳" : "↻"}</span>
+        {label || "Tool Refresh"}
+      </button>
+      <span style={{fontSize:11, color:"#64748b", flex:1}}>
+        Wipe this module's scan history + tool cache before starting a fresh scan
+      </span>
+      {lastMsg && (
+        <span style={{
+          fontSize:11,
+          fontFamily:"JetBrains Mono,monospace",
+          color: lastMsg.startsWith("✓") ? "#4ade80" : "#fb923c",
+          padding:"2px 8px",
+          background:"#020617",
+          borderRadius:4,
+          border:"1px solid #1e293b",
+          whiteSpace:"nowrap",
+        }}>{lastMsg}</span>
+      )}
+    </div>
+  );
+}
+
 const Tagline = ({size=10}) => (
   <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0}}>
     <div style={{flex:1,height:1,background:"linear-gradient(90deg,transparent,#3b82f6)"}}/>
@@ -3553,6 +3644,17 @@ function WebAppModule(props) {
       {tab==="phases" && (
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
 
+        {/* TOOL-REFRESH-V2 — before the WAPT tools start */}
+        <ToolRefreshButton
+          module="webapp"
+          token={token}
+          disabled={running}
+          onClear={() => {
+            setAll({}); setDone([]); setFailed([]); setFinished(false);
+            setCurPhase(-1); setLines(["Ready — pick a target and click Start"]);
+          }}
+        />
+
         {/* Badge Legend */}
         <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,flexWrap:"wrap"}}>
           <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
@@ -4924,7 +5026,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
 }
 
 // ── SHARED MODULE SHELL ──────────────────────────────────────
-function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn}) {
+function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn, moduleKey}) {
   const API = apiUrl || getApiUrl();
   const tok = token || getAuthToken();
   const [target, setTarget] = useState("");
@@ -5037,6 +5139,16 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
           {extraInputs && extraInputs(opts, setOpts)}
         </div>
 
+        {/* TOOL-REFRESH-V2 — sits before the attack/tool tiles */}
+        {moduleKey && (
+          <ToolRefreshButton
+            module={moduleKey}
+            token={tok}
+            disabled={!!loading}
+            onClear={() => setResults({})}
+          />
+        )}
+
         {/* Attack Cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
           {attacks.map(atk => {
@@ -5127,7 +5239,7 @@ function WirelessModule({token, apiUrl}) {
     <input placeholder="BSSID (deauth)" value={opts.bssid||""} onChange={e=>setOpts(p=>({...p,bssid:e.target.value}))}
       style={{width:155,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Wireless Attacks" icon="📶" color="#8b5cf6" desc="WiFi penetration — network scan, WPA handshake capture, deauth, aircrack-ng cracking" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Wireless Attacks" moduleKey="wireless" icon="📶" color="#8b5cf6" desc="WiFi penetration — network scan, WPA handshake capture, deauth, aircrack-ng cracking" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── ACTIVE DIRECTORY ─────────────────────────────────────────
@@ -5172,7 +5284,7 @@ function ActiveDirectoryModule({token, apiUrl}) {
     <input type="password" placeholder="Password" value={opts.password||""} onChange={e=>setOpts(p=>({...p,password:e.target.value}))}
       style={{width:110,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Active Directory Attacks" icon="🏰" color="#ef4444" desc="Full AD attack chain — Kerberoasting, AS-REP Roasting, BloodHound, DCSync, PsExec" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,dc_ip:t}})}/>;
+  return <ModuleShell title="Active Directory Attacks" moduleKey="ad" icon="🏰" color="#ef4444" desc="Full AD attack chain — Kerberoasting, AS-REP Roasting, BloodHound, DCSync, PsExec" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,dc_ip:t}})}/>;
 }
 
 // ── PRIVILEGE ESCALATION ─────────────────────────────────────
@@ -5209,7 +5321,7 @@ function PrivescModule({token, apiUrl}) {
      requires:"Shell access on Linux target + les.py at /tmp/",
      vulns:["Dirty COW (CVE-2016-5195)","OverlayFS (CVE-2021-3493)","PwnKit (CVE-2021-4034)","Baron Samedit sudo (CVE-2021-3156)"]},
   ];
-  return <ModuleShell title="Privilege Escalation" icon="📈" color="#f59e0b" desc="Automated Linux privesc — LinPEAS, SUID abuse, sudo misconfig, capabilities, cron jobs" token={token} apiUrl={apiUrl} attacks={attacks}/>;
+  return <ModuleShell title="Privilege Escalation" moduleKey="privesc" icon="📈" color="#f59e0b" desc="Automated Linux privesc — LinPEAS, SUID abuse, sudo misconfig, capabilities, cron jobs" token={token} apiUrl={apiUrl} attacks={attacks}/>;
 }
 
 // ── PIVOTING & TUNNELING ─────────────────────────────────────
@@ -5257,7 +5369,7 @@ function TunnelModule({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"8080"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Pivoting & Tunneling" icon="🕳" color="#06b6d4" desc="Network pivoting through compromised hosts — Chisel, Ligolo-ng, Socat, SSH, Proxychains" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,rhost:t}})}/>;
+  return <ModuleShell title="Pivoting & Tunneling" moduleKey="pivot" icon="🕳" color="#06b6d4" desc="Network pivoting through compromised hosts — Chisel, Ligolo-ng, Socat, SSH, Proxychains" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,rhost:t}})}/>;
 }
 
 // ── POST EXPLOITATION ─────────────────────────────────────────
@@ -5299,7 +5411,7 @@ function PostExploitModule({token, apiUrl}) {
      vulns:["Unencrypted SSH private keys","AWS/GCP credentials stored on disk","Password manager files","Browser saved passwords","Git credentials"],
      hackerImpact:"Developer machine often has SSH keys to production servers, cloud API keys, and git credentials. Attacker pivots from developer laptop to entire cloud infrastructure."},
   ];
-  return <ModuleShell title="Post Exploitation" icon="🎯" color="#10b981" desc="After gaining shell — credential harvesting, persistence detection, internal network mapping" token={token} apiUrl={apiUrl} attacks={attacks}/>;
+  return <ModuleShell title="Post Exploitation" moduleKey="post_exploit" icon="🎯" color="#10b981" desc="After gaining shell — credential harvesting, persistence detection, internal network mapping" token={token} apiUrl={apiUrl} attacks={attacks}/>;
 }
 
 // ── ANTIVIRUS EVASION ─────────────────────────────────────────
@@ -5340,7 +5452,7 @@ function AVEvasionModule({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"4444"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Antivirus Evasion" icon="👻" color="#a855f7" desc="AV/EDR detection, AMSI bypass, Veil Evasion framework, multi-encoder payload obfuscation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Antivirus Evasion" moduleKey="av_evasion" icon="👻" color="#a855f7" desc="AV/EDR detection, AMSI bypass, Veil Evasion framework, multi-encoder payload obfuscation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── SOCIAL ENGINEERING ────────────────────────────────────────
@@ -5383,7 +5495,7 @@ function SocialEngineeringModule({token, apiUrl}) {
       <option value="hta">HTA</option><option value="vbs">VBScript</option><option value="ps1">PS1</option><option value="doc">DOC</option>
     </select>
   </>);
-  return <ModuleShell title="Social Engineering" icon="🎭" color="#f43f5e" desc="Phishing emails, site cloning, SET credential harvester, malicious document payloads" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Social Engineering" moduleKey="social_eng" icon="🎭" color="#f43f5e" desc="Phishing emails, site cloning, SET credential harvester, malicious document payloads" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── MALWARE ANALYSIS ─────────────────────────────────────────
@@ -5422,7 +5534,7 @@ function MalwareModule({token, apiUrl}) {
     <input placeholder="File path on Kali (/tmp/sample.exe)" value={opts.filepath||""} onChange={e=>setOpts(p=>({...p,filepath:e.target.value}))}
       style={{flex:1,minWidth:260,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   );
-  return <ModuleShell title="Malware Analysis" icon="🦠" color="#dc2626" desc="Static analysis, string extraction, YARA scanning, hash lookup — no sandbox required" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Malware Analysis" moduleKey="malware" icon="🦠" color="#dc2626" desc="Static analysis, string extraction, YARA scanning, hash lookup — no sandbox required" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── SUPPLY CHAIN ─────────────────────────────────────────────
@@ -5458,7 +5570,7 @@ function SupplyChainModule({token, apiUrl}) {
       <option value="npm">npm</option><option value="pip">pip</option>
     </select>
   </>);
-  return <ModuleShell title="Supply Chain Security" icon="⛓" color="#0ea5e9" desc="Dependency confusion, package auditing, SBOM generation — software supply chain security" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Supply Chain Security" moduleKey="supply_chain" icon="⛓" color="#0ea5e9" desc="Dependency confusion, package auditing, SBOM generation — software supply chain security" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── ADVANCED PERSISTENCE ──────────────────────────────────────
@@ -5499,7 +5611,7 @@ function PersistenceModule({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"4444"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Advanced Persistence" icon="👁" color="#7c3aed" desc="Rootkit detection, cron/systemd backdoors, persistence IoC hunting — offensive + defensive" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Advanced Persistence" moduleKey="persistence" icon="👁" color="#7c3aed" desc="Rootkit detection, cron/systemd backdoors, persistence IoC hunting — offensive + defensive" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── OSINT PDF ─────────────────────────────────────────────────
@@ -5848,6 +5960,10 @@ function OsintModule({token, apiUrl}) {
 
   return (
     <div style={C.wrap}>
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="osint" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{marginBottom:20}}>
         <div style={{fontSize:22,fontWeight:900,color:"#60a5fa",letterSpacing:4,marginBottom:4}}>OSINT & THREAT INTEL</div>
         <div style={{color:"#475569",fontSize:12}}>Email harvesting · GeoIP · VirusTotal · AbuseIPDB · Sherlock · Recon-ng · SpiderFoot</div>
@@ -6072,7 +6188,7 @@ function ClientSideModule({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"4444"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Client-Side Attacks" icon="💻" color="#e11d48" desc="Browser exploitation with BeEF, HTA payloads, malicious Office macro VBA generation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Client-Side Attacks" moduleKey="client_side" icon="💻" color="#e11d48" desc="Browser exploitation with BeEF, HTA payloads, malicious Office macro VBA generation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── MOBILE TESTING ────────────────────────────────────────────
@@ -6113,7 +6229,7 @@ function MobileModule({token, apiUrl}) {
     <input placeholder="Package name" value={opts.package_name||""} onChange={e=>setOpts(p=>({...p,package_name:e.target.value}))}
       style={{width:180,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Mobile App Testing" icon="📱" color="#0d9488" desc="Android APK analysis, jadx decompilation, permission audit, Frida SSL/root bypass scripts" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Mobile App Testing" moduleKey="mobile" icon="📱" color="#0d9488" desc="Android APK analysis, jadx decompilation, permission audit, Frida SSL/root bypass scripts" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── API SECURITY ──────────────────────────────────────────────
@@ -6152,7 +6268,7 @@ function ApiSecModule({token, apiUrl}) {
     <input placeholder="Auth token (optional)" value={opts.token||""} onChange={e=>setOpts(p=>({...p,token:e.target.value}))}
       style={{width:220,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   );
-  return <ModuleShell title="API Security Testing" icon="🔌" color="#2563eb" desc="OpenAPI discovery, ffuf endpoint fuzzing, arjun parameter discovery, auth bypass testing" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="API Security Testing" moduleKey="apisec" icon="🔌" color="#2563eb" desc="OpenAPI discovery, ffuf endpoint fuzzing, arjun parameter discovery, auth bypass testing" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 
@@ -6195,7 +6311,7 @@ function PivotModule({token, apiUrl}) {
      vulns:["Full Layer 3 network access","No proxychains needed — native tool support","Fastest pivot method available"],
      hackerImpact:"Fastest pivot tool. OSCP students use this on exam. Creates real network interface — you can run nmap, metasploit, browser natively against internal 10.x.x.x subnet with zero proxy overhead."},
   ];
-  return <ModuleShell title="Pivoting & Lateral Movement" icon="🔄" color="#7c3aed" desc="SSH tunnels, SOCKS proxies, chisel, ligolo-ng — move through internal networks after initial compromise" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Pivoting & Lateral Movement" moduleKey="pivot" icon="🔄" color="#7c3aed" desc="SSH tunnels, SOCKS proxies, chisel, ligolo-ng — move through internal networks after initial compromise" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── CLOUD SECURITY ─────────────────────────────────────────────
@@ -6230,7 +6346,7 @@ function CloudModule({token, apiUrl}) {
      vulns:["Public GCS bucket with sensitive data","allUsers IAM binding (world-readable)","Compute Engine metadata accessible","Service account key files exposed in bucket"],
      hackerImpact:"GCS bucket company-data open to allUsers → contains service account JSON keys → attacker authenticates to GCP with Owner role → full cloud infrastructure access."},
   ];
-  return <ModuleShell title="Cloud Security Testing" icon="☁️" color="#0891b2" desc="AWS S3 enumeration, SSRF metadata attacks, Azure AD enumeration, GCP bucket misconfigurations" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Cloud Security Testing" moduleKey="cloud" icon="☁️" color="#0891b2" desc="AWS S3 enumeration, SSRF metadata attacks, Azure AD enumeration, GCP bucket misconfigurations" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── REPORT WRITING ─────────────────────────────────────────────
@@ -8324,32 +8440,6 @@ function ReconModule({token, onRunningChange}) {
     return next;
   });
 
-  // ── RECON-REFRESH-V1 ─────────────────────────────────────────────────
-  // "Refresh" button in the module header. Wipes the customer's dashboard
-  // state (results, log, tile statuses) AND calls /api/recon/clear_history
-  // so any persisted scan files in the user's zone are also cleared. Built
-  // to be fast (single backend rmtree, no DB transactions, no confirmation
-  // modal — clicking = committing).
-  const refresh = async () => {
-    if (running) return;   // can't refresh while a scan is in-flight
-    // 1. Clear all React state instantly — UI snaps back to clean state.
-    setAll({}); setDone([]); setFailed([]); setFinished(false);
-    setCurPhase(-1); setStopped(false); setShowPDFModal(false);
-    setLines([`[*] Refresh — clearing dashboard state and backend history...`]);
-    // 2. Call backend to wipe persisted scan files for this user + module.
-    try {
-      const r = await api("/api/recon/clear_history","POST",null,token);
-      if (r && r.ok) {
-        add(`[✓] Backend cleared: ${r.files_deleted||0} file(s), ${r.dirs_deleted||0} dir(s), ${((r.freed_bytes||0)/1024).toFixed(1)} KB freed`);
-      } else {
-        add(`[!] Backend clear partial: ${r && r.error || "unknown error"}`);
-      }
-    } catch(e) {
-      add(`[!] Backend clear failed (UI state cleared anyway): ${e?.message||e}`);
-    }
-    setLines(p => [...p, `Ready — enter a domain or IP and click Start Recon`]);
-  };
-
   const run = async () => {
     if (!target.trim()) return;
     stopRef.current = false; setStopped(false);
@@ -8954,24 +9044,6 @@ function ReconModule({token, onRunningChange}) {
           <Badge label={RECON_PHASES.length+" PHASES"} color="blue"/>
           <Badge label="PASSIVE + ACTIVE" color="green"/>
           {finished && <Badge label="DONE" color="green"/>}
-          {/* RECON-REFRESH-BTN-V1 — clears React state + calls backend clear_history */}
-          <button
-            onClick={refresh}
-            disabled={running}
-            title="Clear all results, log, and backend scan history for this user (recon module)"
-            style={{
-              marginLeft:"auto",
-              background: running ? "#1e293b" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
-              border:"1px solid "+(running?"#334155":"#a78bfa"),
-              color: running?"#64748b":"#fff",
-              padding:"6px 14px", borderRadius:6, fontSize:12, fontWeight:600,
-              cursor: running?"not-allowed":"pointer",
-              opacity: running?0.5:1,
-              display:"inline-flex", alignItems:"center", gap:6,
-            }}
-          >
-            <span style={{fontSize:14}}>↻</span> Refresh
-          </button>
         </div>
         <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>
           WHOIS · DNS · subdomains · cert transparency · OSINT · Shodan · port scan · service detection · OS fingerprinting · banners · directory enum
@@ -9145,6 +9217,17 @@ function ReconModule({token, onRunningChange}) {
       </div>
 
       {/* Phase selector */}
+      {/* TOOL-REFRESH-V2 — before the tools start in Recon */}
+      <ToolRefreshButton
+        module="recon"
+        token={token}
+        disabled={running}
+        onClear={() => {
+          setAll({}); setDone([]); setFailed([]); setFinished(false);
+          setCurPhase(-1); setLines(["Ready — enter a domain or IP and click Start Recon"]);
+        }}
+      />
+
       <div style={{background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,padding:14,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <span style={{fontSize:11,fontWeight:700,color:"#64748b",letterSpacing:1,textTransform:"uppercase"}}>Select Phases</span>
@@ -10955,6 +11038,8 @@ function ExploitationModule({token, apiUrl}) {
   const [_pendingResults, setPendingResults] = useState(null);
   return (
     <>
+      {/* TOOL-REFRESH-V2 — before the exploit tools start */}
+      <ToolRefreshButton module="exploitation" token={token} />
       <ShellPanel
         title="Exploitation Techniques"
         subtitle="direct-socket exploits · vsftpd · DVWA cmdi · DVWA SQLi · Juice Shop · bWAPP · zero false positives"
@@ -11556,6 +11641,10 @@ function BufferOverflowModule({token}) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#020617",color:"#e2e8f0"}}>
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="buffer_overflow" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
       {/* Sidebar */}
       <div style={{width:210,background:"#0a0f1e",borderRight:"1px solid #1e293b",padding:14,flexShrink:0,overflowY:"auto"}}>
@@ -11885,6 +11974,10 @@ function VulnModule(props) {
     const findings = (r.findings||[]).filter(f=>f.severity!=="INFO");
     if(findings.length===0) return (
       <div style={{padding:20,textAlign:"center"}}>
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="vuln" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
         <div style={{fontSize:28,marginBottom:8}}>✅</div>
         <div style={{color:"#4ade80",fontSize:13,fontWeight:600}}>No significant findings</div>
         <div style={{color:"#475569",fontSize:11,marginTop:4}}>Scan completed — target appears clean for this check</div>
@@ -12193,6 +12286,10 @@ function PasswordModule(props) {
 
   return (
     <div className="fade">
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="password" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:16}}>
         <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>🔑 Password Attacks — Hydra</h2>
         <p style={{fontSize:12,color:"#64748b",marginBottom:10}}>Brute force login credentials — authorized use only</p>
@@ -12314,6 +12411,10 @@ function NetworkAttacksModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="network" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
         <div style={{fontSize:20,fontWeight:700,color:"#f8fafc",marginBottom:16}}>Network Attacks</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
@@ -12428,6 +12529,10 @@ function SystemExploitModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="system_exploit" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
         <div style={{fontSize:20,fontWeight:700,color:"#f8fafc",marginBottom:16}}>System / Exploitation Attacks</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
@@ -12538,6 +12643,10 @@ function CloudAttacksModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="cloud_attacks" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
         <div style={{fontSize:20,fontWeight:700,color:"#f8fafc",marginBottom:16}}>Cloud Attacks</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
@@ -12652,6 +12761,10 @@ function AuthAttacksModule({token}) {
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="auth_attacks" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{marginBottom:24,background:"#0f172a",borderRadius:12,padding:20,border:"1px solid #1e293b"}}>
         <div style={{fontSize:20,fontWeight:700,color:"#f8fafc",marginBottom:16}}>Authentication Attacks</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
@@ -12753,6 +12866,10 @@ function MetasploitModule(props) {
 
   return (
     <div className="fade">
+      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
+      <ToolRefreshButton module="metasploit" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+
+
       <div style={{background:"linear-gradient(135deg,#1c0a0a,#0f172a)",border:"1px solid #7f1d1d",borderRadius:8,padding:20,marginBottom:16}}>
         <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>🧰 Metasploit Framework</h2>
         <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>Search and reference common MSF modules</p>
