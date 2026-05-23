@@ -32,9 +32,10 @@ Returns: { "module": "...", "target": "...", "duration_sec": 38.4,
 """
 import asyncio
 import datetime
+import json
 import os
 import time
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 import httpx
 
@@ -213,3 +214,125 @@ async def run_module_parallel(
             "by_severity":    by_sev,
         },
     }
+
+
+# ─────────────────────────────────────────────────────────────────
+# STREAMING VARIANT — for Cloudflare-fronted dashboards
+# ─────────────────────────────────────────────────────────────────
+# Cloudflare's free tier kills any connection that takes >100s to send
+# its FIRST byte. The buffered run_module_parallel above collects all 41
+# tool results before returning, so first byte = last byte = ~60-120s in.
+# That always exceeds the 100s TTFB ceiling and the request 504s.
+#
+# This generator yields ONE newline-delimited JSON object per tool the
+# moment it completes (plus opening + closing summary events). First byte
+# goes out within ~1-3s when whois/dns/dnsrecon finish — well under the
+# 100s ceiling — and Cloudflare keeps the connection alive as long as
+# bytes keep flowing.
+#
+# Event types yielded (one per line, NDJSON):
+#   {"event":"scan_started", "module":..., "target":..., "total_tools":...}
+#   {"event":"tool_complete", "tool":..., "duration_sec":..., "result":{...}}
+#   {"event":"scan_complete", "duration_sec":..., "summary":{...}, "timing":{...}}
+async def run_module_streaming(
+    target: str,
+    tools: list[tuple[str, str]],
+    module_name: str = "recon",
+    concurrency: int = 8,
+    auth_cookie: Optional[str] = None,
+    auth_bearer: Optional[str] = None,
+    extra_body: Optional[dict] = None,
+    jwt_token: Optional[str] = None,
+) -> AsyncIterator[bytes]:
+    """NDJSON-streaming version of run_module_parallel. Yields utf-8 bytes."""
+    started_at = datetime.datetime.utcnow().isoformat() + "Z"
+    t0 = time.monotonic()
+
+    base_body: dict = {"target": target}
+    if auth_cookie: base_body["auth_cookie"] = auth_cookie
+    if auth_bearer: base_body["auth_bearer"] = auth_bearer
+    if extra_body:  base_body.update(extra_body)
+
+    internal_headers: dict = {}
+    if jwt_token:
+        internal_headers["Authorization"] = f"Bearer {jwt_token}"
+
+    # Emit opening event IMMEDIATELY so first byte goes out within ~1ms of
+    # the request reaching FastAPI. Cloudflare's TTFB clock stops here.
+    opening = {
+        "event":       "scan_started",
+        "module":      module_name,
+        "target":      target,
+        "started_at":  started_at,
+        "concurrency": concurrency,
+        "total_tools": len(tools),
+        "tool_names":  [name for name, _ in tools],
+    }
+    yield (json.dumps(opening) + "\n").encode("utf-8")
+
+    limits = httpx.Limits(
+        max_keepalive_connections=concurrency * 2,
+        max_connections=concurrency * 3,
+    )
+    sem = asyncio.Semaphore(concurrency)
+
+    # Accumulate results so we can emit the final summary
+    results: dict = {}
+    timings: dict = {}
+
+    async with httpx.AsyncClient(
+        base_url=_INTERNAL_BASE,
+        limits=limits,
+        timeout=httpx.Timeout(_PER_TOOL_TIMEOUT, connect=10.0),
+        verify=False,
+    ) as client:
+        tasks = [
+            _dispatch_one(client, tool_name, endpoint, base_body, sem,
+                            headers=internal_headers)
+            for tool_name, endpoint in tools
+        ]
+        for coro in asyncio.as_completed(tasks):
+            tool_name, result, dur = await coro
+            results[tool_name] = result
+            timings[tool_name] = round(dur, 2)
+            event = {
+                "event":        "tool_complete",
+                "tool":         tool_name,
+                "duration_sec": round(dur, 2),
+                "result":       result,
+            }
+            yield (json.dumps(event) + "\n").encode("utf-8")
+
+    # Final summary aggregation
+    ok_count, failed_count, skipped_count = 0, 0, 0
+    total_findings = 0
+    by_sev = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0,
+               "INFO": 0, "POSITIVE": 0}
+    for r in results.values():
+        if not isinstance(r, dict): continue
+        if r.get("_failed"):
+            failed_count += 1; continue
+        if r.get("_skipped") or r.get("skipped_reason"):
+            skipped_count += 1; continue
+        ok_count += 1
+        for f in (r.get("findings") or []):
+            total_findings += 1
+            sev = (f.get("severity") or "").upper()
+            if sev in by_sev: by_sev[sev] += 1
+
+    closing = {
+        "event":        "scan_complete",
+        "module":       module_name,
+        "target":       target,
+        "duration_sec": round(time.monotonic() - t0, 2),
+        "total_tools":  len(tools),
+        "timing":       timings,
+        "summary": {
+            "ok":             ok_count,
+            "failed":         failed_count,
+            "skipped":        skipped_count,
+            "total_findings": total_findings,
+            "by_severity":    by_sev,
+        },
+    }
+    yield (json.dumps(closing) + "\n").encode("utf-8")

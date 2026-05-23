@@ -14,10 +14,13 @@ for a 30-second smoke check before the full scan.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from tools._shared import verify_scan_quota
-from tools._framework.orchestrator import run_module_parallel
+from tools._framework.orchestrator import (
+    run_module_parallel, run_module_streaming,
+)
 
 router = APIRouter()
 
@@ -102,16 +105,8 @@ class RunAllRequest(BaseModel):
     shodan_api_key: Optional[str] = None    # tier6 shodan needs this
 
 
-@router.post("/api/recon/run_all")
-async def recon_run_all(req: RunAllRequest,
-                          request: Request,
-                          _=Depends(verify_scan_quota)):
-    """Fan-out scan: dispatch every selected recon tool in parallel.
-
-    Returns the aggregated result + per-tool timing + summary counts.
-    See tools/_framework/orchestrator.py:run_module_parallel for the
-    response shape.
-    """
+def _resolve_tools_and_jwt(req: "RunAllRequest", request: Request):
+    """Common request unpacking — used by both the streaming + buffered routes."""
     if req.tiers:
         tools = []
         for tier in req.tiers:
@@ -122,23 +117,73 @@ async def recon_run_all(req: RunAllRequest,
 
     extra = {}
     if req.shodan_api_key:
-        # Forwarded to every tool body — only the shodan handler reads it.
         extra["api_key"] = req.shodan_api_key
 
-    # JWT-FORWARD-V1 — extract the user's bearer token so the orchestrator can
-    # re-attach it to every internal /api/recon/<tool> call. Without this each
-    # internal hop hits verify_scan_quota and returns 401, which is what caused
-    # the 0/41 phases in the 08:40 juiceshop scan.
     auth_header = request.headers.get("authorization") or ""
     jwt_token = None
     if auth_header.lower().startswith("bearer "):
         jwt_token = auth_header.split(" ", 1)[1].strip()
 
+    return tools, extra, jwt_token
+
+
+# ─────────────────────────────────────────────────────────────────
+# /api/recon/run_all — NDJSON STREAMING (default since 2026-05-23)
+# ─────────────────────────────────────────────────────────────────
+# Streams one JSON line per tool completion + opening + closing events.
+# First byte goes out within ~1-3s, beating Cloudflare's 100s TTFB ceiling.
+# Frontend reads ReadableStream line-by-line and updates tiles as each
+# tool finishes — replaces the all-tiles-update-at-once UX of buffered v2.
+#
+# Header hints to bypass intermediary buffering:
+#   X-Accel-Buffering: no   — nginx (your frontend container's nginx)
+#   Cache-Control:    no-store, no-transform
+#   Content-Type:     application/x-ndjson
+@router.post("/api/recon/run_all")
+async def recon_run_all(req: "RunAllRequest",
+                          request: Request,
+                          _=Depends(verify_scan_quota)):
+    """Stream per-tool results as NDJSON. See run_module_streaming for shape."""
+    tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
+    concurrency = max(1, min(req.concurrency or 8, 16))
+
+    generator = run_module_streaming(
+        target=req.target,
+        tools=tools,
+        module_name="recon",
+        concurrency=concurrency,
+        auth_cookie=req.auth_cookie,
+        auth_bearer=req.auth_bearer,
+        extra_body=extra or None,
+        jwt_token=jwt_token,
+    )
+    return StreamingResponse(
+        generator,
+        media_type="application/x-ndjson",
+        headers={
+            "X-Accel-Buffering": "no",          # nginx must NOT buffer
+            "Cache-Control":     "no-store, no-transform",
+            "Connection":        "keep-alive",
+        },
+    )
+
+
+# Legacy buffered endpoint preserved for callers that don't want to deal with
+# streaming (CLI scripts, tests, internal automation). Same shape as the
+# original v2 response (single JSON object with tools{} + summary{}).
+@router.post("/api/recon/run_all_buffered")
+async def recon_run_all_buffered(req: "RunAllRequest",
+                                    request: Request,
+                                    _=Depends(verify_scan_quota)):
+    """Non-streaming v2 — buffers all results then returns one big JSON.
+    Use only when streaming isn't suitable (CLI tools, server-to-server)."""
+    tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
+    concurrency = max(1, min(req.concurrency or 8, 16))
     return await run_module_parallel(
         target=req.target,
         tools=tools,
         module_name="recon",
-        concurrency=max(1, min(req.concurrency or 8, 16)),
+        concurrency=concurrency,
         auth_cookie=req.auth_cookie,
         auth_bearer=req.auth_bearer,
         extra_body=extra or None,
