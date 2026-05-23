@@ -8356,57 +8356,115 @@ function ReconModule({token, onRunningChange}) {
     }
     const results = {};
 
-    // ── RECON-V2-ORCHESTRATOR ─────────────────────────────────────────
-    // If the user selected ALL phases, use the v2 backend orchestrator
-    // (one HTTP call, backend fans out to all 41 tools in parallel via
-    // tools/_framework/orchestrator.py). ~5-7x faster than the v1 sequential
-    // loop. For partial-phase selections we fall back to the v1 loop so
-    // tier-filter use cases still work without extending the endpoint API.
+    // ── RECON-V2-STREAMING ────────────────────────────────────────────
+    // When the user selects ALL phases, hit the streaming v2 endpoint.
+    // Backend returns NDJSON: one event per line as each of the 41 tools
+    // completes. We read the ReadableStream line-by-line and update each
+    // tile the moment its tool finishes — no more all-at-once update.
+    //
+    // Critical for Cloudflare-fronted dashboards: the FIRST byte goes out
+    // within ~1-3s (when whois/dns finish), beating Cloudflare's 100s TTFB
+    // ceiling that was killing the old buffered v2 endpoint.
     if (active.length === RECON_PHASES.length) {
-      add(`[*] v2 orchestrator: dispatching all ${RECON_PHASES.length} phases in parallel (one HTTP call)...`);
+      add(`[*] v2 streaming: dispatching ${RECON_PHASES.length} phases (NDJSON stream)...`);
       const body = {target};
       if (sessionCookie) body.auth_cookie = sessionCookie;
       if (sessionBearer) body.auth_bearer = sessionBearer;
       const _shodanKey = localStorage.getItem("shodanApiKey") || "";
       if (_shodanKey) body.shodan_api_key = _shodanKey;
+
+      // Map tool name -> phase index for fast tile updates as events arrive.
+      const _toolToIdx = {};
+      RECON_PHASES.forEach((ph,i) => { _toolToIdx[ph.tool] = i; });
+
+      let _scanStartTime = Date.now();
+      let _completedCount = 0;
+      let _finalSummary = null;
+      let _streamError = null;
+
       try {
-        const r = await api("/api/recon/run_all","POST",body,token);
-        if (stopRef.current) { add("[!] Scan stopped by user during v2 dispatch."); }
-        else if (!r || !r.tools) {
-          add("✗ v2 orchestrator returned no results — falling back to standard mode unsupported here, please retry");
-        } else {
-          // Distribute per-tool results into the existing `results` map
-          // so the PDF generator + dashboard tiles work unchanged.
-          for (let idx=0; idx<RECON_PHASES.length; idx++) {
-            const ph = RECON_PHASES[idx];
-            const data = r.tools[ph.tool];
-            if (data === undefined) continue;
-            results[ph.tool] = data;
-            if (data._failed === true || data.ok === false) {
-              setFailed(p=>[...p,idx]);
-            }
-            setDone(p=>[...p,idx]);
+        const headers = {"Content-Type":"application/json"};
+        if (token) headers["Authorization"] = "Bearer " + token;
+        const res = await fetch(API + "/api/recon/run_all", {
+          method: "POST", headers, body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(()=>"");
+          throw new Error(`HTTP ${res.status}: ${errText.substring(0,160) || res.statusText || "no body"}`);
+        }
+        if (!res.body) {
+          throw new Error("Streaming not supported by browser/proxy — no response.body");
+        }
+
+        // Read NDJSON: split on newlines, parse each line.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        while (true) {
+          if (stopRef.current) {
+            try { reader.cancel(); } catch(_) {}
+            add("[!] Scan stopped by user during v2 stream.");
+            break;
           }
-          setAll(Object.assign({},results));
-          const sum = r.summary || {};
-          add(`✓ v2 complete in ${r.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
+          const {value, done} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          let nl;
+          while ((nl = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (!line) continue;
+            let evt;
+            try { evt = JSON.parse(line); }
+            catch(_) { continue; }   // ignore non-JSON noise
+
+            if (evt.event === "scan_started") {
+              add(`  ⇒ ${evt.total_tools} tools dispatched, concurrency=${evt.concurrency}`);
+            }
+            else if (evt.event === "tool_complete") {
+              const idx = _toolToIdx[evt.tool];
+              const data = evt.result || {};
+              if (idx !== undefined) {
+                results[evt.tool] = data;
+                if (data._failed === true || data.ok === false) {
+                  setFailed(p=>[...p,idx]);
+                }
+                setDone(p=>[...p,idx]);
+                setAll(Object.assign({},results));
+              }
+              _completedCount += 1;
+              const elapsed = ((Date.now() - _scanStartTime)/1000).toFixed(1);
+              const ph = RECON_PHASES.find(p=>p.tool===evt.tool);
+              const phName = ph ? ph.name : evt.tool;
+              const status = data._failed ? "✗" : (data._skipped || data.skipped_reason) ? "○" : "✓";
+              add(`  ${status} [${_completedCount}/${RECON_PHASES.length}] ${phName} (${evt.duration_sec}s, +${elapsed}s)`);
+            }
+            else if (evt.event === "scan_complete") {
+              _finalSummary = evt;
+            }
+          }
+        }
+        if (!stopRef.current && _finalSummary) {
+          const sum = _finalSummary.summary || {};
+          add(`✓ v2 complete in ${_finalSummary.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
           if (sum.by_severity) {
             const sev = sum.by_severity;
             add(`  Severity: ${sev.CRITICAL||0} CRIT · ${sev.HIGH||0} HIGH · ${sev.MEDIUM||0} MED · ${sev.LOW||0} LOW`);
           }
-          if (r.timing) {
-            const slow = Object.entries(r.timing).sort((a,b)=>b[1]-a[1]).slice(0,5);
+          if (_finalSummary.timing) {
+            const slow = Object.entries(_finalSummary.timing).sort((a,b)=>b[1]-a[1]).slice(0,5);
             add(`  Slowest 5: ${slow.map(([k,v])=>`${k}=${v}s`).join(", ")}`);
           }
         }
       } catch(e) {
         let msg = e?.message || String(e);
-        add(`✗ v2 orchestrator failed: ${msg}`);
+        add(`✗ v2 stream failed: ${msg}`);
+        _streamError = msg;
       }
       setCurPhase(-1); setRunning(false); _notifyRunning(false); setFinished(true);
       return;
     }
-    // ── RECON-V2-ORCHESTRATOR END — fall through to v1 sequential loop ──
+    // ── RECON-V2-STREAMING END — partial selections fall through to v1 ──
 
     // Single-retry-on-failure helper — most transient errors (429, network
     // glitch, brief origin 502) clear on a 3-second pause. Without this, a
