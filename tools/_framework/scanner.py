@@ -107,6 +107,18 @@ async def run_scanner(
             skipped_reason=f"{tool}: no data sources returned usable data for {host}",
         )
 
+    # CTX-SKIPPED-REASON-V1 — gather() can set ctx.state["skipped_reason"] to
+    # surface a clean diagnostic (e.g. "target rate-limited the scanner") and
+    # have the tile render as SKIPPED (yellow) instead of FAILED (red). Used
+    # by gobuster after the GRACEFUL-FAIL-V1 early-bailout.
+    _ctx_skip = ctx.state.get("skipped_reason")
+    if _ctx_skip:
+        return standard_response(
+            tool=tool, target=host, findings=[],
+            tests_performed=1, vulnerable=False,
+            skipped_reason=str(_ctx_skip),
+        )
+
     findings = run_rules(ctx.state, finding_rules)
 
     # Intel table — only include populated, non-empty fields.

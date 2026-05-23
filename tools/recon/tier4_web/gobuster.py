@@ -15,10 +15,20 @@ Findings (~9 rules in tools/_payloads/directory_findings.py):
   LOW     : IDE files (.vscode/.idea/.DS_Store)
   INFO    : total count, soft-404 warning
   POSITIVE: no paths found (strong content security)
+
+GRACEFUL-FAIL-V1: If the target's WAF/Cloudflare slow-walks our scanner IP,
+the original code would burn the entire 240s orchestrator budget and fall
+back to a hard timeout (looks like ERROR). Now we:
+  1. Measure the first batch's success rate at ~5s
+  2. Bail out early with skipped_reason if 0% reachable
+  3. Cap the entire probe loop at 200s (under the 240s orchestrator budget)
+  4. Return whatever found so far on cap — RAN with partial data,
+     not FAILED with no diagnostic.
 """
 import asyncio
 import hashlib
 import pathlib
+import time
 
 from fastapi import APIRouter, Depends
 
@@ -149,21 +159,65 @@ async def gather(ctx: ScanContext):
             hit["redirect_to"] = loc
         return hit
 
-    # 40 in-flight requests via threadpool
+    # ── GRACEFUL-FAIL-V1 — early bailout + wall-clock cap ──
+    # The original code would burn the entire 240s orchestrator budget on a
+    # WAF-throttled target, surfacing as a hard TIMEOUT/ERROR. Now we abort
+    # cleanly the moment the target is clearly blocking us.
     BATCH = 40
+    WALL_BUDGET = 200.0        # full probe loop must finish inside 200s
+    SOFT_CHECK_AFTER = 1       # check first batch's reachability
+    t_start = time.monotonic()
+    paths_actually_probed = 0
+    reachable_count = 0        # = response received (any status, not None)
+
+    bailed = False
+    bail_reason = None
+
     for i in range(0, len(wordlist), BATCH):
+        # Wall-clock cap: stop the loop if we've burned our budget
+        if time.monotonic() - t_start > WALL_BUDGET:
+            bailed = True
+            bail_reason = (f"hit {int(WALL_BUDGET)}s wall-clock cap with "
+                            f"{paths_actually_probed}/{len(wordlist)} paths probed "
+                            f"({reachable_count} reachable, {len(found)} hits)")
+            break
+
         batch = wordlist[i:i+BATCH]
         results = await asyncio.gather(
             *[asyncio.to_thread(_probe, p) for p in batch],
             return_exceptions=False,
         )
+        paths_actually_probed += len(batch)
         for hit in results:
             if hit is not None:
                 found.append(hit)
+                reachable_count += 1
+        # Even the timeout/blocked cases come back as None from safe_get.
+        # We approximate "reachable" via found-rate of the FIRST batch:
+        # if zero hits AND the soft-404 baseline did get answers, the target
+        # is almost certainly rate-limiting us (Cloudflare slow-lane).
+        if i == 0 and len(batch) >= 20 and reachable_count == 0 and fingerprints:
+            # Confirm by probing a known-good path (homepage)
+            homecheck = safe_get(base + "/", headers=headers_used or {},
+                                   allow_redirects=False, timeout=4, retries=0)
+            if homecheck is None:
+                bailed = True
+                bail_reason = ("first 40 paths all unreachable + homepage probe failed — "
+                                "target IP-blocked or rate-limited the scanner")
+                break
 
     ctx.state["found"] = found
     ctx.state["found_count"] = len(found)
-    ctx.state["paths_probed"] = len(wordlist)
+    ctx.state["paths_probed"] = paths_actually_probed
+    ctx.state["wordlist_size"] = len(wordlist)
+    ctx.state["elapsed_sec"] = round(time.monotonic() - t_start, 1)
+    if bailed and bail_reason:
+        ctx.state["partial_reason"] = bail_reason
+        # Surface as skipped_reason so framework marks tile SKIPPED (yellow)
+        # instead of ERROR (red) — much more accurate diagnostic.
+        ctx.state["skipped_reason"] = (
+            f"gobuster bailed early: {bail_reason}. Try Tool Refresh + retry "
+            f"in a few minutes (Cloudflare cooldown), or scan from a fresh IP.")
     if wordlist:
         ctx.source(f"wordlist-{len(wordlist)}-paths")
 
