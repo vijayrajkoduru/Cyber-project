@@ -3532,7 +3532,8 @@ function WebAppModule(props) {
         </div>
       </div>
 
-      <div style={{marginBottom:16}}><Terminal lines={lines} height={120}/></div>
+      {/* WAPT-TERMINAL-POSITION-V2 — Terminal moved to bottom of PHASES tab
+          so it appears AFTER all the tools end, not before. */}
 
       {/* TABS */}
       <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
@@ -3802,6 +3803,16 @@ function WebAppModule(props) {
           );
         })}
         </div>
+      </div>
+
+      {/* WAPT-TERMINAL-POSITION-V2 — Live terminal now sits AFTER the tools
+          end (was above the tabs before). Keeps the scan log close to the
+          tools that produced it. */}
+      <div style={{marginTop:18}}>
+        <div style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
+          📡 Live Scan Terminal
+        </div>
+        <Terminal lines={lines} height={160}/>
       </div>
       )}
 
