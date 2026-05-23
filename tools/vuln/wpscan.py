@@ -68,7 +68,7 @@ def _matches_entry(r, entry, baseline):
     return True, f"HTTP {r.status_code} on {entry['path']}"
 
 
-@router.post("/api/scan/wpscan")
+@router.post("/api/vuln/wpscan")
 def scan_wpscan(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     if not _is_wp(base, req):

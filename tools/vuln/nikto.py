@@ -18,7 +18,7 @@ router = APIRouter()
 _DELEGATED_TO = ["security_headers", "exposed_files", "cors", "http_methods"]
 
 
-@router.post("/api/scan/nikto")
+@router.post("/api/vuln/nikto")
 def scan_nikto(req: ScanRequest, payload=Depends(verify_scan_quota)):
     """Lightweight meta-scanner — defers all active work to the 4 standalone
     scanners that the same orchestrator pass already runs in parallel."""
