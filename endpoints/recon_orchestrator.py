@@ -11,13 +11,15 @@ Tier filtering: optional `tiers` field in the request body lets the
 frontend run only a subset — e.g. tiers=["tier1_dns", "tier2_subdomain"]
 for a 30-second smoke check before the full scan.
 """
+import shutil
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, verify_token
 from tools._framework.orchestrator import (
     run_module_parallel, run_module_streaming,
 )
@@ -189,6 +191,69 @@ async def recon_run_all_buffered(req: "RunAllRequest",
         extra_body=extra or None,
         jwt_token=jwt_token,
     )
+
+
+# ─────────────────────────────────────────────────────────────────
+# /api/recon/clear_history — per-customer "Refresh" button backing
+# ─────────────────────────────────────────────────────────────────
+# Customer clicks Refresh in the Recon module header. Frontend wipes its
+# React state immediately (instant UI reset) AND hits this endpoint so
+# any persisted server-side scan files for THIS user + recon module are
+# also gone. Designed to be fast — single shutil.rmtree on a user-scoped
+# directory, no DB transactions, no cross-customer locking.
+#
+# Per-user isolation: pulls user_id from the JWT 'sub' claim. Each
+# customer can ONLY clear their own recon history. No way to wipe
+# another user's data via this endpoint.
+_USER_ZONE_ROOT = Path("/data/users")
+
+
+@router.post("/api/recon/clear_history")
+async def recon_clear_history(payload=Depends(verify_token)):
+    """Wipe the calling user's recon scan history + report cache.
+    Fast: rmtree a single user-scoped directory, no per-record loop.
+
+    Returns: {ok: bool, user_id, files_deleted, dirs_deleted, freed_bytes}
+    """
+    user_id = payload.get("sub") or "unknown"
+    # Defence-in-depth: even though JWT 'sub' is server-controlled, refuse
+    # any value with path separators / parent-dir refs.
+    if not user_id or "/" in user_id or "\\" in user_id or ".." in user_id:
+        return {"ok": False, "error": "invalid user_id in token"}
+
+    files_deleted = 0
+    dirs_deleted = 0
+    freed_bytes = 0
+    user_recon_zone = _USER_ZONE_ROOT / user_id / "scans" / "recon"
+    user_reports_zone = _USER_ZONE_ROOT / user_id / "reports" / "recon"
+
+    for zone in (user_recon_zone, user_reports_zone):
+        if not zone.exists():
+            continue
+        # Count what's about to be deleted (for the UI confirmation msg)
+        for child in zone.rglob("*"):
+            if child.is_file():
+                files_deleted += 1
+                try: freed_bytes += child.stat().st_size
+                except Exception: pass
+            elif child.is_dir():
+                dirs_deleted += 1
+        try:
+            shutil.rmtree(zone)
+        except Exception as e:
+            return {"ok": False, "error": f"rmtree failed: {type(e).__name__}: {str(e)[:100]}",
+                    "files_deleted": files_deleted}
+        # Recreate empty dir so the next scan has somewhere to write
+        zone.mkdir(parents=True, exist_ok=True)
+
+    return {
+        "ok":            True,
+        "user_id":       user_id,
+        "module":        "recon",
+        "files_deleted": files_deleted,
+        "dirs_deleted":  dirs_deleted,
+        "freed_bytes":   freed_bytes,
+    }
 
 
 @router.get("/api/recon/run_all/tiers")
