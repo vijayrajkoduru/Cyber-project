@@ -6844,6 +6844,13 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     {tool:"jslib_cve",  name:"JS Library CVE",       isEmpty:d=>(!d.libs_detected||d.libs_detected.length===0)},
     {tool:"git_recon",  name:"Git Repo Exposure",    isEmpty:d=>!d.exposed_files||d.exposed_files.length===0},
     {tool:"cdn_origin", name:"CDN Origin Discovery", isEmpty:d=>!d.cdn_detected||d.cdn_detected.length===0},
+    // Tier 6 — OSINT
+    {tool:"breach_search",      name:"Breach Search",          isEmpty:d=>(d.breach_count||0)===0 && (d.paste_count||0)===0},
+    {tool:"github_leaks",       name:"GitHub Leaks",           isEmpty:d=>(!d.matched_repos||d.matched_repos.length===0) && (!d.secret_hits||d.secret_hits.length===0) && !d.org_name},
+    {tool:"graphql_introspect", name:"GraphQL Introspection",  isEmpty:d=>!d.endpoint_found},
+    {tool:"email_security",     name:"Email Security",         isEmpty:d=>!d.spf_record && !d.dmarc_record && (!d.dkim_selectors_found||d.dkim_selectors_found.length===0)},
+    {tool:"dork_harvest",       name:"Search-Engine Dorks",    isEmpty:d=>(!d.critical_hits||d.critical_hits.length===0) && (!d.indexed_files||d.indexed_files.length===0)},
+    {tool:"dnssec_validate",    name:"DNSSEC Validate",        isEmpty:d=>!d.dnssec_enabled && !d.chain_broken && (!d.weak_algorithms||d.weak_algorithms.length===0)},
   ];
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
@@ -6888,6 +6895,13 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} VULN takeover(s) on ${d.checked||0} subs` : `0 takeovers (${d.checked||0} subs checked)`;
       case "waf_cdn":    return (d.detected||[]).length > 0 ? `${(d.detected||[]).map(x=>x.vendor).slice(0,2).join(", ")}${d.detected.length>2?` +${d.detected.length-2}`:""}` : "none detected";
       case "ssl_deep":   return (d.total_vulnerabilities||0) > 0 ? `${d.total_vulnerabilities} TLS issue(s), ${d.current_protocol||"?"}` : `clean (${d.current_protocol||"?"})`;
+      // Tier 6 — OSINT
+      case "breach_search":     return (d.breach_count||0)>0 ? `${d.breach_count} breach(es), ${(d.paste_count||0)} paste hit(s)` : "no breaches";
+      case "github_leaks":      return (d.secret_hits||[]).length>0 ? `${d.secret_hits.length} secret hit(s) on GitHub` : `${(d.matched_repos||[]).length} repo(s)`;
+      case "graphql_introspect":return d.introspection_enabled ? `EXPOSED · ${d.type_count||0} types` : (d.endpoint_found?`endpoint hardened`:"no endpoint");
+      case "email_security":    return (d.spf_record?"SPF✓":"SPF✗")+" "+(d.dmarc_record?"DMARC✓":"DMARC✗")+" "+((d.dkim_selectors_found||[]).length>0?"DKIM✓":"DKIM✗");
+      case "dork_harvest":      return (d.critical_hits||[]).length>0 ? `${d.critical_hits.length} CRITICAL exposure(s)` : `${(d.indexed_files||[]).length} indexed URL(s)`;
+      case "dnssec_validate":   return d.chain_broken ? "BROKEN CHAIN" : (d.dnssec_enabled?`enabled · ${d.strongest_algorithm||"?"}`:"not enabled");
       default:           return "Completed";
     }
   }
@@ -7215,6 +7229,13 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         case "email_audit":  return (d.spf?.found || d.dmarc?.found || d.dkim?.found) ? `SPF=${d.spf?.found?"yes":"no"} · DMARC=${d.dmarc?.found?"yes":"no"} · DKIM=${d.dkim?.found?"yes":"no"}` : (d.skipped_reason || "no email security records");
         case "waf_detect":   return (d.detected||[]).length > 0 ? `${d.detected.length} WAF fingerprint(s)` : "no WAF detected";
         case "takeover_check": return (d.vulnerable||[]).length > 0 ? `${d.vulnerable.length} VULN takeover(s) on ${d.checked||0} subs` : `${d.checked||0} subdomain(s) checked`;
+        // Tier 6 — OSINT
+        case "breach_search":      return (d.breach_count||0) > 0 ? `${d.breach_count} breach(es) · ${(d.total_accounts_exposed||0).toLocaleString()} account(s) exposed · ${d.paste_count||0} paste(s)` : (d.skipped_reason || "No breaches found for this domain");
+        case "github_leaks":       return (d.secret_hits||[]).length > 0 ? `${d.secret_hits.length} possible secret(s) in public GitHub code · ${(d.matched_repos||[]).length} matched repo(s)` : `${(d.matched_repos||[]).length} repo(s) mention domain · no secret patterns matched`;
+        case "graphql_introspect": return d.introspection_enabled ? `INTROSPECTION EXPOSED at ${d.endpoint_found} · ${d.type_count||0} types · ${d.mutation_count||0} mutations` : (d.endpoint_found ? `Endpoint ${d.endpoint_found} reachable, introspection hardened` : "No GraphQL endpoint detected");
+        case "email_security":     return `SPF=${d.spf_record?"set":"MISSING"} · DMARC=${d.dmarc_record?"set":"MISSING"} · DKIM=${(d.dkim_selectors_found||[]).length>0?`${d.dkim_selectors_found.length} selector(s)`:"none"}`;
+        case "dork_harvest":       return (d.critical_hits||[]).length > 0 ? `CRITICAL: ${d.critical_hits.length} sensitive URL(s) indexed by search engines · ${(d.indexed_files||[]).length} total indexed` : `${d.dorks_run||0} dorks run · ${(d.indexed_files||[]).length} URL(s) indexed`;
+        case "dnssec_validate":    return d.chain_broken ? `CHAIN BROKEN — ${(d.chain_error||"").substring(0,80)}` : (d.dnssec_enabled ? `Enabled · alg ${d.strongest_algorithm||"?"} · ${d.nsec_type||"NSEC?"}` : "DNSSEC not enabled");
         default:           return "Completed";
       }
     };
@@ -8219,6 +8240,13 @@ const RECON_PHASES = [
           {name:"JS Library CVE",         tool:"jslib_cve",  endpoint:"/api/recon/jslib_cve",  desc:"Outdated jQuery/React/Angular with known CVEs"},
           {name:"Git Repo Exposure",      tool:"git_recon",  endpoint:"/api/recon/git_recon",  desc:".git/ directory exposed → source code leak"},
           {name:"CDN Origin Discovery",   tool:"cdn_origin", endpoint:"/api/recon/cdn_origin", desc:"Real IP behind Cloudflare/AWS WAF"},
+          // Tier 6 — OSINT/human-side recon (89% → 95% industry coverage)
+          {name:"Breach Search",          tool:"breach_search",      endpoint:"/api/recon/breach_search",      desc:"HIBP + paste-site search for domain in data breaches"},
+          {name:"GitHub Leaks",           tool:"github_leaks",       endpoint:"/api/recon/github_leaks",       desc:"GitHub org + leaked secrets in public repos"},
+          {name:"GraphQL Introspection",  tool:"graphql_introspect", endpoint:"/api/recon/graphql_introspect", desc:"/graphql exposed? schema enumerable?"},
+          {name:"Email Security",         tool:"email_security",     endpoint:"/api/recon/email_security",     desc:"SPF/DMARC/DKIM deep audit + spoofability"},
+          {name:"Search-Engine Dorks",    tool:"dork_harvest",       endpoint:"/api/recon/dork_harvest",       desc:"Google/Bing-indexed configs, dumps, admin panels"},
+          {name:"DNSSEC Validate",        tool:"dnssec_validate",    endpoint:"/api/recon/dnssec_validate",    desc:"Chain of trust + weak algorithms + zone walking"},
 ];
 
 function ReconModule({token, onRunningChange}) {
