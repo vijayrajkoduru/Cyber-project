@@ -19,6 +19,8 @@ Elastic/Mongo, ransomware against Redis, etc.) when exposed to the internet with
 authentication. Industry baseline is "no DB on internet, ever."
 """
 import socket
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
                             wrap_finding, standard_response)
@@ -26,7 +28,7 @@ from tools.vuln._vuln_common import vuln_response
 
 router = APIRouter()
 
-_TIMEOUT = 4.0
+_TIMEOUT = 2.5  # VL-TURBO: was 4.0 -> 2.5; ~50 ports parallel completes in ~5s vs 200s sequential
 
 # Each entry: (port, name, probe_bytes, expect_substring_in_response, severity, cvss, cwe, remediation)
 _PROBES = [
@@ -153,20 +155,33 @@ def _probe(host, port, send_bytes, expect):
 @router.post("/api/vuln/db_exposure_check")
 def scan_db_exposure_check(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
-    findings, tests, exposed = [], 0, []
-
-    for port, name, probe, expect, sev, cvss, cwe, fix in _PROBES:
-        tests += 1
-        confirmed, data = _probe(host, port, probe, expect)
-        if confirmed:
-            exposed.append({"db": name, "port": port,
-                             "response_sample": data[:80].decode("utf-8", errors="replace")[:100]})
-            findings.append(wrap_finding(
-                f"{name} database exposed on TCP/{port} without authentication",
-                sev, cvss=cvss, cwe=cwe, owasp="A05:2021",
-                remediation=fix,
-                evidence_marker=(f"Probe to {host}:{port} returned matching {name} signature; "
-                                  f"data sample: {data[:60].hex()}...")))
+    findings, exposed = [], []
+    # VL-TURBO: ThreadPoolExecutor 20 workers + 60s wall-clock cap.
+    # ~50 ports × 2.5s timeout / 20 workers = ~7s parallel (vs 200s sequential).
+    deadline = time.time() + 60.0
+    tests = len(_PROBES)
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        future_to_idx = {pool.submit(_probe, host, p[0], p[2], p[3]): i
+                         for i, p in enumerate(_PROBES)}
+        for future in as_completed(future_to_idx):
+            if time.time() > deadline:
+                for f in future_to_idx: f.cancel()
+                break
+            i = future_to_idx[future]
+            port, name, probe, expect, sev, cvss, cwe, fix = _PROBES[i]
+            try:
+                confirmed, data = future.result(timeout=3.0)
+            except Exception:
+                continue
+            if confirmed:
+                exposed.append({"db": name, "port": port,
+                                 "response_sample": data[:80].decode("utf-8", errors="replace")[:100]})
+                findings.append(wrap_finding(
+                    f"{name} database exposed on TCP/{port} without authentication",
+                    sev, cvss=cvss, cwe=cwe, owasp="A05:2021",
+                    remediation=fix,
+                    evidence_marker=(f"Probe to {host}:{port} returned matching {name} signature; "
+                                      f"data sample: {data[:60].hex()}...")))
 
     if not exposed:
         return vuln_response(tool="db_exposure_check", target=req.target, findings=[],

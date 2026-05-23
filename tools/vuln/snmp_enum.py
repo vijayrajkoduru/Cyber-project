@@ -14,6 +14,8 @@ SNMP is UDP, so behind-firewall scans return SKIPPED cleanly.
 """
 import socket
 import struct
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
                             wrap_finding, standard_response)
@@ -22,7 +24,7 @@ from tools.vuln._vuln_common import vuln_response
 router = APIRouter()
 
 _PORT = 161
-_TIMEOUT = 3.0
+_TIMEOUT = 1.5  # VL-TURBO: 3.0 -> 1.5s per UDP probe; 120 strings in ~5s parallel
 _FALLBACK_COMMUNITIES = ["public", "private", "community", "manager", "admin", "snmp",
                           "cisco", "default", "root", "monitor"]
 try:
@@ -107,21 +109,35 @@ def _probe(host, community):
 def scan_snmp_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
     findings, tests, hits = [], 0, []
-
-    for community in _COMMUNITIES:
-        tests += 1
-        ok, sysdescr = _probe(host, community)
-        if ok:
-            sample = sysdescr or "(no readable banner)"
-            findings.append(wrap_finding(
-                f"SNMP exposed on UDP/161 — community {community!r} accepted",
-                "HIGH", cvss="7.5", cwe="CWE-200", owasp="A05:2021",
-                remediation=("Disable SNMP if not needed. If required: change community to a long random string, "
-                              "restrict to management VLAN via ACL, prefer SNMPv3 with authPriv (auth + encryption)."),
-                evidence_marker=f"UDP 161 responded to GetRequest with community={community!r}; "
-                                 f"sysDescr sample: {sample[:120]}"))
-            hits.append({"community": community, "sysdescr_sample": (sample or "")[:200]})
-            break  # one confirmed exposure is enough; don't probe further
+    # VL-TURBO: ThreadPoolExecutor 20 workers + 60s wall-clock cap.
+    # Early-exits on first hit (cancels remaining futures).
+    deadline = time.time() + 60.0
+    tests = len(_COMMUNITIES)
+    found_community = None
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        future_to_c = {pool.submit(_probe, host, c): c for c in _COMMUNITIES}
+        for future in as_completed(future_to_c):
+            if time.time() > deadline:
+                for f in future_to_c: f.cancel()
+                break
+            community = future_to_c[future]
+            try:
+                ok, sysdescr = future.result(timeout=2.0)
+            except Exception:
+                continue
+            if ok:
+                sample = sysdescr or "(no readable banner)"
+                findings.append(wrap_finding(
+                    f"SNMP exposed on UDP/161 — community {community!r} accepted",
+                    "HIGH", cvss="7.5", cwe="CWE-200", owasp="A05:2021",
+                    remediation=("Disable SNMP if not needed. If required: change community to a long random string, "
+                                  "restrict to management VLAN via ACL, prefer SNMPv3 with authPriv (auth + encryption)."),
+                    evidence_marker=f"UDP 161 responded to GetRequest with community={community!r}; "
+                                     f"sysDescr sample: {sample[:120]}"))
+                hits.append({"community": community, "sysdescr_sample": (sample or "")[:200]})
+                found_community = community
+                for f in future_to_c: f.cancel()  # one hit is enough
+                break
 
     if not hits:
         return vuln_response(tool="snmp_enum", target=req.target, findings=[],

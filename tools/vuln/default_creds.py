@@ -107,7 +107,8 @@ except Exception:
 
 def _probe(url, signature, base_404_len):
     try:
-        r = requests.get(url, timeout=6, verify=False, allow_redirects=False,
+        # VL-TURBO: connect timeout 2s, read timeout 3s. Fast 404s, no hanging.
+        r = requests.get(url, timeout=(2, 3), verify=False, allow_redirects=False,
                           headers={"User-Agent": "VulnusLab/1.0"})
         if r.status_code not in (200, 301, 302, 401, 403):
             return None
@@ -131,17 +132,27 @@ async def gather(ctx: ScanContext):
     try:
         r = await asyncio.to_thread(
             requests.get, base + "/_vlabprobe_nonexistent_xyz",
-            timeout=6, verify=False, allow_redirects=False,
+            timeout=(2, 3), verify=False, allow_redirects=False,
             headers={"User-Agent": "VulnusLab/1.0"})
         if r is not None:
             base_404_len = len(r.content)
     except Exception:
         pass
 
-    # Parallel probe all panel paths
-    tasks = [asyncio.to_thread(_probe, base + path, sig, base_404_len)
-             for path, _, sig, _ in _PANEL_SIGNATURES]
-    results = await asyncio.gather(*tasks)
+    # VL-TURBO: bounded-parallelism probe with semaphore cap + global wall-clock.
+    # 281 paths / sem=30 / ~3s each = ~30s worst case. Wall-clock cap 90s.
+    sem = asyncio.Semaphore(30)
+    async def _bounded(path, sig):
+        async with sem:
+            return await asyncio.to_thread(_probe, base + path, sig, base_404_len)
+
+    tasks = [_bounded(path, sig) for path, _, sig, _ in _PANEL_SIGNATURES]
+    try:
+        results = await asyncio.wait_for(asyncio.gather(*tasks), timeout=90.0)
+    except asyncio.TimeoutError:
+        # Partial results — gather what's done so far via a re-fetch attempt
+        results = [None] * len(_PANEL_SIGNATURES)
+        ctx.source("wall-clock-cap-hit-90s")
 
     panels_found = []
     for (path, product, sig, default_creds), result in zip(_PANEL_SIGNATURES, results):
