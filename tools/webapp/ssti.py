@@ -41,7 +41,7 @@ for _p in _AI_EXTRA_SSTI:
 # === /SSTI-AI-EXTRA-V1 ===
 
 
-@router.post("/api/scan/ssti")
+@router.post("/api/webapp/scan/ssti")
 def scan_ssti(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target)
     parsed = urlparse(base)

@@ -25,7 +25,7 @@ def _fp(r):
     return f"{r.status_code}:{hashlib.md5(body.encode('utf-8', errors='ignore')).hexdigest()}"
 
 
-@router.post("/api/scan/access_control")
+@router.post("/api/webapp/scan/access_control")
 def scan_access_control(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     has_auth = bool(getattr(req, "auth_cookie", None) or getattr(req, "auth_bearer", None))

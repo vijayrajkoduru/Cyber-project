@@ -31,7 +31,7 @@ for _p in _AI_EXTRA_GRAPHQL:
 # === /GRAPHQL-AI-EXTRA-V1 ===
 
 
-@router.post("/api/scan/graphql")
+@router.post("/api/webapp/scan/graphql")
 def scan_graphql(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, tests, confirmed = [], 0, []

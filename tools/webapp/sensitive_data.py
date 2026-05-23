@@ -24,7 +24,7 @@ _PATTERNS = [
 ]
 
 
-@router.post("/api/scan/sensitive_data")
+@router.post("/api/webapp/scan/sensitive_data")
 def scan_sensitive_data(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)

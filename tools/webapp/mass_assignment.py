@@ -29,7 +29,7 @@ def _contains(obj, val, key):
     return False
 
 
-@router.post("/api/scan/mass_assignment")
+@router.post("/api/webapp/scan/mass_assignment")
 def scan_mass_assignment(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)

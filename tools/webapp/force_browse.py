@@ -18,7 +18,7 @@ def _cvss(sev):
     return {"HIGH": "7.5", "MEDIUM": "5.3", "LOW": "3.1"}.get(sev, "3.1")
 
 
-@router.post("/api/scan/force_browse")
+@router.post("/api/webapp/scan/force_browse")
 def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
 

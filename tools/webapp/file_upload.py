@@ -52,7 +52,7 @@ for _p in _AI_EXTRA_UPLOADS:
 # === /FILE-UPLOAD-AI-EXTRA-V1 ===
 
 
-@router.post("/api/scan/file_upload")
+@router.post("/api/webapp/scan/file_upload")
 def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)
