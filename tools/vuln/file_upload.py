@@ -1,9 +1,10 @@
 """File upload — tries malicious file types on discovered upload endpoints."""
-import secrets
+import secrets, time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
+from tools._payloads.vuln._loader import load_json
 
 router = APIRouter()
 
@@ -25,9 +26,34 @@ _PAYLOADS = [
      b'\xff\xd8\xff\xe0\x00\x10JFIF<?php echo "VLXSS_PHP"; ?>', "VLXSS_PHP"),
 ]
 
+# === FILE-UPLOAD-AI-EXTRA-V1 ===
+# AI-curated file_upload bypass catalogue. Each entry is a dict with
+# {filename, mime, body, magic_prefix (optional), category}. We assemble
+# bytes = magic_prefix + body and append as a tuple matching _PAYLOADS shape.
+# Only categories that are SAFE to actually POST in a customer scan are
+# included (no .htaccess overrides, no zip bombs, no destructive payloads).
+# Marker is derived from filename for evidence pinning.
+_AI_EXTRA_UPLOADS = load_json("file_upload_payloads", fallback=[])
+_SAFE_CATEGORIES = {"direct", "ext-bypass", "case-bypass", "double-ext",
+                    "null-byte", "magic-bypass", "polyglot", "stored-xss",
+                    "mime-spoof", "semicolon-bypass", "path-traversal"}
+for _p in _AI_EXTRA_UPLOADS:
+    if not isinstance(_p, dict): continue
+    if _p.get("category") not in _SAFE_CATEGORIES: continue
+    fn = _p.get("filename"); mime = _p.get("mime"); body = _p.get("body", "")
+    if not fn or not mime: continue
+    magic = _p.get("magic_prefix", "")
+    try:
+        content = (magic + body).encode("utf-8", errors="replace")
+    except Exception:
+        continue
+    marker = "VL_AI_" + (_p.get("category") or "x")[:8].upper().replace("-", "_")
+    _PAYLOADS.append((fn, mime, content, marker))
+# === /FILE-UPLOAD-AI-EXTRA-V1 ===
+
 
 @router.post("/api/scan/file_upload")
-async def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)
     endpoints = set(_UPLOAD_PATHS)
@@ -40,9 +66,16 @@ async def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
                     endpoints.add(path)
 
     findings, tests, confirmed = [], 0, []
+    # VL-TURBO wall-clock cap: 10 endpoints × many payloads × 10s timeout.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 45.0
+    _bailed = False
     for endpoint in list(endpoints)[:10]:
+        if _bailed: break
         url = base + endpoint
         for filename, ctype, content, marker in _PAYLOADS:
+            if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                _bailed = True; break
             tests += 1
             files = {"file": (filename, content, ctype)}
             r = safe_request("POST", url, req=req, allow_redirects=False, timeout=10,
@@ -70,10 +103,14 @@ async def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
                               "ctype": ctype, "status": r.status_code})
             break  # one finding per endpoint
 
+    summary = (f"File Upload: {tests} probes across {len(list(endpoints)[:10])} endpoints "
+               f"with {len(_PAYLOADS)} payload types in {time.time() - _wallclock_start:.1f}s")
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return standard_response(tool="file_upload", target=req.target,
         findings=findings, tests_performed=tests,
-        tests_summary=f"File Upload: {tests} probes across {len(list(endpoints)[:10])} endpoints with {len(_PAYLOADS)} payload types",
-        raw_data={"file_upload": {"confirmed": confirmed}})
+        tests_summary=summary,
+        raw_data={"file_upload": {"confirmed": confirmed, "wallclock_bailed": _bailed}})
 
 
 def register(app):

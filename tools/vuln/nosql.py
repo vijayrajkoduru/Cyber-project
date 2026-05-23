@@ -1,8 +1,10 @@
 """NoSQL Injection — MongoDB-style operator injection on auth + review endpoints."""
+import json as _json
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_post, safe_request, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
+from tools._payloads.vuln._loader import load_json
 
 router = APIRouter()
 
@@ -27,6 +29,28 @@ _REVIEW_PAYLOADS = [
     {"$gt": ""},
 ]
 
+# === NOSQL-AI-EXTRA-V1 ===
+# Merge AI-curated MongoDB operator payloads into auth-bypass + review attack
+# sets. Filter to entries whose transport is JSON and whose category targets
+# auth-bypass / privilege-escalation. Each curated payload is a JSON-string
+# we parse into a dict so the existing _LOGIN_PAYLOADS shape is preserved.
+_AI_EXTRA_NOSQL = load_json("nosql_payloads", fallback=[])
+for _p in _AI_EXTRA_NOSQL:
+    if not isinstance(_p, dict): continue
+    if _p.get("transport") != "json": continue
+    if _p.get("engine") not in ("MongoDB", "Universal"): continue
+    cat = _p.get("category", "")
+    try:
+        parsed = _json.loads(_p.get("payload", ""))
+    except Exception:
+        continue
+    if not isinstance(parsed, dict): continue
+    if cat in ("auth-bypass", "privilege-escalation") and parsed not in _LOGIN_PAYLOADS:
+        _LOGIN_PAYLOADS.append(parsed)
+    if cat in ("data-exfil", "where-tautology", "auth-bypass") and parsed not in _REVIEW_PAYLOADS:
+        _REVIEW_PAYLOADS.append(parsed)
+# === /NOSQL-AI-EXTRA-V1 ===
+
 
 def _is_auth_success(text):
     low = text.lower()
@@ -36,7 +60,7 @@ def _is_auth_success(text):
 
 
 @router.post("/api/scan/nosql")
-async def scan_nosql(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_nosql(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)
 

@@ -139,7 +139,9 @@ async def webapp_run_all(req: "WebAppRunAllRequest",
       {"event":"scan_complete", "duration_sec":..., "summary":{...}, "timing":{...}}
     """
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    concurrency = max(1, min(req.concurrency or 8, 16))
+    # VL-TURBO — default concurrency 8→12. 34 webapp tools / 12 ≈ 3 waves
+    # instead of 5; httpx connection pool already allows up to 36 keepalives.
+    concurrency = max(1, min(req.concurrency or 12, 16))
 
     generator = run_module_streaming(
         target=req.target,
@@ -169,7 +171,9 @@ async def webapp_run_all_buffered(req: "WebAppRunAllRequest",
     """Non-streaming version — buffers all 34 results then returns one big JSON.
     Use only when streaming isn't suitable (CLI tools, server-to-server)."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    concurrency = max(1, min(req.concurrency or 8, 16))
+    # VL-TURBO — default concurrency 8→12. 34 webapp tools / 12 ≈ 3 waves
+    # instead of 5; httpx connection pool already allows up to 36 keepalives.
+    concurrency = max(1, min(req.concurrency or 12, 16))
     return await run_module_parallel(
         target=req.target,
         tools=tools,
