@@ -145,7 +145,9 @@ async def recon_run_all(req: "RunAllRequest",
                           _=Depends(verify_scan_quota)):
     """Stream per-tool results as NDJSON. See run_module_streaming for shape."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    concurrency = max(1, min(req.concurrency or 8, 16))
+    # VL-TURBO — default concurrency 8→12. 41 recon tools / 12 ≈ 4 waves
+    # instead of 6; httpx connection pool already allows up to 36 keepalives.
+    concurrency = max(1, min(req.concurrency or 12, 16))
 
     generator = run_module_streaming(
         target=req.target,
@@ -178,7 +180,9 @@ async def recon_run_all_buffered(req: "RunAllRequest",
     """Non-streaming v2 — buffers all results then returns one big JSON.
     Use only when streaming isn't suitable (CLI tools, server-to-server)."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    concurrency = max(1, min(req.concurrency or 8, 16))
+    # VL-TURBO — default concurrency 8→12. 41 recon tools / 12 ≈ 4 waves
+    # instead of 6; httpx connection pool already allows up to 36 keepalives.
+    concurrency = max(1, min(req.concurrency or 12, 16))
     return await run_module_parallel(
         target=req.target,
         tools=tools,

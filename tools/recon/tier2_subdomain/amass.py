@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import re
 import socket
+import time
 from typing import Optional
 import requests
 import dns.resolver
@@ -67,6 +68,14 @@ async def _recon_amass_impl(req: ScanRequest, _=None):
             if name and name.endswith(host) and not name.startswith("*"):
                 all_subs.add(name)
         sources_hit[source] = len(all_subs) - before
+
+    # VL-TURBO wall-clock cap: 11 sequential 10s-timeout API calls + DNS brute.
+    # Cap at 45s — bail with partial sources rather than 100s+ worst case.
+    _wallclock_start = time.monotonic()
+    _WALLCLOCK_BUDGET = 45.0
+    def _budget_exceeded():
+        return time.monotonic() - _wallclock_start > _WALLCLOCK_BUDGET
+    _bailed = False
 
     # 1. crt.sh
     try:
@@ -202,15 +211,21 @@ async def _recon_amass_impl(req: ScanRequest, _=None):
     except Exception as e:
         sources_failed["commoncrawl"] = str(e)[:80]
 
-    # 11. DNS brute force — parallel resolution of common subdomain prefixes
-    try:
-        results = await asyncio.gather(*[_resolve_brute(host, p) for p in _BRUTE_WORDLIST])
-        brute_found = [r for r in results if r]
-        for name in brute_found:
-            all_subs.add(name)
-        sources_hit["dns_brute"] = len(brute_found)
-    except Exception as e:
-        sources_failed["dns_brute"] = str(e)[:80]
+    # VL-TURBO budget check — if 10 sources burned through 45s already, skip
+    # the DNS brute force step (it's the slowest single operation, ~10-20s).
+    if _budget_exceeded():
+        _bailed = True
+        sources_failed["dns_brute"] = f"VL-TURBO bailed at {_WALLCLOCK_BUDGET}s before DNS brute"
+    else:
+        # 11. DNS brute force — parallel resolution of common subdomain prefixes
+        try:
+            results = await asyncio.gather(*[_resolve_brute(host, p) for p in _BRUTE_WORDLIST])
+            brute_found = [r for r in results if r]
+            for name in brute_found:
+                all_subs.add(name)
+            sources_hit["dns_brute"] = len(brute_found)
+        except Exception as e:
+            sources_failed["dns_brute"] = str(e)[:80]
 
     return {
         "ok": True,
@@ -220,6 +235,8 @@ async def _recon_amass_impl(req: ScanRequest, _=None):
         "sources": sources_hit,
         "sources_failed": sources_failed,
         "engine": "pure-Python (6 passive sources + DNS brute, parallel)",
+        "wallclock_seconds": round(time.monotonic() - _wallclock_start, 1),
+        "wallclock_bailed": _bailed,
     }
 
 
