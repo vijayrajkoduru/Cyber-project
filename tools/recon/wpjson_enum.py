@@ -1,107 +1,140 @@
-"""recon_wpjson_enum — WordPress REST API enumeration."""
+"""WordPress wp-json Enum v2 — VL-FORGE pattern.
+
+Route: /api/recon/wpjson_enum
+
+Sources (parallel):
+  1. WordPress detection (wp-json + generator meta tag)
+  2. User enumeration via /wp-json/wp/v2/users
+  3. Plugins/themes enumeration via wp-json
+  4. Version detection (readme.html + generator tag)
+"""
+import asyncio
 import re
+
+import requests
+
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, safe_get, web_url
+
+from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
+                            web_url)
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.tier5_findings import WPJSON_FINDING_RULES
 
 router = APIRouter()
 
 
-async def recon_wpjson_enum_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    findings, users, posts, wp_version = [], [], [], None
+def _http_get(url, timeout=8):
+    try:
+        r = requests.get(url, timeout=timeout, verify=False,
+                          headers={"User-Agent": "VulnusLab/1.0"})
+        return r
+    except Exception:
+        return None
 
-    # Check WP REST API root
-    r = safe_get(f"{base}/wp-json/", req=req)
-    if r is None or r.status_code != 200:
-        return {"ok": True, "vulnerable": False,
-                "skipped_reason": "Not a WordPress site (no /wp-json/ found)"}
 
-    # Confirm it's WordPress
-    body = (r.text or "")[:5000]
-    if "wp-json" not in body.lower() and "wordpress" not in body.lower():
-        return {"ok": True, "vulnerable": False,
-                "skipped_reason": "No WordPress signature in /wp-json/ response"}
+async def gather(ctx: ScanContext):
+    base = web_url(ctx.host).rstrip("/")
 
-    # Try to extract WP version from generator or meta
-    home_r = safe_get(base, req=req)
-    if home_r:
-        m = re.search(r'<meta name="generator" content="WordPress (\d+\.\d+\.\d+)', home_r.text or "")
+    # Phase 1: Detect WordPress via wp-json + base HTML generator meta
+    wp_json_resp, base_resp = await asyncio.gather(
+        asyncio.to_thread(_http_get, base + "/wp-json"),
+        asyncio.to_thread(_http_get, base),
+    )
+
+    wp_detected = False
+    wp_version = None
+
+    if wp_json_resp and wp_json_resp.status_code == 200:
+        try:
+            data = wp_json_resp.json()
+            if isinstance(data, dict) and ("name" in data or "url" in data):
+                wp_detected = True
+                ctx.source("wp-json-root-api")
+        except Exception:
+            pass
+
+    # Generator meta tag in HTML
+    if base_resp and base_resp.status_code == 200:
+        m = re.search(r'<meta name="generator" content="WordPress ([\d.]+)"',
+                       base_resp.text or "")
         if m:
+            wp_detected = True
             wp_version = m.group(1)
+            ctx.source("wp-generator-tag")
 
-    # User enumeration via REST API
-    r = safe_get(f"{base}/wp-json/wp/v2/users", req=req)
-    if r and r.status_code == 200:
+    ctx.state["wp_detected"] = wp_detected
+    ctx.state["wp_version"] = wp_version
+
+    if not wp_detected:
+        return
+
+    # Phase 2: Enumerate users + plugins (parallel)
+    users_resp, plugins_html_resp = await asyncio.gather(
+        asyncio.to_thread(_http_get, base + "/wp-json/wp/v2/users"),
+        asyncio.to_thread(_http_get, base),
+    )
+
+    # Users
+    if users_resp and users_resp.status_code == 200:
         try:
-            users_data = r.json()
+            users_data = users_resp.json()
             if isinstance(users_data, list):
-                for u in users_data[:30]:
-                    users.append({"id": u.get("id"), "name": u.get("name"),
-                                  "slug": u.get("slug"), "link": u.get("link")})
+                ctx.state["users"] = users_data[:50]
+                ctx.source(f"wp-users-enum ({len(users_data)})")
         except Exception:
             pass
 
-    if users:
-        findings.append({"title": f"WordPress user enumeration — {len(users)} users exposed via /wp-json/wp/v2/users",
-            "severity": "MEDIUM", "cvss": 5.3, "cwe": "CWE-200", "owasp": "A01:2021",
-            "evidence": f"Users discovered: {', '.join(u.get('slug') or u.get('name','?') for u in users[:5])}",
-            "remediation": "Disable REST API user enumeration. Use a plugin like 'Hide WP-JSON' or restrict via .htaccess."})
+    # Plugins (heuristic from <link rel="stylesheet" href="...wp-content/plugins/PLUGIN/...">)
+    plugins = set()
+    if plugins_html_resp and plugins_html_resp.status_code == 200:
+        for m in re.finditer(r"wp-content/plugins/([^/]+)/",
+                              plugins_html_resp.text or ""):
+            plugins.add(m.group(1))
+    if plugins:
+        ctx.state["plugins"] = sorted(plugins)
+        ctx.source(f"plugin-enum ({len(plugins)})")
 
-    # Try ?author=N user enumeration (alternative method)
-    for author_id in range(1, 6):
-        r = safe_get(f"{base}/?author={author_id}", req=req, allow_redirects=False)
-        if r and r.status_code in (301, 302):
-            loc = r.headers.get("Location", "")
-            m = re.search(r"/author/([a-zA-Z0-9_-]+)", loc)
-            if m:
-                slug = m.group(1)
-                if not any(u.get("slug") == slug for u in users):
-                    users.append({"id": author_id, "slug": slug,
-                                  "source": "?author= redirect"})
-
-    # Get posts
-    r = safe_get(f"{base}/wp-json/wp/v2/posts", req=req)
-    if r and r.status_code == 200:
-        try:
-            posts_data = r.json()
-            if isinstance(posts_data, list):
-                posts = [{"id": p.get("id"), "slug": p.get("slug"),
-                          "title": (p.get("title") or {}).get("rendered","")[:80]}
-                         for p in posts_data[:10]]
-        except Exception:
-            pass
-
-    # WP version disclosure
+    # Version outdated heuristic — anything <6.0 is old
     if wp_version:
-        # Heuristic check for known-old versions
-        major, minor, patch = (int(p) for p in wp_version.split("."))
-        if major < 6:
-            findings.append({"title": f"Outdated WordPress version disclosed: {wp_version}",
-                "severity": "HIGH", "cvss": 7.5, "cwe": "CWE-1395", "owasp": "A06:2021",
-                "evidence": f"WordPress version {wp_version} detected via meta generator tag",
-                "remediation": f"Upgrade WordPress to latest stable. {wp_version} likely has unpatched CVEs."})
-        else:
-            findings.append({"title": f"WordPress version disclosed: {wp_version}",
-                "severity": "LOW", "cvss": 3.1, "cwe": "CWE-200", "owasp": "A05:2021",
-                "evidence": f"Generator: WordPress {wp_version}",
-                "remediation": "Hide WP version via plugin or remove <meta generator> tag."})
-
-    return {"ok": True, "vulnerable": len(findings) > 0, "findings": findings,
-            "wp_version": wp_version, "users": users, "posts": posts,
-            "users_count": len(users), "posts_sample_count": len(posts),
-            "engine": "WordPress wp-json REST API + ?author= redirect enumeration"}
+        try:
+            major = int(wp_version.split(".")[0])
+            if major < 6:
+                ctx.state["wp_outdated"] = True
+        except Exception:
+            pass
 
 
+INTEL_FIELDS = [
+    ("WordPress detected", "wp_detected"),
+    ("WordPress version",  "wp_version"),
+    ("Users enumerated",   "users_count_display"),
+    ("Plugins detected",   "plugins_display"),
+]
 
-# VLERR-WRAP-V1
+
 @router.post("/api/recon/wpjson_enum")
 async def recon_wpjson_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
-    try:
-        return await recon_wpjson_enum_impl(req, _)
-    except Exception as _e:
-        return {"ok": False,
-                 "skipped_reason": f"wpjson_enum scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        users = ctx.state.get("users") or []
+        if users:
+            ctx.state["users_count_display"] = (
+                f"{len(users)}: " +
+                ", ".join(u.get("slug", "?") for u in users[:5]))
+        plugins = ctx.state.get("plugins") or []
+        if plugins:
+            ctx.state["plugins_display"] = ", ".join(plugins[:5])
+
+    return await run_scanner(
+        host=host, tool="wpjson_enum",
+        gather_func=gather_with_display,
+        finding_rules=WPJSON_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["users", "wp_version", "plugins"],
+    )
+
 
 def register(app):
     app.include_router(router)

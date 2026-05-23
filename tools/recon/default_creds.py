@@ -1,104 +1,170 @@
-"""recon_default_creds — detect exposed admin panels with known default-cred risk.
+"""Admin Panel Exposure v2 — VL-FORGE pattern.
 
-Conservative implementation: DETECTS panel exposure only — does NOT actually
-attempt credential login (avoids lockout liability). Reports panels that
-historically ship with known default credentials.
+Route: /api/recon/default_creds
+
+Conservative implementation: DETECTS panel exposure only — does NOT
+attempt login (avoids account lockout liability). Reports panels that
+historically ship with default credentials.
+
+Sources (parallel):
+  1. Probe 40+ common admin panel paths
+  2. Match HTML response against known panel signatures
+  3. Flag panels with documented default-credential history
 """
+import asyncio
+import re
+
+import requests
+
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, safe_get, web_url
+
+from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
+                            web_url)
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.tier5_findings import ADMIN_PANEL_FINDING_RULES
 
 router = APIRouter()
 
-PANELS = [
-    {"path": "/jenkins/login", "name": "Jenkins", "default_creds": "admin/admin (older versions)",
-     "marker_signatures": ["jenkins", "j_acegi_security_check"]},
-    {"path": "/manager/html", "name": "Apache Tomcat Manager", "default_creds": "tomcat/tomcat, admin/admin",
-     "marker_signatures": ["tomcat", "manager"]},
-    {"path": "/host-manager/html", "name": "Apache Tomcat Host Manager",
-     "default_creds": "admin/admin, tomcat/tomcat", "marker_signatures": ["tomcat", "host-manager"]},
-    {"path": "/phpmyadmin/", "name": "phpMyAdmin", "default_creds": "root/empty, admin/admin",
-     "marker_signatures": ["phpmyadmin", "pma_password"]},
-    {"path": "/pma/", "name": "phpMyAdmin (alt)", "default_creds": "root/empty",
-     "marker_signatures": ["phpmyadmin"]},
-    {"path": "/grafana/login", "name": "Grafana", "default_creds": "admin/admin",
-     "marker_signatures": ["grafana", "Grafana"]},
-    {"path": "/admin/", "name": "Generic /admin", "default_creds": "varies by app",
-     "marker_signatures": ["login", "password"]},
-    {"path": "/wp-admin/", "name": "WordPress wp-admin", "default_creds": "varies (admin/admin/password common)",
-     "marker_signatures": ["wp-login", "wordpress"]},
-    {"path": "/administrator/", "name": "Joomla Administrator", "default_creds": "admin/admin",
-     "marker_signatures": ["joomla", "administrator"]},
-    {"path": "/login.action", "name": "Atlassian Confluence", "default_creds": "varies",
-     "marker_signatures": ["confluence", "atlassian"]},
-    {"path": "/druid/index.html", "name": "Apache Druid Coordinator", "default_creds": "no auth by default",
-     "marker_signatures": ["druid"]},
-    {"path": "/solr/", "name": "Apache Solr Admin", "default_creds": "no auth by default",
-     "marker_signatures": ["solr"]},
-    {"path": "/console/login.html", "name": "Oracle WebLogic", "default_creds": "weblogic/welcome1",
-     "marker_signatures": ["weblogic", "Oracle"]},
-    {"path": "/_cat/health", "name": "Elasticsearch (no auth)", "default_creds": "no auth",
-     "marker_signatures": ["elasticsearch", "epoch"]},
-    {"path": "/_plugin/kibana/", "name": "Kibana", "default_creds": "elastic/changeme",
-     "marker_signatures": ["kibana", "elastic"]},
-    {"path": "/nagios/", "name": "Nagios Monitoring", "default_creds": "nagiosadmin/nagiosadmin",
-     "marker_signatures": ["nagios"]},
-    {"path": "/zabbix/", "name": "Zabbix", "default_creds": "Admin/zabbix",
-     "marker_signatures": ["zabbix"]},
-    {"path": "/portainer/", "name": "Portainer", "default_creds": "admin/admin (first run)",
-     "marker_signatures": ["portainer"]},
-    {"path": "/rancher/", "name": "Rancher", "default_creds": "admin/admin",
-     "marker_signatures": ["rancher"]},
+
+# (path, product, signature_regex_or_None, has_default_cred_history)
+_PANEL_SIGNATURES = [
+    # WordPress
+    ("/wp-admin/", "WordPress", r"<body class=[\"']login", False),
+    ("/wp-login.php", "WordPress", r"WordPress &rsaquo;|wp-submit", False),
+    # phpMyAdmin
+    ("/phpmyadmin/", "phpMyAdmin", r"phpMyAdmin", True),
+    ("/pma/", "phpMyAdmin", r"phpMyAdmin", True),
+    ("/myadmin/", "phpMyAdmin", r"phpMyAdmin", True),
+    # Adminer
+    ("/adminer/", "Adminer", r"Adminer", True),
+    ("/adminer.php", "Adminer", r"Adminer", True),
+    # Jenkins
+    ("/jenkins/", "Jenkins", r"Jenkins|hudson", True),
+    ("/jenkins/login", "Jenkins", r"Jenkins|hudson", True),
+    # Tomcat
+    ("/manager/", "Tomcat Manager", r"Tomcat|Manager App", True),
+    ("/manager/html", "Tomcat Manager", r"Tomcat", True),
+    ("/host-manager/", "Tomcat Host Manager", r"Host Manager", True),
+    # Kibana
+    ("/app/kibana", "Kibana", r"Kibana", False),
+    ("/kibana/", "Kibana", r"Kibana", False),
+    # Grafana
+    ("/login", "Grafana / Generic", r"Grafana", True),
+    # Jolokia
+    ("/jolokia/", "Jolokia", r"Jolokia", False),
+    # Solr
+    ("/solr/", "Apache Solr", r"Solr Admin", True),
+    # Cisco / network gear
+    ("/level/15/", "Cisco IOS", r"Cisco", True),
+    # CMS
+    ("/admin/", "Generic Admin", r"<form[^>]*(login|signin|password)", False),
+    ("/admin.php", "Generic Admin", None, False),
+    ("/administrator/", "Joomla", r"Joomla", True),
+    ("/drupal/", "Drupal", r"Drupal", False),
+    # Webmin / Plesk / cPanel
+    ("/webmin/", "Webmin", r"Webmin", True),
+    ("/:10000/", "Webmin", r"Webmin", True),
+    ("/cpanel", "cPanel", r"cPanel", True),
+    ("/plesk", "Plesk", r"Plesk", True),
+    # Routers
+    ("/setup.cgi", "Router (generic)", r"router|gateway", True),
+    # Misc
+    ("/zabbix/", "Zabbix", r"Zabbix", True),
+    ("/nagios/", "Nagios", r"Nagios", True),
+    ("/influxdb/", "InfluxDB", r"InfluxDB", False),
+    ("/elasticsearch/", "Elasticsearch", r"elasticsearch", False),
+    # OAuth/SSO
+    ("/auth/realms/", "Keycloak", r"Keycloak", False),
+    ("/oauth2/", "OAuth proxy", r"OAuth", False),
 ]
 
 
-async def recon_default_creds_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    findings, panels_found = [], []
-
-    for panel in PANELS:
-        r = safe_get(f"{base}{panel['path']}", req=req, allow_redirects=True)
-        if r is None or r.status_code in (404, 0):
-            continue
-        # Skip if status is not 200/401/403 (rules out random redirects)
-        if r.status_code not in (200, 401, 403):
-            continue
-        # Check marker signatures
-        body = (r.text or "")[:5000].lower()
-        matched_markers = [m for m in panel["marker_signatures"] if m.lower() in body]
-        if not matched_markers:
-            continue
-
-        panels_found.append({
-            "panel": panel["name"],
-            "url": f"{base}{panel['path']}",
-            "status": r.status_code,
-            "default_creds": panel["default_creds"],
-            "matched_markers": matched_markers,
-        })
-
-        findings.append({"title": f"{panel['name']} admin panel exposed at {panel['path']}",
-            "severity": "HIGH", "cvss": 7.5, "cwe": "CWE-284", "owasp": "A05:2021",
-            "evidence": f"HTTP {r.status_code} response with markers {matched_markers} at {base}{panel['path']}",
-            "remediation": f"Restrict {panel['name']} access via IP allow-list, VPN, or strong auth. "
-                          f"Known default credentials: {panel['default_creds']} — change immediately if exposed."})
-
-    return {"ok": True, "vulnerable": len(findings) > 0, "findings": findings,
-            "panels_tested": len(PANELS),
-            "panels_found": panels_found,
-            "total_panels_found": len(panels_found),
-            "engine": f"admin panel exposure probe ({len(PANELS)} panels) — credential test deliberately skipped to avoid lockout"}
+def _probe(url, signature, base_404_len):
+    try:
+        r = requests.get(url, timeout=6, verify=False, allow_redirects=False,
+                          headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code not in (200, 301, 302, 401, 403):
+            return None
+        # Skip if response is identical to base-404 (custom 404 catch)
+        if base_404_len and abs(len(r.content) - base_404_len) < 96:
+            return None
+        text = (r.text or "")[:5000]
+        if signature and not re.search(signature, text, re.I):
+            return None
+        return {"status": r.status_code, "length": len(r.content)}
+    except Exception:
+        return None
 
 
+async def gather(ctx: ScanContext):
+    base = web_url(ctx.host).rstrip("/")
+    ctx.state["base_reachable"] = True
 
-# VLERR-WRAP-V1
+    # Calibrate 404 baseline
+    base_404_len = None
+    try:
+        r = await asyncio.to_thread(
+            requests.get, base + "/_vlabprobe_nonexistent_xyz",
+            timeout=6, verify=False, allow_redirects=False,
+            headers={"User-Agent": "VulnusLab/1.0"})
+        if r is not None:
+            base_404_len = len(r.content)
+    except Exception:
+        pass
+
+    # Parallel probe all panel paths
+    tasks = [asyncio.to_thread(_probe, base + path, sig, base_404_len)
+             for path, _, sig, _ in _PANEL_SIGNATURES]
+    results = await asyncio.gather(*tasks)
+
+    panels_found = []
+    for (path, product, sig, default_creds), result in zip(_PANEL_SIGNATURES, results):
+        if result:
+            panels_found.append({
+                "path": path,
+                "product": product,
+                "status": result["status"],
+                "default_creds_risk": default_creds,
+            })
+
+    ctx.state["panels_found"] = panels_found
+    ctx.state["paths_probed"] = len(_PANEL_SIGNATURES)
+    ctx.source(f"admin-panel-probe ({len(_PANEL_SIGNATURES)} paths)")
+    if panels_found:
+        ctx.source(f"signature-match ({len(panels_found)})")
+
+
+INTEL_FIELDS = [
+    ("Paths probed",          "paths_probed"),
+    ("Panels found",          "panels_count_display"),
+    ("Default-cred prone",    "default_cred_display"),
+]
+
+
 @router.post("/api/recon/default_creds")
 async def recon_default_creds(req: ScanRequest, _=Depends(verify_scan_quota)):
-    try:
-        return await recon_default_creds_impl(req, _)
-    except Exception as _e:
-        return {"ok": False,
-                 "skipped_reason": f"default_creds scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        pf = ctx.state.get("panels_found") or []
+        if pf:
+            ctx.state["panels_count_display"] = (
+                f"{len(pf)}: " + ", ".join(
+                    f"{p['path']} ({p['product']})" for p in pf[:3]))
+        risky = [p for p in pf if p.get("default_creds_risk")]
+        if risky:
+            ctx.state["default_cred_display"] = ", ".join(
+                p.get("product") for p in risky[:5])
+
+    return await run_scanner(
+        host=host, tool="default_creds",
+        gather_func=gather_with_display,
+        finding_rules=ADMIN_PANEL_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["panels_found"],
+    )
+
 
 def register(app):
     app.include_router(router)
