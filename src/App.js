@@ -6895,6 +6895,17 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} VULN takeover(s) on ${d.checked||0} subs` : `0 takeovers (${d.checked||0} subs checked)`;
       case "waf_cdn":    return (d.detected||[]).length > 0 ? `${(d.detected||[]).map(x=>x.vendor).slice(0,2).join(", ")}${d.detected.length>2?` +${d.detected.length-2}`:""}` : "none detected";
       case "ssl_deep":   return (d.total_vulnerabilities||0) > 0 ? `${d.total_vulnerabilities} TLS issue(s), ${d.current_protocol||"?"}` : `clean (${d.current_protocol||"?"})`;
+      // Tier 3-5 — summaries that were missing
+      case "tls_deep":      return (d.findings||[]).length>0 ? `${(d.findings||[]).length} TLS issue(s)` : "TLS clean";
+      case "zone_transfer": return d.vulnerable ? `AXFR LEAK · ${(d.transfers||[]).length} record(s)` : "AXFR refused";
+      case "sourcemap":     return (d.maps_found||[]).length>0 ? `${(d.maps_found||[]).length} map(s) exposed` : "no maps";
+      case "bucket_perms":  return d.buckets_exist ? `${(d.public_buckets||[]).length} public · ${(d.private_buckets||[]).length} private` : "no buckets";
+      case "api_docs":      return (d.exposed_endpoints||[]).length>0 ? `${(d.exposed_endpoints||[]).length} docs exposed` : "no API docs";
+      case "wpjson_enum":   return d.wp_version ? `WP ${d.wp_version} · ${(d.users||[]).length} user(s)` : "no WP";
+      case "default_creds": return (d.panels_found||[]).length>0 ? `${(d.panels_found||[]).length} panel(s) found` : "no panels";
+      case "jslib_cve":     return (d.vulnerable_libs||[]).length>0 ? `${(d.vulnerable_libs||[]).length} vuln lib(s)` : `${(d.libs_detected||[]).length} lib(s)`;
+      case "git_recon":     return (d.exposed_files||[]).length>0 ? `${(d.exposed_files||[]).length} VCS file(s) exposed` : "no .git";
+      case "cdn_origin":    return (d.cdn_detected||[]).length>0 ? `CDN: ${(d.cdn_detected||[]).join(",")}` : "no CDN";
       // Tier 6 — OSINT
       case "breach_search":     return (d.breach_count||0)>0 ? `${d.breach_count} breach(es), ${(d.paste_count||0)} paste hit(s)` : "no breaches";
       case "github_leaks":      return (d.secret_hits||[]).length>0 ? `${d.secret_hits.length} secret hit(s) on GitHub` : `${(d.matched_repos||[]).length} repo(s)`;
@@ -7229,6 +7240,17 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         case "email_audit":  return (d.spf?.found || d.dmarc?.found || d.dkim?.found) ? `SPF=${d.spf?.found?"yes":"no"} · DMARC=${d.dmarc?.found?"yes":"no"} · DKIM=${d.dkim?.found?"yes":"no"}` : (d.skipped_reason || "no email security records");
         case "waf_detect":   return (d.detected||[]).length > 0 ? `${d.detected.length} WAF fingerprint(s)` : "no WAF detected";
         case "takeover_check": return (d.vulnerable||[]).length > 0 ? `${d.vulnerable.length} VULN takeover(s) on ${d.checked||0} subs` : `${d.checked||0} subdomain(s) checked`;
+        // Tier 3-5 — long summaries that were missing
+        case "tls_deep":      return (d.findings||[]).length > 0 ? `${(d.findings||[]).length} TLS issue(s) — ${d.current_protocol||"protocol?"}` : (d.current_protocol ? `${d.current_protocol} clean` : (d.skipped_reason || "TLS deep audit complete"));
+        case "zone_transfer": return d.vulnerable ? `CRITICAL: AXFR succeeded — ${(d.transfers||[]).length} zone record(s) leaked` : `Zone transfer refused on ${(d.ns_servers||[]).length} NS server(s)`;
+        case "sourcemap":     return (d.maps_found||[]).length > 0 ? `${(d.maps_found||[]).length} .map file(s) exposed · ${d.paths_probed||0} paths probed` : `${d.paths_probed||0} common .map paths probed, none exposed`;
+        case "bucket_perms":  return d.buckets_exist ? `${(d.public_buckets||[]).length} PUBLIC · ${(d.private_buckets||[]).length} private bucket(s)` : (d.skipped_reason || "No matching buckets found");
+        case "api_docs":      return (d.exposed_endpoints||[]).length > 0 ? `${(d.exposed_endpoints||[]).length} API doc(s) exposed: ${(d.exposed_endpoints||[]).slice(0,3).map(e=>e.path||e).join(", ")}` : `${d.paths_probed||0} doc paths probed, none exposed`;
+        case "wpjson_enum":   return d.wp_version ? `WordPress ${d.wp_version} · ${(d.users||[]).length} user(s) enumerated via wp-json` : (d.skipped_reason || "Not a WordPress site");
+        case "default_creds": return (d.panels_found||[]).length > 0 ? `${(d.panels_found||[]).length} admin panel(s) found: ${(d.panels_found||[]).slice(0,3).map(p=>p.product||p.path).join(", ")}` : `${d.paths_probed||0} panel paths probed, none exposed`;
+        case "jslib_cve":     return (d.vulnerable_libs||[]).length > 0 ? `${(d.vulnerable_libs||[]).length} vulnerable JS lib(s) · ${(d.libs_detected||[]).length} total detected` : `${(d.libs_detected||[]).length} JS lib(s) detected, none vulnerable`;
+        case "git_recon":     return (d.exposed_files||[]).length > 0 ? `${(d.exposed_files||[]).length} VCS file(s) exposed${d.git_full_exposure?" — FULL REPO EXTRACTABLE":""}` : `${d.paths_tested||0} VCS paths probed, none exposed`;
+        case "cdn_origin":    return (d.cdn_detected||[]).length > 0 ? `Behind ${(d.cdn_detected||[]).join(", ")}${d.origin_ip?` · origin IP: ${d.origin_ip}`:""}` : (d.skipped_reason || "No CDN detected");
         // Tier 6 — OSINT
         case "breach_search":      return (d.breach_count||0) > 0 ? `${d.breach_count} breach(es) · ${(d.total_accounts_exposed||0).toLocaleString()} account(s) exposed · ${d.paste_count||0} paste(s)` : (d.skipped_reason || "No breaches found for this domain");
         case "github_leaks":       return (d.secret_hits||[]).length > 0 ? `${d.secret_hits.length} possible secret(s) in public GitHub code · ${(d.matched_repos||[]).length} matched repo(s)` : `${(d.matched_repos||[]).length} repo(s) mention domain · no secret patterns matched`;
