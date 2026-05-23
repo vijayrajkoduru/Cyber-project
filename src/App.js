@@ -5962,7 +5962,7 @@ function OsintModule({token, apiUrl}) {
   return (
     <div style={C.wrap}>
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="osint" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="osint" token={token} />
 
 
       <div style={{marginBottom:20}}>
@@ -11643,7 +11643,7 @@ function BufferOverflowModule({token}) {
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:"#020617",color:"#e2e8f0"}}>
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="buffer_overflow" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="buffer_overflow" token={token} />
 
 
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
@@ -11976,7 +11976,7 @@ function VulnModule(props) {
     if(findings.length===0) return (
       <div style={{padding:20,textAlign:"center"}}>
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="vuln" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="vuln" token={props.token} />
 
 
         <div style={{fontSize:28,marginBottom:8}}>✅</div>
@@ -12288,7 +12288,7 @@ function PasswordModule(props) {
   return (
     <div className="fade">
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="password" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="password" token={props.token} />
 
 
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:16}}>
@@ -12413,7 +12413,7 @@ function NetworkAttacksModule({token}) {
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="network" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="network" token={token} />
 
 
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
@@ -12531,7 +12531,7 @@ function SystemExploitModule({token}) {
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="system_exploit" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="system_exploit" token={token} />
 
 
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
@@ -12645,7 +12645,7 @@ function CloudAttacksModule({token}) {
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="cloud_attacks" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="cloud_attacks" token={token} />
 
 
       <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
@@ -12763,7 +12763,7 @@ function AuthAttacksModule({token}) {
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="auth_attacks" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="auth_attacks" token={token} />
 
 
       <div style={{marginBottom:24,background:"#0f172a",borderRadius:12,padding:20,border:"1px solid #1e293b"}}>
@@ -12868,7 +12868,7 @@ function MetasploitModule(props) {
   return (
     <div className="fade">
       {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="metasploit" token={(typeof token!=="undefined" && token) || (typeof props!=="undefined" && props && props.token) || null} />
+      <ToolRefreshButton module="metasploit" token={props.token} />
 
 
       <div style={{background:"linear-gradient(135deg,#1c0a0a,#0f172a)",border:"1px solid #7f1d1d",borderRadius:8,padding:20,marginBottom:16}}>
