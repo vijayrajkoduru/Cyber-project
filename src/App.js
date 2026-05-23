@@ -12012,6 +12012,120 @@ function VulnModule(props) {
     }
 
     const results = {};
+
+    // ── VULN-V2-STREAMING ────────────────────────────────────────────────
+    // Single POST to /api/vuln/run_all + NDJSON stream of per-scanner events.
+    // ~7 min sequential -> ~30-60 sec parallel. Cloudflare-safe (heartbeats).
+    {
+      add(`[*] v2 streaming: dispatching ${VULN_PHASES.length} scanners (NDJSON stream)...`);
+      const body = {target};
+      if (sessionCookie) body.auth_cookie = sessionCookie;
+      if (sessionBearer) body.auth_bearer = sessionBearer;
+
+      const _toolToIdx = {};
+      VULN_PHASES.forEach((ph,i) => { _toolToIdx[ph.tool] = i; });
+
+      let _completedCount = 0;
+      let _finalSummary = null;
+      const _scanStartedAt = Date.now();
+
+      try {
+        const headers = {"Content-Type":"application/json"};
+        if (token) headers["Authorization"] = "Bearer " + token;
+        const res = await fetch(API + "/api/vuln/run_all", {
+          method: "POST", headers, body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(()=>"");
+          throw new Error("HTTP " + res.status + ": " + (errText.substring(0,160) || res.statusText || "no body"));
+        }
+        if (!res.body) throw new Error("Streaming not supported by browser/proxy");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        while (true) {
+          if (stopRef.current) {
+            try { reader.cancel(); } catch(_) {}
+            add("[!] Scan stopped by user during v2 stream.");
+            break;
+          }
+          const {value, done} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          let nl;
+          while ((nl = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (!line) continue;
+            let evt;
+            try { evt = JSON.parse(line); }
+            catch(parseErr) {
+              console.warn("[vuln-v2-stream] skipped non-JSON", parseErr, "preview:", line.substring(0,200));
+              continue;
+            }
+            if (evt.event === "scan_started") {
+              add(`  ⇒ ${evt.total_tools} scanners dispatched, concurrency=${evt.concurrency}`);
+            }
+            else if (evt.event === "heartbeat") {
+              // keep-alive; no UI update needed
+            }
+            else if (evt.event === "tool_complete") {
+              const idx = _toolToIdx[evt.tool];
+              const data = evt.result || {};
+              if (idx !== undefined) {
+                results[evt.tool] = data;
+                if (data._failed === true || data.ok === false) {
+                  // Vuln module tracks via `done` only (no `failed`) — push anyway
+                }
+                setDone(p => [...p, idx]);
+                setAllResults(Object.assign({}, results));
+              }
+              _completedCount += 1;
+              const elapsed = ((Date.now() - _scanStartedAt)/1000).toFixed(1);
+              const ph = VULN_PHASES.find(p => p.tool === evt.tool);
+              const phName = ph ? ph.name : evt.tool;
+              const status = data._failed ? "✗" : (data._skipped || data.skipped_reason) ? "○" : "✓";
+              add(`  ${status} [${_completedCount}/${VULN_PHASES.length}] ${phName} (${evt.duration_sec}s, +${elapsed}s)`);
+            }
+            else if (evt.event === "scan_complete") {
+              _finalSummary = evt;
+            }
+          }
+        }
+
+        // INCOMPLETE-STREAM-V1 — recover any QUEUED scanners on connection drop
+        if (!stopRef.current && !_finalSummary) {
+          const missing = VULN_PHASES.filter(ph => !(ph.tool in results));
+          if (missing.length > 0) {
+            add(`⚠ stream ended without scan_complete — ${missing.length} scanner(s) didn't report`);
+            missing.forEach(ph => {
+              const idx = _toolToIdx[ph.tool];
+              results[ph.tool] = {ok:false, _failed:true,
+                                   error:"stream interrupted before this scanner completed",
+                                   findings:[], tool:ph.tool};
+              setDone(p => [...p, idx]);
+            });
+            setAllResults(Object.assign({}, results));
+          }
+        }
+        if (!stopRef.current && _finalSummary) {
+          const sum = _finalSummary.summary || {};
+          add(`✓ v2 complete in ${_finalSummary.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
+          if (sum.by_severity) {
+            const sev = sum.by_severity;
+            add(`  Severity: ${sev.CRITICAL||0} CRIT · ${sev.HIGH||0} HIGH · ${sev.MEDIUM||0} MED · ${sev.LOW||0} LOW`);
+          }
+        }
+      } catch(e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        add(`✗ v2 stream failed: ${msg}`);
+      }
+      setCurrent(-1); setRunning(false); _notifyRunning(false); setFinished(true);
+      return;
+    }
+    // ── VULN-V2-STREAMING END (legacy code below is now dead but kept for safety) ──
+
     // Single-retry-on-failure (same pattern as Recon module). Transient
     // 429s / network glitches no longer permanently drop a phase.
     const _scanBody = () => {
