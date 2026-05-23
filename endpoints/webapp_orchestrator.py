@@ -74,6 +74,7 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     ],
     # Framework-specific + Heavy
     "tier8_framework": [
+        ("nikto",          "/api/scan/nikto"),
         ("nuclei",         "/api/scan/nuclei"),
         ("force_browse",   "/api/scan/force_browse"),
         ("file_upload",    "/api/scan/file_upload"),
