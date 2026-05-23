@@ -21,7 +21,7 @@ from tools._framework import ScanContext, run_scanner
 from tools._payloads.portscan_findings import (
     PORTSCAN_FINDING_RULES, PORT_CATALOG,
 )
-from tools.recon._portscan_engine import (
+from tools._framework.portscan_engine import (
     tcp_probe, grab_banner, os_hint_from_banner, os_fingerprint_probe,
 )
 
