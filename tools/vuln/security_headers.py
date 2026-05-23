@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools.vuln._vuln_common import vuln_response, precheck_target
 router = APIRouter()
 
 def _csp(h):
@@ -66,7 +67,7 @@ def _xpb(h):
                 remediation="Disable X-Powered-By in framework/server config.",
                 evidence_marker=f"X-Powered-By: {v}")
 
-async def scan_security_headers(req, payload):
+def scan_security_headers(req, payload):
     url = web_url(req.target)
     r = safe_get(url, req=req, allow_redirects=True)
     if r is None:
@@ -76,17 +77,18 @@ async def scan_security_headers(req, payload):
     https = str(r.url).startswith("https://")
     h = dict(r.headers)
     checks = [_csp(h), _hsts(h, https), _xfo(h), _xcto(h), _ref(h), _perm(h), _srv(h), _xpb(h)]
-    return standard_response(tool="security_headers", target=req.target,
-        findings=[c for c in checks if c], tests_performed=len(checks),
+    return vuln_response(tool="security_headers", target=req.target,
+        findings=[c for c in checks if c], tested=len(checks),
+        what_checked="9 critical HTTP security headers (CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By)",
         tests_summary="9 header checks: CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By",
         raw_data={"security_headers": {"is_https": https, "headers_seen": list(h.keys())}})
 
 @router.post("/api/scan/security_headers")
-async def ep_sh(req: ScanRequest, payload=Depends(verify_scan_quota)):
-    return await scan_security_headers(req, payload)
+def ep_sh(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    return scan_security_headers(req, payload)
 @router.post("/api/scan/headers")
-async def ep_h(req: ScanRequest, payload=Depends(verify_scan_quota)):
-    r = await scan_security_headers(req, payload)
+def ep_h(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    r = scan_security_headers(req, payload)
     if isinstance(r, dict): r["tool"] = "headers"
     return r
 def register(app): app.include_router(router)

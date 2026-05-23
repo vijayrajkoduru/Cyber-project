@@ -1,15 +1,23 @@
-"""JWT — alg=none + HMAC-secret crack + missing exp + PII."""
+"""JWT — alg=none + HMAC-secret crack + missing exp + PII.
+
+Secret dictionary: AI-curated 695-entry wordlist at
+tools/_payloads/vuln/jwt_secrets.txt (loaded once at import, falls back
+to a 32-entry hardcoded baseline if the file is missing).
+"""
 import base64, hashlib, hmac, json, re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_lines
 router = APIRouter()
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
-_SECRETS = ["secret","password","jwt","jwt-secret","jwtsecret","your-256-bit-secret",
+_FALLBACK_SECRETS = ["secret","password","jwt","jwt-secret","jwtsecret","your-256-bit-secret",
     "your_jwt_secret","supersecret","supersecretkey","mysecret","test","admin","key",
     "private","changeme","123456","12345","1234567890","secret123","password123",
     "qwerty","default","abcdef","abc123","ssshhh","tokenkey","jwt_secret","JWT_SECRET",
     "JWTSecret","shhh","thisIsMySecretKey","0123456789abcdef"]
+_SECRETS = load_lines("jwt_secrets", fallback=_FALLBACK_SECRETS)
 
 def _b64d(s):
     pad = "=" * (4 - len(s) % 4)
@@ -66,7 +74,7 @@ def _analyze(token, findings, confirmed):
         confirmed.append({"issue": "sensitive_pii", "fields": pii})
 
 @router.post("/api/scan/jwt")
-async def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, confirmed, tokens = [], [], []
     pages = 0
@@ -99,8 +107,10 @@ async def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
         return standard_response(tool="jwt", target=req.target, findings=[],
             tests_performed=pages, vulnerable=False,
             skipped_reason=f"No JWT tokens found across {pages} crawled endpoints")
-    return standard_response(tool="jwt", target=req.target, findings=findings,
-        tests_performed=pages,
+    return vuln_response(tool="jwt", target=req.target, findings=findings,
+        tested=pages,
+        what_checked=f"JWT tokens for alg=none, weak HMAC secrets ({len(_SECRETS)}-entry AI-curated wordlist), missing exp, PII leakage",
         tests_summary=f"JWT: crawled {pages} endpoints, found {len(tokens)} token(s); checked alg=none + crack against {len(_SECRETS)} secrets + missing exp + PII",
-        raw_data={"jwt": {"tokens_found": len(tokens), "issues_confirmed": confirmed}})
+        raw_data={"jwt": {"tokens_found": len(tokens), "issues_confirmed": confirmed,
+                          "secret_dictionary_size": len(_SECRETS)}})
 def register(app): app.include_router(router)

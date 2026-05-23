@@ -1,0 +1,70 @@
+[
+  {"category": "absolute",        "payload": "https://evil-attacker.example/"},
+  {"category": "absolute",        "payload": "http://evil-attacker.example"},
+  {"category": "absolute",        "payload": "https://evil-attacker.example/index.html"},
+  {"category": "absolute",        "payload": "https://evil-attacker.example/?id=1"},
+  {"category": "absolute",        "payload": "//evil-attacker.example"},
+
+  {"category": "schemeless",      "payload": "//evil-attacker.example/"},
+  {"category": "schemeless",      "payload": "//evil-attacker.example"},
+  {"category": "schemeless",      "payload": "///evil-attacker.example"},
+  {"category": "schemeless",      "payload": "////evil-attacker.example"},
+  {"category": "schemeless",      "payload": "//evil-attacker.example/%2e%2e"},
+  {"category": "schemeless",      "payload": "//evil-attacker.example/.."},
+
+  {"category": "backslash",       "payload": "/\\\\evil-attacker.example"},
+  {"category": "backslash",       "payload": "\\\\evil-attacker.example"},
+  {"category": "backslash",       "payload": "\\\\\\\\evil-attacker.example"},
+  {"category": "backslash",       "payload": "/\\\\/evil-attacker.example"},
+  {"category": "backslash",       "payload": "//\\\\evil-attacker.example"},
+  {"category": "backslash",       "payload": "\\\\//evil-attacker.example"},
+
+  {"category": "userinfo",        "payload": "https://target.com@evil-attacker.example"},
+  {"category": "userinfo",        "payload": "https://target.com%40evil-attacker.example"},
+  {"category": "userinfo",        "payload": "https://target.com:80@evil-attacker.example"},
+  {"category": "userinfo",        "payload": "//google.com@evil-attacker.example"},
+  {"category": "userinfo",        "payload": "https://target.com&@evil-attacker.example#@target.com"},
+
+  {"category": "subdomain",       "payload": "https://target.com.evil-attacker.example"},
+  {"category": "subdomain",       "payload": "https://target-com.evil-attacker.example"},
+  {"category": "subdomain",       "payload": "https://target.com-evil-attacker.example"},
+  {"category": "subdomain",       "payload": "https://evil-attacker.example/target.com"},
+
+  {"category": "url-encoded",     "payload": "https%3A%2F%2Fevil-attacker.example%2F"},
+  {"category": "url-encoded",     "payload": "%2f%2fevil-attacker.example"},
+  {"category": "url-encoded",     "payload": "%2f%2f%65%76%69%6c-attacker.example"},
+  {"category": "url-encoded",     "payload": "%2f%5cevil-attacker.example"},
+
+  {"category": "double-encoded",  "payload": "%252f%252fevil-attacker.example"},
+  {"category": "double-encoded",  "payload": "%2525%2538%2545evil-attacker.example"},
+  {"category": "double-encoded",  "payload": "https:%252f%252fevil-attacker.example"},
+
+  {"category": "whitespace",      "payload": " https://evil-attacker.example/"},
+  {"category": "whitespace",      "payload": "%20https://evil-attacker.example/"},
+  {"category": "whitespace",      "payload": "\\thttps://evil-attacker.example/"},
+  {"category": "whitespace",      "payload": "\\nhttps://evil-attacker.example/"},
+  {"category": "whitespace",      "payload": "%09https://evil-attacker.example"},
+  {"category": "whitespace",      "payload": "%0ahttps://evil-attacker.example"},
+  {"category": "whitespace",      "payload": "%0d%0ahttps://evil-attacker.example"},
+
+  {"category": "null-byte",       "payload": "https://target.com%00.evil-attacker.example"},
+  {"category": "null-byte",       "payload": "https://evil-attacker.example%00.target.com"},
+  {"category": "null-byte",       "payload": "https://target.com\\x00@evil-attacker.example"},
+
+  {"category": "protocol-rel",    "payload": "//evil-attacker.example/"},
+  {"category": "protocol-rel",    "payload": "://evil-attacker.example/"},
+
+  {"category": "scheme-bypass",   "payload": "javascript:alert(1)"},
+  {"category": "scheme-bypass",   "payload": "data:text/html,<script>alert(1)</script>"},
+  {"category": "scheme-bypass",   "payload": "vbscript:alert(1)"},
+  {"category": "scheme-bypass",   "payload": "//evil-attacker.example/?javascript:alert(1)"},
+
+  {"category": "fragment",        "payload": "https://target.com#@evil-attacker.example"},
+  {"category": "fragment",        "payload": "https://target.com#evil-attacker.example"},
+  {"category": "fragment",        "payload": "https://evil-attacker.example#@target.com"},
+
+  {"category": "unicode",         "payload": "https://evil%E3%80%82attacker%E3%80%82example"},
+  {"category": "unicode",         "payload": "https://evil。attacker。example"},
+  {"category": "unicode",         "payload": "https://evil%EF%BC%8Eattacker%EF%BC%8Eexample"},
+  {"category": "unicode",         "payload": "https://е﻿vil-attacker.example"}
+]

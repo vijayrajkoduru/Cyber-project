@@ -15,6 +15,7 @@ import subprocess
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools.vuln._vuln_common import vuln_response, precheck_target
 
 router = APIRouter()
 
@@ -38,7 +39,7 @@ _CVSS_DEFAULT = {"CRITICAL": "9.5", "HIGH": "7.5", "MEDIUM": "5.5", "LOW": "3.0"
 
 
 @router.post("/api/scan/nuclei")
-async def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
     if not os.path.isfile(_which()):
         return standard_response(tool="nuclei", target=req.target, findings=[],
             tests_performed=0, vulnerable=False,
@@ -106,8 +107,9 @@ async def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
         parsed.append({"template": obj.get("template-id"), "name": name,
                        "severity": sev, "matched_at": url})
 
-    return standard_response(tool="nuclei", target=req.target, findings=findings,
-        tests_performed=max(len(parsed), 1),
+    return vuln_response(tool="nuclei", target=req.target, findings=findings,
+        tested=max(len(parsed), 1),
+        what_checked="community Nuclei templates (CVE / exposure / misconfig, severity ≥ medium)",
         tests_summary=(f"Nuclei: {len(findings)} finding(s) from community templates "
                        f"(severity≥medium, safe-only tags, auth headers injected)"),
         raw_data={"nuclei": {"matches": parsed[:50],

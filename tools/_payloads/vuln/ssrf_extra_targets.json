@@ -1,0 +1,71 @@
+[
+  {"name": "aws_imds_v1",          "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/latest/meta-data/",                                        "matcher": "(ami-id|instance-id|iam/)"},
+  {"name": "aws_imds_iam",         "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/",              "matcher": "[A-Za-z0-9_-]+"},
+  {"name": "aws_imds_userdata",    "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/latest/user-data/",                                       "matcher": "(#!/|#cloud-config|export\\s+)"},
+  {"name": "aws_imds_v1_alt",      "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://[::ffff:169.254.169.254]/latest/meta-data/",                              "matcher": "(ami-id|instance-id)"},
+  {"name": "aws_imds_dec",         "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://2852039166/latest/meta-data/",                                            "matcher": "(ami-id|instance-id)"},
+  {"name": "aws_imds_hex",         "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://0xa9fea9fe/latest/meta-data/",                                            "matcher": "(ami-id|instance-id)"},
+
+  {"name": "gcp_metadata_root",    "category": "gcp-metadata",   "severity": "CRITICAL", "cvss": "9.8", "url": "http://metadata.google.internal/computeMetadata/v1/",                            "matcher": "(/instance/|/project/)"},
+  {"name": "gcp_metadata_token",   "category": "gcp-metadata",   "severity": "CRITICAL", "cvss": "9.8", "url": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", "matcher": "(access_token|token_type)"},
+  {"name": "gcp_metadata_id",      "category": "gcp-metadata",   "severity": "HIGH",     "cvss": "7.5", "url": "http://metadata.google.internal/computeMetadata/v1/project/project-id",          "matcher": "[a-z][-a-z0-9]+"},
+  {"name": "gcp_metadata_ip",      "category": "gcp-metadata",   "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/computeMetadata/v1/",                                     "matcher": "(/instance/|/project/)"},
+
+  {"name": "azure_imds_v1",        "category": "azure-imds",     "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/metadata/instance?api-version=2021-02-01",                "matcher": "(compute|network|location)"},
+  {"name": "azure_imds_token",     "category": "azure-imds",     "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/", "matcher": "(access_token|expires_in)"},
+
+  {"name": "do_metadata",          "category": "do-metadata",    "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/metadata/v1/",                                            "matcher": "(droplet_id|region|hostname)"},
+  {"name": "do_metadata_userdata", "category": "do-metadata",    "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/metadata/v1/user-data",                                   "matcher": "(#!/|#cloud-config)"},
+
+  {"name": "oracle_imds",          "category": "oracle-imds",    "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/opc/v1/instance/",                                        "matcher": "(displayName|shape|compartmentId)"},
+
+  {"name": "alibaba_imds",         "category": "alibaba-imds",   "severity": "HIGH",     "cvss": "7.5", "url": "http://100.100.100.200/latest/meta-data/",                                       "matcher": "(instance-id|region-id)"},
+
+  {"name": "tencent_imds",         "category": "tencent-imds",   "severity": "HIGH",     "cvss": "7.5", "url": "http://metadata.tencentyun.com/latest/meta-data/",                               "matcher": "(instance-id|region)"},
+
+  {"name": "ibm_imds",             "category": "ibm-imds",       "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/metadata/v1/instance",                                    "matcher": "(id|name|profile|zone)"},
+
+  {"name": "k8s_api_root",         "category": "kubelet",        "severity": "CRITICAL", "cvss": "9.1", "url": "https://kubernetes.default.svc/api/v1/",                                         "matcher": "(\"kind\":\\s*\"APIResourceList\"|\"resources\":)"},
+  {"name": "k8s_token",            "category": "kubelet",        "severity": "CRITICAL", "cvss": "9.8", "url": "file:///var/run/secrets/kubernetes.io/serviceaccount/token",                     "matcher": "ey[A-Za-z0-9_-]+\\.ey"},
+  {"name": "k8s_namespaces",       "category": "kubelet",        "severity": "HIGH",     "cvss": "7.5", "url": "https://kubernetes.default.svc/api/v1/namespaces",                               "matcher": "(\"kind\":\\s*\"NamespaceList\")"},
+  {"name": "k8s_pods",             "category": "kubelet",        "severity": "HIGH",     "cvss": "7.5", "url": "https://kubernetes.default.svc/api/v1/pods",                                     "matcher": "(\"kind\":\\s*\"PodList\")"},
+  {"name": "kubelet_default",      "category": "kubelet",        "severity": "HIGH",     "cvss": "7.5", "url": "https://127.0.0.1:10250/pods",                                                  "matcher": "(\"kind\":\\s*\"PodList\")"},
+  {"name": "kubelet_metrics",      "category": "kubelet",        "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:10255/metrics",                                                "matcher": "# HELP"},
+
+  {"name": "docker_socket",        "category": "docker-api",     "severity": "CRITICAL", "cvss": "9.8", "url": "http://localhost:2375/containers/json",                                          "matcher": "\"Id\":\\s*\"[a-f0-9]+\""},
+  {"name": "docker_socket_tls",    "category": "docker-api",     "severity": "CRITICAL", "cvss": "9.8", "url": "https://localhost:2376/containers/json",                                         "matcher": "\"Id\":\\s*\"[a-f0-9]+\""},
+  {"name": "docker_info",          "category": "docker-api",     "severity": "HIGH",     "cvss": "7.5", "url": "http://localhost:2375/info",                                                    "matcher": "(\"Containers\":|\"Images\":)"},
+
+  {"name": "localhost_app",        "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:3000/",                                                        "matcher": ".+"},
+  {"name": "localhost_8080",       "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:8080/",                                                        "matcher": ".+"},
+  {"name": "localhost_9090",       "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:9090/",                                                        "matcher": ".+"},
+  {"name": "localhost_5000",       "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:5000/",                                                        "matcher": ".+"},
+  {"name": "localhost_redis",      "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:6379/",                                                        "matcher": "(\\+OK|\\$\\d+|\\*\\d+)"},
+  {"name": "localhost_memcached",  "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:11211/",                                                       "matcher": "(STAT|VERSION)"},
+  {"name": "localhost_es",         "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:9200/_cluster/health",                                         "matcher": "(\"cluster_name\"|\"status\":)"},
+  {"name": "localhost_es_alt",     "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:9200/_cat/indices",                                            "matcher": "(open|close|green|yellow|red)"},
+  {"name": "localhost_kibana",     "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:5601/",                                                        "matcher": "(Kibana|kbn-)"},
+  {"name": "localhost_jenkins",    "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:8080/api/json",                                                "matcher": "(\"jobs\"|\"_class\":\\s*\"hudson)"},
+  {"name": "localhost_mongo",      "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:27017/",                                                       "matcher": "It looks like you are trying to access MongoDB"},
+  {"name": "localhost_couchdb",    "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:5984/",                                                        "matcher": "(\"couchdb\":\\s*\"Welcome\")"},
+  {"name": "localhost_rabbit",     "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:15672/api/overview",                                           "matcher": "(rabbitmq_version|management_version)"},
+  {"name": "localhost_consul",     "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:8500/v1/agent/self",                                           "matcher": "(\"Config\"|\"DebugConfig\")"},
+  {"name": "localhost_vault",      "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:8200/v1/sys/health",                                           "matcher": "(\"initialized\"|\"sealed\"|\"standby\")"},
+  {"name": "localhost_etcd",       "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:2379/v2/keys/",                                                "matcher": "(\"action\":\\s*\"get\"|errorCode)"},
+
+  {"name": "internal_10",          "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://10.0.0.1/",                                                              "matcher": ".+"},
+  {"name": "internal_172",         "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://172.16.0.1/",                                                            "matcher": ".+"},
+  {"name": "internal_192",         "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://192.168.0.1/",                                                           "matcher": ".+"},
+  {"name": "internal_ipv6",        "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://[fc00::1]/",                                                             "matcher": ".+"},
+  {"name": "internal_link_local",  "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://[fe80::1]/",                                                             "matcher": ".+"},
+
+  {"name": "schema_file",          "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "file:///etc/passwd",                                                            "matcher": "root:[x*]?:0:0"},
+  {"name": "schema_file_windows",  "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "file:///C:/Windows/win.ini",                                                    "matcher": "\\[fonts\\]"},
+  {"name": "schema_gopher",        "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "gopher://127.0.0.1:6379/_INFO",                                                 "matcher": "(redis_version|\\+OK)"},
+  {"name": "schema_dict",          "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "dict://127.0.0.1:11211/stats",                                                 "matcher": "(STAT|VERSION)"},
+  {"name": "schema_ldap",          "category": "schema-bypass",  "severity": "MEDIUM",   "cvss": "5.3", "url": "ldap://127.0.0.1:389/",                                                         "matcher": ".+"},
+  {"name": "schema_sftp",          "category": "schema-bypass",  "severity": "MEDIUM",   "cvss": "5.3", "url": "sftp://127.0.0.1/",                                                             "matcher": ".+"},
+
+  {"name": "dns_rebind_imds",      "category": "dns-rebind",     "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254.nip.io/latest/meta-data/",                                "matcher": "(ami-id|instance-id)"},
+  {"name": "dns_rebind_localhost", "category": "dns-rebind",     "severity": "HIGH",     "cvss": "7.5", "url": "http://localtest.me/",                                                          "matcher": ".+"}
+]

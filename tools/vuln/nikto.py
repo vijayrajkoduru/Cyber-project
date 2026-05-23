@@ -1,31 +1,45 @@
-"""Nikto-equivalent — aggregates 4 passive web-vuln scanners."""
+"""Nikto-equivalent — meta-scanner that aggregates results from 4 standalone scanners.
+
+V2 (post-orchestrator-stall fix): we used to re-run security_headers + exposed_files +
+cors + http_methods SERIALLY inside this handler. But those four scanners ALSO run in
+the same orchestrator pass as standalone tools. Net effect: 4× duplicate work AND nikto
+held an orchestrator semaphore slot for the WHOLE serial duration (60-120s), starving
+the other 11 queued scanners.
+
+Fix: return immediately with a pointer-finding so the PDF still has a "Nikto" section,
+but the actual content lives in the standalone security_headers / exposed_files / cors /
+http_methods sections. Zero duplicate HTTP traffic against the customer's target.
+"""
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, standard_response
+from tools._shared import ScanRequest, verify_scan_quota, wrap_finding
+from tools.vuln._vuln_common import vuln_response
 router = APIRouter()
 
+_DELEGATED_TO = ["security_headers", "exposed_files", "cors", "http_methods"]
+
+
 @router.post("/api/scan/nikto")
-async def scan_nikto(req: ScanRequest, payload=Depends(verify_scan_quota)):
-    from tools.vuln.security_headers import scan_security_headers
-    from tools.vuln.exposed_files import scan_exposed_files
-    from tools.vuln.cors import scan_cors
-    from tools.vuln.http_methods import scan_http_methods
-    subs = [("security_headers", scan_security_headers), ("exposed_files", scan_exposed_files),
-            ("cors", scan_cors), ("http_methods", scan_http_methods)]
-    all_findings, sub_results, total = [], {}, 0
-    for name, fn in subs:
-        try:
-            r = await fn(req, payload)
-            for f in r.get("findings", []):
-                f["source_tool"] = name
-                all_findings.append(f)
-            total += r.get("tests_performed", 0)
-            sub_results[name] = {"findings_count": len(r.get("findings", [])),
-                                 "tests": r.get("tests_performed", 0),
-                                 "skipped_reason": r.get("skipped_reason")}
-        except Exception as e:
-            sub_results[name] = {"error": str(e)[:120]}
-    return standard_response(tool="nikto", target=req.target, findings=all_findings,
-        tests_performed=total,
-        tests_summary=f"Nikto-equivalent: {len(subs)} scanners aggregated ({total} tests, {len(all_findings)} findings)",
-        raw_data={"nikto": {"sub_scanners": sub_results}})
+def scan_nikto(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    """Lightweight meta-scanner — defers all active work to the 4 standalone
+    scanners that the same orchestrator pass already runs in parallel."""
+    info = wrap_finding(
+        "Nikto coverage delegated — see standalone scanners",
+        "POSITIVE",
+        evidence_marker=("Nikto's web-vulnerability checks (missing security headers, "
+                          "exposed sensitive files, CORS misconfig, dangerous HTTP "
+                          "methods) are executed by 4 dedicated scanners that run in "
+                          "the same orchestrator pass: "
+                          + ", ".join(_DELEGATED_TO) + ". Consolidating prevented "
+                          "duplicate HTTP traffic against the target and unblocked "
+                          "the orchestrator queue."))
+    return vuln_response(
+        tool="nikto", target=req.target, findings=[info], tested=1,
+        what_checked="meta-aggregation pointer (see standalone scanners)",
+        tests_summary=("Nikto meta — actual findings live in "
+                       + " / ".join(_DELEGATED_TO) + " sections."),
+        raw_data={"nikto": {"delegated_to": _DELEGATED_TO,
+                             "rationale": "avoid duplicate active probes during parallel orchestrator pass"}},
+    )
+
+
 def register(app): app.include_router(router)

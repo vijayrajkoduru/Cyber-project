@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools.vuln._vuln_common import vuln_response, precheck_target
 router = APIRouter()
 _ATTACKER = "https://evil-attacker.example"
 
@@ -13,7 +14,7 @@ def _probe(url, origin, req):
            (r.headers.get("Access-Control-Allow-Credentials", "") or "").strip().lower()
 
 @router.post("/api/scan/cors")
-async def scan_cors(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_cors(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     findings, probes = [], []
 
@@ -49,8 +50,9 @@ async def scan_cors(req: ScanRequest, payload=Depends(verify_scan_quota)):
             skipped_reason=f"Target {url} did not respond to any CORS probe (network/firewall/host down)",
             tests_summary="CORS scan aborted - 0 of 3 probes received a response")
 
-    return standard_response(tool="cors", target=req.target,
-        findings=findings, tests_performed=len(probes),
+    return vuln_response(tool="cors", target=req.target,
+        findings=findings, tested=len(probes),
+        what_checked="CORS reflection of attacker / null origins",
         tests_summary=f"{len(probes)}/2 CORS probes succeeded - {len(findings)} misconfiguration(s) found",
         raw_data={"cors": {"probes": probes}})
 

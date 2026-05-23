@@ -17,6 +17,11 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._payloads.ssrf import SSRF_PAYLOADS
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_json
+# AI-curated extras: more cloud metadata endpoints, k8s, docker, redis, vault, etcd.
+_AI_EXTRA_SSRF = load_json("ssrf_extra_targets", fallback=[])
+_MERGED_SSRF = list(SSRF_PAYLOADS) + [p for p in _AI_EXTRA_SSRF if isinstance(p, dict) and "url" in p]
 
 router = APIRouter()
 
@@ -36,7 +41,7 @@ def _build_payload_set():
              "kubelet", "docker-api", "localhost", "internal-net",
              "schema-bypass", "dns-rebind"]
     buckets = {cat: [] for cat in order}
-    for p in SSRF_PAYLOADS:
+    for p in _MERGED_SSRF:
         cat = p.get("category")
         if cat not in buckets: continue
         buckets[cat].append(p)
@@ -71,8 +76,12 @@ def _extra_headers_for(ssrf_url):
 
 
 @router.post("/api/scan/ssrf")
-async def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
+    unreachable = precheck_target(base, req)
+    if unreachable:
+        return vuln_response(tool="ssrf", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     parsed = urlparse(base)
     existing = parse_qs(parsed.query)
     candidates = set(existing.keys()) | set(_COMMON_KEYS)
@@ -96,9 +105,17 @@ async def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
         cr = safe_get(canary_url, req=req, allow_redirects=False, timeout=10)
         baselines[key] = _resp_fingerprint(cr)
 
+    # SPEED-V2 — wall-clock cap to prevent 240s orchestrator-timeout cascades.
+    import time as _time
+    _wallclock_start = _time.time()
+    _WALLCLOCK_BUDGET = 45.0
+    _bailed = False
     for key in candidates:
+        if _bailed: break
         baseline_fp = baselines.get(key)
         for entry in payload_set:
+            if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                _bailed = True; break
             tests += 1
             ssrf_url = entry["url"]
             marker = entry["matcher"]
@@ -134,15 +151,22 @@ async def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
             except re.error:
                 continue
 
-    return standard_response(tool="ssrf", target=req.target, findings=findings,
-        tests_performed=tests,
-        tests_summary=(f"SSRF: {tests} probes across {len(candidates)} params using "
-                       f"{len(payload_set)}-entry payload set (SSRF_PAYLOADS library, "
-                       f"14 categories); {len(suppressed)} SPA matches filtered as non-vulnerable"),
+    summary = (f"SSRF: {tests} probes across {len(candidates)} params using "
+               f"{len(payload_set)}-entry payload set (merged: {len(SSRF_PAYLOADS)} baked-in + {len(_AI_EXTRA_SSRF)} AI-curated, "
+               f"14 categories); {len(suppressed)} SPA matches filtered as non-vulnerable "
+               f"({_time.time() - _wallclock_start:.1f}s)")
+    if _bailed:
+        summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    return vuln_response(tool="ssrf", target=req.target, findings=findings,
+        tested=tests,
+        what_checked=f"URL parameters for SSRF to cloud metadata / localhost / k8s / docker / IPC ({len(_MERGED_SSRF)}-entry merged library)",
+        tests_summary=summary,
         raw_data={"ssrf": {"confirmed": confirmed,
                             "suppressed_fps": suppressed,
                             "baseline_fingerprints": len([b for b in baselines.values() if b]),
-                            "library_size": len(SSRF_PAYLOADS)}})
+                            "library_size": len(_MERGED_SSRF),
+                            "ai_extras_loaded": len(_AI_EXTRA_SSRF),
+                            "wallclock_bailed": _bailed}})
 
 
 def register(app):
