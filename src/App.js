@@ -6910,7 +6910,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       case "breach_search":     return (d.breach_count||0)>0 ? `${d.breach_count} breach(es), ${(d.paste_count||0)} paste hit(s)` : "no breaches";
       case "github_leaks":      return (d.secret_hits||[]).length>0 ? `${d.secret_hits.length} secret hit(s) on GitHub` : `${(d.matched_repos||[]).length} repo(s)`;
       case "graphql_introspect":return d.introspection_enabled ? `EXPOSED · ${d.type_count||0} types` : (d.endpoint_found?`endpoint hardened`:"no endpoint");
-      case "email_security":    return (d.spf_record?"SPF✓":"SPF✗")+" "+(d.dmarc_record?"DMARC✓":"DMARC✗")+" "+((d.dkim_selectors_found||[]).length>0?"DKIM✓":"DKIM✗");
+      case "email_security":    return `SPF=${d.spf_record?"set":"missing"} DMARC=${d.dmarc_record?"set":"missing"} DKIM=${(d.dkim_selectors_found||[]).length>0?"set":"none"}`;
       case "dork_harvest":      return (d.critical_hits||[]).length>0 ? `${d.critical_hits.length} CRITICAL exposure(s)` : `${(d.indexed_files||[]).length} indexed URL(s)`;
       case "dnssec_validate":   return d.chain_broken ? "BROKEN CHAIN" : (d.dnssec_enabled?`enabled · ${d.strongest_algorithm||"?"}`:"not enabled");
       default:           return "Completed";
@@ -7867,8 +7867,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     chk(30); y = sHead("ASN / IP Ownership (Team-Cymru)", y);
     const rows = [
       ["IP",        r.asn.ip],
-      ["ASN",       r.asn.asn ? `AS${r.asn.asn}` : null],
-      ["Owner",     r.asn.as_owner],
+      ["ASN",       r.asn.asn ? (String(r.asn.asn).toUpperCase().startsWith("AS") ? r.asn.asn : `AS${r.asn.asn}`) : null],
+      ["Owner",     r.asn.org || r.asn.as_owner],
       ["Prefix",    r.asn.prefix],
       ["Country",   r.asn.country],
       ["Registry",  r.asn.registry],
@@ -8416,10 +8416,19 @@ function ReconModule({token, onRunningChange}) {
             if (!line) continue;
             let evt;
             try { evt = JSON.parse(line); }
-            catch(_) { continue; }   // ignore non-JSON noise
+            catch(parseErr) {
+              // Surface parse failures so silent drops never recur
+              console.warn("[v2-stream] skipped non-JSON line", parseErr,
+                            "len="+line.length, "preview:", line.substring(0,200));
+              continue;
+            }
 
             if (evt.event === "scan_started") {
               add(`  ⇒ ${evt.total_tools} tools dispatched, concurrency=${evt.concurrency}`);
+            }
+            else if (evt.event === "heartbeat") {
+              // Backend's keep-alive ping during long waits — no UI update needed,
+              // just keep the Cloudflare connection alive by reading the byte.
             }
             else if (evt.event === "tool_complete") {
               const idx = _toolToIdx[evt.tool];
@@ -8442,6 +8451,25 @@ function ReconModule({token, onRunningChange}) {
             else if (evt.event === "scan_complete") {
               _finalSummary = evt;
             }
+          }
+        }
+        // INCOMPLETE-STREAM-V1 — if the stream closed without a scan_complete
+        // event (Cloudflare timeout, proxy interrupt, network drop), mark
+        // every still-QUEUED tile as failed so the PDF doesn't show "NOT RUN"
+        // for tools that simply never reported back.
+        if (!stopRef.current && !_finalSummary) {
+          const missing = RECON_PHASES.filter(ph => !(ph.tool in results));
+          if (missing.length > 0) {
+            add(`⚠ stream ended without scan_complete — ${missing.length} tool(s) didn't report (likely Cloudflare idle timeout or proxy interrupt)`);
+            missing.forEach(ph => {
+              const idx = _toolToIdx[ph.tool];
+              results[ph.tool] = {ok:false, _failed:true,
+                                   error:"stream interrupted before this tool completed",
+                                   findings:[], tool:ph.tool};
+              setFailed(p=>[...p,idx]);
+              setDone(p=>[...p,idx]);
+            });
+            setAll(Object.assign({},results));
           }
         }
         if (!stopRef.current && _finalSummary) {
