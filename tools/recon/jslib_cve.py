@@ -1,126 +1,175 @@
-"""recon_jslib_cve — detect outdated JS libraries with known CVEs (retire.js pattern)."""
+"""JS Library CVE v2 — VL-FORGE pattern.
+
+Route: /api/recon/jslib_cve
+
+Sources (parallel):
+  1. Base HTML fetch + <script src=> extraction
+  2. JS file fetch + version-signature matching (Retire.js style)
+  3. Per-library version → CVE lookup
+"""
+import asyncio
 import re
+from urllib.parse import urljoin, urlparse
+
+import requests
+
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, safe_get, web_url
+
+from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
+                            web_url)
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.tier5_findings import JSLIB_CVE_FINDING_RULES
 
 router = APIRouter()
 
-# Minimal retire.js-style DB. Each entry: (regex on URL/content, lib name,
-# fixed-from version, list of [(introduced_version, fixed_version, CVE, severity, summary)])
-VULN_DB = [
-    ("jquery",   r"jquery[-/]([12]\.\d+\.\d+)", [
-        ("1.0.0",  "1.6.3",  "CVE-2011-4969", "MEDIUM", "XSS via location.hash"),
-        ("1.0.0",  "1.9.0",  "CVE-2012-6708", "MEDIUM", "XSS via $.html()"),
-        ("1.0.0",  "3.0.0",  "CVE-2015-9251", "MEDIUM", "XSS via cross-domain ajax"),
-        ("1.2.0",  "3.5.0",  "CVE-2019-11358","MEDIUM", "Prototype pollution"),
-        ("1.0.0",  "3.5.0",  "CVE-2020-11022","MEDIUM", "XSS via .html() with crafted HTML"),
-        ("1.0.0",  "3.5.0",  "CVE-2020-11023","MEDIUM", "XSS via .html() with <option> tags"),
-    ]),
-    ("jquery-ui", r"jquery[-/]?ui[-/]?(\d+\.\d+\.\d+)", [
-        ("0.0.0",  "1.12.0", "CVE-2016-7103", "MEDIUM", "XSS in dialog close text"),
-    ]),
-    ("angular",  r"angular[-/.]?(\d+\.\d+\.\d+)", [
-        ("1.0.0",  "1.6.3",  "CVE-2017-1000033","HIGH",  "Multiple XSS vulnerabilities"),
-        ("1.0.0",  "1.8.0",  "CVE-2019-14863", "MEDIUM", "XSS via merge"),
-        ("1.0.0",  "1.8.0",  "CVE-2020-7676",  "MEDIUM", "XSS via xlink:href"),
-    ]),
-    ("bootstrap", r"bootstrap[-./]?(\d+\.\d+\.\d+)", [
-        ("3.0.0",  "3.4.1",  "CVE-2018-14041","MEDIUM", "XSS via data-target"),
-        ("4.0.0",  "4.3.1",  "CVE-2019-8331", "MEDIUM", "XSS in tooltip data-template"),
-        ("3.0.0",  "3.4.0",  "CVE-2018-14042","MEDIUM", "XSS in data-container"),
-    ]),
-    ("lodash",   r"lodash[-./]?(\d+\.\d+\.\d+)", [
-        ("0.0.0",  "4.17.5", "CVE-2018-3721", "MEDIUM", "Prototype pollution via defaultsDeep"),
-        ("0.0.0",  "4.17.11","CVE-2018-16487","MEDIUM", "Prototype pollution via merge"),
-        ("0.0.0",  "4.17.21","CVE-2021-23337","HIGH",   "Command injection via template"),
-    ]),
-    ("moment",   r"moment[-./]?(\d+\.\d+\.\d+)", [
-        ("0.0.0",  "2.29.4","CVE-2022-31129","HIGH",   "ReDoS in moment.parsing"),
-    ]),
-    ("vue",      r"vue[-./]?(\d+\.\d+\.\d+)", [
-        ("2.0.0",  "2.7.14","CVE-2024-9506", "MEDIUM", "Various Vue 2.x XSS"),
-    ]),
-    ("react",    r"react[-./@]?(\d+\.\d+\.\d+)", [
-        ("15.0.0", "15.6.2","CVE-2018-6341", "HIGH",   "XSS via injected attributes"),
-    ]),
-    ("dompurify", r"dompurify[-./]?(\d+\.\d+\.\d+)", [
-        ("0.0.0", "2.3.4",  "CVE-2021-39126","HIGH",   "Mutation XSS bypass"),
-    ]),
+
+# Retire.js-style signatures: (library_name, regex_to_match_in_js_text_or_filename,
+#                              regex_to_extract_version, [(version_range, CVE_list)])
+_LIB_SIGNATURES = [
+    ("jquery", r"jquery[\.\-]([\d\.]+)(?:\.min)?\.js",
+     r"jQuery\s+JavaScript Library v?([\d\.]+)|/\*!\s*jQuery v([\d\.]+)",
+     [("<3.5.0", ["CVE-2020-11023", "CVE-2020-11022"])]),
+    ("lodash", r"lodash[\.\-]([\d\.]+)(?:\.min)?\.js",
+     r"lodash\s+v?([\d\.]+)|/\*\*\s*\@license\s+Lodash\s+([\d\.]+)",
+     [("<4.17.21", ["CVE-2021-23337", "CVE-2020-8203"])]),
+    ("angular", r"angular[\.\-]([\d\.]+)(?:\.min)?\.js",
+     r"AngularJS\s+v([\d\.]+)|@version\s+v?([\d\.]+)",
+     [("<1.8.0", ["CVE-2020-7676"])]),
+    ("bootstrap", r"bootstrap[\.\-]([\d\.]+)(?:\.min)?\.js",
+     r"Bootstrap v([\d\.]+)|\*\s*Bootstrap\s+v?([\d\.]+)",
+     [("<4.3.1", ["CVE-2019-8331"])]),
+    ("vue", r"vue[\.\-]([\d\.]+)(?:\.min)?\.js",
+     r"Vue\.js v([\d\.]+)|\*\*\s*\*\s*Vue\.js v([\d\.]+)",
+     []),
+    ("react", r"react[\.\-]?([\d\.]+)?(?:\.min)?\.js",
+     r"react\.development\.js[^\n]*v([\d\.]+)|@version\s+([\d\.]+)",
+     []),
+    ("moment", r"moment[\.\-]([\d\.]+)(?:\.min)?\.js",
+     r"moment\.js\s+version?\s+([\d\.]+)|//!\s*version\s*:\s*([\d\.]+)",
+     [("<2.29.4", ["CVE-2022-31129"])]),
+    ("axios", r"axios[\.\-]([\d\.]+)(?:\.min)?\.js",
+     r"axios v([\d\.]+)|\*\s*Axios\s+v([\d\.]+)",
+     [("<0.21.1", ["CVE-2020-28168"])]),
 ]
 
 
-def _version_lt(a, b):
-    """Return True if version a < b."""
+def _fetch(url):
     try:
-        pa = tuple(int(x) for x in a.split("."))
-        pb = tuple(int(x) for x in b.split("."))
-        return pa < pb
+        r = requests.get(url, timeout=8, verify=False,
+                          headers={"User-Agent": "VulnusLab/1.0"})
+        return r if r.status_code == 200 else None
     except Exception:
-        return False
+        return None
 
 
-async def recon_jslib_cve_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    findings, libs_detected = [], []
-    r = safe_get(base, req=req)
-    if r is None:
-        return {"ok": True, "vulnerable": False, "skipped_reason": "Could not reach target"}
-
-    # Collect all <script src=> URLs
-    js_refs = []
-    for m in re.finditer(r'<script[^>]+src=["\']([^"\']+)["\']', r.text or "", re.I):
-        js_refs.append(m.group(1))
-
-    # Detect libs from URL filename patterns
-    for lib_name, url_pattern, cves in VULN_DB:
-        for js_url in js_refs:
-            m = re.search(url_pattern, js_url, re.I)
-            if not m:
-                continue
-            detected_version = m.group(1)
-            libs_detected.append({
-                "lib": lib_name, "version": detected_version, "url": js_url,
-                "vulnerable_cves": [],
-            })
-            for intro, fixed, cve_id, sev, summary in cves:
-                if _version_lt(detected_version, fixed):
-                    findings.append({
-                        "title": f"{lib_name} {detected_version} vulnerable — {cve_id}",
-                        "severity": sev, "cvss": 7.5 if sev == "HIGH" else 5.3,
-                        "cwe": "CWE-1395", "owasp": "A06:2021",
-                        "evidence": (f"Detected {lib_name} {detected_version} at {js_url} — "
-                                     f"{cve_id}: {summary}. Fixed in {fixed}."),
-                        "remediation": (f"Upgrade {lib_name} to {fixed} or later. "
-                                        "Consider switching to a maintained alternative.")
-                    })
-                    libs_detected[-1]["vulnerable_cves"].append(cve_id)
-
-    # Dedupe by (lib, version) to avoid double-reporting
-    seen, unique_libs = set(), []
-    for lib in libs_detected:
-        k = (lib["lib"], lib["version"])
-        if k in seen: continue
-        seen.add(k)
-        unique_libs.append(lib)
-
-    return {"ok": True, "vulnerable": len(findings) > 0, "findings": findings,
-            "libs_detected": unique_libs,
-            "js_files_scanned": len(js_refs),
-            "total_findings": len(findings),
-            "engine": f"retire.js-style detector ({len(VULN_DB)} libs, "
-                      f"{sum(len(v[2]) for v in VULN_DB)} CVEs in DB)"}
+def _detect_libs_in_text(text, filename):
+    """Return list of {name, version, cves[]} found in JS text or filename."""
+    libs = []
+    for lib_name, filename_re, version_re, cve_ranges in _LIB_SIGNATURES:
+        # First try filename match (e.g., jquery-3.5.1.min.js)
+        m = re.search(filename_re, filename, re.I)
+        version = m.group(1) if m and m.group(1) else None
+        # Else try content extraction
+        if not version:
+            m = re.search(version_re, text)
+            if m:
+                version = m.group(1) or (m.group(2) if m.lastindex >= 2 else None)
+        if not version: continue
+        # CVE matching (simple lexicographic comparison for "<X.Y.Z" ranges)
+        cves = []
+        try:
+            cur = tuple(int(p) for p in version.split(".")[:3])
+            for cve_range, cve_list in cve_ranges:
+                if cve_range.startswith("<"):
+                    upper = cve_range[1:].split(".")
+                    target = tuple(int(p) for p in upper)
+                    if cur < target:
+                        cves.extend(cve_list)
+        except Exception:
+            pass
+        libs.append({"name": lib_name, "version": version, "cves": cves})
+    return libs
 
 
+async def gather(ctx: ScanContext):
+    base = web_url(ctx.host).rstrip("/")
+    parsed = urlparse(base)
 
-# VLERR-WRAP-V1
+    base_resp = await asyncio.to_thread(_fetch, base)
+    if not base_resp:
+        return
+    ctx.state["base_reachable"] = True
+    ctx.source("html-fetch")
+
+    # Extract JS URLs
+    js_urls = set()
+    for m in re.finditer(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']',
+                           base_resp.text or "", re.I):
+        src = m.group(1)
+        if src.startswith("//"): src = parsed.scheme + ":" + src
+        elif src.startswith("/"): src = parsed.scheme + "://" + parsed.netloc + src
+        elif not src.startswith("http"): src = urljoin(base + "/", src)
+        js_urls.add(src)
+
+    js_urls = list(js_urls)[:20]
+
+    js_responses = await asyncio.gather(*[
+        asyncio.to_thread(_fetch, url) for url in js_urls
+    ])
+
+    libs_detected = []
+    seen = set()
+    for url, resp in zip(js_urls, js_responses):
+        if not resp: continue
+        filename = url.rsplit("/", 1)[-1]
+        text = resp.text or ""
+        libs = _detect_libs_in_text(text, filename)
+        for lib in libs:
+            key = (lib["name"], lib["version"])
+            if key in seen: continue
+            seen.add(key)
+            libs_detected.append(lib)
+
+    ctx.state["libs_detected"] = libs_detected
+    ctx.state["vulnerable_libs"] = [l for l in libs_detected if l.get("cves")]
+    ctx.state["signatures_loaded"] = len(_LIB_SIGNATURES)
+    ctx.state["js_files_scanned"] = len(js_urls)
+    if js_urls: ctx.source(f"js-fetch ({len(js_urls)})")
+    if libs_detected: ctx.source(f"retire-js-sig-match ({len(libs_detected)})")
+
+
+INTEL_FIELDS = [
+    ("Signatures loaded",  "signatures_loaded"),
+    ("JS files scanned",   "js_files_scanned"),
+    ("Libraries detected", "libs_display"),
+    ("Vulnerable libs",     "vuln_display"),
+]
+
+
 @router.post("/api/recon/jslib_cve")
 async def recon_jslib_cve(req: ScanRequest, _=Depends(verify_scan_quota)):
-    try:
-        return await recon_jslib_cve_impl(req, _)
-    except Exception as _e:
-        return {"ok": False,
-                 "skipped_reason": f"jslib_cve scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        libs = ctx.state.get("libs_detected") or []
+        if libs:
+            ctx.state["libs_display"] = ", ".join(
+                f"{l['name']} {l['version']}" for l in libs[:6])
+        v = ctx.state.get("vulnerable_libs") or []
+        if v:
+            ctx.state["vuln_display"] = "; ".join(
+                f"{l['name']} {l['version']} -> {len(l.get('cves') or [])} CVE"
+                for l in v[:3])
+
+    return await run_scanner(
+        host=host, tool="jslib_cve",
+        gather_func=gather_with_display,
+        finding_rules=JSLIB_CVE_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["libs_detected", "vulnerable_libs"],
+    )
+
 
 def register(app):
     app.include_router(router)

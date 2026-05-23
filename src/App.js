@@ -7614,6 +7614,14 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   renderToolFindingsAndIntel("CVE Matching (NVD)", r.cve_match);
   renderToolFindingsAndIntel("Deep Subdomain (amass)",   r.amass);
 
+  // ── Tier 5 — App-specific (VL-FORGE) — FINAL TIER ──
+  renderToolFindingsAndIntel("Source Map Exposure",  r.sourcemap);
+  renderToolFindingsAndIntel("API Docs Discovery",  r.api_docs);
+  renderToolFindingsAndIntel("WordPress wp-json Enum", r.wpjson_enum);
+  renderToolFindingsAndIntel("Admin Panel Exposure", r.default_creds);
+  renderToolFindingsAndIntel("JS Library CVE",       r.jslib_cve);
+  renderToolFindingsAndIntel("Git Repo Exposure",    r.git_recon);
+
   // ── Harvester ──────────────────────────────────────────────
   if(r.harvester){ const emails=r.harvester.emails||[]; const hosts=r.harvester.hosts||[];
     chk(30); y = sHead("OSINT Harvesting (theHarvester)",y);

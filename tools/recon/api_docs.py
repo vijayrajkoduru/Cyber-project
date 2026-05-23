@@ -1,67 +1,106 @@
-"""recon_api_docs — find exposed Swagger / GraphQL / OAuth endpoints."""
+"""API Docs Discovery v2 — VL-FORGE pattern.
+
+Route: /api/recon/api_docs
+
+Sources (parallel):
+  1. Direct probe of 30+ common API doc paths
+  2. Validate response (JSON / HTML content matching swagger/openapi signatures)
+"""
+import asyncio
+import re
+
+import requests
+
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, safe_get, web_url
+
+from tools._shared import (ScanRequest, verify_scan_quota, recon_host,
+                            web_url)
+from tools._framework import ScanContext, run_scanner
+from tools._payloads.tier5_findings import API_DOCS_FINDING_RULES
 
 router = APIRouter()
 
-CATEGORIES = {
-    "swagger": ["/swagger", "/swagger-ui", "/swagger-ui.html", "/swagger.json",
-                "/swagger.yaml", "/swagger/v1/swagger.json", "/api-docs", "/api/docs",
-                "/v1/swagger", "/v2/swagger", "/v3/swagger"],
-    "openapi": ["/openapi.json", "/openapi.yaml", "/.well-known/openapi.json"],
-    "graphql": ["/graphql", "/graphiql", "/graphql-playground", "/api/graphql",
-                "/v1/graphql"],
-    "redoc": ["/redoc", "/docs/redoc", "/api/redoc"],
-    "oauth": ["/.well-known/oauth-authorization-server",
-              "/.well-known/openid-configuration", "/.well-known/jwks.json"],
-    "actuator": ["/actuator", "/actuator/mappings", "/actuator/env",
-                 "/actuator/heapdump"],
-}
+
+_API_DOC_PATHS = [
+    # Swagger / OpenAPI
+    "/swagger", "/swagger.json", "/swagger.yaml", "/swagger/index.html",
+    "/swagger-ui", "/swagger-ui.html", "/swagger-ui/index.html",
+    "/api-docs", "/api-docs.json", "/v2/api-docs", "/v3/api-docs",
+    "/openapi", "/openapi.json", "/openapi.yaml", "/openapi.yml",
+    "/api/swagger", "/api/openapi", "/api/docs", "/api/v1/swagger",
+    "/api/v2/swagger", "/api/v1/openapi",
+    # GraphQL
+    "/graphql", "/graphiql", "/api/graphql",
+    # Postman / Insomnia / Stoplight
+    "/postman", "/postman.json", "/collection.json",
+    "/redoc", "/redoc/index.html",
+    # Other
+    "/docs", "/docs/api", "/api/v1/docs",
+]
 
 
-async def recon_api_docs_impl(req: ScanRequest, _=Depends(verify_scan_quota)):
-    base = web_url(req.target).rstrip("/")
-    findings, exposed = [], []
-    for category, paths in CATEGORIES.items():
-        for path in paths:
-            r = safe_get(f"{base}{path}", req=req, allow_redirects=False)
-            if r is None or r.status_code != 200:
-                continue
-            preview = (r.text or "")[:500].lower()
-            is_match = any([
-                ("swagger" in preview or "openapi" in preview or '"paths"' in preview) and category in ("swagger","openapi","redoc"),
-                ("graphql" in preview or "playground" in preview or "__schema" in preview) and category == "graphql",
-                ("issuer" in preview or "token_endpoint" in preview) and category == "oauth",
-                ("_links" in preview or category == "actuator"),
-            ])
-            if not is_match: continue
-            sev = "HIGH" if category in ("graphql", "swagger", "openapi", "actuator") else "MEDIUM"
-            cvss = 7.5 if sev == "HIGH" else 5.3
-            kind = {"swagger":"Swagger/OpenAPI doc","openapi":"OpenAPI spec",
-                    "graphql":"GraphQL endpoint","redoc":"ReDoc UI",
-                    "oauth":"OAuth/OIDC discovery","actuator":"Spring Actuator"}[category]
-            exposed.append({"path": path, "url": f"{base}{path}",
-                            "category": category, "kind": kind, "size": len(r.content)})
-            findings.append({"title": f"{kind} exposed at {path}",
-                "severity": sev, "cvss": cvss, "cwe": "CWE-200", "owasp": "A05:2021",
-                "evidence": f"{path} returns 200 with {kind.lower()}",
-                "remediation": f"Restrict {path} via auth/IP allow-list/VPN."})
-    return {"ok": True, "vulnerable": len(findings) > 0, "findings": findings,
-            "exposed_endpoints": exposed[:50], "total_exposed": len(exposed),
-            "paths_probed": sum(len(v) for v in CATEGORIES.values()),
-            "engine": f"API doc discovery ({sum(len(v) for v in CATEGORIES.values())} paths probed)"}
+_SWAGGER_SIGNATURES = [
+    r'"swagger"\s*:', r'"openapi"\s*:', r'"info"\s*:.*"title"',
+    r'swagger-ui', r'graphiql',
+    r'<swagger-ui', r'<rapi-doc',
+]
 
 
+def _validate_api_doc(url):
+    try:
+        r = requests.get(url, timeout=6, verify=False, allow_redirects=False,
+                          headers={"User-Agent": "VulnusLab/1.0"})
+        if r.status_code != 200: return False
+        text = (r.text or "")[:5000]
+        return any(re.search(p, text, re.I) for p in _SWAGGER_SIGNATURES)
+    except Exception:
+        return False
 
-# VLERR-WRAP-V1
+
+async def gather(ctx: ScanContext):
+    base = web_url(ctx.host).rstrip("/")
+    ctx.state["base_reachable"] = True
+
+    candidates = [base + p for p in _API_DOC_PATHS]
+    results = await asyncio.gather(*[
+        asyncio.to_thread(_validate_api_doc, url) for url in candidates
+    ])
+
+    exposed = []
+    for url, ok in zip(candidates, results):
+        if ok:
+            exposed.append(url)
+
+    ctx.state["exposed_endpoints"] = exposed
+    ctx.state["paths_probed"] = len(_API_DOC_PATHS)
+    ctx.source(f"api-doc-probe ({len(_API_DOC_PATHS)} paths)")
+    if exposed:
+        ctx.source(f"swagger-signature-match ({len(exposed)})")
+
+
+INTEL_FIELDS = [
+    ("Paths probed",     "paths_probed"),
+    ("Exposed endpoints", "exposed_display"),
+]
+
+
 @router.post("/api/recon/api_docs")
 async def recon_api_docs(req: ScanRequest, _=Depends(verify_scan_quota)):
-    try:
-        return await recon_api_docs_impl(req, _)
-    except Exception as _e:
-        return {"ok": False,
-                 "skipped_reason": f"api_docs scanner failed: {type(_e).__name__}: {str(_e)[:200]}",
-                 "error": f"{type(_e).__name__}: {str(_e)[:300]}"}
+    host = recon_host(req.target)
+
+    async def gather_with_display(ctx):
+        await gather(ctx)
+        ee = ctx.state.get("exposed_endpoints") or []
+        if ee: ctx.state["exposed_display"] = ", ".join(ee[:5])
+
+    return await run_scanner(
+        host=host, tool="api_docs",
+        gather_func=gather_with_display,
+        finding_rules=API_DOCS_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=["exposed_endpoints"],
+    )
+
 
 def register(app):
     app.include_router(router)
