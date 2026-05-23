@@ -1,15 +1,30 @@
 """Vulnerability Scanning module orchestrator — VL-FORGE v2 streaming.
 
-Same engine as endpoints/recon_orchestrator.py and webapp_orchestrator.py.
-Registers the 19 scanners that VulnModule exposes — a focused subset of
-the WebApp toolset (no Discovery/Modern-API tests, but adds Nikto on top).
+INDUSTRY-ALIGNED REBUILD (2026-05-24): the Vuln module is now a TRUE
+infrastructure/host vulnerability scanner — matches what Nessus / OpenVAS /
+Qualys VMDR / Rapid7 InsightVM do. The webapp-style scanners (xss, sqli,
+csrf, jwt, etc.) live in the isolated Webapp module at /api/webapp/scan/*.
 
-The shared engine in tools/_framework/orchestrator.py handles the parallel
-dispatch, NDJSON event streaming, heartbeats, and per-tool error isolation.
+16 tools across 5 tiers:
 
-POST /api/vuln/run_all          — NDJSON stream (default for dashboard)
-POST /api/vuln/run_all_buffered — single big JSON (CLI / scripts)
-GET  /api/vuln/run_all/tiers    — discovery for tier-filter UI
+  Tier 1 — CVE & Template Scanners (3 tools)
+    nuclei, wpscan, nikto
+
+  Tier 2 — Discovery & Service Detection (4 tools)
+    portscan, service_detect, os_fingerprint, internetdb
+
+  Tier 3 — Crypto & TLS (1 tool)
+    ssl_deep
+
+  Tier 4 — Credentials (1 tool)
+    default_creds
+
+  Tier 5 — Service Enumeration (7 tools)
+    snmp_enum, smb_enum, ftp_enum, smtp_enum, nfs_check, db_exposure_check, cve_match
+
+Routes: every scanner answers at /api/vuln/<tool>. The orchestrator
+streams NDJSON from /api/vuln/run_all. Cloudflare-safe (heartbeats every
+15s). Same V2 framework as Recon and Webapp.
 """
 from typing import Optional
 
@@ -26,45 +41,38 @@ router = APIRouter()
 
 
 VULN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
-    # Generic vuln scanners (heavy, take longest)
+    # Tier 1 — Heavy CVE / template scanners (slowest, run first so others
+    # have time to complete in parallel)
     "tier1_heavy": [
-        ("nikto",  "/api/scan/nikto"),
-        ("nuclei", "/api/scan/nuclei"),
-        ("wpscan", "/api/scan/wpscan"),
+        ("nuclei",          "/api/vuln/nuclei"),
+        ("wpscan",          "/api/vuln/wpscan"),
+        ("nikto",           "/api/vuln/nikto"),
     ],
-    # TLS + headers + cookies (fast, almost always run)
-    "tier2_transport": [
-        ("ssl",      "/api/scan/ssl"),
-        ("headers",  "/api/scan/headers"),
-        ("cors",     "/api/scan/cors"),
-        ("cookies",  "/api/scan/cookies"),
+    # Tier 2 — Discovery & service detection (port scan informs the
+    # enumeration scanners — but we run parallel via async, not strict-serial)
+    "tier2_discovery": [
+        ("portscan",        "/api/vuln/portscan"),
+        ("service_detect",  "/api/vuln/service_detect"),
+        ("os_fingerprint",  "/api/vuln/os_fingerprint"),
+        ("internetdb",      "/api/vuln/internetdb"),
     ],
-    # Fingerprinting
-    "tier3_fingerprint": [
-        ("cms", "/api/scan/cms"),
+    # Tier 3 — Crypto / TLS deep audit
+    "tier3_crypto": [
+        ("ssl_deep",        "/api/vuln/ssl_deep"),
     ],
-    # Injection attacks (highest customer impact)
-    "tier4_injection": [
-        ("xss",           "/api/scan/xss"),
-        ("sqli",          "/api/scan/sqli"),
-        ("cmd_injection", "/api/scan/cmd_injection"),
-        ("xxe",           "/api/scan/xxe"),
+    # Tier 4 — Credential & auth surface
+    "tier4_credentials": [
+        ("default_creds",   "/api/vuln/default_creds"),
     ],
-    # File / path
-    "tier5_file_path": [
-        ("lfi",           "/api/scan/lfi"),
-        ("exposed_files", "/api/scan/exposed_files"),
-    ],
-    # Network / protocol
-    "tier6_network": [
-        ("open_redirect", "/api/scan/open_redirect"),
-        ("ssrf",          "/api/scan/ssrf"),
-        ("http_methods",  "/api/scan/http_methods"),
-    ],
-    # Auth / session
-    "tier7_auth": [
-        ("csrf", "/api/scan/csrf"),
-        ("jwt",  "/api/scan/jwt"),
+    # Tier 5 — Service enumeration (SNMP/SMB/FTP/SMTP/NFS/DB) + CVE lookup
+    "tier5_enumeration": [
+        ("snmp_enum",            "/api/vuln/snmp_enum"),
+        ("smb_enum",             "/api/vuln/smb_enum"),
+        ("ftp_enum",             "/api/vuln/ftp_enum"),
+        ("smtp_enum",            "/api/vuln/smtp_enum"),
+        ("nfs_check",            "/api/vuln/nfs_check"),
+        ("db_exposure_check",    "/api/vuln/db_exposure_check"),
+        ("cve_match",            "/api/vuln/cve_match"),
     ],
 }
 
@@ -79,10 +87,6 @@ def _all_tools() -> list[tuple[str, str]]:
 class VulnRunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
-    # Bumped 8 -> 12 after the 2026-05-23 stall on vulnuslab.com (Cloudflare-fronted).
-    # With 19 scanners and concurrency=8, 11 sit idle while nikto/wpscan/ssl/nuclei
-    # block 4 of the 8 slots for 60-120s. 12 lets cors/cookies/cms/etc fly through
-    # while the heavies run. Still safe for target WAF — most tools are read-only.
     concurrency: Optional[int] = 12
     auth_cookie: Optional[str] = None
     auth_bearer: Optional[str] = None
@@ -116,6 +120,7 @@ async def vuln_run_all(req: "VulnRunAllRequest",
                         _=Depends(verify_scan_quota)):
     """Stream per-scanner results as NDJSON. See run_module_streaming for shape."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
+    # VL-TURBO — default concurrency 8→12. 16 vuln tools / 12 ≈ 2 waves.
     concurrency = max(1, min(req.concurrency or 12, 16))
 
     generator = run_module_streaming(
@@ -143,7 +148,7 @@ async def vuln_run_all(req: "VulnRunAllRequest",
 async def vuln_run_all_buffered(req: "VulnRunAllRequest",
                                   request: Request,
                                   _=Depends(verify_scan_quota)):
-    """Non-streaming version — buffers all 19 results then returns one big JSON."""
+    """Non-streaming version — buffers all 16 results then returns one big JSON."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
     concurrency = max(1, min(req.concurrency or 12, 16))
     return await run_module_parallel(

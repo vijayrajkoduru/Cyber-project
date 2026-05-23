@@ -10078,25 +10078,27 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
 
     // Tools used — Vuln-module scanner set
     const VULN_TOOLS=[
-      {tool:"nikto",         label:"Nikto",            desc:"Web vulnerability scanner (6700+ checks)"},
-      {tool:"nuclei",        label:"Nuclei",           desc:"Template-based scanner (13,099 templates)"},
-      {tool:"wpscan",        label:"WPScan",           desc:"WordPress core / plugin / theme scanner"},
-      {tool:"ssl",           label:"SSLScan",          desc:"SSL/TLS configuration analysis"},
-      {tool:"headers",       label:"Security Headers", desc:"HTTP security headers (10-header check + A-F grade)"},
-      {tool:"cors",          label:"CORS",             desc:"Cross-origin resource sharing misconfiguration"},
-      {tool:"cookies",       label:"Cookie Security",  desc:"Cookie attribute analysis (Secure / HttpOnly / SameSite)"},
-      {tool:"cms",           label:"CMS Detection",    desc:"CMS fingerprinting (WordPress / Drupal / Joomla)"},
-      {tool:"xss",           label:"XSS Testing",      desc:"Reflected XSS active probe (canary + payload library)"},
-      {tool:"sqli",          label:"SQL Injection",    desc:"Error-based + boolean-based + time-based SQLi"},
-      {tool:"cmd_injection", label:"Cmd Injection",    desc:"OS command injection via out-of-band canary"},
-      {tool:"lfi",           label:"Path Traversal",   desc:"Local file inclusion / directory traversal"},
-      {tool:"open_redirect", label:"Open Redirect",    desc:"Location-header attacker-host verification"},
-      {tool:"ssrf",          label:"SSRF",             desc:"Server-side request forgery (out-of-band callback)"},
-      {tool:"xxe",           label:"XXE Injection",    desc:"XML external entity injection"},
-      {tool:"csrf",          label:"CSRF",             desc:"Anti-CSRF token / SameSite analysis"},
-      {tool:"jwt",           label:"JWT Security",     desc:"alg=none, weak-secret, kid traversal, JWKS confusion"},
-      {tool:"exposed_files", label:"Exposed Files",    desc:".env / .git / backup / config file exposure"},
-      {tool:"http_methods",  label:"HTTP Methods",     desc:"Dangerous HTTP verbs (TRACE / PUT / DELETE)"},
+      // Tier 1 — CVE & template scanners
+      {tool:"nuclei",             label:"Nuclei",                 desc:"Community CVE template scanner (15k+ templates, severity≥medium)"},
+      {tool:"wpscan",             label:"WPScan",                 desc:"WordPress core / plugin / theme vulnerability scanner"},
+      {tool:"nikto",              label:"Nikto",                  desc:"Web server vulnerability scanner (6700+ checks)"},
+      // Tier 2 — Discovery & service detection
+      {tool:"portscan",           label:"Port Scan",              desc:"TCP port discovery (top 1000 ports)"},
+      {tool:"service_detect",     label:"Service Detection",      desc:"Banner grab + version fingerprint per open port"},
+      {tool:"os_fingerprint",     label:"OS Fingerprint",         desc:"TCP/IP stack-signature OS detection"},
+      {tool:"internetdb",         label:"Shodan InternetDB",      desc:"Free Shodan exposure / known-port intelligence"},
+      // Tier 3 — Crypto / TLS
+      {tool:"ssl_deep",           label:"SSL/TLS Deep Audit",     desc:"Protocol / cipher / cert chain audit (Heartbleed / BEAST / weak ciphers)"},
+      // Tier 4 — Credentials
+      {tool:"default_creds",      label:"Default Credentials",    desc:"Default-password brute against admin / panel paths"},
+      // Tier 5 — Service enumeration + CVE lookup
+      {tool:"snmp_enum",          label:"SNMP Enumeration",       desc:"UDP/161 + community-string brute (public/private/...)"},
+      {tool:"smb_enum",           label:"SMB Enumeration",        desc:"TCP/445 SMBv1 + signing-required + null-session check"},
+      {tool:"ftp_enum",           label:"FTP Enumeration",        desc:"TCP/21 anonymous-login + vulnerable-banner check"},
+      {tool:"smtp_enum",          label:"SMTP Enumeration",       desc:"TCP/25 VRFY user-enum + open-relay + EXPN test"},
+      {tool:"nfs_check",          label:"NFS Exposure",           desc:"TCP/111 (rpcbind) + TCP/2049 (NFS) public-internet exposure"},
+      {tool:"db_exposure_check",  label:"Database Exposure",      desc:"Open Mongo / Redis / Elastic / CouchDB / Memcached / PG / MySQL"},
+      {tool:"cve_match",          label:"CVE Matching (NVD)",     desc:"Live NVD lookup for detected service versions"},
     ];
     chk(30); y=sHead("Tools Used",y);
     y=tHead(["TOOL","DESCRIPTION","FINDINGS"],[35,110,35],y);
@@ -10697,26 +10699,31 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
 // ═══════════════════════════════════════════════════════════════
 //  VULNERABILITY SCANNING MODULE
 // ═══════════════════════════════════════════════════════════════
+// VULN module rebuilt 2026-05-24: industry-aligned infrastructure vulnerability
+// scanning (Nessus/Qualys/OpenVAS-equivalent). Web-app tests moved to Webapp module.
+// 16 tools across 5 tiers. Routes all under /api/vuln/<tool> (isolated namespace).
 const VULN_PHASES = [
-  {name:"Nikto Web Scanner",    tool:"nikto",          endpoint:"/api/scan/nikto",          icon:"🔍"},
-  {name:"Nuclei Scanner",       tool:"nuclei",         endpoint:"/api/scan/nuclei",         icon:"⚡"},
-  {name:"WPScan",               tool:"wpscan",         endpoint:"/api/scan/wpscan",         icon:"📝"},
-  {name:"SSL/TLS Analysis",     tool:"ssl",            endpoint:"/api/scan/ssl",            icon:"🔒"},
-  {name:"Security Headers",     tool:"headers",        endpoint:"/api/scan/headers",        icon:"📋"},
-  {name:"CORS Testing",         tool:"cors",           endpoint:"/api/scan/cors",           icon:"🌐"},
-  {name:"Cookie Security",      tool:"cookies",        endpoint:"/api/scan/cookies",        icon:"🍪"},
-  {name:"CMS Detection",        tool:"cms",            endpoint:"/api/scan/cms",            icon:"🏗️"},
-  {name:"Reflected XSS",        tool:"xss",            endpoint:"/api/scan/xss",            icon:"💉"},
-  {name:"SQL Injection",        tool:"sqli",           endpoint:"/api/scan/sqli",           icon:"🗄️"},
-  {name:"Command Injection",    tool:"cmd_injection",  endpoint:"/api/scan/cmd_injection",  icon:"⌨️"},
-  {name:"Path Traversal / LFI", tool:"lfi",            endpoint:"/api/scan/lfi",            icon:"📂"},
-  {name:"Open Redirect",        tool:"open_redirect",  endpoint:"/api/scan/open_redirect",  icon:"↪️"},
-  {name:"SSRF",                 tool:"ssrf",           endpoint:"/api/scan/ssrf",           icon:"🛰️"},
-  {name:"XXE Injection",        tool:"xxe",            endpoint:"/api/scan/xxe",            icon:"📜"},
-  {name:"CSRF Protection",      tool:"csrf",           endpoint:"/api/scan/csrf",           icon:"🛡️"},
-  {name:"JWT Security",         tool:"jwt",            endpoint:"/api/scan/jwt",            icon:"🔑"},
-  {name:"Exposed Files",        tool:"exposed_files",  endpoint:"/api/scan/exposed_files",  icon:"📑"},
-  {name:"HTTP Methods",         tool:"http_methods",   endpoint:"/api/scan/http_methods",   icon:"🔧"},
+  // Tier 1 — CVE & template scanners
+  {name:"Nuclei Scanner",            tool:"nuclei",             endpoint:"/api/vuln/nuclei",             icon:"⚡"},
+  {name:"WPScan",                    tool:"wpscan",             endpoint:"/api/vuln/wpscan",             icon:"📝"},
+  {name:"Nikto Web Scanner",         tool:"nikto",              endpoint:"/api/vuln/nikto",              icon:"🔍"},
+  // Tier 2 — Discovery & service detection
+  {name:"Port Scan",                 tool:"portscan",           endpoint:"/api/vuln/portscan",           icon:"🛰️"},
+  {name:"Service Detection",         tool:"service_detect",     endpoint:"/api/vuln/service_detect",     icon:"📡"},
+  {name:"OS Fingerprint",            tool:"os_fingerprint",     endpoint:"/api/vuln/os_fingerprint",     icon:"🖥️"},
+  {name:"Shodan InternetDB",         tool:"internetdb",         endpoint:"/api/vuln/internetdb",         icon:"🌐"},
+  // Tier 3 — Crypto / TLS
+  {name:"SSL/TLS Deep Audit",        tool:"ssl_deep",           endpoint:"/api/vuln/ssl_deep",           icon:"🔒"},
+  // Tier 4 — Credentials
+  {name:"Default Credentials",       tool:"default_creds",      endpoint:"/api/vuln/default_creds",      icon:"🔑"},
+  // Tier 5 — Service enumeration + CVE lookup
+  {name:"SNMP Enumeration",          tool:"snmp_enum",          endpoint:"/api/vuln/snmp_enum",          icon:"📊"},
+  {name:"SMB Enumeration",           tool:"smb_enum",           endpoint:"/api/vuln/smb_enum",           icon:"💾"},
+  {name:"FTP Enumeration",           tool:"ftp_enum",           endpoint:"/api/vuln/ftp_enum",           icon:"📁"},
+  {name:"SMTP Enumeration",          tool:"smtp_enum",          endpoint:"/api/vuln/smtp_enum",          icon:"📧"},
+  {name:"NFS Exposure",              tool:"nfs_check",          endpoint:"/api/vuln/nfs_check",          icon:"🗂️"},
+  {name:"Database Exposure",         tool:"db_exposure_check",  endpoint:"/api/vuln/db_exposure_check",  icon:"🗄️"},
+  {name:"CVE Matching (NVD)",        tool:"cve_match",          endpoint:"/api/vuln/cve_match",          icon:"📚"},
 ];
 
 // ═══════════════════════════════════════════════════════════════

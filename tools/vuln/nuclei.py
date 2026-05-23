@@ -38,7 +38,7 @@ _SEV = {"critical": "CRITICAL", "high": "HIGH", "medium": "MEDIUM",
 _CVSS_DEFAULT = {"CRITICAL": "9.5", "HIGH": "7.5", "MEDIUM": "5.5", "LOW": "3.0"}
 
 
-@router.post("/api/scan/nuclei")
+@router.post("/api/vuln/nuclei")
 def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
     if not os.path.isfile(_which()):
         return standard_response(tool="nuclei", target=req.target, findings=[],
