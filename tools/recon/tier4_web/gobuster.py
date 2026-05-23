@@ -73,7 +73,9 @@ _BUILTIN_WORDLIST = [
 def _load_ai_wordlist():
     """Load AI-curated path wordlist if present."""
     try:
-        p = pathlib.Path(__file__).resolve().parent.parent / "_payloads" / "recon" / "consolidated_paths.txt"
+        # After tier restructure this file is at tools/recon/tier4_web/ — three
+        # .parent hops reach tools/ where _payloads/ lives.
+        p = pathlib.Path(__file__).resolve().parent.parent.parent / "_payloads" / "recon" / "consolidated_paths.txt"
         if p.exists():
             return [ln.strip() for ln in p.read_text(encoding="utf-8").splitlines()
                     if ln.strip() and not ln.startswith("#")]

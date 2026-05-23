@@ -52,7 +52,8 @@ _PROVIDER_TEMPLATES = [
 
 def _load_ai_patterns():
     try:
-        p = pathlib.Path(__file__).parent.parent / "_payloads" / "recon" / "cloud_bucket_patterns.json"
+        # After tier restructure: tools/recon/tier5_cloud/ -> need 3 .parent
+        p = pathlib.Path(__file__).resolve().parent.parent.parent / "_payloads" / "recon" / "cloud_bucket_patterns.json"
         if p.exists():
             data = json.loads(p.read_text())
             if isinstance(data, list):

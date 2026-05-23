@@ -66,7 +66,8 @@ _BUILTIN_WORDLIST = [
 def _load_ai_wordlist():
     """Load AI-curated subdomain wordlist if available."""
     try:
-        p = pathlib.Path(__file__).parent.parent / "_payloads" / "recon" / "subdomain_wordlist.json"
+        # After tier restructure: tools/recon/tier2_subdomain/ -> need 3 .parent
+        p = pathlib.Path(__file__).resolve().parent.parent.parent / "_payloads" / "recon" / "subdomain_wordlist.json"
         if p.exists():
             data = json.loads(p.read_text())
             if isinstance(data, list):
