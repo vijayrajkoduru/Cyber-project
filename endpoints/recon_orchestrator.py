@@ -13,7 +13,7 @@ for a 30-second smoke check before the full scan.
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from tools._shared import verify_scan_quota
@@ -103,7 +103,9 @@ class RunAllRequest(BaseModel):
 
 
 @router.post("/api/recon/run_all")
-async def recon_run_all(req: RunAllRequest, _=Depends(verify_scan_quota)):
+async def recon_run_all(req: RunAllRequest,
+                          request: Request,
+                          _=Depends(verify_scan_quota)):
     """Fan-out scan: dispatch every selected recon tool in parallel.
 
     Returns the aggregated result + per-tool timing + summary counts.
@@ -123,6 +125,15 @@ async def recon_run_all(req: RunAllRequest, _=Depends(verify_scan_quota)):
         # Forwarded to every tool body — only the shodan handler reads it.
         extra["api_key"] = req.shodan_api_key
 
+    # JWT-FORWARD-V1 — extract the user's bearer token so the orchestrator can
+    # re-attach it to every internal /api/recon/<tool> call. Without this each
+    # internal hop hits verify_scan_quota and returns 401, which is what caused
+    # the 0/41 phases in the 08:40 juiceshop scan.
+    auth_header = request.headers.get("authorization") or ""
+    jwt_token = None
+    if auth_header.lower().startswith("bearer "):
+        jwt_token = auth_header.split(" ", 1)[1].strip()
+
     return await run_module_parallel(
         target=req.target,
         tools=tools,
@@ -131,6 +142,7 @@ async def recon_run_all(req: RunAllRequest, _=Depends(verify_scan_quota)):
         auth_cookie=req.auth_cookie,
         auth_bearer=req.auth_bearer,
         extra_body=extra or None,
+        jwt_token=jwt_token,
     )
 
 
