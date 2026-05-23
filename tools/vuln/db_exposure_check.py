@@ -91,6 +91,40 @@ _PROBES = [
      "Configure SASL_SSL listeners + ACLs. Bind to internal network."),
 ]
 
+# AI-curated extra probes — covers Cassandra, InfluxDB, Neo4j, ClickHouse,
+# ArangoDB, Etcd, Riak, etc. that the hand-curated _PROBES list misses.
+# Skips any service whose port is already covered above (to avoid double-probes).
+try:
+    from tools._payloads.db_exposure_probes import DB_EXPOSURE_PROBES as _AI_DB_PROBES
+    _covered_ports = {p[0] for p in _PROBES}
+    for _p in _AI_DB_PROBES:
+        if not isinstance(_p, dict): continue
+        port = _p.get("port")
+        if not isinstance(port, int) or port in _covered_ports: continue
+        if _p.get("protocol", "tcp") != "tcp": continue
+        name = _p.get("service", "unknown")
+        # Decode probe_bytes — accept hex or text or empty
+        pb_raw = _p.get("probe_bytes", "")
+        try:
+            probe = bytes.fromhex(pb_raw) if all(c in "0123456789abcdefABCDEF" for c in pb_raw) and pb_raw else (
+                pb_raw.encode("utf-8", errors="replace") if pb_raw else b"")
+        except Exception:
+            probe = b""
+        ex_raw = _p.get("expect_substring", "")
+        try:
+            expect = bytes.fromhex(ex_raw) if all(c in "0123456789abcdefABCDEF" for c in ex_raw) and ex_raw else (
+                ex_raw.encode("utf-8", errors="replace") if ex_raw else b"")
+        except Exception:
+            expect = b""
+        sev = _p.get("severity", "MEDIUM")
+        cvss = str(_p.get("cvss", "5.0"))
+        cwe = "CWE-306"
+        fix = _p.get("remediation", f"Restrict {name} to internal network only; enable authentication.")
+        _PROBES.append((port, name.title(), probe, expect, sev, cvss, cwe, fix))
+        _covered_ports.add(port)
+except Exception:
+    pass  # Fallback to hand-curated _PROBES only
+
 def _probe(host, port, send_bytes, expect):
     """Return (port_open, banner_or_response_bytes)."""
     try:

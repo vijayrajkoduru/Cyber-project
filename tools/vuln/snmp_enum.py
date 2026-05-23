@@ -23,8 +23,18 @@ router = APIRouter()
 
 _PORT = 161
 _TIMEOUT = 3.0
-_COMMUNITIES = ["public", "private", "community", "manager", "admin", "snmp",
-                "cisco", "default", "root", "monitor"]
+_FALLBACK_COMMUNITIES = ["public", "private", "community", "manager", "admin", "snmp",
+                          "cisco", "default", "root", "monitor"]
+try:
+    from tools._payloads.snmp_communities import SNMP_COMMUNITIES as _AI_COMMUNITIES
+    # AI-curated list is a list of dicts {community, category, priority} — extract + sort by priority
+    _COMMUNITIES = [c["community"] for c in sorted(
+        _AI_COMMUNITIES, key=lambda x: -int(x.get("priority", 5)))
+        if isinstance(c, dict) and c.get("community")]
+    if not _COMMUNITIES:
+        _COMMUNITIES = _FALLBACK_COMMUNITIES
+except Exception:
+    _COMMUNITIES = _FALLBACK_COMMUNITIES
 _OID_SYSDESCR = "1.3.6.1.2.1.1.1.0"
 
 def _encode_oid(oid):

@@ -19,8 +19,18 @@ router = APIRouter()
 
 _PORT = 25
 _TIMEOUT = 5.0
-_VRFY_USERS = ["root", "admin", "administrator", "postmaster",
-                "webmaster", "mail", "info", "test"]
+_FALLBACK_VRFY_USERS = ["root", "admin", "administrator", "postmaster",
+                         "webmaster", "mail", "info", "test"]
+try:
+    from tools._payloads.smtp_vrfy_users import SMTP_VRFY_USERS as _AI_VRFY
+    # Sort by priority descending; cap at top 40 to keep VRFY runtime sane
+    _VRFY_USERS = [u["username"] for u in sorted(
+        _AI_VRFY, key=lambda x: -int(x.get("priority", 5)))
+        if isinstance(u, dict) and u.get("username")][:40]
+    if not _VRFY_USERS:
+        _VRFY_USERS = _FALLBACK_VRFY_USERS
+except Exception:
+    _VRFY_USERS = _FALLBACK_VRFY_USERS
 
 def _recv(sock):
     """Read SMTP multi-line response (lines starting with code-)."""
