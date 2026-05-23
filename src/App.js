@@ -8355,6 +8355,59 @@ function ReconModule({token, onRunningChange}) {
       }
     }
     const results = {};
+
+    // ── RECON-V2-ORCHESTRATOR ─────────────────────────────────────────
+    // If the user selected ALL phases, use the v2 backend orchestrator
+    // (one HTTP call, backend fans out to all 41 tools in parallel via
+    // tools/_framework/orchestrator.py). ~5-7x faster than the v1 sequential
+    // loop. For partial-phase selections we fall back to the v1 loop so
+    // tier-filter use cases still work without extending the endpoint API.
+    if (active.length === RECON_PHASES.length) {
+      add(`[*] v2 orchestrator: dispatching all ${RECON_PHASES.length} phases in parallel (one HTTP call)...`);
+      const body = {target};
+      if (sessionCookie) body.auth_cookie = sessionCookie;
+      if (sessionBearer) body.auth_bearer = sessionBearer;
+      const _shodanKey = localStorage.getItem("shodanApiKey") || "";
+      if (_shodanKey) body.shodan_api_key = _shodanKey;
+      try {
+        const r = await api("/api/recon/run_all","POST",body,token);
+        if (stopRef.current) { add("[!] Scan stopped by user during v2 dispatch."); }
+        else if (!r || !r.tools) {
+          add("✗ v2 orchestrator returned no results — falling back to standard mode unsupported here, please retry");
+        } else {
+          // Distribute per-tool results into the existing `results` map
+          // so the PDF generator + dashboard tiles work unchanged.
+          for (let idx=0; idx<RECON_PHASES.length; idx++) {
+            const ph = RECON_PHASES[idx];
+            const data = r.tools[ph.tool];
+            if (data === undefined) continue;
+            results[ph.tool] = data;
+            if (data._failed === true || data.ok === false) {
+              setFailed(p=>[...p,idx]);
+            }
+            setDone(p=>[...p,idx]);
+          }
+          setAll(Object.assign({},results));
+          const sum = r.summary || {};
+          add(`✓ v2 complete in ${r.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
+          if (sum.by_severity) {
+            const sev = sum.by_severity;
+            add(`  Severity: ${sev.CRITICAL||0} CRIT · ${sev.HIGH||0} HIGH · ${sev.MEDIUM||0} MED · ${sev.LOW||0} LOW`);
+          }
+          if (r.timing) {
+            const slow = Object.entries(r.timing).sort((a,b)=>b[1]-a[1]).slice(0,5);
+            add(`  Slowest 5: ${slow.map(([k,v])=>`${k}=${v}s`).join(", ")}`);
+          }
+        }
+      } catch(e) {
+        let msg = e?.message || String(e);
+        add(`✗ v2 orchestrator failed: ${msg}`);
+      }
+      setCurPhase(-1); setRunning(false); _notifyRunning(false); setFinished(true);
+      return;
+    }
+    // ── RECON-V2-ORCHESTRATOR END — fall through to v1 sequential loop ──
+
     // Single-retry-on-failure helper — most transient errors (429, network
     // glitch, brief origin 502) clear on a 3-second pause. Without this, a
     // bad blip permanently drops a phase from the PDF.
