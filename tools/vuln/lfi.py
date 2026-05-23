@@ -14,21 +14,29 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
 from tools._payloads.lfi import LFI_PAYLOADS
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_json
+# AI-curated extras: system files, history, logs, configs, cloud-meta, container indicators.
+_AI_EXTRA_LFI = load_json("lfi_extra_paths", fallback=[])
+_MERGED_LFI = list(LFI_PAYLOADS) + [p for p in _AI_EXTRA_LFI if isinstance(p, dict) and "payload" in p]
 
 router = APIRouter()
 
 
 def _build_lfi_payloads():
     """Interleave by category so the first per-param HTTP burst exercises
-    every variant family — linux-passwd, windows-ini, proc-self,
-    encoded-bypass, double-encoded, null-byte, log-poison, php-filter —
-    instead of burning the budget on 39 linux-passwd variants in a row.
+    every variant family — instead of burning the budget on N linux-passwd
+    variants in a row.
+
+    Uses _MERGED_LFI (baked-in LFI_PAYLOADS + AI-curated lfi_extra_paths).
     """
-    order = ["linux-passwd", "windows-ini", "proc-self",
+    order = ["linux-passwd", "linux-shadow", "linux-hosts", "linux-ssh",
+             "linux-history", "windows-ini", "windows-sam", "proc-self",
+             "var-log", "config", "cloud-meta",
              "encoded-bypass", "double-encoded", "null-byte",
-             "log-poison", "php-filter"]
+             "log-poison", "php-filter", "linux-resolv", "linux-fstab", "linux-issue"]
     buckets = {cat: [] for cat in order}
-    for p in LFI_PAYLOADS:
+    for p in _MERGED_LFI:
         cat = p.get("category")
         if cat not in buckets: continue
         buckets[cat].append({
@@ -75,8 +83,12 @@ def _check_marker(body, matcher, category):
 
 
 @router.post("/api/scan/lfi")
-async def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
+    unreachable = precheck_target(base, req)
+    if unreachable:
+        return vuln_response(tool="lfi", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     parsed = urlparse(base)
     params_base = parse_qs(parsed.query)
     test_urls = []
@@ -97,12 +109,21 @@ async def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
             tests_performed=1, vulnerable=False,
             skipped_reason="No URL parameters present on base or SPA-discovered endpoints")
     findings, tests, confirmed = [], 0, []
-    # Per-param cap: 40 covers every interesting variant (Linux + Windows +
-    # PHP filter + null-byte + double-encoded). Bounded scan time.
-    payload_set = _PAYLOADS[:40]
+    # Per-param cap: 60 covers every interesting variant family (Linux + Windows +
+    # PHP filter + null-byte + double-encoded + AI-curated system files / logs / configs).
+    payload_set = _PAYLOADS[:60]
+    # SPEED-V2 — wall-clock cap to prevent 240s orchestrator-timeout cascades.
+    import time as _time
+    _wallclock_start = _time.time()
+    _WALLCLOCK_BUDGET = 60.0
+    _bailed = False
     for tu_url, tu_parsed, params in test_urls[:8]:
+        if _bailed: break
         for key in list(params.keys())[:3]:
+            if _bailed: break
             for entry in payload_set:
+                if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                    _bailed = True; break
                 tests += 1
                 new_params = {k: v[0] for k, v in params.items()}
                 new_params[key] = entry["payload"]
@@ -123,12 +144,20 @@ async def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
             else:
                 continue
             break
-    return standard_response(tool="lfi", target=req.target, findings=findings,
-        tests_performed=max(tests, 1),
-        tests_summary=(f"Path traversal: {tests} variants from {len(payload_set)}-entry library "
-                       f"(LFI_PAYLOADS, 8 categories) with marker verification"),
+    summary = (f"Path traversal: {tests} variants from {len(payload_set)}-entry interleaved set "
+               f"(merged: {len(LFI_PAYLOADS)} baked-in + {len(_AI_EXTRA_LFI)} AI-curated) "
+               f"in {_time.time() - _wallclock_start:.1f}s")
+    if _bailed:
+        summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    return vuln_response(tool="lfi", target=req.target, findings=findings,
+        tested=max(tests, 1),
+        what_checked=f"URL parameters for path traversal / LFI (marker-verified, {len(_MERGED_LFI)}-entry merged library covering ~19 categories)",
+        tests_summary=summary,
         raw_data={"lfi": {"confirmed": confirmed,
-                           "library_size": len(_PAYLOADS)}})
+                           "library_size": len(_PAYLOADS),
+                           "merged_size": len(_MERGED_LFI),
+                           "ai_extras_loaded": len(_AI_EXTRA_LFI),
+                           "wallclock_bailed": _bailed}})
 
 
 def register(app):

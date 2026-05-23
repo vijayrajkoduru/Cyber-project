@@ -11,6 +11,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools.vuln._vuln_common import vuln_response, precheck_target
 router = APIRouter()
 _SESSION = re.compile(r"(sess|session|sid|auth|token|jwt|csrf|xsrf|connect\.sid)", re.I)
 
@@ -34,7 +35,7 @@ def _is_csrf_token_by_design(name: str) -> bool:
 
 
 @router.post("/api/scan/cookies")
-async def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     r = safe_get(url, req=req, allow_redirects=True)
     if r is None:
@@ -85,8 +86,9 @@ async def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
     summary = f"Analyzed {len(analyzed)} cookie(s) for Secure/HttpOnly/SameSite"
     if suppressed:
         summary += f"; {len(suppressed)} framework-CSRF FP(s) suppressed"
-    return standard_response(tool="cookies", target=req.target,
-        findings=findings, tests_performed=max(len(analyzed), 1),
+    return vuln_response(tool="cookies", target=req.target,
+        findings=findings, tested=max(len(analyzed), 1),
+        what_checked="cookie Secure / HttpOnly / SameSite flags (framework-CSRF aware)",
         tests_summary=summary,
         raw_data={"cookies": {"analyzed": analyzed, "is_https": is_https,
                               "suppressed_fps": suppressed}})

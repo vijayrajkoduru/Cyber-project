@@ -13,8 +13,13 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
 from tools._payloads.cmd_injection import CMD_PAYLOADS
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_json
 
 router = APIRouter()
+# AI-curated extras: more shell variants + powershell + template-injection + WAF-bypass.
+_AI_EXTRA_CMD = load_json("cmd_injection_extra", fallback=[])
+_MERGED_CMD = list(CMD_PAYLOADS) + [p for p in _AI_EXTRA_CMD if isinstance(p, dict) and "payload" in p]
 
 
 def _build_payload_set():
@@ -26,7 +31,7 @@ def _build_payload_set():
     order = ["linux-shell", "windows-cmd", "node-js", "php-cli",
              "python-cli", "perl-ruby", "waf-bypass", "encoded"]
     buckets = {cat: [] for cat in order}
-    for p in CMD_PAYLOADS:
+    for p in _MERGED_CMD:
         if not p.get("confirmable"): continue
         cat = p.get("category")
         if cat not in buckets: continue
@@ -50,8 +55,12 @@ def _time_get(url, req, timeout):
 
 
 @router.post("/api/scan/cmd_injection")
-async def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
+    unreachable = precheck_target(base, req)
+    if unreachable:
+        return vuln_response(tool="cmd_injection", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     parsed = urlparse(base)
     params_base = parse_qs(parsed.query)
     test_urls = []
@@ -76,11 +85,19 @@ async def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota
     # Per-param cap: 32 covers every interesting variant family while keeping
     # latency bounded (each tested payload may cost up to 5s of sleep delay).
     payload_set = _PAYLOAD_SET[:32]
+    # SPEED-V2 — wall-clock cap to prevent 240s orchestrator-timeout cascades.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 60.0
+    _bailed = False
 
     for tu_url, tu_parsed, params in test_urls[:8]:
+        if _bailed: break
         for key in list(params.keys())[:3]:
+            if _bailed: break
             original = params[key][0]
             for entry in payload_set:
+                if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                    _bailed = True; break
                 tests += 1
                 tmpl = entry["payload"]
                 name = entry.get("name", entry.get("category", "cmd"))
@@ -111,14 +128,21 @@ async def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota
                 continue
             break
 
-    return standard_response(tool="cmd_injection", target=req.target, findings=findings,
-        tests_performed=max(tests, 1),
-        tests_summary=(f"Cmd injection: {tests} variants from {len(payload_set)}-entry payload set "
-                       f"(CMD_PAYLOADS library, 8 categories) with double-sleep timing confirmation"),
+    summary = (f"Cmd injection: {tests} variants from {len(payload_set)}-entry payload set "
+               f"(merged: {len(CMD_PAYLOADS)} baked-in + {len(_AI_EXTRA_CMD)} AI-curated, 8 categories) "
+               f"with double-sleep timing confirmation in {time.time() - _wallclock_start:.1f}s")
+    if _bailed:
+        summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    return vuln_response(tool="cmd_injection", target=req.target, findings=findings,
+        tested=max(tests, 1),
+        what_checked=f"URL parameters for OS command injection (timing-based, 8-category merged library: {len(CMD_PAYLOADS)} baked-in + {len(_AI_EXTRA_CMD)} AI-curated)",
+        tests_summary=summary,
         raw_data={"cmd_injection": {"baseline_seconds": t0,
                                      "confirmed": confirmed,
-                                     "library_size": len(CMD_PAYLOADS),
-                                     "filtered_confirmable": len(_PAYLOAD_SET)}})
+                                     "library_size": len(_MERGED_CMD),
+                                     "filtered_confirmable": len(_PAYLOAD_SET),
+                                     "ai_extras_loaded": len(_AI_EXTRA_CMD),
+                                     "wallclock_bailed": _bailed}})
 
 
 def register(app):

@@ -6,14 +6,18 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._payloads.sqli import SQL_PAYLOADS
 from tools._spa_state import load_spa_state
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_json
 router = APIRouter()
-# Filter the 200-payload library to time-based variants (compatible with our timing detector).
+# Merge baked-in library with AI-curated extras (tools/_payloads/vuln/sqli_extra_payloads.json).
 # Format: (name, template, dbms) — same tuple shape the rest of the scanner expects.
+_AI_EXTRA = load_json("sqli_extra_payloads", fallback=[])
+_MERGED = list(SQL_PAYLOADS) + [p for p in _AI_EXTRA if isinstance(p, dict) and "payload" in p]
 _PAYLOADS = [
     (f"{p['dbms'].lower()}_{p.get('category','time')}_{i}", p['payload'], p['dbms'])
-    for i, p in enumerate(SQL_PAYLOADS)
-    if p.get("category") == "time" and "{N}" in p.get("payload", "")
-][:40]  # cap at 40 per scan for politeness
+    for i, p in enumerate(_MERGED)
+    if p.get("category") in ("time", "stacked-time", "waf-bypass") and "{N}" in p.get("payload", "")
+][:60]  # cap at 60 per scan (was 40; AI extras add WAF-bypass variants)
 
 # Fallback hardcoded baseline (used only if library load failed somehow)
 if not _PAYLOADS:
@@ -32,8 +36,12 @@ def _time_get(url, req, timeout):
     return r, time.time() - t0
 
 @router.post("/api/scan/sqli")
-async def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
+    unreachable = precheck_target(base, req)
+    if unreachable:
+        return vuln_response(tool="sqli", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     parsed = urlparse(base)
     params_base = parse_qs(parsed.query)
 
@@ -60,10 +68,21 @@ async def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
 
     findings, tests, confirmed = [], 0, []
     _, t0 = _time_get(base, req, timeout=20)
+    # SPEED-V2 — wall-clock cap. Without this the inner loop can run for
+    # 240s on slow targets and hit the orchestrator's per-tool kill switch,
+    # surfacing as a confusing ERROR. Bail at 60s and report whatever we
+    # found so far as a clean SKIPPED.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 60.0
+    _bailed = False
     for test_url, params in test_urls[:8]:
+        if _bailed: break
         url_parsed = urlparse(test_url)
         for key in list(params.keys())[:3]:
+            if _bailed: break
             for name, tmpl, db in _PAYLOADS:
+                if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                    _bailed = True; break
                 tests += 1
                 payload5 = tmpl.replace("{N}", "5")
                 new_params = {k: v[0] for k, v in params.items()}
@@ -84,8 +103,14 @@ async def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
                     confirmed.append({"url": test_url, "param": key, "db": db,
                                        "t0": t0, "t1": t1, "t2": t2})
                     break
-    return standard_response(tool="sqli", target=req.target, findings=findings,
-        tests_performed=max(tests, 1),
-        tests_summary=f"Time-based SQLi: {tests} payloads, triple-confirmation via SLEEP(5)+SLEEP(2)",
-        raw_data={"sqli": {"confirmed": confirmed, "baseline_seconds": t0}})
+    summary = (f"Time-based SQLi: {tests} payloads tested in "
+               f"{time.time() - _wallclock_start:.1f}s, triple-confirmation via SLEEP(5)+SLEEP(2)")
+    if _bailed:
+        summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s (target too slow for full payload set)"
+    return vuln_response(tool="sqli", target=req.target, findings=findings,
+        tested=max(tests, 1),
+        what_checked="URL parameters for time-based SQL injection (triple-confirmation SLEEP)",
+        tests_summary=summary,
+        raw_data={"sqli": {"confirmed": confirmed, "baseline_seconds": t0,
+                            "wallclock_bailed": _bailed}})
 def register(app): app.include_router(router)

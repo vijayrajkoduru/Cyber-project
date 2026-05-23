@@ -13,6 +13,11 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._payloads.xxe import XXE_PAYLOADS
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_json
+# AI-curated extras: more file targets, parameter-entity, XInclude, SVG, SOAP, UTF-16.
+_AI_EXTRA_XXE = load_json("xxe_extra_payloads", fallback=[])
+_MERGED_XXE = list(XXE_PAYLOADS) + [p for p in _AI_EXTRA_XXE if isinstance(p, dict) and "body" in p and "matcher" in p]
 
 router = APIRouter()
 
@@ -22,7 +27,7 @@ _CTS = ["application/xml", "text/xml", "application/x-xml",
 
 def _testable_payloads():
     """Drop blind-oob (needs OOB infra) and dos (unsafe for live targets)."""
-    return [p for p in XXE_PAYLOADS if p.get("category") not in ("blind-oob", "dos")]
+    return [p for p in _MERGED_XXE if p.get("category") not in ("blind-oob", "dos")]
 
 
 _PAYLOAD_SET = _testable_payloads()
@@ -38,8 +43,12 @@ def _pick_cts_for(category):
 
 
 @router.post("/api/scan/xxe")
-async def scan_xxe(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_xxe(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
+    unreachable = precheck_target(url, req)
+    if unreachable:
+        return vuln_response(tool="xxe", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     findings, tests, confirmed = [], 0, []
 
     for entry in _PAYLOAD_SET:
@@ -68,23 +77,25 @@ async def scan_xxe(req: ScanRequest, payload=Depends(verify_scan_quota)):
                         evidence_marker=f"POST with {ct} and {variant} XXE returned body matching {matcher!r}"))
                     confirmed.append({"variant": variant, "category": category,
                                        "content_type": ct})
-                    return standard_response(tool="xxe", target=req.target,
-                        findings=findings, tests_performed=tests,
+                    return vuln_response(tool="xxe", target=req.target,
+                        findings=findings, tested=tests,
+                        what_checked="XML external entity injection across multiple content-types",
                         tests_summary=(f"XXE: confirmed on first hit — {tests} payload×content-type "
                                        f"combos tested from {len(_PAYLOAD_SET)}-entry library "
                                        f"(XXE_PAYLOADS, 10 categories)"),
                         raw_data={"xxe": {"confirmed": confirmed,
-                                           "library_size": len(XXE_PAYLOADS)}})
+                                           "library_size": len(_MERGED_XXE), "ai_extras_loaded": len(_AI_EXTRA_XXE)}})
             except re.error:
                 continue
 
-    return standard_response(tool="xxe", target=req.target, findings=findings,
-        tests_performed=tests,
+    return vuln_response(tool="xxe", target=req.target, findings=findings,
+        tested=tests,
+        what_checked="XML external entity injection across multiple content-types",
         tests_summary=(f"XXE: tested {tests} payload×content-type combos from "
                        f"{len(_PAYLOAD_SET)}-entry library (XXE_PAYLOADS, 10 categories) "
                        f"— classic, parameter-entity, XInclude, SVG, SOAP, Office-XML, UTF-16, JSON→XML"),
         raw_data={"xxe": {"confirmed": confirmed,
-                           "library_size": len(XXE_PAYLOADS)}})
+                           "library_size": len(_MERGED_XXE), "ai_extras_loaded": len(_AI_EXTRA_XXE)}})
 
 
 def register(app):

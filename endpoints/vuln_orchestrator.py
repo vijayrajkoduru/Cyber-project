@@ -79,7 +79,11 @@ def _all_tools() -> list[tuple[str, str]]:
 class VulnRunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
-    concurrency: Optional[int] = 8
+    # Bumped 8 -> 12 after the 2026-05-23 stall on vulnuslab.com (Cloudflare-fronted).
+    # With 19 scanners and concurrency=8, 11 sit idle while nikto/wpscan/ssl/nuclei
+    # block 4 of the 8 slots for 60-120s. 12 lets cors/cookies/cms/etc fly through
+    # while the heavies run. Still safe for target WAF — most tools are read-only.
+    concurrency: Optional[int] = 12
     auth_cookie: Optional[str] = None
     auth_bearer: Optional[str] = None
     options: Optional[dict] = None
@@ -112,7 +116,7 @@ async def vuln_run_all(req: "VulnRunAllRequest",
                         _=Depends(verify_scan_quota)):
     """Stream per-scanner results as NDJSON. See run_module_streaming for shape."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    concurrency = max(1, min(req.concurrency or 8, 16))
+    concurrency = max(1, min(req.concurrency or 12, 16))
 
     generator = run_module_streaming(
         target=req.target,
@@ -141,7 +145,7 @@ async def vuln_run_all_buffered(req: "VulnRunAllRequest",
                                   _=Depends(verify_scan_quota)):
     """Non-streaming version — buffers all 19 results then returns one big JSON."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    concurrency = max(1, min(req.concurrency or 8, 16))
+    concurrency = max(1, min(req.concurrency or 12, 16))
     return await run_module_parallel(
         target=req.target,
         tools=tools,

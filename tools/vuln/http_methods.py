@@ -10,6 +10,7 @@ the request line back, which is the actual attack signature.
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools.vuln._vuln_common import vuln_response, precheck_target
 router = APIRouter()
 _DANGEROUS = {
     "TRACE":  ("Cross-Site Tracing -- can leak cookies", "MEDIUM", "5.3"),
@@ -25,8 +26,12 @@ def _parse_allow(header: str) -> set:
 
 
 @router.post("/api/scan/http_methods")
-async def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
+    unreachable = precheck_target(url, req, active_probes=False)  # OPTIONS/TRACE probes — read-only
+    if unreachable:
+        return vuln_response(tool="http_methods", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     findings = []
     tested = []
     suppressed = []
@@ -93,8 +98,9 @@ async def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)
     summary = f"Probed {len(_DANGEROUS)} dangerous methods; Allow: {allow_str!r}"
     if suppressed:
         summary += f"; {len(suppressed)} CDN-normalized methods filtered as non-vulnerable"
-    return standard_response(tool="http_methods", target=req.target,
-        findings=findings, tests_performed=len(_DANGEROUS),
+    return vuln_response(tool="http_methods", target=req.target,
+        findings=findings, tested=len(_DANGEROUS),
+        what_checked="dangerous HTTP methods (TRACE/PUT/DELETE/CONNECT/PATCH)",
         tests_summary=summary,
         raw_data={"http_methods": {"allow_header": allow_str,
                                     "allowed_methods": sorted(allowed_methods),

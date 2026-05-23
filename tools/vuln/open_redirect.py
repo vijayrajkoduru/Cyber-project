@@ -15,6 +15,11 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._payloads.open_redirect import OPEN_REDIRECT_PAYLOADS, ATTACKER_HOST
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_json
+# AI-curated extras: more bypass families (userinfo, subdomain, double-encoded, unicode, fragment).
+_AI_EXTRA_REDIR = load_json("open_redirect_extra", fallback=[])
+_MERGED_REDIR = list(OPEN_REDIRECT_PAYLOADS) + [p for p in _AI_EXTRA_REDIR if isinstance(p, dict) and "payload" in p]
 
 router = APIRouter()
 _COMMON_KEYS = ["url", "next", "redirect", "return", "returnTo", "return_url",
@@ -32,7 +37,7 @@ def _build_payload_set():
              "url-encoded", "double-encoded", "whitespace", "null-byte",
              "protocol-rel", "scheme-bypass", "fragment", "unicode"]
     buckets = {cat: [] for cat in order}
-    for p in OPEN_REDIRECT_PAYLOADS:
+    for p in _MERGED_REDIR:
         cat = p.get("category")
         if cat not in buckets: continue
         buckets[cat].append(p)
@@ -97,8 +102,12 @@ _CANARY_HOST = "benign-canary-vulnuslab.example"
 
 
 @router.post("/api/scan/open_redirect")
-async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
+    unreachable = precheck_target(base, req)
+    if unreachable:
+        return vuln_response(tool="open_redirect", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     parsed = urlparse(base)
     target_host = (parsed.netloc or "").lower()
     params = parse_qs(parsed.query)
@@ -122,8 +131,16 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
     location_counts = {}
     MAX_PER_LOCATION = 1
 
+    # SPEED-V2 — wall-clock cap to prevent 240s orchestrator-timeout cascades.
+    import time as _time
+    _wallclock_start = _time.time()
+    _WALLCLOCK_BUDGET = 45.0
+    _bailed = False
     for key in candidates:
+        if _bailed: break
         for entry in payload_set:
+            if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                _bailed = True; break
             tests += 1
             inj = entry["payload"]
             cat = entry.get("category", "?")
@@ -154,20 +171,25 @@ async def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota
             break
 
     summary = (f"Open redirect: {tests} probes across {len(candidates)} candidate params "
-               f"using {len(payload_set)}-entry payload set (OPEN_REDIRECT_PAYLOADS library, "
-               f"13 bypass categories; host-verified, dedupe-by-destination)")
+               f"using {len(payload_set)}-entry payload set (merged: {len(OPEN_REDIRECT_PAYLOADS)} baked-in + {len(_AI_EXTRA_REDIR)} AI-curated, "
+               f"13 bypass categories; host-verified, dedupe-by-destination) "
+               f"in {_time.time() - _wallclock_start:.1f}s")
+    if _bailed:
+        summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     if canary_redirects:
         summary += " — canary baseline redirected to off-host, findings marked SUSPECTED"
 
-    return standard_response(tool="open_redirect", target=req.target, findings=findings,
-        tests_performed=tests,
+    return vuln_response(tool="open_redirect", target=req.target, findings=findings,
+        tested=tests,
+        what_checked=f"URL parameters for open redirect to attacker host ({len(_MERGED_REDIR)}-entry merged library, Location-verified)",
         tests_summary=summary,
         raw_data={"open_redirect": {
             "confirmed": confirmed,
             "canary_redirects": canary_redirects,
             "canary_location": canary_location,
             "unique_destinations": len(location_counts),
-            "library_size": len(OPEN_REDIRECT_PAYLOADS),
+            "library_size": len(_MERGED_REDIR),
+            "ai_extras_loaded": len(_AI_EXTRA_REDIR),
         }})
 
 

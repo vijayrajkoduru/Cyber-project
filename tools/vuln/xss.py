@@ -16,16 +16,21 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
 from tools._payloads.xss import XSS_PAYLOADS
+from tools.vuln._vuln_common import vuln_response, precheck_target
+from tools._payloads.vuln._loader import load_json
 
 router = APIRouter()
+# Merge baked-in 265-entry XSS library with AI-curated extras (DOM sinks, polyglot, mutation).
+_AI_EXTRA_XSS = load_json("xss_extra_payloads", fallback=[])
+_MERGED_XSS = list(XSS_PAYLOADS) + [p for p in _AI_EXTRA_XSS if isinstance(p, dict) and "payload" in p and "context" in p]
 
 _CTX_PAYLOAD_CAP = 4   # confirm a reflection with up to N payloads per ctx
 
 
 def _payloads_for_context(ctx):
-    """Pick first N XSS_PAYLOADS whose context matches detected reflection.
+    """Pick first N merged-library payloads whose context matches detected reflection.
     Library is ordered strongest-first, so top-N slice is the budget choice."""
-    out = [p for p in XSS_PAYLOADS if p.get("context") == ctx]
+    out = [p for p in _MERGED_XSS if p.get("context") == ctx]
     return out[:_CTX_PAYLOAD_CAP]
 
 
@@ -103,7 +108,7 @@ def _confirm_with_library(url, key, params, req, ctx):
 
 
 @router.post("/api/scan/xss")
-async def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     r = safe_get(base, req=req, allow_redirects=True)
     if r is None:
@@ -149,14 +154,16 @@ async def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
             confirmed.append({"url": u, "param": key, "context": ctx,
                               "payload": payload_used})
             break
-    return standard_response(tool="xss", target=req.target, findings=findings,
-        tests_performed=max(tests, 1),
+    return vuln_response(tool="xss", target=req.target, findings=findings,
+        tested=max(tests, 1),
+        what_checked=f"URL parameters for reflected XSS (canary + {len(_MERGED_XSS)}-entry merged AI+baked-in payload library)",
         tests_summary=(f"Tested {tests} params across {len(urls)} URLs (incl. SPA-discovered) "
-                       f"with canary + context-matched XSS_PAYLOADS confirmation "
-                       f"({len(XSS_PAYLOADS)}-entry library)"),
+                       f"with canary + context-matched confirmation "
+                       f"({len(_MERGED_XSS)}-entry library: {len(XSS_PAYLOADS)} baked-in + {len(_AI_EXTRA_XSS)} AI-curated)"),
         raw_data={"xss": {"urls_tested": urls, "tests": tests,
                            "confirmed": confirmed,
-                           "library_size": len(XSS_PAYLOADS)}})
+                           "library_size": len(_MERGED_XSS),
+                           "ai_extras_loaded": len(_AI_EXTRA_XSS)}})
 
 
 def register(app):

@@ -1,0 +1,112 @@
+[
+  {"name": "WordPress",      "path": "/wp-login.php",                                "marker": "<title>.*Log In.*WordPress|wp-content",                         "desc": "WordPress login page"},
+  {"name": "WordPress",      "path": "/",                                            "marker": "<meta name=\"generator\" content=\"WordPress",                  "desc": "WordPress generator meta"},
+  {"name": "WordPress",      "path": "/wp-includes/js/wp-emoji-release.min.js",      "marker": "wpemojiSettings|wp-emoji",                                      "desc": "WordPress wp-includes"},
+  {"name": "WordPress",      "path": "/readme.html",                                 "marker": "WordPress|Welcome\\. WordPress is web",                         "desc": "WordPress readme.html"},
+  {"name": "WordPress",      "path": "/wp-json/wp/v2",                               "marker": "\"namespace\":\\s*\"wp/v2\"",                                   "desc": "WordPress REST API root"},
+  {"name": "WordPress",      "path": "/xmlrpc.php",                                  "marker": "XML-RPC server accepts POST requests",                          "desc": "WordPress XML-RPC endpoint"},
+
+  {"name": "Drupal",         "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Drupal",                     "desc": "Drupal generator meta"},
+  {"name": "Drupal",         "path": "/CHANGELOG.txt",                               "marker": "Drupal \\d+\\.\\d+",                                            "desc": "Drupal CHANGELOG.txt"},
+  {"name": "Drupal",         "path": "/sites/default/files/",                        "marker": "Drupal|sites/default",                                          "desc": "Drupal sites/default"},
+  {"name": "Drupal",         "path": "/core/CHANGELOG.txt",                          "marker": "Drupal \\d+",                                                   "desc": "Drupal 8+ core CHANGELOG"},
+  {"name": "Drupal",         "path": "/user/login",                                  "marker": "user-login-form|drupal-",                                       "desc": "Drupal login page"},
+
+  {"name": "Joomla",         "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Joomla",                     "desc": "Joomla generator meta"},
+  {"name": "Joomla",         "path": "/administrator/",                              "marker": "Joomla|com_login",                                              "desc": "Joomla admin login"},
+  {"name": "Joomla",         "path": "/administrator/manifests/files/joomla.xml",    "marker": "<extension|<version>",                                          "desc": "Joomla manifest XML"},
+  {"name": "Joomla",         "path": "/language/en-GB/en-GB.xml",                    "marker": "<metadata|<version>",                                           "desc": "Joomla language metadata"},
+
+  {"name": "Magento",        "path": "/",                                            "marker": "Magento|/skin/frontend/|/static/version",                       "desc": "Magento path"},
+  {"name": "Magento",        "path": "/magento_version",                             "marker": "Magento/\\d",                                                   "desc": "Magento version endpoint"},
+  {"name": "Magento",        "path": "/static/frontend",                             "marker": "frontend/Magento|frontend/luma",                                "desc": "Magento static frontend"},
+
+  {"name": "Shopify",        "path": "/",                                            "marker": "shopify-checkout-api-token|cdn\\.shopify\\.com",                "desc": "Shopify CDN"},
+  {"name": "Shopify",        "path": "/cart.js",                                     "marker": "\"items\":\\s*\\[|shopify",                                     "desc": "Shopify cart.js"},
+
+  {"name": "Ghost",          "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Ghost",                      "desc": "Ghost generator"},
+  {"name": "Ghost",          "path": "/ghost/",                                      "marker": "<title>Ghost|content=\"Ghost",                                  "desc": "Ghost admin panel"},
+  {"name": "Ghost",          "path": "/ghost/api/canary/admin/site/",                "marker": "\"site\":|\"title\":",                                          "desc": "Ghost admin API"},
+
+  {"name": "PrestaShop",     "path": "/",                                            "marker": "<meta name=\"generator\" content=\"PrestaShop",                 "desc": "PrestaShop generator"},
+  {"name": "PrestaShop",     "path": "/admin/",                                      "marker": "PrestaShop|admin-dev",                                          "desc": "PrestaShop admin"},
+
+  {"name": "TYPO3",          "path": "/",                                            "marker": "<meta name=\"generator\" content=\"TYPO3",                      "desc": "TYPO3 generator"},
+  {"name": "TYPO3",          "path": "/typo3/",                                      "marker": "TYPO3|typo3temp",                                               "desc": "TYPO3 admin path"},
+
+  {"name": "Sitecore",       "path": "/sitecore/login/",                             "marker": "Sitecore|sitecore_username",                                    "desc": "Sitecore login"},
+  {"name": "Sitecore",       "path": "/sitecore/shell/",                             "marker": "Sitecore.Shell",                                                "desc": "Sitecore shell"},
+
+  {"name": "Umbraco",        "path": "/umbraco/",                                    "marker": "Umbraco|<title>Umbraco",                                        "desc": "Umbraco admin"},
+  {"name": "Umbraco",        "path": "/Umbraco/RestServices/PleaseWait.aspx",        "marker": "Umbraco",                                                       "desc": "Umbraco service"},
+
+  {"name": "Adobe Experience Manager", "path": "/etc.html",                          "marker": "Adobe Experience Manager|cq:Page",                              "desc": "AEM /etc.html"},
+  {"name": "Adobe Experience Manager", "path": "/libs/granite/core/content/login.html","marker": "AEM|Adobe Experience Manager",                                "desc": "AEM login"},
+  {"name": "Adobe Experience Manager", "path": "/system/console/bundles",            "marker": "Apache Felix|OSGi",                                             "desc": "AEM OSGi console"},
+
+  {"name": "Hugo",           "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Hugo",                       "desc": "Hugo static-site generator"},
+  {"name": "Jekyll",         "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Jekyll",                     "desc": "Jekyll static-site generator"},
+  {"name": "Eleventy",       "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Eleventy",                   "desc": "Eleventy static-site generator"},
+  {"name": "Gatsby",         "path": "/",                                            "marker": "gatsby-",                                                       "desc": "Gatsby static site"},
+  {"name": "Next.js",        "path": "/",                                            "marker": "/_next/static/|<meta name=\"next-",                             "desc": "Next.js framework"},
+  {"name": "Nuxt.js",        "path": "/",                                            "marker": "__NUXT__|/_nuxt/",                                              "desc": "Nuxt.js framework"},
+  {"name": "Astro",          "path": "/",                                            "marker": "astro-island|<meta name=\"generator\" content=\"Astro",         "desc": "Astro framework"},
+  {"name": "SvelteKit",      "path": "/",                                            "marker": "kit:|/_app/immutable/",                                         "desc": "SvelteKit framework"},
+  {"name": "Remix",          "path": "/",                                            "marker": "__remixContext|/build/_assets/",                                "desc": "Remix framework"},
+  {"name": "Docusaurus",     "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Docusaurus",                 "desc": "Docusaurus docs"},
+  {"name": "VuePress",       "path": "/",                                            "marker": "<meta name=\"generator\" content=\"VuePress",                   "desc": "VuePress docs"},
+  {"name": "MkDocs",         "path": "/",                                            "marker": "<meta name=\"generator\" content=\"mkdocs",                     "desc": "MkDocs docs"},
+
+  {"name": "Contentful",     "path": "/",                                            "marker": "ctfassets\\.net|contentful",                                    "desc": "Contentful headless CMS"},
+  {"name": "Strapi",         "path": "/admin/",                                      "marker": "Strapi|<title>Strapi",                                          "desc": "Strapi admin"},
+  {"name": "Sanity",         "path": "/",                                            "marker": "cdn\\.sanity\\.io|sanity-image",                                "desc": "Sanity CMS"},
+  {"name": "Storyblok",      "path": "/",                                            "marker": "storyblok\\.com|a\\.storyblok\\.com",                           "desc": "Storyblok CMS"},
+
+  {"name": "MediaWiki",      "path": "/",                                            "marker": "<meta name=\"generator\" content=\"MediaWiki",                  "desc": "MediaWiki generator"},
+  {"name": "MediaWiki",      "path": "/api.php?action=query&meta=siteinfo&format=json","marker": "\"generator\":\\s*\"MediaWiki",                               "desc": "MediaWiki API siteinfo"},
+  {"name": "DokuWiki",       "path": "/doku.php",                                    "marker": "DokuWiki|<title>start \\[",                                     "desc": "DokuWiki"},
+
+  {"name": "phpBB",          "path": "/",                                            "marker": "<meta name=\"generator\" content=\"phpBB",                      "desc": "phpBB forum"},
+  {"name": "phpBB",          "path": "/viewforum.php",                               "marker": "phpBB|powered by phpBB",                                        "desc": "phpBB viewforum"},
+  {"name": "vBulletin",      "path": "/",                                            "marker": "vBulletin|vbulletin_global",                                    "desc": "vBulletin forum"},
+  {"name": "Discourse",      "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Discourse|/assets/discourse", "desc": "Discourse forum"},
+  {"name": "Discourse",      "path": "/site.json",                                   "marker": "discourse|\"site_settings\"",                                   "desc": "Discourse /site.json"},
+  {"name": "MyBB",           "path": "/",                                            "marker": "<meta name=\"generator\" content=\"MyBB",                       "desc": "MyBB forum"},
+  {"name": "XenForo",        "path": "/",                                            "marker": "XF\\.config|XenForo",                                           "desc": "XenForo forum"},
+  {"name": "Flarum",         "path": "/",                                            "marker": "flarum|/assets/forum",                                          "desc": "Flarum forum"},
+
+  {"name": "Moodle",         "path": "/login/index.php",                             "marker": "Moodle|moodle.org",                                             "desc": "Moodle LMS"},
+  {"name": "Moodle",         "path": "/lib/javascript-static.js",                    "marker": "M\\.cfg|moodle_",                                                "desc": "Moodle static JS"},
+  {"name": "Canvas LMS",     "path": "/login",                                       "marker": "Canvas|instructure",                                            "desc": "Canvas LMS"},
+
+  {"name": "Atlassian Confluence","path": "/login.action",                           "marker": "Confluence|Atlassian",                                          "desc": "Confluence login"},
+  {"name": "Atlassian Jira", "path": "/login.jsp",                                   "marker": "Jira|Atlassian Jira",                                           "desc": "Jira login"},
+  {"name": "Atlassian Jira", "path": "/secure/Dashboard.jspa",                       "marker": "Jira|Atlassian",                                                "desc": "Jira dashboard"},
+
+  {"name": "Bitrix",         "path": "/bitrix/admin/",                               "marker": "Bitrix|1C-Bitrix",                                              "desc": "Bitrix admin"},
+  {"name": "OpenCart",       "path": "/",                                            "marker": "<meta name=\"generator\" content=\"OpenCart",                   "desc": "OpenCart e-commerce"},
+  {"name": "WooCommerce",    "path": "/",                                            "marker": "woocommerce|/wp-content/plugins/woocommerce/",                  "desc": "WooCommerce plugin"},
+  {"name": "BigCommerce",    "path": "/",                                            "marker": "bigcommerce|cdn\\d+\\.bigcommerce\\.com",                       "desc": "BigCommerce platform"},
+
+  {"name": "Webflow",        "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Webflow|w-mod-",             "desc": "Webflow site"},
+  {"name": "Wix",            "path": "/",                                            "marker": "X-Wix-|wix\\.com|wixstatic\\.com",                              "desc": "Wix site"},
+  {"name": "Squarespace",    "path": "/",                                            "marker": "Squarespace|squarespace-cdn",                                   "desc": "Squarespace site"},
+  {"name": "Weebly",         "path": "/",                                            "marker": "weebly|cdn\\d+\\.editmysite\\.com",                             "desc": "Weebly site"},
+
+  {"name": "Salesforce Lightning","path": "/_slds/icons/utility-sprite/svg/symbols.svg","marker": "lightning|salesforce",                                       "desc": "Salesforce Lightning"},
+  {"name": "Microsoft SharePoint","path": "/_layouts/15/start.aspx",                 "marker": "SharePoint|_layouts/15",                                        "desc": "SharePoint"},
+
+  {"name": "Concrete5",      "path": "/",                                            "marker": "<meta name=\"generator\" content=\"concrete5",                  "desc": "concrete5 CMS"},
+  {"name": "MODX",           "path": "/",                                            "marker": "<meta name=\"generator\" content=\"MODX",                       "desc": "MODX CMS"},
+  {"name": "ProcessWire",    "path": "/",                                            "marker": "<meta name=\"generator\" content=\"ProcessWire",                "desc": "ProcessWire CMS"},
+  {"name": "October CMS",    "path": "/",                                            "marker": "<meta name=\"generator\" content=\"OctoberCMS",                 "desc": "October CMS"},
+  {"name": "Grav",           "path": "/",                                            "marker": "<meta name=\"generator\" content=\"Grav",                       "desc": "Grav flat-file CMS"},
+  {"name": "Craft CMS",      "path": "/admin",                                       "marker": "Craft CMS|<title>Craft",                                        "desc": "Craft CMS admin"},
+  {"name": "Statamic",       "path": "/cp",                                          "marker": "Statamic|<title>Statamic",                                      "desc": "Statamic control panel"},
+  {"name": "Kirby",          "path": "/panel",                                       "marker": "Kirby|getKirby",                                                "desc": "Kirby panel"},
+
+  {"name": "Plesk",          "path": "/login_up.php",                                "marker": "Plesk|plesk_session",                                           "desc": "Plesk hosting panel"},
+  {"name": "cPanel",         "path": "/cpanel",                                      "marker": "cPanel|<title>cPanel",                                          "desc": "cPanel"},
+  {"name": "Webmin",         "path": ":10000/",                                      "marker": "Webmin|<title>Login to Webmin",                                 "desc": "Webmin"},
+  {"name": "DirectAdmin",    "path": ":2222/",                                       "marker": "DirectAdmin|JBMC Software",                                     "desc": "DirectAdmin"}
+]

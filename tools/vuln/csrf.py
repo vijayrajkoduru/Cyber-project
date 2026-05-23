@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools.vuln._vuln_common import vuln_response, precheck_target
 router = APIRouter()
 _TOKEN_RE = re.compile(r"(csrf|csrftoken|_token|authenticity_token|xsrf|nonce|state)", re.IGNORECASE)
 _PAGES = ["/", "/login", "/signin", "/register", "/signup", "/profile", "/settings", "/account"]
@@ -15,8 +16,12 @@ def _form_has_token(html):
     return False, None
 
 @router.post("/api/scan/csrf")
-async def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
+def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    unreachable = precheck_target(base, req, active_probes=False)  # token-field inspection only — no payload injection
+    if unreachable:
+        return vuln_response(tool="csrf", target=req.target, findings=[],
+            tested=1, skipped_reason=unreachable)
     findings, tests, forms_seen = [], 0, []
     samesite = "unknown"
     r0 = safe_get(base, req=req, allow_redirects=True, timeout=10)
@@ -40,8 +45,9 @@ async def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
                     "MEDIUM", cvss="6.5", cwe="CWE-352", owasp="A01:2021",
                     remediation="Add CSRF token to state-changing forms. Use framework CSRF middleware (Django/Rails/Express csurf). Set SameSite=Lax on session cookies.",
                     evidence_marker=f"{method} form at {path} has no CSRF token AND SameSite={samesite}"))
-    return standard_response(tool="csrf", target=req.target, findings=findings,
-        tests_performed=tests,
+    return vuln_response(tool="csrf", target=req.target, findings=findings,
+        tested=tests,
+        what_checked="state-changing forms for missing CSRF tokens + cookie SameSite",
         tests_summary=f"CSRF: crawled {tests} pages, analysed {len(forms_seen)} state-changing forms",
         raw_data={"csrf": {"forms_seen": forms_seen, "samesite_status": samesite}})
 def register(app): app.include_router(router)
