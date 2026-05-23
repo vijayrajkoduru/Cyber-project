@@ -1,5 +1,5 @@
 """Mass Assignment — POST forbidden fields to user/registration endpoints."""
-import secrets
+import secrets, time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_post, wrap_finding, standard_response)
@@ -30,7 +30,7 @@ def _contains(obj, val, key):
 
 
 @router.post("/api/scan/mass_assignment")
-async def scan_mass_assignment(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_mass_assignment(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)
     candidates = list(_DEFAULT_PATHS)
@@ -43,7 +43,13 @@ async def scan_mass_assignment(req: ScanRequest, _=Depends(verify_scan_quota)):
 
     findings, tests, confirmed = [], 0, []
     canary_email = f"vlcanary-{secrets.token_hex(4)}@vulnuslab.example"
+    # VL-TURBO wall-clock cap.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 30.0
+    _bailed = False
     for path in candidates[:8]:
+        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
         url = base + (path if path.startswith("/") else "/" + path)
         body = {"email": canary_email,
                 "password": "VlLab-" + secrets.token_hex(6) + "!",
@@ -72,10 +78,14 @@ async def scan_mass_assignment(req: ScanRequest, _=Depends(verify_scan_quota)):
             confirmed.append({"path": path, "echoed_fields": echoed,
                               "status": r.status_code})
 
+    summary = (f"Mass Assignment: {tests} probes with {len(_FORBIDDEN_FIELDS)} forbidden fields "
+               f"in {time.time() - _wallclock_start:.1f}s")
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return standard_response(tool="mass_assignment", target=req.target,
         findings=findings, tests_performed=tests,
-        tests_summary=f"Mass Assignment: {tests} probes with {len(_FORBIDDEN_FIELDS)} forbidden fields",
-        raw_data={"mass_assignment": {"confirmed": confirmed}})
+        tests_summary=summary,
+        raw_data={"mass_assignment": {"confirmed": confirmed, "wallclock_bailed": _bailed}})
 
 
 def register(app):

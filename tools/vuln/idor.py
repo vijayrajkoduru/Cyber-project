@@ -1,6 +1,7 @@
 """IDOR — sequential-ID enumeration on /api/<resource>/<id> endpoints."""
 import hashlib
 import re
+import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -21,7 +22,7 @@ def _hash(text):
 
 
 @router.post("/api/scan/idor")
-async def scan_idor(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_idor(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     has_auth = bool(getattr(req, "auth_cookie", None) or getattr(req, "auth_bearer", None))
     if not has_auth:
@@ -52,7 +53,13 @@ async def scan_idor(req: ScanRequest, _=Depends(verify_scan_quota)):
             self.auth_bearer = None
     no_auth = _NoAuthReq(req)
 
+    # VL-TURBO wall-clock cap: bail at 45s, report partial findings honestly.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 45.0
+    _bailed = False
     for pattern in patterns[:15]:
+        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
         # Step 1 — does unauth get 401/403 here? If not, it's a public endpoint.
         url1 = base + pattern.replace("{id}", "1")
         tests += 1
@@ -94,13 +101,18 @@ async def scan_idor(req: ScanRequest, _=Depends(verify_scan_quota)):
                               "distinct_responses": len(unique),
                               "ids_tested": sorted(hashes_seen.keys())})
 
+    summary = (f"IDOR: {tests} probes across {len(patterns[:15])} ID patterns "
+               f"(auth=on) in {time.time() - _wallclock_start:.1f}s; "
+               f"{len(suppressed)} public-endpoint FP(s) suppressed")
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return standard_response(tool="idor", target=req.target, findings=findings,
         tests_performed=tests,
-        tests_summary=(f"IDOR: {tests} probes across {len(patterns[:15])} ID patterns "
-                       f"(auth=on); {len(suppressed)} public-endpoint FP(s) suppressed"),
+        tests_summary=summary,
         raw_data={"idor": {"confirmed": confirmed,
                             "suppressed_public_endpoints": suppressed,
-                            "patterns_tested": patterns[:15]}})
+                            "patterns_tested": patterns[:15],
+                            "wallclock_bailed": _bailed}})
 
 
 def register(app):

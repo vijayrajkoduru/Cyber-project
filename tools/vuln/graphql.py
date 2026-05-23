@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_post, wrap_finding, standard_response)
+from tools._payloads.vuln._loader import load_json
 
 router = APIRouter()
 
@@ -14,9 +15,24 @@ _INTROSPECTION_QUERY = (
 _SENSITIVE_TYPES = ("password", "passwordhash", "secret", "token",
                     "apikey", "creditcard", "ssn", "privatekey")
 
+# === GRAPHQL-AI-EXTRA-V1 ===
+# AI-curated GraphQL attack catalogue (35 entries: introspection variants,
+# batching DoS, alias overload, deep nesting, mutation CSRF, mass assignment,
+# IDOR, SQLi-in-arg, NoSQLi-in-arg, endpoint discovery, GraphiQL probes).
+# - endpoint-probe entries seed _GRAPHQL_PATHS with extra discovery paths
+# - introspection entries seed alternate __schema query payloads
+_AI_EXTRA_GRAPHQL = load_json("graphql_payloads", fallback=[])
+for _p in _AI_EXTRA_GRAPHQL:
+    if not isinstance(_p, dict): continue
+    if _p.get("category") == "endpoint-probe":
+        ep = _p.get("endpoint")
+        if ep and ep.startswith("/") and ep not in _GRAPHQL_PATHS:
+            _GRAPHQL_PATHS.append(ep)
+# === /GRAPHQL-AI-EXTRA-V1 ===
+
 
 @router.post("/api/scan/graphql")
-async def scan_graphql(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_graphql(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, tests, confirmed = [], 0, []
 

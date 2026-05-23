@@ -1,5 +1,6 @@
 """Sensitive data exposure — regex-scan response bodies for leaked secrets."""
 import re
+import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -24,7 +25,7 @@ _PATTERNS = [
 
 
 @router.post("/api/scan/sensitive_data")
-async def scan_sensitive_data(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_sensitive_data(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)
     # Collect URLs to probe — base + SPA-discovered + common API roots
@@ -40,7 +41,13 @@ async def scan_sensitive_data(req: ScanRequest, _=Depends(verify_scan_quota)):
     findings, tests, hits_by_pattern = [], 0, {}
     seen_values = set()  # dedupe — only report each distinct match once
 
+    # VL-TURBO wall-clock cap: 25 URLs × 8s × retries = up to 10 min without cap.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 45.0
+    _bailed = False
     for url in list(urls_to_scan)[:25]:
+        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
         tests += 1
         r = safe_get(url, req=req, allow_redirects=True, timeout=8)
         if r is None or not r.text:
@@ -75,12 +82,16 @@ async def scan_sensitive_data(req: ScanRequest, _=Depends(verify_scan_quota)):
     if hits_by_pattern.get("email_bulk", 0) < 5:
         findings = [f for f in findings if "Email" not in f.get("detail", "")]
 
+    summary = (f"Sensitive Data: {tests} URLs scanned with {len(_PATTERNS)} regex patterns "
+               f"(AWS/Stripe/RSA/bcrypt/JWT/PII) in {time.time() - _wallclock_start:.1f}s")
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return standard_response(tool="sensitive_data", target=req.target,
         findings=findings, tests_performed=tests,
-        tests_summary=(f"Sensitive Data: {tests} URLs scanned with {len(_PATTERNS)} regex patterns "
-                       f"(AWS/Stripe/RSA/bcrypt/JWT/PII)"),
+        tests_summary=summary,
         raw_data={"sensitive_data": {"hits_by_pattern": hits_by_pattern,
-                                       "urls_scanned": len(urls_to_scan)}})
+                                       "urls_scanned": len(urls_to_scan),
+                                       "wallclock_bailed": _bailed}})
 
 
 def register(app):

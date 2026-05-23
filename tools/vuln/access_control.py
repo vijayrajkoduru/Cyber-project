@@ -26,7 +26,7 @@ def _fp(r):
 
 
 @router.post("/api/scan/access_control")
-async def scan_access_control(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_access_control(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     has_auth = bool(getattr(req, "auth_cookie", None) or getattr(req, "auth_bearer", None))
     spa = load_spa_state(req.target)

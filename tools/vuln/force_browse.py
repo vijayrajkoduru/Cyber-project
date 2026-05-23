@@ -1,5 +1,5 @@
 """Force-browse scanner — uses tools/_payloads/force_browse.py (595 paths)."""
-import hashlib, secrets
+import hashlib, secrets, time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -19,7 +19,7 @@ def _cvss(sev):
 
 
 @router.post("/api/scan/force_browse")
-async def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
+def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
 
     # SPA-shell baseline — kills FPs on Angular/React/Vue apps
@@ -34,7 +34,13 @@ async def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
 
     findings, tests, confirmed, suppressed = [], 0, [], 0
     by_cat = {}
+    # VL-TURBO wall-clock cap: 200 paths × 8s = up to 27 min without cap.
+    _wallclock_start = time.time()
+    _WALLCLOCK_BUDGET = 60.0
+    _bailed = False
     for entry in paths_to_test:
+        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+            _bailed = True; break
         path = entry.get("path", "")
         if not path.startswith("/"):
             path = "/" + path
@@ -60,9 +66,12 @@ async def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
                           "status": r.status_code, "bytes": len(r.content)})
         by_cat[category] = by_cat.get(category, 0) + 1
 
-    summary = (f"Force-browse: {tests} paths probed (top-{_MAX_PATHS} by severity); "
+    summary = (f"Force-browse: {tests} paths probed (top-{_MAX_PATHS} by severity) in "
+               f"{time.time() - _wallclock_start:.1f}s; "
                f"{len(findings)} sensitive paths found; "
                f"{suppressed} SPA-shell FP(s) suppressed")
+    if _bailed:
+        summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return standard_response(tool="force_browse", target=req.target,
         findings=findings, tests_performed=tests, tests_summary=summary,
         raw_data={"force_browse": {"confirmed": confirmed, "by_category": by_cat,
