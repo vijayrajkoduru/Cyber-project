@@ -7,12 +7,26 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wra
 router = APIRouter()
 
 _OAUTH_PATHS = ["/oauth/authorize","/oauth2/authorize","/auth/oauth/authorize","/o/authorize","/login/oauth/authorize","/connect/authorize"]
-_BYPASS_VARIANTS = [
+_FALLBACK_BYPASS_VARIANTS = [
     "http://attacker.example/callback",
     "//attacker.example/callback",
     "/\\attacker.example/callback",
     "http://legitsite.com.attacker.example/cb",
 ]
+# AI-curated 80-entry bypass list — extend variants
+try:
+    from tools._payloads.oauth_redirect_bypass_payloads import OAUTH_REDIRECT_BYPASS_PAYLOADS as _AI_OAUTH
+    _BYPASS_VARIANTS = list(_FALLBACK_BYPASS_VARIANTS)
+    seen = set(_BYPASS_VARIANTS)
+    for _p in _AI_OAUTH:
+        if not isinstance(_p, dict): continue
+        payload = _p.get("payload", "")
+        if payload and payload not in seen:
+            _BYPASS_VARIANTS.append(payload)
+            seen.add(payload)
+    _BYPASS_VARIANTS = _BYPASS_VARIANTS[:25]  # cap for runtime
+except Exception:
+    _BYPASS_VARIANTS = _FALLBACK_BYPASS_VARIANTS
 
 
 @router.post("/api/webapp/oauth_redirect_bypass")

@@ -7,6 +7,13 @@ router = APIRouter()
 
 _UPLOAD_PATHS = ["/upload","/api/upload","/file/upload","/files/upload","/images/upload","/admin/upload","/user/upload","/api/v1/upload"]
 
+# AI-curated 80-entry list of (filename, content-type, technique, severity)
+try:
+    from tools._payloads.file_upload_bypass_extensions import FILE_UPLOAD_BYPASS_EXTENSIONS as _AI_BYPASS
+    _AI_BYPASS = _AI_BYPASS if isinstance(_AI_BYPASS, list) else []
+except Exception:
+    _AI_BYPASS = []
+
 
 @router.post("/api/webapp/file_upload_bypass")
 async def webapp_file_upload_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)):
