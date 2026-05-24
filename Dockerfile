@@ -13,6 +13,30 @@ RUN apt-get update -q -o Acquire::Retries=3 \
         curl wget ca-certificates git iputils-ping whois dnsutils \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# ── §1 APP BINARY (Static Analysis) tooling ─────────────────────────
+# These CLI tools are required by any mobile_static / binary_static scanner.
+# Pure-Python alternatives are preferred where they exist (androguard for
+# apktool, pefile for PE parsing) but the CLI tools are higher-fidelity.
+RUN apt-get update -q -o Acquire::Retries=3 \
+ && apt-get install -y -q --no-install-recommends \
+        apktool \
+        aapt \
+        unzip \
+        ripgrep \
+        binutils \
+        file \
+        default-jre-headless \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Python libs for §1 — fall back to these when CLI tools are unavailable
+# or for richer parsing (apkleaks for secret extraction, pefile for PE,
+# androguard as pure-Python apktool alternative, Quark for malware signatures).
+RUN pip install --no-cache-dir \
+        apkleaks \
+        pefile \
+        androguard \
+        quark-engine
+
 WORKDIR /app
 
 # Python deps

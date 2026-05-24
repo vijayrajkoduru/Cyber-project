@@ -48,12 +48,69 @@
       "parse_re": "curl ([0-9]+\\.[0-9]+)",
       "required": true,
       "used_by": ["recon", "vuln", "webapp"]
+    },
+    {
+      "name": "apktool",
+      "min_version": "2.5",
+      "check_cmd": ["apktool", "--version"],
+      "parse_re": "([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["mobile_static"]
+    },
+    {
+      "name": "aapt",
+      "min_version": "0.2",
+      "check_cmd": ["aapt", "version"],
+      "parse_re": "v([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["mobile_static"]
+    },
+    {
+      "name": "unzip",
+      "min_version": "6.0",
+      "check_cmd": ["unzip", "-v"],
+      "parse_re": "UnZip ([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["mobile_static"]
+    },
+    {
+      "name": "ripgrep",
+      "min_version": "13.0",
+      "check_cmd": ["rg", "--version"],
+      "parse_re": "ripgrep ([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["mobile_static", "webapp"]
+    },
+    {
+      "name": "binutils-nm",
+      "min_version": "2.30",
+      "check_cmd": ["nm", "--version"],
+      "parse_re": "([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["mobile_static"]
+    },
+    {
+      "name": "file",
+      "min_version": "5.30",
+      "check_cmd": ["file", "--version"],
+      "parse_re": "file-([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["mobile_static"]
+    },
+    {
+      "name": "java",
+      "min_version": "17",
+      "check_cmd": ["java", "-version"],
+      "parse_re": "version \"([0-9]+)",
+      "required": false,
+      "used_by": ["mobile_static"]
     }
   ],
   "wordlist_refresh_days": {
     "recon": 30,
     "vuln": 14,
     "webapp": 14,
-    "osint": 30
+    "osint": 30,
+    "mobile_static": 90
   }
 }
