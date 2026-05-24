@@ -1,4 +1,5 @@
-"""Webapp: Cache poisoning - unkeyed header injection (Param Miner-style)."""
+"""Webapp: Cache poisoning - unkeyed header injection (Param Miner-style) — VL-TURBO."""
+import asyncio
 import secrets
 import requests
 from fastapi import APIRouter, Depends
@@ -57,22 +58,53 @@ async def webapp_cache_poisoning(req: ScanRequest, payload=Depends(verify_scan_q
             raw_data={"cache_poisoning": {"cache_headers_found": []}},
         )
     
+    # VL-TURBO: phase 1 — parallel injection probes; phase 2 — parallel persistence checks
+    sem = asyncio.Semaphore(15)
+
+    def _sync_get(url, extra_headers=None):
+        h = {"User-Agent": "VulnusLab/1.0"}
+        if extra_headers:
+            h.update(extra_headers)
+        try:
+            return requests.get(url, headers=h, timeout=4, allow_redirects=False, verify=False)
+        except Exception:
+            return None
+
+    async def _probe(url, extra=None):
+        async with sem:
+            return await asyncio.to_thread(_sync_get, url, extra)
+
+    # Phase 1: send each header with the canary
+    probes = []  # (header, url)
     for header in _UNKEYED_HEADERS:
-        tests += 1
         cb = secrets.token_hex(6)
-        url = f"{base}/?cb={cb}"
-        try:
-            r1 = requests.get(url, headers={header: canary, "User-Agent":"VulnusLab/1.0"},
-                              timeout=8, allow_redirects=False, verify=False)
-        except Exception:
+        probes.append((header, f"{base}/?cb={cb}"))
+    try:
+        injection_results = await asyncio.wait_for(
+            asyncio.gather(*(_probe(u, {h: canary}) for h, u in probes)), timeout=45
+        )
+    except asyncio.TimeoutError:
+        injection_results = [None] * len(probes)
+
+    tests = len(probes)
+    # Phase 2: for each "reflected" hit, send a clean follow-up to test cache persistence
+    reflected = []
+    for (header, url), r1 in zip(probes, injection_results):
+        if r1 is None: continue
+        if canary not in (r1.text or "") and canary not in r1.headers.get("Location", ""):
             continue
-        if canary not in (r1.text or "") and canary not in r1.headers.get("Location",""):
-            continue
-        # Header is reflected. Now check if it persists in a CLEAN follow-up (suggests cache poisoning)
-        try:
-            r2 = requests.get(url, headers={"User-Agent":"VulnusLab/1.0"},
-                              timeout=8, allow_redirects=False, verify=False)
-        except Exception:
+        reflected.append((header, url))
+
+    try:
+        persist_results = await asyncio.wait_for(
+            asyncio.gather(*(_probe(u) for _, u in reflected)), timeout=30
+        ) if reflected else []
+    except asyncio.TimeoutError:
+        persist_results = [None] * len(reflected)
+
+    # Phase 3: evaluate
+    for (header, url), r2 in zip(reflected, persist_results):
+        if r2 is None:
             continue
         if canary in (r2.text or "") or canary in r2.headers.get("Location",""):
             suspect.append({"header": header, "url": url})

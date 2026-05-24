@@ -1,4 +1,5 @@
-"""Webapp: LDAP filter injection detection."""
+"""Webapp: LDAP filter injection detection (VL-TURBO async-parallel)."""
+import asyncio
 from fastapi import APIRouter, Depends
 from urllib.parse import quote
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -34,39 +35,68 @@ except Exception:
 async def webapp_ldap_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []
-    tests = 0
-    for param in _PARAMS:
-        baseline = safe_get(f"{base}/?{param}=normaluser", req=req, timeout=8)
-        if baseline is None or baseline.status_code >= 500:
+
+    # VL-TURBO: parallelize baselines (10 params) AND injection probes (200 reqs)
+    # Sem caps concurrency to avoid hammering the target. Wall-clock cap at 60s.
+    sem = asyncio.Semaphore(15)
+
+    async def _fetch(url):
+        async with sem:
+            return await asyncio.to_thread(safe_get, url, req=req, timeout=5)
+
+    # Phase 1: fetch all baselines in parallel
+    baseline_urls = [f"{base}/?{param}=normaluser" for param in _PARAMS]
+    try:
+        baselines = await asyncio.wait_for(
+            asyncio.gather(*(_fetch(u) for u in baseline_urls)), timeout=30
+        )
+    except asyncio.TimeoutError:
+        baselines = [None] * len(_PARAMS)
+
+    valid_baselines = {}  # param -> (status, size)
+    for param, b in zip(_PARAMS, baselines):
+        if b is None or b.status_code >= 500:
             continue
-        b_size = len(baseline.content)
-        b_status = baseline.status_code
+        valid_baselines[param] = (b.status_code, len(b.content))
+
+    # Phase 2: fetch all injection probes in parallel
+    probe_tasks = []
+    probe_meta = []  # (param, payload_str, desc)
+    for param in valid_baselines:
         for p, desc in _PAYLOADS:
-            tests += 1
-            r = safe_get(f"{base}/?{param}={quote(p)}", req=req, timeout=8)
-            if r is None or r.status_code != b_status:
-                continue
-            # Significant size delta or response pattern change suggests LDAP processed input
-            if abs(len(r.content) - b_size) < 200:
-                continue
-            # Skip if generic 4xx echo (often just template differences)
-            findings.append(wrap_finding(
-                f"Suspected LDAP injection - parameter '{param}' shows behavior change on filter payload",
-                "HIGH",
-                cvss="7.5", cwe="CWE-90",
-                cwe_name="Improper Neutralization of Special Elements used in an LDAP Query",
-                owasp="A03:2021",
-                remediation=("Escape LDAP special chars: \\, *, (, ), NUL, /. Use parameterized "
-                             "LDAP queries via your LDAP library's binding API instead of string "
-                             "concatenation. Validate input against an allow-list (alphanumeric)."),
-                evidence_marker=f"GET ?{param}=normaluser ({b_size}B) vs GET ?{param}={p} ({len(r.content)}B) - {desc}",
-            ))
-            break
+            probe_meta.append((param, p, desc))
+            probe_tasks.append(_fetch(f"{base}/?{param}={quote(p)}"))
+    try:
+        probe_results = await asyncio.wait_for(
+            asyncio.gather(*probe_tasks), timeout=60
+        )
+    except asyncio.TimeoutError:
+        probe_results = [None] * len(probe_tasks)
+
+    # Phase 3: evaluate — one finding per affected param (de-dupe)
+    seen_params = set()
+    for (param, p, desc), r in zip(probe_meta, probe_results):
+        if param in seen_params or r is None: continue
+        b_status, b_size = valid_baselines[param]
+        if r.status_code != b_status: continue
+        if abs(len(r.content) - b_size) < 200: continue
+        seen_params.add(param)
+        findings.append(wrap_finding(
+            f"Suspected LDAP injection - parameter '{param}' shows behavior change on filter payload",
+            "HIGH",
+            cvss="7.5", cwe="CWE-90",
+            cwe_name="Improper Neutralization of Special Elements used in an LDAP Query",
+            owasp="A03:2021",
+            remediation=("Escape LDAP special chars: \\, *, (, ), NUL, /. Use parameterized "
+                         "LDAP queries via your LDAP library's binding API instead of string "
+                         "concatenation. Validate input against an allow-list (alphanumeric)."),
+            evidence_marker=f"GET ?{param}=normaluser ({b_size}B) vs GET ?{param}={p} ({len(r.content)}B) - {desc}",
+        ))
 
     return standard_response(
         tool="ldap_injection", target=req.target,
-        findings=findings, tests_performed=tests,
-        tests_summary=f"{tests} LDAP filter probes across {len(_PARAMS)} params x {len(_PAYLOADS)} payloads",
+        findings=findings, tests_performed=len(probe_tasks),
+        tests_summary=f"{len(probe_tasks)} LDAP filter probes across {len(valid_baselines)} params x {len(_PAYLOADS)} payloads (parallel)",
         raw_data={"ldap_injection": {"payloads_tested": [p for p,_ in _PAYLOADS]}},
     )
 

@@ -1,4 +1,5 @@
-"""Webapp: Host header injection / X-Forwarded-Host abuse."""
+"""Webapp: Host header injection / X-Forwarded-Host abuse — VL-TURBO."""
+import asyncio
 import secrets
 import requests
 from fastapi import APIRouter, Depends
@@ -43,14 +44,30 @@ async def webapp_host_header_injection(req: ScanRequest, payload=Depends(verify_
             break
     
     suspect = []
-    for header_name, headers in test_cases:
-        tests += 1
+    # VL-TURBO: gather all 25 header-injection probes in parallel
+    sem = asyncio.Semaphore(15)
+
+    def _sync_probe(headers):
         try:
-            r = requests.get(base + "/", headers={**headers, "User-Agent": "VulnusLab/1.0"},
-                             timeout=8, allow_redirects=False, verify=False)
+            return requests.get(base + "/", headers={**headers, "User-Agent": "VulnusLab/1.0"},
+                                 timeout=4, allow_redirects=False, verify=False)
         except Exception:
-            continue
-        # Check for canary in response body OR Location header (redirect)
+            return None
+
+    async def _probe(headers):
+        async with sem:
+            return await asyncio.to_thread(_sync_probe, headers)
+
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(*(_probe(headers) for _, headers in test_cases)), timeout=45
+        )
+    except asyncio.TimeoutError:
+        results = [None] * len(test_cases)
+
+    tests = len(test_cases)
+    for (header_name, _), r in zip(test_cases, results):
+        if r is None: continue
         body = (r.text or "")[:20000]
         loc = r.headers.get("Location", "")
         if canary in body or canary in loc:
