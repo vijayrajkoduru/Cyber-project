@@ -301,6 +301,37 @@ can't see it because of <reason>", DEMAND a screenshot/cURL transcript
 proving a real /api/<module>/run_all call happened from the browser.
 ```
 
+### Layer 23 — Deployment & Verification (added 2026-05-24)
+
+```
+{universal preamble}
+
+LAYER: 23 (Deployment + production verification)
+MODULE: <module_name>
+
+Run on the VPS (SSH'd as root):
+  $ cat /var/log/vl-foundry-deploys.log | grep "module=<module>" | tail -5
+
+Verify:
+  1. The most recent entry for this module ends with `all_green`
+  2. The commit hash matches the current origin/main HEAD
+  3. The five PHASE lines are present (PHASE1..PHASE5) in chronological order
+  4. No FAIL gate=... entries since the last DONE entry
+
+Also run:
+  $ ./scripts/smoke_test.sh <module>
+
+Confirm gates 1-2 green (public probe). If VL_TOKEN is in the shell,
+confirm gates 3-5 green too.
+
+Fail if:
+  - The deploy log shows FAIL but the running backend is serving requests
+    (= someone manually restarted without re-deploying cleanly)
+  - The commit hash in the log doesn't match the running container's
+    /api/health version string (= drift between code-in-git and code-in-prod)
+  - Multiple consecutive FAIL entries without a corresponding rollback
+```
+
 ### Final gate — Full scorer + acid test
 
 ```

@@ -56,6 +56,11 @@ EACH layer commits, not just at the end.
                   ▼
    ┌────────────────────────────┐
    │ Layer 20 E2E verify        │   GATE 2
+   └──────────────┬─────────────┘
+                  ▼
+   ┌────────────────────────────┐
+   │ Layer 23 Deploy + verify   │   GATE 3
+   │ (deploy.sh on VPS)         │
    └────────────────────────────┘
 
 Cross-cutting (apply at every layer — no fixed slot):
@@ -92,6 +97,19 @@ Cross-cutting (apply at every layer — no fixed slot):
   4. audit-agent           →  cold-context double-check
 ```
 
+### Sequence D — Deployment order (after every commit, on VPS)
+
+```
+  1. git pull              →  fresh code on production hardware
+  2. install_hooks.py      →  pre-commit hook (idempotent, one-time effect)
+  3. docker compose build  →  rebuild backend + frontend with new code
+  4. docker compose up -d  →  restart containers
+  5. smoke_test.sh (no token)  →  /health + tier discovery
+  6. smoke_test.sh (with token) →  POST /run_all + NDJSON + shape check
+```
+
+Or wrap all 6 steps with: `./scripts/deploy.sh <module>`
+
 ### Quick lookup — which runs first?
 
 | Situation | First thing that runs |
@@ -100,6 +118,7 @@ Cross-cutting (apply at every layer — no fixed slot):
 | Customer hits Scan | Frontend POST → orchestrator (7→4) |
 | Committing scanner code | `scripts/pre_commit_score.py` (auto) |
 | Shipping the module | `scripts/e2e_test.py` must exit 0 |
+| Deploying to VPS | `scripts/deploy.sh <module>` (Layer 23) |
 
 The framework knows the order via three sources of truth:
 - `VL-FOUNDRY-CHECKLIST.md` — forge order (top to bottom)
@@ -1033,6 +1052,79 @@ python scripts/e2e_test.py <module> [--target=<host>] [--api=<base_url>]
 
 ---
 
+## Layer 23 — Deployment & Verification (added 2026-05-24)
+
+A scored, audit-passed, locally-tested module is still NOT a product until
+it's running on production hardware and verified there. Layer 23 captures
+the 5-phase deploy sequence so it can't be improvised.
+
+**Pre-requisites:** Layer 22 green (UI integration verified locally) +
+module score >= 85.
+
+**The 5-phase deploy sequence (run on VPS):**
+
+```bash
+# Phase 1 — Pull
+cd ~/Cyber-project && git pull
+
+# Phase 2 — Install pre-commit hook (one-time, idempotent)
+python scripts/install_hooks.py
+
+# Phase 3 — Rebuild + restart
+docker compose build --no-cache backend frontend
+docker compose up -d
+
+# Phase 4 — Public smoke test (no auth)
+./scripts/smoke_test.sh <module>      # health + tier discovery
+
+# Phase 5 — Authenticated smoke test (full chain)
+export VL_TOKEN='<from browser localStorage.cyberToken>'
+./scripts/smoke_test.sh <module>      # actual scan + NDJSON validation
+```
+
+**Or, one command (recommended after Layer 23 was added):**
+
+```bash
+./scripts/deploy.sh <module>
+```
+
+This script wraps phases 1-5 with proper exit-on-failure and a rollback
+prompt if any phase fails.
+
+**Five gates Layer 23 enforces:**
+
+| Gate | Verified by | Failure mode caught |
+|---|---|---|
+| 1. Code is fresh on VPS | `git pull` reports updates | Stale deployment serving old code |
+| 2. Pre-commit hook installed | `install_hooks.py` exits 0 | Future regressions can land in main |
+| 3. Docker rebuilt cleanly | `compose build --no-cache` exits 0 | Cached layer hiding a real bug |
+| 4. Public API reachable | `smoke_test.sh` gates 1-2 green | Container not healthy / nginx misconfig |
+| 5. Authenticated scan works | `smoke_test.sh` gates 3-5 green | OSINT-broken-PDF class regression |
+
+**Rollback contract:**
+
+If gate 4 or 5 fails:
+```bash
+git reset --hard HEAD~1                  # revert the bad commit locally
+git push --force-with-lease origin main  # propagate (announce to team first)
+docker compose build --no-cache backend frontend && docker compose up -d
+./scripts/smoke_test.sh <module>         # confirm rollback healthy
+```
+
+The `--force-with-lease` flag protects against overwriting commits you
+haven't seen. **Never `--force` raw to main.**
+
+**SLO for the deploy itself:** the entire 5-phase sequence should
+complete within **10 minutes** on the VPS. If it takes longer:
+- Docker build > 5 min → audit Dockerfile for non-cached layers
+- Smoke test > 3 min → the module's SLO (Layer 20) is wrong
+
+**Logging:** every deploy writes a one-line entry to
+`/var/log/vl-foundry-deploys.log` (date · commit · module · result). The
+audit-agent reads this when verifying production claims.
+
+---
+
 ## Layer 22 — UI Integration Gate (added 2026-05-24 after OSINT lesson)
 
 The scorer and e2e_test.py both said OSINT was 91.7/100 READY TO SHIP. The
@@ -1163,6 +1255,9 @@ python scripts/doctor.py --json       # CI-friendly machine output
 - `scripts/forge_scanner.py` — scaffolds a new scanner with the 7-check skeleton
 - `scripts/forge_module.py` — scaffolds an ENTIRE new module from Recon canon (one command)
 - `scripts/doctor.py` — Layer 21 dependency + tool freshness checker
+- `scripts/install_hooks.py` — installs pre-commit hook (Layer 23 prerequisite)
+- `scripts/smoke_test.sh` — production 5-gate smoke test (Layer 23 phase 4-5)
+- `scripts/deploy.sh` — Layer 23 full deploy + verify (5-phase sequence)
 - `tools/_framework/tool_versions.json` — declared min/current versions for external CLIs
 - `tools/_framework/scan_state.py` — Layer 10 schema enforcer
 - `tools/_framework/observability.py` — Layer 13 health tracker
