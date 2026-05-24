@@ -102,6 +102,33 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("deserialization_probe", "/api/webapp/deserialization_probe"), # 53 markers
         ("http_smuggling",        "/api/webapp/http_smuggling"),        # CL.TE timing probe
     ],
+    # Tier 11 — Discovery-deep (pre-existing real implementations now wired in)
+    "tier11_discovery_deep": [
+        ("backup_files",          "/api/webapp/backup_files"),
+        ("directory_listing",     "/api/webapp/directory_listing"),
+        ("swagger_discovery",     "/api/webapp/swagger_discovery"),
+        ("graphql_introspection", "/api/webapp/graphql_introspection"),
+        ("retire_js",             "/api/webapp/retire_js"),
+        ("api_endpoint_fuzz",     "/api/webapp/api_endpoint_fuzz"),
+        ("param_reflection",      "/api/webapp/param_reflection"),
+    ],
+    # Tier 12 — Auth & session (pre-existing real implementations now wired in)
+    "tier12_auth_session": [
+        ("broken_auth",           "/api/webapp/broken_auth"),
+        ("session_fixation",      "/api/webapp/session_fixation"),
+        ("oauth_redirect_bypass", "/api/webapp/oauth_redirect_bypass"),
+        ("password_reset_flaws",  "/api/webapp/password_reset_flaws"),
+        ("privilege_escalation",  "/api/webapp/privilege_escalation"),
+    ],
+    # Tier 13 — Modern + framework-specific (pre-existing real implementations)
+    "tier13_modern_framework": [
+        ("csp_bypass",            "/api/webapp/csp_bypass"),
+        ("weak_crypto",           "/api/webapp/weak_crypto"),
+        ("race_condition",        "/api/webapp/race_condition"),
+        ("drupal_scan",           "/api/webapp/drupal_scan"),
+        ("joomla_scan",           "/api/webapp/joomla_scan"),
+        ("file_upload_bypass",    "/api/webapp/file_upload_bypass"),
+    ],
 }
 
 
