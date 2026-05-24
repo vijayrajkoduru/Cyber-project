@@ -100,7 +100,7 @@ Verify:
 Fail if any orphan file or missing catalogue entry.
 ```
 
-### Layer 3 — Report (PDF)
+### Layer 3 — Report (PDF) — Webapp PDF is the canon
 
 ```
 {universal preamble}
@@ -108,32 +108,50 @@ Fail if any orphan file or missing catalogue entry.
 LAYER: 3 (Report PDF)
 MODULE: <module_name>
 
-Read these files:
-  - VL-FOUNDRY.md (Layer 3 section — the 9-block layout + 7-check DoD)
-  - src/App.js (find function generate<Module>Report)
+CANON: The Webapp PDF (generatePDF in src/App.js:761) is the source of
+truth for VL-FOUNDRY's PDF structure. Every module's PDF must converge
+to it. When the function and VL-FOUNDRY.md disagree, the function wins.
 
-Verify the 9 blocks render:
-  1. Cover (target, date, classification)
-  2. Tools Used table
-  3. Executive Summary (risk score 0-100, severity bar, top-3 priorities)
-  4. Findings Summary (CRIT/HIGH/MED/LOW counters)
-  5. OWASP Top 10 + Compliance map (8 frameworks)
-  6. Scan Coverage table
-  7. Per-Tool Findings (one section per scanner with severity/CVSS/CWE/OWASP/
-     remediation/evidence_marker)
-  8. Verification Audit (probes/probed/found columns)
-  9. Appendix (methodology, CVSS scale, references)
+Read these files:
+  - src/App.js  (function generatePDF at line ~761 — the CANON)
+  - src/App.js  (function generate<Module>Report — the SUBJECT)
+  - VL-FOUNDRY.md (Layer 3 — convergence table + 17-section list)
+
+Verify the 17 sections render in the subject's PDF generator:
+   1. Cover page (black header + logo + "PENETRATION TEST REPORT")
+   2. Info table (Target/Date/Classification/Authenticated/Prepared By)
+   3. Trust statement ("VERIFIED VULNUSLAB" blue accent box)
+   4. Key Risk Headline (color-coded box with severity tag + SLA)
+   5. Executive Summary (Severity × Count × SLA × Recommendation)
+   6. OWASP Top 10 Grade (A-F + per-category pass/fail)
+   7. Compliance Coverage (8 frameworks)
+   8. Remediation Diff (Fixed/Persisting/Novel vs previous scan)
+   9. Risk Score Bar (0-100 numeric + progress bar)
+  10. Severity Breakdown (horizontal bars per severity tier)
+  11. Tier Coverage matrix
+  12. Per-Tool Sections (one per scanner)
+  13. Detailed Findings (cards: severity/CVSS/CWE/OWASP/evidence/fix)
+  14. Recommendations (synthesized from findings)
+  15. Verification Audit ("what each scanner probed for")
+  16. Appendix (Methodology/Severity/Tools/References)
+  17. Border + Footer (Report ID + Content Hash + watermark every page)
+
+For each section: locate the corresponding block in the subject function.
+Mark ✅ present / ⚠️ partial / ❌ missing. Cite the App.js line number.
 
 Also verify 7-check DoD:
   1. Risk Score in executive summary
-  2. Severity bar (stacked horizontal)
+  2. Stacked severity bar
   3. Per-finding CVSS + CWE + OWASP
   4. Per-finding remediation
   5. Per-finding evidence_marker
   6. Verification audit table
   7. Report ID + content hash
 
-Fail if any block is missing or any of the 7 checks isn't satisfied.
+Fail if any of the 7 checks isn't satisfied OR if >= 4 of the 17 sections
+are missing/partial without an explicit waiver documented in VL-FOUNDRY.md.
+
+When in doubt: re-read generatePDF in src/App.js. The function is canon.
 ```
 
 ### Layer 4 — Orchestrator

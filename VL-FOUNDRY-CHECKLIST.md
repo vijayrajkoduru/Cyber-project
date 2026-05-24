@@ -48,18 +48,23 @@ framework. Any scanner not in table? Any table row not in tools/?"
 ## Layer 3 — Report (PDF)
 
 - [ ] `generate<Module>Report()` function exists in `src/App.js`
-- [ ] All 9 vulntemplate blocks render (Cover / Tools / Exec / Findings /
-      Compliance / Coverage / Per-tool / Audit / Appendix)
+- [ ] All 17 sections from the canon (`generatePDF` in src/App.js:761) render:
+      1-Cover · 2-Info · 3-Trust · 4-Risk Headline · 5-Exec Summary ·
+      6-OWASP Grade · 7-Compliance · 8-Remediation Diff · 9-Risk Score Bar ·
+      10-Severity Breakdown · 11-Tier Coverage · 12-Per-Tool · 13-Findings ·
+      14-Recommendations · 15-Verification Audit · 16-Appendix · 17-Footer
 - [ ] Per-finding fields present: severity, CVSS, CWE, OWASP, remediation, evidence
 - [ ] Compliance map table renders (8 frameworks)
-- [ ] Report ID + content hash present
-- [ ] CONFIDENTIAL footer on every page
+- [ ] Report ID + content hash present in footer of every page
+- [ ] CONFIDENTIAL classification badge in info table
 - [ ] Risk Score (0-100) in executive summary
 - [ ] Severity bar (stacked horizontal) in executive summary
-- [ ] Top-3 priorities listed
+- [ ] Key Risk Headline (color-coded box, SLA-driven) on cover
+- [ ] Trust statement ("VERIFIED VULNUSLAB" box) on cover
 
-**Audit agent check:** "Read generate<Module>Report() in App.js. Verify all
-9 blocks present + 7-check DoD satisfied."
+**Audit agent check:** "Read generate<Module>Report() in App.js. Compare
+section-by-section to `generatePDF` (line 761, the canon). Fail if >= 4
+sections missing without an explicit waiver in VL-FOUNDRY.md."
 
 ---
 
