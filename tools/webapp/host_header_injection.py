@@ -6,6 +6,12 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding,
 
 router = APIRouter()
 
+# AI-curated 60-entry header-injection list
+try:
+    from tools._payloads.host_header_payloads import HOST_HEADER_PAYLOADS as _AI_HH
+except Exception:
+    _AI_HH = []
+
 
 @router.post("/api/webapp/host_header_injection")
 async def webapp_host_header_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
@@ -13,7 +19,7 @@ async def webapp_host_header_injection(req: ScanRequest, payload=Depends(verify_
     findings = []
     tests = 0
     canary = "vulnuslab-" + secrets.token_hex(4) + ".attacker.example"
-    
+
     test_cases = [
         ("Host", {"Host": canary}),
         ("X-Forwarded-Host", {"X-Forwarded-Host": canary}),
@@ -22,6 +28,19 @@ async def webapp_host_header_injection(req: ScanRequest, payload=Depends(verify_
         ("X-Original-URL", {"X-Original-URL": f"http://{canary}/"}),
         ("X-Rewrite-URL", {"X-Rewrite-URL": f"http://{canary}/"}),
     ]
+    # Append AI-curated header variants, substituting the canary in for "attacker.example"
+    _seen = {tc[0] for tc in test_cases}
+    for _p in _AI_HH:
+        if not isinstance(_p, dict): continue
+        hn = _p.get("header_name", "")
+        hv_template = _p.get("header_value", "")
+        if not hn or not hv_template or hn in _seen: continue
+        # Substitute the canary into placeholder positions
+        hv = hv_template.replace("attacker.example", canary).replace("evil.example", canary)
+        test_cases.append((hn, {hn: hv}))
+        _seen.add(hn)
+        if len(test_cases) >= 25:
+            break
     
     suspect = []
     for header_name, headers in test_cases:
