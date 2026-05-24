@@ -11134,8 +11134,24 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
 //
 // generateOsintReport — Layer 3 of OSINT module forge (2026-05-24).
 // Section list matches generatePDF (line ~761) section-by-section.
-function generateOsintReport({target, allResults, date, authenticated, pdfConfig}) { /*OSINT-PDF-V1*/
+function generateOsintReport({target, allResults, date, authenticated, pdfConfig, moduleConfig}) { /*OSINT-PDF-V1*/
   const _cfg = pdfConfig || {};
+  // moduleConfig — optional; if omitted, defaults to OSINT (preserves backward-compat)
+  const _MC = moduleConfig || {};
+  const M_KEY        = _MC.key          || "osint";
+  const M_NAME       = _MC.name         || "OSINT";
+  const M_LONG       = _MC.longName     || "OSINT (Open Source Intelligence)";
+  const M_TITLE      = _MC.reportTitle  || "OSINT INTELLIGENCE REPORT";
+  const M_SUBTITLE   = _MC.subtitle     || "Public-source threat surface assessment";
+  const M_HEADER     = _MC.headerLabel  || "VulnusLab — OSINT Assessment";
+  const M_AUTHLINE   = _MC.authLine     || "No - public sources only";
+  const M_TRUSTLINE  = _MC.trustLine    || "Every finding was independently triggered against a public source and re-confirmed.";
+  const M_TOOLS      = _MC.tools        || ["geoip","dnstwist","wayback_history","harvester_emails","crtsh_emails","social_handles","github_recon","pastebin_search","breach_check","document_metadata","search_dorks","gravatar_check"];
+  const M_TIERS      = _MC.tiers        || [["Tier 1","Passive Domain",["geoip","dnstwist","wayback_history"]],["Tier 2","People & Identity",["harvester_emails","crtsh_emails","social_handles"]],["Tier 3","Leaks & Code",["github_recon","pastebin_search","breach_check"]],["Tier 4","Metadata & Dorking",["document_metadata","search_dorks","gravatar_check"]]];
+  const M_AUDIT      = _MC.auditRows    || [["geoip","ip-api.com geolocation + ISP + ASN lookup"],["dnstwist","80 lookalike-domain permutations DNS-resolved"],["wayback_history","Wayback CDX snapshot timeline + sensitive paths"],["harvester_emails","DDG + Bing snippet regex email harvest"],["crtsh_emails","crt.sh certificate transparency subject scrape"],["social_handles","12 platforms × 6 org-handle variations probed"],["github_recon","5 GitHub code-search queries for target mentions"],["pastebin_search","5 paste-sites via DDG site: queries"],["breach_check","HIBP breach-by-domain API (free, no key)"],["document_metadata","sitemap crawl → PDF/OOXML metadata extraction"],["search_dorks","30 dorks across 7 categories on DDG"],["gravatar_check","18 role emails MD5'd vs Gravatar profile API"]];
+  const M_METHOD     = _MC.methodology  || ["OSINT follows PTES §4 (Intelligence Gathering > Open Source) and NIST SP 800-115","§4.2. Every probe targets a third-party source (search engines, CT logs,","paste sites, code-search APIs). NO direct probes against customer infrastructure."];
+  const M_REFS       = _MC.references   || ["PTES — http://www.pentest-standard.org","NIST SP 800-115 — https://csrc.nist.gov/publications/detail/sp/800-115/final","Have I Been Pwned — https://haveibeenpwned.com","Internet Archive Wayback CDX — https://web.archive.org/cdx/","crt.sh CT logs — https://crt.sh"];
+  const M_RECS_FN    = _MC.recsBuilder  || null;  // optional callback(sevCount, r) → string[]
   const r = allResults || {};
   const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
   const doc = new jsPDF({unit:"mm",format:"a4",
@@ -11152,12 +11168,10 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(String(t),x,yy,{align:align||"left"});};
   const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
   const sHead=(t,yy)=>{_secN++;fillR(margin,yy,contentW,9,[220,230,245]);txt(_secN+". "+t,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
-  const drawHeader=()=>{txt("VulnusLab — OSINT Assessment",margin,10,7,GRAY);txt(date||"",pageW-margin,10,7,BLUE,false,"right");};
+  const drawHeader=()=>{txt(M_HEADER,margin,10,7,GRAY);txt(date||"",pageW-margin,10,7,BLUE,false,"right");};
 
-  // Collect all findings from all 12 scanners
-  const TOOLS = ["geoip","dnstwist","wayback_history","harvester_emails","crtsh_emails",
-                  "social_handles","github_recon","pastebin_search","breach_check",
-                  "document_metadata","search_dorks","gravatar_check"];
+  // Collect all findings from every configured scanner
+  const TOOLS = M_TOOLS;
   const allFindings = [];
   TOOLS.forEach(t => {
     const d = r[t]; if (!d || !d.findings) return;
@@ -11182,13 +11196,13 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   fillR(0,0,pageW,64,[0,0,0]);
   doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(...BLUE);
   doc.text("VULNUS",pageW/2-1,32,{align:"right"});doc.setTextColor(241,245,249);doc.text("LAB",pageW/2,32,{align:"left"});
-  txt("OSINT INTELLIGENCE REPORT",pageW/2,80,18,DARK,true,"center");
-  txt("Public-source threat surface assessment",pageW/2,88,10,GRAY,false,"center");
+  txt(M_TITLE,pageW/2,80,18,DARK,true,"center");
+  txt(M_SUBTITLE,pageW/2,88,10,GRAY,false,"center");
   y=100;
 
   // ── SECTION 2: INFO TABLE ──────────────────────────────────────
   fillR(margin,y,contentW,8,DARK);txt("FIELD",margin+3,y+5.5,8,WHITE,true);txt("VALUE",margin+55,y+5.5,8,WHITE,true);y+=8;
-  [["Target",target],["Scan Date",date||""],["Classification","CONFIDENTIAL"],["Authenticated","No - public sources only"],["Module","OSINT (Open Source Intelligence)"]].forEach((row,i)=>{
+  [["Target",target],["Scan Date",date||""],["Classification","CONFIDENTIAL"],["Authenticated",M_AUTHLINE],["Module",M_LONG]].forEach((row,i)=>{
     fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
     txt(row[0],margin+3,y+5.5,8.5,GRAY,true);
     if(row[0]==="Classification"){doc.setFillColor(...RED);doc.roundedRect(margin+55,y+2,28,4,1,1,"F");txt("CONFIDENTIAL",margin+57,y+5.2,7,WHITE,true);}
@@ -11200,13 +11214,13 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   // ── SECTION 3: TRUST STATEMENT ─────────────────────────────────
   chk(20);fillR(margin,y,contentW,14,LBLUE);fillR(margin,y,3,14,BLUE);
   txt("[VERIFIED] VULNUSLAB",margin+8,y+6,8,BLUE,true);
-  txt("Every finding was independently triggered against a public source and re-confirmed.",margin+8,y+10,7.5,DARK);
+  txt(M_TRUSTLINE,margin+8,y+10,7.5,DARK);
   y+=18;
 
   // ── SECTION 4: KEY RISK HEADLINE ───────────────────────────────
   chk(28);const _hlBg=riskScore>=60?[254,242,242]:riskScore>=20?[255,247,237]:[240,253,244];
   const _hlTag=riskScore>=60?"FIX THIS WEEK":riskScore>=20?"REVIEW SOON":"POSTURE OK";
-  const _hlTitle=sevCount.CRITICAL>0?`${sevCount.CRITICAL} CRITICAL OSINT finding(s) — patch within 24 hours`:sevCount.HIGH>0?`${sevCount.HIGH} HIGH OSINT finding(s) — patch within 7 days`:sevCount.MEDIUM>0?`${sevCount.MEDIUM} MEDIUM OSINT finding(s) — hardening recommended`:"No exposed OSINT surface above LOW severity";
+  const _hlTitle=sevCount.CRITICAL>0?`${sevCount.CRITICAL} CRITICAL ${M_NAME} finding(s) — patch within 24 hours`:sevCount.HIGH>0?`${sevCount.HIGH} HIGH ${M_NAME} finding(s) — patch within 7 days`:sevCount.MEDIUM>0?`${sevCount.MEDIUM} MEDIUM ${M_NAME} finding(s) — hardening recommended`:`No exposed ${M_NAME} surface above LOW severity`;
   fillR(margin,y,contentW,24,_hlBg);fillR(margin,y,3,24,riskColor);
   txt(_hlTag,margin+8,y+6,8,riskColor,true);txt(_hlTitle,margin+8,y+13,11,DARK,true);
   txt("See Detailed Findings for full breakdown.",margin+8,y+18,8,GRAY);y+=28;
@@ -11254,7 +11268,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   fillR(margin,y,contentW,20,LIGHT);
   doc.setFont("Arial","bold");doc.setFontSize(24);doc.setTextColor(...riskColor);doc.text(String(riskScore),margin+8,y+15);
   txt(riskLabel,margin+38,y+8,11,riskColor,true);
-  txt(`Report ID: ${_REPORT_ID}  ·  ${allFindings.length} findings across 12 scanners`,margin+38,y+14,7.5,GRAY);
+  txt(`Report ID: ${_REPORT_ID}  ·  ${allFindings.length} findings across ${M_TOOLS.length} scanners`,margin+38,y+14,7.5,GRAY);
   // Track bar
   fillR(margin+38,y+17,contentW-40,2,[226,232,240]);fillR(margin+38,y+17,Math.max(((riskScore/100)*(contentW-40)),2),2,riskColor);
   y+=24;
@@ -11270,7 +11284,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
 
   // ── SECTION 11: TIER COVERAGE MATRIX ───────────────────────────
   chk(36);y=sHead("Tier Coverage",y);
-  const TIERS=[["Tier 1","Passive Domain",["geoip","dnstwist","wayback_history"]],["Tier 2","People & Identity",["harvester_emails","crtsh_emails","social_handles"]],["Tier 3","Leaks & Code",["github_recon","pastebin_search","breach_check"]],["Tier 4","Metadata & Dorking",["document_metadata","search_dorks","gravatar_check"]]];
+  const TIERS=M_TIERS;
   fillR(margin,y,contentW,8,DARK);["TIER","NAME","SCANNERS","STATUS"].forEach((c,i)=>txt(c,margin+3+[0,20,75,130][i],y+5.5,8,WHITE,true));y+=8;
   TIERS.forEach((t,i)=>{
     const ran=t[2].filter(s=>r[s]).length;const ok=ran===t[2].length;
@@ -11312,23 +11326,27 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
     if(f.remediation){txt("Fix: "+String(f.remediation).substring(0,110),margin+5,y+14,6.5,GREEN);}
     y+=20;
   });
-  if(!ranked.length){fillR(margin,y,contentW,12,LIGHT);txt("No findings — clean OSINT surface.",margin+4,y+7,9,GREEN,true);y+=14;}
+  if(!ranked.length){fillR(margin,y,contentW,12,LIGHT);txt(`No findings — clean ${M_NAME} surface.`,margin+4,y+7,9,GREEN,true);y+=14;}
 
   // ── SECTION 14: RECOMMENDATIONS ────────────────────────────────
   chk(20);y=sHead("Recommendations",y);
-  const recs=[];
-  if(sevCount.CRITICAL>0)recs.push("🔴 Rotate any credentials surfaced by github_recon or breach_check immediately");
-  if(sevCount.HIGH>0)recs.push("🟠 Audit hits from search_dorks and pastebin_search; file takedown requests");
-  if(r.dnstwist&&r.dnstwist.vulnerable)recs.push("🟡 Register typosquat domains defensively or file UDRP complaints");
-  if(r.breach_check&&r.breach_check.vulnerable)recs.push("🟡 Force MFA + password rotation across the org; subscribe to HIBP domain monitoring");
-  if(r.document_metadata&&r.document_metadata.vulnerable)recs.push("🟢 Strip document metadata pre-publish (ExifTool -all=)");
-  if(!recs.length)recs.push("✅ Clean OSINT posture — re-scan quarterly to catch drift");
+  let recs=[];
+  if(typeof M_RECS_FN === "function"){
+    try { recs = M_RECS_FN(sevCount, r) || []; } catch(_){ recs = []; }
+  } else {
+    if(sevCount.CRITICAL>0)recs.push("🔴 Rotate any credentials surfaced by github_recon or breach_check immediately");
+    if(sevCount.HIGH>0)recs.push("🟠 Audit hits from search_dorks and pastebin_search; file takedown requests");
+    if(r.dnstwist&&r.dnstwist.vulnerable)recs.push("🟡 Register typosquat domains defensively or file UDRP complaints");
+    if(r.breach_check&&r.breach_check.vulnerable)recs.push("🟡 Force MFA + password rotation across the org; subscribe to HIBP domain monitoring");
+    if(r.document_metadata&&r.document_metadata.vulnerable)recs.push("🟢 Strip document metadata pre-publish (ExifTool -all=)");
+  }
+  if(!recs.length)recs.push(`✅ Clean ${M_NAME} posture — re-scan quarterly to catch drift`);
   recs.forEach(rec=>{chk(8);fillR(margin,y,contentW,7,LIGHT);txt(rec,margin+4,y+4.8,8,DARK);y+=8;});y+=4;
 
   // ── SECTION 15: VERIFICATION AUDIT ─────────────────────────────
   chk(80);y=sHead("Verification Audit",y);
   fillR(margin,y,contentW,8,DARK);txt("SCANNER",margin+3,y+5.5,8,WHITE,true);txt("DISCOVERY PROBED",margin+50,y+5.5,8,WHITE,true);y+=8;
-  [["geoip","ip-api.com geolocation + ISP + ASN lookup"],["dnstwist","80 lookalike-domain permutations DNS-resolved"],["wayback_history","Wayback CDX snapshot timeline + sensitive paths"],["harvester_emails","DDG + Bing snippet regex email harvest"],["crtsh_emails","crt.sh certificate transparency subject scrape"],["social_handles","12 platforms × 6 org-handle variations probed"],["github_recon","5 GitHub code-search queries for target mentions"],["pastebin_search","5 paste-sites via DDG site: queries"],["breach_check","HIBP breach-by-domain API (free, no key)"],["document_metadata","sitemap crawl → PDF/OOXML metadata extraction"],["search_dorks","30 dorks across 7 categories on DDG"],["gravatar_check","18 role emails MD5'd vs Gravatar profile API"]].forEach((row,i)=>{
+  M_AUDIT.forEach((row,i)=>{
     chk(7);fillR(margin,y,contentW,6.5,i%2===0?LIGHT:WHITE);
     txt(row[0],margin+3,y+4.6,7.5,DARK,true);txt(row[1],margin+50,y+4.6,7,GRAY);y+=6.5;
   });y+=4;
@@ -11336,17 +11354,17 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   // ── SECTION 16: APPENDIX ───────────────────────────────────────
   chk(40);y=sHead("Appendix",y);
   txt("A. Methodology",margin,y+5,9,DARK,true);y+=8;
-  ["OSINT follows PTES §4 (Intelligence Gathering > Open Source) and NIST SP 800-115","§4.2. Every probe targets a third-party source (search engines, CT logs,","paste sites, code-search APIs). NO direct probes against customer infrastructure."].forEach(l=>{txt(l,margin+2,y+3.5,7.5,GRAY);y+=4;});
+  M_METHOD.forEach(l=>{txt(l,margin+2,y+3.5,7.5,GRAY);y+=4;});
   y+=4;
   txt("B. References",margin,y+5,9,DARK,true);y+=8;
-  ["PTES — http://www.pentest-standard.org","NIST SP 800-115 — https://csrc.nist.gov/publications/detail/sp/800-115/final","Have I Been Pwned — https://haveibeenpwned.com","Internet Archive Wayback CDX — https://web.archive.org/cdx/","crt.sh CT logs — https://crt.sh"].forEach(l=>{txt(l,margin+2,y+3.5,7.5,BLUE);y+=4.5;});
+  M_REFS.forEach(l=>{txt(l,margin+2,y+3.5,7.5,BLUE);y+=4.5;});
   y+=6;
 
   // End of report block
   if(y+30>284){doc.addPage();y=18;drawHeader();}
   fillR(margin,y+5,contentW,28,LBLUE);fillR(margin,y+5,3,28,BLUE);
-  txt("— END OF OSINT REPORT —",pageW/2,y+13,10,BLUE,true,"center");
-  txt("Generated by VulnusLab — VL-FOUNDRY OSINT module v1.",pageW/2,y+18,6.5,GRAY,false,"center");
+  txt(`— END OF ${M_NAME} REPORT —`,pageW/2,y+13,10,BLUE,true,"center");
+  txt(`Generated by VulnusLab — ${M_NAME} module.`,pageW/2,y+18,6.5,GRAY,false,"center");
   txt("vulnuslab.com · support@vulnuslab.com",pageW/2,y+27,7,BLUE,true,"center");
 
   // ── SECTION 17: BORDER + FOOTER (every page) ───────────────────
@@ -11355,7 +11373,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
     doc.setPage(i);
     doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
     if(i>=2){
-      txt("VulnusLab OSINT Report — CONFIDENTIAL",margin,290,6.5,GRAY);
+      txt(`VulnusLab ${M_NAME} Report — CONFIDENTIAL`,margin,290,6.5,GRAY);
       txt(`Report ID: ${_REPORT_ID}  ·  Content: ${_contentHash}`,pageW/2,290,6.5,GRAY,false,"center");
       txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
     }
@@ -11364,7 +11382,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   // File save
   const _safe = String(target||"target").replace(/[^a-zA-Z0-9_.-]/g,"_");
   const _dt = (date||new Date().toISOString().substring(0,10)).replace(/[^0-9]/g,"").substring(0,8);
-  doc.save(`osint_${_safe}_${_dt}.pdf`);
+  doc.save(`${M_KEY}_${_safe}_${_dt}.pdf`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -11516,8 +11534,70 @@ function _mobileStaticScanStub({apkPath, token}) {
   });
 }
 
-// Placeholder PDF generator — alias to OSINT canon (17 sections).
-function generateMobileStaticReport(opts) { return generateOsintReport(opts); }
+// Mobile static analysis PDF — reuses the 17-section OSINT canon with
+// mobile-binary-specific labels, tools, tiers, audit rows, and references.
+function generateMobileStaticReport(opts) {
+  const moduleConfig = {
+    key: "mobile_static",
+    name: "MOBILE STATIC",
+    longName: "Mobile App Binary Analysis (Static)",
+    reportTitle: "MOBILE BINARY SECURITY REPORT",
+    subtitle: "Static analysis of APK / IPA / PE / ELF binaries",
+    headerLabel: "VulnusLab — Mobile Binary Assessment",
+    authLine: "N/A - static binary analysis (no live target)",
+    trustLine: "Every finding is rule-driven and replayable against the same binary hash.",
+    tools: [
+      "android_manifest_audit","ios_plist_audit","network_security_config_audit",
+      "secret_extraction_audit","weak_crypto_audit","hardcoded_url_and_ip_audit",
+      "native_lib_hardening","pe_hardening_audit","elf_symbol_audit",
+      "bytecode_malware_signatures","third_party_sdk_audit","mobsf_aggregate_scan"
+    ],
+    tiers: [
+      ["Tier 1","Manifest & Config",["android_manifest_audit","ios_plist_audit","network_security_config_audit"]],
+      ["Tier 2","Secrets & Crypto",["secret_extraction_audit","weak_crypto_audit","hardcoded_url_and_ip_audit"]],
+      ["Tier 3","Binary Hardening",["native_lib_hardening","pe_hardening_audit","elf_symbol_audit"]],
+      ["Tier 4","Behavioral & Aggregate",["bytecode_malware_signatures","third_party_sdk_audit","mobsf_aggregate_scan"]]
+    ],
+    auditRows: [
+      ["android_manifest_audit","apktool-decoded AndroidManifest.xml — exported components, permissions, debuggable, backup flags"],
+      ["ios_plist_audit","Info.plist — ATS, URL schemes, background modes, NSAllowsArbitraryLoads"],
+      ["network_security_config_audit","res/xml/network_security_config.xml — cleartextTrafficPermitted + trust-anchors"],
+      ["secret_extraction_audit","ripgrep against decompiled smali/java for 10 secret regex (AWS, Stripe, JWT, GCP, GitHub, Slack, Twilio, Firebase, PEM, generic API keys)"],
+      ["weak_crypto_audit","grep for DES/RC4/MD5/SHA1, TrustManager.checkServerTrusted bypass, SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER"],
+      ["hardcoded_url_and_ip_audit","regex over decompiled code for embedded HTTP/HTTPS endpoints + raw IPv4 (debug API leakage)"],
+      ["native_lib_hardening","checksec / readelf on every .so — RELRO, stack canary, NX, PIE, fortify-source"],
+      ["pe_hardening_audit","pefile inspection of .exe/.dll — ASLR, DEP, /GS, CFG, NX bits"],
+      ["elf_symbol_audit","nm + file on ELF binaries — dangerous libc imports (gets/strcpy/sprintf), unstripped debug symbols"],
+      ["bytecode_malware_signatures","10 malware behavior rules + correlation (SMS+contacts, root-detect+overlay, accessibility+keylog)"],
+      ["third_party_sdk_audit","Package-tree scan against 22 known tracking/ad/analytics SDK signatures"],
+      ["mobsf_aggregate_scan","Optional MobSF REST API call; falls back to SHA-256 fingerprint + size metadata when unavailable"]
+    ],
+    methodology: [
+      "Mobile binary analysis follows OWASP MASVS v2 (Mobile App Security Verification Standard) and",
+      "NIST SP 800-163r1 (Vetting the Security of Mobile Applications). All scanners are static — the",
+      "binary is decompiled with apktool (Android) or parsed with pefile/readelf (PE/ELF). No code is executed."
+    ],
+    references: [
+      "OWASP MASVS v2 — https://mas.owasp.org/MASVS/",
+      "OWASP Mobile Top 10 (2024) — https://owasp.org/www-project-mobile-top-10/",
+      "NIST SP 800-163r1 — https://csrc.nist.gov/publications/detail/sp/800-163/rev-1/final",
+      "Apktool — https://apktool.org",
+      "MobSF — https://mobsf.github.io/docs/"
+    ],
+    recsBuilder: function(sevCount, r){
+      const out=[];
+      if(sevCount.CRITICAL>0)out.push("🔴 CRITICAL bytecode-malware correlation — submit binary to MalwareBazaar + revoke any signing key");
+      if((r.secret_extraction_audit&&(r.secret_extraction_audit.secrets_found||0)>0))out.push("🔴 Rotate every leaked secret within 24h (assume committed history is compromised)");
+      if(sevCount.HIGH>0)out.push("🟠 Fix HIGH findings in next release — exported components / weak crypto / debug builds shipped to production");
+      if((r.third_party_sdk_audit&&(r.third_party_sdk_audit.high_risk_sdks||[]).length>0))out.push("🟠 Audit high-risk tracking SDK consent flows — GDPR / CCPA exposure");
+      if((r.native_lib_hardening&&(r.native_lib_hardening.unhardened_libs||[]).length>0))out.push("🟡 Rebuild native libs with -fPIE -fstack-protector-strong -Wl,-z,relro,-z,now");
+      if((r.weak_crypto_audit&&(r.weak_crypto_audit.weak_crypto_total||0)>0))out.push("🟡 Replace DES/RC4/MD5/SHA1 with AES-GCM + SHA-256 / SHA-3");
+      if((r.android_manifest_audit&&r.android_manifest_audit.debuggable))out.push("🟢 Set android:debuggable=\"false\" + android:allowBackup=\"false\" before release");
+      return out;
+    }
+  };
+  return generateOsintReport(Object.assign({}, opts, {moduleConfig}));
+}
 
 
 // ═══════════════════════════════════════════════════════════════
