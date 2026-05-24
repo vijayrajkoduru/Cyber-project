@@ -123,8 +123,13 @@ const MODULES = [
   { id:"ad",        icon:"🏢", label:"Active Directory Attacks",           cat:"advanced",free:false, comingSoon:true },
   { id:"av",        icon:"🥷", label:"Antivirus Evasion",                  cat:"advanced",free:false, comingSoon:true },
   { id:"cloud",     icon:"☁️", label:"Cloud Security Testing",             cat:"advanced",free:false, comingSoon:true },
-  { id:"mobile_static", icon:"📱", label:"Mobile App Binary Analysis",     cat:"advanced",free:false },
   { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false, comingSoon:true },
+
+  // ── MOBILE ───────────────────────────────────────────────────
+  { id:"mobile_static",  icon:"📱", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
+  { id:"mobile_dynamic", icon:"🪝", label:"Runtime / Frida Hooks",          cat:"mobile",  free:false, comingSoon:true },
+  { id:"mobile_traffic", icon:"📡", label:"Network Traffic Interception",   cat:"mobile",  free:false, comingSoon:true },
+  { id:"mobile_manual",  icon:"📋", label:"Manual Pentest Checklist",       cat:"mobile",  free:false, comingSoon:true },
 
   // ── DATA PROTECTION ──────────────────────────────────────────
   { id:"backups",   icon:"📦", label:"My Backups",                          cat:"data",    free:true  },
@@ -15495,6 +15500,7 @@ export default function App() {
     { key:"post",     label:"POST-EXPLOITATION", color:"#f59e0b" },
     { key:"network",  label:"NETWORK & INFRA",   color:"#22c55e" },
     { key:"advanced", label:"ADVANCED",          color:"#a855f7" },
+    { key:"mobile",   label:"MOBILE",            color:"#ec4899" },
     { key:"data",     label:"DATA PROTECTION",   color:"#10b981" },
     { key:"admin",    label:"ADMIN",             color:"#dc2626" },
     { key:"tools",    label:"TOOLS & REPORTS",   color:"#64748b" },
