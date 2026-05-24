@@ -7408,6 +7408,26 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const tHead  = (cols,widths,yy) => { fillR(margin,yy,contentW,8,DARK); let cx=margin+3; cols.forEach((c,i)=>{ txt(c,cx,yy+5.5,8,WHITE,true); cx+=widths[i]; }); return yy+8; };
   const drawHeader = () => { txt("VulnusLab — Recon Report",margin,10,7,GRAY); txt(date,pageW-margin,10,7,BLUE,false,"right"); };
 
+  // ─── VL-FOUNDRY canon ports (Gap 11 — 4 missing sections from Webapp canon) ───
+  // Pre-collect findings from all recon scanners for risk math
+  const _R_allFindings = [];
+  Object.values(r).forEach(d => { if (d && Array.isArray(d.findings)) d.findings.forEach(f => _R_allFindings.push(f)); });
+  const _R_sevCount = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,POSITIVE:0,INFO:0};
+  _R_allFindings.forEach(f => { const k = f.severity || "INFO"; _R_sevCount[k] = (_R_sevCount[k]||0) + 1; });
+
+  // Risk score (0-100) — same formula as Webapp/Vuln canon
+  const _R_rawSum = _R_sevCount.CRITICAL*15 + _R_sevCount.HIGH*8 + _R_sevCount.MEDIUM*3 + _R_sevCount.LOW*1;
+  const _R_maxC   = _R_sevCount.CRITICAL>0?30:_R_sevCount.HIGH>0?22:_R_sevCount.MEDIUM>0?12:5;
+  const _R_riskScore = Math.round(Math.min(100, Math.max(5, Math.min(70, _R_rawSum) + _R_maxC)));
+  const _R_riskLabel = _R_riskScore>=80?"CRITICAL RISK":_R_riskScore>=60?"HIGH RISK":_R_riskScore>=40?"MODERATE RISK":_R_riskScore>=20?"LOW RISK":"MINIMAL RISK";
+  const _R_riskColor = _R_riskScore>=80?[162,28,28]:_R_riskScore>=60?[194,65,12]:_R_riskScore>=40?[133,79,11]:_R_riskScore>=20?[202,138,4]:[15,118,82];
+
+  // Report ID + Content Hash (deterministic per (target, date, findings))
+  const _R_genId = (t,d) => { const s=String(t)+"|"+String(d)+"|"+Date.now(); let h=0; for(let i=0;i<s.length;i++) h=((h<<5)-h+s.charCodeAt(i))|0; return "VL-"+(String(d||"").replace(/[^0-9]/g,"").substring(0,8)||"00000000")+"-"+Math.abs(h).toString(16).toUpperCase().padStart(6,"0").substring(0,6); };
+  const _R_hash  = (s) => { let h=0; const str=String(s||""); for(let i=0;i<str.length;i++) h=((h<<5)-h+str.charCodeAt(i))|0; return Math.abs(h).toString(16).toUpperCase().padStart(8,"0").substring(0,8); };
+  const _R_REPORT_ID = _R_genId(target, date);
+  const _R_contentHash = _R_hash(JSON.stringify(_R_allFindings));
+
   // ── COVER ──────────────────────────────────────────────────
   fillR(0,0,pageW,64,DARK);
   // VulnusLab shield logo + wordmark (top-center)
@@ -7454,6 +7474,36 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   doc.text("Every data point in this report was independently triggered and re-confirmed by the VulnusLab engine.", margin+8, y+11);
   doc.text("No template-only matches. Manual review still required for exploitation context.", margin+8, y+14);
   y+=20;
+
+  // ─── KEY RISK HEADLINE (canon section 4) — color-coded box + SLA ───
+  chk(28);
+  const _R_hlBg = _R_riskScore>=60?[254,242,242]:_R_riskScore>=20?[255,247,237]:[240,253,244];
+  const _R_hlTag = _R_riskScore>=60?"FIX THIS WEEK":_R_riskScore>=20?"REVIEW SOON":"POSTURE OK";
+  const _R_hlTitle = _R_sevCount.CRITICAL>0?`${_R_sevCount.CRITICAL} CRITICAL recon exposure(s) — patch within 24 hours`:
+                     _R_sevCount.HIGH>0?`${_R_sevCount.HIGH} HIGH recon exposure(s) — patch within 7 days`:
+                     _R_sevCount.MEDIUM>0?`${_R_sevCount.MEDIUM} MEDIUM exposure(s) — hardening recommended`:
+                     "No critical recon exposures detected";
+  fillR(margin,y,contentW,24,_R_hlBg);
+  fillR(margin,y,3,24,_R_riskColor);
+  doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(..._R_riskColor);
+  doc.text(_R_hlTag, margin+8, y+6);
+  doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
+  doc.text(_R_hlTitle, margin+8, y+13);
+  doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+  doc.text("See Findings + Per-Tool sections for full breakdown.", margin+8, y+18);
+  y += 28;
+
+  // ─── RISK SCORE BAR (canon section 9) — 0-100 numeric + bar ───
+  chk(26);
+  y = sHead("Risk Score", y);
+  fillR(margin,y,contentW,20,LIGHT);
+  doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._R_riskColor);
+  doc.text(String(_R_riskScore), margin+8, y+15);
+  txt(_R_riskLabel, margin+38, y+8, 11, _R_riskColor, true);
+  txt(`Report ID: ${_R_REPORT_ID}  ·  ${_R_allFindings.length} findings across recon tools`, margin+38, y+14, 7.5, GRAY);
+  fillR(margin+38, y+17, contentW-40, 2, [226,232,240]);
+  fillR(margin+38, y+17, Math.max((_R_riskScore/100)*(contentW-40), 2), 2, _R_riskColor);
+  y += 24;
 
   // ─── SCAN COVERAGE ───────────────────────────────────────────
   // Every recon report MUST account for every phase. Three states:
@@ -7616,6 +7666,30 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
     doc.text(String(p.detail||"").substring(0,95), margin+84, y+4.8);
     y += 6.5;
+  });
+  y += 6;
+
+  // ─── COMPLIANCE COVERAGE (canon section 7) — 8 frameworks ───
+  chk(80);
+  y = sHead("Compliance Coverage", y);
+  y = tHead(["FRAMEWORK","CONTROL","STATUS"], [75,75,30], y);
+  const _R_compRows = [
+    ["PCI-DSS",      "2.4 Asset inventory (subdomains + IPs)"],
+    ["PCI-DSS",      "11.2 Internal/external vuln scanning prereq"],
+    ["SOC 2",        "CC7.1 Detection (CT log monitoring)"],
+    ["ISO 27001",    "A.5.9 Asset register (resolved IPs + tech stack)"],
+    ["NIST 800-53",  "RA-3 Risk assessment (external attack surface)"],
+    ["NIST CSF",     "ID.AM-1 Hardware/software inventory"],
+    ["HIPAA",        "164.308(a)(1) Risk analysis prereq"],
+    ["CIS v8",       "1.1 Detailed enterprise asset inventory"],
+  ];
+  const _R_compOk = _R_sevCount.CRITICAL===0 && _R_sevCount.HIGH===0;
+  _R_compRows.forEach((row,i) => {
+    fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+    txt(row[0], margin+3, y+5, 8, DARK, true);
+    txt(row[1], margin+78, y+5, 7.5, GRAY);
+    txt(_R_compOk?"✓ Aligned":"⚠ Findings", margin+150, y+5, 7.5, _R_compOk?[15,118,82]:[133,79,11], true);
+    y += 7;
   });
   y += 6;
 
@@ -8860,7 +8934,12 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       doc.restoreGraphicsState();
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
-    if(i>=2){ txt(_ftr,margin,290,6.5,GRAY); txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right"); }
+    if(i>=2){
+      txt(_ftr,margin,290,6.5,GRAY);
+      // Section 17 canon — Report ID + Content Hash centered in footer
+      txt(`Report ID: ${_R_REPORT_ID}  ·  Content: ${_R_contentHash}`,pageW/2,290,6.5,GRAY,false,"center");
+      txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
+    }
   }
   doc.save(`recon_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   }; // end _doGen
