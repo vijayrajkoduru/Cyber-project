@@ -84,6 +84,24 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("stored_xss",     "/api/webapp/scan/stored_xss"),
         ("wpscan",         "/api/webapp/scan/wpscan"),
     ],
+    # Tier 9 — AI-curated discovery (newly forged, big wordlists, async-parallel)
+    "tier9_ai_curated_discovery": [
+        ("directory_brute",  "/api/webapp/directory_brute"),    # 940 paths
+        ("param_discovery",  "/api/webapp/param_discovery"),    # 577 names
+        ("crawler",          "/api/webapp/crawler"),            # 203 seeds
+        ("secrets",          "/api/webapp/secrets"),            # 97 regex patterns
+    ],
+    # Tier 10 — Modern attack-surface coverage (AI-curated payload lists)
+    "tier10_modern_attacks": [
+        ("nosqli",                "/api/webapp/nosqli"),                # 20 MongoDB operators
+        ("ldap_injection",        "/api/webapp/ldap_injection"),        # 20 LDAP filter probes
+        ("crlf_injection",        "/api/webapp/crlf_injection"),        # 18 CRLF variants
+        ("prototype_pollution",   "/api/webapp/prototype_pollution"),   # 19 gadgets
+        ("host_header_injection", "/api/webapp/host_header_injection"), # 25 header variants
+        ("cache_poisoning",       "/api/webapp/cache_poisoning"),       # 25 unkeyed headers
+        ("deserialization_probe", "/api/webapp/deserialization_probe"), # 53 markers
+        ("http_smuggling",        "/api/webapp/http_smuggling"),        # CL.TE timing probe
+    ],
 }
 
 
