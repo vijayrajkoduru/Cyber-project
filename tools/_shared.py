@@ -10,6 +10,7 @@ register(app) function in your tool file. Examples:
 """
 import os
 import re
+import sys
 import time
 import uuid
 import random
@@ -298,10 +299,28 @@ def standard_response(*, tool: str, target: str, findings: list,
                       skipped_reason: Optional[str] = None,
                       raw_data: Optional[dict] = None) -> dict:
     """Standard response shape every tool returns. Keeps the PDF
-    generator + frontend consistent across all 100+ tools."""
+    generator + frontend consistent across all 100+ tools.
+
+    VL-FOUNDRY Layer 6 (runtime validation): in dev mode, every finding
+    is run through finding_schema.validate_ndjson_record before return.
+    Bad findings are logged but not blocked — production scans must not
+    crash because of a single malformed finding.
+    """
     if vulnerable is None:
         vulnerable = any(f.get("severity") in ("CRITICAL", "HIGH", "MEDIUM")
                          for f in findings)
+
+    # Runtime validation (Gap 6 fix — finding_schema.py is now WIRED, not dead)
+    if os.environ.get("VL_VALIDATE_FINDINGS") == "1":
+        try:
+            from tools._framework.finding_schema import validate_ndjson_record
+            for i, f in enumerate(findings):
+                ok, errs = validate_ndjson_record(f)
+                if not ok:
+                    print(f"[VL-VALIDATE] {tool}: finding[{i}] invalid: {errs}",
+                          file=sys.stderr)
+        except Exception:
+            pass  # never crash a scan on the validator path
     resp = {
         "scan_id":         str(uuid.uuid4()),
         "target":          target,
