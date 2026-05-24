@@ -5383,7 +5383,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
 }
 
 // ── SHARED MODULE SHELL ──────────────────────────────────────
-function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn, moduleKey}) {
+function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn, moduleKey, reportFn}) {
   const API = apiUrl || getApiUrl();
   const tok = token || getAuthToken();
   const [target, setTarget] = useState("");
@@ -5435,7 +5435,13 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
               {guide?"✕ Hide Guide":"📋 How to Use"}
             </button>
             {hasResults && (
-              <button onClick={()=>generateShellReport({title,icon,target,attacks,results})}
+              <button onClick={()=>{
+                  const args={title,icon,target,attacks,results};
+                  try {
+                    if (typeof reportFn === "function") reportFn(args);
+                    else generateShellReport(args);
+                  } catch(e) { alert("PDF error: "+(e.message||e)); }
+                }}
                 style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
                 📄 Report
               </button>
@@ -6684,7 +6690,12 @@ function MobileStaticModule({token, apiUrl}) {
     apiUrl={apiUrl}
     attacks={attacks}
     extraInputs={extra}
-    bodyFn={(t,o)=>({target: uploadedPath || t, options:o})}/>;
+    bodyFn={(t,o)=>({target: uploadedPath || t, options:o})}
+    reportFn={({target, results}) => generateMobileStaticReport({
+      target: uploadedPath || target || "uploaded binary",
+      allResults: results || {},
+      date: new Date().toLocaleString(),
+    })}/>;
 }
 
 
