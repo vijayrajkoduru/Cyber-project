@@ -4,7 +4,23 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wra
 
 router = APIRouter()
 
-_JSONP_HOSTS = ["www.googleapis.com","ajax.googleapis.com","apis.google.com","accounts.google.com","plus.google.com","www.youtube.com","s.ytimg.com","cdnjs.cloudflare.com","ajax.aspnetcdn.com","code.jquery.com","stackpath.bootstrapcdn.com"]
+_FALLBACK_JSONP_HOSTS = ["www.googleapis.com","ajax.googleapis.com","apis.google.com","accounts.google.com","plus.google.com","www.youtube.com","s.ytimg.com","cdnjs.cloudflare.com","ajax.aspnetcdn.com","code.jquery.com","stackpath.bootstrapcdn.com"]
+# AI-curated 120-entry CSP bypass gadget list — extract JSONP/CDN bypass hosts
+try:
+    from tools._payloads.csp_bypass_gadgets import CSP_BYPASS_GADGETS as _AI_CSP
+    _JSONP_HOSTS = list(_FALLBACK_JSONP_HOSTS)
+    seen = set(_JSONP_HOSTS)
+    for _g in _AI_CSP:
+        if not isinstance(_g, dict): continue
+        gadget = _g.get("gadget", "")
+        # Extract just the hostname portion if present
+        h = gadget.replace("https://", "").replace("http://", "").split("/")[0]
+        if h and "." in h and h not in seen and len(h) < 80:
+            _JSONP_HOSTS.append(h)
+            seen.add(h)
+    _JSONP_HOSTS = _JSONP_HOSTS[:50]  # cap to avoid noisy report
+except Exception:
+    _JSONP_HOSTS = _FALLBACK_JSONP_HOSTS
 
 
 def _parse_csp(csp_header):

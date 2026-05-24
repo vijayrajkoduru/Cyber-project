@@ -5,6 +5,14 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wra
 
 router = APIRouter()
 
+# AI-curated 200-entry signature list — extends _VULN_LIBS with additional
+# library/version/CVE entries. Loaded with safe fallback.
+try:
+    from tools._payloads.retire_js_signatures import RETIRE_JS_SIGNATURES as _AI_RETIRE
+    _AI_RETIRE = _AI_RETIRE if isinstance(_AI_RETIRE, list) else []
+except Exception:
+    _AI_RETIRE = []
+
 # Format: (library_name, vulnerable_version_regex, fixed_version, cve, severity, description)
 _VULN_LIBS = [
     ("jQuery",      r"jquery[/-](?:v)?(1\.(?:[0-9]|1[0-1])\.[0-9]+|2\.[01]\.[0-9])", "3.5.0",  "CVE-2020-11023", "MEDIUM", "XSS via HTML manipulation in append()"),
@@ -14,6 +22,20 @@ _VULN_LIBS = [
     ("Bootstrap",   r"bootstrap[/-](?:v)?(3\.[0-3]\.[0-9]+|4\.[0-2]\.[0-9]+)",      "4.3.1",  "CVE-2019-8331",  "MEDIUM", "XSS in tooltip/popover data-template"),
     ("Handlebars",  r"handlebars[/-](?:v)?([0-3]\.[0-9]+\.[0-9]+|4\.[0-6]\.[0-9]+)",  "4.7.7",  "CVE-2021-23369", "CRITICAL","Prototype pollution leading to RCE"),
 ]
+
+# Convert AI-curated entries to the same 6-tuple shape and extend _VULN_LIBS
+for _ai in _AI_RETIRE:
+    if not isinstance(_ai, dict): continue
+    lib = _ai.get("library", "")
+    det = _ai.get("detection_regex", "")
+    cve = _ai.get("cve", "") or ""
+    sev = _ai.get("severity", "MEDIUM")
+    vuln_versions = _ai.get("vulnerable_versions", "")
+    # Use detection_regex as the version-match regex too (it should capture version)
+    # Fallback: skip entries with no useful detection regex
+    if not lib or not det: continue
+    desc = f"AI-curated {lib} CVE — vulnerable versions {vuln_versions}"
+    _VULN_LIBS.append((lib, det, "(see CVE)", cve, sev, desc))
 
 
 @router.post("/api/webapp/retire_js")
