@@ -6,6 +6,14 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wra
 
 router = APIRouter()
 
+# AI-curated 53-entry marker list — covers Java/Python/PHP/.NET/Ruby/Node markers
+try:
+    from tools._payloads.deserialization_payloads import DESERIALIZATION_PAYLOADS as _AI_DS
+    _AI_MARKERS = [(p["marker"], p.get("language", "unknown"))
+                   for p in _AI_DS if isinstance(p, dict) and p.get("marker")]
+except Exception:
+    _AI_MARKERS = []
+
 
 def _looks_like_serialized(value):
     """Return (engine, snippet) if value looks like a serialized object."""
@@ -32,6 +40,11 @@ def _looks_like_serialized(value):
             return ("Python pickle (base64)", value[:60])
     except Exception:
         pass
+    # AI-curated marker substring check — catches less-common gadget signatures
+    # (XStream, PHPMailer, ysoserial, BinaryFormatter, ObjectDataProvider, etc.)
+    for _mk, _lang in _AI_MARKERS:
+        if _mk and len(_mk) >= 4 and _mk in value:
+            return (f"AI-marker:{_lang}", value[:80])
     return None
 
 

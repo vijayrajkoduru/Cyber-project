@@ -8,6 +8,14 @@ router = APIRouter()
 
 _TEST_PARAMS = ["redirect","url","return","next","callback","redir","redirect_uri","u","link"]
 
+# AI-curated 60-entry CRLF payload list — each entry: {payload, category, severity}
+# Substituted into the canary template at scan time to combine AI breadth + freshness-check.
+try:
+    from tools._payloads.crlf_injection_payloads import CRLF_INJECTION_PAYLOADS as _AI_CRLF_PAYLOADS
+    _AI_CRLF_RAW = [p.get("payload","") for p in _AI_CRLF_PAYLOADS if isinstance(p, dict) and p.get("payload")]
+except Exception:
+    _AI_CRLF_RAW = []
+
 
 @router.post("/api/webapp/crlf_injection")
 async def webapp_crlf_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
@@ -22,6 +30,11 @@ async def webapp_crlf_injection(req: ScanRequest, payload=Depends(verify_scan_qu
         f"%0aSet-Cookie:%20{canary_name}={canary_value}",
         f"%E5%98%8A%E5%98%8DSet-Cookie:%20{canary_name}={canary_value}",  # UTF-8 CRLF bypass
     ]
+    # Append AI-curated CRLF variants — combine each AI sequence with the canary
+    # so we still catch echo even if scanner doesn't know the exact AI payload shape.
+    for ai in _AI_CRLF_RAW[:15]:  # cap to keep wave size sane
+        if "%0d%0a" in ai or "%0a" in ai or "\r\n" in ai:
+            payloads.append(f"{ai}Set-Cookie:%20{canary_name}={canary_value}")
     
     suspect = []
     for param in _TEST_PARAMS:

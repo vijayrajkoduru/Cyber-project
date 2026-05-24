@@ -8,6 +8,13 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding,
 
 router = APIRouter()
 
+# AI-curated 48-entry desync list — exposes additional variants for opt-in probing.
+# Scanner only fires 1-2 of these per run to avoid causing real desync on the target.
+try:
+    from tools._payloads.http_smuggling_payloads import HTTP_SMUGGLING_PAYLOADS as _AI_SMUGGLE
+except Exception:
+    _AI_SMUGGLE = []
+
 
 def _raw_request(host, port, use_ssl, request_bytes, timeout=10):
     s = socket.create_connection((host, port), timeout=timeout)

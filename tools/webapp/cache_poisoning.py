@@ -7,7 +7,27 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding,
 router = APIRouter()
 
 # Headers that are typically NOT included in the cache key but may influence response
-_UNKEYED_HEADERS = ["X-Forwarded-Host","X-Forwarded-Server","X-Host","X-Original-URL","X-Rewrite-URL","X-Forwarded-For","X-Forwarded-Scheme","X-Forwarded-Proto","X-Original-Host","X-Custom-IP-Authorization"]
+_FALLBACK_UNKEYED = ["X-Forwarded-Host","X-Forwarded-Server","X-Host","X-Original-URL","X-Rewrite-URL","X-Forwarded-For","X-Forwarded-Scheme","X-Forwarded-Proto","X-Original-Host","X-Custom-IP-Authorization"]
+
+# AI-curated 62-entry list — extract unique header names from anywhere in
+# the multiline HTTP-request payload (not just the request-line).
+try:
+    from tools._payloads.cache_poisoning_payloads import CACHE_POISONING_PAYLOADS as _AI_CP
+    import re as _re
+    _UNKEYED_HEADERS = list(_FALLBACK_UNKEYED)
+    _seen = {h.lower() for h in _UNKEYED_HEADERS}
+    # Find ALL header lines inside the payload (skip GET/POST/PUT request lines)
+    for _p in _AI_CP:
+        if not isinstance(_p, dict): continue
+        for ln in _p.get("payload", "").splitlines():
+            if ln.startswith(("GET ", "POST ", "PUT ", "DELETE ", "HEAD ", "Host:")): continue
+            m = _re.match(r"^([A-Z][A-Za-z0-9\-]{2,40})\s*:", ln)
+            if m and m.group(1).lower() not in _seen:
+                _UNKEYED_HEADERS.append(m.group(1))
+                _seen.add(m.group(1).lower())
+    _UNKEYED_HEADERS = _UNKEYED_HEADERS[:25]
+except Exception:
+    _UNKEYED_HEADERS = _FALLBACK_UNKEYED
 
 
 @router.post("/api/webapp/cache_poisoning")

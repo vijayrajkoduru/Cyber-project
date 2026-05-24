@@ -5,12 +5,35 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wra
 router = APIRouter()
 
 _PARAMS = ["username","user","email","login","id","search","q","name","filter"]
-_PAYLOADS = [
+_FALLBACK_PAYLOADS = [
     ("$ne",    "[$ne]=1",       "MongoDB $ne (not-equal) - bypasses equality filters"),
     ("$regex", "[$regex]=.*",   "MongoDB $regex - matches any value"),
     ("$gt",    "[$gt]=",        "MongoDB $gt (greater-than) - bypasses comparison filters"),
     ("$where", "[$where]=1==1", "MongoDB $where - JS expression evaluation"),
 ]
+# AI-curated 131-entry payload list — extract query-string operator-injection
+# variants. Most AI entries are json_body, but we mine MongoDB operators from
+# them and synthesize query-string equivalents the scanner can probe with.
+try:
+    from tools._payloads.nosqli_payloads import NOSQLI_PAYLOADS as _AI_NOSQLI
+    import re as _re_n
+    _PAYLOADS = list(_FALLBACK_PAYLOADS)
+    seen_ops = {p[0] for p in _PAYLOADS}
+    # Extract every distinct $operator pattern seen in AI payloads
+    for _p in _AI_NOSQLI:
+        if not isinstance(_p, dict): continue
+        payload_str = _p.get("payload", "")
+        # Mine $operator names: $ne, $gt, $regex, $where, $exists, $in, $or, etc.
+        for op in _re_n.findall(r"\$[a-z]{2,12}", payload_str):
+            if op in seen_ops: continue
+            cat = _p.get("category", "ai")
+            # Synthesize a generic query-string probe for this operator
+            qs_payload = f"[{op}]=1" if op != "$where" else f"[{op}]=1==1"
+            _PAYLOADS.append((op, qs_payload, f"AI-curated MongoDB {op} ({cat})"))
+            seen_ops.add(op)
+    _PAYLOADS = _PAYLOADS[:25]
+except Exception:
+    _PAYLOADS = _FALLBACK_PAYLOADS
 
 
 @router.post("/api/webapp/nosqli")

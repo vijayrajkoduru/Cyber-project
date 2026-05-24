@@ -5,6 +5,12 @@ from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wra
 
 router = APIRouter()
 
+# AI-curated 87-entry list — gadget patterns specific to lodash/mongoose/jquery/etc.
+try:
+    from tools._payloads.prototype_pollution_payloads import PROTOTYPE_POLLUTION_PAYLOADS as _AI_PP_PAYLOADS
+except Exception:
+    _AI_PP_PAYLOADS = []
+
 
 @router.post("/api/webapp/prototype_pollution")
 async def webapp_prototype_pollution(req: ScanRequest, payload=Depends(verify_scan_quota)):
@@ -12,13 +18,22 @@ async def webapp_prototype_pollution(req: ScanRequest, payload=Depends(verify_sc
     findings = []
     tests = 0
     canary = secrets.token_hex(8)
-    
+
     payloads = [
         f"__proto__[ppMarker]={canary}",
         f"__proto__.ppMarker={canary}",
         f"constructor[prototype][ppMarker]={canary}",
         f"constructor.prototype.ppMarker={canary}",
     ]
+    # Append AI-curated query_string variants, substituting our canary into ppMarker= context
+    for _ai in _AI_PP_PAYLOADS[:15]:
+        if not isinstance(_ai, dict): continue
+        if _ai.get("context") != "query_string": continue
+        raw = _ai.get("payload", "")
+        if "=" in raw and "__proto__" in raw or "constructor" in raw:
+            # Substitute the value side with our canary so we can detect leak
+            key = raw.split("=", 1)[0]
+            payloads.append(f"{key}={canary}")
     
     suspect = []
     for p in payloads:
