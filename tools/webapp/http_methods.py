@@ -41,6 +41,30 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
     _WALLCLOCK_BUDGET = 30.0
     _bailed = False
 
+    # 0. Follow a single HTTP->HTTPS (or host) redirect before establishing
+    #    baseline. Without this, a 308 redirect at line 0 makes every dangerous
+    #    method look like it "passed through" since 3xx < 400 and the body is
+    #    empty (defeats the identical-to-GET filter). See DELETE-FP-V2.
+    _redirect_followed = None
+    pre_get = safe_request("GET", url, req=req, timeout=8, retries=0, allow_redirects=False)
+    if pre_get is not None and 300 <= pre_get.status_code < 400:
+        loc = (pre_get.headers.get("Location") or "").strip()
+        if loc:
+            # Resolve relative redirects
+            from urllib.parse import urljoin
+            new_url = urljoin(url, loc)
+            # Sanity: only follow if same host or http->https upgrade on same host
+            try:
+                from urllib.parse import urlparse
+                old_p = urlparse(url); new_p = urlparse(new_url)
+                same_host = (old_p.hostname or "") == (new_p.hostname or "")
+                if same_host and new_url != url:
+                    _redirect_followed = {"from": url, "to": new_url,
+                                            "status": pre_get.status_code}
+                    url = new_url
+            except Exception:
+                pass
+
     # 1. Ask the server what it supports.
     options_resp = safe_request("OPTIONS", url, req=req, timeout=8, retries=0)
     allow_str = (options_resp.headers.get("Allow", "") if options_resp else "") or ""
@@ -66,6 +90,15 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
 
         # --- Server rejected it explicitly -- never a finding ---
         if r2.status_code in (405, 501) or r2.status_code >= 400:
+            continue
+
+        # --- 3xx redirect: server hasn't processed the verb, just redirecting.
+        # A 301/302/307/308 to https:// or another host means the request was
+        # never evaluated by an application handler. Suppress.
+        if 300 <= r2.status_code < 400:
+            suppressed.append({"method": method, "reason": "redirect_not_processed",
+                               "status": r2.status_code,
+                               "location": (r2.headers.get("Location") or "")[:120]})
             continue
 
         # --- Allow header is authoritative when present ---
@@ -104,8 +137,11 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
 
     summary = (f"Probed {len(tested)}/{len(_DANGEROUS)} dangerous methods in "
                f"{time.time() - _wallclock_start:.1f}s; Allow: {allow_str!r}")
+    if _redirect_followed:
+        summary += (f"; followed {_redirect_followed['status']} redirect "
+                    f"{_redirect_followed['from']} -> {_redirect_followed['to']}")
     if suppressed:
-        summary += f"; {len(suppressed)} CDN-normalized methods filtered as non-vulnerable"
+        summary += f"; {len(suppressed)} method(s) filtered as non-vulnerable (CDN/redirect/etc.)"
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return vuln_response(tool="http_methods", target=req.target,
@@ -116,5 +152,6 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                     "allowed_methods": sorted(allowed_methods),
                                     "methods_tested": tested,
                                     "suppressed_fps": suppressed,
+                                    "redirect_followed": _redirect_followed,
                                     "wallclock_bailed": _bailed}})
 def register(app): app.include_router(router)
