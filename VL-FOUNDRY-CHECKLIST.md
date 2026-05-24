@@ -1,7 +1,7 @@
 # Module Shipping Checklist
 
 Copy this file when you start a new module forge. Rename to
-`MODULE-CHECKLIST-<name>.md` and tick each box as you go.
+`VL-FOUNDRY-CHECKLIST-<name>.md` and tick each box as you go.
 
 A module **must score ≥ 85/100** via `python scripts/score_module.py <name>`
 before it ships to customers. This checklist enforces the underlying
@@ -20,20 +20,20 @@ contract.
 
 ## Layer 1 — Module Role
 
-- [ ] One-sentence customer question documented in `MODULE-FRAMEWORK.md`
+- [ ] One-sentence customer question documented in `VL-FOUNDRY.md`
 - [ ] PTES/NIST phase mapping listed
 - [ ] "Why it exists" bullets (2-3) documented
 - [ ] "What it isn't" bullets (2-3) documented
 - [ ] "When customer runs it" ordering documented
 
-**Audit agent check:** spawn agent → ask "read MODULE-FRAMEWORK.md and
+**Audit agent check:** spawn agent → ask "read VL-FOUNDRY.md and
 confirm Layer 1 for <module> is complete + makes sense."
 
 ---
 
 ## Layer 2 — Tools
 
-- [ ] All scanners catalogued in `MODULE-FRAMEWORK.md` Layer 2 table
+- [ ] All scanners catalogued in `VL-FOUNDRY.md` Layer 2 table
 - [ ] Each scanner has a one-line role
 - [ ] Tier grouping defined (tier1_xxx, tier2_yyy, ...)
 - [ ] Tier names map to pentest workflow (not random)
@@ -166,7 +166,7 @@ orchestrator count exactly?"
 - [ ] Scan duration under target SLA (Recon ≤ 2min, Vuln ≤ 5min, Webapp ≤ 90s)
 - [ ] No false positives on a known-clean target
 - [ ] Real findings on a known-vulnerable target (Juice Shop / DVWA / lab)
-- [ ] Module added to `MODULE-FRAMEWORK.md` status matrix
+- [ ] Module added to `VL-FOUNDRY.md` status matrix
 - [ ] Commit history is clean (small, focused commits per layer)
 - [ ] Pushed to `origin/main`
 - [ ] Deployed on VPS (`docker compose build --no-cache backend frontend`)
