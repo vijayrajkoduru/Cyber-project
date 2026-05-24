@@ -14,6 +14,89 @@ describe it externally* (marketing copy, customer demos, sales decks).
 
 ---
 
+## Execution sequences (which layer runs when)
+
+The 20 layers below are a **catalog**, not a runtime order. Three distinct
+sequences fire at different times:
+
+### Sequence A — Forge order (build-time, one-shot per module)
+
+Strict order. Each layer's output feeds the next. Audit-agent fires after
+EACH layer commits, not just at the end.
+
+```
+   ┌────────────────────────────┐
+   │ Layer 1  Module Role       │   DESIGN
+   │ Layer 2  Tool Catalogue    │   (what)
+   │ Layer 3  Report layout     │
+   └──────────────┬─────────────┘
+                  ▼
+   ┌────────────────────────────┐
+   │ Layer 4  Orchestrator      │
+   │ Layer 5  AI Wordlists      │   BUILD
+   │ Layer 6  Quality bar 7/7   │   (code)
+   │ Layer 6b VL-TURBO parallel │
+   └──────────────┬─────────────┘
+                  ▼
+   ┌────────────────────────────┐
+   │ Layer 7  Frontend wiring   │   WRAP
+   │ Layer 8  Pricing tier      │   (ship)
+   │ Layer 9  Compliance map    │
+   └──────────────┬─────────────┘
+                  ▼
+   ┌────────────────────────────┐
+   │ Layer 20 E2E verify        │   GATE
+   └────────────────────────────┘
+
+Cross-cutting (apply at every layer — no fixed slot):
+  Layer 10  scan_state schema
+  Layer 11  naming validator
+  Layer 12  cost model
+  Layer 13  observability
+  Layer 14-19  lifecycle policies (deprecation, A/B, model version, etc.)
+```
+
+### Sequence B — Runtime order (every customer scan)
+
+```
+  1. Frontend POSTs target           (Layer 7)
+  2. Orchestrator selects tier       (Layer 4)
+  3. Precheck target reachable       (Layer 6 check #1)
+  4. Load AI-curated wordlists       (Layer 5)
+  5. Run scanners in parallel        (Layer 6b)
+  6. Each scanner emits findings     (Layer 6 checks #2-6)
+  7. Validate finding shape          (finding_schema.py)
+  8. Stream NDJSON to client         (Layer 4)
+  9. Frontend renders tiles          (Layer 7)
+ 10. Generate PDF                    (Layer 3)
+ 11. Log observability               (Layer 13)
+```
+
+### Sequence C — Verification order (after every change)
+
+```
+  1. pre_commit_score.py   →  blocks bad commits
+  2. score_module.py       →  must be >= 85
+  3. e2e_test.py           →  6 gates must all green
+  4. audit-agent           →  cold-context double-check
+```
+
+### Quick lookup — which runs first?
+
+| Situation | First thing that runs |
+|---|---|
+| Building a NEW module | Layer 1 (define the role) |
+| Customer hits Scan | Frontend POST → orchestrator (7→4) |
+| Committing scanner code | `scripts/pre_commit_score.py` (auto) |
+| Shipping the module | `scripts/e2e_test.py` must exit 0 |
+
+The framework knows the order via three sources of truth:
+- `VL-FOUNDRY-CHECKLIST.md` — forge order (top to bottom)
+- `endpoints/<module>_orchestrator.py` — runtime order (tier dict order)
+- `VL-FOUNDRY-AUDIT-AGENT.md` — verify order (per-layer gates)
+
+---
+
 ## Layer 1 — Module Role
 
 **Definition:** the pentest phase this module covers and the question it
