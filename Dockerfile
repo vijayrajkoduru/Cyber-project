@@ -15,11 +15,10 @@ RUN apt-get update -q -o Acquire::Retries=3 \
 
 # ── §1 APP BINARY (Static Analysis) tooling ─────────────────────────
 # These CLI tools are required by any mobile_static / binary_static scanner.
-# Pure-Python alternatives are preferred where they exist (androguard for
-# apktool, pefile for PE parsing) but the CLI tools are higher-fidelity.
+# Debian Bookworm doesn't reliably ship apktool — install it from the
+# official jar release instead (same pattern as nuclei below).
 RUN apt-get update -q -o Acquire::Retries=3 \
  && apt-get install -y -q --no-install-recommends \
-        apktool \
         aapt \
         unzip \
         ripgrep \
@@ -28,9 +27,16 @@ RUN apt-get update -q -o Acquire::Retries=3 \
         default-jre-headless \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Python libs for §1 — fall back to these when CLI tools are unavailable
-# or for richer parsing (apkleaks for secret extraction, pefile for PE,
-# androguard as pure-Python apktool alternative, Quark for malware signatures).
+# apktool — official jar + launcher script
+ARG APKTOOL_VERSION=2.10.0
+RUN wget -q "https://github.com/iBotPeaches/Apktool/releases/download/v${APKTOOL_VERSION}/apktool_${APKTOOL_VERSION}.jar" \
+        -O /usr/local/bin/apktool.jar \
+ && wget -q "https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool" \
+        -O /usr/local/bin/apktool \
+ && chmod +x /usr/local/bin/apktool \
+ && apktool --version || echo "apktool install probe failed (non-fatal)"
+
+# Python libs for §1 — fallbacks when CLI tools aren't installed
 RUN pip install --no-cache-dir \
         apkleaks \
         pefile \
