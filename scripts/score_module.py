@@ -30,13 +30,16 @@ if sys.platform == "win32":
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-# Framework score weights
+# Framework score weights — totals to 115 so that all-passing modules
+# clear 100, but a module that misses Layer 22 UI integration drops to ~85.
 WEIGHTS = {
     "orchestrator": 25,  # Layer 4 — % scanners wired into run_all
     "curation":     25,  # Layer 5 — % scanners loading AI wordlists
     "quality_bar":  20,  # Layer 6 — % scanners passing 7-check DoD
     "frontend":     15,  # Layer 7 — % scanners in App.js PHASES
     "parallel":     15,  # Layer 6 sub — % scanners using async/threadpool
+    "ui_integration": 15, # Layer 22 — generate<X>Report called + PHASES
+                          # consumed + /run_all endpoint POSTed from UI
 }
 
 # Per-scanner 7-check requirements (Layer 6).
@@ -153,6 +156,41 @@ def load_frontend_phases(module: str) -> set[str]:
     return set(re.findall(pattern, src))
 
 
+def check_ui_integration(module: str) -> dict[str, bool]:
+    """Layer 22 — verify the frontend actually USES the new module's wiring.
+
+    The OSINT lesson (2026-05-24): a scanner / orchestrator / PDF function
+    can exist and score 91.7 while the UI tab still calls a dead
+    placeholder. These three checks catch that.
+    """
+    app_js = ROOT / "src" / "App.js"
+    if not app_js.exists():
+        return {"pdf_callsite": False, "phases_consumed": False,
+                "endpoint_called": False}
+    src = app_js.read_text(encoding="utf-8")
+
+    cap = module.capitalize()
+    # 1. PDF function is CALLED somewhere (not just declared)
+    pdf_decl = f"function generate{cap}Report"
+    pdf_call = f"generate{cap}Report("
+    pdf_callsite = src.count(pdf_call) >= 2  # 1 declaration + >= 1 call
+
+    # 2. <MODULE>_PHASES referenced AT LEAST TWICE (declaration + consumer)
+    phases_name = f"{module.upper()}_PHASES"
+    phases_consumed = src.count(phases_name) >= 2
+
+    # 3. fetch(.../api/<module>/run_all) appears (UI fans out to orchestrator)
+    endpoint_called = bool(re.search(
+        rf'fetch\s*\([^)]*?/api/{re.escape(module)}/run_all', src
+    ))
+
+    return {
+        "pdf_callsite": pdf_callsite,
+        "phases_consumed": phases_consumed,
+        "endpoint_called": endpoint_called,
+    }
+
+
 def score_module(module: str, verbose: bool = False) -> dict:
     """Return per-layer scores + total."""
     module_path = ROOT / "tools" / module
@@ -200,14 +238,21 @@ def score_module(module: str, verbose: bool = False) -> dict:
     in_fe = sum(1 for n in scanner_names if n in fe_phases)
     fe_pct = (in_fe / len(scanners)) * 100
 
-    # Weighted total
+    # Layer 22 — UI integration (added 2026-05-24 after OSINT broken-PDF)
+    ui_checks = check_ui_integration(module)
+    ui_passed = sum(ui_checks.values())
+    ui_pct = (ui_passed / 3) * 100
+
+    # Weighted total. Divisor = sum of weights (115) so that 100% on every
+    # layer produces score = 100. Missing Layer 22 alone drops you ~13 points.
     total = (
         orch_pct      * WEIGHTS["orchestrator"] +
         curation_pct  * WEIGHTS["curation"] +
         quality_pct   * WEIGHTS["quality_bar"] +
         fe_pct        * WEIGHTS["frontend"] +
-        parallel_pct  * WEIGHTS["parallel"]
-    ) / 100
+        parallel_pct  * WEIGHTS["parallel"] +
+        ui_pct        * WEIGHTS["ui_integration"]
+    ) / sum(WEIGHTS.values())
 
     return {
         "module": module,
@@ -219,7 +264,9 @@ def score_module(module: str, verbose: bool = False) -> dict:
             "L6_quality_bar":  {"passed": quality_passes, "of": len(scanners), "pct": quality_pct},
             "L6_parallel":     {"passed": parallel, "of": len(scanners), "pct": parallel_pct},
             "L7_frontend":     {"passed": in_fe, "of": len(scanners), "pct": fe_pct},
+            "L22_ui_integration": {"passed": ui_passed, "of": 3, "pct": ui_pct},
         },
+        "ui_integration_detail": ui_checks,
         "score": round(total, 1),
         "ready": total >= 85,
         "per_scanner_checks": per_scanner_checks if verbose else None,
@@ -262,6 +309,19 @@ def print_result(r: dict, verbose: bool = False):
             mark = "✅" if pct >= 90 else "⚠️ " if pct >= 70 else "❌"
             print(f"  {mark} {name:15s} {data['passed']:3d}/{data['of']:<3d} "
                   f"{bar(pct)} {pct:5.1f}%")
+
+    # Layer 22 — UI integration detail
+    ui = r.get("ui_integration_detail", {})
+    if ui:
+        print(f"\n  Layer 22 — UI Integration (added 2026-05-24):")
+        labels = {
+            "pdf_callsite":    "generate<X>Report called (not just declared)",
+            "phases_consumed": "<MODULE>_PHASES consumed by a component",
+            "endpoint_called": "fetch(/api/<module>/run_all) called",
+        }
+        for k, v in ui.items():
+            mark = "✅" if v else "❌"
+            print(f"  {mark} {labels.get(k, k)}")
 
     print(f"{'─' * 65}")
     status = "READY TO SHIP" if r["ready"] else "NOT READY"

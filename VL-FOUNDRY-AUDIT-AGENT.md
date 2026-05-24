@@ -258,6 +258,49 @@ Verify:
 Fail if PHASES count != orchestrator count.
 ```
 
+### Layer 22 — UI Integration Gate (added 2026-05-24)
+
+```
+{universal preamble}
+
+LAYER: 22 (UI Integration)
+MODULE: <module_name>
+
+Context: The OSINT lesson — a module can score 91.7/100 while the UI is
+still wired to a dead placeholder function. This audit verifies the
+LAST mile between the scoring artifact and what a real customer clicks.
+
+Read these files:
+  - src/App.js  (use Grep to find specific patterns below)
+  - VL-FOUNDRY.md Layer 22 section
+
+Run these GREP searches in src/App.js and report results:
+
+  1. PDF function called:
+     grep -c "generate<Module>Report("   — must return >= 2
+     (1 for the declaration + 1 for the call; <2 = dead code)
+
+  2. PHASES array consumed:
+     grep -c "<MODULE>_PHASES"           — must return >= 2
+
+  3. Orchestrator endpoint POSTed:
+     grep -E "fetch\\([^)]*\\/api\\/<module>\\/run_all"   — must match
+
+  4. OLD/legacy PDF function is DELETED (not just commented out):
+     grep "generate<Module>Pdf("         — must return 0 matches
+     (lowercase "Pdf" is the typical placeholder name; ensure
+     it's gone, not parked as dead code)
+
+Pass criteria: all 4 checks return the expected result.
+Fail: report exact grep counts and which files still contain the dead
+function. Recommend a single Edit that wires up the new function and
+deletes the old one.
+
+Anti-cheat clause: if the builder claims "the UI is wired but the scorer
+can't see it because of <reason>", DEMAND a screenshot/cURL transcript
+proving a real /api/<module>/run_all call happened from the browser.
+```
+
 ### Final gate — Full scorer + acid test
 
 ```
