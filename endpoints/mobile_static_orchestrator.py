@@ -157,5 +157,36 @@ async def mobile_static_run_all_tiers():
     }
 
 
+# ─── Pre-bundled sample binaries (for demo / first-time customer) ─
+# Customers without their own APK can pick one of these from a dropdown
+# and run a full scan without uploading anything. Paths come from the
+# Dockerfile's /app/samples/mobile stage.
+SAMPLE_BINARIES = [
+    {
+        "id": "insecurebankv2",
+        "name": "InsecureBankv2 — intentionally vulnerable",
+        "path": "/app/samples/mobile/insecurebankv2.apk",
+        "description": "OWASP MASVS training APK. Triggers ~30 findings across all 12 scanners — hardcoded credentials, weak crypto, exported components, cleartext traffic.",
+    },
+]
+
+
+@router.get("/api/mobile_static/samples")
+async def mobile_static_samples():
+    """List demo binaries pre-bundled in the image. Only returns samples
+    whose files actually exist (so a failed Docker download doesn't show
+    a broken entry in the UI)."""
+    out = []
+    for s in SAMPLE_BINARIES:
+        p = Path(s["path"])
+        if p.exists() and p.is_file():
+            out.append({
+                **s,
+                "size": p.stat().st_size,
+                "size_mb": round(p.stat().st_size / 1024 / 1024, 2),
+            })
+    return {"samples": out, "count": len(out)}
+
+
 def register(app):
     app.include_router(router)
