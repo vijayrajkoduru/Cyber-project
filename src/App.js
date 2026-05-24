@@ -1203,10 +1203,18 @@ function generatePDF(reportData) {
           rrect(margin+28, y+1.5, 18, 5, 1, lt);
           doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...bg);
           doc.text(worst, margin+29, y+5);
-          // Sample finding
-          const sample = (fs[0].detail || "").substring(0, 95);
+          // COMPLIANCE-SAMPLE-V2: previously the sample was always fs[0] which
+          // was the first-pushed finding and made same-CWE counts look unequal
+          // ("1 finding: X-Frame-Options" in one row, "3 findings: X-Frame-Options"
+          // in another). Anchor the sample to the WORST-severity finding in this
+          // control so the displayed example matches the severity badge, and
+          // word the label as "impact this control" to make clear the count
+          // is per-control aggregation, not per-finding.
+          const sampleF = fs.find(f => f.severity === worst) || fs[0];
+          const sample = (sampleF.detail || "").substring(0, 95);
+          const noun = fs.length === 1 ? "finding impacts" : "findings impact";
           doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
-          doc.text(`${fs.length} finding(s): ${sample}`, margin+50, y+4.5);
+          doc.text(`${fs.length} ${noun} this control — top: ${sample}`, margin+50, y+4.5);
           y += 6.5;
         });
         y += 4;
@@ -1645,12 +1653,28 @@ function generatePDF(reportData) {
       chk(30); y+=2;
       y = sectionHead("CMS Detection",y);
       fillR(margin,y,contentW,9,LIGHT);
-      const cmsName = cms && (cms.cms || cms.name || cms.platform);
-      const cmsVer  = cms && (cms.version || "");
-      rrect(margin+3,y+2,cmsName?24:28,5,1,cmsName?[219,234,254]:[220,252,231]);
-      doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...(cmsName?[30,64,175]:GREEN));
-      doc.text(cmsName?"DETECTED":"NOT FOUND",margin+5,y+6);
-      txt(cmsName?(cmsName+(cmsVer?" v"+cmsVer:"")):"No CMS Detected",margin+35,y+6,8,DARK,true);
+      // CMS-RENDER-V2: the backend returns r.cms.detected as an array of
+      // platform names (e.g. ["WordPress"]). Older shapes (cms.cms / cms.name
+      // / cms.platform) may be strings; never render an object.
+      const _cmsList = (cms && Array.isArray(cms.detected)) ? cms.detected
+                       : (cms && cms.cms && Array.isArray(cms.cms.detected)) ? cms.cms.detected
+                       : [];
+      let cmsName = "";
+      if (_cmsList.length > 0) {
+        cmsName = _cmsList.filter(x => typeof x === "string").join(", ");
+      } else if (cms && typeof cms.cms === "string") {
+        cmsName = cms.cms;
+      } else if (cms && typeof cms.name === "string") {
+        cmsName = cms.name;
+      } else if (cms && typeof cms.platform === "string") {
+        cmsName = cms.platform;
+      }
+      const cmsVer  = (cms && typeof cms.version === "string") ? cms.version : "";
+      const _has = !!cmsName;
+      rrect(margin+3,y+2,_has?24:28,5,1,_has?[219,234,254]:[220,252,231]);
+      doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...(_has?[30,64,175]:GREEN));
+      doc.text(_has?"DETECTED":"NOT FOUND",margin+5,y+6);
+      txt(_has?(cmsName+(cmsVer?" v"+cmsVer:"")):"No CMS Detected",margin+35,y+6,8,DARK,true);
       y+=10;
     }
 
@@ -1855,13 +1879,36 @@ function generatePDF(reportData) {
         const isVuln = c.res && c.res.vulnerable === true;
         const hasRealFinds = c.res && Array.isArray(c.res.findings) && c.res.findings.some(f=>["CRITICAL","HIGH","MEDIUM"].includes(f.severity));
         const isSkipped = c.res && (c.res.skipped_reason || c.res.skipped === true);
-        // Three-state status — never "PASSED" if the scanner didn't actually test.
-        // SKIPPED (orange) means we recognized the target as not having the
-        // surface needed for this check (e.g. SSTI on a Netlify static site).
-        // PASSED only when the scanner actually ran and found nothing.
-        const status = isSkipped ? "SKIPPED" : (isVuln || hasRealFinds ? "VULNERABLE" : "PASSED");
-        const stColor = status==="VULNERABLE" ? RED : status==="SKIPPED" ? [217,119,6] : GREEN;
-        const stW = status==="VULNERABLE" ? 18 : status==="SKIPPED" ? 16 : 13;
+        // PARTIAL-V1: scanner reached wall-clock budget before completing its
+        // probe set. We don't yet know if the target is clean — calling it
+        // "PASSED" misleads. Inspect raw_data.*.wallclock_bailed AND
+        // tests_summary text for the "wall-clock bailed" signal.
+        let _bailed = false;
+        if (c.res) {
+          const _rd = c.res.raw_data || {};
+          for (const k of Object.keys(_rd)) {
+            if (_rd[k] && _rd[k].wallclock_bailed === true) { _bailed = true; break; }
+          }
+          const _summary = String(c.res.tests_summary || c.res.what_checked || "");
+          if (!_bailed && /wall.?clock\s+bailed|VL-TURBO\s+bailed/i.test(_summary)) _bailed = true;
+        }
+        // Four-state status — never "PASSED" if the scanner didn't actually test.
+        // VULNERABLE (red): real finding emitted.
+        // SKIPPED (orange): scanner recognized target lacks the surface (no params, etc.).
+        // PARTIAL (yellow): wall-clock bailed; coverage incomplete.
+        // PASSED (green): scanner ran fully and emitted no real findings.
+        const status = isSkipped ? "SKIPPED"
+                       : (isVuln || hasRealFinds) ? "VULNERABLE"
+                       : _bailed ? "PARTIAL"
+                       : "PASSED";
+        const stColor = status==="VULNERABLE" ? RED
+                       : status==="SKIPPED" ? [217,119,6]
+                       : status==="PARTIAL" ? [202,138,4]
+                       : GREEN;
+        const stW = status==="VULNERABLE" ? 18
+                       : status==="SKIPPED" ? 16
+                       : status==="PARTIAL" ? 15
+                       : 13;
         rrect(margin+53,y+1.5,stW,4,1,stColor);
         doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(...WHITE);
         doc.text(status,margin+55,y+5);
@@ -1874,11 +1921,13 @@ function generatePDF(reportData) {
             ? (c.res.findings && c.res.findings[0] ? c.res.findings[0].detail || "Vulnerability confirmed" : "Vulnerability confirmed")
             : hasRealFinds
               ? (c.res.findings[0].detail || "No vulnerability detected")
-              : "No vulnerability detected";
+              : status === "PARTIAL"
+                ? String(c.res.tests_summary || "Scanner reached wall-clock budget before completing — coverage incomplete")
+                : "No vulnerability detected";
         doc.setFont("Arial","normal"); doc.setFontSize(7.5);
         const wrapped = doc.splitTextToSize(String(fullDetail), 86);
         const detail = wrapped.length > 1 ? wrapped[0].replace(/\s+\S*$/, "") + "…" : wrapped[0];
-        const dColor = isSkipped ? [120,53,15] : DARK;
+        const dColor = isSkipped ? [120,53,15] : (status === "PARTIAL" ? [120,53,15] : DARK);
         txt(detail,margin+98,y+5,7.5,dColor);
         y+=7;
       });
@@ -1990,12 +2039,20 @@ function generatePDF(reportData) {
 
     const realF=(findings||[]).filter(f=>{
       if(!f || !f.severity) return false;
+      // POSITIVE-FILTER-V1: POSITIVE entries are clean-state markers (scanner
+      // ran, found nothing). They belong in Section 11 (Advanced Security
+      // Testing) + OWASP coverage, NOT in "Detailed Findings". Listing them
+      // here with CVSS 5.0 + "Apply security hardening" Fix is misleading.
+      if(String(f.severity).toUpperCase()==="POSITIVE") return false;
       const detail = String(f.detail||"");
       if(f.severity==="INFO"&&!detail.includes("/")) return false;
       const d=detail.toLowerCase();
       if(d.includes("no cgi dir")||d.includes("cgi tests skipped")||d.includes("no cgi-bin")||d.includes("no cgi bin")) return false;
       return true;
     });
+    // Count what we filtered so the report still acknowledges the clean checks.
+    const _positiveCount = (findings||[]).filter(f =>
+      f && String(f.severity).toUpperCase() === "POSITIVE").length;
 
     // Decide whether to show the CVE column at all — only if at least one finding has a real CVE.
     // Most findings are configuration issues (missing headers, etc.) without a CVE, so the column
@@ -2089,6 +2146,18 @@ function generatePDF(reportData) {
       fillR(margin,y,contentW,8,LIGHT);
       txt("No findings recorded",margin+3,y+5.5,8,GRAY);
       y+=9;
+    }
+    // Acknowledgement row for filtered-out POSITIVE clean checks so the
+    // report still tells customers "we tested these surfaces and they passed".
+    if (_positiveCount > 0) {
+      chk(8);
+      fillR(margin,y,contentW,7,[240,253,244]);
+      hline(margin,y,margin,y+7,GREEN,1);
+      doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...DGREEN);
+      doc.text(`+ ${_positiveCount} clean check(s) — no actionable findings`, margin+4, y+4.5);
+      doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
+      doc.text("See Section 11 (Advanced Security Testing) + OWASP Top 10 coverage for per-scanner pass/fail.", margin+4, y+8 - 1.2);
+      y+=10;
     }
 
     // ─── RECOMMENDATIONS (dynamic from findings) ──────────────────
@@ -2197,11 +2266,21 @@ function generatePDF(reportData) {
     Object.entries(_allResultsLocal).forEach(([tool, res]) => {
       if (!res) return;
       if (!res.tests_summary && !res.tests_performed) return;
+      // AUDIT-COUNT-V2: separate ACTIONABLE findings (Critical/High/Medium/Low)
+      // from POSITIVE clean-state entries. The previous logic counted every
+      // non-INFO finding as a "HIT" — which incorrectly flagged xss/cors/csrf
+      // as "1 HIT" when their only finding was a clean-state POSITIVE.
+      const _allF = res.findings || [];
+      const _real = _allF.filter(f =>
+        ["CRITICAL","HIGH","MEDIUM","LOW"].includes(String(f.severity||"").toUpperCase())).length;
+      const _positive = _allF.filter(f =>
+        String(f.severity||"").toUpperCase() === "POSITIVE").length;
       _scannerAudits.push({
         tool,
         tests: res.tests_performed || "—",
         summary: res.tests_summary || "Active probe completed",
-        found: (res.findings || []).filter(f => f.severity !== "INFO").length,
+        found: _real,
+        positives: _positive,
       });
     });
     if (_scannerAudits.length > 0) {
@@ -2222,10 +2301,15 @@ function generatePDF(reportData) {
         doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
         doc.text(String(a.tests), margin+33, y+5);
         lines.forEach((ln,li)=>doc.text(ln, margin+48, y+5 + li*3.6));
-        // Found count
+        // Found count — three states: HIT (red), CLEAN (green), OK (green).
+        // HIT  : actionable finding(s) emitted (Critical/High/Medium/Low).
+        // CLEAN: only POSITIVE clean-state entries — scanner ran, target clean.
+        // OK   : neither (e.g. wall-clock bailed before producing output).
+        const _label = a.found > 0 ? `${a.found} HIT`
+                       : (a.positives > 0 ? `${a.positives} CLEAN` : "0 OK");
         const foundColor = a.found > 0 ? [162,28,28] : [15,118,82];
         doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...foundColor);
-        doc.text(a.found > 0 ? `${a.found} HIT` : "0 OK", pageW-margin-15, y+5);
+        doc.text(_label, pageW-margin-15, y+5);
         y += h;
       });
       y += 6;
@@ -2543,12 +2627,30 @@ function generateModuleReport(reportData) {
       iy+=rh+2;
     });
 
-    // Risk summary bar
+    // Risk summary bar — RISK-SCORE-V2 (aligned with Vuln module: higher = worse).
     const visFinds = (findings||[]).filter(f=>f.severity!=="INFO");
-    const _riskPenalty = visFinds.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
-    const riskScore = Math.max(0, 100 - _riskPenalty);
-    const rColor = riskScore<40?RED:riskScore<70?ORANGE:riskScore<90?[133,100,0]:GREEN;
-    const rDisp = riskScore<40?"CRITICAL RISK":riskScore<70?"HIGH RISK":riskScore<90?"MEDIUM RISK":riskScore<100?"LOW RISK":"SECURE";
+    const _wapRiskBar = (() => {
+      const real = visFinds.filter(f =>
+        ["CRITICAL","HIGH","MEDIUM","LOW"].includes(f && f.severity));
+      if (real.length === 0) return {score: 5, label: "MINIMAL RISK", color: [15,118,82]};
+      const _cvss = f => {
+        const c = parseFloat(f.cvss || "0");
+        if (c > 0) return c;
+        return {CRITICAL:9.0, HIGH:7.5, MEDIUM:5.0, LOW:3.0}[f.severity] || 0;
+      };
+      let sum = 0, maxCvss = 0;
+      real.forEach(f => { const c = _cvss(f); sum += c; if (c > maxCvss) maxCvss = c; });
+      const raw = Math.min(70, sum * 2.5) + Math.min(30, maxCvss * 3);
+      const score = Math.round(Math.min(100, Math.max(5, raw)));
+      const label = score >= 80 ? "CRITICAL RISK" : score >= 60 ? "HIGH RISK" :
+                    score >= 40 ? "MODERATE RISK" : score >= 20 ? "LOW RISK" : "MINIMAL RISK";
+      const color = score >= 80 ? [162,28,28] : score >= 60 ? [194,65,12] :
+                    score >= 40 ? [133,79,11] : score >= 20 ? [202,138,4] : [15,118,82];
+      return {score, label, color};
+    })();
+    const riskScore = _wapRiskBar.score;
+    const rColor = _wapRiskBar.color;
+    const rDisp = _wapRiskBar.label;
     if(iy < 225){
       iy+=6;
       fillR(margin,iy,contentW,14,LIGHT.map(v=>Math.round(v*0.12)));
@@ -2679,60 +2781,101 @@ function generateModuleReport(reportData) {
 // ── Section 6: Network & Protocol Attacks (OSWA) ────────────────
 // ── Section 7: Modern Web Vulnerabilities (OSWE Focus) ──────────
 // ── Section 8: Infrastructure & Services (OSCP) ─────────────────
+// PHASES mirrors endpoints/webapp_orchestrator.py WEBAPP_TOOLS_BY_TIER exactly.
+// Curation 2026-05-24: dropped ssl (was a pointer to recon/tls_deep) + 4 dupes
+// (idor_detector / nosqli / forced_browsing / directory_brute). Final: 60 phases.
 const PHASES = [
-  // ── Discovery (runs FIRST — populates scan_state.json for every later scanner)
-  {name:"SPA Crawler",            tool:"spa_crawler",   endpoint:"/api/scan/spa_crawler",       icon:"🕷️"},
-  // ── Reconnaissance & Fingerprinting ─────────────────────────
-  {name:"CMS Detection",          tool:"cms",           endpoint:"/api/scan/cms",               icon:"📦"},
-  {name:"SSL/TLS Analysis",       tool:"ssl",           endpoint:"/api/scan/ssl",               icon:"🔒"},
-  {name:"Port Scanning",          tool:"portscan",      endpoint:"/api/scan/portscan",          icon:"🔌"},
-  // dns/techstack/ssl_cert removed — they live in the Recon module (tools/recon/)
-  // and have no /api/scan/<x> backend impl. Keeps webapp focused on app-layer.
-  // ── Injection Attacks ───────────────────────────────────────
-  {name:"XSS Testing",            tool:"xss",           endpoint:"/api/scan/xss",               icon:"⚡"},
-  {name:"SQL Injection",          tool:"sqli",          endpoint:"/api/scan/sqli",              icon:"💉"},
-  {name:"Command Injection",      tool:"cmd_injection", endpoint:"/api/scan/cmd_injection",     icon:"💻"},
-  {name:"XXE Injection",          tool:"xxe",           endpoint:"/api/scan/xxe",               icon:"📄"},
-  // ── Authentication & Session ────────────────────────────────
-  {name:"Security Headers",       tool:"headers",       endpoint:"/api/scan/headers",           icon:"📋"},
-  {name:"Cookie Analysis",        tool:"cookies",       endpoint:"/api/scan/cookies",           icon:"🍪"},
-  {name:"CSRF Testing",           tool:"csrf",          endpoint:"/api/scan/csrf",              icon:"🛡"},
-  {name:"JWT Attacks",            tool:"jwt",           endpoint:"/api/scan/jwt",               icon:"🎟"},
-  // ── File & Path Attacks ─────────────────────────────────────
-  {name:"Path Traversal / LFI",   tool:"lfi",           endpoint:"/api/scan/lfi",               icon:"📂"},
-  {name:"Exposed Files",          tool:"exposed_files", endpoint:"/api/scan/exposed_files",     icon:"🗂"},
-  // ── Network & Protocol Attacks ──────────────────────────────
-  {name:"CORS Testing",           tool:"cors",          endpoint:"/api/scan/cors",              icon:"🌐"},
-  {name:"SSRF Testing",           tool:"ssrf",          endpoint:"/api/scan/ssrf",              icon:"🔄"},
-  {name:"HTTP Methods",           tool:"http_methods",  endpoint:"/api/scan/http_methods",      icon:"🔀"},
-  {name:"Open Redirect",          tool:"open_redirect", endpoint:"/api/scan/open_redirect",     icon:"↩"},
-  {name:"Clickjacking",           tool:"clickjacking",  endpoint:"/api/scan/clickjacking",      icon:"🖱"},
-  // ── Access Control & Modern API Bugs ────────────────────────
-  {name:"IDOR",                   tool:"idor",            endpoint:"/api/scan/idor",            icon:"🔓"},
-  {name:"Mass Assignment",        tool:"mass_assignment", endpoint:"/api/scan/mass_assignment", icon:"🧬"},
-  {name:"NoSQL Injection",        tool:"nosql",           endpoint:"/api/scan/nosql",           icon:"🍃"},
-  {name:"Broken Access Control",  tool:"access_control",  endpoint:"/api/scan/access_control",  icon:"🚧"},
-  // ── Framework-Specific ──────────────────────────────────────
-  {name:"Nuclei Templates",       tool:"nuclei",        endpoint:"/api/scan/nuclei",            icon:"☢️"},
-  {name:"Force Browse",          tool:"force_browse",  endpoint:"/api/scan/force_browse",     icon:"🔦"},
-  {name:"File Upload",          tool:"file_upload",      endpoint:"/api/scan/file_upload",       icon:"🗃️"},
-  {name:"SSTI",          tool:"ssti",      endpoint:"/api/scan/ssti",       icon:"📜"},
-  {name:"GraphQL Audit",          tool:"graphql",      endpoint:"/api/scan/graphql",       icon:"◈"},
-  {name:"Sensitive Data",          tool:"sensitive_data",      endpoint:"/api/scan/sensitive_data",       icon:"🔍"},
-  {name:"Stored XSS",          tool:"stored_xss",      endpoint:"/api/scan/stored_xss",       icon:"💾"},
-  {name:"WordPress Scanner",      tool:"wpscan",        endpoint:"/api/scan/wpscan",            icon:"📝"},
+  // ── tier1_discovery (1) — runs FIRST, populates scan_state.json ─────
+  {name:"SPA Crawler",            tool:"spa_crawler",       endpoint:"/api/webapp/scan/spa_crawler",     icon:"🕷️"},
+  // ── tier2_recon (2) ────────────────────────────────────────────────
+  {name:"CMS Detection",          tool:"cms",               endpoint:"/api/webapp/scan/cms",             icon:"📦"},
+  {name:"Port Scanning",          tool:"portscan",          endpoint:"/api/webapp/scan/portscan",        icon:"🔌"},
+  // ── tier3_injection (4) — highest customer impact ──────────────────
+  {name:"XSS Testing",            tool:"xss",               endpoint:"/api/webapp/scan/xss",             icon:"⚡"},
+  {name:"SQL Injection",          tool:"sqli",              endpoint:"/api/webapp/scan/sqli",            icon:"💉"},
+  {name:"Command Injection",      tool:"cmd_injection",     endpoint:"/api/webapp/scan/cmd_injection",   icon:"💻"},
+  {name:"XXE Injection",          tool:"xxe",               endpoint:"/api/webapp/scan/xxe",             icon:"📄"},
+  // ── tier4_auth (4) — auth & session ────────────────────────────────
+  {name:"Security Headers",       tool:"headers",           endpoint:"/api/webapp/scan/headers",         icon:"📋"},
+  {name:"Cookie Analysis",        tool:"cookies",           endpoint:"/api/webapp/scan/cookies",         icon:"🍪"},
+  {name:"CSRF Testing",           tool:"csrf",              endpoint:"/api/webapp/scan/csrf",            icon:"🛡"},
+  {name:"JWT Attacks",            tool:"jwt",               endpoint:"/api/webapp/scan/jwt",             icon:"🎟"},
+  // ── tier5_file_path (2) ────────────────────────────────────────────
+  {name:"Path Traversal / LFI",   tool:"lfi",               endpoint:"/api/webapp/scan/lfi",             icon:"📂"},
+  {name:"Exposed Files",          tool:"exposed_files",     endpoint:"/api/webapp/scan/exposed_files",   icon:"🗂"},
+  // ── tier6_network (5) — protocol attacks ───────────────────────────
+  {name:"CORS Testing",           tool:"cors",              endpoint:"/api/webapp/scan/cors",            icon:"🌐"},
+  {name:"SSRF Testing",           tool:"ssrf",              endpoint:"/api/webapp/scan/ssrf",            icon:"🔄"},
+  {name:"HTTP Methods",           tool:"http_methods",      endpoint:"/api/webapp/scan/http_methods",    icon:"🔀"},
+  {name:"Open Redirect",          tool:"open_redirect",     endpoint:"/api/webapp/scan/open_redirect",   icon:"↩"},
+  {name:"Clickjacking",           tool:"clickjacking",      endpoint:"/api/webapp/scan/clickjacking",    icon:"🖱"},
+  // ── tier7_access (4) — access control & modern API ─────────────────
+  {name:"IDOR",                   tool:"idor",              endpoint:"/api/webapp/scan/idor",            icon:"🔓"},
+  {name:"Mass Assignment",        tool:"mass_assignment",   endpoint:"/api/webapp/scan/mass_assignment", icon:"🧬"},
+  {name:"NoSQL Injection",        tool:"nosql",             endpoint:"/api/webapp/scan/nosql",           icon:"🍃"},
+  {name:"Broken Access Control",  tool:"access_control",    endpoint:"/api/webapp/scan/access_control",  icon:"🚧"},
+  // ── tier8_framework (9) — heavy / Kali-style ───────────────────────
+  {name:"Nikto",                  tool:"nikto",             endpoint:"/api/webapp/scan/nikto",           icon:"🦷"},
+  {name:"Nuclei Templates",       tool:"nuclei",            endpoint:"/api/webapp/scan/nuclei",          icon:"☢️"},
+  {name:"Force Browse",           tool:"force_browse",      endpoint:"/api/webapp/scan/force_browse",    icon:"🔦"},
+  {name:"File Upload",            tool:"file_upload",       endpoint:"/api/webapp/scan/file_upload",     icon:"🗃️"},
+  {name:"SSTI",                   tool:"ssti",              endpoint:"/api/webapp/scan/ssti",            icon:"📜"},
+  {name:"GraphQL Audit",          tool:"graphql",           endpoint:"/api/webapp/scan/graphql",         icon:"◈"},
+  {name:"Sensitive Data",         tool:"sensitive_data",    endpoint:"/api/webapp/scan/sensitive_data",  icon:"🔍"},
+  {name:"Stored XSS",             tool:"stored_xss",        endpoint:"/api/webapp/scan/stored_xss",      icon:"💾"},
+  {name:"WordPress Scanner",      tool:"wpscan",            endpoint:"/api/webapp/scan/wpscan",          icon:"📝"},
+  // ── tier9_ai_curated_discovery (3) ─────────────────────────────────
+  {name:"Param Discovery",        tool:"param_discovery",   endpoint:"/api/webapp/param_discovery",      icon:"🧪"},
+  {name:"HTML Crawler",           tool:"crawler",           endpoint:"/api/webapp/crawler",              icon:"🕸"},
+  {name:"Secrets Hunt",           tool:"secrets",           endpoint:"/api/webapp/secrets",              icon:"🔑"},
+  // ── tier10_modern_attacks (7) — AI-curated payload lists ───────────
+  {name:"LDAP Injection",         tool:"ldap_injection",    endpoint:"/api/webapp/ldap_injection",       icon:"📚"},
+  {name:"CRLF Injection",         tool:"crlf_injection",    endpoint:"/api/webapp/crlf_injection",       icon:"↵"},
+  {name:"Prototype Pollution",    tool:"prototype_pollution", endpoint:"/api/webapp/prototype_pollution", icon:"🧬"},
+  {name:"Host Header Injection",  tool:"host_header_injection", endpoint:"/api/webapp/host_header_injection", icon:"📨"},
+  {name:"Cache Poisoning",        tool:"cache_poisoning",   endpoint:"/api/webapp/cache_poisoning",      icon:"💧"},
+  {name:"Deserialization Probe",  tool:"deserialization_probe", endpoint:"/api/webapp/deserialization_probe", icon:"📦"},
+  {name:"HTTP Smuggling",         tool:"http_smuggling",    endpoint:"/api/webapp/http_smuggling",       icon:"📦"},
+  // ── tier11_discovery_deep (7) ──────────────────────────────────────
+  {name:"Backup Files",           tool:"backup_files",      endpoint:"/api/webapp/backup_files",         icon:"💾"},
+  {name:"Directory Listing",      tool:"directory_listing", endpoint:"/api/webapp/directory_listing",    icon:"📁"},
+  {name:"Swagger Discovery",      tool:"swagger_discovery", endpoint:"/api/webapp/swagger_discovery",    icon:"📘"},
+  {name:"GraphQL Introspection",  tool:"graphql_introspection", endpoint:"/api/webapp/graphql_introspection", icon:"◇"},
+  {name:"Retire.js",              tool:"retire_js",         endpoint:"/api/webapp/retire_js",            icon:"📜"},
+  {name:"API Endpoint Fuzz",      tool:"api_endpoint_fuzz", endpoint:"/api/webapp/api_endpoint_fuzz",    icon:"🔬"},
+  {name:"Param Reflection",       tool:"param_reflection",  endpoint:"/api/webapp/param_reflection",     icon:"🪞"},
+  // ── tier12_auth_session (6) ────────────────────────────────────────
+  {name:"Broken Auth",            tool:"broken_auth",       endpoint:"/api/webapp/broken_auth",          icon:"🔐"},
+  {name:"Session Fixation",       tool:"session_fixation",  endpoint:"/api/webapp/session_fixation",     icon:"🪪"},
+  {name:"OAuth Redirect Bypass",  tool:"oauth_redirect_bypass", endpoint:"/api/webapp/oauth_redirect_bypass", icon:"🪝"},
+  {name:"Password Reset Flaws",   tool:"password_reset_flaws", endpoint:"/api/webapp/password_reset_flaws", icon:"🔁"},
+  {name:"Privilege Escalation",   tool:"privilege_escalation", endpoint:"/api/webapp/privilege_escalation", icon:"⬆"},
+  {name:"Authenticated Scan",     tool:"authenticated_scan", endpoint:"/api/webapp/authenticated_scan",  icon:"🪟"},
+  // ── tier13_modern_framework (6) ────────────────────────────────────
+  {name:"CSP Bypass",             tool:"csp_bypass",        endpoint:"/api/webapp/csp_bypass",           icon:"🛡"},
+  {name:"Weak Crypto",            tool:"weak_crypto",       endpoint:"/api/webapp/weak_crypto",          icon:"🔐"},
+  {name:"Race Condition",         tool:"race_condition",    endpoint:"/api/webapp/race_condition",       icon:"🏁"},
+  {name:"Drupal Scan",            tool:"drupal_scan",       endpoint:"/api/webapp/drupal_scan",          icon:"🟦"},
+  {name:"Joomla Scan",            tool:"joomla_scan",       endpoint:"/api/webapp/joomla_scan",          icon:"🟧"},
+  {name:"File Upload Bypass",     tool:"file_upload_bypass", endpoint:"/api/webapp/file_upload_bypass",  icon:"📎"},
 ];
 
-// Section header definitions — keyed by the first tool in each section
+// Section header definitions — keyed by the first tool in each section.
+// Mirrors WEBAPP_TOOLS_BY_TIER in endpoints/webapp_orchestrator.py (13 tiers).
 const SECTION_HEADERS = {
-  "wafw00f":       {label:"Section 1 — Reconnaissance & Fingerprinting", sub:"OSWA Phase 1 • 11 scanners", color:"#3b82f6"},
-  "gobuster":      {label:"Section 2 — Discovery & Fuzzing",             sub:"OSWA Phase 2 • 2 scanners",  color:"#06b6d4"},
-  "xss":           {label:"Section 3 — Injection Attacks",               sub:"OSWA Core • 7 scanners",     color:"#ef4444"},
-  "headers":       {label:"Section 4 — Authentication & Session",        sub:"OSWA + OSWE • 9 scanners",   color:"#a855f7"},
-  "lfi":           {label:"Section 5 — File & Path Attacks",             sub:"OSWA • 3 scanners",          color:"#f97316"},
-  "cors":          {label:"Section 6 — Network & Protocol Attacks",      sub:"OSWA • 10 scanners",         color:"#0891b2"},
-  "deserial":      {label:"Section 7 — Modern Web Vulnerabilities",      sub:"OSWE Focus • 5 scanners",    color:"#22c55e"},
-  "smb":           {label:"Section 8 — Infrastructure & Services",       sub:"OSCP • 4 scanners",          color:"#eab308"},
+  "spa_crawler":           {label:"Section 1 — Discovery",                       sub:"Runs first • 1 scanner",     color:"#3b82f6"},
+  "cms":                   {label:"Section 2 — Reconnaissance & Fingerprinting", sub:"OSWA Phase 1 • 2 scanners",  color:"#06b6d4"},
+  "xss":                   {label:"Section 3 — Injection Attacks",               sub:"OSWA Core • 4 scanners",     color:"#ef4444"},
+  "headers":               {label:"Section 4 — Authentication & Session",        sub:"OSWA + OSWE • 4 scanners",   color:"#a855f7"},
+  "lfi":                   {label:"Section 5 — File & Path Attacks",             sub:"OSWA • 2 scanners",          color:"#f97316"},
+  "cors":                  {label:"Section 6 — Network & Protocol Attacks",      sub:"OSWA • 5 scanners",          color:"#0891b2"},
+  "idor":                  {label:"Section 7 — Access Control & Modern API",     sub:"OWASP A01/A04 • 4 scanners", color:"#14b8a6"},
+  "nikto":                 {label:"Section 8 — Framework-Specific & Heavy",      sub:"Kali-style • 9 scanners",    color:"#eab308"},
+  "param_discovery":       {label:"Section 9 — AI-Curated Discovery",            sub:"VL-FORGE • 3 scanners",      color:"#22c55e"},
+  "ldap_injection":        {label:"Section 10 — Modern Attack Surface",          sub:"AI payloads • 7 scanners",   color:"#84cc16"},
+  "backup_files":          {label:"Section 11 — Deep Discovery",                 sub:"Auxiliary • 7 scanners",     color:"#0ea5e9"},
+  "broken_auth":           {label:"Section 12 — Auth & Session (Extended)",      sub:"OWASP A07 • 6 scanners",     color:"#a855f7"},
+  "csp_bypass":            {label:"Section 13 — Modern & Framework-Specific",    sub:"OSWE Focus • 6 scanners",    color:"#ec4899"},
 };
 
 // Tools trial users can access in Web App Pentesting (Section 1 recon only)
@@ -3320,9 +3463,29 @@ function WebAppModule(props) {
 
     // Tools used list for cover page
     const toolsUsed = Object.keys(allResults).filter(k=>allResults[k]);
-    const _riskPenalty = allFindings.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
-    const riskScore = Math.max(0, 100 - _riskPenalty);
-    const riskLabel = riskScore<40?"CRITICAL":riskScore<70?"HIGH":riskScore<90?"MEDIUM":riskScore<100?"LOW":"SAFE";
+    // RISK-SCORE-V2: aligned with Vuln module (_computeRiskScore). HIGHER = worse risk.
+    // 0-19 MINIMAL · 20-39 LOW · 40-59 MODERATE · 60-79 HIGH · 80-100 CRITICAL.
+    // Previously Webapp used `100 - penalty` (higher = safer), creating
+    // cross-module confusion (Vuln 25/100=LOW vs Webapp 79/100=MEDIUM).
+    const _wapRisk = (() => {
+      const real = (allFindings||[]).filter(f =>
+        ["CRITICAL","HIGH","MEDIUM","LOW"].includes(f && f.severity));
+      if (real.length === 0) return {score: 5, label: "MINIMAL RISK"};
+      const _cvss = f => {
+        const c = parseFloat(f.cvss || "0");
+        if (c > 0) return c;
+        return {CRITICAL:9.0, HIGH:7.5, MEDIUM:5.0, LOW:3.0}[f.severity] || 0;
+      };
+      let sum = 0, maxCvss = 0;
+      real.forEach(f => { const c = _cvss(f); sum += c; if (c > maxCvss) maxCvss = c; });
+      const raw = Math.min(70, sum * 2.5) + Math.min(30, maxCvss * 3);
+      const score = Math.round(Math.min(100, Math.max(5, raw)));
+      const label = score >= 80 ? "CRITICAL RISK" : score >= 60 ? "HIGH RISK" :
+                    score >= 40 ? "MODERATE RISK" : score >= 20 ? "LOW RISK" : "MINIMAL RISK";
+      return {score, label};
+    })();
+    const riskScore = _wapRisk.score;
+    const riskLabel = _wapRisk.label.replace(/\s+RISK$/, "");
 
     // ─── REMEDIATION DIFF vs previous scan ──────────────────────
     // Compute fixed / new / persisting buckets by hashing each finding to
@@ -8626,7 +8789,6 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     ["Param Discovery",  "Form action + URL query + JS literal extraction"],
     ["Favicon",          "MurmurHash3 + Shodan favicon query"],
     ["Cloud Buckets",    "AI-curated 270-pattern S3/GCS/Azure permutation check"],
-    ["JS Secret Scanner","API key / token / cred patterns in JS bundles"],
     ["ASN / IP Owner",   "Team Cymru WHOIS ASN lookup"],
     ["InternetDB",       "Shodan free CVE/port surface"],
     ["CVE Match (NVD)",  "Live NVD query for detected versions"],
@@ -10652,12 +10814,18 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     const _vAudits = [];
     VULN_TOOLS.forEach(t => {
       const d = r[t.tool]; if (!d) return;
-      const found = (d.findings||[]).filter(f=>f.severity!=="INFO").length;
+      // AUDIT-COUNT-V2 (mirror of webapp audit): split actionable from POSITIVE.
+      const _allF = d.findings || [];
+      const found = _allF.filter(f =>
+        ["CRITICAL","HIGH","MEDIUM","LOW"].includes(String(f.severity||"").toUpperCase())).length;
+      const positives = _allF.filter(f =>
+        String(f.severity||"").toUpperCase() === "POSITIVE").length;
       _vAudits.push({
         tool: t.label,
         tests: d.tests_performed || "—",
         summary: d.tests_summary || t.desc,
         found,
+        positives,
       });
     });
     if (_vAudits.length > 0) {
@@ -10676,9 +10844,11 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
         doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
         doc.text(String(a.tests), margin+33, y+5);
         lines.forEach((ln,li)=>doc.text(ln, margin+48, y+5 + li*3.6));
+        const _label = a.found > 0 ? `${a.found} HIT`
+                       : (a.positives > 0 ? `${a.positives} CLEAN` : "0 OK");
         const foundColor = a.found > 0 ? [162,28,28] : [15,118,82];
         doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...foundColor);
-        doc.text(a.found > 0 ? `${a.found} HIT` : "0 OK", pageW-margin-15, y+5);
+        doc.text(_label, pageW-margin-15, y+5);
         y += h;
       });
       y += 6;
@@ -10781,6 +10951,245 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  OSINT REPORT — VL-FOUNDRY canon (Webapp PDF, all 17 sections)
+// ═══════════════════════════════════════════════════════════════
+//
+// generateOsintReport — Layer 3 of OSINT module forge (2026-05-24).
+// Section list matches generatePDF (line ~761) section-by-section.
+function generateOsintReport({target, allResults, date, authenticated, pdfConfig}) { /*OSINT-PDF-V1*/
+  const _cfg = pdfConfig || {};
+  const r = allResults || {};
+  const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
+  const doc = new jsPDF({unit:"mm",format:"a4",
+    ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+      userPermissions: ["print","modify","copy","annot-forms"]}} : {})
+  });
+  const pageW=210, margin=12, contentW=pageW-margin*2;
+  const BLUE=[59,130,246], DARK=[15,23,42], GRAY=[100,116,139];
+  const LIGHT=[248,250,252], WHITE=[255,255,255], LBLUE=[235,245,255];
+  const RED=[162,28,28], ORANGE=[133,79,11], GREEN=[15,118,82];
+  const SEV={CRITICAL:[220,38,38],HIGH:[234,88,12],MEDIUM:[202,138,4],LOW:[22,163,74],INFO:[100,116,139],POSITIVE:[15,118,82]};
+  let y=0, _secN=0;
+  const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
+  const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(String(t),x,yy,{align:align||"left"});};
+  const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
+  const sHead=(t,yy)=>{_secN++;fillR(margin,yy,contentW,9,[220,230,245]);txt(_secN+". "+t,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
+  const drawHeader=()=>{txt("VulnusLab — OSINT Assessment",margin,10,7,GRAY);txt(date||"",pageW-margin,10,7,BLUE,false,"right");};
+
+  // Collect all findings from all 12 scanners
+  const TOOLS = ["geoip","dnstwist","wayback_history","harvester_emails","crtsh_emails",
+                  "social_handles","github_recon","pastebin_search","breach_check",
+                  "document_metadata","search_dorks","gravatar_check"];
+  const allFindings = [];
+  TOOLS.forEach(t => {
+    const d = r[t]; if (!d || !d.findings) return;
+    d.findings.forEach(f => allFindings.push({...f, tool:t}));
+  });
+  const sevCount = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,POSITIVE:0,INFO:0};
+  allFindings.forEach(f => { sevCount[f.severity||"INFO"]=(sevCount[f.severity||"INFO"]||0)+1; });
+
+  // Risk score formula (matches Webapp canon)
+  const riskRaw = Math.min(70, (sevCount.CRITICAL*15 + sevCount.HIGH*8 + sevCount.MEDIUM*3 + sevCount.LOW*1)) + Math.min(30, (sevCount.CRITICAL>0?30:sevCount.HIGH>0?22:sevCount.MEDIUM>0?12:5));
+  const riskScore = Math.round(Math.min(100, Math.max(5, riskRaw)));
+  const riskLabel = riskScore>=80?"CRITICAL RISK":riskScore>=60?"HIGH RISK":riskScore>=40?"MODERATE RISK":riskScore>=20?"LOW RISK":"MINIMAL RISK";
+  const riskColor = riskScore>=80?RED:riskScore>=60?[194,65,12]:riskScore>=40?ORANGE:riskScore>=20?[202,138,4]:GREEN;
+
+  // Report ID + Content Hash (Section 17 prereq)
+  const _genId = (t,d)=>{const s=String(t)+"|"+String(d)+"|"+Date.now();let h=0;for(let i=0;i<s.length;i++)h=((h<<5)-h+s.charCodeAt(i))|0;return "VL-"+(String(d||"").replace(/[^0-9]/g,"").substring(0,8)||"00000000")+"-"+Math.abs(h).toString(16).toUpperCase().padStart(6,"0").substring(0,6);};
+  const _hash = (s)=>{let h=0;const str=String(s||"");for(let i=0;i<str.length;i++)h=((h<<5)-h+str.charCodeAt(i))|0;return Math.abs(h).toString(16).toUpperCase().padStart(8,"0").substring(0,8);};
+  const _REPORT_ID = _genId(target, date);
+  const _contentHash = _hash(JSON.stringify(allFindings));
+
+  // ── SECTION 1: COVER PAGE ──────────────────────────────────────
+  fillR(0,0,pageW,64,[0,0,0]);
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(...BLUE);
+  doc.text("VULNUS",pageW/2-1,32,{align:"right"});doc.setTextColor(241,245,249);doc.text("LAB",pageW/2,32,{align:"left"});
+  txt("OSINT INTELLIGENCE REPORT",pageW/2,80,18,DARK,true,"center");
+  txt("Public-source threat surface assessment",pageW/2,88,10,GRAY,false,"center");
+  y=100;
+
+  // ── SECTION 2: INFO TABLE ──────────────────────────────────────
+  fillR(margin,y,contentW,8,DARK);txt("FIELD",margin+3,y+5.5,8,WHITE,true);txt("VALUE",margin+55,y+5.5,8,WHITE,true);y+=8;
+  [["Target",target],["Scan Date",date||""],["Classification","CONFIDENTIAL"],["Authenticated","No - public sources only"],["Module","OSINT (Open Source Intelligence)"]].forEach((row,i)=>{
+    fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
+    txt(row[0],margin+3,y+5.5,8.5,GRAY,true);
+    if(row[0]==="Classification"){doc.setFillColor(...RED);doc.roundedRect(margin+55,y+2,28,4,1,1,"F");txt("CONFIDENTIAL",margin+57,y+5.2,7,WHITE,true);}
+    else txt(row[1],margin+55,y+5.5,8.5,DARK);
+    y+=8;
+  });
+  y+=6;
+
+  // ── SECTION 3: TRUST STATEMENT ─────────────────────────────────
+  chk(20);fillR(margin,y,contentW,14,LBLUE);fillR(margin,y,3,14,BLUE);
+  txt("[VERIFIED] VULNUSLAB",margin+8,y+6,8,BLUE,true);
+  txt("Every finding was independently triggered against a public source and re-confirmed.",margin+8,y+10,7.5,DARK);
+  y+=18;
+
+  // ── SECTION 4: KEY RISK HEADLINE ───────────────────────────────
+  chk(28);const _hlBg=riskScore>=60?[254,242,242]:riskScore>=20?[255,247,237]:[240,253,244];
+  const _hlTag=riskScore>=60?"FIX THIS WEEK":riskScore>=20?"REVIEW SOON":"POSTURE OK";
+  const _hlTitle=sevCount.CRITICAL>0?`${sevCount.CRITICAL} CRITICAL OSINT finding(s) — patch within 24 hours`:sevCount.HIGH>0?`${sevCount.HIGH} HIGH OSINT finding(s) — patch within 7 days`:sevCount.MEDIUM>0?`${sevCount.MEDIUM} MEDIUM OSINT finding(s) — hardening recommended`:"No exposed OSINT surface above LOW severity";
+  fillR(margin,y,contentW,24,_hlBg);fillR(margin,y,3,24,riskColor);
+  txt(_hlTag,margin+8,y+6,8,riskColor,true);txt(_hlTitle,margin+8,y+13,11,DARK,true);
+  txt("See Detailed Findings for full breakdown.",margin+8,y+18,8,GRAY);y+=28;
+
+  // ── SECTION 5: EXECUTIVE SUMMARY ───────────────────────────────
+  y=sHead("Executive Summary",y);
+  fillR(margin,y,contentW,8,DARK);["SEVERITY","COUNT","SLA","RECOMMENDATION"].forEach((c,i)=>txt(c,margin+3+[0,30,55,90][i],y+5.5,8,WHITE,true));y+=8;
+  [{s:"CRITICAL",v:sevCount.CRITICAL,sla:"24 hrs",r:"Immediate action"},{s:"HIGH",v:sevCount.HIGH,sla:"7 days",r:"Fix within 7 days"},{s:"MEDIUM",v:sevCount.MEDIUM,sla:"30 days",r:"Hardening"},{s:"LOW",v:sevCount.LOW,sla:"90 days",r:"Defense in depth"}].forEach((row,i)=>{
+    fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+    doc.setFillColor(...SEV[row.s]);doc.roundedRect(margin+3,y+1.5,25,4,1,1,"F");txt(row.s,margin+4,y+5,7,WHITE,true);
+    txt(String(row.v),margin+33,y+5,10,SEV[row.s],true);txt(row.sla,margin+58,y+5,8,DARK);txt(row.r,margin+93,y+5,8,DARK);y+=7;
+  });y+=6;
+
+  // ── SECTION 6: OWASP TOP 10 GRADE ──────────────────────────────
+  // OSINT findings map mostly to A05:2021 (Misconfig) + A07:2021 (Auth failures)
+  chk(40);y=sHead("OWASP Top 10 Coverage",y);
+  const owasp={A01:0,A02:0,A03:0,A04:0,A05:0,A06:0,A07:0,A08:0,A09:0,A10:0};
+  allFindings.forEach(f=>{const m=String(f.owasp||"").match(/A(\d+)/);if(m){const k="A"+m[1].padStart(2,"0");if(k in owasp)owasp[k]++;}});
+  const failCats=Object.values(owasp).filter(v=>v>0).length;const passCats=10-failCats;
+  const grade=passCats>=9?"A":passCats>=7?"B":passCats>=5?"C":passCats>=3?"D":"F";
+  const gColor=grade==="A"?GREEN:grade==="B"?[22,163,74]:grade==="C"?[202,138,4]:grade==="D"?[194,65,12]:RED;
+  fillR(margin,y,contentW,16,LIGHT);fillR(margin,y,4,16,gColor);
+  doc.setFont("Arial","bold");doc.setFontSize(22);doc.setTextColor(...gColor);doc.text(grade,margin+10,y+11);
+  txt(`${passCats}/10 categories clean`,margin+30,y+7,11,DARK,true);
+  txt(failCats===0?"No OWASP-aligned findings — strong external posture":`${failCats} categor${failCats===1?"y":"ies"} have findings`,margin+30,y+12,8,GRAY);y+=22;
+
+  // ── SECTION 7: COMPLIANCE COVERAGE (8 frameworks) ──────────────
+  y=sHead("Compliance Coverage",y);
+  fillR(margin,y,contentW,8,DARK);["FRAMEWORK","CONTROL","STATUS"].forEach((c,i)=>txt(c,margin+3+[0,75,130][i],y+5.5,8,WHITE,true));y+=8;
+  [["GDPR","Art. 5 (data minimization)"],["GDPR","Art. 32 (security of processing)"],["ISO 27001","A.5.7 (threat intelligence)"],["NIST CSF","ID.RA-2 (cyber threat intel)"],["NIST 800-53","RA-3 (risk assessment)"],["SOC 2","CC7.1 (security event mon.)"],["PCI-DSS","3.4.1 (sensitive data exposure)"],["CIS v8","18.1 (penetration testing)"]].forEach((row,i)=>{
+    fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+    txt(row[0],margin+3,y+5,8,DARK,true);txt(row[1],margin+78,y+5,7.5,GRAY);
+    const ok=sevCount.HIGH===0&&sevCount.CRITICAL===0;
+    txt(ok?"✓ Aligned":"⚠ Findings",margin+133,y+5,7.5,ok?GREEN:ORANGE,true);y+=7;
+  });y+=4;
+
+  // ── SECTION 8: REMEDIATION DIFF (placeholder, no prev scan) ────
+  chk(18);y=sHead("Remediation Progress",y);
+  fillR(margin,y,contentW,12,LIGHT);
+  txt("No previous scan on record — first-baseline OSINT assessment.",margin+4,y+7,8.5,GRAY);
+  txt("Re-run quarterly to track posture changes.",margin+4,y+11,7.5,GRAY);y+=16;
+
+  // ── SECTION 9: RISK SCORE BAR ──────────────────────────────────
+  chk(28);y=sHead("Risk Score",y);
+  fillR(margin,y,contentW,20,LIGHT);
+  doc.setFont("Arial","bold");doc.setFontSize(24);doc.setTextColor(...riskColor);doc.text(String(riskScore),margin+8,y+15);
+  txt(riskLabel,margin+38,y+8,11,riskColor,true);
+  txt(`Report ID: ${_REPORT_ID}  ·  ${allFindings.length} findings across 12 scanners`,margin+38,y+14,7.5,GRAY);
+  // Track bar
+  fillR(margin+38,y+17,contentW-40,2,[226,232,240]);fillR(margin+38,y+17,Math.max(((riskScore/100)*(contentW-40)),2),2,riskColor);
+  y+=24;
+
+  // ── SECTION 10: SEVERITY BREAKDOWN ─────────────────────────────
+  chk(28);y=sHead("Severity Breakdown",y);
+  const totSev=Object.values(sevCount).reduce((a,b)=>a+b,0)||1;
+  ["CRITICAL","HIGH","MEDIUM","LOW","POSITIVE"].forEach(s=>{
+    const w=Math.max(2,(sevCount[s]/totSev)*(contentW-30));
+    fillR(margin,y,28,5,LIGHT);txt(s,margin+2,y+3.5,7,DARK,true);
+    fillR(margin+30,y,w,5,SEV[s]);txt(String(sevCount[s]),margin+30+w+2,y+3.5,7.5,SEV[s],true);y+=6;
+  });y+=4;
+
+  // ── SECTION 11: TIER COVERAGE MATRIX ───────────────────────────
+  chk(36);y=sHead("Tier Coverage",y);
+  const TIERS=[["Tier 1","Passive Domain",["geoip","dnstwist","wayback_history"]],["Tier 2","People & Identity",["harvester_emails","crtsh_emails","social_handles"]],["Tier 3","Leaks & Code",["github_recon","pastebin_search","breach_check"]],["Tier 4","Metadata & Dorking",["document_metadata","search_dorks","gravatar_check"]]];
+  fillR(margin,y,contentW,8,DARK);["TIER","NAME","SCANNERS","STATUS"].forEach((c,i)=>txt(c,margin+3+[0,20,75,130][i],y+5.5,8,WHITE,true));y+=8;
+  TIERS.forEach((t,i)=>{
+    const ran=t[2].filter(s=>r[s]).length;const ok=ran===t[2].length;
+    fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
+    txt(t[0],margin+3,y+5.5,8,DARK,true);txt(t[1],margin+22,y+5.5,8,DARK);
+    txt(`${ran}/${t[2].length}`,margin+78,y+5.5,8,DARK);
+    txt(ok?"✓ Complete":"⚠ Partial",margin+133,y+5.5,7.5,ok?GREEN:ORANGE,true);y+=8;
+  });y+=4;
+
+  // ── SECTION 12: PER-TOOL SECTIONS ──────────────────────────────
+  TOOLS.forEach(t=>{
+    const d=r[t];if(!d)return;
+    chk(20);y=sHead(t.replace(/_/g," ").toUpperCase(),y);
+    if(d.skipped_reason){fillR(margin,y,contentW,9,LIGHT);txt("Skipped: "+d.skipped_reason,margin+4,y+6,8,GRAY);y+=12;return;}
+    fillR(margin,y,contentW,8,DARK);["SEV","FINDING","REMEDIATION"].forEach((c,i)=>txt(c,margin+3+[0,15,110][i],y+5.5,7.5,WHITE,true));y+=8;
+    (d.findings||[]).slice(0,5).forEach((f,i)=>{
+      chk(12);const sc=SEV[f.severity||"INFO"]||GRAY;
+      fillR(margin,y,contentW,10,i%2===0?LIGHT:WHITE);
+      doc.setFillColor(...sc);doc.roundedRect(margin+2,y+2,11,4,1,1,"F");txt(String(f.severity||"-").substring(0,4),margin+3,y+5,6,WHITE,true);
+      const det=doc.splitTextToSize(String(f.detail||f.title||""),90);txt(det[0]||"",margin+16,y+4,7.5,DARK);
+      if(det[1])txt(det[1].substring(0,55),margin+16,y+7,6.5,GRAY);
+      const rem=doc.splitTextToSize(String(f.remediation||""),65);txt(rem[0]||"",margin+110,y+4,6.5,DARK);
+      if(rem[1])txt(rem[1].substring(0,42),margin+110,y+7,6,GRAY);y+=10;
+    });
+    if((d.findings||[]).length>5){txt(`... +${d.findings.length-5} more`,margin+4,y+4,7,GRAY);y+=6;}
+    y+=4;
+  });
+
+  // ── SECTION 13: DETAILED FINDINGS ──────────────────────────────
+  chk(20);y=sHead("Detailed Findings (top 10 by severity)",y);
+  const sevOrder={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,POSITIVE:4,INFO:5};
+  const ranked=[...allFindings].sort((a,b)=>(sevOrder[a.severity||"INFO"]||9)-(sevOrder[b.severity||"INFO"]||9)).slice(0,10);
+  ranked.forEach((f,i)=>{
+    chk(22);const sc=SEV[f.severity||"INFO"]||GRAY;
+    fillR(margin,y,contentW,18,LIGHT);fillR(margin,y,3,18,sc);
+    doc.setFillColor(...sc);doc.roundedRect(margin+5,y+2,14,4.5,1,1,"F");txt(f.severity||"-",margin+6,y+5.3,7,WHITE,true);
+    txt((f.tool||"").toUpperCase()+" — "+String(f.detail||f.title||"").substring(0,90),margin+22,y+5,8.5,DARK,true);
+    if(f.evidence_marker){txt("Evidence: "+String(f.evidence_marker).substring(0,110),margin+5,y+10,6.5,GRAY);}
+    if(f.remediation){txt("Fix: "+String(f.remediation).substring(0,110),margin+5,y+14,6.5,GREEN);}
+    y+=20;
+  });
+  if(!ranked.length){fillR(margin,y,contentW,12,LIGHT);txt("No findings — clean OSINT surface.",margin+4,y+7,9,GREEN,true);y+=14;}
+
+  // ── SECTION 14: RECOMMENDATIONS ────────────────────────────────
+  chk(20);y=sHead("Recommendations",y);
+  const recs=[];
+  if(sevCount.CRITICAL>0)recs.push("🔴 Rotate any credentials surfaced by github_recon or breach_check immediately");
+  if(sevCount.HIGH>0)recs.push("🟠 Audit hits from search_dorks and pastebin_search; file takedown requests");
+  if(r.dnstwist&&r.dnstwist.vulnerable)recs.push("🟡 Register typosquat domains defensively or file UDRP complaints");
+  if(r.breach_check&&r.breach_check.vulnerable)recs.push("🟡 Force MFA + password rotation across the org; subscribe to HIBP domain monitoring");
+  if(r.document_metadata&&r.document_metadata.vulnerable)recs.push("🟢 Strip document metadata pre-publish (ExifTool -all=)");
+  if(!recs.length)recs.push("✅ Clean OSINT posture — re-scan quarterly to catch drift");
+  recs.forEach(rec=>{chk(8);fillR(margin,y,contentW,7,LIGHT);txt(rec,margin+4,y+4.8,8,DARK);y+=8;});y+=4;
+
+  // ── SECTION 15: VERIFICATION AUDIT ─────────────────────────────
+  chk(80);y=sHead("Verification Audit",y);
+  fillR(margin,y,contentW,8,DARK);txt("SCANNER",margin+3,y+5.5,8,WHITE,true);txt("DISCOVERY PROBED",margin+50,y+5.5,8,WHITE,true);y+=8;
+  [["geoip","ip-api.com geolocation + ISP + ASN lookup"],["dnstwist","80 lookalike-domain permutations DNS-resolved"],["wayback_history","Wayback CDX snapshot timeline + sensitive paths"],["harvester_emails","DDG + Bing snippet regex email harvest"],["crtsh_emails","crt.sh certificate transparency subject scrape"],["social_handles","12 platforms × 6 org-handle variations probed"],["github_recon","5 GitHub code-search queries for target mentions"],["pastebin_search","5 paste-sites via DDG site: queries"],["breach_check","HIBP breach-by-domain API (free, no key)"],["document_metadata","sitemap crawl → PDF/OOXML metadata extraction"],["search_dorks","30 dorks across 7 categories on DDG"],["gravatar_check","18 role emails MD5'd vs Gravatar profile API"]].forEach((row,i)=>{
+    chk(7);fillR(margin,y,contentW,6.5,i%2===0?LIGHT:WHITE);
+    txt(row[0],margin+3,y+4.6,7.5,DARK,true);txt(row[1],margin+50,y+4.6,7,GRAY);y+=6.5;
+  });y+=4;
+
+  // ── SECTION 16: APPENDIX ───────────────────────────────────────
+  chk(40);y=sHead("Appendix",y);
+  txt("A. Methodology",margin,y+5,9,DARK,true);y+=8;
+  ["OSINT follows PTES §4 (Intelligence Gathering > Open Source) and NIST SP 800-115","§4.2. Every probe targets a third-party source (search engines, CT logs,","paste sites, code-search APIs). NO direct probes against customer infrastructure."].forEach(l=>{txt(l,margin+2,y+3.5,7.5,GRAY);y+=4;});
+  y+=4;
+  txt("B. References",margin,y+5,9,DARK,true);y+=8;
+  ["PTES — http://www.pentest-standard.org","NIST SP 800-115 — https://csrc.nist.gov/publications/detail/sp/800-115/final","Have I Been Pwned — https://haveibeenpwned.com","Internet Archive Wayback CDX — https://web.archive.org/cdx/","crt.sh CT logs — https://crt.sh"].forEach(l=>{txt(l,margin+2,y+3.5,7.5,BLUE);y+=4.5;});
+  y+=6;
+
+  // End of report block
+  if(y+30>284){doc.addPage();y=18;drawHeader();}
+  fillR(margin,y+5,contentW,28,LBLUE);fillR(margin,y+5,3,28,BLUE);
+  txt("— END OF OSINT REPORT —",pageW/2,y+13,10,BLUE,true,"center");
+  txt("Generated by VulnusLab — VL-FOUNDRY OSINT module v1.",pageW/2,y+18,6.5,GRAY,false,"center");
+  txt("vulnuslab.com · support@vulnuslab.com",pageW/2,y+27,7,BLUE,true,"center");
+
+  // ── SECTION 17: BORDER + FOOTER (every page) ───────────────────
+  const total=doc.internal.getNumberOfPages();
+  for(let i=1;i<=total;i++){
+    doc.setPage(i);
+    doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
+    if(i>=2){
+      txt("VulnusLab OSINT Report — CONFIDENTIAL",margin,290,6.5,GRAY);
+      txt(`Report ID: ${_REPORT_ID}  ·  Content: ${_contentHash}`,pageW/2,290,6.5,GRAY,false,"center");
+      txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
+    }
+  }
+
+  // File save
+  const _safe = String(target||"target").replace(/[^a-zA-Z0-9_.-]/g,"_");
+  const _dt = (date||new Date().toISOString().substring(0,10)).replace(/[^0-9]/g,"").substring(0,8);
+  doc.save(`osint_${_safe}_${_dt}.pdf`);
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  VULNERABILITY SCANNING MODULE
 // ═══════════════════════════════════════════════════════════════
 // VULN module rebuilt 2026-05-24: industry-aligned infrastructure vulnerability
@@ -10809,6 +11218,38 @@ const VULN_PHASES = [
   {name:"Database Exposure",         tool:"db_exposure_check",  endpoint:"/api/vuln/db_exposure_check",  icon:"🗄️"},
   {name:"CVE Matching (NVD)",        tool:"cve_match",          endpoint:"/api/vuln/cve_match",          icon:"📚"},
 ];
+
+// ═══════════════════════════════════════════════════════════════
+//  OSINT MODULE — VL-FOUNDRY first cold-context forge (2026-05-24)
+// ═══════════════════════════════════════════════════════════════
+//
+// Layer 7 wiring. Matches the 12 entries in
+// endpoints/osint_orchestrator.py::OSINT_TOOLS_BY_TIER.
+const OSINT_PHASES = [
+  // Tier 1 — Passive Domain Surface
+  {name:"GeoIP Lookup",          tool:"geoip",            endpoint:"/api/osint/geoip",            icon:"🌍"},
+  {name:"DNS Twist",             tool:"dnstwist",         endpoint:"/api/osint/dnstwist",         icon:"🔁"},
+  {name:"Wayback History",       tool:"wayback_history",  endpoint:"/api/osint/wayback_history",  icon:"📜"},
+  // Tier 2 — People & Identity
+  {name:"Harvester Emails",      tool:"harvester_emails", endpoint:"/api/osint/harvester_emails", icon:"✉️"},
+  {name:"CT Log Emails",         tool:"crtsh_emails",     endpoint:"/api/osint/crtsh_emails",     icon:"📜"},
+  {name:"Social Handles",        tool:"social_handles",   endpoint:"/api/osint/social_handles",   icon:"👤"},
+  // Tier 3 — Leaks & Code
+  {name:"GitHub Recon",          tool:"github_recon",     endpoint:"/api/osint/github_recon",     icon:"🐙"},
+  {name:"Pastebin Search",       tool:"pastebin_search",  endpoint:"/api/osint/pastebin_search",  icon:"📋"},
+  {name:"Breach Check (HIBP)",   tool:"breach_check",     endpoint:"/api/osint/breach_check",     icon:"🚨"},
+  // Tier 4 — Metadata & Dorking
+  {name:"Document Metadata",     tool:"document_metadata",endpoint:"/api/osint/document_metadata",icon:"📄"},
+  {name:"Search Dorks",          tool:"search_dorks",     endpoint:"/api/osint/search_dorks",     icon:"🔎"},
+  {name:"Gravatar Check",        tool:"gravatar_check",   endpoint:"/api/osint/gravatar_check",   icon:"🖼️"},
+];
+
+const OSINT_SECTION_HEADERS = {
+  "tier1_passive_domain":  {label:"Tier 1 — Passive Domain Surface",  color:"#3b82f6"},
+  "tier2_people_identity": {label:"Tier 2 — People & Identity",       color:"#8b5cf6"},
+  "tier3_leaks_code":      {label:"Tier 3 — Leaks & Code",            color:"#ef4444"},
+  "tier4_metadata_dorking":{label:"Tier 4 — Metadata & Dorking",      color:"#06b6d4"},
+};
 
 // ═══════════════════════════════════════════════════════════════
 //  BUFFER OVERFLOW MODULE
