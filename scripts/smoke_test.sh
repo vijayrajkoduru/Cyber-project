@@ -33,9 +33,12 @@ echo "  API: $API"
 echo "  Target: $TARGET"
 echo "═══════════════════════════════════════════════════════════════"
 
-# Gate 1: /health
-echo -n "  [1/5] API /health ... "
-STATUS=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "$API/health")
+# Gate 1: /health (backend serves /api/health; fall back to /health for older deploys)
+echo -n "  [1/5] API health ... "
+STATUS=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "$API/api/health")
+if [ "$STATUS" != "200" ]; then
+  STATUS=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "$API/health")
+fi
 if [ "$STATUS" = "200" ]; then echo "OK (200)"; else echo "FAIL ($STATUS)"; exit 1; fi
 
 # Gate 2: tier discovery (no auth required)

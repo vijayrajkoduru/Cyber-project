@@ -123,7 +123,7 @@ const MODULES = [
   { id:"ad",        icon:"🏢", label:"Active Directory Attacks",           cat:"advanced",free:false, comingSoon:true },
   { id:"av",        icon:"🥷", label:"Antivirus Evasion",                  cat:"advanced",free:false, comingSoon:true },
   { id:"cloud",     icon:"☁️", label:"Cloud Security Testing",             cat:"advanced",free:false, comingSoon:true },
-  { id:"mobile",    icon:"📱", label:"Mobile Application Testing",         cat:"advanced",free:false, comingSoon:true },
+  { id:"mobile",    icon:"📱", label:"Mobile Application Testing",         cat:"advanced",free:false },
   { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false, comingSoon:true },
 
   // ── DATA PROTECTION ──────────────────────────────────────────
@@ -6546,43 +6546,46 @@ function ClientSideModule({token, apiUrl}) {
 
 // ── MOBILE TESTING ────────────────────────────────────────────
 function MobileModule({token, apiUrl}) {
-  const attacks = [
-    {id:"apk_info", label:"APK Analysis", icon:"📱", ep:"/api/mobile/apk_info",
-     desc:"aapt + apktool — metadata and AndroidManifest",
-     howto:"Download target APK from Play Store using apk-dl.com or pull from device: adb pull /data/app/com.app/base.apk /tmp/app.apk. Enter APK path in filepath field. Analyzes metadata, permissions, activities, and services.",
-     requires:"APK file at known path + apktool installed (apt install apktool)",
-     target_type:"Android mobile applications — banking apps, corporate apps, any APK",
-     vulns:["Exported activities (no permission check)","Backup allowed","Debuggable flag enabled","Weak network security config","Plaintext traffic allowed"],
-     hackerImpact:"Exported activities can be launched by other apps without permission — attacker installs malicious app that triggers sensitive functionality. Debuggable apps can be attached with debugger for runtime manipulation."},
-    {id:"decompile", label:"Decompile APK", icon:"🔍", ep:"/api/mobile/decompile",
-     desc:"jadx — decompile to Java source code",
-     howto:"Enter APK path in filepath field. jadx converts .dex bytecode back to readable Java source. Search decompiled code for: hardcoded API keys, passwords, secret keys, SQL queries, encryption keys.",
-     requires:"APK file + jadx installed (apt install jadx)",
-     target_type:"Android apps — especially financial, healthcare, enterprise apps",
-     vulns:["Hardcoded API keys in source code","Hardcoded credentials (username/password)","Insecure cryptography (MD5, DES)","SQLite database with sensitive data","Unencrypted local storage"],
-     hackerImpact:"Banking app with hardcoded API key → attacker uses key to make unlimited transactions. Healthcare app with hardcoded admin password → access to all patient records. These are real vulnerabilities found in real apps."},
-    {id:"permissions", label:"Permission Audit", icon:"🔐", ep:"/api/mobile/permissions",
-     desc:"Flag dangerous Android permissions",
-     howto:"Enter APK path in filepath field. Lists all permissions the app requests. CRITICAL permissions like READ_SMS, RECORD_AUDIO, ACCESS_FINE_LOCATION should be justified by app functionality.",
-     requires:"APK file at known path",
-     target_type:"Any Android application",
-     vulns:["READ_SMS → OTP stealing","RECORD_AUDIO → microphone surveillance","ACCESS_FINE_LOCATION → tracking","READ_CONTACTS → data harvesting","RECEIVE_SMS → intercept 2FA codes"],
-     hackerImpact:"Malicious app requesting SMS permission can silently steal 2FA codes. Location permission = track victim's physical location. Attackers disguise spyware as useful apps (flashlight, calculator) to collect permissions."},
-    {id:"frida_script", label:"Frida Scripts", icon:"💉", ep:"/api/mobile/frida_script",
-     desc:"SSL pinning bypass + root detection bypass",
-     howto:"Install target app on Android device/emulator. Install Frida: pip install frida-tools. Enter package name (e.g. com.bank.app). Run: frida -U -f com.bank.app -l script.js. Bypasses SSL cert pinning to intercept traffic.",
-     requires:"Android device/emulator + Frida server on device + package name",
-     target_type:"iOS/Android apps with certificate pinning or root detection",
-     vulns:["SSL certificate pinning (can be bypassed)","Root detection bypass","Biometric authentication bypass","Anti-debugging bypass","Runtime method hooking"],
-     hackerImpact:"Banking apps implement SSL pinning to prevent traffic interception. Frida bypasses it — attacker intercepts all API calls between app and server, capturing tokens, credentials, and transaction data in plaintext."},
-  ];
-  const extra = (opts,setOpts) => (<>
-    <input placeholder="APK path (/tmp/app.apk)" value={opts.apk_path||""} onChange={e=>setOpts(p=>({...p,apk_path:e.target.value}))}
-      style={{flex:1,minWidth:220,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
-    <input placeholder="Package name" value={opts.package_name||""} onChange={e=>setOpts(p=>({...p,package_name:e.target.value}))}
-      style={{width:180,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
-  </>);
-  return <ModuleShell title="Mobile App Testing" moduleKey="mobile" icon="📱" color="#0d9488" desc="Android APK analysis, jadx decompilation, permission audit, Frida SSL/root bypass scripts" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  // VL-FOUNDRY mobile module — 12 passive OSINT scanners across 4 tiers.
+  // Auto-derived from MOBILE_PHASES; matches what's wired in
+  // endpoints/mobile_orchestrator.py (no APK upload required — pure
+  // third-party / passive sources).
+  const _tierDesc = {
+    "google_play_app_enumeration":"Discover all Android apps published under the org and detect impersonation/clone apps.",
+    "apple_app_store_enumeration":"Identify all iOS apps attributed to the org's Apple developer team; flag clones.",
+    "app_version_staleness_check":"Flag published apps significantly behind latest — indicates unpatched CVEs.",
+    "apk_hardcoded_secrets_scan":"Scan publicly available APK for hardcoded API keys, tokens, credentials.",
+    "github_mobile_secret_leak_scan":"Search public GitHub for source/CI configs containing the org's app secrets.",
+    "firebase_open_database_check":"Identify Firebase URLs in the app binary and test for unauthenticated access.",
+    "certificate_transparency_mobile_api_discovery":"Mine CT logs for mobile-API subdomains (api., mobile., app., mapi.).",
+    "ssl_labs_mobile_api_tls_grade":"SSL Labs TLS grade for discovered mobile API endpoints.",
+    "wayback_machine_mobile_api_endpoint_harvest":"Wayback CDX for historically reachable mobile API paths.",
+    "virustotal_apk_reputation_check":"VirusTotal SHA-256 lookup for the published APK — AV verdicts.",
+    "third_party_sdk_cve_check":"Extract 3rd-party SDK versions and cross-reference NVD CVE feed.",
+    "shodan_mobile_backend_exposure_check":"Shodan lookup for internet-facing hosts on the org's mobile API domains.",
+  };
+  const attacks = MOBILE_PHASES.map(p => ({
+    id: p.tool,
+    label: p.name,
+    icon: p.icon,
+    ep: p.endpoint,
+    desc: _tierDesc[p.tool] || p.name,
+    howto: "Enter the target domain (e.g. example.com). Scanner queries public third-party sources only — no direct probing of customer infrastructure.",
+    requires: "Target domain (apex/registered)",
+    target_type: "Mobile-publishing organization (org with Android/iOS apps).",
+    vulns: ["See findings card after scan completes."],
+    hackerImpact: "Passive reconnaissance — what a phisher could learn before launching a targeted attack on the mobile app's users or developers.",
+  }));
+  return <ModuleShell
+    title="Mobile Application Testing"
+    moduleKey="mobile"
+    icon="📱"
+    color="#0d9488"
+    desc="VL-FOUNDRY 12-scanner passive surface — app store recon · APK secret leaks · Firebase exposure · CT log mobile APIs · TLS grades · Wayback endpoints · VirusTotal reputation · SDK CVEs · Shodan backend"
+    token={token}
+    apiUrl={apiUrl}
+    attacks={attacks}
+    bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── API SECURITY ──────────────────────────────────────────────
