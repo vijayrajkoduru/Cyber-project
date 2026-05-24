@@ -761,13 +761,60 @@ Track model version per wordlist in its docstring:
 
 ---
 
+## Layer 20 — End-to-end verification
+
+Per-scanner unit checks (Layer 6) and the scorer (Layer 4–7) verify pieces
+in isolation. They do NOT catch:
+
+- Orchestrator drops a scanner mid-stream
+- NDJSON corruption from a proxy (Cloudflare, nginx, gzip)
+- Frontend can't parse a new finding shape
+- PDF generator silently skips a section
+- CORS / auth misconfig blocks the API
+- Cloudflare 100s TTFB cuts the stream before payload arrives
+
+Layer 20 closes the loop with a **full-chain test**: target in → NDJSON out
+→ PDF rendered. One script, one exit code, CI-friendly.
+
+**Artifact:** `scripts/e2e_test.py`
+
+**Run:**
+```bash
+python scripts/e2e_test.py <module> [--target=<host>] [--api=<base_url>]
+```
+
+**Six verification gates (in order, fail-fast):**
+
+1. **API reachable** — `GET /health` returns 200 within 5s
+2. **POST returns 200** — `POST /api/<module>/run_all` with `{target, concurrency:8}` returns 200
+3. **SLO check** — elapsed ≤ module SLO (Recon ≤ 120s, Vuln ≤ 300s, Webapp ≤ 90s, OSINT ≤ 120s)
+4. **NDJSON record count sanity** — between 1 and 200 records (catches "empty stream" and "runaway")
+5. **Each record has recognizable shape** — has at least one of `tool / target / findings / scanner / error`
+6. **Orchestrator dispatched ≥ 70% of expected scanners** — catches silent scanner drops
+
+**Output:** structured pass/warn/fail report + exit code (0 = pass, 1 = fail).
+
+**When to run:**
+- After every module forge — required for the Final Gate (see VL-FOUNDRY-AUDIT-AGENT.md)
+- After ANY change to: `endpoints/<module>_orchestrator.py`, `src/App.js` finding-shape, PDF generator, Cloudflare/nginx config
+- In CI before merging to main (`exit 1` fails the build)
+
+**SLO source of truth:** `SLO_MAX_SECONDS` dict in `scripts/e2e_test.py`. Updates to module SLOs MUST update this dict + VL-FOUNDRY-AUDIT-AGENT.md Final Gate.
+
+---
+
 ## Companion documents
 
 - `VL-FOUNDRY-CHECKLIST.md` — per-forge shipping checklist (copy + tick)
 - `VL-FOUNDRY-AUDIT-AGENT.md` — agent prompts for per-layer verification
 - `VL-FOUNDRY-PRICING.md` — Layer 8 concrete tier→scanner mapping
 - `VL-FOUNDRY-COMPLIANCE.md` — Layer 9 finding→control mapping
-- `scripts/score_module.py` — objective scorer
+- `MIGRATION-GUIDE.md` — how to retrofit existing modules to VL-FOUNDRY
+- `scripts/score_module.py` — objective scorer (Layer 4–7)
+- `scripts/e2e_test.py` — Layer 20 full-chain verifier
+- `scripts/pre_commit_score.py` — pre-commit hook (blocks scanner commits that lower the score)
+- `scripts/forge_scanner.py` — scaffolds a new scanner with the 7-check skeleton
 - `tools/_framework/scan_state.py` — Layer 10 schema enforcer
 - `tools/_framework/observability.py` — Layer 13 health tracker
 - `tools/_framework/naming.py` — Layer 11 naming validator
+- `tools/_framework/finding_schema.py` — runtime JSON Schema validator for findings

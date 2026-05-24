@@ -177,11 +177,18 @@ def score_module(module: str, verbose: bool = False) -> dict:
     # Layer 6 — quality bar (count scanners passing >= 5 of 7 checks)
     quality_passes = 0
     per_scanner_checks = {}
+    # Per-check rollup: how many scanners pass each individual check.
+    # Surfaces the weakest check across the module (e.g. "evidence_marker
+    # only at 40% means the module-wide remediation step is to add markers").
+    per_check_rollup = {name: 0 for name in CHECKS}
     for s in scanners:
         checks = check_scanner_quality(s)
         per_scanner_checks[s.stem] = checks
         if sum(checks.values()) >= 5:
             quality_passes += 1
+        for name, ok in checks.items():
+            if ok:
+                per_check_rollup[name] += 1
     quality_pct = (quality_passes / len(scanners)) * 100
 
     # Layer 6 sub — parallel
@@ -216,6 +223,11 @@ def score_module(module: str, verbose: bool = False) -> dict:
         "score": round(total, 1),
         "ready": total >= 85,
         "per_scanner_checks": per_scanner_checks if verbose else None,
+        "per_check_rollup": {
+            name: {"passed": cnt, "of": len(scanners),
+                   "pct": (cnt / len(scanners)) * 100}
+            for name, cnt in per_check_rollup.items()
+        },
     }
 
 
@@ -239,6 +251,17 @@ def print_result(r: dict, verbose: bool = False):
         label = layer_name.replace("_", " ")
         print(f"  {mark} {label:25s} {data['passed']:3d}/{data['of']:<3d} "
               f"{bar(pct)} {pct:5.1f}%")
+
+    # 7-check rollup — shows which individual check is the weakest link
+    # across the module (always rendered, not just in verbose).
+    rollup = r.get("per_check_rollup", {})
+    if rollup:
+        print(f"\n  7-check Definition of Done — module-wide pass rate:")
+        for name, data in rollup.items():
+            pct = data["pct"]
+            mark = "✅" if pct >= 90 else "⚠️ " if pct >= 70 else "❌"
+            print(f"  {mark} {name:15s} {data['passed']:3d}/{data['of']:<3d} "
+                  f"{bar(pct)} {pct:5.1f}%")
 
     print(f"{'─' * 65}")
     status = "READY TO SHIP" if r["ready"] else "NOT READY"

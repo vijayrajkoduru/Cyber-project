@@ -158,9 +158,24 @@ orchestrator count exactly?"
 
 ---
 
+## Layer 20 — End-to-end verification
+
+- [ ] `python scripts/e2e_test.py <module> --target=vulnuslab.com` returns exit code 0
+- [ ] All 6 gates green: API reachable, POST 200, SLO met, record count sane, shape valid, ≥70% scanners dispatched
+- [ ] SLO target for the module is registered in `scripts/e2e_test.py::SLO_MAX_SECONDS`
+- [ ] Run repeated 3× — no flakes
+- [ ] Each VULNERABLE finding passes `tools._framework.finding_schema.validate_finding`
+
+**Audit agent check:** run e2e_test.py and confirm exit 0. Spot-check 3
+random NDJSON records pass `validate_ndjson_record`.
+
+---
+
 ## Final gate
 
 - [ ] `python scripts/score_module.py <module>` returns **≥ 85**
+- [ ] 7-check rollup shows no individual check below 70%
+- [ ] `python scripts/e2e_test.py <module>` returns exit code 0 (Layer 20)
 - [ ] Test scan against `vulnuslab.com` completes successfully
 - [ ] PDF generated cleanly (no missing sections, no encoding glitches)
 - [ ] Scan duration under target SLA (Recon ≤ 2min, Vuln ≤ 5min, Webapp ≤ 90s)
@@ -168,6 +183,7 @@ orchestrator count exactly?"
 - [ ] Real findings on a known-vulnerable target (Juice Shop / DVWA / lab)
 - [ ] Module added to `VL-FOUNDRY.md` status matrix
 - [ ] Commit history is clean (small, focused commits per layer)
+- [ ] Pre-commit hook (`scripts/pre_commit_score.py`) green on every commit
 - [ ] Pushed to `origin/main`
 - [ ] Deployed on VPS (`docker compose build --no-cache backend frontend`)
 
@@ -197,6 +213,7 @@ What surprised you about this layer? What would you change in the framework?
 | 7 | | |
 | 8 | | |
 | 9 | | |
+| 20 | | |
 
 After forging the module, commit your filled checklist + any framework
 updates so the next module's forge is even smoother.
