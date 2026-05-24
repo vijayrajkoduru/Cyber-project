@@ -164,6 +164,22 @@ orchestrator count exactly?"
 
 ---
 
+## Layer 22 — UI Integration Gate (added 2026-05-24)
+
+- [ ] `generate<Module>Report(` appears AT LEAST TWICE in src/App.js (declaration + call)
+- [ ] `<MODULE>_PHASES` appears AT LEAST TWICE in src/App.js (declaration + consumer)
+- [ ] `fetch(...api/<module>/run_all...)` appears AT LEAST ONCE in src/App.js
+- [ ] OLD placeholder function (`generate<Module>Pdf` etc.) is DELETED, not just commented
+- [ ] 5-minute UI smoke test passed (open Incognito → log in → click tab → scan → DevTools Network shows POST /api/<module>/run_all → PDF has new 17 sections)
+
+**Audit agent check:** Layer 22 prompt in VL-FOUNDRY-AUDIT-AGENT.md.
+Scorer line `L22 ui integration` must be 3/3 (100%).
+
+**The OSINT lesson:** a module can score 91.7/100 while the UI is wired
+to a dead placeholder. Layer 22 closes this gap.
+
+---
+
 ## Layer 21 — Tooling & dependency freshness
 
 - [ ] Every new Python import declared in `requirements.txt`
@@ -234,6 +250,7 @@ What surprised you about this layer? What would you change in the framework?
 | 9 | | |
 | 20 | | |
 | 21 | | |
+| 22 | | |
 
 After forging the module, commit your filled checklist + any framework
 updates so the next module's forge is even smoother.

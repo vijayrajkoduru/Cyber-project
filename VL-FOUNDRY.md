@@ -50,7 +50,12 @@ EACH layer commits, not just at the end.
    └──────────────┬─────────────┘
                   ▼
    ┌────────────────────────────┐
-   │ Layer 20 E2E verify        │   GATE
+   │ Layer 22 UI Integration    │   GATE 1
+   │ (scorer + UI smoke test)   │
+   └──────────────┬─────────────┘
+                  ▼
+   ┌────────────────────────────┐
+   │ Layer 20 E2E verify        │   GATE 2
    └────────────────────────────┘
 
 Cross-cutting (apply at every layer — no fixed slot):
@@ -961,6 +966,61 @@ python scripts/e2e_test.py <module> [--target=<host>] [--api=<base_url>]
 - In CI before merging to main (`exit 1` fails the build)
 
 **SLO source of truth:** `SLO_MAX_SECONDS` dict in `scripts/e2e_test.py`. Updates to module SLOs MUST update this dict + VL-FOUNDRY-AUDIT-AGENT.md Final Gate.
+
+---
+
+## Layer 22 — UI Integration Gate (added 2026-05-24 after OSINT lesson)
+
+The scorer and e2e_test.py both said OSINT was 91.7/100 READY TO SHIP. The
+PDF the customer downloaded was a single-section placeholder rendered by
+DEAD code. The gap: **a `generate<X>Report` function can exist without
+being CALLED. A `<MODULE>_PHASES` array can exist without being RENDERED.**
+
+Layer 22 closes the gap with three concrete checks.
+
+**Symptoms this catches:**
+- New PDF function written but the "Download PDF" button still wired to
+  the old function (= customer sees the old placeholder)
+- New `<MODULE>_PHASES` array exists but the tab component still iterates
+  the OLD array (= UI shows the old scanners)
+- Orchestrator endpoint `/api/<module>/run_all` exists but the tab posts
+  to a different URL (= scan never fans out)
+- Dead placeholder function still in source (= scoring-grade ≠ shipping-grade)
+
+**Three checks** (added to `scripts/score_module.py`):
+
+| Check | What it verifies |
+|---|---|
+| `pdf_callsite` | `src/App.js` contains a literal call to `generate<X>Report(` |
+| `phases_consumed` | `src/App.js` contains a reference to `<MODULE>_PHASES` *outside* the array declaration line (= consumed by a component) |
+| `endpoint_called` | `src/App.js` contains a `fetch(...api/<module>/run_all...)` call |
+
+Each check adds **+5 points** to the score (up to 15 total). A module
+scoring 91.7 today scores 76.7 if Layer 22 checks fail — which correctly
+reflects that the UI isn't shipping yet.
+
+**Manual gate (post-deploy):** before announcing a module to customers,
+do the **5-minute UI smoke test**:
+
+```
+1. Open app.vulnuslab.com in Incognito
+2. Log in, click the new module's tab
+3. Enter a target, click Scan
+4. Verify in DevTools Network tab: POST /api/<module>/run_all (200)
+5. Verify the UI shows ALL scanners from <MODULE>_PHASES (not just 1)
+6. Click Download PDF
+7. Verify the PDF is the NEW generator's output, not a placeholder
+   (look for: 17 sections, Report ID footer, all 12 scanner sections)
+```
+
+If any step fails, the module is NOT ready — regardless of what the
+scorer says. **Update scoring before fixing the bug; don't gamify the score.**
+
+**Anti-pattern: dead placeholder functions.** When a new `generate<X>Report`
+is shipped, the OLD `generate<X>Pdf` (or whatever the placeholder was named)
+MUST be deleted in the same commit. Comment it out → it gets called.
+Leave it → someone calls it. Delete it → the import fails loudly. That's
+the correct failure mode.
 
 ---
 
