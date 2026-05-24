@@ -48,15 +48,17 @@ MIN_NDJSON_RECORDS = 1   # at least one scanner must respond
 MAX_NDJSON_RECORDS = 200  # sanity — shouldn't exceed scanner count by much
 
 
-def http_post_stream(url: str, payload: dict, timeout: int = 180):
+UA = "Mozilla/5.0 (VL-FOUNDRY-e2e/1.0)"  # Cloudflare blocks python-urllib UA
+
+
+def http_post_stream(url: str, payload: dict, timeout: int = 180,
+                     token: str | None = None):
     """POST + read NDJSON stream. Returns (status_code, records, elapsed_s)."""
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    headers = {"Content-Type": "application/json", "User-Agent": UA}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     records = []
     t0 = time.time()
     try:
@@ -83,7 +85,9 @@ def http_post_stream(url: str, payload: dict, timeout: int = 180):
 def check_api_reachable(api_base: str) -> bool:
     """Quick GET to confirm backend is up."""
     try:
-        urllib.request.urlopen(f"{api_base}/health", timeout=5).read()
+        req = urllib.request.Request(f"{api_base}/health",
+                                     headers={"User-Agent": UA})
+        urllib.request.urlopen(req, timeout=5).read()
         return True
     except Exception:
         return False
@@ -101,7 +105,8 @@ def validate_ndjson_shape(records: list[dict]) -> tuple[bool, list[str]]:
     return len(errors) == 0, errors
 
 
-def run_e2e(module: str, target: str, api_base: str) -> dict:
+def run_e2e(module: str, target: str, api_base: str,
+            token: str | None = None) -> dict:
     """Run the end-to-end test. Returns structured result."""
     result = {
         "module": module,
@@ -124,7 +129,9 @@ def run_e2e(module: str, target: str, api_base: str) -> dict:
     payload = {"target": target, "concurrency": 8}
     slo_s = SLO_MAX_SECONDS.get(module, SLO_MAX_SECONDS["default"])
 
-    status, records, elapsed = http_post_stream(url, payload, timeout=slo_s + 30)
+    status, records, elapsed = http_post_stream(
+        url, payload, timeout=slo_s + 30, token=token
+    )
     result["elapsed_s"] = round(elapsed, 2)
 
     if status != 200:
@@ -197,9 +204,12 @@ def main():
                     help="Scan target (default: vulnuslab.com)")
     ap.add_argument("--api", default="http://localhost:8000",
                     help="API base URL (default: http://localhost:8000)")
+    ap.add_argument("--token", default=os.environ.get("VL_TOKEN"),
+                    help="Bearer token for authenticated endpoints "
+                         "(or set VL_TOKEN env var)")
     args = ap.parse_args()
 
-    r = run_e2e(args.module, args.target, args.api)
+    r = run_e2e(args.module, args.target, args.api, token=args.token)
     print_result(r)
     sys.exit(0 if not r["failures"] else 1)
 
