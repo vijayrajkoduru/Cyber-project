@@ -123,8 +123,7 @@ const MODULES = [
   { id:"ad",        icon:"🏢", label:"Active Directory Attacks",           cat:"advanced",free:false, comingSoon:true },
   { id:"av",        icon:"🥷", label:"Antivirus Evasion",                  cat:"advanced",free:false, comingSoon:true },
   { id:"cloud",     icon:"☁️", label:"Cloud Security Testing",             cat:"advanced",free:false, comingSoon:true },
-  { id:"mobile",    icon:"📱", label:"Mobile Application Testing",         cat:"advanced",free:false },
-  { id:"mobile_static", icon:"🔬", label:"Mobile App Binary Analysis",   cat:"advanced",free:false },
+  { id:"mobile_static", icon:"📱", label:"Mobile App Binary Analysis",     cat:"advanced",free:false },
   { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false, comingSoon:true },
 
   // ── DATA PROTECTION ──────────────────────────────────────────
