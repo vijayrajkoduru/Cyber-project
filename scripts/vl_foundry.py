@@ -341,7 +341,7 @@ def phase_cd_scanners(client, plan: dict, examples: dict) -> list[tuple[str, Pat
                 expected_findings=scanner.get("expected_findings", ""),
                 SCANNER_UPPER=name.upper(),
                 scanner_example=examples["scanner_example"][:4000],
-            ), system=SYSTEM_PROMPT, max_tokens=4000)
+            ), system=SYSTEM_PROMPT, max_tokens=12000)  # large — scanners can be 200-400 lines
             scanner_src = _extract_python(scanner_src)
 
             # Validate Python syntax
@@ -365,7 +365,7 @@ def phase_cd_scanners(client, plan: dict, examples: dict) -> list[tuple[str, Pat
                 scanner_role=scanner.get("role", ""),
                 expected_findings=scanner.get("expected_findings", ""),
                 findings_example=examples["findings_example"][:3000],
-            ), system=SYSTEM_PROMPT, max_tokens=3000)
+            ), system=SYSTEM_PROMPT, max_tokens=6000)  # findings can have 10+ rules
             findings_src = _extract_python(findings_src)
 
             try:
@@ -551,7 +551,7 @@ def phase_g_score_and_heal(client, plan: dict, examples: dict) -> float:
                 f"Output ONLY the corrected Python file. No markdown fences."
             )
             try:
-                fixed = _ask(client, heal_prompt, system=SYSTEM_PROMPT, max_tokens=4000)
+                fixed = _ask(client, heal_prompt, system=SYSTEM_PROMPT, max_tokens=12000)
                 fixed = _extract_python(fixed)
                 ast.parse(fixed)
                 sp.write_text(fixed, encoding="utf-8")
@@ -571,6 +571,8 @@ def main():
     ap.add_argument("--scanners", type=int, default=12)
     ap.add_argument("--dry-run", action="store_true", help="Only generate plan, no code")
     ap.add_argument("--resume", action="store_true", help="Reuse existing plan JSON")
+    ap.add_argument("--regenerate-failed", action="store_true",
+                    help="Only re-run AI for scanners that ended up as .ai_draft (token-limit failures)")
     args = ap.parse_args()
 
     if not args.module.replace("_", "").isalnum():
@@ -592,6 +594,37 @@ def main():
 
     if args.dry_run:
         print(f"\nDry run — plan saved to {plan_path}. No code generated.")
+        return
+
+    # Regenerate-only mode: ONLY rerun the AI for scanners that previously
+    # failed (.ai_draft files). Cheap (~$0.30 vs $1.50 full forge) and avoids
+    # re-clobbering the working scanners.
+    if args.regenerate_failed:
+        draft_files = list((ROOT / "tools" / args.module).rglob("*.py.ai_draft"))
+        if not draft_files:
+            print(f"  No .ai_draft files in tools/{args.module}/ — nothing to regenerate.")
+            return
+        print(f"  Found {len(draft_files)} failed scanner(s):")
+        for d in draft_files:
+            print(f"    {d.relative_to(ROOT)}")
+        # Subset the plan to only failed scanners
+        failed_names = {d.name.replace(".py.ai_draft", "") for d in draft_files}
+        reduced_plan = dict(plan)
+        reduced_plan["tiers"] = [
+            {**t, "scanners": [s for s in t["scanners"] if s["name"] in failed_names]}
+            for t in plan["tiers"]
+        ]
+        reduced_plan["tiers"] = [t for t in reduced_plan["tiers"] if t["scanners"]]
+        phase_cd_scanners(client, reduced_plan, examples)
+        # Delete the old drafts that now have working .py
+        for d in draft_files:
+            real = d.with_suffix("")  # foo.py.ai_draft -> foo.py
+            if real.exists():
+                d.unlink()
+                print(f"    removed stale draft: {d.relative_to(ROOT)}")
+        # Rerun scoring
+        score = phase_g_score_and_heal(client, plan, examples)
+        print(f"\n  Final score after regeneration: {score}/100")
         return
 
     phase_b_scaffold(plan)
