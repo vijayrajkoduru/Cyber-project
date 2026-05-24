@@ -260,39 +260,110 @@ exists to feed this document.
 | **Compliance map** | Findings → PCI / SOC2 / ISO / HIPAA / GDPR / NIST / CIS controls |
 | **Trust anchor** | Verified-by stamp + Report ID + content hash = tamper evidence |
 
-### Canonical 9-block layout ("vulntemplate")
+### Canonical PDF = the Webapp PDF (`generatePDF` in `src/App.js:761`)
+
+The **Webapp module's PDF is the canonical VL-FOUNDRY report**. Every other
+module's PDF must converge to this exact structure. The function
+[`generatePDF`](src/App.js#L761) is the source of truth — when this doc and
+the function disagree, the function wins, and this doc must be updated.
+
+Why Webapp is the canon (not an abstract spec):
+- It's the most-shipped report (every paid customer who runs an app scan)
+- It has the deepest auditor feedback (OWASP grade + 8-framework compliance)
+- It has every component the other modules need; the others are subsets
+
+### The 17-section Webapp PDF layout
+
+Section numbering matches the order they appear in [`generatePDF`](src/App.js#L761):
 
 ```
-1. Cover               — target, date, classification, scope
-2. Tools Used          — every scanner + finding count
-3. Executive Summary   — risk score, severity bar, top-3 priorities
-4. Findings Summary    — CRIT / HIGH / MED / LOW counters
-5. OWASP / Compliance  — A01-A10 coverage + 8-framework mapping
-6. Scan Coverage       — % phases completed + per-phase status
-7. Per-Tool Findings   — one section per scanner (severity / CVSS / CWE /
-                         OWASP / remediation / evidence_marker)
-8. Verification Audit  — proves what was PROBED, not just FOUND
-9. Appendix            — methodology + CVSS scale + references
+═════════════ COVER ═════════════════════════════════════════════
+ 1. Cover page          black header + logo + "PENETRATION TEST REPORT"
+ 2. Info table          Target / Date / Classification(CONFIDENTIAL badge) /
+                        Authenticated yes-no / Prepared By
+ 3. Trust statement     "[VERIFIED] VULNUSLAB — every finding independently
+                        triggered and re-confirmed" (blue accent box)
+ 4. Key Risk Headline   Single color-coded box (red/amber/yellow/green) with
+                        severity tag + count + SLA ("patch within 24h")
+
+══════════ EXECUTIVE SUMMARY ════════════════════════════════════
+ 5. Executive Summary   Severity × Count × SLA × Recommendation table
+ 6. OWASP Top 10 Grade  Letter grade A-F + per-category pass/fail row
+ 7. Compliance Coverage 8 frameworks (PCI / SOC2 / ISO / HIPAA / GDPR /
+                        NIST 800-53 / NIST CSF / CIS) mapped to findings
+ 8. Remediation Diff    Fixed / Persisting / Novel vs previous scan
+
+══════════ RISK PROFILE ═════════════════════════════════════════
+ 9. Risk Score Bar      0-100 numeric + colored progress bar + label
+10. Severity Breakdown  Horizontal stacked bar per severity tier
+11. Tier Coverage       Per-tier (Discovery/Recon/Injection/Auth/File/
+                        Network/Access/Framework) coverage matrix
+
+══════════ FINDINGS ═════════════════════════════════════════════
+12. Per-Tool Sections   One section per scanner: Directory enum / Web
+                        fuzz / Tech / SQLi / WAF / CMS / SSL/TLS / CORS /
+                        Cookies / XSS / Subdomains / DNS / + extended set
+13. Detailed Findings   Per-finding card: severity badge, CVSS, CWE, OWASP,
+                        evidence (Courier font), Fix snippet (green accent),
+                        References
+14. Recommendations     Dynamic action list synthesized from findings
+
+══════════ AUDIT TRAIL ══════════════════════════════════════════
+15. Verification Audit  "What each scanner PROBED for" — shows depth
+                        without leaking payloads
+16. Appendix            Methodology · Severity scale · Tools used · References
+
+══════════ EVERY PAGE ═══════════════════════════════════════════
+17. Border + Footer     Blue rectangle border · Watermark · Report ID +
+                        Content Hash centered in footer · CONFIDENTIAL tag
 ```
 
-### Rules for every PDF (the 7-check Definition of Done)
+### The 7-check Definition of Done (per-PDF gate)
 
-1. ✅ **Risk score** in executive summary (0-100, color-coded)
-2. ✅ **Severity bar** showing distribution at a glance
+A module's PDF ships only when ALL 7 are present:
+
+1. ✅ **Risk score (0-100)** in executive summary, color-coded
+2. ✅ **Stacked severity bar** showing distribution at a glance
 3. ✅ **Per-finding CVSS + CWE + OWASP** — no findings without taxonomy
 4. ✅ **Per-finding remediation** — every HIGH/CRIT has a fix snippet
 5. ✅ **Per-finding evidence_marker** — what the scanner actually observed
 6. ✅ **Verification audit** — proves negative tests too ("0 OK" rows)
 7. ✅ **Report ID + content hash** — tamper-evidence + reproducibility
 
+### Current module convergence (2026-05-24)
+
+| Block | Webapp (canon) | Vuln | Recon |
+|---|---|---|---|
+| 1. Cover | ✅ | ✅ | ✅ |
+| 2. Info table | ✅ | ✅ | ✅ |
+| 3. Trust statement | ✅ | ✅ | ✅ |
+| 4. Key Risk Headline | ✅ | ✅ | ❌ |
+| 5. Executive Summary | ✅ | ✅ | ⚠️ partial |
+| 6. OWASP Top 10 Grade | ✅ | ✅ | ✅ |
+| 7. Compliance Coverage | ✅ | ✅ | ❌ |
+| 8. Remediation Diff | ✅ | ⚠️ | ❌ |
+| 9. Risk Score Bar | ✅ | ✅ | ❌ |
+| 10. Severity Breakdown | ✅ | ✅ | ⚠️ |
+| 11. Tier Coverage | ✅ | ⚠️ | ✅ (Phases) |
+| 12. Per-Tool Sections | ✅ | ✅ | ✅ (24 tools) |
+| 13. Detailed Findings | ✅ | ✅ | ✅ |
+| 14. Recommendations | ✅ | ✅ | ⚠️ |
+| 15. Verification Audit | ✅ | ✅ | ✅ |
+| 16. Appendix | ✅ | ✅ | ✅ |
+| 17. Report ID + Hash | ✅ | ✅ | ❌ |
+
+**Recon gap:** 4 missing + 3 partial. Retrofit by porting blocks 4, 7, 8, 9, 17
+from [`generatePDF`](src/App.js#L761) into [`generateReconReport`](src/App.js#L7388).
+
 ### What distinguishes VulnusLab PDFs
 
 - **Per-scanner verification audit** — competitors only show findings;
   we show what was *probed*. Auditors actually want this.
-- **9-block structure consistent across all 3 modules** — customer learns once.
+- **One canonical structure across all 3 modules** — customer learns once.
 - **AI-curated remediation** — fix snippets are copy-paste-ready, not generic.
 - **No template-only matches** — every finding independently triggered and
   re-confirmed by the engine before emission.
+- **Tamper-evident** — Report ID (deterministic) + content hash in footer.
 
 ---
 
@@ -302,8 +373,9 @@ exists to feed this document.
    a single sentence. Document why it exists, what it isn't, and when it runs.
 2. **Layer 2:** list every scanner in a one-line table. Each row answers one
    specific question. Group by tier so customers can run partial scans.
-3. **Layer 3:** every finding flows into the 9-block PDF template. Confirm
-   the 7-check Definition of Done passes before shipping.
+3. **Layer 3:** every finding flows into the **17-section Webapp PDF layout**
+   (canon: `generatePDF` in `src/App.js:761`). Confirm the 7-check Definition
+   of Done passes before shipping.
 
 If any layer is incomplete, the module isn't ready for customers.
 
