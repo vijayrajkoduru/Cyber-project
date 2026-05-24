@@ -15,6 +15,7 @@ contract.
 - [ ] Pentest phase it covers documented (PTES / NIST 800-115 ref)
 - [ ] Existing code audited (don't duplicate Recon/Vuln/Webapp coverage)
 - [ ] Branch created: `forge-<modulename>`
+- [ ] `python scripts/doctor.py` returns exit 0 (Layer 21 — lab is current)
 
 ---
 
@@ -158,6 +159,19 @@ orchestrator count exactly?"
 
 ---
 
+## Layer 21 — Tooling & dependency freshness
+
+- [ ] Every new Python import declared in `requirements.txt`
+- [ ] Every new external CLI added to `Dockerfile` AND `tools/_framework/tool_versions.json`
+- [ ] `python scripts/doctor.py` returns exit 0 (no MISSING required tools)
+- [ ] No wordlist older than its refresh window (Layer 5 calendar)
+- [ ] Doctor run from clean container — confirms Dockerfile is self-sufficient
+
+**Audit agent check:** run `doctor.py --json` in a fresh container, verify
+exit 0 and no MISSING required tools.
+
+---
+
 ## Layer 20 — End-to-end verification
 
 - [ ] `python scripts/e2e_test.py <module> --target=vulnuslab.com` returns exit code 0
@@ -214,6 +228,7 @@ What surprised you about this layer? What would you change in the framework?
 | 8 | | |
 | 9 | | |
 | 20 | | |
+| 21 | | |
 
 After forging the module, commit your filled checklist + any framework
 updates so the next module's forge is even smoother.
