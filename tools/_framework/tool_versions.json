@@ -1,0 +1,59 @@
+{
+  "_comment": "VL-FOUNDRY Layer 21 — declared external CLI tools. Add a new tool here AND to Dockerfile. doctor.py reads this file. min_version is the floor; check_cmd's stdout/stderr is parsed by parse_re.",
+  "tools": [
+    {
+      "name": "nmap",
+      "min_version": "7.80",
+      "check_cmd": ["nmap", "--version"],
+      "parse_re": "Nmap version ([0-9]+\\.[0-9]+)",
+      "required": true,
+      "used_by": ["recon", "vuln"]
+    },
+    {
+      "name": "nuclei",
+      "min_version": "3.0.0",
+      "check_cmd": ["nuclei", "-version"],
+      "parse_re": "Current Version: ([0-9]+\\.[0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["vuln"]
+    },
+    {
+      "name": "amass",
+      "min_version": "4.0",
+      "check_cmd": ["amass", "-version"],
+      "parse_re": "v([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["recon"]
+    },
+    {
+      "name": "whatweb",
+      "min_version": "0.5",
+      "check_cmd": ["whatweb", "--version"],
+      "parse_re": "WhatWeb version ([0-9]+\\.[0-9]+)",
+      "required": false,
+      "used_by": ["recon"]
+    },
+    {
+      "name": "dig",
+      "min_version": "9.0",
+      "check_cmd": ["dig", "-v"],
+      "parse_re": "DiG ([0-9]+\\.[0-9]+)",
+      "required": true,
+      "used_by": ["recon"]
+    },
+    {
+      "name": "curl",
+      "min_version": "7.0",
+      "check_cmd": ["curl", "--version"],
+      "parse_re": "curl ([0-9]+\\.[0-9]+)",
+      "required": true,
+      "used_by": ["recon", "vuln", "webapp"]
+    }
+  ],
+  "wordlist_refresh_days": {
+    "recon": 30,
+    "vuln": 14,
+    "webapp": 14,
+    "osint": 30
+  }
+}

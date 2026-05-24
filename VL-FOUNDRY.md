@@ -26,6 +26,11 @@ EACH layer commits, not just at the end.
 
 ```
    ┌────────────────────────────┐
+   │ Layer 21 doctor.py         │   PRE-FLIGHT
+   │ (deps + CLIs + wordlists)  │   (lab must be current)
+   └──────────────┬─────────────┘
+                  ▼
+   ┌────────────────────────────┐
    │ Layer 1  Module Role       │   DESIGN
    │ Layer 2  Tool Catalogue    │   (what)
    │ Layer 3  Report layout     │
@@ -54,6 +59,7 @@ Cross-cutting (apply at every layer — no fixed slot):
   Layer 12  cost model
   Layer 13  observability
   Layer 14-19  lifecycle policies (deprecation, A/B, model version, etc.)
+  Layer 21  tooling freshness (weekly cron + pre-forge)
 ```
 
 ### Sequence B — Runtime order (every customer scan)
@@ -886,6 +892,68 @@ python scripts/e2e_test.py <module> [--target=<host>] [--api=<base_url>]
 
 ---
 
+## Layer 21 — Tooling & dependency freshness
+
+Scanners depend on three layers of tooling that **drift out of date** if no
+process owns them:
+
+| Tier | Examples | How it drifts |
+|---|---|---|
+| **Python packages** | `httpx`, `dnspython`, `anthropic`, `cryptography` | New CVE in a dep; new feature we want |
+| **External CLI tools** | `nmap`, `nuclei`, `amass`, `sublist3r`, `whatweb` | Vendor releases new version with new probes |
+| **Tool templates / signature DBs** | `nuclei-templates/`, JS lib signatures, CVE feeds | Daily/weekly upstream updates |
+
+Layer 21 makes drift **detectable** and **fixable** in one command. It does
+NOT auto-update in production — surprise upgrades break scans. It REPORTS,
+then the operator runs the install.
+
+**Artifact:** `scripts/doctor.py`
+
+**Run:**
+```bash
+python scripts/doctor.py              # check only — list outdated / missing
+python scripts/doctor.py --install    # install missing Python deps
+python scripts/doctor.py --update     # upgrade outdated (pinned only)
+python scripts/doctor.py --json       # CI-friendly machine output
+```
+
+**Five health checks (in order):**
+
+1. **Python deps installed** — every package in `requirements.txt` resolves
+2. **Python deps current** — `pip list --outdated` against pinned versions
+3. **External CLI tools on PATH** — `which nmap / nuclei / amass / ...` returns a path
+4. **External CLI tools current** — `<tool> --version` parsed and compared against `tools/_framework/tool_versions.json`
+5. **Wordlist / template freshness** — mtime of each AI-curated wordlist vs the refresh calendar (Layer 5)
+
+**Exit codes:**
+- `0` — all green
+- `1` — something missing (blocks CI)
+- `2` — something outdated (warning, doesn't block)
+
+**Source of truth:**
+- Python deps → `requirements.txt`
+- CLI binaries → `Dockerfile` (apt install / go install lines) + `tools/_framework/tool_versions.json` (minimum + current versions per tool)
+- Template/signature DBs → per-scanner cache dir + version stamp file
+
+**When to run:**
+- Before every module forge (sanity-check the lab is current)
+- Weekly via cron on the VPS (catches CVE-driven dep upgrades)
+- Before every customer-facing release
+- After upgrading Docker base image
+
+**What it does NOT do:**
+- Does NOT auto-`pip install --upgrade` (deterministic builds matter)
+- Does NOT pull arbitrary GitHub repos (every tool must be declared first)
+- Does NOT modify `requirements.txt` — that's a human decision
+
+**Adding a new external tool:**
+1. Add install line to `Dockerfile`
+2. Add `{"name": "...", "min_version": "...", "check_cmd": "... --version"}` to `tools/_framework/tool_versions.json`
+3. `python scripts/doctor.py` — confirm it shows green
+4. Commit all three changes together
+
+---
+
 ## Companion documents
 
 - `VL-FOUNDRY-CHECKLIST.md` — per-forge shipping checklist (copy + tick)
@@ -897,6 +965,8 @@ python scripts/e2e_test.py <module> [--target=<host>] [--api=<base_url>]
 - `scripts/e2e_test.py` — Layer 20 full-chain verifier
 - `scripts/pre_commit_score.py` — pre-commit hook (blocks scanner commits that lower the score)
 - `scripts/forge_scanner.py` — scaffolds a new scanner with the 7-check skeleton
+- `scripts/doctor.py` — Layer 21 dependency + tool freshness checker
+- `tools/_framework/tool_versions.json` — declared min/current versions for external CLIs
 - `tools/_framework/scan_state.py` — Layer 10 schema enforcer
 - `tools/_framework/observability.py` — Layer 13 health tracker
 - `tools/_framework/naming.py` — Layer 11 naming validator
