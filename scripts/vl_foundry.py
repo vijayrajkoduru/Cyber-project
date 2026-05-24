@@ -158,6 +158,49 @@ Hard rules:
 6. ZERO FALSE POSITIVES — only emit findings with concrete evidence.
 7. 5-second timeouts on all HTTP. Handle exceptions silently.
 
+CRITICAL — exact run_scanner() signature (DO NOT hallucinate parameter names):
+  run_scanner(host=..., tool=..., gather_func=..., finding_rules=...,
+              intel_fields=..., flat_field_keys=...)
+  Forbidden parameter names: req, scanner_name, gather_fn, scan_fn,
+  finding_rule, intel_field, flat_field, rules.
+
+Every scanner file MUST end with:
+    def register(app):
+        app.include_router(router)
+
+When you produce code, output ONLY the code. No markdown fences. No explanations."""
+
+
+# Binary-static mode — for modules that analyze uploaded binaries (APK, IPA,
+# PE, ELF). Allows subprocess + file paths instead of HTTP-only.
+SYSTEM_PROMPT_BINARY_STATIC = """You are VL-FOUNDRY (binary-static mode), the autonomous module forge for VulnusLab.
+
+This module ANALYZES CUSTOMER-UPLOADED BINARIES (APK, IPA, PE, ELF). The customer
+uploads the file via POST /api/<module>/upload; the path is stored as ctx.state["apk_path"].
+
+Hard rules:
+1. Use Python 3.10+ stdlib + tools._shared + tools._framework + tools._framework.apk_cache.
+2. External CLI tools ARE ALLOWED via subprocess (apktool, jadx, aapt, MobSF, checksec,
+   nm, strings, unzip, otool). Wrap in subprocess.run(..., timeout=...).
+3. Input is a FILE PATH (apk_path / ipa_path / binary_path), not a URL.
+4. Use tools._framework.apk_cache.get_unpacked(apk_path) for shared decompile cache —
+   scanners stay isolated but redundant decompiles are avoided.
+5. Every finding must have: severity, evidence, remediation.
+6. POSITIVE emit when scan is clean (proves the analysis ran on the binary).
+7. ZERO FALSE POSITIVES — only emit findings with concrete evidence (file path + line).
+8. Timeout every subprocess (timeout=60 default; MobSF up to 120s). Handle exceptions silently.
+9. Each scanner is ISOLATED — no scanner imports another scanner. Shared infra
+   (apk_cache, finding_schema) is via tools._framework only.
+
+CRITICAL — exact run_scanner() signature:
+  run_scanner(host=..., tool=..., gather_func=..., finding_rules=...,
+              intel_fields=..., flat_field_keys=...)
+  For binary-static: pass `host=apk_path` (path is the "target" of analysis).
+
+Every scanner file MUST end with:
+    def register(app):
+        app.include_router(router)
+
 When you produce code, output ONLY the code. No markdown fences. No explanations."""
 
 
@@ -200,6 +243,59 @@ Output ONLY the JSON object. Start with {{ end with }}.
 """
 
 
+# Binary-static variant — for modules that analyze customer-uploaded binaries
+PROMPT_LAYER_2_BINARY_STATIC = """Design a VulnusLab BINARY-STATIC module called "{module}".
+
+This module ANALYZES CUSTOMER-UPLOADED BINARIES (APK / IPA / PE / ELF) — NOT
+domains or live targets. The customer uploads the file; each scanner reads
+the file and produces findings via static analysis.
+
+Examples of valid §1 (APP BINARY) scanners:
+  - apk_decompile_audit (apktool subprocess)
+  - android_manifest_audit (parse AndroidManifest.xml)
+  - ios_plist_audit (plistlib stdlib)
+  - secret_extraction_audit (regex over decompiled tree)
+  - native_lib_hardening (checksec subprocess on .so files)
+  - bytecode_malware_signatures (Quark-Engine Python lib)
+  - mobsf_aggregate_scan (MobSF CLI subprocess)
+
+Output a JSON plan with EXACTLY this shape:
+
+{{
+  "module": "{module}",
+  "module_role": "<one sentence: what binary class + what risks the module surfaces>",
+  "ptes_phase": "PTES Section 7 - Reporting (static analysis)",
+  "binary_type": "<APK | IPA | PE | ELF>",
+  "why_exists": ["<bullet 1>", "<bullet 2>", "<bullet 3>"],
+  "what_it_isnt": ["<bullet 1>", "<bullet 2>", "<bullet 3>"],
+  "tiers": [
+    {{
+      "id": "tier1_<snake_category>",
+      "label": "Tier 1 - <Human Label>",
+      "scanners": [
+        {{
+          "name": "<snake_case_name>",
+          "role": "<one-line role>",
+          "tooling": "<CLI tool or Python lib used — apktool, jadx, plistlib, etc.>",
+          "expected_findings": "<concrete finding examples — debuggable=true, hardcoded AWS key, etc.>"
+        }}
+      ]
+    }}
+  ]
+}}
+
+Requirements:
+- {n_tiers} tiers total
+- {n_scanners} scanners total (distributed across tiers)
+- Every scanner takes a FILE PATH as input (not a URL)
+- External CLI tools ARE ALLOWED via subprocess
+- Use tools._framework.apk_cache.get_unpacked() for shared decompile cache
+- Each scanner is one specific check — not an aggregator
+
+Output ONLY the JSON object. Start with {{ end with }}.
+"""
+
+
 PROMPT_SCANNER = """Generate ONE complete Python file for a VulnusLab scanner.
 
 Path: tools/{module}/{tier_id}/{scanner_name}.py
@@ -232,6 +328,93 @@ Generate WORKING gather() logic. Don't write `# TODO`. Use real HTTP calls and r
 For 3rd-party data: HTML scrape via safe_get + regex, OR public JSON APIs.
 
 The gather() should populate at least: ctx.state["{scanner_name}_total"] = N
+
+Output ONLY the complete Python file. No markdown fences. No explanation.
+"""
+
+
+PROMPT_SCANNER_BINARY_STATIC = """Generate ONE complete Python file for a VulnusLab BINARY-STATIC scanner.
+
+Path: tools/{module}/{tier_id}/{scanner_name}.py
+
+This is a {module} module scanner. Module role: {module_role}.
+Binary type: {binary_type}.
+
+Scanner spec:
+  name: {scanner_name}
+  role: {scanner_role}
+  tooling: {tooling}
+  expected findings: {expected_findings}
+
+Required file structure (use this EXACT template — replace only the marked sections):
+
+```python
+\"\"\"{scanner_name} — {scanner_role}.\"\"\"
+import subprocess
+from pathlib import Path
+
+from fastapi import APIRouter, Depends
+
+from tools._shared import ScanRequest, verify_scan_quota
+from tools._framework import ScanContext, run_scanner
+from tools._framework.apk_cache import get_unpacked   # shared decompile cache
+from tools._payloads.{scanner_name}_findings import {SCANNER_UPPER}_FINDING_RULES
+
+router = APIRouter()
+
+
+async def gather(ctx: ScanContext):
+    \"\"\"YOUR CODE: read file from ctx.host (apk_path) and populate ctx.state.\"\"\"
+    apk_path = ctx.host  # for binary-static, ctx.host is the uploaded file path
+    if not Path(apk_path).is_file():
+        ctx.state["{scanner_name}_total"] = 0
+        ctx.source("file-not-found")
+        return
+
+    # Use the shared cache for any decompile work (avoids 12x redundant unpacks)
+    try:
+        unpacked_dir = get_unpacked(apk_path)
+    except Exception as e:
+        ctx.state["{scanner_name}_error"] = str(e)
+        return
+
+    # === YOUR SCANNER LOGIC HERE ===
+    # Example for {tooling}:
+    #   result = subprocess.run(["{tooling}", str(unpacked_dir / "AndroidManifest.xml")],
+    #                            capture_output=True, text=True, timeout=60)
+    #   parse result.stdout, populate ctx.state with findings
+    #
+    # Then mark sources used:
+    ctx.source("{tooling}")
+    ctx.state["{scanner_name}_total"] = 0  # update with real count
+
+
+INTEL_FIELDS = [
+    # ("Display label", "state_key"),
+]
+
+
+@router.post("/api/{module}/{scanner_name}")
+async def {module}_{scanner_name}(req: ScanRequest, _=Depends(verify_scan_quota)):
+    # req.target is the apk_path uploaded earlier via POST /api/{module}/upload
+    apk_path = req.target
+    return await run_scanner(
+        host=apk_path, tool="{scanner_name}",
+        gather_func=gather,
+        finding_rules={SCANNER_UPPER}_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=[],
+    )
+
+
+def register(app):
+    app.include_router(router)
+```
+
+Generate WORKING gather() logic. Don't write `# TODO`. Use real subprocess
+calls + real parsing. Wrap subprocess.run with timeout. Handle FileNotFoundError
+gracefully (binary may have moved). The scanner runs against ONE uploaded file
+per scan — don't loop over multiple APKs.
 
 Output ONLY the complete Python file. No markdown fences. No explanation.
 """
@@ -274,13 +457,23 @@ Output ONLY the complete Python file. No markdown fences.
 
 # ─────────────────── PHASES ───────────────────
 
-def phase_a_research(client, module: str, n_tiers: int, n_scanners: int) -> dict:
-    print(f"  [A] Researching '{module}' domain ...")
+def phase_a_research(client, module: str, n_tiers: int, n_scanners: int,
+                     mode: str = "passive") -> dict:
+    print(f"  [A] Researching '{module}' domain (mode={mode}) ...")
     plan_path = PLAN_DIR / f"{module}.json"
 
-    raw = _ask(client, PROMPT_LAYER_2.format(
-        module=module, n_tiers=n_tiers, n_scanners=n_scanners,
-    ), system=SYSTEM_PROMPT, max_tokens=4000)
+    if mode == "binary-static":
+        prompt = PROMPT_LAYER_2_BINARY_STATIC.format(
+            module=module, n_tiers=n_tiers, n_scanners=n_scanners,
+        )
+        system = SYSTEM_PROMPT_BINARY_STATIC
+    else:
+        prompt = PROMPT_LAYER_2.format(
+            module=module, n_tiers=n_tiers, n_scanners=n_scanners,
+        )
+        system = SYSTEM_PROMPT
+
+    raw = _ask(client, prompt, system=system, max_tokens=4000)
 
     try:
         plan = _extract_json(raw)
@@ -289,7 +482,8 @@ def phase_a_research(client, module: str, n_tiers: int, n_scanners: int) -> dict
         print(f"      AI output (first 500 chars): {raw[:500]}")
         raise
 
-    # Persist
+    # Persist (include mode marker so downstream phases know which prompts to use)
+    plan["mode"] = mode
     plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
     n_actual = sum(len(t.get("scanners", [])) for t in plan.get("tiers", []))
     print(f"      done. {len(plan['tiers'])} tiers, {n_actual} scanners. Plan: {plan_path}")
@@ -320,6 +514,8 @@ def phase_cd_scanners(client, plan: dict, examples: dict) -> list[tuple[str, Pat
     """
     module = plan["module"]
     module_role = plan.get("module_role", "")
+    mode = plan.get("mode", "passive")
+    binary_type = plan.get("binary_type", "APK")
     written = []
 
     total_scanners = sum(len(t["scanners"]) for t in plan["tiers"])
@@ -330,18 +526,30 @@ def phase_cd_scanners(client, plan: dict, examples: dict) -> list[tuple[str, Pat
         for scanner in tier["scanners"]:
             idx += 1
             name = scanner["name"]
-            print(f"  [C/D {idx}/{total_scanners}] AI generating {name} ...")
+            print(f"  [C/D {idx}/{total_scanners}] AI generating {name} (mode={mode}) ...")
 
-            # The scanner file
-            scanner_src = _ask(client, PROMPT_SCANNER.format(
-                module=module, module_role=module_role,
-                tier_id=tier_id, scanner_name=name,
-                scanner_role=scanner.get("role", ""),
-                data_source=scanner.get("data_source", ""),
-                expected_findings=scanner.get("expected_findings", ""),
-                SCANNER_UPPER=name.upper(),
-                scanner_example=examples["scanner_example"][:4000],
-            ), system=SYSTEM_PROMPT, max_tokens=12000)  # large — scanners can be 200-400 lines
+            # Branch by mode — passive uses HTTP example; binary-static uses
+            # subprocess template baked into the prompt
+            if mode == "binary-static":
+                scanner_src = _ask(client, PROMPT_SCANNER_BINARY_STATIC.format(
+                    module=module, module_role=module_role,
+                    binary_type=binary_type,
+                    tier_id=tier_id, scanner_name=name,
+                    scanner_role=scanner.get("role", ""),
+                    tooling=scanner.get("tooling", "subprocess CLI"),
+                    expected_findings=scanner.get("expected_findings", ""),
+                    SCANNER_UPPER=name.upper(),
+                ), system=SYSTEM_PROMPT_BINARY_STATIC, max_tokens=12000)
+            else:
+                scanner_src = _ask(client, PROMPT_SCANNER.format(
+                    module=module, module_role=module_role,
+                    tier_id=tier_id, scanner_name=name,
+                    scanner_role=scanner.get("role", ""),
+                    data_source=scanner.get("data_source", ""),
+                    expected_findings=scanner.get("expected_findings", ""),
+                    SCANNER_UPPER=name.upper(),
+                    scanner_example=examples["scanner_example"][:4000],
+                ), system=SYSTEM_PROMPT, max_tokens=12000)
             scanner_src = _extract_python(scanner_src)
 
             # Validate Python syntax
@@ -571,6 +779,9 @@ def main():
     ap.add_argument("--scanners", type=int, default=12)
     ap.add_argument("--dry-run", action="store_true", help="Only generate plan, no code")
     ap.add_argument("--resume", action="store_true", help="Reuse existing plan JSON")
+    ap.add_argument("--mode", choices=["passive", "binary-static"], default="passive",
+                    help="passive (default — 3rd-party HTTP scanners) or "
+                         "binary-static (analyze uploaded APK/IPA/PE/ELF)")
     ap.add_argument("--regenerate-failed", action="store_true",
                     help="Only re-run AI for scanners that ended up as .ai_draft (token-limit failures)")
     args = ap.parse_args()
@@ -579,7 +790,7 @@ def main():
         sys.exit("error: module name must be alphanumeric + underscores")
 
     print("═" * 65)
-    print(f"  VL-FOUNDRY forge — module: {args.module}")
+    print(f"  VL-FOUNDRY forge — module: {args.module} (mode: {args.mode})")
     print("═" * 65)
 
     client = _client()
@@ -590,7 +801,7 @@ def main():
         print(f"  [A] Resuming from plan: {plan_path}")
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
     else:
-        plan = phase_a_research(client, args.module, args.tiers, args.scanners)
+        plan = phase_a_research(client, args.module, args.tiers, args.scanners, mode=args.mode)
 
     if args.dry_run:
         print(f"\nDry run — plan saved to {plan_path}. No code generated.")
