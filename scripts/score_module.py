@@ -139,7 +139,14 @@ def load_orchestrator_tools(module: str) -> set[str]:
         mod = __import__(f"endpoints.{module}_orchestrator", fromlist=["_all_tools"])
         tools = mod._all_tools()
         return {name for name, _ in tools}
-    except Exception:
+    except Exception as e:
+        # Show the actual error instead of silently returning empty set.
+        # Set VL_QUIET=1 to suppress (e.g. inside CI when error is expected).
+        if not os.environ.get("VL_QUIET"):
+            import traceback
+            print(f"\n  [L4 import error for {module}]: {type(e).__name__}: {e}",
+                  file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
         return set()
 
 
