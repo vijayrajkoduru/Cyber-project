@@ -461,3 +461,159 @@ python scripts/score_module.py <new_module>
 
 If consistently ≥ 85 → framework is solid.
 If routinely < 85 → add the missing layer or detail.
+
+---
+
+## Definition of a Module (when to forge vs. extend)
+
+Before saying "Forge X" — verify X actually merits a new module:
+
+| Test | If YES → new module | If NO → extend existing |
+|---|---|---|
+| Does it have its own pentest **phase** (PTES / NIST 800-115)? | ✅ | ❌ extend |
+| Would it have **≥ 10 distinct scanners**? | ✅ | ❌ extend |
+| Does it produce a **standalone PDF** customers want? | ✅ | ❌ extend |
+| Does it have its **own NDJSON orchestrator** flow? | ✅ | ❌ extend |
+| Is there an **industry-recognized name** for this category? | ✅ | ❌ extend |
+
+If 3+ "no" → it's a sub-feature, not a module. Add as new scanners to existing.
+
+**Examples:**
+- "Add Kerberos enum" → extend Vuln (not new module)
+- "Cloud security (AWS/GCP/Azure config audit)" → NEW module (5/5 yes)
+- "Mobile app pentest (APK + IPA)" → NEW module (5/5 yes)
+- "Better SQLi payloads" → extend Webapp's sqli scanner
+
+---
+
+## Layer 11 — Naming conventions
+
+Validated by `tools/_framework/naming.py`, enforced by `scripts/score_module.py`.
+
+**Module names:** lowercase, ≤ 12 chars, in allowed set (recon/vuln/webapp/osint/password/cloud/mobile/api/network/exploit/bof). Must be added to `_VALID_MODULES` first.
+
+**Scanner names:** `^[a-z][a-z0-9_]{2,40}$` — lowercase + underscores + digits only.
+
+**Banned suffixes** (cause duplicates): `_detection`, `_detector`, `_scan`, `_check`, `_test`, `_v2`, `_new`, `_old`, `_legacy`, `_alt`.
+
+**Banned pluralization confusion** — never ship two scanners differing only by plural/singular:
+- ❌ `nosql` + `nosqli`  → pick one
+- ❌ `force_browse` + `forced_browsing`  → pick one
+- ❌ `idor` + `idor_detector`  → drop the `_detector`
+
+Pre-commit linter: `python -m tools._framework.naming <module>` exits 1 on violations.
+
+---
+
+## Layer 13 — Observability
+
+Defined in `tools/_framework/observability.py`. Every scanner records each scan attempt:
+
+```python
+from tools._framework.observability import record_scan
+record_scan(module="recon", scanner="wayback", target="example.com",
+            status="ok", duration_s=4.2, findings_count=3)
+```
+
+**SLO targets:**
+
+| Module | SLO |
+|---|---|
+| Recon | ≥ 95% scans < 30s; ≥ 90% within-expected findings range |
+| Vuln | ≥ 90% scans < 60s |
+| Webapp | ≥ 85% scans < 90s |
+
+**Health dashboard:** `python -c "from tools._framework.observability import health_summary; print(health_summary('webapp', 7))"` — per-scanner ok/skipped/failed % over 7 days.
+
+**Degraded alert:** `alert_degraded(threshold_pct=80)` returns scanners below 80% success. Run as nightly cron → Slack webhook.
+
+---
+
+## Layer 14 — Deprecation process
+
+When a scanner becomes obsolete:
+
+1. Mark `_DEPRECATED = True` in scanner module
+2. Soft-disable — remove from orchestrator `_TOOLS_BY_TIER`
+3. Notify in release notes: "X deprecated, use Y instead"
+4. Wait 60 days — Pro/Enterprise customers update integrations
+5. Hard delete — `rm` + remove from App.js PHASES + update VL-FOUNDRY.md status matrix
+
+Old reports referencing deleted scanners still render (frozen data).
+
+---
+
+## Layer 15 — Backwards-compatibility contract
+
+**Stable (don't change without 90-day notice):**
+- API routes: `/api/<module>/<scanner>`
+- Scanner names in NDJSON output
+- JSON finding shape (severity/cvss/cwe/owasp/remediation/evidence_marker keys)
+- PDF Report ID format (`VL-YYYYMMDD-XXXXXX`)
+
+**Internal (change anytime):**
+- `_FALLBACK_*` consts, internal regex
+- Wordlist file names + counts (refresh freely)
+- Per-scanner implementation
+- Tier names + groupings
+
+Breaking-change procedure: add new version alongside (`/v2`), 90-day deprecation, then remove.
+
+---
+
+## Layer 16 — Customer feedback loop
+
+Every PDF has a final-page CTA → `app.vulnuslab.com/feedback/<report_id>` (5-star rating + free-text). Captured to `feedback.jsonl` for monthly review. Scanners with low remediation-clarity get prioritized for AI-curation refresh.
+
+---
+
+## Layer 17 — Abuse prevention
+
+- **Domain ownership verification** — DNS TXT record required for Free tier
+- **Rate limiting** — 1 concurrent scan / Free, 3 / Starter, 10 / Pro
+- **Banned targets** — google.com, microsoft.com, government domains, .gov, .mil
+- **Scan velocity** — > 100 scans/hour → auto-suspend pending review
+
+Implementation in `tools/_shared/abuse.py` (TODO post first paid customer).
+
+---
+
+## Layer 18 — A/B testing scanner improvements
+
+When updating a scanner with new AI-curated payloads:
+1. Branch + deploy to 10% of users (`User.flags.experiment_pool`)
+2. Measure 1 week: hit rate, FP rate, duration delta
+3. Promote if hit-rate ≥ +5% AND FP rate < +2% AND duration within SLO
+4. Revert if hit-rate flat or FP rate up ≥ +5%
+
+Tracked in `experiments.jsonl`.
+
+---
+
+## Layer 19 — Model version contract
+
+Today: AI curation uses `claude-sonnet-4-6`.
+
+When Claude updates (5.x etc.):
+1. Re-gen all wordlists with new model on a branch
+2. Diff sizes + category coverage
+3. Test scan known-vuln target with both
+4. Promote new wordlists if hit-rate improves OR same hit-rate with smaller list
+
+Track model version per wordlist in its docstring:
+```python
+"""sqli_payloads — generated 2026-05-24 by claude-sonnet-4-6."""
+```
+
+---
+
+## Companion documents
+
+- `VL-FOUNDRY-CHECKLIST.md` — per-forge shipping checklist (copy + tick)
+- `VL-FOUNDRY-AUDIT-AGENT.md` — agent prompts for per-layer verification
+- `VL-FOUNDRY-PRICING.md` — Layer 8 concrete tier→scanner mapping
+- `VL-FOUNDRY-COMPLIANCE.md` — Layer 9 finding→control mapping
+- `scripts/score_module.py` — objective scorer
+- `tools/_framework/scan_state.py` — Layer 10 schema enforcer
+- `tools/_framework/observability.py` — Layer 13 health tracker
+- `tools/_framework/naming.py` — Layer 11 naming validator

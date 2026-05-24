@@ -67,9 +67,53 @@ def find_scanners(module_path: Path) -> list[Path]:
 
 
 def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
-    """Run the 7 VL-FORGE checks against one scanner."""
+    """Run the 7 VL-FORGE checks against one scanner.
+
+    Hybrid mode:
+      • regex pre-screen (fast — kills bad scanners early)
+      • AST behavioral check on suspicious ones (slow but accurate)
+
+    A scanner can have `precheck_target` in an import or comment without
+    calling it. AST checks confirm the function is actually USED.
+    """
     src = scanner_path.read_text(encoding="utf-8")
-    return {name: bool(re.search(pattern, src)) for name, pattern in CHECKS.items()}
+    regex_results = {name: bool(re.search(pattern, src))
+                     for name, pattern in CHECKS.items()}
+
+    # AST behavioral verification for the 2 most-faked checks:
+    # `precheck` and `uniform_shape`. Parse the file, walk it, look for actual
+    # FUNCTION CALLS (not imports / comments / strings).
+    try:
+        tree = ast.parse(src)
+        called_functions = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                # Capture the callable name regardless of attribute access
+                func = node.func
+                if isinstance(func, ast.Name):
+                    called_functions.add(func.id)
+                elif isinstance(func, ast.Attribute):
+                    called_functions.add(func.attr)
+
+        # Behavioral overrides — if regex said YES but AST says no actual call,
+        # the check FAILS. We're catching scanners that imported but didn't call.
+        if regex_results.get("precheck"):
+            actual_call = bool(called_functions & {
+                "precheck_target", "safe_get", "web_url", "recon_host",
+                "run_scanner",
+            })
+            regex_results["precheck"] = actual_call
+
+        if regex_results.get("uniform_shape"):
+            actual_call = bool(called_functions & {
+                "standard_response", "vuln_response", "run_scanner",
+            })
+            regex_results["uniform_shape"] = actual_call
+    except SyntaxError:
+        # If it doesn't even parse, fail everything (broken scanner)
+        return {k: False for k in CHECKS}
+
+    return regex_results
 
 
 def is_parallel(scanner_path: Path) -> bool:
