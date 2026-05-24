@@ -164,6 +164,30 @@ orchestrator count exactly?"
 
 ---
 
+## Layer 23 — Deployment & Verification (added 2026-05-24)
+
+After Layer 22 + Layer 20 green LOCALLY, deploy to production:
+
+- [ ] On VPS: `cd ~/Cyber-project && git pull` — fresh code
+- [ ] `python scripts/install_hooks.py` — pre-commit hook installed (one-time)
+- [ ] `docker compose build --no-cache backend frontend` — clean build
+- [ ] `docker compose up -d` — containers healthy
+- [ ] `./scripts/smoke_test.sh <module>` (public) — gates 1-2 green
+- [ ] `VL_TOKEN='...' ./scripts/smoke_test.sh <module>` (auth) — all 5 gates green
+- [ ] Or one command: `./scripts/deploy.sh <module>` runs all of the above
+
+**Rollback known:** if any gate fails, run:
+```
+git reset --hard HEAD~1
+git push --force-with-lease origin main
+docker compose build --no-cache backend frontend && docker compose up -d
+```
+
+**Audit-agent check:** spawn agent → read /var/log/vl-foundry-deploys.log,
+confirm the most recent line for this module is `all_green`.
+
+---
+
 ## Layer 22 — UI Integration Gate (added 2026-05-24)
 
 - [ ] `generate<Module>Report(` appears AT LEAST TWICE in src/App.js (declaration + call)
@@ -251,6 +275,7 @@ What surprised you about this layer? What would you change in the framework?
 | 20 | | |
 | 21 | | |
 | 22 | | |
+| 23 | | |
 
 After forging the module, commit your filled checklist + any framework
 updates so the next module's forge is even smoother.
