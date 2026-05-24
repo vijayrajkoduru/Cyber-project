@@ -220,6 +220,160 @@ If any layer is incomplete, the module isn't ready for customers.
 
 ---
 
+## Named Processes (the verbs of VL-FOUNDRY)
+
+VL-FOUNDRY defines WHAT a module must contain (the 19 layers).
+**Named Processes define HOW to build, refresh, and ship those parts.**
+
+Every named process has:
+- a trigger phrase (what you say to invoke it)
+- an output (the artifact it produces)
+- a step count (how many discrete actions)
+- an approximate time + cost
+
+When you write a commit message that says "Apply VL-TURBO to scanner X",
+the process is unambiguous — everyone (you, agents, future devs) knows
+exactly what was done.
+
+---
+
+### VL-FORGE — build ONE scanner
+
+**Trigger:** `"Forge <scanner_name> for <module>"`
+
+**Output:** `tools/<module>/<scanner>.py` that passes the Layer 6 7-check Definition of Done.
+
+**Steps (7):**
+1. Add scanner name to module's tier in `<MODULE>_TOOLS_BY_TIER` (Layer 4)
+2. Create `tools/<module>/<scanner>.py` skeleton (FastAPI router + register)
+3. Add `precheck_target()` reachability guard
+4. Implement scan logic, emitting `wrap_finding()` for every finding (severity / CVSS / CWE / OWASP / remediation / evidence_marker)
+5. Wrap output in `standard_response()` or `vuln_response()` for uniform shape
+6. Emit POSITIVE finding when target is clean
+7. Set wall-clock cap (60-90s) + per-probe timeout (3-5s)
+
+**Verification:** `python scripts/score_module.py <module> --verbose` — scanner must show ≥ 5/7 checks passing in L6 Quality Bar.
+
+**Time:** ~15 min per scanner.
+
+**Pre-existing memory:** see `feedback_self_verify_before_show.md` — the
+7-check pattern was codified after early FP/skip bugs.
+
+---
+
+### VL-TURBO — parallelize ONE scanner
+
+**Trigger:** `"Apply VL-TURBO to <scanner>"`
+
+**Output:** same scanner, refactored from sequential probes to async-parallel.
+
+**Steps (6):**
+1. Identify sequential pattern (nested `for` loops issuing requests)
+2. Add `asyncio.Semaphore(N)` cap (N = 15-30 depending on probe weight)
+3. Convert request loop to `asyncio.gather(*tasks)` with `asyncio.to_thread` if scanner uses sync `requests`
+4. Lower per-probe timeout (8s → 3-5s)
+5. Wrap full gather in `asyncio.wait_for(..., wall_clock_cap)` (60-90s)
+6. Test against vulnuslab.com — confirm scan time drops by ≥ 3×
+
+**Verification:** scorer's L6 parallel pct goes up. Scan duration drops.
+
+**Time:** ~10 min per scanner.
+
+**Pre-existing memory:** `project_vl_turbo_process.md` codified this after
+Vuln scanners started hitting 240s wall-clock timeouts.
+
+---
+
+### VL-CURATOR — refresh AI wordlists for a module
+
+**Trigger:** `"Refresh AI curation for <module>"` or `"Curate <asset> for <module>"`
+
+**Output:** `tools/_payloads/<module>/<asset>.py` (or .json) with newer AI-generated content.
+
+**Steps (5):**
+1. Ensure `tools/_gen/gen_<module>_assets.py` has CONFIGS entry for the asset
+2. Set `ANTHROPIC_API_KEY` env var
+3. Run `python tools/_gen/gen_<module>_assets.py <asset>` — outputs to `/tmp/vl_payloads/`
+4. Review the generated file (`/tmp/vl_payloads/<asset>.py`)
+5. Move into place + commit:
+   `cp /tmp/vl_payloads/*.py tools/_payloads/<module>/`
+
+**Cost:** $1-3 per asset in Anthropic API tokens (build-time only — zero scan-time cost).
+
+**Time:** ~5 min per asset, ~30 min for full module refresh.
+
+**Refresh calendar** (from Layer 5):
+- Monthly: `cve_match`, `default_creds`, `service_banners`
+- Quarterly: `sqli`, `xss`, `cmd_injection`, `lfi`, `ssrf` payloads
+- Annually: `jwt_secrets`, `exposed_files_paths`, `cms_fingerprints`
+
+**Safety refusals:** Claude sometimes refuses dual-use prompts (credential brute, OAuth bypass, deserialization gadgets). When that happens, handcraft the wordlist instead — same shape, same fallback discipline.
+
+---
+
+### vulntemplate — render findings into the 9-block PDF
+
+**Trigger:** `"Apply vulntemplate to <module>"`
+
+**Output:** `generate<Module>Report()` function in `src/App.js` that produces the canonical 9-block PDF.
+
+**Steps (9 — one per block):**
+1. Cover block — target, date, classification, scope
+2. Tools Used table — every scanner + finding count
+3. Executive Summary — risk score (0-100) + severity bar + top-3 priorities
+4. Findings Summary — CRITICAL / HIGH / MEDIUM / LOW counters
+5. OWASP + Compliance Coverage (8 frameworks per `VL-FOUNDRY-COMPLIANCE.md`)
+6. Scan Coverage table — % phases completed + per-phase status
+7. Per-Tool Findings — one section per scanner with severity / CVSS / CWE / OWASP / remediation / evidence_marker
+8. Verification Audit — what was probed (proves negative tests)
+9. Appendix — methodology, CVSS scale, references
+
+**7-check Definition of Done** for the PDF itself (mirrors Layer 6 for scanners):
+- Risk score 0-100 in exec summary
+- Severity bar (stacked horizontal)
+- Per-finding CVSS + CWE + OWASP fields
+- Per-finding remediation
+- Per-finding evidence_marker
+- Verification audit table
+- Report ID + content hash
+
+**Time:** ~30 min per module.
+
+---
+
+### How named processes interact
+
+```
+   ┌──────────────────────────────────────────────────────────────┐
+   │   FORGE  →  TURBO  →  CURATOR  →  vulntemplate  →  SHIP     │
+   └──────────────────────────────────────────────────────────────┘
+        │         │           │              │             │
+   build one  make it fast  feed it AI    render PDF   passes scorer
+   scanner                 wordlists                   ≥ 85/100
+```
+
+Inside a single module forge (e.g., "Forge OSINT"):
+1. Run **VL-FORGE** once per scanner (~15 min × 10-15 scanners = 2-4 hr)
+2. Run **VL-CURATOR** once per scanner needing curation (~5 min × N)
+3. Run **VL-TURBO** on scanners with sequential network loops
+4. Run **vulntemplate** once for the module's PDF generator
+5. Run scorer → if ≥ 85 → SHIP
+
+---
+
+### Process discovery (for agents / new devs)
+
+If a future Claude session — or audit agent, or new dev — reads a commit
+message that says `"Apply VL-TURBO to webapp/ldap_injection"`, they can:
+1. Look up VL-TURBO in this section
+2. Read the 6-step process
+3. Know exactly what change was made and how to verify it
+
+This is the difference between a *codebase with conventions* and a
+*codebase with documented contracts*. Named processes are contracts.
+
+---
+
 ## Module status matrix (as of 2026-05-24)
 
 | Module | Layer 1 (role) | Layer 2 (tools) | Layer 3 (PDF) | Production-ready |
