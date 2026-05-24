@@ -43,6 +43,18 @@ RUN pip install --no-cache-dir \
         androguard \
         quark-engine
 
+# ── §1 SAMPLE BINARIES ────────────────────────────────────────────────
+# Pre-stage 1-2 demo APKs so a first-time customer can click "Try Sample"
+# in the dashboard and run a full scan without hunting for an APK first.
+# Non-fatal — if GitHub is throttled the image still builds; the dropdown
+# simply lists fewer samples.
+RUN mkdir -p /app/samples/mobile \
+ && ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/dineshshetty/Android-InsecureBankv2/raw/master/InsecureBankv2.apk" \
+        -O /app/samples/mobile/insecurebankv2.apk \
+      && ls -lh /app/samples/mobile/insecurebankv2.apk ) \
+    || echo "WARNING: InsecureBankv2 sample download failed (non-fatal)"
+
 WORKDIR /app
 
 # Python deps

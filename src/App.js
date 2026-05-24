@@ -6607,6 +6607,21 @@ function MobileStaticModule({token, apiUrl}) {
   const [uploadedPath, setUploadedPath] = React.useState("");
   const [uploadStatus, setUploadStatus] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
+  const [samples, setSamples] = React.useState([]);
+
+  React.useEffect(() => {
+    fetch("/api/mobile_static/samples", {
+      headers: {Authorization: `Bearer ${token}`}
+    })
+      .then(r => r.ok ? r.json() : {samples: []})
+      .then(d => setSamples(d.samples || []))
+      .catch(() => setSamples([]));
+  }, [token]);
+
+  const pickSample = (s) => {
+    setUploadedPath(s.path);
+    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+  };
 
   const onFileChange = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -6667,6 +6682,24 @@ function MobileStaticModule({token, apiUrl}) {
         <input type="file" accept=".apk,.ipa,.exe,.dll,.so" disabled={uploading}
                style={{display:"none"}} onChange={onFileChange}/>
       </label>
+      {samples.length > 0 && (
+        <select defaultValue="" onChange={e => {
+                  const s = samples.find(x => x.id === e.target.value);
+                  if (s) pickSample(s);
+                  e.target.value = "";
+                }}
+                style={{background:"#1e293b", color:"#f1f5f9",
+                        border:"1px solid #475569", borderRadius:6,
+                        padding:"8px 10px", fontSize:12, cursor:"pointer",
+                        maxWidth:280}}>
+          <option value="">🧪 Try Sample APK ▼</option>
+          {samples.map(s => (
+            <option key={s.id} value={s.id}>
+              {s.name} ({s.size_mb} MB)
+            </option>
+          ))}
+        </select>
+      )}
       {uploadedPath && (
         <input value={uploadedPath} readOnly
                style={{flex:1, minWidth:240, background:"#020617",
@@ -6675,7 +6708,9 @@ function MobileStaticModule({token, apiUrl}) {
                        fontFamily:"monospace"}}/>
       )}
       <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
-        {uploadStatus || "Upload a binary first. Then enter its path in the Target field below + click Run on any scanner."}
+        {uploadStatus || (samples.length > 0
+          ? "Upload your own binary OR pick a sample APK above — then click Run on any scanner."
+          : "Upload a binary first. Then enter its path in the Target field below + click Run on any scanner.")}
       </div>
     </div>
   );
