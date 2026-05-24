@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automated module scoring — enforces MODULE-FRAMEWORK.md contracts.
+"""Automated module scoring — enforces VL-FOUNDRY.md contracts.
 
 Usage:
   python scripts/score_module.py <module>           # score one module
@@ -215,7 +215,7 @@ def print_result(r: dict, verbose: bool = False):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Score VulnusLab modules against MODULE-FRAMEWORK.md"
+        description="Score VulnusLab modules against VL-FOUNDRY.md"
     )
     ap.add_argument("module", nargs="?", help="Module name (recon|vuln|webapp)")
     ap.add_argument("--all", action="store_true", help="Score all 3 modules")
