@@ -374,13 +374,77 @@ from [`generatePDF`](src/App.js#L761) into [`generateReconReport`](src/App.js#L7
 
 ## How to apply this framework to a new module
 
-1. **Layer 1:** answer the customer question this module solves. Write it as
-   a single sentence. Document why it exists, what it isn't, and when it runs.
-2. **Layer 2:** list every scanner in a one-line table. Each row answers one
-   specific question. Group by tier so customers can run partial scans.
-3. **Layer 3:** every finding flows into the **17-section Webapp PDF layout**
-   (canon: `generatePDF` in `src/App.js:761`). Confirm the 7-check Definition
-   of Done passes before shipping.
+### One-command scaffold (start here)
+
+```bash
+python scripts/forge_module.py <module> --tiers <tier1> <tier2> <tier3> ...
+```
+
+Example:
+```bash
+python scripts/forge_module.py mobile --tiers \
+  tier1_apk_static tier2_apk_dynamic tier3_api_traffic
+```
+
+What this generates (in ~1 second):
+
+| Layer | Artifact |
+|---|---|
+| 2 | `tools/<module>/<tier>/<starter>.py` — one starter scanner per tier (Recon canon: `gather()` + `INTEL_FIELDS` + `run_scanner()`) |
+| 4 | `endpoints/<module>_orchestrator.py` — full NDJSON streaming + buffered + tier discovery |
+| 5 | `tools/_payloads/<module>/` package + per-scanner `<scanner>_findings.py` with a `rule_positive_emit` template |
+| 6 | Every starter passes the 7-check DoD by construction (precheck/shape/POSITIVE/severity/remediation/evidence/timeout — no manual work) |
+| 7 | App.js paste snippets in `scripts/_FORGE_OUTPUT_<module>.md` (PHASES array + SECTION_HEADERS dict) |
+| Per-forge | `VL-FOUNDRY-CHECKLIST-<module>.md` ready to tick |
+
+Out of the box, a freshly scaffolded module scores **~74/100** before
+you write a single line of scan logic. Filling in `gather()` bodies +
+pasting App.js snippets brings it to >= 85.
+
+### Then iterate through the layers
+
+1. **Layer 1:** answer the customer question in `VL-FOUNDRY-CHECKLIST-<module>.md` line 1
+2. **Layer 2:** rename / add scanners under `tools/<module>/<tier>/`
+3. **Layer 6:** fill in each scanner's `gather()` body — populate `ctx.state` and call `ctx.source()`
+4. **Layer 6:** add `rule_*()` functions to each `tools/_payloads/<scanner>_findings.py`
+5. **Layer 7:** paste the snippets from `scripts/_FORGE_OUTPUT_<module>.md` into `src/App.js`
+6. **Layer 3:** copy `generateOsintReport` / `generateVulnReport`, rename to `generate<Module>Report`, customize sections 11 (tier coverage) + 12 (per-tool) + 15 (verification audit) for the new module
+7. **Layer 22:** confirm `pdf_callsite` + `phases_consumed` + `endpoint_called` all show ✅ in `python scripts/score_module.py <module>`
+8. **Final gate:** score >= 85 AND `python scripts/e2e_test.py <module>` exits 0
+
+### Why this works (Recon empirically validated it)
+
+Recon scored 99.2/100 because every one of its 41 scanners follows the SAME
+4-piece pattern:
+
+```python
+# tools/recon/tier<N>/<scanner>.py
+async def gather(ctx: ScanContext):  # populate ctx.state + ctx.source()
+    ...
+
+INTEL_FIELDS = [("Display label", "state_key"), ...]
+
+@router.post("/api/recon/<scanner>")
+async def recon_<scanner>(req, _=Depends(verify_scan_quota)):
+    return await run_scanner(
+        host=recon_host(req.target), tool="<scanner>",
+        gather_func=gather, finding_rules=<SCANNER>_FINDING_RULES,
+        intel_fields=INTEL_FIELDS, flat_field_keys=[...])
+```
+
+```python
+# tools/_payloads/<scanner>_findings.py
+def rule_X(s):
+    if not condition: return None
+    return {"name": "...", "severity": "HIGH", "evidence": "...",
+            "remediation": "...", "cvss": "7.5", "cwe": "...", "owasp": "..."}
+
+<SCANNER>_FINDING_RULES = [rule_X, rule_Y, ...]
+```
+
+This pattern is what the scaffolder bakes in. Don't deviate from it without
+a documented reason — OSINT deviated (hand-rolled `_do_scan` per scanner)
+and got the broken-PDF lesson that produced Layer 22.
 
 If any layer is incomplete, the module isn't ready for customers.
 
@@ -1097,6 +1161,7 @@ python scripts/doctor.py --json       # CI-friendly machine output
 - `scripts/e2e_test.py` — Layer 20 full-chain verifier
 - `scripts/pre_commit_score.py` — pre-commit hook (blocks scanner commits that lower the score)
 - `scripts/forge_scanner.py` — scaffolds a new scanner with the 7-check skeleton
+- `scripts/forge_module.py` — scaffolds an ENTIRE new module from Recon canon (one command)
 - `scripts/doctor.py` — Layer 21 dependency + tool freshness checker
 - `tools/_framework/tool_versions.json` — declared min/current versions for external CLIs
 - `tools/_framework/scan_state.py` — Layer 10 schema enforcer
