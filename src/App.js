@@ -5618,10 +5618,30 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) {
             These {totalCount} techniques cannot be fully automated. Run them locally — paste your findings below for the PDF report.
           </div>
         </div>
-        <div style={{fontSize:12, color:"#94a3b8"}}>
-          <span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>
-            {completedCount}/{totalCount}
-          </span> completed
+        <div style={{display:"flex", alignItems:"center", gap:12}}>
+          <div style={{fontSize:12, color:"#94a3b8"}}>
+            <span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>
+              {completedCount}/{totalCount}
+            </span> completed
+          </div>
+          <button onClick={() => {
+              try {
+                generateManualTestsReport({
+                  moduleKey, moduleLabel, tests, findings,
+                  date: new Date().toLocaleString(),
+                });
+              } catch(e) { alert("PDF error: " + (e.message || e)); }
+            }}
+            disabled={completedCount === 0}
+            style={{
+              background: completedCount === 0 ? "#374151" : "#7c3aed",
+              border:"none", borderRadius:6, padding:"7px 14px",
+              color:"#fff", fontSize:12, fontWeight:700,
+              cursor: completedCount === 0 ? "not-allowed" : "pointer",
+              opacity: completedCount === 0 ? 0.5 : 1,
+            }}>
+            📄 Manual Tests Report
+          </button>
         </div>
       </div>
 
@@ -5708,6 +5728,216 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) {
     </div>
   );
 }
+
+// ── MANUAL TESTS PDF — focused report for customer self-test results.
+//    Separate deliverable from the auto-scan PDF: cover, exec summary,
+//    one detailed page per test (steps + customer evidence + severity),
+//    methodology + references. Generated client-side via jsPDF.
+// ─────────────────────────────────────────────────────────────────
+function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date}) {
+  const doc = new jsPDF({unit:"mm", format:"a4"});
+  const pageW=210, margin=12, contentW=pageW-margin*2;
+  const BLUE=[124,58,237], DARK=[15,23,42], GRAY=[100,116,139];
+  const LIGHT=[248,250,252], WHITE=[255,255,255], LBLUE=[243,232,255];
+  const RED=[220,38,38], ORANGE=[234,88,12], GREEN=[15,118,82], AMBER=[202,138,4];
+  const SEV={HIGH:RED, MEDIUM:ORANGE, LOW:GREEN, "no-finding":GRAY, NOT_RUN:[148,163,184]};
+  let y=0, _secN=0;
+  const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
+  const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(String(t),x,yy,{align:align||"left"});};
+  const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
+  const sHead=(t,yy)=>{_secN++;fillR(margin,yy,contentW,9,LBLUE);txt(_secN+". "+t,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
+  const drawHeader=()=>{txt(`VulnusLab — Manual Tests: ${moduleLabel}`,margin,10,7,GRAY);txt(date||"",pageW-margin,10,7,BLUE,false,"right");};
+
+  // Aggregate
+  const tally = {HIGH:0, MEDIUM:0, LOW:0, "no-finding":0, NOT_RUN:0};
+  const enriched = tests.map(t => {
+    const f = findings[t.id] || {};
+    const status = f.status || "not_run";
+    const sev = status === "done" ? (f.severity || "no-finding") : "NOT_RUN";
+    tally[sev] = (tally[sev]||0) + 1;
+    return {...t, customer: f, _sev: sev, _status: status};
+  });
+  const completed = enriched.length - tally.NOT_RUN;
+  const _genId = (k,d)=>{const s=String(k)+"|"+String(d)+"|"+Date.now();let h=0;for(let i=0;i<s.length;i++)h=((h<<5)-h+s.charCodeAt(i))|0;return "VL-MT-"+Math.abs(h).toString(16).toUpperCase().padStart(8,"0").substring(0,8);};
+  const REPORT_ID = _genId(moduleKey, date);
+
+  // ── COVER ─────────────────────────────────────────────────────
+  fillR(0,0,pageW,64,[0,0,0]);
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(...BLUE);
+  doc.text("VULNUS",pageW/2-1,32,{align:"right"});doc.setTextColor(241,245,249);doc.text("LAB",pageW/2,32,{align:"left"});
+  txt("MANUAL PENETRATION TEST REPORT",pageW/2,82,17,DARK,true,"center");
+  txt(`Customer self-test results — ${moduleLabel}`,pageW/2,90,10,GRAY,false,"center");
+  y=104;
+  fillR(margin,y,contentW,8,DARK);txt("FIELD",margin+3,y+5.5,8,WHITE,true);txt("VALUE",margin+55,y+5.5,8,WHITE,true);y+=8;
+  [["Module", moduleLabel],
+   ["Module key", moduleKey],
+   ["Date", date||""],
+   ["Tests defined", String(tests.length)],
+   ["Tests completed", `${completed} / ${tests.length}`],
+   ["Report ID", REPORT_ID],
+   ["Classification", "CONFIDENTIAL"]].forEach((row,i)=>{
+    fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
+    txt(row[0],margin+3,y+5.5,8.5,GRAY,true);
+    if(row[0]==="Classification"){doc.setFillColor(...RED);doc.roundedRect(margin+55,y+2,28,4,1,1,"F");txt("CONFIDENTIAL",margin+57,y+5.2,7,WHITE,true);}
+    else txt(row[1],margin+55,y+5.5,8.5,DARK);
+    y+=8;
+  });
+  y+=8;
+
+  // Trust banner
+  fillR(margin,y,contentW,14,LBLUE);fillR(margin,y,3,14,BLUE);
+  txt("[CUSTOMER ATTESTATION]",margin+8,y+6,8,BLUE,true);
+  txt("Findings below are self-reported by the customer running each test locally on their own infrastructure.",margin+8,y+10,7.5,DARK);
+  y+=20;
+
+  // ── EXECUTIVE SUMMARY ────────────────────────────────────────
+  y = sHead("Executive Summary", y);
+  fillR(margin,y,contentW,8,DARK);["RESULT","COUNT","NOTE"].forEach((c,i)=>txt(c,margin+3+[0,55,90][i],y+5.5,8,WHITE,true));y+=8;
+  const sumRows = [
+    {s:"HIGH", v:tally.HIGH, note:"Critical — production-blocking issue confirmed"},
+    {s:"MEDIUM", v:tally.MEDIUM, note:"Material risk — schedule fix in next release"},
+    {s:"LOW", v:tally.LOW, note:"Hardening recommended"},
+    {s:"no-finding", v:tally["no-finding"], note:"Customer confirmed: no issue found"},
+    {s:"NOT_RUN", v:tally.NOT_RUN, note:"Test defined but not executed yet"},
+  ];
+  sumRows.forEach((row,i)=>{
+    fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+    doc.setFillColor(...SEV[row.s]);doc.roundedRect(margin+3,y+1.5,40,4,1,1,"F");
+    const lbl = row.s === "no-finding" ? "NO ISSUE" : row.s === "NOT_RUN" ? "NOT RUN" : row.s;
+    txt(lbl,margin+4,y+5,7,WHITE,true);
+    txt(String(row.v),margin+58,y+5,10,SEV[row.s],true);
+    txt(row.note,margin+93,y+5,7.5,DARK);
+    y+=7;
+  });
+  y+=6;
+
+  // ── PROGRESS BAR ─────────────────────────────────────────────
+  chk(20); y = sHead("Completion Progress", y);
+  fillR(margin,y,contentW,16,LIGHT);
+  doc.setFont("Arial","bold");doc.setFontSize(20);doc.setTextColor(...(completed===tests.length?GREEN:AMBER));
+  doc.text(`${completed}/${tests.length}`, margin+8, y+11);
+  txt(completed===tests.length ? "All defined manual tests executed" : `${tests.length-completed} test(s) still pending`, margin+40, y+8, 10, DARK, true);
+  txt(`Report ID: ${REPORT_ID}`, margin+40, y+13, 7.5, GRAY);
+  fillR(margin+40, y+15.5, contentW-44, 1.5, [226,232,240]);
+  if(tests.length) fillR(margin+40, y+15.5, Math.max(((completed/tests.length)*(contentW-44)),1), 1.5, completed===tests.length?GREEN:AMBER);
+  y += 22;
+
+  // ── PER-TEST DETAILS ─────────────────────────────────────────
+  enriched.forEach((t, idx) => {
+    chk(40);
+    y = sHead(t.title, y);
+    txt(`Reference: ${t.ref || "—"}`, margin, y, 7.5, GRAY); y += 5;
+
+    // Status badge
+    const sc = SEV[t._sev] || GRAY;
+    fillR(margin, y, contentW, 8, LIGHT); fillR(margin, y, 3, 8, sc);
+    doc.setFillColor(...sc); doc.roundedRect(margin+5, y+1.5, 22, 5, 1, 1, "F");
+    const lbl = t._sev === "no-finding" ? "NO ISSUE" : t._sev === "NOT_RUN" ? "NOT RUN" : t._sev;
+    txt(lbl, margin+6, y+5.2, 7, WHITE, true);
+    txt(`Tools: ${(t.tools_required||[]).join(", ").substring(0,90)}`, margin+32, y+5.2, 8, DARK);
+    y += 11;
+
+    // Customer prereqs
+    chk(20); txt("WHAT CUSTOMER NEEDS", margin, y+4, 8, BLUE, true); y += 7;
+    (t.customer_prereqs||[]).forEach(p => {
+      chk(5);
+      const lines = doc.splitTextToSize("• " + p, contentW - 4);
+      lines.forEach(ln => { txt(ln, margin+2, y+3.5, 8, DARK); y += 4; });
+    });
+    y += 3;
+
+    // Steps
+    chk(20); txt("STEPS EXECUTED", margin, y+4, 8, BLUE, true); y += 7;
+    (t.steps||[]).forEach((s, i) => {
+      chk(6);
+      const isCmd = String(s).startsWith("$");
+      const text = isCmd ? String(s).slice(1).trim() : s;
+      const lines = doc.splitTextToSize(`${i+1}. ${text}`, contentW - 4);
+      lines.forEach(ln => {
+        txt(ln, margin+2, y+3.5, 7.5, isCmd ? [22,163,74] : DARK);
+        y += 4;
+      });
+    });
+    y += 3;
+
+    // What to look for
+    chk(20); txt("WHAT TO LOOK FOR", margin, y+4, 8, BLUE, true); y += 7;
+    const wlf = doc.splitTextToSize(t.what_to_look_for || "—", contentW - 4);
+    wlf.forEach(ln => { chk(5); txt(ln, margin+2, y+3.5, 8, DARK); y += 4; });
+    y += 4;
+
+    // Customer findings (the actual point of this report)
+    chk(20); txt("CUSTOMER FINDINGS", margin, y+4, 8, [220,38,38], true); y += 7;
+    if (t._status !== "done") {
+      fillR(margin, y, contentW, 8, [254,243,199]);
+      txt("⚠ Test not yet executed by customer", margin+4, y+5.5, 8.5, AMBER, true);
+      y += 11;
+    } else {
+      fillR(margin, y, contentW, 8, LIGHT);
+      txt(`Severity assigned by customer: ${t._sev}`, margin+4, y+5.5, 8.5, sc, true);
+      y += 10;
+      const ev = t.customer.evidence || "(no evidence text provided)";
+      const evLines = doc.splitTextToSize(ev, contentW - 8);
+      fillR(margin, y, contentW, Math.min(evLines.length*4+4, 60), [248,250,252]);
+      evLines.slice(0, 14).forEach(ln => { chk(5); txt(ln, margin+4, y+3.5, 7.5, DARK); y += 4; });
+      if (evLines.length > 14) { txt(`... +${evLines.length-14} more lines (truncated)`, margin+4, y+3.5, 7, GRAY); y += 4; }
+      y += 5;
+    }
+
+    // MASVS mapping
+    if (t.owasp_masvs) {
+      chk(8); fillR(margin, y, contentW, 6, [240,253,244]);
+      txt(`MASVS: ${t.owasp_masvs}`, margin+4, y+4, 7.5, GREEN, true);
+      y += 9;
+    }
+
+    y += 4;
+  });
+
+  // ── APPENDIX ────────────────────────────────────────────────
+  chk(30); y = sHead("Methodology + References", y);
+  txt("A. Methodology", margin, y+5, 9, DARK, true); y += 8;
+  [
+    "Manual tests complement the automated scanners by covering techniques that",
+    "require a connected device, human creativity, or interactive tooling (Frida,",
+    "Burp, jailbroken iOS, rooted Android). Each test was executed locally by the",
+    "customer using the steps documented in this report. Evidence is self-reported.",
+  ].forEach(l => { txt(l, margin+2, y+3.5, 7.5, GRAY); y += 4; });
+  y += 4;
+  txt("B. References", margin, y+5, 9, DARK, true); y += 8;
+  [
+    "OWASP MASVS v2 — https://mas.owasp.org/MASVS/",
+    "OWASP MASTG  — https://mas.owasp.org/MASTG/",
+    "Frida CodeShare — https://codeshare.frida.re",
+    "Objection — https://github.com/sensepost/objection",
+    "Apktool — https://apktool.org",
+  ].forEach(l => { txt(l, margin+2, y+3.5, 7.5, BLUE); y += 4.5; });
+  y += 6;
+
+  // End block
+  if (y+30 > 284) { doc.addPage(); y=18; drawHeader(); }
+  fillR(margin, y+5, contentW, 24, LBLUE); fillR(margin, y+5, 3, 24, BLUE);
+  txt(`— END OF MANUAL TEST REPORT —`, pageW/2, y+13, 10, BLUE, true, "center");
+  txt(`Report ID: ${REPORT_ID}`, pageW/2, y+18, 7.5, GRAY, false, "center");
+  txt("vulnuslab.com · support@vulnuslab.com", pageW/2, y+25, 7, BLUE, true, "center");
+
+  // Borders + footers on every page
+  const total = doc.internal.getNumberOfPages();
+  for (let i=1; i<=total; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0, 0, 210, 297, "S");
+    if (i >= 2) {
+      txt(`VulnusLab Manual Test Report — CONFIDENTIAL`, margin, 290, 6.5, GRAY);
+      txt(`${REPORT_ID}`, pageW/2, 290, 6.5, GRAY, false, "center");
+      txt("Page " + i + " of " + total, pageW-margin, 290, 6.5, BLUE, false, "right");
+    }
+  }
+
+  const _safe = String(moduleKey || "module").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const _dt = (date || new Date().toISOString().substring(0,10)).replace(/[^0-9]/g,"").substring(0,8);
+  doc.save(`manual_tests_${_safe}_${_dt}.pdf`);
+}
+
 
 // ── WIRELESS ATTACKS ─────────────────────────────────────────
 function WirelessModule({token, apiUrl}) {
