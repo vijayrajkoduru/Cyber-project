@@ -31,8 +31,26 @@ def rule_deprecated_safetynet_only(s):
             "remediation": "URGENT migration: SafetyNet Attestation API was deprecated 2023, fully retired by end of 2024. Move to com.google.android.play.core.integrity.IntegrityManager."}
 
 
+def rule_other_attestation_only(s):
+    """Catch-all: scanner found mechanisms but neither Play Integrity nor
+    SafetyNet. Examples: only Hardware Key Attestation, or only Firebase
+    App Check. Without this rule the Section row renders empty when an app
+    uses non-Google attestation paths."""
+    mechs = s.get("attestation_mechanisms") or {}
+    if not mechs:
+        return None
+    if s.get("has_play_integrity") or s.get("has_deprecated_safetynet"):
+        return None
+    return {"name": f"Attestation mechanism(s) present without Play Integrity / SafetyNet",
+            "severity": "INFO",
+            "cwe": "CWE-693", "owasp": "M8:2023",
+            "evidence": "Mechanisms: " + "; ".join(list(mechs.keys())[:5]),
+            "remediation": "Hardware Key Attestation / Firebase App Check are valid but limited. For full anti-tamper coverage add Play Integrity API alongside what's already in place."}
+
+
 PLAY_INTEGRITY_AUDIT_FINDING_RULES = [
     rule_positive_emit,
     rule_modern_attestation,
     rule_deprecated_safetynet_only,
+    rule_other_attestation_only,
 ]
