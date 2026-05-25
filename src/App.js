@@ -129,6 +129,7 @@ const MODULES = [
   { id:"mobile_static",  icon:"📱", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
   { id:"mobile_storage", icon:"🗄️", label:"Storage (Data-at-Rest)",         cat:"mobile",  free:false },
   { id:"mobile_runtime", icon:"🪝", label:"Runtime / Anti-Tamper",           cat:"mobile",  free:false },
+  { id:"mobile_crypto",  icon:"🔐", label:"Crypto (Algorithms & TLS)",       cat:"mobile",  free:false },
   { id:"mobile_traffic", icon:"📡", label:"Network Traffic Interception",   cat:"mobile",  free:false, comingSoon:true },
   { id:"mobile_manual",  icon:"📋", label:"Manual Pentest Checklist",       cat:"mobile",  free:false, comingSoon:true },
 
@@ -7556,6 +7557,133 @@ function MobileRuntimeModule({token, apiUrl}) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+//  MOBILE CRYPTO MODULE — §4 mobile_ruff coverage (7 auto + 2 manual)
+// ═══════════════════════════════════════════════════════════════
+function MobileCryptoModule({token, apiUrl}) {
+  const [uploadedPath, setUploadedPath] = React.useState("");
+  const [uploadStatus, setUploadStatus] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [samples, setSamples] = React.useState([]);
+
+  React.useEffect(() => {
+    fetch("/api/mobile_static/samples", {headers: {Authorization:`Bearer ${token}`}})
+      .then(r => r.ok ? r.json() : {samples: []})
+      .then(d => setSamples(d.samples || []))
+      .catch(() => setSamples([]));
+  }, [token]);
+
+  const pickSample = (s) => {
+    setUploadedPath(s.path);
+    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+  };
+
+  const onFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadStatus(`Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)...`);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/mobile_static/upload", {
+        method: "POST", headers: {Authorization: `Bearer ${token}`}, body: fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({detail: `HTTP ${r.status}`}));
+        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploading(false);
+        return;
+      }
+      const data = await r.json();
+      setUploadedPath(data.apk_path);
+      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
+    } catch (e) {
+      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const attacks = MOBILE_CRYPTO_PHASES.map(p => ({
+    id: p.tool,
+    label: p.name,
+    icon: p.icon,
+    ep: p.endpoint,
+    desc: `Crypto scan: ${p.name.toLowerCase()}`,
+    howto: "Upload an APK/IPA above first (or pick a sample), then click Run on each scanner.",
+    requires: "Uploaded binary file path",
+    target_type: "APK / IPA binary",
+    vulns: ["See findings card after scan completes."],
+    hackerImpact: "Crypto audit reveals weak algorithms, hardcoded keys, broken TLS, and disabled certificate validation. These are MITM and decrypt-at-rest entry points.",
+  }));
+
+  const extra = () => (
+    <div style={{background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+                 padding:"12px 16px", marginBottom:12, display:"flex",
+                 alignItems:"center", gap:12, flexWrap:"wrap"}}>
+      <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+                     padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
+                     cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
+        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        <input type="file" accept=".apk,.ipa" disabled={uploading}
+               style={{display:"none"}} onChange={onFileChange}/>
+      </label>
+      {samples.length > 0 && (
+        <select defaultValue="" onChange={e => {
+                  const s = samples.find(x => x.id === e.target.value);
+                  if (s) pickSample(s);
+                  e.target.value = "";
+                }}
+                style={{background:"#1e293b", color:"#f1f5f9",
+                        border:"1px solid #475569", borderRadius:6,
+                        padding:"8px 10px", fontSize:12, cursor:"pointer",
+                        maxWidth:280}}>
+          <option value="">🧪 Try Sample APK ▼</option>
+          {samples.map(s => (<option key={s.id} value={s.id}>{s.name} ({s.size_mb} MB)</option>))}
+        </select>
+      )}
+      {uploadedPath && (
+        <input value={uploadedPath} readOnly
+               style={{flex:1, minWidth:240, background:"#020617",
+                       border:"1px solid #1e3a8a", borderRadius:6,
+                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+                       fontFamily:"monospace"}}/>
+      )}
+      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+        {uploadStatus || (samples.length > 0
+          ? "Upload your own APK OR pick a sample - then click Run on any scanner."
+          : "Upload an APK first. Then click Run on any scanner.")}
+      </div>
+    </div>
+  );
+
+  return <ModuleShell
+    title="Mobile Crypto Audit"
+    moduleKey="mobile_crypto"
+    icon="🔐"
+    color="#06b6d4"
+    desc="§4 CRYPTO - 7 static scanners. Audits weak algorithms (DES/RC4/MD5/SHA-1/ECB), insecure PRNG, homebrew crypto, hardcoded keys, TLS configuration, and certificate-validation bypasses."
+    hideHeader={true}
+    token={token}
+    apiUrl={apiUrl}
+    attacks={attacks}
+    extraInputs={extra}
+    bodyFn={(t,o)=>({target: uploadedPath || t, options:o})}
+    reportFn={({target, results}) => generateMobileCryptoReport({
+      target: uploadedPath || target || "uploaded binary",
+      allResults: results || {},
+      date: new Date().toLocaleString(),
+    })}
+    belowPanel={() => (
+      <ManualTestsPanel
+        moduleKey="mobile_crypto"
+        moduleLabel="Mobile Crypto Audit"
+        tests={MANUAL_TESTS_MOBILE_CRYPTO}/>
+    )}/>;
+}
+
+
 // ── API SECURITY ──────────────────────────────────────────────
 function ApiSecModule({token, apiUrl}) {
   const attacks = [
@@ -12985,6 +13113,129 @@ function generateMobileRuntimeReport(opts) {
 
 
 // ═══════════════════════════════════════════════════════════════
+//  MOBILE CRYPTO module data (PHASES + PDF + manual tests)
+// ═══════════════════════════════════════════════════════════════
+const MOBILE_CRYPTO_PHASES = [
+  // Tier 1 — Algorithm strength
+  {name:"Weak Algorithm Audit",        tool:"weak_algo_audit",              endpoint:"/api/mobile_crypto/weak_algo_audit",              icon:"🧪"},
+  {name:"AES/ECB Mode Audit",          tool:"aes_ecb_mode_audit",           endpoint:"/api/mobile_crypto/aes_ecb_mode_audit",           icon:"🟦"},
+  {name:"Insecure PRNG Audit",         tool:"insecure_prng_audit",          endpoint:"/api/mobile_crypto/insecure_prng_audit",          icon:"🎲"},
+  {name:"Custom Crypto Audit",         tool:"custom_crypto_audit",          endpoint:"/api/mobile_crypto/custom_crypto_audit",          icon:"🛠️"},
+  // Tier 2 — Keys & TLS
+  {name:"Hardcoded Keys Audit",        tool:"hardcoded_keys_audit",         endpoint:"/api/mobile_crypto/hardcoded_keys_audit",         icon:"🔑"},
+  {name:"TLS Version Audit",           tool:"tls_version_audit",            endpoint:"/api/mobile_crypto/tls_version_audit",            icon:"🔒"},
+  {name:"Cert Validation Bypass",      tool:"cert_validation_bypass_audit", endpoint:"/api/mobile_crypto/cert_validation_bypass_audit", icon:"⚠️"},
+];
+
+const MANUAL_TESTS_MOBILE_CRYPTO = [
+  {
+    id: "padding_oracle_probe",
+    ref: "§4 #53",
+    title: "Padding-Oracle / Timing Probe",
+    tools_required: ["Burp Suite (Repeater + Intruder)", "Test device or proxy capture", "Python timing harness (optional)"],
+    customer_prereqs: [
+      "Your app's traffic captured into Burp (run after SSL pinning bypass)",
+      "A request that decrypts or verifies encrypted data server-side",
+      "Knowledge of your app's encryption mode (AES/CBC/PKCS5 = vulnerable)",
+    ],
+    steps: [
+      "Identify an encrypted request body or response token in Burp captured traffic",
+      "$ Send the same request to Repeater - flip the LAST byte of the ciphertext",
+      "Compare server responses: 200 OK vs 500 / generic error vs malformed-padding error",
+      "If error texts differ for valid vs invalid padding -> ORACLE PRESENT",
+      "Optionally run a timing harness: measure response time for valid vs invalid ciphertext (delta > 5ms = timing oracle)",
+      "Confirm with padbuster.pl or similar tool against the endpoint",
+    ],
+    what_to_look_for: "Distinguishable server responses for valid vs invalid padding = padding-oracle. Attacker decrypts the full ciphertext byte-by-byte without ever knowing the key. Fix: use AES/GCM/NoPadding (authenticated encryption) — padding errors don't leak.",
+    owasp_masvs: "MSTG-CRYPTO-3, MSTG-CRYPTO-4",
+  },
+  {
+    id: "side_channel_probe",
+    ref: "§4 #54",
+    title: "Side-Channel Key Recovery (advanced)",
+    tools_required: ["ChipWhisperer hardware ($300+)", "Power-analysis software (OpenChipWhisperer)", "Physical access to the device + custom probe"],
+    customer_prereqs: [
+      "Physical device + ability to instrument power consumption",
+      "Crypto operations callable from the app shell (Frida-triggered loop)",
+      "Time + expertise: this is research-grade testing",
+    ],
+    steps: [
+      "Trigger a known-plaintext encryption operation 10,000+ times on the device",
+      "Capture power traces during each operation with ChipWhisperer or oscilloscope",
+      "Run Differential Power Analysis (DPA) - correlate power spikes with each guessed key byte",
+      "Hardware-keystore keys are typically resistant; software AES leaks within hours",
+    ],
+    what_to_look_for: "If DPA recovers the AES key, the implementation uses software AES with no masking. Production fix: move to Android Keystore with StrongBox attestation (TEE hardware-backed). This is rarely worth testing unless the threat model includes physical attacker (e.g. hardware-wallet apps, payment terminals).",
+    owasp_masvs: "MSTG-CRYPTO-1, MSTG-CRYPTO-5",
+  },
+];
+
+function generateMobileCryptoReport(opts) {
+  const moduleConfig = {
+    key: "mobile_crypto",
+    name: "MOBILE CRYPTO",
+    longName: "Mobile App Crypto Audit",
+    reportTitle: "MOBILE CRYPTO SECURITY REPORT",
+    subtitle: "Static analysis of algorithms, keys, TLS, and certificate validation",
+    headerLabel: "VulnusLab - Mobile Crypto Assessment",
+    authLine: "N/A - static binary analysis (no live target)",
+    trustLine: "Crypto findings indicate decrypt-at-rest or MITM exposure - manual verification recommended.",
+    tools: [
+      "weak_algo_audit","aes_ecb_mode_audit","insecure_prng_audit","custom_crypto_audit",
+      "hardcoded_keys_audit","tls_version_audit","cert_validation_bypass_audit"
+    ],
+    tiers: [
+      ["Tier 1","Algorithm Strength", ["weak_algo_audit","aes_ecb_mode_audit","insecure_prng_audit","custom_crypto_audit"]],
+      ["Tier 2","Keys & TLS",         ["hardcoded_keys_audit","tls_version_audit","cert_validation_bypass_audit"]],
+    ],
+    auditRows: [
+      ["weak_algo_audit","regex over decompiled smali for DES / 3DES / RC4 / RC2 / Blowfish / MD5 / SHA-1 / ECB-mode literals"],
+      ["aes_ecb_mode_audit","Cipher.getInstance() with bare 'AES' (defaults to ECB) or explicit /ECB/ + flag CBC/NoPadding"],
+      ["insecure_prng_audit","java.util.Random + Math.random() usage cross-referenced with security-named classes (token/key/iv/nonce/auth)"],
+      ["custom_crypto_audit","xor-int/lit8 opcode density per file + encrypt/decrypt methods that don't call javax.crypto / java.security"],
+      ["hardcoded_keys_audit","SecretKeySpec / IvParameterSpec literal args + Shannon-entropy filter on 32/48/64-char hex strings"],
+      ["tls_version_audit","TLSv1.0/1.1/SSLv2/SSLv3 literals + ALLOW_ALL_HOSTNAME_VERIFIER + network_security_config trust-anchors + minSdkVersion gate"],
+      ["cert_validation_bypass_audit","TrustAllX509TrustManager + empty checkServerTrusted + NaiveSSLSocketFactory + OkHttp HostnameVerifier(true)"],
+    ],
+    methodology: [
+      "Mobile crypto audit follows OWASP MASVS v2 controls MSTG-CRYPTO-1 through MSTG-CRYPTO-6",
+      "and NIST SP 800-131A Rev. 2 algorithm transitions. All 7 scanners are STATIC - the binary is",
+      "decompiled with apktool, then smali files are searched for crypto API calls + algorithm",
+      "literals. 2 manual tests in the panel below require interactive Burp / hardware probes.",
+    ],
+    references: [
+      "OWASP MASVS v2 (Crypto) - https://mas.owasp.org/MASVS/06-MASVS-CRYPTO/",
+      "NIST SP 800-131A Rev. 2 - https://csrc.nist.gov/publications/detail/sp/800-131a/rev-2/final",
+      "OWASP Mobile Crypto Cheatsheet - https://cheatsheetseries.owasp.org/cheatsheets/Mobile_Application_Security_Cheat_Sheet.html",
+      "Android Keystore - https://developer.android.com/training/articles/keystore",
+      "BouncyCastle - https://www.bouncycastle.org/",
+    ],
+    manualLocalStorageKey: "mobile_crypto",
+    manualTests: MANUAL_TESTS_MOBILE_CRYPTO,
+    recsBuilder: function(sevCount, r){
+      const out=[];
+      if(sevCount.CRITICAL>0)
+        out.push("[CRITICAL] Hardcoded keys / cert-validation bypass detected - rotate ALL keys + remove TrustAll patterns before next release");
+      if(sevCount.HIGH>0)
+        out.push("[HIGH] Replace HIGH-risk algorithms (DES/3DES/RC4/MD5/SHA-1/ECB) with AES-GCM + SHA-256+ in next sprint");
+      if((r.tls_version_audit&&Object.keys(r.tls_version_audit.tls_marker_hits||{}).length>0))
+        out.push("[HIGH] Audit TLS marker hits - upgrade to TLSv1.2/1.3 explicitly, drop ALLOW_ALL_HOSTNAME_VERIFIER");
+      if((r.hardcoded_keys_audit&&(r.hardcoded_keys_audit.matched_hardcoded_keys||[]).length>0))
+        out.push("[CRITICAL] Move hardcoded keys to Android Keystore with KeyGenParameterSpec.Builder().setIsStrongBoxBacked(true)");
+      if((r.insecure_prng_audit&&(r.insecure_prng_audit.security_context_insecure||[]).length>0))
+        out.push("[HIGH] Replace java.util.Random with java.security.SecureRandom in security-named classes");
+      if(sevCount.MEDIUM>0)
+        out.push("[MED] Address the " + sevCount.MEDIUM + " MEDIUM finding(s) within 30 days");
+      if((r.aes_ecb_mode_audit&&(r.aes_ecb_mode_audit.ecb_files||[]).length>0))
+        out.push("[MED] Replace AES/ECB with AES/GCM/NoPadding (authenticated encryption)");
+      return out;
+    }
+  };
+  return generateOsintReport(Object.assign({}, opts, {moduleConfig}));
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 //  BUFFER OVERFLOW MODULE
 // ═══════════════════════════════════════════════════════════════
 const BOF_PHASES = [
@@ -17000,6 +17251,9 @@ export default function App() {
         </div>
         <div style={{display: active==="mobile_runtime" ? "block" : "none"}}>
           <MobileRuntimeModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_crypto" ? "block" : "none"}}>
+          <MobileCryptoModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="api"      ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
