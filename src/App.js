@@ -130,7 +130,7 @@ const MODULES = [
   { id:"mobile_storage", icon:"🗄️", label:"Storage (Data-at-Rest)",         cat:"mobile",  free:false },
   { id:"mobile_runtime", icon:"🪝", label:"Runtime / Anti-Tamper",           cat:"mobile",  free:false },
   { id:"mobile_crypto",  icon:"🔐", label:"Crypto (Algorithms & TLS)",       cat:"mobile",  free:false },
-  { id:"mobile_traffic", icon:"📡", label:"Network Traffic Interception",   cat:"mobile",  free:false, comingSoon:true },
+  { id:"mobile_network", icon:"📡", label:"Network / Traffic",               cat:"mobile",  free:false },
   { id:"mobile_manual",  icon:"📋", label:"Manual Pentest Checklist",       cat:"mobile",  free:false, comingSoon:true },
 
   // ── DATA PROTECTION ──────────────────────────────────────────
@@ -7684,6 +7684,133 @@ function MobileCryptoModule({token, apiUrl}) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+//  MOBILE NETWORK MODULE — §5 mobile_ruff coverage (8 auto + 10 manual)
+// ═══════════════════════════════════════════════════════════════
+function MobileNetworkModule({token, apiUrl}) {
+  const [uploadedPath, setUploadedPath] = React.useState("");
+  const [uploadStatus, setUploadStatus] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [samples, setSamples] = React.useState([]);
+
+  React.useEffect(() => {
+    fetch("/api/mobile_static/samples", {headers: {Authorization:`Bearer ${token}`}})
+      .then(r => r.ok ? r.json() : {samples: []})
+      .then(d => setSamples(d.samples || []))
+      .catch(() => setSamples([]));
+  }, [token]);
+
+  const pickSample = (s) => {
+    setUploadedPath(s.path);
+    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+  };
+
+  const onFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadStatus(`Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)...`);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/mobile_static/upload", {
+        method: "POST", headers: {Authorization: `Bearer ${token}`}, body: fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({detail: `HTTP ${r.status}`}));
+        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploading(false);
+        return;
+      }
+      const data = await r.json();
+      setUploadedPath(data.apk_path);
+      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
+    } catch (e) {
+      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const attacks = MOBILE_NETWORK_PHASES.map(p => ({
+    id: p.tool,
+    label: p.name,
+    icon: p.icon,
+    ep: p.endpoint,
+    desc: `Network scan: ${p.name.toLowerCase()}`,
+    howto: "Upload an APK/IPA above first (or pick a sample), then click Run on each scanner.",
+    requires: "Uploaded binary file path",
+    target_type: "APK / IPA binary",
+    vulns: ["See findings card after scan completes."],
+    hackerImpact: "Network surface analysis reveals interception risk - SSL pinning weaknesses, proxy-bypass code, BLE / NFC attack surface, debug endpoints leaked in production.",
+  }));
+
+  const extra = () => (
+    <div style={{background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+                 padding:"12px 16px", marginBottom:12, display:"flex",
+                 alignItems:"center", gap:12, flexWrap:"wrap"}}>
+      <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+                     padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
+                     cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
+        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        <input type="file" accept=".apk,.ipa" disabled={uploading}
+               style={{display:"none"}} onChange={onFileChange}/>
+      </label>
+      {samples.length > 0 && (
+        <select defaultValue="" onChange={e => {
+                  const s = samples.find(x => x.id === e.target.value);
+                  if (s) pickSample(s);
+                  e.target.value = "";
+                }}
+                style={{background:"#1e293b", color:"#f1f5f9",
+                        border:"1px solid #475569", borderRadius:6,
+                        padding:"8px 10px", fontSize:12, cursor:"pointer",
+                        maxWidth:280}}>
+          <option value="">🧪 Try Sample APK ▼</option>
+          {samples.map(s => (<option key={s.id} value={s.id}>{s.name} ({s.size_mb} MB)</option>))}
+        </select>
+      )}
+      {uploadedPath && (
+        <input value={uploadedPath} readOnly
+               style={{flex:1, minWidth:240, background:"#020617",
+                       border:"1px solid #1e3a8a", borderRadius:6,
+                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+                       fontFamily:"monospace"}}/>
+      )}
+      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+        {uploadStatus || (samples.length > 0
+          ? "Upload your own APK OR pick a sample - then click Run on any scanner."
+          : "Upload an APK first. Then click Run on any scanner.")}
+      </div>
+    </div>
+  );
+
+  return <ModuleShell
+    title="Mobile Network / Traffic"
+    moduleKey="mobile_network"
+    icon="📡"
+    color="#0ea5e9"
+    desc="§5 NETWORK - 8 static scanners. Audits SSL pinning libraries, proxy-bypass code, HTTP methods, endpoint classification, WebSocket / gRPC / MQTT transports, network library versions, BLE / NFC attack surface."
+    hideHeader={true}
+    token={token}
+    apiUrl={apiUrl}
+    attacks={attacks}
+    extraInputs={extra}
+    bodyFn={(t,o)=>({target: uploadedPath || t, options:o})}
+    reportFn={({target, results}) => generateMobileNetworkReport({
+      target: uploadedPath || target || "uploaded binary",
+      allResults: results || {},
+      date: new Date().toLocaleString(),
+    })}
+    belowPanel={() => (
+      <ManualTestsPanel
+        moduleKey="mobile_network"
+        moduleLabel="Mobile Network / Traffic"
+        tests={MANUAL_TESTS_MOBILE_NETWORK}/>
+    )}/>;
+}
+
+
 // ── API SECURITY ──────────────────────────────────────────────
 function ApiSecModule({token, apiUrl}) {
   const attacks = [
@@ -13236,6 +13363,280 @@ function generateMobileCryptoReport(opts) {
 
 
 // ═══════════════════════════════════════════════════════════════
+//  MOBILE NETWORK module data (PHASES + PDF + manual tests)
+// ═══════════════════════════════════════════════════════════════
+const MOBILE_NETWORK_PHASES = [
+  // Tier 1 — Transport
+  {name:"SSL Pinning Detection",   tool:"ssl_pinning_detection", endpoint:"/api/mobile_network/ssl_pinning_detection", icon:"📌"},
+  {name:"Proxy Bypass Audit",      tool:"proxy_bypass_audit",    endpoint:"/api/mobile_network/proxy_bypass_audit",    icon:"🚧"},
+  {name:"HTTP Method Audit",       tool:"http_method_audit",     endpoint:"/api/mobile_network/http_method_audit",     icon:"🔣"},
+  // Tier 2 — Endpoint discovery
+  {name:"Endpoint Classifier",     tool:"endpoint_classifier",   endpoint:"/api/mobile_network/endpoint_classifier",   icon:"🗂️"},
+  {name:"WebSocket / gRPC Audit",  tool:"websocket_grpc_audit",  endpoint:"/api/mobile_network/websocket_grpc_audit",  icon:"🔌"},
+  {name:"Network Lib Inventory",   tool:"network_lib_inventory", endpoint:"/api/mobile_network/network_lib_inventory", icon:"📚"},
+  // Tier 3 — Wireless
+  {name:"BLE Attack Surface",      tool:"ble_attack_surface",    endpoint:"/api/mobile_network/ble_attack_surface",    icon:"📶"},
+  {name:"NFC Attack Surface",      tool:"nfc_attack_surface",    endpoint:"/api/mobile_network/nfc_attack_surface",    icon:"📲"},
+];
+
+const MANUAL_TESTS_MOBILE_NETWORK = [
+  {
+    id: "mitm_proxy_setup",
+    ref: "§5 #55",
+    title: "MITM Proxy Setup (Burp / mitmproxy)",
+    tools_required: ["Burp Suite Community / Pro", "Burp CA certificate exported", "Test device on same network"],
+    customer_prereqs: [
+      "Burp running on your laptop, listening on 0.0.0.0:8080",
+      "Burp's CA exported as DER (.cer) and copied to device storage",
+      "Phone configured to use the laptop's IP as a Wi-Fi proxy",
+    ],
+    steps: [
+      "On laptop: Burp -> Proxy -> Options -> add Interface 0.0.0.0:8080",
+      "Burp -> Proxy -> Import / Export CA cert -> Certificate in DER -> save burp.cer",
+      "$ adb push burp.cer /sdcard/Download/burp.cer",
+      "On device: Settings -> Security -> Install from SD card -> select burp.cer",
+      "On device: Settings -> Wi-Fi -> long-press your network -> Modify -> Manual proxy -> laptop_IP:8080",
+      "Open the target app. Burp's Proxy -> HTTP history should populate.",
+    ],
+    what_to_look_for: "If Burp doesn't see HTTPS traffic from your app: SSL pinning is active (run the pinning-bypass manual tests). If Burp sees ALL traffic including login/payment: no pinning - any user on hostile Wi-Fi can intercept. HIGH severity for any finance / health app.",
+    owasp_masvs: "MSTG-NETWORK-1, MSTG-NETWORK-3",
+  },
+  {
+    id: "pin_bypass_frida",
+    ref: "§5 #56",
+    title: "SSL Pinning Bypass via Frida CodeShare",
+    tools_required: ["frida-tools (pip install)", "frida-server pushed to /data/local/tmp/", "Rooted Android or jailbroken iOS"],
+    customer_prereqs: [
+      "Frida environment set up (frida-server on device, frida-ps -U works)",
+      "Burp already configured (run after the MITM Proxy Setup test)",
+      "Your app's package name (com.example.target)",
+    ],
+    steps: [
+      "$ frida -U -f com.example.target -l https://codeshare.frida.re/@pcipolloni/universal-android-ssl-pinning-bypass-with-frida/ --no-pause",
+      "Use the app - login, browse, anything that triggers HTTPS",
+      "Check Burp - if it now sees the requests, pinning is bypassed",
+    ],
+    what_to_look_for: "If the universal-bypass script defeats your pinning, you're using stock OkHttp CertificatePinner with no extra defense. Real protection: native pinning (.so), Play Integrity attestation, or pin rotation via signed remote config.",
+    owasp_masvs: "MSTG-NETWORK-3, MSTG-NETWORK-4",
+  },
+  {
+    id: "pin_bypass_objection",
+    ref: "§5 #57",
+    title: "SSL Pinning Bypass via Objection",
+    tools_required: ["pip install objection", "frida-server on device", "Rooted/jailbroken device"],
+    customer_prereqs: ["Same Frida setup as pin_bypass_frida"],
+    steps: [
+      "$ objection -g com.example.target explore",
+      "objection> android sslpinning disable",
+      "(iOS: ios sslpinning disable instead)",
+      "Use the app - check Burp",
+    ],
+    what_to_look_for: "Objection covers TrustManager, OkHttp CertificatePinner, WebView, and more. If it bypasses your pinning, you have NO native pinning. Real defense: implement pinning in JNI / C++.",
+    owasp_masvs: "MSTG-NETWORK-3",
+  },
+  {
+    id: "pin_bypass_justtrustme",
+    ref: "§5 #58",
+    title: "SSL Pinning Bypass via Xposed / LSPosed JustTrustMe",
+    tools_required: ["LSPosed Manager (Magisk module)", "JustTrustMe Xposed module"],
+    customer_prereqs: [
+      "Magisk-rooted Android with LSPosed installed",
+      "JustTrustMe module flashed via LSPosed",
+    ],
+    steps: [
+      "Enable JustTrustMe for your target app via LSPosed Manager",
+      "Force-stop + restart the app",
+      "Open the app - check Burp",
+    ],
+    what_to_look_for: "JustTrustMe hooks all common cert-validation methods at the framework level. If it bypasses your pinning, the implementation uses standard Android crypto APIs. Strong defense: custom certificate validation in native code that doesn't go through framework hooks.",
+    owasp_masvs: "MSTG-NETWORK-3, MSTG-NETWORK-4",
+  },
+  {
+    id: "pin_bypass_sslkillswitch_ios",
+    ref: "§5 #59",
+    title: "SSL Pinning Bypass via SSLKillSwitch2 (iOS)",
+    tools_required: ["Jailbroken iOS device", "SSLKillSwitch2 tweak from Cydia / Sileo"],
+    customer_prereqs: [
+      "Jailbroken iOS device (checkra1n / palera1n)",
+      "SSLKillSwitch2 installed via package manager",
+      "Burp proxy already configured",
+    ],
+    steps: [
+      "Install SSLKillSwitch2 from your package manager (Sileo / Zebra)",
+      "Settings -> SSL Kill Switch 2 -> toggle on",
+      "Open the target iOS app - check Burp",
+    ],
+    what_to_look_for: "SSLKillSwitch2 hooks Secure Transport at the framework level. Bypasses NSURLSession + most native iOS pinning. If your app's pinning bypasses, you need custom CFNetwork pinning or Network.framework with explicit cert validation.",
+    owasp_masvs: "MSTG-NETWORK-3",
+  },
+  {
+    id: "dns_rebinding",
+    ref: "§5 #62",
+    title: "DNS Rebinding Attack Probe",
+    tools_required: ["singularity DNS rebinding framework", "Control of a DNS zone OR Singularity SaaS endpoint", "Burp Collaborator (optional)"],
+    customer_prereqs: [
+      "Identify any endpoint where the app uses a user-controlled hostname (deep-link / WebView URL / shareable config)",
+      "Singularity running locally on a public IP OR use https://lock.cmpxchg8b.com/",
+    ],
+    steps: [
+      "Set up a domain that DNS-resolves to your public IP first, then 127.0.0.1 / 192.168.x.x after 1 second",
+      "Trigger the app to fetch a URL on that domain",
+      "Once the in-app DNS cache rebinds, attacker-controlled content is served from a 'same origin' as a private resource",
+    ],
+    what_to_look_for: "If the app fetches from your rebound domain AND reads response data (especially WebView), you have a DNS rebinding vector. Real fix: pin hostnames + use HTTPS + validate cert SAN match exactly.",
+    owasp_masvs: "MSTG-NETWORK-2",
+  },
+  {
+    id: "evil_twin_wifi",
+    ref: "§5 #63",
+    title: "Rogue Wi-Fi / Evil Twin",
+    tools_required: ["hostapd + dnsmasq on a laptop with 2nd Wi-Fi NIC", "or Wifipumpkin3", "Burp running for traffic capture"],
+    customer_prereqs: [
+      "Authorization to broadcast a network with the SSID name of your target's normal Wi-Fi",
+      "Test device with no captive-portal whitelisting",
+      "Burp listening on the AP's gateway IP",
+    ],
+    steps: [
+      "$ wifipumpkin3 -i wlan1",
+      "Configure AP with target's familiar SSID (e.g. 'AirportFreeWifi')",
+      "Force device to join the rogue AP (deauth original AP with aireplay-ng if needed)",
+      "Watch the app's traffic in Burp - does it warn? Send sensitive data?",
+    ],
+    what_to_look_for: "If the app sends ANY sensitive data over the rogue AP without warning, it has no certificate-pinning / no public-Wi-Fi safeguards. Banks and password managers should refuse to operate on open networks OR enforce VPN.",
+    owasp_masvs: "MSTG-NETWORK-1, MSTG-NETWORK-2",
+  },
+  {
+    id: "ble_sniff_replay",
+    ref: "§5 #65 #66",
+    title: "BLE Traffic Sniffing + Replay",
+    tools_required: ["Ubertooth One OR nRF52840 dongle", "Wireshark with BLE plugin", "btlejack OR gatttool"],
+    customer_prereqs: [
+      "Customer's app uses BLE (run ble_attack_surface auto scanner first to confirm)",
+      "Test device + the BLE peripheral (smartwatch, lock, sensor) in range",
+      "Sniffer + Wireshark working - confirmed with non-target BLE first",
+    ],
+    steps: [
+      "$ ubertooth-btle -f -c btle.pcap   # follow connections",
+      "Wireshark: filter btle.master_bd_addr == <target>",
+      "Identify the GATT write characteristic that triggers actions (door unlock, payment)",
+      "$ gatttool -b <addr> -t random --char-write-req --handle=0x000f --value=<captured-payload>",
+    ],
+    what_to_look_for: "Can you replay a captured write request and get the same physical action? If yes, the BLE peripheral has no nonce / no fresh-key-per-session and is fully replayable. Real defense: per-session ECDH key exchange + monotonic counter.",
+    owasp_masvs: "MSTG-NETWORK-3",
+  },
+  {
+    id: "nfc_relay_clone",
+    ref: "§5 #67 #68",
+    title: "NFC Relay / Tag Cloning",
+    tools_required: ["Proxmark3 RDV4 OR Flipper Zero", "Android phone with NFC reader", "NFC Tools (pro) Android app"],
+    customer_prereqs: [
+      "App uses NFC (run nfc_attack_surface auto scanner first)",
+      "Authorization to clone the target tag (e.g. customer's own access card)",
+      "Proxmark3 + computer for analysis",
+    ],
+    steps: [
+      "$ proxmark3 -> hf 14a info   # identify tag type (MIFARE Classic, DESFire, ISO14443A)",
+      "$ proxmark3 -> hf mf autopwn   # for MIFARE Classic, recover keys + dump",
+      "$ proxmark3 -> hf mf eload -f dump.bin   # load into emulator",
+      "$ proxmark3 -> hf mf sim -i   # emulate the cloned tag",
+      "Present Proxmark3 to the app's reader - does it accept the clone?",
+    ],
+    what_to_look_for: "MIFARE Classic UID-only auth = trivial clone. DESFire EV2 with diversified keys + mutual auth = strong. The 'sim' command tests whether your app's reader does sufficient verification beyond UID match.",
+    owasp_masvs: "MSTG-NETWORK-3",
+  },
+  {
+    id: "imsi_catching_brief",
+    ref: "§5 #69",
+    title: "IMSI Catching (Cellular Surveillance)",
+    tools_required: ["bladeRF / USRP / HackRF", "OpenBTS / srsRAN / YateBTS", "Authorization to operate a cellular base station (FCC-restricted)"],
+    customer_prereqs: [
+      "FCC-equivalent license to broadcast cellular (otherwise illegal everywhere)",
+      "Test device with SIM + cellular radio enabled",
+      "An RF-shielded room or remote site",
+    ],
+    steps: [
+      "Set up a rogue cell with higher signal strength than nearby legitimate carriers",
+      "Device's baseband attaches to your cell, sends IMSI + IMEI in registration",
+      "Force GSM A5/0 (no encryption) downgrade",
+      "Intercept SMS / voice / metadata",
+    ],
+    what_to_look_for: "If the app uses SMS-based 2FA, IMSI-catching enables OTP interception. Real defense: switch to TOTP (RFC 6238) or push-based 2FA. SMS 2FA has been NIST SP 800-63B 'restricted' since 2017.",
+    owasp_masvs: "MSTG-AUTH-2",
+  },
+];
+
+function generateMobileNetworkReport(opts) {
+  const moduleConfig = {
+    key: "mobile_network",
+    name: "MOBILE NETWORK",
+    longName: "Mobile App Network / Traffic",
+    reportTitle: "MOBILE NETWORK SECURITY REPORT",
+    subtitle: "Static analysis of SSL pinning, transports, endpoints, and wireless surface",
+    headerLabel: "VulnusLab - Mobile Network Assessment",
+    authLine: "N/A - static binary analysis (no live target)",
+    trustLine: "Network findings indicate interception / replay risk - manual MITM testing recommended.",
+    tools: [
+      "ssl_pinning_detection","proxy_bypass_audit","http_method_audit",
+      "endpoint_classifier","websocket_grpc_audit","network_lib_inventory",
+      "ble_attack_surface","nfc_attack_surface"
+    ],
+    tiers: [
+      ["Tier 1","Transport",          ["ssl_pinning_detection","proxy_bypass_audit","http_method_audit"]],
+      ["Tier 2","Endpoint Discovery", ["endpoint_classifier","websocket_grpc_audit","network_lib_inventory"]],
+      ["Tier 3","Wireless Surface",   ["ble_attack_surface","nfc_attack_surface"]],
+    ],
+    auditRows: [
+      ["ssl_pinning_detection","grep for OkHttp CertificatePinner + TrustKit + Cronet PublicKeyPins + Custom TrustManager + extract sha256/ pin literals"],
+      ["proxy_bypass_audit","System.getProperty https.proxyHost queries + Proxy.NO_PROXY + ProxySelector.setDefault + OkHttp .proxy() explicit calls"],
+      ["http_method_audit","Retrofit @VERB annotations + .method(...) + setRequestMethod() + X-HTTP-Method-Override header literal"],
+      ["endpoint_classifier","regex http(s):// URLs, classify by hostname against analytics / ads / crash / CDN / api / auth / debug rules"],
+      ["websocket_grpc_audit","ws:// + wss:// + OkHttp WebSocket + io.grpc.ManagedChannel + Paho MQTT + Socket.IO + SignalR + Server-Sent Events markers"],
+      ["network_lib_inventory","class signature scan for OkHttp / Retrofit / Volley / Apollo / Cronet / Ktor / HttpClient + META-INF version extraction"],
+      ["ble_attack_surface","BLUETOOTH* permissions + BluetoothLeScanner / BluetoothGatt / ScanCallback / AdvertisingSet API usage"],
+      ["nfc_attack_surface","NFC permissions + NfcAdapter / IsoDep / MifareClassic + HostApduService declaration (HCE)"],
+    ],
+    methodology: [
+      "Mobile network assessment follows OWASP MASVS v2 controls MSTG-NETWORK-1 through MSTG-NETWORK-6.",
+      "All 8 scanners are STATIC - they inspect the binary's network code surface without running it.",
+      "Section 5 NETWORK of mobile_ruff.md is heavily manual (Burp / BLE / NFC / IMSI hardware) -",
+      "the 10 manual tests in the panel below give step-by-step recipes for those probes.",
+    ],
+    references: [
+      "OWASP MASVS v2 (Network) - https://mas.owasp.org/MASVS/04-MASVS-NETWORK/",
+      "OWASP Mobile Network Cheatsheet - https://cheatsheetseries.owasp.org/cheatsheets/Mobile_Application_Security_Cheat_Sheet.html",
+      "Frida CodeShare (pinning bypasses) - https://codeshare.frida.re",
+      "Objection - https://github.com/sensepost/objection",
+      "Proxmark3 (NFC) - https://github.com/RfidResearchGroup/proxmark3",
+      "Ubertooth (BLE) - https://github.com/greatscottgadgets/ubertooth",
+    ],
+    manualLocalStorageKey: "mobile_network",
+    manualTests: MANUAL_TESTS_MOBILE_NETWORK,
+    recsBuilder: function(sevCount, r){
+      const out=[];
+      if(sevCount.CRITICAL>0)
+        out.push("[CRITICAL] Fix the CRITICAL findings (cleartext WebSocket / HCE service issues) before next release");
+      if(sevCount.HIGH>0)
+        out.push("[HIGH] Address the " + sevCount.HIGH + " HIGH finding(s) within 7 days");
+      if((r.ssl_pinning_detection&&!r.ssl_pinning_detection.ssl_pinning_detection_total))
+        out.push("[HIGH] No SSL pinning detected - add OkHttp CertificatePinner with backup pin + 30-day rotation");
+      if((r.endpoint_classifier&&(r.endpoint_classifier.debug_endpoints||[]).length>0))
+        out.push("[HIGH] Strip debug / staging endpoints from release builds (use BuildConfig.DEBUG branches)");
+      if((r.ble_attack_surface&&r.ble_attack_surface.ble_attack_surface_total))
+        out.push("[MED] BLE surface present - engage a BLE pentest (Ubertooth / nRF) + verify per-session ECDH key exchange");
+      if((r.nfc_attack_surface&&r.nfc_attack_surface.nfc_hce_service_declared))
+        out.push("[MED] HCE service declared - verify backend transaction validation + AID-based isolation");
+      if((r.proxy_bypass_audit&&r.proxy_bypass_audit.proxy_bypass_audit_total))
+        out.push("[LOW] Proxy-bypass code detected - inform pentest team to use transparent proxy mode");
+      if(sevCount.MEDIUM>0)
+        out.push("[MED] Address the " + sevCount.MEDIUM + " MEDIUM finding(s) within 30 days");
+      return out;
+    }
+  };
+  return generateOsintReport(Object.assign({}, opts, {moduleConfig}));
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 //  BUFFER OVERFLOW MODULE
 // ═══════════════════════════════════════════════════════════════
 const BOF_PHASES = [
@@ -17254,6 +17655,9 @@ export default function App() {
         </div>
         <div style={{display: active==="mobile_crypto" ? "block" : "none"}}>
           <MobileCryptoModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_network" ? "block" : "none"}}>
+          <MobileNetworkModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="api"      ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
