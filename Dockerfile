@@ -73,6 +73,22 @@ RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
       && ls -lh /app/samples/mobile/ovaa.apk ) \
     || echo "WARNING: OVAA sample download failed (non-fatal)"
 
+# InjuredAndroid — modern (2020+) CTF-style training app with 13+ flags,
+# each representing a deliberate vulnerability. Great variety for demos.
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/B3nac/InjuredAndroid/releases/download/v1.0.12/InjuredAndroid-1.0.12-release.apk" \
+        -O /app/samples/mobile/injuredandroid.apk \
+      && ls -lh /app/samples/mobile/injuredandroid.apk ) \
+    || echo "WARNING: InjuredAndroid sample download failed (non-fatal)"
+
+# AndroGoat — Kotlin-based vulnerable app aligned to OWASP MASVS controls.
+# ~20 categories. Useful when demoing MASVS-mapped customer reports.
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/satishpatnayak/AndroGoat/raw/master/AndroGoat.apk" \
+        -O /app/samples/mobile/androgoat.apk \
+      && ls -lh /app/samples/mobile/androgoat.apk ) \
+    || echo "WARNING: AndroGoat sample download failed (non-fatal)"
+
 WORKDIR /app
 
 # Python deps
