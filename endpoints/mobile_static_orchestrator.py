@@ -197,18 +197,20 @@ SAMPLE_BINARIES = [
 
 @router.get("/api/mobile_static/samples")
 async def mobile_static_samples():
-    """List demo binaries pre-bundled in the image. Only returns samples
-    whose files actually exist (so a failed Docker download doesn't show
-    a broken entry in the UI)."""
+    """List demo binaries pre-bundled in the image. Filters out files
+    that don't exist OR are 0-byte (wget creates the file even on 404,
+    so a broken URL leaves a zero-byte placeholder that we ignore here).
+    Minimum size threshold: 100KB - real APKs are always larger."""
     out = []
+    MIN_BYTES = 100 * 1024  # 100KB — anything smaller is a download artifact
     for s in SAMPLE_BINARIES:
         p = Path(s["path"])
-        if p.exists() and p.is_file():
-            out.append({
-                **s,
-                "size": p.stat().st_size,
-                "size_mb": round(p.stat().st_size / 1024 / 1024, 2),
-            })
+        if not (p.exists() and p.is_file()):
+            continue
+        sz = p.stat().st_size
+        if sz < MIN_BYTES:
+            continue
+        out.append({**s, "size": sz, "size_mb": round(sz / 1024 / 1024, 2)})
     return {"samples": out, "count": len(out)}
 
 

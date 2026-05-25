@@ -55,39 +55,46 @@ RUN mkdir -p /app/samples/mobile \
       && ls -lh /app/samples/mobile/insecurebankv2.apk ) \
     || echo "WARNING: InsecureBankv2 sample download failed (non-fatal)"
 
-# Allsafe — modern (2021+) Android pentest training app focused on Frida
-# bypasses + anti-tamper protections. Best target for the mobile_runtime
-# module since it has RootBeer + SafetyNet + Frida detection wired in.
-RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
-        "https://github.com/t0thkr1s/allsafe/raw/master/app/release/app-release.apk" \
+# Sample APK downloader macro — exit 1 + delete the output file on
+# any failure (HTTP 4xx, timeout, etc) so 0-byte placeholders never
+# survive into the image. Each block is `|| true`-suffixed so the
+# image still builds even if a sample's URL changes.
+
+# Allsafe — modern (2021+) Frida training lab. Released as GitHub release asset.
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 \
+        "https://github.com/t0thkr1s/allsafe/releases/latest/download/allsafe.apk" \
         -O /app/samples/mobile/allsafe.apk \
+      && [ -s /app/samples/mobile/allsafe.apk ] \
       && ls -lh /app/samples/mobile/allsafe.apk ) \
-    || echo "WARNING: Allsafe sample download failed (non-fatal)"
+    || ( rm -f /app/samples/mobile/allsafe.apk; \
+         echo "WARNING: Allsafe sample download failed (non-fatal)" )
 
-# OVAA — Oversecured Vulnerable Android App. Comprehensive modern lab
-# covering MASVS storage / IPC / WebView / deep links / native code.
-# Best for breadth of findings across all 3 mobile modules.
-RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
-        "https://github.com/oversecured/ovaa/raw/master/ovaa.apk" \
+# OVAA — Oversecured Vulnerable Android App.
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 \
+        "https://github.com/oversecured/ovaa/releases/latest/download/ovaa.apk" \
         -O /app/samples/mobile/ovaa.apk \
+      && [ -s /app/samples/mobile/ovaa.apk ] \
       && ls -lh /app/samples/mobile/ovaa.apk ) \
-    || echo "WARNING: OVAA sample download failed (non-fatal)"
+    || ( rm -f /app/samples/mobile/ovaa.apk; \
+         echo "WARNING: OVAA sample download failed (non-fatal)" )
 
-# InjuredAndroid — modern (2020+) CTF-style training app with 13+ flags,
-# each representing a deliberate vulnerability. Great variety for demos.
-RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+# InjuredAndroid — modern (2020+) CTF-style training app with 13+ flags.
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 \
         "https://github.com/B3nac/InjuredAndroid/releases/download/v1.0.12/InjuredAndroid-1.0.12-release.apk" \
         -O /app/samples/mobile/injuredandroid.apk \
+      && [ -s /app/samples/mobile/injuredandroid.apk ] \
       && ls -lh /app/samples/mobile/injuredandroid.apk ) \
-    || echo "WARNING: InjuredAndroid sample download failed (non-fatal)"
+    || ( rm -f /app/samples/mobile/injuredandroid.apk; \
+         echo "WARNING: InjuredAndroid sample download failed (non-fatal)" )
 
 # AndroGoat — Kotlin-based vulnerable app aligned to OWASP MASVS controls.
-# ~20 categories. Useful when demoing MASVS-mapped customer reports.
-RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
-        "https://github.com/satishpatnayak/AndroGoat/raw/master/AndroGoat.apk" \
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 \
+        "https://github.com/satishpatnayak/AndroGoat/releases/latest/download/AndroGoat.apk" \
         -O /app/samples/mobile/androgoat.apk \
+      && [ -s /app/samples/mobile/androgoat.apk ] \
       && ls -lh /app/samples/mobile/androgoat.apk ) \
-    || echo "WARNING: AndroGoat sample download failed (non-fatal)"
+    || ( rm -f /app/samples/mobile/androgoat.apk; \
+         echo "WARNING: AndroGoat sample download failed (non-fatal)" )
 
 WORKDIR /app
 
