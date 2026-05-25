@@ -164,9 +164,21 @@ async def mobile_static_run_all_tiers():
 SAMPLE_BINARIES = [
     {
         "id": "insecurebankv2",
-        "name": "InsecureBankv2 — intentionally vulnerable",
+        "name": "InsecureBankv2 — banking-app vulnerabilities (broad)",
         "path": "/app/samples/mobile/insecurebankv2.apk",
-        "description": "OWASP MASVS training APK. Triggers ~30 findings across all 12 scanners — hardcoded credentials, weak crypto, exported components, cleartext traffic.",
+        "description": "OWASP MASVS training APK. Triggers ~30 findings across mobile_static + mobile_storage — hardcoded credentials, weak crypto, exported components, cleartext traffic, plain SharedPreferences.",
+    },
+    {
+        "id": "allsafe",
+        "name": "Allsafe — anti-tamper / Frida training lab",
+        "path": "/app/samples/mobile/allsafe.apk",
+        "description": "Modern (2021+) APK with RootBeer + SafetyNet + Frida detection + SSL pinning wired in. Best target for mobile_runtime module — fires all 6 anti-tamper scanners.",
+    },
+    {
+        "id": "ovaa",
+        "name": "OVAA — Oversecured Vulnerable Android App",
+        "path": "/app/samples/mobile/ovaa.apk",
+        "description": "Comprehensive modern lab covering MASVS storage / IPC / WebView / deep links / native code. Best for breadth of findings across all 3 mobile modules.",
     },
 ]
 
