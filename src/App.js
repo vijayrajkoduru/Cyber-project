@@ -14,7 +14,7 @@ export const getApiUrl = () => {
 export const getAuthToken = () => localStorage.getItem("cyberToken") || "";
 const API = getApiUrl();
 
-// ─── COMPLIANCE_MAP — CWE → 8 compliance framework controls ───────────
+// ─── COMPLIANCE_MAP — CWE -> 8 compliance framework controls ───────────
 const COMPLIANCE_MAP = {
   "CWE-79":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
   "CWE-89":   ["6.2.4 / 6.4.1","CC6.6","A.8.28","SI-10","164.312(c)","Art. 32","PR.DS-2","16.10"],
@@ -695,7 +695,7 @@ function Terminal(props) {
         {lines.map((l,i) => {
           const isOk    = l.startsWith("✓");
           const isErr   = l.startsWith("✗");
-          const isArrow = l.startsWith("→") || l.startsWith("[*]");
+          const isArrow = l.startsWith("->") || l.startsWith("[*]");
           const color   = isOk?"#22c55e":isErr?"#ef4444":isArrow?"#60a5fa":"#64748b";
           return (
             <div key={i} style={{display:"flex",gap:8,marginBottom:2}}>
@@ -753,7 +753,7 @@ function TestTargets({targets, onSelect}) {
   );
 }
 
-// Shared severity → color mapping used by both PDF generators
+// Shared severity -> color mapping used by both PDF generators
 const sevColor = s => ({
   CRITICAL:[[162,28,28],[254,226,226]],
   HIGH:    [[133,79,11],[254,215,170]],
@@ -1169,7 +1169,7 @@ function generatePDF(reportData) {
 
     // Render only when something maps — empty section is just noise.
     // BUG-FIX 2026-05-22: previously checked dead _pci/_soc/_iso maps (never populated
-    // after 3→8 framework migration), so the section never rendered. Now uses the
+    // after 3->8 framework migration), so the section never rendered. Now uses the
     // actual _frameworkMaps array that gets populated above.
     const _hasAny = _frameworkMaps.some(m => m.size > 0);
     if (_hasAny) {
@@ -2076,7 +2076,7 @@ function generatePDF(reportData) {
         const rl=doc.splitTextToSize(String(f.remediation||"Apply security hardening."),contentW-22);
         // EVIDENCE block: the actual HTTP exchange / payload that triggered
         // the finding. Backend scanners populate this via `evidence_marker`
-        // (e.g. "GET /?family=<canary> → reflected in HTML body").
+        // (e.g. "GET /?family=<canary> -> reflected in HTML body").
         const evidenceText = f.evidence_marker || f.evidence || f.payload || "";
         const el = evidenceText ? doc.splitTextToSize(String(evidenceText), contentW-22) : [];
         const evidenceH = el.length > 0 ? (el.length * 3.6 + 7) : 0;
@@ -3462,7 +3462,7 @@ function WebAppModule(props) {
         f.cvss = _cvssByCwe[cwe] || _sevDefaultCvss[f.severity] || "5.0";
       }
     });
-    // Sort final findings by severity so master table reads CRITICAL → INFO
+    // Sort final findings by severity so master table reads CRITICAL -> INFO
     const _sevOrder = {CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3, INFO:4};
     allFindings.sort((a, b) => (_sevOrder[a.severity] ?? 5) - (_sevOrder[b.severity] ?? 5));
 
@@ -4723,7 +4723,7 @@ function WebAppModule(props) {
               }, 800);
             } catch (e) {
               console.error("[VL] Generate handler crashed:", e);
-              alert("Report generation failed: " + (e.message || e) + "\n\nOpen DevTools (F12) → Console for the stack trace.");
+              alert("Report generation failed: " + (e.message || e) + "\n\nOpen DevTools (F12) -> Console for the stack trace.");
             }
           }}
             style={{width:"100%",background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
@@ -5055,16 +5055,16 @@ journalctl -u uvicorn -n 50
             ✅ Run through this every session before scanning.
           </div>
           {[
-            { step:"01", title:"Start VirtualBox", detail:"Open VirtualBox → Start Kali VM → Wait for desktop", ok:true },
+            { step:"01", title:"Start VirtualBox", detail:"Open VirtualBox -> Start Kali VM -> Wait for desktop", ok:true },
             { step:"02", title:"Start Apache2 on Kali", detail:"sudo service apache2 start", code:true },
             { step:"03", title:"Start SSH on Kali",     detail:"sudo service ssh start", code:true },
             { step:"04", title:"Kill port 8000",         detail:"sudo fuser -k 8000/tcp", code:true },
             { step:"05", title:"Start backend",          detail:"cd ~/Cyber-project && uvicorn main:app --host 0.0.0.0 --port 8000 --reload", code:true },
             { step:"06", title:"Start frontend (Windows)", detail:'cd "C:\\Users\\vijay\\OneDrive\\Desktop\\kali\\Cyber-project" && npm.cmd start', code:true },
             { step:"07", title:"Verify backend alive",   detail:"Open http://YOUR-VPS-IP:8000/docs (or http://localhost:8000/docs) — should show FastAPI UI", ok:true },
-            { step:"08", title:"Login",                   detail:"http://localhost:3000 → admin / admin123", ok:true },
+            { step:"08", title:"Login",                   detail:"http://localhost:3000 -> admin / admin123", ok:true },
             { step:"09", title:"Set target",              detail:"Paste target URL e.g. http://lab_dvwa/dvwa (DVWA Docker)", ok:true },
-            { step:"10", title:"Run Full Scan (25 phases)", detail:"Click Web App Pentesting → Run Full Scan → Wait ~5 min", ok:true },
+            { step:"10", title:"Run Full Scan (25 phases)", detail:"Click Web App Pentesting -> Run Full Scan -> Wait ~5 min", ok:true },
             { step:"11", title:"Generate PDF",            detail:"Click Generate PDF Report after scan completes", ok:true },
           ].map(({step, title, detail, code}) => (
             <div key={step} style={{
@@ -5742,8 +5742,16 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
   const RED=[220,38,38], ORANGE=[234,88,12], GREEN=[15,118,82], AMBER=[202,138,4];
   const SEV={HIGH:RED, MEDIUM:ORANGE, LOW:GREEN, "no-finding":GRAY, NOT_RUN:[148,163,184]};
   let y=0, _secN=0;
+  // Strip emojis + map Unicode arrows/quotes to ASCII so jsPDF helvetica
+  // doesn't render them as garbage bytes ("Ø=ßà", "!'", spaced-out chars).
+  const _ascii = s => String(s == null ? "" : s)
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+      .replace(/✅/g, "[OK] ").replace(/[✓✔]/g, "v ").replace(/[⚠⚑]/g, "[!] ")
+      .replace(/[✘✖]/g, "X ").replace(/[—–]/g, "-").replace(/->/g, "->")
+      .replace(/←/g, "<-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+      .replace(/·/g, "-").replace(/[︎️]/g, "");
   const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
-  const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(String(t),x,yy,{align:align||"left"});};
+  const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(_ascii(t),x,yy,{align:align||"left"});};
   const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
   const sHead=(t,yy)=>{_secN++;fillR(margin,yy,contentW,9,LBLUE);txt(_secN+". "+t,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
   const drawHeader=()=>{txt(`VulnusLab — Manual Tests: ${moduleLabel}`,margin,10,7,GRAY);txt(date||"",pageW-margin,10,7,BLUE,false,"right");};
@@ -6034,7 +6042,7 @@ function PrivescModule({token, apiUrl}) {
      desc:"Find SUID — cross-check against GTFOBins",
      howto:"Run locally after gaining shell. Finds all binaries with SUID bit set. CRITICAL results can be exploited via GTFOBins (gtfobins.github.io) to get root.",
      requires:"Shell access on Linux target",
-     vulns:["SUID python/perl/bash → instant root","SUID find/vim/nmap → command execution","Custom SUID binaries","Shared library injection"]},
+     vulns:["SUID python/perl/bash -> instant root","SUID find/vim/nmap -> command execution","Custom SUID binaries","Shared library injection"]},
     {id:"sudo",         label:"Sudo Analysis",      icon:"👑",ep:"/api/privesc/sudo",
      desc:"sudo -l — detect exploitable allowed commands",
      howto:"Run locally after gaining shell. Checks what commands current user can run as root. CRITICAL if any GTFOBins binary is listed with NOPASSWD.",
@@ -6044,14 +6052,14 @@ function PrivescModule({token, apiUrl}) {
      desc:"getcap -r — find cap_setuid / cap_sys_admin",
      howto:"Run locally after gaining shell. Capabilities give programs elevated privileges without full root. cap_setuid on python = root shell instantly.",
      requires:"Shell access on Linux target",
-     vulns:["cap_setuid → root shell","cap_sys_admin → container escape","cap_net_raw → packet sniffing","cap_dac_override → bypass file permissions"]},
+     vulns:["cap_setuid -> root shell","cap_sys_admin -> container escape","cap_net_raw -> packet sniffing","cap_dac_override -> bypass file permissions"]},
     {id:"cron",         label:"Cron Jobs",          icon:"⏰",ep:"/api/privesc/cron",
      desc:"Find world-writable cron scripts and paths",
      howto:"Run locally. Finds cron jobs running as root. If the script is world-writable, replace it with a reverse shell. PATH hijacking also possible.",
      requires:"Shell access on Linux target",
      vulns:["World-writable cron script","Cron runs script from writable directory","PATH hijacking in cron","Wildcard injection in cron tar/rsync"]},
     {id:"suggest",      label:"Exploit Suggester",  icon:"💡",ep:"/api/privesc/linux_suggest",
-     desc:"Kernel version → matching public exploits",
+     desc:"Kernel version -> matching public exploits",
      howto:"Run locally. Checks kernel version against known local privilege escalation exploits. Download matching exploit from exploit-db and compile on target.",
      requires:"Shell access on Linux target + les.py at /tmp/",
      vulns:["Dirty COW (CVE-2016-5195)","OverlayFS (CVE-2021-3493)","PwnKit (CVE-2021-4034)","Baron Samedit sudo (CVE-2021-3156)"]},
@@ -6209,7 +6217,7 @@ function SocialEngineeringModule({token, apiUrl}) {
      hackerImpact:"Cloned site looks identical to real one. Victims enter real credentials which go to attacker. Works on any web-based login: Office 365, corporate VPN, banking portals."},
     {id:"set_launcher", label:"SET Harvester", icon:"🎣", ep:"/api/se/set_launcher",
      desc:"Social Engineering Toolkit credential harvester",
-     howto:"Enter target company domain as target. Follow the menu: SET → Website Attacks → Credential Harvester → Site Cloner. SET automates everything — cloning, hosting, and capturing credentials.",
+     howto:"Enter target company domain as target. Follow the menu: SET -> Website Attacks -> Credential Harvester -> Site Cloner. SET automates everything — cloning, hosting, and capturing credentials.",
      requires:"setoolkit installed (kali: apt install set)",
      target_type:"Any organization with web login portals",
      vulns:["Unaware employees","No phishing simulation training","Weak email filters"],
@@ -6912,7 +6920,7 @@ function ClientSideModule({token, apiUrl}) {
      hackerImpact:"User receives email: 'Click here to view your invoice'. Clicking opens HTA file in Windows MSHTA.exe. Attacker gets command shell instantly. HTA bypasses many email filters because it's not a traditional executable."},
     {id:"macro", label:"Office Macro", icon:"📊", ep:"/api/client/macro",
      desc:"Malicious VBA macro for Word/Excel document",
-     howto:"Fill LHOST and LPORT. Generates VBA macro code. Open Word → Developer → Visual Basic → paste macro → save as .doc. Attach to phishing email as 'invoice.doc' or 'salary_review.doc'.",
+     howto:"Fill LHOST and LPORT. Generates VBA macro code. Open Word -> Developer -> Visual Basic -> paste macro -> save as .doc. Attach to phishing email as 'invoice.doc' or 'salary_review.doc'.",
      requires:"LHOST + LPORT set + nc/metasploit listener",
      target_type:"Windows users with Microsoft Office — employees, executives",
      vulns:["Office macros enabled by Group Policy","Users bypass security warnings","No email attachment sandboxing","Macro auto-execution (AutoOpen, Workbook_Open)"],
@@ -6982,7 +6990,7 @@ const MANUAL_TESTS_MOBILE_STATIC = [
   {
     id: "smali_patch_resign",
     ref: "§1 #8",
-    title: "Smali Patching → Resign → Reinstall",
+    title: "Smali Patching -> Resign -> Reinstall",
     tools_required: ["apktool", "jarsigner", "Android SDK / adb"],
     customer_prereqs: [
       "Android device or emulator with USB debugging on",
@@ -7057,7 +7065,7 @@ const MANUAL_TESTS_MOBILE_STATIC = [
       "Extract the binary: $ unzip app.apk lib/arm64-v8a/libnative.so",
       "$ file libnative.so   # confirm arch + dynamic",
       "$ nm -D libnative.so | head   # list exported symbols",
-      "Open in Ghidra → analyze → look at function list",
+      "Open in Ghidra -> analyze -> look at function list",
       "Search for strings: 'license', 'key', 'auth', 'server' — follow XREFs to find logic",
       "Patch + LD_PRELOAD or use Frida.Interceptor to hook hot functions",
     ],
@@ -7066,7 +7074,7 @@ const MANUAL_TESTS_MOBILE_STATIC = [
   },
   {
     id: "frida_runtime_hook",
-    ref: "§2 #25 (bridge from binary → runtime)",
+    ref: "§2 #25 (bridge from binary -> runtime)",
     title: "Root-Detection Bypass via Frida",
     tools_required: ["frida-server (on device)", "frida-tools (pip install)", "Rooted/jailbroken test device"],
     customer_prereqs: [
@@ -7087,7 +7095,7 @@ const MANUAL_TESTS_MOBILE_STATIC = [
   },
   {
     id: "ssl_pinning_bypass",
-    ref: "§5 #56 (bridge from binary → network)",
+    ref: "§5 #56 (bridge from binary -> network)",
     title: "SSL Pinning Bypass via Frida",
     tools_required: ["Frida + frida-server", "Burp Suite / mitmproxy"],
     customer_prereqs: [
@@ -7098,7 +7106,7 @@ const MANUAL_TESTS_MOBILE_STATIC = [
     ],
     steps: [
       "Configure Burp to listen on 8080 on your laptop IP",
-      "On the device — Wi-Fi proxy → laptop_IP:8080",
+      "On the device — Wi-Fi proxy -> laptop_IP:8080",
       "Without Frida — open your app. Does Burp see HTTPS traffic? If NO, pinning is active.",
       "$ frida -U -f com.yourcorp.yourapp -l https://codeshare.frida.re/@pcipolloni/universal-android-ssl-pinning-bypass-with-frida/ --no-pause",
       "Open the app again — does Burp now see the requests?",
@@ -7295,7 +7303,7 @@ function PivotModule({token, apiUrl}) {
      requires:"SSH access to pivot host (username + password or key)",
      target_type:"Internal networks behind firewall, segmented environments",
      vulns:["Exposed internal database reachable via pivot","Internal RDP/SMB accessible through tunnel","Internal admin panels behind firewall"],
-     hackerImpact:"Attacker compromises web server. Internal MySQL on 192.168.1.100:3306 not reachable from internet. SSH local forward: localhost:13306 → pivot:3306. Now attacker runs sqlmap against localhost:13306."},
+     hackerImpact:"Attacker compromises web server. Internal MySQL on 192.168.1.100:3306 not reachable from internet. SSH local forward: localhost:13306 -> pivot:3306. Now attacker runs sqlmap against localhost:13306."},
     {id:"ssh_dynamic", label:"SSH SOCKS5 Proxy", icon:"🧅", ep:"/api/pivot/ssh_dynamic",
      desc:"Dynamic SOCKS5 proxy through SSH — route all traffic via pivot",
      howto:"Target = compromised SSH host. Creates SOCKS5 proxy on localhost:1080. Configure proxychains or browser to use 127.0.0.1:1080 as proxy. All traffic routes through pivot into internal network.",
@@ -7316,7 +7324,7 @@ function PivotModule({token, apiUrl}) {
      requires:"SOCKS proxy running (SSH dynamic or chisel)",
      target_type:"Any tool that needs to pivot through compromised host",
      vulns:["nmap through pivot","Metasploit through pivot","Credential spraying internal services"],
-     hackerImpact:"Chain 3 compromised hosts: Kali → DMZ server → internal server → domain controller. Each hop adds a layer. Defenders can't trace attack back to attacker. Real APT groups use multi-hop pivoting."},
+     hackerImpact:"Chain 3 compromised hosts: Kali -> DMZ server -> internal server -> domain controller. Each hop adds a layer. Defenders can't trace attack back to attacker. Real APT groups use multi-hop pivoting."},
     {id:"ligolo", label:"Ligolo-ng Setup", icon:"🌐", ep:"/api/pivot/ligolo",
      desc:"Ligolo-ng — kernel-level tunneling, fastest pivot tool",
      howto:"Ligolo creates a TUN interface on Kali that routes directly to internal network. No proxychains needed — use tools natively. Target agent connects to Kali listener.",
@@ -7337,28 +7345,28 @@ function CloudModule({token, apiUrl}) {
      requires:"AWS CLI or curl. No credentials needed for public buckets.",
      target_type:"Any company using AWS S3 for storage",
      vulns:["Public bucket with sensitive files","World-readable bucket with PII","World-writable bucket (upload malware)","Bucket listing enabled (directory traversal)"],
-     hackerImpact:"Company named 'acme' → check acme-backup.s3.amazonaws.com. File backup.sql found — full database dump with customer PII and password hashes. Capital One breach ($80M fine) happened this way."},
+     hackerImpact:"Company named 'acme' -> check acme-backup.s3.amazonaws.com. File backup.sql found — full database dump with customer PII and password hashes. Capital One breach ($80M fine) happened this way."},
     {id:"aws_enum", label:"AWS Metadata / SSRF", icon:"☁️", ep:"/api/cloud/aws_enum",
      desc:"EC2 metadata endpoint — steal IAM credentials via SSRF",
      howto:"Target = URL of web app with SSRF vulnerability. Tool tests if app fetches http://169.254.169.254/latest/meta-data/iam/security-credentials/. This URL returns temporary AWS keys if vulnerable.",
      requires:"Web app with SSRF vulnerability (found via SSRF scanner)",
      target_type:"AWS EC2 instances running web applications",
      vulns:["IMDSv1 enabled — no auth required","IAM role credentials stolen","AWS account takeover via temporary keys"],
-     hackerImpact:"SSRF in profile picture URL → fetches 169.254.169.254 → gets IAM keys → attacker has full AWS account access. Capital One, Netflix, Twitch all had similar exposures. AWS now recommends IMDSv2."},
+     hackerImpact:"SSRF in profile picture URL -> fetches 169.254.169.254 -> gets IAM keys -> attacker has full AWS account access. Capital One, Netflix, Twitch all had similar exposures. AWS now recommends IMDSv2."},
     {id:"azure_enum", label:"Azure AD Enumeration", icon:"🔷", ep:"/api/cloud/azure_enum",
      desc:"Enumerate Azure AD users, apps, permissions without auth",
      howto:"Enter target domain (e.g. company.com) as target. Checks Azure AD login endpoint for valid users (user enumeration), lists public apps, checks for common misconfigs.",
      requires:"Domain name. No Azure credentials needed for initial enum.",
      target_type:"Organizations using Microsoft 365, Azure AD, Entra ID",
      vulns:["Azure AD user enumeration without auth","Public app registrations exposing internal tools","Guest access enabled on sensitive resources"],
-     hackerImpact:"company.com → enumerate Azure AD → find valid usernames → password spray → gain access to M365, Teams, SharePoint, internal apps. 85% of enterprises use Azure AD — high-value target."},
+     hackerImpact:"company.com -> enumerate Azure AD -> find valid usernames -> password spray -> gain access to M365, Teams, SharePoint, internal apps. 85% of enterprises use Azure AD — high-value target."},
     {id:"gcp_enum", label:"GCP Bucket & IAM", icon:"🔵", ep:"/api/cloud/gcp_enum",
      desc:"Google Cloud Storage buckets + IAM misconfiguration check",
      howto:"Enter company name or GCS bucket name as target. Checks for public GCS buckets, allUsers permissions, IAM bindings that allow unauthenticated access.",
      requires:"curl or gsutil CLI",
      target_type:"Companies using Google Cloud Platform",
      vulns:["Public GCS bucket with sensitive data","allUsers IAM binding (world-readable)","Compute Engine metadata accessible","Service account key files exposed in bucket"],
-     hackerImpact:"GCS bucket company-data open to allUsers → contains service account JSON keys → attacker authenticates to GCP with Owner role → full cloud infrastructure access."},
+     hackerImpact:"GCS bucket company-data open to allUsers -> contains service account JSON keys -> attacker authenticates to GCP with Owner role -> full cloud infrastructure access."},
   ];
   return <ModuleShell title="Cloud Security Testing" moduleKey="cloud" icon="☁️" color="#0891b2" desc="AWS S3 enumeration, SSRF metadata attacks, Azure AD enumeration, GCP bucket misconfigurations" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
@@ -9656,9 +9664,9 @@ const RECON_PHASES = [
           {name:"WordPress wp-json Enum", tool:"wpjson_enum",   endpoint:"/api/recon/wpjson_enum",   desc:"WP user enumeration via REST API"},
           {name:"Admin Panel Exposure",   tool:"default_creds", endpoint:"/api/recon/default_creds", desc:"Jenkins/Tomcat/phpMyAdmin/Grafana detected"},
           {name:"JS Library CVE",         tool:"jslib_cve",  endpoint:"/api/recon/jslib_cve",  desc:"Outdated jQuery/React/Angular with known CVEs"},
-          {name:"Git Repo Exposure",      tool:"git_recon",  endpoint:"/api/recon/git_recon",  desc:".git/ directory exposed → source code leak"},
+          {name:"Git Repo Exposure",      tool:"git_recon",  endpoint:"/api/recon/git_recon",  desc:".git/ directory exposed -> source code leak"},
           {name:"CDN Origin Discovery",   tool:"cdn_origin", endpoint:"/api/recon/cdn_origin", desc:"Real IP behind Cloudflare/AWS WAF"},
-          // Tier 6 — OSINT/human-side recon (89% → 95% industry coverage)
+          // Tier 6 — OSINT/human-side recon (89% -> 95% industry coverage)
           {name:"Breach Search",          tool:"breach_search",      endpoint:"/api/recon/breach_search",      desc:"HIBP + paste-site search for domain in data breaches"},
           {name:"GitHub Leaks",           tool:"github_leaks",       endpoint:"/api/recon/github_leaks",       desc:"GitHub org + leaked secrets in public repos"},
           {name:"GraphQL Introspection",  tool:"graphql_introspect", endpoint:"/api/recon/graphql_introspect", desc:"/graphql exposed? schema enumerable?"},
@@ -10777,7 +10785,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     const SEV_COLOR = {CRITICAL:[220,38,38],HIGH:[234,88,12],MEDIUM:[202,138,4],LOW:[22,163,74],INFO:[100,116,139]};
 
     // ─── REPORT-V2 HELPERS — Gap fixes 1..7 from industry-score audit ───
-    // CWE → attack scenario narrative (gap 4). Drives "what an attacker does
+    // CWE -> attack scenario narrative (gap 4). Drives "what an attacker does
     // with this" sub-row under each HIGH/CRITICAL finding.
     const _ATTACK_SCENARIOS = {
       "CWE-79":   "Attacker delivers the victim a crafted link or stores a payload. On render, the browser executes the attacker's JavaScript in the victim's authenticated session — full account takeover, session-cookie exfiltration, or credential phishing under your domain's trust.",
@@ -10793,7 +10801,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
       "CWE-611":  "Attacker submits XML with an external-entity declaration. The server's XML parser fetches local files (/etc/passwd) or makes blind out-of-band HTTP requests, leaking files or pivoting to SSRF.",
       "CWE-613":  "JWT without an 'exp' claim never expires. Even after password change, logout, or compromise detection, stolen tokens remain valid forever — credentials cannot be revoked.",
       "CWE-614":  "Cookie sent over plain HTTP (missing Secure flag) can be sniffed by anyone on the network. WiFi MITM, rogue proxy, or HTTP-downgrade attack captures the session — full account takeover.",
-      "CWE-639":  "Attacker increments object IDs (/api/orders/123 → 124) and reads other users' data because the server only checks 'is the user logged in?' not 'does the user own this record?'.",
+      "CWE-639":  "Attacker increments object IDs (/api/orders/123 -> 124) and reads other users' data because the server only checks 'is the user logged in?' not 'does the user own this record?'.",
       "CWE-693":  "An attacker injects a malicious <script> via reflected/stored XSS, supply-chain script, or browser extension. With no CSP, the browser executes it, harvesting session cookies, exfiltrating PII, or pivoting to other in-session privileged actions.",
       "CWE-749":  "Dangerous HTTP method (TRACE/PUT/DELETE) enabled. TRACE bypasses HttpOnly via Cross-Site Tracing; PUT uploads web-shell; DELETE corrupts data — all without authentication on misconfigured stacks.",
       "CWE-918":  "Attacker tricks the server into making HTTP requests to internal services (AWS IMDS at 169.254.169.254, k8s API, Redis on localhost). Used to steal cloud credentials or hit internal-only admin endpoints.",
@@ -10803,7 +10811,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
       "CWE-200":  "Information disclosed in the Referer header (URLs visited, query parameters) leaks to every third-party resource your page loads. Sensitive workflow URLs (password-reset tokens, admin paths) reach analytics/CDN providers.",
     };
 
-    // CWE → numbered remediation playbook (gap 5). 3-5 concrete steps customers
+    // CWE -> numbered remediation playbook (gap 5). 3-5 concrete steps customers
     // can copy-paste directly into their config-management workflow.
     const _PLAYBOOKS = {
       "CWE-693":  ["Add Content-Security-Policy header to ALL responses",
@@ -10892,7 +10900,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
                     "If encryption is mandatory: use JWE (encrypted JWT) instead of JWS"],
     };
 
-    // CWE → industry-baseline CVSS (NVD median). Used when scanner emits a
+    // CWE -> industry-baseline CVSS (NVD median). Used when scanner emits a
     // finding without an explicit CVSS — Recon-derived scanners often omit it.
     const _CVSS_DEFAULTS_BY_CWE = {
       "CWE-79": 6.1, "CWE-89": 9.8, "CWE-78": 9.8, "CWE-22": 7.5,
@@ -11710,10 +11718,10 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   const M_TRUSTLINE  = _MC.trustLine    || "Every finding was independently triggered against a public source and re-confirmed.";
   const M_TOOLS      = _MC.tools        || ["geoip","dnstwist","wayback_history","harvester_emails","crtsh_emails","social_handles","github_recon","pastebin_search","breach_check","document_metadata","search_dorks","gravatar_check"];
   const M_TIERS      = _MC.tiers        || [["Tier 1","Passive Domain",["geoip","dnstwist","wayback_history"]],["Tier 2","People & Identity",["harvester_emails","crtsh_emails","social_handles"]],["Tier 3","Leaks & Code",["github_recon","pastebin_search","breach_check"]],["Tier 4","Metadata & Dorking",["document_metadata","search_dorks","gravatar_check"]]];
-  const M_AUDIT      = _MC.auditRows    || [["geoip","ip-api.com geolocation + ISP + ASN lookup"],["dnstwist","80 lookalike-domain permutations DNS-resolved"],["wayback_history","Wayback CDX snapshot timeline + sensitive paths"],["harvester_emails","DDG + Bing snippet regex email harvest"],["crtsh_emails","crt.sh certificate transparency subject scrape"],["social_handles","12 platforms × 6 org-handle variations probed"],["github_recon","5 GitHub code-search queries for target mentions"],["pastebin_search","5 paste-sites via DDG site: queries"],["breach_check","HIBP breach-by-domain API (free, no key)"],["document_metadata","sitemap crawl → PDF/OOXML metadata extraction"],["search_dorks","30 dorks across 7 categories on DDG"],["gravatar_check","18 role emails MD5'd vs Gravatar profile API"]];
+  const M_AUDIT      = _MC.auditRows    || [["geoip","ip-api.com geolocation + ISP + ASN lookup"],["dnstwist","80 lookalike-domain permutations DNS-resolved"],["wayback_history","Wayback CDX snapshot timeline + sensitive paths"],["harvester_emails","DDG + Bing snippet regex email harvest"],["crtsh_emails","crt.sh certificate transparency subject scrape"],["social_handles","12 platforms × 6 org-handle variations probed"],["github_recon","5 GitHub code-search queries for target mentions"],["pastebin_search","5 paste-sites via DDG site: queries"],["breach_check","HIBP breach-by-domain API (free, no key)"],["document_metadata","sitemap crawl -> PDF/OOXML metadata extraction"],["search_dorks","30 dorks across 7 categories on DDG"],["gravatar_check","18 role emails MD5'd vs Gravatar profile API"]];
   const M_METHOD     = _MC.methodology  || ["OSINT follows PTES §4 (Intelligence Gathering > Open Source) and NIST SP 800-115","§4.2. Every probe targets a third-party source (search engines, CT logs,","paste sites, code-search APIs). NO direct probes against customer infrastructure."];
   const M_REFS       = _MC.references   || ["PTES — http://www.pentest-standard.org","NIST SP 800-115 — https://csrc.nist.gov/publications/detail/sp/800-115/final","Have I Been Pwned — https://haveibeenpwned.com","Internet Archive Wayback CDX — https://web.archive.org/cdx/","crt.sh CT logs — https://crt.sh"];
-  const M_RECS_FN    = _MC.recsBuilder  || null;  // optional callback(sevCount, r) → string[]
+  const M_RECS_FN    = _MC.recsBuilder  || null;  // optional callback(sevCount, r) -> string[]
   const r = allResults || {};
   const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
   const doc = new jsPDF({unit:"mm",format:"a4",
@@ -11726,8 +11734,26 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   const RED=[162,28,28], ORANGE=[133,79,11], GREEN=[15,118,82];
   const SEV={CRITICAL:[220,38,38],HIGH:[234,88,12],MEDIUM:[202,138,4],LOW:[22,163,74],INFO:[100,116,139],POSITIVE:[15,118,82]};
   let y=0, _secN=0;
+  // jsPDF's default helvetica can't render Unicode emojis or arrows — they
+  // come out as garbage byte sequences (e.g. "Ø=ßà" for 🟠, "->" -> "!'", etc).
+  // Strip emojis + map common Unicode punctuation to ASCII before passing
+  // any string to doc.text(). Applied via the txt() wrapper so every caller
+  // is automatically safe.
+  const _ascii = s => String(s == null ? "" : s)
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")             // emoji blocks
+      .replace(/✅/g, "[OK] ")                         // ✅
+      .replace(/[✓✔]/g, "v ")                    // ✓ ✔
+      .replace(/[⚠⚑]/g, "[!] ")                  // ⚠ ⚑
+      .replace(/[✘✖]/g, "X ")                    // ✘ ✖
+      .replace(/[—–]/g, "-")                     // em/en dash
+      .replace(/->/g, "->")                            // ->
+      .replace(/←/g, "<-")                            // ←
+      .replace(/[‘’]/g, "'")                     // smart quotes
+      .replace(/[“”]/g, '"')                     // smart double quotes
+      .replace(/·/g, "-")                             // middle dot ·
+      .replace(/[︎️]/g, "");                     // variation selectors
   const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
-  const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(String(t),x,yy,{align:align||"left"});};
+  const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(_ascii(t),x,yy,{align:align||"left"});};
   const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
   const sHead=(t,yy)=>{_secN++;fillR(margin,yy,contentW,9,[220,230,245]);txt(_secN+". "+t,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
   const drawHeader=()=>{txt(M_HEADER,margin,10,7,GRAY);txt(date||"",pageW-margin,10,7,BLUE,false,"right");};
@@ -11822,7 +11848,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   // ── SECTION 8: REMEDIATION DIFF (placeholder, no prev scan) ────
   chk(18);y=sHead("Remediation Progress",y);
   fillR(margin,y,contentW,12,LIGHT);
-  txt("No previous scan on record — first-baseline OSINT assessment.",margin+4,y+7,8.5,GRAY);
+  txt(`No previous scan on record - first-baseline ${M_NAME.toLowerCase()} assessment.`,margin+4,y+7,8.5,GRAY);
   txt("Re-run quarterly to track posture changes.",margin+4,y+11,7.5,GRAY);y+=16;
 
   // ── SECTION 9: RISK SCORE BAR ──────────────────────────────────
@@ -11896,14 +11922,22 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   if(typeof M_RECS_FN === "function"){
     try { recs = M_RECS_FN(sevCount, r) || []; } catch(_){ recs = []; }
   } else {
-    if(sevCount.CRITICAL>0)recs.push("🔴 Rotate any credentials surfaced by github_recon or breach_check immediately");
-    if(sevCount.HIGH>0)recs.push("🟠 Audit hits from search_dorks and pastebin_search; file takedown requests");
-    if(r.dnstwist&&r.dnstwist.vulnerable)recs.push("🟡 Register typosquat domains defensively or file UDRP complaints");
-    if(r.breach_check&&r.breach_check.vulnerable)recs.push("🟡 Force MFA + password rotation across the org; subscribe to HIBP domain monitoring");
-    if(r.document_metadata&&r.document_metadata.vulnerable)recs.push("🟢 Strip document metadata pre-publish (ExifTool -all=)");
+    if(sevCount.CRITICAL>0)recs.push("[CRITICAL] Rotate any credentials surfaced by github_recon or breach_check immediately");
+    if(sevCount.HIGH>0)recs.push("[HIGH] Audit hits from search_dorks and pastebin_search; file takedown requests");
+    if(r.dnstwist&&r.dnstwist.vulnerable)recs.push("[MED] Register typosquat domains defensively or file UDRP complaints");
+    if(r.breach_check&&r.breach_check.vulnerable)recs.push("[MED] Force MFA + password rotation across the org; subscribe to HIBP domain monitoring");
+    if(r.document_metadata&&r.document_metadata.vulnerable)recs.push("[LOW] Strip document metadata pre-publish (ExifTool -all=)");
   }
-  if(!recs.length)recs.push(`✅ Clean ${M_NAME} posture — re-scan quarterly to catch drift`);
-  recs.forEach(rec=>{chk(8);fillR(margin,y,contentW,7,LIGHT);txt(rec,margin+4,y+4.8,8,DARK);y+=8;});y+=4;
+  if(!recs.length)recs.push(`[OK] Clean ${M_NAME} posture - re-scan quarterly to catch drift`);
+  recs.forEach(rec=>{
+    const _wrapped = doc.splitTextToSize(_ascii(rec), contentW-8);
+    const _h = Math.max(8, _wrapped.length*5 + 3);
+    chk(_h+2);
+    fillR(margin,y,contentW,_h,LIGHT);
+    _wrapped.forEach((ln,li)=>txt(ln, margin+4, y+5+(li*4.5), 8, DARK));
+    y += _h + 1;
+  });
+  y+=4;
 
   // ── SECTION 15: VERIFICATION AUDIT ─────────────────────────────
   chk(80);y=sHead("Verification Audit",y);
@@ -12099,8 +12133,8 @@ function generateMobileReport(opts) { return generateOsintReport(opts); }
 // ═══════════════════════════════════════════════════════════════
 //  MOBILE_STATIC MODULE — §1 APP BINARY (Static Analysis)
 // ═══════════════════════════════════════════════════════════════
-// Customer uploads APK/IPA/PE/ELF → 12 isolated scanners analyze the
-// binary → unified PDF report. Each scanner takes file path (not URL).
+// Customer uploads APK/IPA/PE/ELF -> 12 isolated scanners analyze the
+// binary -> unified PDF report. Each scanner takes file path (not URL).
 const MOBILE_STATIC_PHASES = [
   // Tier 1 — Manifest & Configuration
   {name:"Android Manifest Audit",          tool:"android_manifest_audit",        endpoint:"/api/mobile_static/android_manifest_audit",        icon:"📄"},
@@ -12195,13 +12229,13 @@ function generateMobileStaticReport(opts) {
     manualTests: MANUAL_TESTS_MOBILE_STATIC,
     recsBuilder: function(sevCount, r){
       const out=[];
-      if(sevCount.CRITICAL>0)out.push("🔴 CRITICAL bytecode-malware correlation — submit binary to MalwareBazaar + revoke any signing key");
-      if((r.secret_extraction_audit&&(r.secret_extraction_audit.secrets_found||0)>0))out.push("🔴 Rotate every leaked secret within 24h (assume committed history is compromised)");
-      if(sevCount.HIGH>0)out.push("🟠 Fix HIGH findings in next release — exported components / weak crypto / debug builds shipped to production");
-      if((r.third_party_sdk_audit&&(r.third_party_sdk_audit.high_risk_sdks||[]).length>0))out.push("🟠 Audit high-risk tracking SDK consent flows — GDPR / CCPA exposure");
-      if((r.native_lib_hardening&&(r.native_lib_hardening.unhardened_libs||[]).length>0))out.push("🟡 Rebuild native libs with -fPIE -fstack-protector-strong -Wl,-z,relro,-z,now");
-      if((r.weak_crypto_audit&&(r.weak_crypto_audit.weak_crypto_total||0)>0))out.push("🟡 Replace DES/RC4/MD5/SHA1 with AES-GCM + SHA-256 / SHA-3");
-      if((r.android_manifest_audit&&r.android_manifest_audit.debuggable))out.push("🟢 Set android:debuggable=\"false\" + android:allowBackup=\"false\" before release");
+      if(sevCount.CRITICAL>0)out.push("[CRITICAL] Bytecode-malware correlation - submit binary to MalwareBazaar + revoke any signing key");
+      if((r.secret_extraction_audit&&(r.secret_extraction_audit.secrets_found||0)>0))out.push("[CRITICAL] Rotate every leaked secret within 24h (assume committed history is compromised)");
+      if(sevCount.HIGH>0)out.push("[HIGH] Fix HIGH findings in next release - exported components / weak crypto / debug builds shipped to production");
+      if((r.third_party_sdk_audit&&(r.third_party_sdk_audit.high_risk_sdks||[]).length>0))out.push("[HIGH] Audit high-risk tracking SDK consent flows - GDPR / CCPA exposure");
+      if((r.native_lib_hardening&&(r.native_lib_hardening.unhardened_libs||[]).length>0))out.push("[MED] Rebuild native libs with -fPIE -fstack-protector-strong -Wl,-z,relro,-z,now");
+      if((r.weak_crypto_audit&&(r.weak_crypto_audit.weak_crypto_total||0)>0))out.push("[MED] Replace DES/RC4/MD5/SHA1 with AES-GCM + SHA-256 / SHA-3");
+      if((r.android_manifest_audit&&r.android_manifest_audit.debuggable))out.push("[LOW] Set android:debuggable=\"false\" + android:allowBackup=\"false\" before release");
       return out;
     }
   };
@@ -13435,7 +13469,7 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
     doc.text("A. Methodology", margin, y+5); y+=8;
     doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
     const _bofMethod = doc.splitTextToSize(
-      "Stack-based buffer overflow exploitation follows the standard 7-phase OSCP methodology: Fuzz → Find Offset → Confirm EIP Control → Detect Bad Characters → Find JMP ESP gadget → Generate Shellcode → Deliver Exploit. Each phase is independently verifiable from the artifacts captured in this report.",
+      "Stack-based buffer overflow exploitation follows the standard 7-phase OSCP methodology: Fuzz -> Find Offset -> Confirm EIP Control -> Detect Bad Characters -> Find JMP ESP gadget -> Generate Shellcode -> Deliver Exploit. Each phase is independently verifiable from the artifacts captured in this report.",
       contentW-4);
     _bofMethod.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
     y+=4;
@@ -13689,7 +13723,7 @@ function BufferOverflowModule({token}) {
       add(`✅ Pattern ready (${patSize} bytes)`);
       add("");
       add("📋 GEF STEPS:");
-      add("  1. Open terminal → gdb /tmp/vulnserver");
+      add("  1. Open terminal -> gdb /tmp/vulnserver");
       add("  2. (gdb) handle SIGPIPE noprint nostop pass");
       add("  3. (gdb) run");
       add("  4. Click  📤 Send Pattern  button below");
@@ -13763,7 +13797,7 @@ function BufferOverflowModule({token}) {
 
   const PHASES = [
     {n:1,icon:"🔥",label:"Fuzzing",      desc:"Find crash point"},
-    {n:2,icon:"📍",label:"EIP Offset",   desc:"Cyclic pattern → offset"},
+    {n:2,icon:"📍",label:"EIP Offset",   desc:"Cyclic pattern -> offset"},
     {n:3,icon:"🎯",label:"EIP Control",  desc:"Confirm BBBB = 0x42424242"},
     {n:4,icon:"🚫",label:"Bad Chars",    desc:"Bytes that break shellcode"},
     {n:5,icon:"🔀",label:"JMP ESP",      desc:"Find return address"},
@@ -13866,8 +13900,8 @@ function BufferOverflowModule({token}) {
         {/* GEF banner */}
         <div style={{margin:"10px 16px 0",background:"#0a1f0a",border:"1px solid #166534",borderRadius:7,padding:"8px 12px",fontSize:11,color:"#86efac",flexShrink:0}}>
           <b style={{color:"#4ade80"}}>🐛 GEF Ready</b>{"  "}
-          <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>gdb /tmp/vulnserver</code>{" → "}
-          <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>handle SIGPIPE noprint nostop pass</code>{" → "}
+          <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>gdb /tmp/vulnserver</code>{" -> "}
+          <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>handle SIGPIPE noprint nostop pass</code>{" -> "}
           <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>run</code>
           {"  — GEF auto-shows $eip on crash. No manual commands needed."}
         </div>
@@ -13878,7 +13912,7 @@ function BufferOverflowModule({token}) {
             <div style={{textAlign:"center",paddingTop:50,color:"#334155"}}>
               <div style={{fontSize:48,marginBottom:12}}>💣</div>
               <div style={{fontSize:15,fontWeight:700,color:"#475569"}}>Buffer Overflow — GEF Edition</div>
-              <div style={{fontSize:12,marginTop:8}}>Set target IP → click ⚡ Auto-Exploit</div>
+              <div style={{fontSize:12,marginTop:8}}>Set target IP -> click ⚡ Auto-Exploit</div>
             </div>
           )}
           {log.map((l,i)=>(
@@ -13907,7 +13941,7 @@ function BufferOverflowModule({token}) {
                 <button disabled={!jmpInput.trim()}
                   onClick={()=>{ if(jmpInput.trim()){ jmpResolve.current(jmpInput.trim()); setJmpInput(""); }}}
                   style={{background:jmpInput.trim()?"#b45309":"#374151",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:800,cursor:jmpInput.trim()?"pointer":"not-allowed"}}>
-                  Submit →
+                  Submit ->
                 </button>
               </div>
             </div>
@@ -13920,7 +13954,7 @@ function BufferOverflowModule({token}) {
               <div style={{fontSize:11,color:"#86efac",marginBottom:12,lineHeight:1.9}}>
                 In your GDB terminal GEF shows:<br/>
                 <code style={{background:"#052e16",padding:"3px 10px",borderRadius:4,color:"#4ade80",display:"inline-block",margin:"4px 0"}}>$eip : 0x61413761  ("a7Aa")</code><br/>
-                Copy those 8 hex digits → paste below. Also click 📤 to send the pattern if not done.
+                Copy those 8 hex digits -> paste below. Also click 📤 to send the pattern if not done.
               </div>
               <div style={{marginBottom:10}}>
                 <button onClick={sendPattern} disabled={!pattern}
@@ -13937,7 +13971,7 @@ function BufferOverflowModule({token}) {
                 <button disabled={!eipInput.trim()}
                   onClick={()=>{ if(eipInput.trim()){ eipResolve.current(eipInput.trim()); setEipInput(""); }}}
                   style={{background:eipInput.trim()?"#16a34a":"#374151",border:"none",borderRadius:6,padding:"10px 24px",color:"#fff",fontSize:13,fontWeight:800,cursor:eipInput.trim()?"pointer":"not-allowed"}}>
-                  Submit →
+                  Submit ->
                 </button>
               </div>
             </div>
@@ -14226,7 +14260,7 @@ function VulnModule(props) {
       add(`[*] Phase ${i+1}/${VULN_PHASES.length}: ${ph.name}...`);
       try {
         const data = await _callWithRetry(ph);
-        // Detect backend-returned ok:false (VLERR-WRAP from scanner) → preserve real reason.
+        // Detect backend-returned ok:false (VLERR-WRAP from scanner) -> preserve real reason.
         if (data && data.ok === false) {
           const realReason = data.skipped_reason || data.error || data.detail || "scanner returned ok:false with no reason";
           results[ph.tool] = {...data, _failed: true, error: realReason};
@@ -15195,7 +15229,7 @@ function MetasploitModule(props) {
         <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>🧰 Metasploit Framework</h2>
         <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>Search and reference common MSF modules</p>
         <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:6,padding:"10px 12px",marginBottom:12,fontSize:11,color:"#d97706"}}>
-          ⚠ To run Metasploit: Open Kali terminal → type <span style={{fontFamily:"monospace",color:"#f87171"}}>msfconsole</span> → use modules listed below
+          ⚠ To run Metasploit: Open Kali terminal -> type <span style={{fontFamily:"monospace",color:"#f87171"}}>msfconsole</span> -> use modules listed below
         </div>
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search modules (e.g. smb, ssh, http)..."
