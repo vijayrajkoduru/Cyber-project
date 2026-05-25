@@ -128,7 +128,7 @@ const MODULES = [
   // ── MOBILE ───────────────────────────────────────────────────
   { id:"mobile_static",  icon:"📱", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
   { id:"mobile_storage", icon:"🗄️", label:"Storage (Data-at-Rest)",         cat:"mobile",  free:false },
-  { id:"mobile_dynamic", icon:"🪝", label:"Runtime / Frida Hooks",          cat:"mobile",  free:false, comingSoon:true },
+  { id:"mobile_runtime", icon:"🪝", label:"Runtime / Anti-Tamper",           cat:"mobile",  free:false },
   { id:"mobile_traffic", icon:"📡", label:"Network Traffic Interception",   cat:"mobile",  free:false, comingSoon:true },
   { id:"mobile_manual",  icon:"📋", label:"Manual Pentest Checklist",       cat:"mobile",  free:false, comingSoon:true },
 
@@ -7418,6 +7418,144 @@ function MobileStorageModule({token, apiUrl}) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+//  MOBILE RUNTIME (ANTI-TAMPER) MODULE — §2 mobile_ruff coverage
+// ═══════════════════════════════════════════════════════════════
+// 6 static-detection scanners + 9 manual tests. All bypass techniques
+// in §2 require a connected device; this module tells the customer
+// which anti-tamper mechanisms their binary has so they know what
+// to target manually.
+
+function MobileRuntimeModule({token, apiUrl}) {
+  const [uploadedPath, setUploadedPath] = React.useState("");
+  const [uploadStatus, setUploadStatus] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [samples, setSamples] = React.useState([]);
+
+  React.useEffect(() => {
+    fetch("/api/mobile_static/samples", {headers:{Authorization:`Bearer ${token}`}})
+      .then(r => r.ok ? r.json() : {samples:[]})
+      .then(d => setSamples(d.samples || []))
+      .catch(() => setSamples([]));
+  }, [token]);
+
+  const pickSample = (s) => {
+    setUploadedPath(s.path);
+    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) - click Run on any tile`);
+  };
+
+  const onFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadStatus(`Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)...`);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/mobile_static/upload", {
+        method:"POST", headers:{Authorization:`Bearer ${token}`}, body:fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({detail:`HTTP ${r.status}`}));
+        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploading(false);
+        return;
+      }
+      const data = await r.json();
+      setUploadedPath(data.apk_path);
+      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) - scan_id=${data.scan_id}`);
+    } catch (e) {
+      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const attacks = MOBILE_RUNTIME_PHASES.map(p => ({
+    id: p.tool,
+    label: p.name,
+    icon: p.icon,
+    ep: p.endpoint,
+    desc: `Anti-tamper detection: ${p.name.toLowerCase()}`,
+    howto: "Upload an APK / IPA (or pick a sample), then click Run on each scanner to detect which anti-tamper protections the binary has.",
+    requires: "Uploaded binary file path",
+    target_type: "APK / IPA binary",
+    vulns: ["See findings card after scan completes."],
+    hackerImpact: "Anti-tamper detection tells an attacker exactly which protections they need to bypass before Frida hooks + memory dumps succeed.",
+  }));
+
+  const extra = () => (
+    <div style={{
+      background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+      padding:"12px 16px", marginBottom:12, display:"flex",
+      alignItems:"center", gap:12, flexWrap:"wrap",
+    }}>
+      <label style={{
+        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
+        cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
+      }}>
+        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        <input type="file" accept=".apk,.ipa" disabled={uploading}
+               style={{display:"none"}} onChange={onFileChange}/>
+      </label>
+      {samples.length > 0 && (
+        <select defaultValue="" onChange={e => {
+                  const s = samples.find(x => x.id === e.target.value);
+                  if (s) pickSample(s);
+                  e.target.value = "";
+                }}
+                style={{background:"#1e293b", color:"#f1f5f9",
+                        border:"1px solid #475569", borderRadius:6,
+                        padding:"8px 10px", fontSize:12, cursor:"pointer",
+                        maxWidth:280}}>
+          <option value="">🧪 Try Sample APK ▼</option>
+          {samples.map(s => (
+            <option key={s.id} value={s.id}>{s.name} ({s.size_mb} MB)</option>
+          ))}
+        </select>
+      )}
+      {uploadedPath && (
+        <input value={uploadedPath} readOnly
+               style={{flex:1, minWidth:240, background:"#020617",
+                       border:"1px solid #1e3a8a", borderRadius:6,
+                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+                       fontFamily:"monospace"}}/>
+      )}
+      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+        {uploadStatus || (samples.length > 0
+          ? "Upload your own APK OR pick a sample - then click Run on any scanner."
+          : "Upload an APK first. Then click Run on any scanner.")}
+      </div>
+    </div>
+  );
+
+  return <ModuleShell
+    title="Mobile Runtime / Anti-Tamper"
+    moduleKey="mobile_runtime"
+    icon="🪝"
+    color="#dc2626"
+    desc="§2 RUNTIME - 6 anti-tamper detection scanners. Catalogs root detection, anti-debug, anti-Frida, emulator detection, Play Integrity attestation, and iOS jailbreak detection mechanisms in the binary."
+    hideHeader={true}
+    token={token}
+    apiUrl={apiUrl}
+    attacks={attacks}
+    extraInputs={extra}
+    bodyFn={(t,o)=>({target: uploadedPath || t, options:o})}
+    reportFn={({target, results}) => generateMobileRuntimeReport({
+      target: uploadedPath || target || "uploaded binary",
+      allResults: results || {},
+      date: new Date().toLocaleString(),
+    })}
+    belowPanel={() => (
+      <ManualTestsPanel
+        moduleKey="mobile_runtime"
+        moduleLabel="Mobile Runtime / Anti-Tamper"
+        tests={MANUAL_TESTS_MOBILE_RUNTIME}/>
+    )}/>;
+}
+
+
 // ── API SECURITY ──────────────────────────────────────────────
 function ApiSecModule({token, apiUrl}) {
   const attacks = [
@@ -12592,6 +12730,261 @@ function generateMobileStorageReport(opts) {
 
 
 // ═══════════════════════════════════════════════════════════════
+//  MOBILE RUNTIME module data (PHASES + PDF + manual tests)
+// ═══════════════════════════════════════════════════════════════
+const MOBILE_RUNTIME_PHASES = [
+  // Tier 1 — Anti-Tamper Detection
+  {name:"Root Detection Audit",       tool:"root_detection_audit",      endpoint:"/api/mobile_runtime/root_detection_audit",      icon:"🔓"},
+  {name:"Anti-Debug Audit",           tool:"anti_debug_audit",          endpoint:"/api/mobile_runtime/anti_debug_audit",          icon:"🐛"},
+  {name:"Anti-Frida Audit",           tool:"anti_frida_audit",          endpoint:"/api/mobile_runtime/anti_frida_audit",          icon:"🪝"},
+  // Tier 2 — Attestation & Environment
+  {name:"Anti-Emulator Audit",        tool:"anti_emulator_audit",       endpoint:"/api/mobile_runtime/anti_emulator_audit",       icon:"📱"},
+  {name:"Play Integrity Audit",       tool:"play_integrity_audit",      endpoint:"/api/mobile_runtime/play_integrity_audit",      icon:"🛡️"},
+  {name:"iOS Jailbreak Detection",    tool:"ios_jailbreak_detection_audit", endpoint:"/api/mobile_runtime/ios_jailbreak_detection_audit", icon:"🍎"},
+];
+
+const MANUAL_TESTS_MOBILE_RUNTIME = [
+  {
+    id: "frida_method_hooking",
+    ref: "§2 #17",
+    title: "Frida Method Hooking",
+    tools_required: ["frida-tools (pip install)", "frida-server matching device arch", "Rooted Android or jailbroken iOS"],
+    customer_prereqs: [
+      "Connected rooted Android device OR jailbroken iOS",
+      "frida-server pushed to /data/local/tmp/ (Android) or installed via Cydia (iOS)",
+      "Your app installed + the target method name (decompile to find it)",
+    ],
+    steps: [
+      "$ frida-ps -U   # confirm device connection + list running apps",
+      "$ frida -U -f com.yourapp -l hook.js --no-pause",
+      "In hook.js: Java.perform(() => { Java.use('com.yourapp.AuthChecker').isLoggedIn.implementation = function() { return true; }; });",
+      "Trigger the hooked code path in the app",
+      "Verify the override took effect (e.g. auth bypass)",
+    ],
+    what_to_look_for: "If your hook silently overrides production logic (auth pass-through, license check skip, payment confirm), the app has insufficient anti-tamper. Real protection: detect Frida + server-side Play Integrity attestation + checksum the .dex on startup.",
+    owasp_masvs: "MSTG-RESILIENCE-2, MSTG-RESILIENCE-4",
+  },
+  {
+    id: "objection_workflows",
+    ref: "§2 #18",
+    title: "Objection Universal Bypass Kit",
+    tools_required: ["Objection (pip install objection)", "frida-server", "Rooted/jailbroken device"],
+    customer_prereqs: [
+      "Same device + Frida setup as #17",
+      "$ pip install objection",
+      "Your app installed",
+    ],
+    steps: [
+      "$ objection -g com.yourapp explore",
+      "Inside Objection REPL:",
+      "  android root disable                    # bypass root detection",
+      "  android sslpinning disable              # bypass SSL pinning",
+      "  android hooking list classes            # enumerate classes",
+      "  android hooking watch class_method com.yourapp.AuthChecker.isLoggedIn",
+      "Exercise the app and watch live hooks fire",
+    ],
+    what_to_look_for: "Objection's universal bypasses worked in <5 min? Your protection is generic library-default (RootBeer, OkHttp pinning). Real apps use custom checks that defeat universal scripts.",
+    owasp_masvs: "MSTG-RESILIENCE-1, MSTG-RESILIENCE-2, MSTG-NETWORK-4",
+  },
+  {
+    id: "cycript_runtime",
+    ref: "§2 #19",
+    title: "Cycript Runtime Manipulation (iOS)",
+    tools_required: ["Cycript", "Jailbroken iOS device", "SSH"],
+    customer_prereqs: [
+      "Jailbroken iOS device (Cydia: Cycript)",
+      "App's process name (ps aux | grep yourapp)",
+      "Knowledge of Obj-C class names (otool -ov or class-dump)",
+    ],
+    steps: [
+      "$ ssh root@<ios_device>",
+      "ios# cycript -p YourApp",
+      "cy# UIApp                              # global app instance",
+      "cy# choose(NSString).filter(s => /token|jwt/.test(s.toString()))",
+      "cy# [LoginVC alloc].init.bypassAuth",
+    ],
+    what_to_look_for: "Live Obj-C runtime manipulation gives full method override + ivar read. iOS apps relying on Obj-C method names for security are trivially defeated. Mitigation: Swift code with method renaming + native obfuscation.",
+    owasp_masvs: "MSTG-RESILIENCE-2, MSTG-RESILIENCE-4",
+  },
+  {
+    id: "lldb_live_debugging",
+    ref: "§2 #20",
+    title: "LLDB / GDB Live Debugging",
+    tools_required: ["LLDB (iOS) or gdbserver (Android)", "USB-attached device"],
+    customer_prereqs: [
+      "Android: debuggable=true APK OR rooted with gdbserver; iOS: jailbroken + debugserver",
+      "App PID running",
+    ],
+    steps: [
+      "Android: $ adb forward tcp:5039 tcp:5039 && adb shell run-as com.yourapp gdbserver :5039 --attach <pid>",
+      "iOS:     ios# debugserver *:5050 -a YourApp",
+      "On laptop: $ lldb -> process connect connect://device:5050",
+      "(lldb) breakpoint set -n -[LoginVC checkPassword:]",
+      "(lldb) p (id)[$rdi password]   # read incoming password",
+    ],
+    what_to_look_for: "If you can attach a debugger to the live process and read sensitive variables, the app lacks anti-debug. ALL high-value targets MUST add ptrace(PTRACE_TRACEME) in JNI_OnLoad (Android) or PT_DENY_ATTACH (iOS - now ineffective on iOS 14+).",
+    owasp_masvs: "MSTG-RESILIENCE-2, MSTG-RESILIENCE-4",
+  },
+  {
+    id: "memory_dump",
+    ref: "§2 #21",
+    title: "Memory Dump (Fridump / gcore)",
+    tools_required: ["Fridump", "frida-server", "gcore", "rooted/jailbroken device"],
+    customer_prereqs: [
+      "Same Frida setup as #17 OR debugger access for gcore",
+      "$ git clone https://github.com/Nightbringer21/fridump && pip install -r fridump/requirements.txt",
+    ],
+    steps: [
+      "$ python3 fridump.py -U com.yourapp -s -o ./dump",
+      "$ strings dump/*.data | grep -iE 'token|jwt|password|api_key' | head",
+      "Or: gcore <pid> && strings core.<pid> | grep -i 'secret'",
+    ],
+    what_to_look_for: "Find plaintext credentials in memory? Critical for any app that should clear sensitive buffers (zero-fill arrays after use). All apps eventually have plaintext in memory; the question is WHETHER they keep it around longer than necessary.",
+    owasp_masvs: "MSTG-STORAGE-10, MSTG-CRYPTO-7",
+  },
+  {
+    id: "method_swizzling_objc",
+    ref: "§2 #22",
+    title: "Method Swizzling (Obj-C runtime override)",
+    tools_required: ["Frida (Frida.ObjC API)", "Theos for dylib injection", "Jailbroken iOS"],
+    customer_prereqs: [
+      "Jailbroken iOS device",
+      "Frida or Theos toolchain installed",
+      "Target class + selector name (class-dump output)",
+    ],
+    steps: [
+      "Identify the selector: $ class-dump-z YourApp | grep checkLicense",
+      "Frida hook: ObjC.classes.LicenseManager['- checkLicense'].implementation = ObjC.implement(...) => true;",
+      "Or build a tweak.xm with %hook LicenseManager that replaces the IMP",
+      "Re-sign + push as Theos package",
+    ],
+    what_to_look_for: "Successful swizzling means the app's class methods can be silently replaced at load time - the original code never runs. Defense: use method_getImplementation comparison at startup to detect swapped pointers.",
+    owasp_masvs: "MSTG-RESILIENCE-4",
+  },
+  {
+    id: "xposed_lsposed_hooks",
+    ref: "§2 #23",
+    title: "Xposed / LSPosed System Hooks",
+    tools_required: ["LSPosed Manager (Magisk module)", "Custom Xposed module"],
+    customer_prereqs: [
+      "Magisk-rooted Android device with LSPosed installed",
+      "Build environment for the Xposed module (Android Studio + xposedapi)",
+    ],
+    steps: [
+      "Create new Android Studio project, add xposedapi dependency",
+      "Implement IXposedHookLoadPackage: findAndHookMethod(\"com.yourapp.AuthChecker\", lpparam.classLoader, \"isLoggedIn\", XC_MethodReplacement.returnConstant(true))",
+      "Build APK + install + enable in LSPosed Manager",
+      "Reboot device + launch target app + observe hooked behavior",
+    ],
+    what_to_look_for: "LSPosed hooks survive app restarts and are persistent. They're invisible to most anti-Frida checks. Detection: kotlinx.coroutines slow-path hooks, ART class verification anomalies, Class.getDeclaredMethods comparison vs known good.",
+    owasp_masvs: "MSTG-RESILIENCE-2, MSTG-RESILIENCE-4",
+  },
+  {
+    id: "play_integrity_bypass",
+    ref: "§2 #28",
+    title: "Play Integrity / Attestation Bypass",
+    tools_required: ["Magisk + MagiskHide / Universal SafetyNet Fix module", "Frida"],
+    customer_prereqs: [
+      "Rooted Android with Magisk + DenyList configured for your app",
+      "Universal SafetyNet Fix or Play Integrity Fix Magisk module",
+      "Optional: Frida script to hook IntegrityManager",
+    ],
+    steps: [
+      "Install Universal SafetyNet Fix Magisk module (https://github.com/kdrag0n/safetynet-fix)",
+      "Add your app to Magisk DenyList (hide root)",
+      "Launch app - does it accept the device as 'integrity-passed'?",
+      "Backup plan: Frida hook IntegrityManager.requestIntegrityToken to return a fixed legit-looking token",
+    ],
+    what_to_look_for: "If your app accepts the bypassed attestation result without server-side verification, you're trusting the client. CRITICAL: server MUST validate the Play Integrity JWT signature + verdict server-side, never client-side. Hardware Key Attestation is the only fully bypass-proof option.",
+    owasp_masvs: "MSTG-RESILIENCE-1, MSTG-AUTH-1, MSTG-AUTH-8",
+  },
+  {
+    id: "jni_bridge_hook",
+    ref: "§2 #30",
+    title: "JNI Bridge Hooking",
+    tools_required: ["Frida (Interceptor API)", "Native debugger (lldb/gdb)", "Rooted Android"],
+    customer_prereqs: [
+      "Rooted Android with Frida",
+      "Native .so library extracted (lib/arm64-v8a/libnative.so)",
+      "Symbol name of the JNI function (Java_com_yourapp_NativeChecker_isValid)",
+    ],
+    steps: [
+      "$ adb shell readelf -s /data/app/com.yourapp/lib/arm64/libnative.so | grep Java_",
+      "$ frida -U -f com.yourapp -l jni-hook.js --no-pause",
+      "In jni-hook.js: Interceptor.attach(Module.getExportByName('libnative.so', 'Java_com_yourapp_NativeChecker_isValid'), { onLeave(retval) { retval.replace(1); } });",
+      "Trigger the native code path - observe the spoofed return",
+    ],
+    what_to_look_for: "JNI bridge hooks bypass Java-only protections. If your sensitive logic is in native code but the JNI boundary is unprotected, attackers spoof return values trivially. Defense: native-side integrity checks that don't trust the Java caller.",
+    owasp_masvs: "MSTG-RESILIENCE-4, MSTG-CODE-9",
+  },
+];
+
+function generateMobileRuntimeReport(opts) {
+  const moduleConfig = {
+    key: "mobile_runtime",
+    name: "MOBILE RUNTIME",
+    longName: "Mobile App Runtime / Anti-Tamper",
+    reportTitle: "MOBILE RUNTIME (ANTI-TAMPER) SECURITY REPORT",
+    subtitle: "Static detection of runtime defenses (root, anti-debug, anti-Frida, attestation)",
+    headerLabel: "VulnusLab - Mobile Runtime Assessment",
+    authLine: "N/A - static binary analysis (no live target)",
+    trustLine: "Catalogs anti-tamper mechanisms so manual pentest knows what to bypass.",
+    tools: [
+      "root_detection_audit","anti_debug_audit","anti_frida_audit",
+      "anti_emulator_audit","play_integrity_audit","ios_jailbreak_detection_audit"
+    ],
+    tiers: [
+      ["Tier 1","Anti-Tamper Detection",   ["root_detection_audit","anti_debug_audit","anti_frida_audit"]],
+      ["Tier 2","Attestation & Environment", ["anti_emulator_audit","play_integrity_audit","ios_jailbreak_detection_audit"]],
+    ],
+    auditRows: [
+      ["root_detection_audit","grep smali for RootBeer / su paths / Magisk markers / SuperSU / test-keys / busybox"],
+      ["anti_debug_audit","Debug.isDebuggerConnected / waitingForDebugger / BuildConfig.DEBUG + native ptrace string scan"],
+      ["anti_frida_audit","port 27042 / frida-server / frida-agent / re.frida.server / linjector helper markers in smali + .so"],
+      ["anti_emulator_audit","Build.FINGERPRINT/MODEL/MANUFACTURER/HARDWARE/PRODUCT checks + QEMU paths + sensor count"],
+      ["play_integrity_audit","com.google.android.play.core.integrity / SafetyNetClient / KeyGenParameterSpec.setAttestationChallenge / Firebase App Check"],
+      ["ios_jailbreak_detection_audit","Mach-O string scan for /Applications/Cydia, /private/var/lib/apt, /usr/sbin/sshd, MobileSubstrate, fork()"],
+    ],
+    methodology: [
+      "Mobile runtime assessment follows OWASP MASVS v2 controls MSTG-RESILIENCE-1 through MSTG-RESILIENCE-13.",
+      "All 6 scanners are STATIC - they detect anti-tamper code WITHIN the binary without running it.",
+      "Section 2 RUNTIME of mobile_ruff.md has ZERO fully-auto techniques: every bypass needs a connected",
+      "device. The 9 manual tests in the panel below provide step-by-step Frida / Objection / LSPosed",
+      "instructions the customer runs locally against their own device.",
+    ],
+    references: [
+      "OWASP MASVS v2 (Resilience) - https://mas.owasp.org/MASVS/05-MASVS-RESILIENCE/",
+      "Play Integrity API - https://developer.android.com/google/play/integrity",
+      "Frida CodeShare - https://codeshare.frida.re",
+      "Objection - https://github.com/sensepost/objection",
+      "Magisk + Universal SafetyNet Fix - https://github.com/kdrag0n/safetynet-fix",
+    ],
+    manualLocalStorageKey: "mobile_runtime",
+    manualTests: MANUAL_TESTS_MOBILE_RUNTIME,
+    recsBuilder: function(sevCount, r){
+      const out=[];
+      // Severity-count fallback (always fires when findings exist)
+      if(sevCount.HIGH>0) out.push(`[HIGH] Address the ${sevCount.HIGH} high-severity finding(s) - typically missing attestation / no anti-Frida.`);
+      if(sevCount.MEDIUM>0) out.push(`[MED] Address the ${sevCount.MEDIUM} medium-severity gap(s) - usually no root detection / weak anti-debug.`);
+      // Specific recommendations
+      if(r.play_integrity_audit && !r.play_integrity_audit.has_play_integrity)
+        out.push("[HIGH] Add Play Integrity API (com.google.android.play.core.integrity) - the only server-side verifiable anti-tamper signal");
+      if(r.play_integrity_audit && r.play_integrity_audit.has_deprecated_safetynet)
+        out.push("[HIGH] Migrate from deprecated SafetyNet (EOL 2024) to Play Integrity");
+      if(r.root_detection_audit && Object.keys(r.root_detection_audit.root_detection_mechanisms||{}).length === 0)
+        out.push("[MED] Add baseline root detection (RootBeer + custom su path checks)");
+      if(r.anti_debug_audit && !r.anti_debug_audit.anti_debug_audit_total)
+        out.push("[MED] Add Debug.isDebuggerConnected check + native-side ptrace(PTRACE_TRACEME) in JNI_OnLoad");
+      if(r.anti_frida_audit && !r.anti_frida_audit.anti_frida_audit_total)
+        out.push("[MED] Add anti-Frida: port-27042 socket scan + /proc/self/maps inspection for frida-agent");
+      return out;
+    }
+  };
+  return generateOsintReport(Object.assign({}, opts, {moduleConfig}));
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 //  BUFFER OVERFLOW MODULE
 // ═══════════════════════════════════════════════════════════════
 const BOF_PHASES = [
@@ -16604,6 +16997,9 @@ export default function App() {
         </div>
         <div style={{display: active==="mobile_storage" ? "block" : "none"}}>
           <MobileStorageModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_runtime" ? "block" : "none"}}>
+          <MobileRuntimeModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="api"      ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
