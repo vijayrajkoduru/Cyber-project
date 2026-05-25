@@ -180,6 +180,18 @@ SAMPLE_BINARIES = [
         "path": "/app/samples/mobile/ovaa.apk",
         "description": "Comprehensive modern lab covering MASVS storage / IPC / WebView / deep links / native code. Best for breadth of findings across all 3 mobile modules.",
     },
+    {
+        "id": "injuredandroid",
+        "name": "InjuredAndroid — CTF-style training (13+ flags)",
+        "path": "/app/samples/mobile/injuredandroid.apk",
+        "description": "Modern (2020+) Kotlin CTF app. 13+ deliberate vulnerabilities mapped to flags - hardcoded creds, exported activities, weak crypto, deep-link hijack, login bypass.",
+    },
+    {
+        "id": "androgoat",
+        "name": "AndroGoat — Kotlin MASVS lab (~20 categories)",
+        "path": "/app/samples/mobile/androgoat.apk",
+        "description": "Kotlin-based vulnerable app aligned to OWASP MASVS controls. Useful when demoing MASVS-mapped customer reports.",
+    },
 ]
 
 
