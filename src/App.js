@@ -5747,7 +5747,7 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
   const _ascii = s => String(s == null ? "" : s)
       .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
       .replace(/✅/g, "[OK] ").replace(/[✓✔]/g, "v ").replace(/[⚠⚑]/g, "[!] ")
-      .replace(/[✘✖]/g, "X ").replace(/[—–]/g, "-").replace(/->/g, "->")
+      .replace(/[✘✖]/g, "X ").replace(/[—–]/g, "-").replace(/→/g, "->")
       .replace(/←/g, "<-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
       .replace(/·/g, "-").replace(/[︎️]/g, "");
   const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
@@ -11746,7 +11746,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
       .replace(/[⚠⚑]/g, "[!] ")                  // ⚠ ⚑
       .replace(/[✘✖]/g, "X ")                    // ✘ ✖
       .replace(/[—–]/g, "-")                     // em/en dash
-      .replace(/->/g, "->")                            // ->
+      .replace(/→/g, "->")                       // U+2192 RIGHTWARDS ARROW (unicode-escaped so future sed can't break this regex)
       .replace(/←/g, "<-")                            // ←
       .replace(/[‘’]/g, "'")                     // smart quotes
       .replace(/[“”]/g, '"')                     // smart double quotes
