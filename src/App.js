@@ -127,6 +127,7 @@ const MODULES = [
 
   // ── MOBILE ───────────────────────────────────────────────────
   { id:"mobile_static",  icon:"📱", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
+  { id:"mobile_storage", icon:"🗄️", label:"Storage (Data-at-Rest)",         cat:"mobile",  free:false },
   { id:"mobile_dynamic", icon:"🪝", label:"Runtime / Frida Hooks",          cat:"mobile",  free:false, comingSoon:true },
   { id:"mobile_traffic", icon:"📡", label:"Network Traffic Interception",   cat:"mobile",  free:false, comingSoon:true },
   { id:"mobile_manual",  icon:"📋", label:"Manual Pentest Checklist",       cat:"mobile",  free:false, comingSoon:true },
@@ -7276,6 +7277,147 @@ function MobileStaticModule({token, apiUrl}) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+//  MOBILE STORAGE (DATA-AT-REST) MODULE — §3 mobile_ruff coverage
+// ═══════════════════════════════════════════════════════════════
+// 11 static-from-APK scanners across 3 tiers, plus 4 manual tests.
+// Reuses the mobile_static /upload endpoint + sample APK + binary_cache.
+
+function MobileStorageModule({token, apiUrl}) {
+  const [uploadedPath, setUploadedPath] = React.useState("");
+  const [uploadStatus, setUploadStatus] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [samples, setSamples] = React.useState([]);
+
+  React.useEffect(() => {
+    // Reuse mobile_static's /samples endpoint (same APK pool, same upload dir)
+    fetch("/api/mobile_static/samples", {headers: {Authorization:`Bearer ${token}`}})
+      .then(r => r.ok ? r.json() : {samples: []})
+      .then(d => setSamples(d.samples || []))
+      .catch(() => setSamples([]));
+  }, [token]);
+
+  const pickSample = (s) => {
+    setUploadedPath(s.path);
+    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+  };
+
+  const onFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadStatus(`Uploading ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)...`);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/mobile_static/upload", {
+        method: "POST",
+        headers: {Authorization: `Bearer ${token}`},
+        body: fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({detail: `HTTP ${r.status}`}));
+        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploading(false);
+        return;
+      }
+      const data = await r.json();
+      setUploadedPath(data.apk_path);
+      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
+    } catch (e) {
+      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const attacks = MOBILE_STORAGE_PHASES.map(p => ({
+    id: p.tool,
+    label: p.name,
+    icon: p.icon,
+    ep: p.endpoint,
+    desc: `Storage scan: ${p.name.toLowerCase()}`,
+    howto: "Upload an APK/IPA above first (or pick a sample), then click Run on each scanner.",
+    requires: "Uploaded binary file path (set by Upload button above)",
+    target_type: "APK / IPA binary",
+    vulns: ["See findings card after scan completes."],
+    hackerImpact: "Storage analysis reveals where the app puts user data at rest - SharedPreferences, SQLite, plists, caches, logcat, clipboard, external storage, backup-extractable folders.",
+  }));
+
+  const extra = () => (
+    <div style={{
+      background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+      padding:"12px 16px", marginBottom:12, display:"flex",
+      alignItems:"center", gap:12, flexWrap:"wrap",
+    }}>
+      <label style={{
+        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
+        cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
+      }}>
+        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        <input type="file" accept=".apk,.ipa" disabled={uploading}
+               style={{display:"none"}} onChange={onFileChange}/>
+      </label>
+      {samples.length > 0 && (
+        <select defaultValue="" onChange={e => {
+                  const s = samples.find(x => x.id === e.target.value);
+                  if (s) pickSample(s);
+                  e.target.value = "";
+                }}
+                style={{background:"#1e293b", color:"#f1f5f9",
+                        border:"1px solid #475569", borderRadius:6,
+                        padding:"8px 10px", fontSize:12, cursor:"pointer",
+                        maxWidth:280}}>
+          <option value="">🧪 Try Sample APK ▼</option>
+          {samples.map(s => (
+            <option key={s.id} value={s.id}>
+              {s.name} ({s.size_mb} MB)
+            </option>
+          ))}
+        </select>
+      )}
+      {uploadedPath && (
+        <input value={uploadedPath} readOnly
+               style={{flex:1, minWidth:240, background:"#020617",
+                       border:"1px solid #1e3a8a", borderRadius:6,
+                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+                       fontFamily:"monospace"}}/>
+      )}
+      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+        {uploadStatus || (samples.length > 0
+          ? "Upload your own APK OR pick a sample - then click Run on any scanner."
+          : "Upload an APK first. Then click Run on any scanner.")}
+      </div>
+    </div>
+  );
+
+  return <ModuleShell
+    title="Mobile Storage (Data-at-Rest)"
+    moduleKey="mobile_storage"
+    icon="🗄️"
+    color="#10b981"
+    desc="§3 STORAGE - 11 static-analysis scanners. Audits SharedPreferences, SQLite, SQLCipher, FLAG_SECURE, WebView cache, external-storage paths, logcat leaks, clipboard usage, and backup-extraction policy."
+    hideHeader={true}
+    token={token}
+    apiUrl={apiUrl}
+    attacks={attacks}
+    extraInputs={extra}
+    bodyFn={(t,o)=>({target: uploadedPath || t, options:o})}
+    reportFn={({target, results}) => generateMobileStorageReport({
+      target: uploadedPath || target || "uploaded binary",
+      allResults: results || {},
+      date: new Date().toLocaleString(),
+    })}
+    belowPanel={() => (
+      <ManualTestsPanel
+        moduleKey="mobile_storage"
+        moduleLabel="Mobile Storage (Data-at-Rest)"
+        tests={MANUAL_TESTS_MOBILE_STORAGE}/>
+    )}/>;
+}
+
+
 // ── API SECURITY ──────────────────────────────────────────────
 function ApiSecModule({token, apiUrl}) {
   const attacks = [
@@ -12266,6 +12408,190 @@ function generateMobileStaticReport(opts) {
 
 
 // ═══════════════════════════════════════════════════════════════
+//  MOBILE STORAGE module data (PHASES + PDF + manual tests)
+// ═══════════════════════════════════════════════════════════════
+const MOBILE_STORAGE_PHASES = [
+  // Tier 1 — DB & Prefs
+  {name:"SharedPreferences Audit",       tool:"sharedprefs_audit",        endpoint:"/api/mobile_storage/sharedprefs_audit",        icon:"📋"},
+  {name:"SQLite Usage Audit",            tool:"sqlite_usage_audit",       endpoint:"/api/mobile_storage/sqlite_usage_audit",       icon:"🗃️"},
+  {name:"SQLCipher Presence Check",      tool:"sqlcipher_presence_check", endpoint:"/api/mobile_storage/sqlcipher_presence_check", icon:"🔐"},
+  {name:"iOS Plist Storage Audit",       tool:"ios_plist_storage_audit",  endpoint:"/api/mobile_storage/ios_plist_storage_audit",  icon:"🍎"},
+  // Tier 2 — Cache & Logs
+  {name:"FLAG_SECURE Audit",             tool:"flag_secure_audit",        endpoint:"/api/mobile_storage/flag_secure_audit",        icon:"📷"},
+  {name:"WebView Cache Audit",           tool:"webview_cache_audit",      endpoint:"/api/mobile_storage/webview_cache_audit",      icon:"🌐"},
+  {name:"Image Cache Paths Audit",       tool:"image_cache_paths_audit",  endpoint:"/api/mobile_storage/image_cache_paths_audit",  icon:"🖼️"},
+  {name:"Logcat Leak Audit",             tool:"logcat_leak_audit",        endpoint:"/api/mobile_storage/logcat_leak_audit",        icon:"📜"},
+  // Tier 3 — Perms & Backup
+  {name:"Clipboard API Audit",           tool:"clipboard_api_audit",      endpoint:"/api/mobile_storage/clipboard_api_audit",      icon:"📎"},
+  {name:"External Storage Audit",        tool:"external_storage_audit",   endpoint:"/api/mobile_storage/external_storage_audit",   icon:"💾"},
+  {name:"Backup Extraction Audit",       tool:"backup_extraction_audit",  endpoint:"/api/mobile_storage/backup_extraction_audit",  icon:"💿"},
+];
+
+const MOBILE_STORAGE_SECTION_HEADERS = {
+  "tier1_db_and_prefs":      {label:"Tier 1 - DB & Preferences",     color:"#10b981"},
+  "tier2_cache_and_logs":    {label:"Tier 2 - Cache & Logs",         color:"#06b6d4"},
+  "tier3_perms_and_backup":  {label:"Tier 3 - Permissions & Backup", color:"#8b5cf6"},
+};
+
+// Manual tests for §3 STORAGE — techniques that need a connected device.
+// Customer runs locally; evidence is captured + included in the Manual PDF.
+const MANUAL_TESTS_MOBILE_STORAGE = [
+  {
+    id: "realm_db_dump",
+    ref: "§3 #34",
+    title: "Realm Database Dump",
+    tools_required: ["Realm Studio", "adb shell", "rooted/debuggable device"],
+    customer_prereqs: [
+      "Android device with USB debugging, ideally rooted OR the app debuggable=true",
+      "Realm Studio installed (https://www.mongodb.com/products/realm)",
+      "Knowledge of your app's package name",
+    ],
+    steps: [
+      "$ adb shell run-as com.yourapp ls /data/data/com.yourapp/files/*.realm",
+      "$ adb shell run-as com.yourapp cp /data/data/com.yourapp/files/default.realm /sdcard/",
+      "$ adb pull /sdcard/default.realm",
+      "Open default.realm in Realm Studio - browse every table",
+      "(If encrypted, attempt key extraction with Frida hooking RealmConfiguration$Builder.encryptionKey)",
+    ],
+    what_to_look_for: "Can you read user data, tokens, or PII directly? If yes (and the DB isn't encryption-protected), this is HIGH. Look for: plaintext tokens, full names, email addresses, transaction history, biometric templates.",
+    owasp_masvs: "MSTG-STORAGE-1, MSTG-STORAGE-3, MSTG-STORAGE-14",
+  },
+  {
+    id: "core_data_inspection",
+    ref: "§3 #35",
+    title: "iOS Core Data Inspection (sqlite3)",
+    tools_required: ["sqlite3 CLI", "iMazing or filesystem access on jailbroken iOS"],
+    customer_prereqs: [
+      "Jailbroken iOS device OR an iTunes backup of the device",
+      "Filza or SSH access to /var/mobile/Containers/Data/Application/<UUID>/Library/",
+      "sqlite3 binary on your laptop",
+    ],
+    steps: [
+      "Locate the Core Data store: <App Container>/Library/Application Support/<App>.sqlite",
+      "$ sqlite3 App.sqlite",
+      "sqlite> .tables  (list all entity tables)",
+      "sqlite> .schema  (see columns including those storing PII)",
+      "sqlite> SELECT * FROM Z_PRIMARYKEY; -- typical Core Data metadata",
+      "Check for plaintext tokens / user data in entity rows",
+    ],
+    what_to_look_for: "Core Data stores Z<EntityName> tables. Any plaintext sensitive value (tokens, full names, addresses, message bodies) = HIGH. Apple does NOT encrypt Core Data by default - protection must be added via NSFileProtectionComplete + Keychain-stored keys.",
+    owasp_masvs: "MSTG-STORAGE-1, MSTG-STORAGE-14",
+  },
+  {
+    id: "android_keystore_extract",
+    ref: "§3 #36",
+    title: "Android Keystore Key Extraction (Frida)",
+    tools_required: ["Frida + frida-server", "Rooted device or Magisk", "Knowledge of the target key alias"],
+    customer_prereqs: [
+      "Magisk-rooted Android device matching your app's minSdkVersion",
+      "Frida-server running on device, frida-tools on laptop",
+      "App installed and you know the alias name your app uses (often inspectable from smali)",
+    ],
+    steps: [
+      "Identify the key alias - grep smali for KeyStore.getInstance + setEntry / setKeyEntry",
+      "$ frida -U -f com.yourapp -l keystore-hook.js --no-pause",
+      "Inside keystore-hook.js: hook KeyStore.getKey, log the SecretKeySpec or PrivateKey returned",
+      "Or use the Frida CodeShare 'android-keystore-bypass' script",
+      "If the key is hardware-bound (StrongBox), extraction will fail - that's the desired outcome",
+    ],
+    what_to_look_for: "Does Frida give you the raw key bytes? If yes, the key is software-backed (CWE-321). Real protection: use KeyGenParameterSpec.Builder().setIsStrongBoxBacked(true). Look for: getEncoded() returning non-null on the secret key.",
+    owasp_masvs: "MSTG-CRYPTO-1, MSTG-CRYPTO-5, MSTG-STORAGE-12",
+  },
+  {
+    id: "ios_keychain_dump",
+    ref: "§3 #37",
+    title: "iOS Keychain Dump (Jailbroken)",
+    tools_required: ["keychain-dumper", "Jailbroken iOS device", "SSH or Filza"],
+    customer_prereqs: [
+      "Jailbroken iOS device (checkra1n, palera1n, etc.)",
+      "keychain-dumper binary: https://github.com/ptoomey3/Keychain-Dumper",
+      "SSH access (root) to the device",
+    ],
+    steps: [
+      "$ scp keychain_dumper root@<ios_device_ip>:/var/root/",
+      "$ ssh root@<ios_device_ip>",
+      "ios# chmod +x keychain_dumper && ./keychain_dumper",
+      "Output lists every entry across kSecClassGenericPassword + kSecClassInternetPassword",
+      "Filter for your app's bundle ID: ./keychain_dumper | grep com.yourcorp.yourapp",
+    ],
+    what_to_look_for: "Each entry shows: Service, Account, Generic, Data. Look for: plaintext API tokens, OAuth refresh tokens, JWT, biometric templates. Defense: protect items with kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly + biometric ACL (LAContext).",
+    owasp_masvs: "MSTG-STORAGE-1, MSTG-STORAGE-2, MSTG-AUTH-8",
+  },
+];
+
+// Mobile storage PDF — reuses the OSINT canon with storage-specific labels.
+function generateMobileStorageReport(opts) {
+  const moduleConfig = {
+    key: "mobile_storage",
+    name: "MOBILE STORAGE",
+    longName: "Mobile App Storage (Data-at-Rest)",
+    reportTitle: "MOBILE STORAGE SECURITY REPORT",
+    subtitle: "Static analysis of APK / IPA storage surfaces (DB, prefs, cache, logs, backup)",
+    headerLabel: "VulnusLab - Mobile Storage Assessment",
+    authLine: "N/A - static binary analysis (no live target)",
+    trustLine: "Every finding is rule-driven and replayable against the same binary hash.",
+    tools: [
+      "sharedprefs_audit","sqlite_usage_audit","sqlcipher_presence_check","ios_plist_storage_audit",
+      "flag_secure_audit","webview_cache_audit","image_cache_paths_audit","logcat_leak_audit",
+      "clipboard_api_audit","external_storage_audit","backup_extraction_audit"
+    ],
+    tiers: [
+      ["Tier 1","DB & Prefs",            ["sharedprefs_audit","sqlite_usage_audit","sqlcipher_presence_check","ios_plist_storage_audit"]],
+      ["Tier 2","Cache & Logs",          ["flag_secure_audit","webview_cache_audit","image_cache_paths_audit","logcat_leak_audit"]],
+      ["Tier 3","Permissions & Backup",  ["clipboard_api_audit","external_storage_audit","backup_extraction_audit"]],
+    ],
+    auditRows: [
+      ["sharedprefs_audit","grep decompiled smali for getSharedPreferences + EncryptedSharedPreferences usage + sensitive key names (token/pwd/jwt)"],
+      ["sqlite_usage_audit","detect SQLiteDatabase / SQLiteOpenHelper callers + DB names hinting sensitive data (auth/wallet/session)"],
+      ["sqlcipher_presence_check","check for net.sqlcipher / Realm encryption / Room SupportFactory markers + .so libs"],
+      ["ios_plist_storage_audit","walk all plist files for keys matching token/password/secret/apikey patterns"],
+      ["flag_secure_audit","check WindowManager.FLAG_SECURE set on Activities whose class names hint at login/payment/PIN"],
+      ["webview_cache_audit","grep for setAppCacheEnabled / setSavePassword / setAllowFileAccess + clearCache() presence"],
+      ["image_cache_paths_audit","regex hardcoded /sdcard /storage/emulated paths + detect Glide/Picasso/Fresco/ExoPlayer/coil"],
+      ["logcat_leak_audit","Log.* calls with arguments matching sensitive hints (token/password/auth/jwt/pin/card)"],
+      ["clipboard_api_audit","ClipboardManager.setPrimaryClip use in classes named login/payment/auth/wallet/otp"],
+      ["external_storage_audit","manifest perms READ/WRITE/MANAGE_EXTERNAL_STORAGE + hardcoded external paths in code"],
+      ["backup_extraction_audit","android:allowBackup + fullBackupContent + dataExtractionRules (Android 12+) + backup_rules XML"],
+    ],
+    methodology: [
+      "Mobile storage analysis follows OWASP MASVS v2 controls MSTG-STORAGE-1 through MSTG-STORAGE-14",
+      "and NIST SP 800-163r1. All scanners are STATIC - the binary is decompiled with apktool (Android)",
+      "or unzipped (IPA) and inspected via regex / XML / plist parsing. No live device is required for these",
+      "11 auto scanners; 4 manual tests in the panel below require a connected rooted or jailbroken device.",
+    ],
+    references: [
+      "OWASP MASVS v2 - https://mas.owasp.org/MASVS/",
+      "OWASP MASTG storage tests - https://mas.owasp.org/MASTG/tests/",
+      "Android Security: Data Storage - https://developer.android.com/topic/security/data",
+      "iOS Keychain Services - https://developer.apple.com/documentation/security/keychain_services",
+      "Apktool - https://apktool.org",
+    ],
+    manualLocalStorageKey: "mobile_storage",
+    manualTests: MANUAL_TESTS_MOBILE_STORAGE,
+    recsBuilder: function(sevCount, r){
+      const out=[];
+      if((r.sharedprefs_audit&&(r.sharedprefs_audit.sensitive_pref_keys||[]).length>0))
+        out.push("[HIGH] Migrate sensitive SharedPreferences keys to androidx.security.crypto.EncryptedSharedPreferences");
+      if((r.sqlite_usage_audit&&(r.sqlite_usage_audit.sensitive_db_names||[]).length>0)&&!(r.sqlcipher_presence_check&&r.sqlcipher_presence_check.sqlcipher_presence_check_total))
+        out.push("[HIGH] Wrap sensitive SQLite DBs with SQLCipher (net.sqlcipher.database) + Android Keystore-backed key");
+      if((r.flag_secure_audit&&(r.flag_secure_audit.unsafe_activities||[]).length>0))
+        out.push("[HIGH] Add FLAG_SECURE to login/payment/PIN Activities to block screen-recording + app-switcher leaks");
+      if((r.logcat_leak_audit&&(r.logcat_leak_audit.suspicious_log_calls||[]).length>0))
+        out.push("[HIGH] Strip Log.* calls from release builds via Proguard -assumenosideeffects rule");
+      if(r.backup_extraction_audit&&r.backup_extraction_audit.allow_backup==="true")
+        out.push("[MED] Set android:allowBackup=false OR ship strict backup_rules.xml with exclude tags for sensitive folders");
+      if((r.external_storage_audit&&(r.external_storage_audit.external_perms||[]).length>0))
+        out.push("[MED] Migrate from external-storage perms to scoped-storage MediaStore (Android 10+)");
+      if((r.webview_cache_audit&&Object.keys(r.webview_cache_audit.webview_risks||{}).length>0))
+        out.push("[MED] Audit risky WebView APIs: setSavePassword/setAllowFileAccess - call clearCache() on logout");
+      return out;
+    }
+  };
+  return generateOsintReport(Object.assign({}, opts, {moduleConfig}));
+}
+
+
+// ═══════════════════════════════════════════════════════════════
 //  BUFFER OVERFLOW MODULE
 // ═══════════════════════════════════════════════════════════════
 const BOF_PHASES = [
@@ -16275,6 +16601,9 @@ export default function App() {
         </div>
         <div style={{display: active==="mobile_static" ? "block" : "none"}}>
           <MobileStaticModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_storage" ? "block" : "none"}}>
+          <MobileStorageModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="api"      ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
