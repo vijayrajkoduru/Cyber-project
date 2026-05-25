@@ -44,16 +44,34 @@ RUN pip install --no-cache-dir \
         quark-engine
 
 # ── §1 SAMPLE BINARIES ────────────────────────────────────────────────
-# Pre-stage 1-2 demo APKs so a first-time customer can click "Try Sample"
-# in the dashboard and run a full scan without hunting for an APK first.
-# Non-fatal — if GitHub is throttled the image still builds; the dropdown
-# simply lists fewer samples.
+# Pre-stage 3 demo APKs covering different mobile-pentest categories.
+# Each download is non-fatal — if GitHub is throttled or a URL moves,
+# the image still builds and the dropdown just lists fewer samples.
+# The /samples endpoint only returns files that exist on disk.
 RUN mkdir -p /app/samples/mobile \
  && ( wget --tries=3 --waitretry=10 --timeout=60 -q \
         "https://github.com/dineshshetty/Android-InsecureBankv2/raw/master/InsecureBankv2.apk" \
         -O /app/samples/mobile/insecurebankv2.apk \
       && ls -lh /app/samples/mobile/insecurebankv2.apk ) \
     || echo "WARNING: InsecureBankv2 sample download failed (non-fatal)"
+
+# Allsafe — modern (2021+) Android pentest training app focused on Frida
+# bypasses + anti-tamper protections. Best target for the mobile_runtime
+# module since it has RootBeer + SafetyNet + Frida detection wired in.
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/t0thkr1s/allsafe/raw/master/app/release/app-release.apk" \
+        -O /app/samples/mobile/allsafe.apk \
+      && ls -lh /app/samples/mobile/allsafe.apk ) \
+    || echo "WARNING: Allsafe sample download failed (non-fatal)"
+
+# OVAA — Oversecured Vulnerable Android App. Comprehensive modern lab
+# covering MASVS storage / IPC / WebView / deep links / native code.
+# Best for breadth of findings across all 3 mobile modules.
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/oversecured/ovaa/raw/master/ovaa.apk" \
+        -O /app/samples/mobile/ovaa.apk \
+      && ls -lh /app/samples/mobile/ovaa.apk ) \
+    || echo "WARNING: OVAA sample download failed (non-fatal)"
 
 WORKDIR /app
 
