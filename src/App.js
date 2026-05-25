@@ -5383,7 +5383,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
 }
 
 // ── SHARED MODULE SHELL ──────────────────────────────────────
-function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn, moduleKey, reportFn, belowPanel}) {
+function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInputs, bodyFn, moduleKey, reportFn, belowPanel, hideHeader}) {
   const API = apiUrl || getApiUrl();
   const tok = token || getAuthToken();
   const [target, setTarget] = useState("");
@@ -5419,36 +5419,57 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
 
   return (
     <div style={{padding:"0 0 40px"}}>
-      {/* Header */}
-      <div style={{background:`linear-gradient(135deg,${color}18,transparent)`,borderBottom:"1px solid #1e293b",padding:"16px 24px 14px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:24}}>{icon}</span>
-            <div>
-              <h2 style={{fontSize:17,fontWeight:700,color:"#f1f5f9",margin:0}}>{title}</h2>
-              <p style={{fontSize:12,color:"#64748b",margin:0}}>{desc}</p>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:8}}>
+      {/* Header (hidden when hideHeader=true; just a floating Report button strip in that case) */}
+      {hideHeader ? (
+        (hasResults && (
+          <div style={{display:"flex", justifyContent:"flex-end", gap:8, padding:"10px 24px 0"}}>
             <button onClick={()=>setGuide(g=>!g)}
               style={{background:guide?"#1e3a5f":"#0f172a",border:`1px solid ${guide?"#3b82f6":"#334155"}`,borderRadius:6,padding:"6px 12px",color:guide?"#93c5fd":"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
               {guide?"✕ Hide Guide":"📋 How to Use"}
             </button>
-            {hasResults && (
-              <button onClick={()=>{
-                  const args={title,icon,target,attacks,results};
-                  try {
-                    if (typeof reportFn === "function") reportFn(args);
-                    else generateShellReport(args);
-                  } catch(e) { alert("PDF error: "+(e.message||e)); }
-                }}
-                style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                📄 Report
+            <button onClick={()=>{
+                const args={title,icon,target,attacks,results};
+                try {
+                  if (typeof reportFn === "function") reportFn(args);
+                  else generateShellReport(args);
+                } catch(e) { alert("PDF error: "+(e.message||e)); }
+              }}
+              style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              📄 Report
+            </button>
+          </div>
+        ))
+      ) : (
+        <div style={{background:`linear-gradient(135deg,${color}18,transparent)`,borderBottom:"1px solid #1e293b",padding:"16px 24px 14px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:24}}>{icon}</span>
+              <div>
+                <h2 style={{fontSize:17,fontWeight:700,color:"#f1f5f9",margin:0}}>{title}</h2>
+                <p style={{fontSize:12,color:"#64748b",margin:0}}>{desc}</p>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setGuide(g=>!g)}
+                style={{background:guide?"#1e3a5f":"#0f172a",border:`1px solid ${guide?"#3b82f6":"#334155"}`,borderRadius:6,padding:"6px 12px",color:guide?"#93c5fd":"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {guide?"✕ Hide Guide":"📋 How to Use"}
               </button>
-            )}
+              {hasResults && (
+                <button onClick={()=>{
+                    const args={title,icon,target,attacks,results};
+                    try {
+                      if (typeof reportFn === "function") reportFn(args);
+                      else generateShellReport(args);
+                    } catch(e) { alert("PDF error: "+(e.message||e)); }
+                  }}
+                  style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  📄 Report
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* How To Use Guide */}
       {guide && (
@@ -7235,6 +7256,7 @@ function MobileStaticModule({token, apiUrl}) {
     icon="🔬"
     color="#7c3aed"
     desc="§1 APP BINARY — 12 isolated static-analysis scanners across 4 tiers. Upload an APK/IPA/PE/ELF and the scanners audit manifests, secrets, crypto, native libraries, malware patterns, and bundled SDKs."
+    hideHeader={true}
     token={token}
     apiUrl={apiUrl}
     attacks={attacks}
