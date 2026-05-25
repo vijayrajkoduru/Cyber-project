@@ -5884,7 +5884,7 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
       fillR(margin, y, contentW, 8, LIGHT);
       txt(`Severity assigned by customer: ${t._sev}`, margin+4, y+5.5, 8.5, sc, true);
       y += 10;
-      const ev = t.customer.evidence || "(no evidence text provided)";
+      const ev = _ascii(t.customer.evidence || "(no evidence text provided)");
       const evLines = doc.splitTextToSize(ev, contentW - 8);
       fillR(margin, y, contentW, Math.min(evLines.length*4+4, 60), [248,250,252]);
       evLines.slice(0, 14).forEach(ln => { chk(5); txt(ln, margin+4, y+3.5, 7.5, DARK); y += 4; });
@@ -11984,7 +11984,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
       y += 16;
       if (c.evidence) {
         chk(10);
-        const lines = doc.splitTextToSize("Customer evidence: " + String(c.evidence), contentW-8);
+        const lines = doc.splitTextToSize(_ascii("Customer evidence: " + String(c.evidence)), contentW-8);
         lines.slice(0,3).forEach(ln => { txt(ln, margin+5, y+3, 7, GRAY); y += 3.5; });
         y += 4;
       }
