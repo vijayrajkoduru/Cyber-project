@@ -61,3 +61,5 @@ last_known_good/
 src/App.js.bak.*
 _archive/
 tools/recon_new/
+.login_backups/
+.safe-fallback-commit
