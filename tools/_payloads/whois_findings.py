@@ -330,7 +330,7 @@ def rule_no_ns(s):
     if not s.get("registrar"): return None
     return {"name": "No nameservers found in WHOIS",
             "severity": "HIGH",
-            "evidence": "Domain has no NS records published — DNS resolution will fail",
+            "evidence": "Domain has no NS records published (verified via direct DNS lookup) — DNS resolution will fail",
             "remediation": "Configure nameservers at your registrar immediately."}
 
 

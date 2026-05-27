@@ -6,6 +6,9 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
 import whois as pywhois
 try:
+    import dns.resolver as _dnsr
+except ImportError: _dnsr = None
+try:
     from tools._payloads.whois_findings import WHOIS_FINDING_RULES as RULES
 except ImportError:
     RULES = []
@@ -19,7 +22,15 @@ async def gather(ctx: ScanContext):
         ctx.state['created'] = str(w.creation_date or '')
         ctx.state['expires'] = str(w.expiration_date or '')
         ctx.state['whois_found'] = bool(w.registrar)
-        ctx.source('python-whois')
+                # Cross-check NS via direct DNS lookup before claiming "no nameservers"
+        ns_dns = []
+        if _dnsr:
+            try:
+                ns_dns = [str(r) for r in _dnsr.resolve(ctx.host, "NS", lifetime=4)]
+            except Exception: pass
+        ctx.state['_ns_dns_confirmed'] = bool(ns_dns)
+        ctx.state['ns_records_dns'] = ns_dns
+        ctx.source('python-whois + DNS NS verify')
     except Exception as e:
         ctx.state['whois_error'] = str(e)[:120]
         ctx.source('whois-error')

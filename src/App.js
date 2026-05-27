@@ -8612,6 +8612,71 @@ function computeVulnCoverage(allResults) {
 //  RECON PDF REPORT
 // ═══════════════════════════════════════════════════════════════
 function generateReconReport({target, allResults, date, authenticated, pdfConfig}) { /*RECON-AUTH-PDF-SIG-V1*/
+  // ─── INDUSTRY-STANDARD ENRICHMENT HELPERS ───
+  const _CVSS_VECTORS = {
+    CRITICAL: "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+    HIGH:     "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    MEDIUM:   "AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L",
+    LOW:      "AV:N/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N",
+    INFO:     ""
+  };
+  // MITRE ATT&CK mapping by finding-content pattern
+  const _MITRE_MAP = [
+    [/whois|domain.?age|registrar/i,                       "T1590.002", "DNS"],
+    [/subdomain|cert|crt\.sh/i,                            "T1592",     "Host Info"],
+    [/asn|ip.?ownership|reverse.?ip|geo/i,                 "T1590.005", "IPs"],
+    [/tls|ssl|heartbleed|poodle/i,                         "T1592.002", "Software"],
+    [/admin|panel|exposed|directory.?listing|s3|bucket|elasticsearch|mongodb|redis|memcached/i, "T1190", "Pub-App"],
+    [/dmarc|spf|dkim|email|smtp/i,                         "T1566.001", "Phishing"],
+    [/waf|cdn|cloudflare/i,                                "T1090",     "Proxy"],
+    [/jwt|oauth|saml|session/i,                            "T1078",     "Valid Acct"],
+    [/sql.?injection|xss|ssrf|xxe|csrf|cmd.?injection/i,   "T1190",     "Pub-App"],
+    [/git|repo|source.?code|secret.?leak/i,                "T1592.002", "Software"],
+    [/breach|leak|dump|pastebin/i,                         "T1589.002", "Emails"],
+    [/smb|netbios|rdp|ftp|telnet|ldap/i,                   "T1133",     "Ext Remote"],
+    [/snmp|community/i,                                    "T1046",     "Net Svc Scan"],
+    [/docker|kubernetes|k8s|etcd|helm/i,                   "T1610",     "Deploy Cont"],
+    [/dns.?zone.?transfer|axfr/i,                          "T1590.002", "DNS"],
+    [/takeover|dangling/i,                                 "T1584.001", "Compr Infra"],
+  ];
+  // CVEs in CISA KEV catalog mappable to recon findings
+  const _KEV_PATTERNS = [
+    [/EternalBlue|MS17-010|SMBv1|SMB.?v1/i,    "CVE-2017-0144"],
+    [/BlueKeep/i,                              "CVE-2019-0708"],
+    [/Heartbleed/i,                            "CVE-2014-0160"],
+    [/ProxyLogon/i,                            "CVE-2021-26855"],
+    [/ProxyShell/i,                            "CVE-2021-34473"],
+    [/ProxyNotShell/i,                         "CVE-2022-41040"],
+    [/CitrixBleed/i,                           "CVE-2023-4966"],
+    [/Log4Shell|Log4j/i,                       "CVE-2021-44228"],
+    [/ZeroLogon/i,                             "CVE-2020-1472"],
+    [/PrintNightmare/i,                        "CVE-2021-34527"],
+    [/Spring4Shell/i,                          "CVE-2022-22965"],
+    [/regreSSHion/i,                           "CVE-2024-6387"],
+  ];
+  const _mitreFor = (f) => {
+    const text = String(f.name||"") + " " + String(f.evidence||"");
+    for (const [pat, id, desc] of _MITRE_MAP) {
+      if (pat.test(text)) return {id, desc};
+    }
+    return null;
+  };
+  const _kevFor = (f) => {
+    const text = String(f.name||"") + " " + String(f.evidence||"");
+    for (const [pat, cve] of _KEV_PATTERNS) {
+      if (pat.test(text)) return cve;
+    }
+    return null;
+  };
+  const _reproSteps = (f, toolKey) => {
+    const ev = String(f.evidence||"").substring(0, 90);
+    return [
+      `Hit the ` + (toolKey || "scanner") + ` endpoint with the target URL/domain`,
+      `Observe response — look for: ` + (ev || "the documented signal"),
+      `Confirm trigger condition matches the rule in tools/recon/`,
+    ];
+  };
+
   const r = allResults || {};
   const _cfg = pdfConfig || {};
   const _doGen = () => {
@@ -8930,6 +8995,15 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     y += 30;
 
     // Top concerns
+    // TEMP DEBUG — dump first finding to PDF so we can see actual field names
+    if (_top3[0]) {
+      doc.setFont("Courier","normal"); doc.setFontSize(5); doc.setTextColor(150,0,150);
+      const _dk = "DEBUG keys: " + Object.keys(_top3[0]).join(",");
+      const _dv = "DEBUG values: " + JSON.stringify(_top3[0]).substring(0,300);
+      doc.text(_dk, margin, y + 3);
+      doc.text(_dv, margin, y + 7);
+      y += 12;
+    }
     if (_top3.length > 0) {
       chk(50); y = sHead("Top Concerns", y);
       _top3.forEach((f,idx)=>{
@@ -8939,7 +9013,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         fillR(margin, y, 4, 10, col);
         fillR(margin+4, y, contentW-4, 10, LIGHT);
         txt(`${idx+1}.`, margin+8, y+6.8, 9, col, true);
-        txt(String(f.name||f.title||"Finding").substring(0,85), margin+15, y+6.8, 8.5, DARK, true);
+        txt(String(f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||f.msg||f.text||f.label||f.id||(f.evidence?String(f.evidence).substring(0,60):"")||"Untitled finding").substring(0,85), margin+15, y+6.8, 8.5, DARK, true);
         txt(sev, margin+contentW-20, y+6.8, 7, col, true);
         y += 12;
       });
@@ -9310,7 +9384,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const cwe = String(f.cwe||"").trim();
         const evLines = doc.splitTextToSize(evidence, 134);
         const remLines = remediation ? doc.splitTextToSize(remediation, 134) : [];
-        const rowH = 6 + (evLines.length * 3.5) + (remLines.length ? (remLines.length * 3.5 + 1) : 0) + 3;
+        const rowH = 6 + 4 + (evLines.length * 3.5) + (sev !== 'INFO' ? (3.5 + 3 * 3.2 + 1.5) : 0) + (remLines.length ? (remLines.length * 3.5 + 1) : 0) + 3;
         chk(rowH + 2);
         fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
         rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
@@ -9327,8 +9401,40 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 6.5, WHITE, true, "center");
         }
         txt(name, margin+(_cvss>0?41:25), y+5, 8.5, DARK, true);
+        // KEV badge (CISA Known Exploited Vulnerabilities) — red pill
+        const _kev = _kevFor(f);
+        let _badgeX = margin+contentW-22;
+        if(_kev){
+          rrect(_badgeX-14, y+2, 14, 5.5, 1, [220,38,38]);
+          txt("KEV", _badgeX-7, y+5.8, 6, WHITE, true, "center");
+          _badgeX -= 17;
+        }
+        // MITRE ATT&CK technique pill — purple
+        const _mitre = _mitreFor(f);
+        if(_mitre){
+          rrect(_badgeX-22, y+2, 22, 5.5, 1, [124,58,237]);
+          txt(_mitre.id, _badgeX-11, y+5.8, 5.5, WHITE, true, "center");
+          _badgeX -= 25;
+        }
         let textY = y + 8.5;
+        // CVSS vector string — small mono
+        const _vec = _CVSS_VECTORS[sev];
+        if(_vec){
+          txt("CVSS: " + _vec, margin+25, textY, 6, [100,116,139], false);
+          textY += 3.5;
+        }
+        // Evidence
         evLines.forEach(ln => { txt(ln, margin+25, textY, 7.5, GRAY); textY += 3.5; });
+        // Reproduction steps
+        if(sev !== "INFO"){
+          textY += 1.5;
+          txt("Reproduction:", margin+25, textY, 7, [16,185,129], true);
+          textY += 3.5;
+          _reproSteps(f, toolKey).forEach((step, idx) => {
+            txt(`${idx+1}. ${step}`, margin+27, textY, 6.5, [71,85,105], false);
+            textY += 3.2;
+          });
+        }
         if(remLines.length){
           textY += 1;
           txt("Fix:", margin+25, textY, 7, BLUE, true);
@@ -10106,6 +10212,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
      "search_engine_scrape","securitytrails_subdomains","virustotal_subdomains","github_subdomains",
      "wayback_subdomain_extract","amass_passive","shuffled_bruteforce","crt_search","cert_san_aggregator"].forEach(k=>{
       const d = r[k]; if (d && Array.isArray(d.discovered)) d.discovered.forEach(s=>_subs.add(s));
+      if (d && Array.isArray(d.subdomains_found)) d.subdomains_found.forEach(s=>_subs.add(s));
+      if (d && Array.isArray(d.results)) d.results.forEach(s=>_subs.add(typeof s === "string" ? s : (s.hostname||s.subdomain||"")));
       if (d && Array.isArray(d.subdomains)) d.subdomains.forEach(s=>_subs.add(s));
       if (d && Array.isArray(d.sans)) d.sans.forEach(s=>_subs.add(s));
     });
@@ -10228,7 +10336,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         fillR(margin, y, 4, 15, col);
         fillR(margin+4, y, contentW-4, 15, LIGHT);
         txt(`#${i+1}`, margin+8, y+6, 8, col, true);
-        txt(String(f.name||f.title||"Finding").substring(0,75), margin+8, y+11, 8.5, DARK, true);
+        txt(String(f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||f.msg||f.text||f.label||f.id||(f.evidence?String(f.evidence).substring(0,60):"")||"Untitled finding").substring(0,75), margin+8, y+11, 8.5, DARK, true);
         txt(sev, margin+contentW-22, y+6, 7, col, true);
         const remed = String(f.remediation||"See per-finding section").substring(0,100);
         txt(`Fix: ${remed}`, margin+8, y+11+3.5, 7, GRAY, false);
@@ -10680,7 +10788,7 @@ const RECON_PHASES = [
   {name:"Email SMTP Validate", tool:"email_smtp_validate", endpoint:"/api/recon/email_smtp_validate", icon:"📧"},
   {name:"Email To Phone Pivot", tool:"email_to_phone_pivot", endpoint:"/api/recon/email_to_phone_pivot", icon:"📧"},
   {name:"Ghunt Google Audit", tool:"ghunt_google_audit", endpoint:"/api/recon/ghunt_google_audit", icon:"📧"},
-  {name:"HIBP Breach Check", tool:"hibp_breach_check", endpoint:"/api/recon/hibp_breach_check", icon:"📧"},
+  {name:"Hibp Breach Check", tool:"hibp_breach_check", endpoint:"/api/recon/hibp_breach_check", icon:"📧"},
   {name:"Holehe Email Audit", tool:"holehe_email_audit", endpoint:"/api/recon/holehe_email_audit", icon:"📧"},
   {name:"Hunter Io Email Pattern", tool:"hunter_io_email_pattern", endpoint:"/api/recon/hunter_io_email_pattern", icon:"📧"},
   {name:"Intelligence X Search", tool:"intelligence_x_search", endpoint:"/api/recon/intelligence_x_search", icon:"📧"},
@@ -10747,6 +10855,8 @@ const RECON_PHASES = [
   {name:"LLM Wordlist Curator", tool:"llm_wordlist_curator", endpoint:"/api/recon/llm_wordlist_curator", icon:"🤖"},
   {name:"Source Code Rag LLM", tool:"source_code_rag_llm", endpoint:"/api/recon/source_code_rag_llm", icon:"🤖"},
 ];
+
+
 
 
 

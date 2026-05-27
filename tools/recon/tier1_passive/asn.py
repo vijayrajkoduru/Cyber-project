@@ -25,7 +25,15 @@ async def gather(ctx: ScanContext):
                 ctx.state['asn'] = p.get('asn', {}).get('asn', '')
                 ctx.state['asn_name'] = p.get('asn', {}).get('name', '')
                 ctx.state['asn_found'] = True
-                ctx.source('BGPView')
+                # Detect Cloudflare-fronted target (suppress noise INFO findings)
+        _cf = False
+        try:
+            import dns.resolver as _r
+            ns = [str(x).lower() for x in _r.resolve(ctx.host, "NS", lifetime=4)]
+            _cf = any("cloudflare" in n for n in ns)
+        except Exception: pass
+        ctx.state["_cloudflare_detected"] = _cf
+        ctx.source('BGPView')
     except Exception as e:
         ctx.state['asn_error'] = str(e)[:120]
         ctx.source('asn-error')
