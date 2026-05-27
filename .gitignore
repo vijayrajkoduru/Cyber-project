@@ -55,3 +55,9 @@ users.db
 backups/
 data/
 last_known_good/
+
+# VulnusLab build hygiene
+.snapshots/
+src/App.js.bak.*
+_archive/
+tools/recon_new/
