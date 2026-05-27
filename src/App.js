@@ -8637,7 +8637,17 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   // ─── VL-FOUNDRY canon ports (Gap 11 — 4 missing sections from Webapp canon) ───
   // Pre-collect findings from all recon scanners for risk math
   const _R_allFindings = [];
-  Object.values(r).forEach(d => { if (d && Array.isArray(d.findings)) d.findings.forEach(f => _R_allFindings.push(f)); });
+  // Skip placeholder/scaffold findings — only count real findings with evidence
+  Object.values(r).forEach(d => {
+    if (d && Array.isArray(d.findings)) {
+      d.findings.forEach(f => {
+        const ev = String(f.evidence||"").toLowerCase();
+        const nm = String(f.name||"").toLowerCase();
+        if (ev.includes("scaffold") || nm.startsWith("scaffold:") || ev.includes("endpoint registered (scaffold)")) return;
+        _R_allFindings.push(f);
+      });
+    }
+  });
   const _R_sevCount = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,POSITIVE:0,INFO:0};
   _R_allFindings.forEach(f => { const k = f.severity || "INFO"; _R_sevCount[k] = (_R_sevCount[k]||0) + 1; });
 
@@ -8859,6 +8869,99 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _completeness = _PHASE_DEFS.length - _notrun - _failed;
   const _covPct = Math.round(_completeness / _PHASE_DEFS.length * 100);
   const _covColor = _covPct >= 90 ? [15,118,82] : _covPct >= 70 ? [202,138,4] : [162,28,28];
+
+  // ═══ INDUSTRY-STANDARD: EXECUTIVE SUMMARY ═══
+  {
+    const _allF = [];
+    Object.values(r).forEach(res => { if (res && Array.isArray(res.findings)) _allF.push(...res.findings); });
+    const _sc = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,INFO:0};
+    _allF.forEach(f => { const s=(f.severity||"INFO").toUpperCase(); if(_sc[s]!==undefined) _sc[s]++; });
+    const _sevOrder = {CRITICAL:1,HIGH:2,MEDIUM:3,LOW:4,INFO:5};
+    const _top3 = _allF
+      .filter(f => ["CRITICAL","HIGH","MEDIUM"].includes((f.severity||"").toUpperCase()))
+      .sort((a,b) => (_sevOrder[(a.severity||"").toUpperCase()]||9) - (_sevOrder[(b.severity||"").toUpperCase()]||9))
+      .slice(0,3);
+    const _SEVCOL = {CRITICAL:[220,38,38],HIGH:[239,68,68],MEDIUM:[245,158,11],LOW:[59,130,246],INFO:[100,116,139]};
+
+    chk(90); y = sHead("Executive Summary", y);
+
+    // Posture banner
+    let _posture="STRONG", _pCol=[16,185,129];
+    if (_sc.CRITICAL>0){_posture="CRITICAL ATTENTION";_pCol=[220,38,38];}
+    else if (_sc.HIGH>2){_posture="NEEDS REMEDIATION";_pCol=[245,158,11];}
+    else if (_sc.HIGH+_sc.MEDIUM>5){_posture="REQUIRES REVIEW";_pCol=[245,158,11];}
+    fillR(margin, y, contentW, 22, [248,250,252]);
+    fillR(margin, y, 4, 22, _pCol);
+    txt("OVERALL SECURITY POSTURE", margin+8, y+8, 8, [100,116,139], true);
+    txt(_posture, margin+8, y+17, 14, _pCol, true);
+    y += 28;
+
+    // Engagement scope
+    chk(50); y = sHead("Engagement Scope", y);
+    y = tHead(["FIELD","VALUE"],[45,135],y);
+    const _scope = [
+      ["Target", target],
+      ["Scan Date", date || new Date().toISOString().slice(0,10)],
+      ["Methodology", "VulnusLab Recon — 154 scanners, 13 categories"],
+      ["Frameworks", "PTES · OWASP WSTG · NIST SP 800-115 · MITRE PRE-ATT&CK"],
+      ["Engagement Type", authenticated ? "Authenticated recon (session captured)" : "Black-box (public surface only)"],
+    ];
+    _scope.forEach((f,i)=>{
+      chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+      txt(f[0],margin+3,y+5,8.5,GRAY,true);
+      const vl = doc.splitTextToSize(String(f[1]),128);
+      doc.setFont("Arial","normal");doc.setFontSize(8.5);doc.setTextColor(...DARK);
+      doc.text(vl[0]||"",margin+48,y+5); y+=7;
+    });
+    y += 6;
+
+    // Findings distribution bars
+    chk(40); y = sHead("Findings Distribution", y);
+    const _cols = ["CRITICAL","HIGH","MEDIUM","LOW","INFO"];
+    let _x = margin;
+    const _bw = (contentW - 4*3) / 5;
+    _cols.forEach(sev => {
+      const col = _SEVCOL[sev]; const cnt = _sc[sev];
+      fillR(_x, y, _bw, 24, col);
+      txt(String(cnt), _x + _bw/2 - (String(cnt).length*2.5), y+12, 18, [255,255,255], true);
+      txt(sev, _x + _bw/2 - (sev.length*1.3), y+20, 7, [255,255,255], true);
+      _x += _bw + 3;
+    });
+    y += 30;
+
+    // Top concerns
+    if (_top3.length > 0) {
+      chk(50); y = sHead("Top Concerns", y);
+      _top3.forEach((f,idx)=>{
+        chk(13);
+        const sev = (f.severity||"INFO").toUpperCase();
+        const col = _SEVCOL[sev] || _SEVCOL.INFO;
+        fillR(margin, y, 4, 10, col);
+        fillR(margin+4, y, contentW-4, 10, LIGHT);
+        txt(`${idx+1}.`, margin+8, y+6.8, 9, col, true);
+        txt(String(f.name||f.title||"Finding").substring(0,85), margin+15, y+6.8, 8.5, DARK, true);
+        txt(sev, margin+contentW-20, y+6.8, 7, col, true);
+        y += 12;
+      });
+      y += 4;
+    }
+
+    // Business impact
+    chk(35); y = sHead("Business Impact", y);
+    let _imp = "Recon findings represent the publicly visible attack surface — data an external attacker gathers without authentication. ";
+    if (_sc.CRITICAL>0) _imp += `${_sc.CRITICAL} CRITICAL exposure(s) indicate immediate compromise potential. `;
+    if (_sc.HIGH>0) _imp += `${_sc.HIGH} HIGH issue(s) require remediation within 7 days. `;
+    if (_sc.CRITICAL===0 && _sc.HIGH===0 && _sc.MEDIUM<=2) _imp += "Surface area is well-managed. Recommend continuous monitoring + quarterly re-scan.";
+    else _imp += "Address findings in priority order, then re-scan to confirm closure.";
+
+    fillR(margin, y, contentW, 26, [248,250,252]);
+    const _lines = doc.splitTextToSize(_imp, contentW-8);
+    doc.setFont("Arial","normal");doc.setFontSize(9);doc.setTextColor(...DARK);
+    _lines.slice(0,5).forEach((ln,i)=>{ doc.text(ln, margin+4, y+6+(i*4.5)); });
+    y += 32;
+  }
+
+  doc.addPage(); y=18; drawHeader();
 
   chk(85); y = sHead("Scan Coverage", y);
   fillR(margin, y, contentW, 16, LIGHT);
@@ -9156,102 +9259,18 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }
   }
 
-  // Tools used — show real, data-driven summaries instead of generic
-  // "Completed". Each summary pulls the actual count/value from the
-  // scanner's response so the customer sees what was discovered.
-  const toolsRun = Object.keys(r).filter(k=>r[k]);
-  if(toolsRun.length>0){
-    y = sHead("Tools Used",y);
-    y = tHead(["TOOL","RESULT SUMMARY"],[50,130],y);
-    const _dynamicSummary = (tool) => {
-      const d = r[tool] || {};
-      switch(tool){
-        case "whois":      return `Registrar: ${d.registrar || "n/a"}`;
-        case "dns":        return `${(d.records||[]).length || Object.keys(d.records||{}).length} record(s) (A/MX/NS/TXT/CNAME/SOA)`;
-        case "dnsrecon":   return `${(d.records||[]).length} DNS record(s)`;
-        case "subdomains": return `${(d.subdomains||[]).length} subdomain(s) discovered`;
-        case "crtsh":      return `${d.total_subdomains || (d.subdomains||[]).length} subdomain(s) from CT logs`;
-        case "amass":      return `${(d.subdomains||[]).length} subdomain(s) (deep enum)`;
-        case "harvester":  return `${(d.emails||[]).length} emails · ${(d.hosts||[]).length} hosts`;
-        case "shodan":     return d.error ? `Shodan API error — ${String(d.error).substring(0,60)}` : `${(d.ports||[]).length} port(s), ${(d.vulns||[]).length} CVE(s)`;
-        case "masscan":    return `${(d.ports||[]).length} open port(s)`;
-        case "nmap":       return `${(d.ports||[]).length} open port(s)` + (d.banner ? ` · ${String(d.banner).substring(0,40)}` : "");
-        case "services":   return `${(d.ports||[]).length} service(s) detected`;
-        case "os":         return d.os || d.os_match || "OS detection completed";
-        case "banner":     return `${Object.keys(d.banners||{}).length} banner(s) grabbed`;
-        case "gobuster":   return `${(d.found||[]).length} path(s) discovered`;
-        case "jsendpoints":return `${(d.paths||[]).length} endpoint(s) across ${(d.js_files||[]).length} JS file(s)`;
-        case "wayback":    return `${d.total||0} archived URL(s) · ${d.interesting_total||0} interesting`;
-        case "robotsmap":  return `${(d.disallow||[]).length} disallow · ${(d.sitemap||[]).length} sitemap · ${(d.well_known||[]).length} well-known`;
-        case "crawl":      return `${d.total||0} URL(s) crawled · ${d.interesting_total||0} interesting`;
-        case "params":     return `${(d.params||[]).length} parameter(s) discovered`;
-        case "favicon":    return d.found ? `Hash ${d.shodan_hash} · ${d.matched_service || "unknown service"}` : (d.skipped_reason || "No favicon");
-        case "cloudbuckets":return `${(d.open_buckets||[]).length} OPEN · ${(d.existing_buckets||[]).length} existing bucket(s)`;
-        case "secrets":    return `${(d.findings||[]).length} secret(s) across ${(d.js_files||[]).length} JS file(s)`;
-        case "asn":        return d.asn ? `${String(d.asn).toUpperCase().startsWith("AS") ? d.asn : "AS"+d.asn} — ${(d.org||d.as_owner||"").substring(0,50)} (${d.country||"?"})` : "ASN lookup completed";
-        case "internetdb": return d.found ? `${(d.ports||[]).length} port(s) · ${(d.vulns||[]).length} CVE(s) · ${(d.tags||[]).length} tag(s)` : (d.skipped_reason || "No Shodan record");
-        case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) found · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high · ${d.summary.medium_cves||0} medium` : (d.skipped_reason || "No CVEs matched");
-        case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} takeover-vulnerable subdomain(s) on ${d.checked||0} checked` : `${d.checked||0} subdomain(s) checked, none vulnerable`;
-        case "waf_cdn":      return (d.detected||[]).length > 0 ? `${d.detected.length} WAF/CDN sig: ${(d.detected||[]).map(x=>x.vendor||x).slice(0,2).join(", ")}` : "no WAF/CDN detected";
-        case "ssl_deep":     return d.current_protocol ? `${d.current_protocol}${(d.total_vulnerabilities||0)>0 ? ` · ${d.total_vulnerabilities} TLS issue(s)` : " · clean"}` : (d.skipped_reason || "TLS deep scan complete");
-        case "email_audit":  return (d.spf?.found || d.dmarc?.found || d.dkim?.found) ? `SPF=${d.spf?.found?"yes":"no"} · DMARC=${d.dmarc?.found?"yes":"no"} · DKIM=${d.dkim?.found?"yes":"no"}` : (d.skipped_reason || "no email security records");
-        case "waf_detect":   return (d.detected||[]).length > 0 ? `${d.detected.length} WAF fingerprint(s)` : "no WAF detected";
-        case "takeover_check": return (d.vulnerable||[]).length > 0 ? `${d.vulnerable.length} VULN takeover(s) on ${d.checked||0} subs` : `${d.checked||0} subdomain(s) checked`;
-        // Tier 3-5 — long summaries that were missing
-        case "tls_deep":      { const _proto = d.negotiated_protocol || d.current_protocol; return (d.findings||[]).length > 0 ? `${(d.findings||[]).length} TLS issue(s) — ${_proto||"protocol unknown"}` : (_proto ? `${_proto} clean` : (d.skipped_reason || "TLS deep audit complete")); }
-        case "zone_transfer": return d.vulnerable ? `CRITICAL: AXFR succeeded — ${(d.transfers||[]).length} zone record(s) leaked` : `Zone transfer refused on ${(d.ns_servers||[]).length} NS server(s)`;
-        case "sourcemap":     return (d.maps_found||[]).length > 0 ? `${(d.maps_found||[]).length} .map file(s) exposed · ${d.paths_probed||0} paths probed` : `${d.paths_probed||0} common .map paths probed, none exposed`;
-        case "bucket_perms":  return d.buckets_exist ? `${(d.public_buckets||[]).length} PUBLIC · ${(d.private_buckets||[]).length} private bucket(s)` : (d.skipped_reason || "No matching buckets found");
-        case "api_docs":      return (d.exposed_endpoints||[]).length > 0 ? `${(d.exposed_endpoints||[]).length} API doc(s) exposed: ${(d.exposed_endpoints||[]).slice(0,3).map(e=>e.path||e).join(", ")}` : `${d.paths_probed||0} doc paths probed, none exposed`;
-        case "wpjson_enum":   return d.wp_version ? `WordPress ${d.wp_version} · ${(d.users||[]).length} user(s) enumerated via wp-json` : (d.skipped_reason || "Not a WordPress site");
-        case "default_creds": return (d.panels_found||[]).length > 0 ? `${(d.panels_found||[]).length} admin panel(s) found: ${(d.panels_found||[]).slice(0,3).map(p=>p.product||p.path).join(", ")}` : `${d.paths_probed||0} panel paths probed, none exposed`;
-        case "jslib_cve":     return (d.vulnerable_libs||[]).length > 0 ? `${(d.vulnerable_libs||[]).length} vulnerable JS lib(s) · ${(d.libs_detected||[]).length} total detected` : `${(d.libs_detected||[]).length} JS lib(s) detected, none vulnerable`;
-        case "git_recon":     return (d.exposed_files||[]).length > 0 ? `${(d.exposed_files||[]).length} VCS file(s) exposed${d.git_full_exposure?" — FULL REPO EXTRACTABLE":""}` : `${d.paths_tested||0} VCS paths probed, none exposed`;
-        case "cdn_origin":    return (d.cdn_detected||[]).length > 0 ? `Behind ${(d.cdn_detected||[]).join(", ")}${d.origin_ip?` · origin IP: ${d.origin_ip}`:""}` : (d.skipped_reason || "No CDN detected");
-        // Tier 6 — OSINT
-        case "breach_search":      return (d.breach_count||0) > 0 ? `${d.breach_count} breach(es) · ${(d.total_accounts_exposed||0).toLocaleString()} account(s) exposed · ${d.paste_count||0} paste(s)` : (d.skipped_reason || "No breaches found for this domain");
-        case "github_leaks":       return (d.secret_hits||[]).length > 0 ? `${d.secret_hits.length} possible secret(s) in public GitHub code · ${(d.matched_repos||[]).length} matched repo(s)` : `${(d.matched_repos||[]).length} repo(s) mention domain · no secret patterns matched`;
-        case "graphql_introspect": return d.introspection_enabled ? `INTROSPECTION EXPOSED at ${d.endpoint_found} · ${d.type_count||0} types · ${d.mutation_count||0} mutations` : (d.endpoint_found ? `Endpoint ${d.endpoint_found} reachable, introspection hardened` : "No GraphQL endpoint detected");
-        case "email_security":     return `SPF=${d.spf_record?"set":"MISSING"} · DMARC=${d.dmarc_record?"set":"MISSING"} · DKIM=${(d.dkim_selectors_found||[]).length>0?`${d.dkim_selectors_found.length} selector(s)`:"none"}`;
-        case "dork_harvest":       return (d.critical_hits||[]).length > 0 ? `CRITICAL: ${d.critical_hits.length} sensitive URL(s) indexed by search engines · ${(d.indexed_files||[]).length} total indexed` : `${d.dorks_run||0} dorks run · ${(d.indexed_files||[]).length} URL(s) indexed`;
-        case "dnssec_validate":    return d.chain_broken ? `CHAIN BROKEN — ${(d.chain_error||"").substring(0,80)}` : (d.dnssec_enabled ? `Enabled · alg ${d.strongest_algorithm||"?"} · ${d.nsec_type||"NSEC?"}` : "DNSSEC not enabled");
-        default:           return "Completed";
-      }
-    };
-    // Group rows so the table doesn't leave a single orphan row floating
-    // on the next page after a page-break — pre-measure remaining height
-    // and start a fresh page if we have less than 4 rows of space.
-    if(toolsRun.length>0){
-      const remaining = 285 - y;
-      const rowsThatFit = Math.floor(remaining / 7);
-      if(rowsThatFit < Math.min(toolsRun.length, 4)){
-        doc.addPage(); y=18; drawHeader();
-        y = sHead("Tools Used (cont.)",y);
-        y = tHead(["TOOL","RESULT SUMMARY"],[50,130],y);
-      }
-    }
-    toolsRun.forEach((tool,i)=>{
-      const summary = _dynamicSummary(tool);
-      chk(7);
-      fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
-      txt(tool,margin+3,y+5,8,BLUE,true);
-      // Wrap long summaries — some (e.g. asn AS owner) push the 130mm column
-      const sLines = doc.splitTextToSize(String(summary), 128);
-      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
-      doc.text(sLines[0] || "", margin+53, y+5);
-      y+=7;
-    });
-    y+=8;
-  }
-
   doc.addPage(); y=18; drawHeader();
 
   // ── WHOIS ──────────────────────────────────────────────────
-  if(r.whois){ chk(30); y = sHead("WHOIS Lookup",y);
+  if(r.whois){
     const fields=[["Domain",r.whois.domain],["Registrar",r.whois.registrar],["Created",r.whois.created],["Expires",r.whois.expires],["Country",r.whois.country],["Name Servers",(r.whois.name_servers||[]).join(", ")]].filter(([,v])=>v);
-    y = tHead(["FIELD","VALUE"],[45,135],y);
-    fields.forEach((f,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(f[0],margin+3,y+5,8.5,GRAY,true); const vl=doc.splitTextToSize(String(f[1]),128); doc.setFont("Arial","normal");doc.setFontSize(8.5);doc.setTextColor(...DARK);doc.text(vl[0],margin+48,y+5); y+=7; });
-    y+=6; }
+    if (fields.length > 0) {
+      chk(30); y = sHead("WHOIS Lookup",y);
+      y = tHead(["FIELD","VALUE"],[45,135],y);
+      fields.forEach((f,i)=>{ chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); txt(f[0],margin+3,y+5,8.5,GRAY,true); const vl=doc.splitTextToSize(String(f[1]),128); doc.setFont("Arial","normal");doc.setFontSize(8.5);doc.setTextColor(...DARK);doc.text(vl[0],margin+48,y+5); y+=7; });
+      y+=6;
+    }
+  }
 
   // ── Reusable renderer: any tool that returns {findings[], intel{}, sources_used[]} ──
   // Renders 3 things:
@@ -9296,11 +9315,18 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
         rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
         txt(sev, margin+12, y+5.8, 6.5, WHITE, true, "center");
+        // CVSS pill — derived from severity (industry-standard CVSS v3.1 mid-range)
+        const _cvssMap = {CRITICAL:9.8, HIGH:7.5, MEDIUM:5.3, LOW:3.1, INFO:0.0};
+        const _cvss = (typeof f.cvss === "number" ? f.cvss : _cvssMap[sev]) || 0.0;
+        if (_cvss > 0) {
+          rrect(margin+22, y+2, 16, 5.5, 1, sevColor);
+          txt(`CVSS ${_cvss.toFixed(1)}`, margin+30, y+5.8, 6.2, WHITE, true, "center");
+        }
         if(cwe && cwe !== "N/A"){
           rrect(margin+contentW-18, y+2, 16, 5.5, 1, DARK);
           txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 6.5, WHITE, true, "center");
         }
-        txt(name, margin+25, y+5, 8.5, DARK, true);
+        txt(name, margin+(_cvss>0?41:25), y+5, 8.5, DARK, true);
         let textY = y + 8.5;
         evLines.forEach(ln => { txt(ln, margin+25, textY, 7.5, GRAY); textY += 3.5; });
         if(remLines.length){
@@ -9357,8 +9383,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         y += rowH;
       });
     }
-    // ── Sources footer ──
-    if (Array.isArray(toolData.sources_used) && toolData.sources_used.length > 0) {
+    // ── Sources footer (only if findings OR intel rendered — prevents orphan lines) ──
+    if ((findings.length > 0 || rows.length > 0) && Array.isArray(toolData.sources_used) && toolData.sources_used.length > 0) {
       chk(9);
       fillR(margin, y, contentW, 7, LBLUE);
       txt(`Sources gathered: ${toolData.sources_used.join(", ")}`, margin+3, y+5, 8, BLUE);
@@ -10069,6 +10095,180 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   // "What each scanner actually probed for" — shows the customer the
   // exact discovery surface area covered. Demonstrates depth without
   // revealing payload contents.
+  // ═══ INDUSTRY-STANDARD: ASSET INVENTORY ═══
+  {
+    chk(50); y = sHead("Asset Inventory", y);
+    const _inv = [];
+
+    // Subdomains (from §3 scanners)
+    const _subs = new Set();
+    ["subdomain_bruteforce","ai_wordlist_subdomain","permutation_gen","passive_aggregation",
+     "search_engine_scrape","securitytrails_subdomains","virustotal_subdomains","github_subdomains",
+     "wayback_subdomain_extract","amass_passive","shuffled_bruteforce","crt_search","cert_san_aggregator"].forEach(k=>{
+      const d = r[k]; if (d && Array.isArray(d.discovered)) d.discovered.forEach(s=>_subs.add(s));
+      if (d && Array.isArray(d.subdomains)) d.subdomains.forEach(s=>_subs.add(s));
+      if (d && Array.isArray(d.sans)) d.sans.forEach(s=>_subs.add(s));
+    });
+    if (_subs.size > 0) _inv.push(["Subdomains discovered", `${_subs.size} unique`]);
+
+    // IP addresses
+    const _ips = new Set();
+    ["dns_records","ip_geo","reverse_ip"].forEach(k=>{
+      const d=r[k]; if(d){
+        (d.a_records||[]).forEach(x=>_ips.add(x));
+        if (d.ip) _ips.add(d.ip);
+        if (Array.isArray(d.ips)) d.ips.forEach(x=>_ips.add(x));
+      }
+    });
+    if (_ips.size > 0) _inv.push(["IP addresses", Array.from(_ips).slice(0,8).join(", ")]);
+
+    // Open ports
+    const _ports = new Set();
+    ["tcp_port_scan","banner_grab","service_version_detect"].forEach(k=>{
+      const d=r[k]; if(d && Array.isArray(d.open_ports)) d.open_ports.forEach(p=>_ports.add(p));
+      if(d && d.banners) Object.keys(d.banners).forEach(p=>_ports.add(parseInt(p)));
+    });
+    if (_ports.size > 0) _inv.push(["Open TCP ports", Array.from(_ports).sort((a,b)=>a-b).join(", ")]);
+
+    // DNS records
+    const _dns = r.dns_records;
+    if (_dns) {
+      if ((_dns.ns_records||[]).length) _inv.push(["Nameservers", (_dns.ns_records||[]).slice(0,3).join(", ")]);
+      if ((_dns.mx_records||[]).length) _inv.push(["Mail servers", (_dns.mx_records||[]).slice(0,3).join(", ")]);
+      if ((_dns.txt_records||[]).length) _inv.push(["TXT records", `${_dns.txt_records.length} entries`]);
+    }
+
+    // Tech stack
+    if (r.tech_stack_detect && (r.tech_stack_detect.technologies||[]).length) {
+      _inv.push(["Technology stack", (r.tech_stack_detect.technologies||[]).join(", ")]);
+    }
+    // TLS
+    if (r.ssl_tls_audit && r.ssl_tls_audit.version) {
+      _inv.push(["TLS version", r.ssl_tls_audit.version]);
+    }
+    if (r.ssl_labs_grade && r.ssl_labs_grade.grade) {
+      _inv.push(["SSL Labs grade", r.ssl_labs_grade.grade]);
+    }
+    // ASN
+    if (r.asn && r.asn.asn) _inv.push(["ASN", `${r.asn.asn} — ${r.asn.org||""}`]);
+    // WAF/CDN
+    if (r.waf_cdn_detect && (r.waf_cdn_detect.fingerprints||[]).length) {
+      _inv.push(["WAF / CDN", (r.waf_cdn_detect.fingerprints||[]).join(", ")]);
+    }
+    // Email security
+    if (r.email_security) {
+      const _es = r.email_security;
+      _inv.push(["Email security", `SPF=${_es.spf?"yes":"no"} · DMARC=${_es.dmarc?"yes":"no"} · DKIM=${(_es.dkim_selectors||[]).length>0?"yes":"no"}`]);
+    }
+
+    if (_inv.length === 0) {
+      fillR(margin, y, contentW, 18, [248,250,252]);
+      txt("No assets discovered for this target.", margin+8, y+11, 9.5, GRAY, false);
+      y += 24;
+    } else {
+      y = tHead(["ASSET CATEGORY","DISCOVERY"],[60,120],y);
+      _inv.forEach((f,i)=>{
+        chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+        txt(f[0],margin+3,y+5,8.5,GRAY,true);
+        const vl = doc.splitTextToSize(String(f[1]),118);
+        doc.setFont("Arial","normal");doc.setFontSize(8.5);doc.setTextColor(...DARK);
+        doc.text(vl[0]||"",margin+63,y+5); y+=7;
+      });
+      y += 8;
+    }
+  }
+
+  // ═══ INDUSTRY-STANDARD: RISK RATING MATRIX ═══
+  chk(70); y = sHead("Risk Rating Matrix", y);
+  y = tHead(["SEVERITY","CVSS RANGE","RESPONSE SLA","DESCRIPTION"],[28,28,30,94],y);
+  const _riskMatrix = [
+    ["CRITICAL","9.0-10.0","24 hours","Direct system compromise; trivial exploit",[220,38,38]],
+    ["HIGH","7.0-8.9","7 days","Significant data exposure; auth bypass; takeover",[239,68,68]],
+    ["MEDIUM","4.0-6.9","30 days","Information disclosure; misconfiguration",[245,158,11]],
+    ["LOW","0.1-3.9","Quarterly","Minor hygiene gap; low exploit ROI",[59,130,246]],
+    ["INFO","N/A","Track","Informational; no immediate action",[100,116,139]],
+  ];
+  _riskMatrix.forEach((row,i)=>{
+    chk(8);
+    fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
+    fillR(margin,y,3,8,row[4]);
+    txt(row[0],margin+6,y+5.5,8.5,row[4],true);
+    txt(row[1],margin+34,y+5.5,8,DARK,false);
+    txt(row[2],margin+62,y+5.5,8,DARK,false);
+    txt(row[3],margin+92,y+5.5,8,DARK,false);
+    y += 8;
+  });
+  y += 8;
+
+  // ═══ INDUSTRY-STANDARD: STRATEGIC RECOMMENDATIONS ═══
+  {
+    const _af = [];
+    Object.values(r).forEach(res => { if (res && Array.isArray(res.findings)) _af.push(...res.findings); });
+    const _sevR = {CRITICAL:1,HIGH:2,MEDIUM:3,LOW:4,INFO:5};
+    const _topRec = _af
+      .filter(f => ["CRITICAL","HIGH","MEDIUM"].includes((f.severity||"").toUpperCase()))
+      .sort((a,b)=>(_sevR[(a.severity||"").toUpperCase()]||9)-(_sevR[(b.severity||"").toUpperCase()]||9))
+      .slice(0,5);
+
+    chk(60); y = sHead("Strategic Recommendations", y);
+
+    if (_topRec.length === 0) {
+      fillR(margin, y, contentW, 24, [240,253,244]);
+      fillR(margin, y, 4, 24, [16,185,129]);
+      txt("No critical-tier remediation required.", margin+8, y+10, 10, [16,185,129], true);
+      txt("Maintain quarterly recon scans and monitor compliance drift.", margin+8, y+19, 8.5, DARK, false);
+      y += 30;
+    } else {
+      txt("PRIORITIZED REMEDIATION QUEUE", margin, y+5, 9, GRAY, true); y += 10;
+      _topRec.forEach((f,i)=>{
+        chk(18);
+        const sev = (f.severity||"INFO").toUpperCase();
+        const _SC = {CRITICAL:[220,38,38],HIGH:[239,68,68],MEDIUM:[245,158,11],LOW:[59,130,246],INFO:[100,116,139]};
+        const col = _SC[sev] || _SC.INFO;
+        fillR(margin, y, 4, 15, col);
+        fillR(margin+4, y, contentW-4, 15, LIGHT);
+        txt(`#${i+1}`, margin+8, y+6, 8, col, true);
+        txt(String(f.name||f.title||"Finding").substring(0,75), margin+8, y+11, 8.5, DARK, true);
+        txt(sev, margin+contentW-22, y+6, 7, col, true);
+        const remed = String(f.remediation||"See per-finding section").substring(0,100);
+        txt(`Fix: ${remed}`, margin+8, y+11+3.5, 7, GRAY, false);
+        y += 17;
+      });
+      y += 4;
+    }
+  }
+
+  // ═══ INDUSTRY-STANDARD: CONCLUSION ═══
+  chk(45); y = sHead("Conclusion", y);
+  {
+    const _allF2 = [];
+    Object.values(r).forEach(res => { if (res && Array.isArray(res.findings)) _allF2.push(...res.findings); });
+    const _hc = _allF2.filter(f=>["CRITICAL","HIGH"].includes((f.severity||"").toUpperCase())).length;
+    let _conc = "";
+    let _retest = "Annual";
+    if (_hc === 0) {
+      _conc = "External recon surface is well-managed. No critical or high-severity recon exposures detected. Maintain current security posture with quarterly drift monitoring.";
+      _retest = "Annual (with quarterly drift scans)";
+    } else if (_hc <= 2) {
+      _conc = `${_hc} elevated-priority finding(s) require attention. After remediation, re-scan to confirm closure. Overall posture is recoverable with focused fixes.`;
+      _retest = "After remediation + 90 days";
+    } else {
+      _conc = `${_hc} elevated findings indicate systemic recon-surface management gaps. Recommend full re-scan after sweep + 30-day follow-up to confirm sustained closure.`;
+      _retest = "Immediate sweep, then 30 days, then quarterly";
+    }
+    fillR(margin, y, contentW, 26, [248,250,252]);
+    const _cl = doc.splitTextToSize(_conc, contentW-8);
+    doc.setFont("Arial","normal");doc.setFontSize(9);doc.setTextColor(...DARK);
+    _cl.slice(0,4).forEach((ln,i)=>{ doc.text(ln, margin+4, y+6+(i*4.5)); });
+    y += 30;
+
+    fillR(margin, y, contentW, 12, [240,249,255]);
+    fillR(margin, y, 4, 12, [59,130,246]);
+    txt("RECOMMENDED RE-TEST CADENCE", margin+8, y+5, 7, [100,116,139], true);
+    txt(_retest, margin+8, y+10, 9.5, [59,130,246], true);
+    y += 18;
+  }
+
   chk(60); y = sHead("Verification Audit", y);
   fillR(margin, y, contentW, 7, DARK);
   doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...WHITE);
@@ -10167,6 +10367,34 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
     }
   }
+  // ═══ INDUSTRY-STANDARD: GLOSSARY ═══
+  chk(60); y = sHead("Glossary", y);
+  y = tHead(["TERM","DEFINITION"],[35,145],y);
+  const _gloss = [
+    ["CVE","Common Vulnerabilities and Exposures — unique ID for a publicly disclosed security flaw"],
+    ["CVSS","Common Vulnerability Scoring System — 0-10 numeric severity (v3.1)"],
+    ["CWE","Common Weakness Enumeration — classification of underlying defect type"],
+    ["OWASP","Open Web Application Security Project — industry security non-profit"],
+    ["PTES","Penetration Testing Execution Standard — 7-phase methodology"],
+    ["WSTG","Web Security Testing Guide — OWASP's web-app pentest manual"],
+    ["DAST","Dynamic Application Security Testing — black-box runtime scanning"],
+    ["SAST","Static Application Security Testing — source-code scanning"],
+    ["AXFR","DNS Zone Transfer — full zone copy from master to secondary"],
+    ["CT log","Certificate Transparency log — public log of issued TLS certs"],
+    ["WAF","Web Application Firewall"],
+    ["CDN","Content Delivery Network"],
+    ["SPF/DKIM/DMARC","Email authentication standards (sender validation, signing, policy)"],
+    ["DNSSEC","DNS Security Extensions — cryptographic signing of DNS records"],
+  ];
+  _gloss.forEach((g,i)=>{
+    chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+    txt(g[0],margin+3,y+5,8,BLUE,true);
+    const vl = doc.splitTextToSize(g[1],138);
+    doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
+    doc.text(vl[0]||"",margin+38,y+5); y+=7;
+  });
+  y += 6;
+
   doc.save(`recon_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   }; // end _doGen
   _doGen();
@@ -10176,63 +10404,353 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 //  RECON MODULE
 // ═══════════════════════════════════════════════════════════════
 // RECON-CANON-V2 — pruned 6 vuln/duplicate phases per PTES/NIST 800-115 Recon scope
-const RECON_PHASES = [
-  {name:"WHOIS Lookup",          tool:"whois",      endpoint:"/api/recon/whois",      icon:"🌐"},
-  {name:"DNS Records",           tool:"dns",        endpoint:"/api/recon/dns",        icon:"🔎"},
-  {name:"DNS Recon",             tool:"dnsrecon",   endpoint:"/api/recon/dnsrecon",   icon:"🕵️"},
-  {name:"Subdomain Discovery",   tool:"subdomains", endpoint:"/api/recon/subdomains", icon:"🌍"},
-  {name:"Cert Transparency",     tool:"crtsh",      endpoint:"/api/recon/crtsh",      icon:"📜"},
-  {name:"Deep Subdomain (amass)",tool:"amass",      endpoint:"/api/recon/amass",      icon:"🕸️"},
-  {name:"OSINT Harvesting",      tool:"harvester",  endpoint:"/api/recon/harvester",  icon:"🔬"},
-  {name:"Shodan Lookup",         tool:"shodan",     endpoint:"/api/recon/shodan",     icon:"👁️"},
-  {name:"Fast Port Scan",        tool:"masscan",    endpoint:"/api/recon/masscan",    icon:"⚡"},
-  {name:"Deep Port Scan",        tool:"nmap",       endpoint:"/api/recon/nmap",       icon:"🔌"},
-  {name:"Service Detection",     tool:"services",   endpoint:"/api/recon/services",   icon:"⚙️"},
-  {name:"OS Fingerprinting",     tool:"os",         endpoint:"/api/recon/os",         icon:"💻"},
-  {name:"Banner Grabbing",       tool:"banner",     endpoint:"/api/recon/banner",     icon:"🏷️"},
-  {name:"Directory Enumeration", tool:"gobuster",   endpoint:"/api/recon/gobuster",   icon:"📁"},
-  // ── Pure-Python URL Discovery Suite (vol. 1) ────────────────
-  // These pull hidden URLs out of (1) JS bundles referenced by the homepage,
-  // (2) the Wayback Machine archive, (3) robots.txt + sitemap.xml +
-  // .well-known files. Together they solve the "SPA returns 0 findings"
-  // problem — WebApp scanners can later test these discovered URLs.
-  {name:"JS Endpoint Extractor", tool:"jsendpoints",endpoint:"/api/recon/jsendpoints",icon:"📜"},
-  {name:"Wayback Machine",       tool:"wayback",    endpoint:"/api/recon/wayback",    icon:"⏪"},
-  {name:"robots + sitemap",      tool:"robotsmap",  endpoint:"/api/recon/robotsmap",  icon:"🗺"},
-  // ── Pure-Python Recon Suite (vol. 2) ────────────────────────
-  // BFS crawler + param discovery feed the WebApp scanners.
-  // Favicon hash, cloud buckets, secrets, and ASN finish the recon picture.
-  {name:"BFS Crawler",           tool:"crawl",      endpoint:"/api/recon/crawl",      icon:"🕷"},
-  {name:"Parameter Discovery",   tool:"params",     endpoint:"/api/recon/params",     icon:"❓"},
-  {name:"Favicon Fingerprint",   tool:"favicon",    endpoint:"/api/recon/favicon",    icon:"🎯"},
-  {name:"Cloud Bucket Finder",   tool:"cloudbuckets",endpoint:"/api/recon/cloudbuckets",icon:"☁"},
-  {name:"ASN / IP Ownership",    tool:"asn",        endpoint:"/api/recon/asn",        icon:"🌐"},
-  // Free Shodan alternative — InternetDB API requires NO API key, so every
-  // customer gets Shodan-equivalent CVE + port + tag intel for any internet-
-  // resolvable target. Pairs with the keyed Shodan tile above.
-  {name:"Free Shodan (InternetDB)",tool:"internetdb",endpoint:"/api/recon/internetdb",icon:"🆓"},
-  {name:"CVE Matching (NVD)",     tool:"cve_match", endpoint:"/api/recon/cve_match",  icon:"🚨"},
-  {name:"WAF / CDN Fingerprint",  tool:"waf_cdn",   endpoint:"/api/recon/waf_cdn",    icon:"🛡️"},
-          {name:"DNS Zone Transfer",      tool:"zone_transfer", endpoint:"/api/recon/zone_transfer", desc:"AXFR — leaks full DNS zone if misconfigured"},
-          {name:"Source Map Exposure",    tool:"sourcemap",     endpoint:"/api/recon/sourcemap",     desc:".js.map files leaking source + secrets"},
-          {name:"Bucket Permission Audit",tool:"bucket_perms",  endpoint:"/api/recon/bucket_perms",  desc:"Public-listable S3/GCS/Azure buckets"},
-          {name:"API Docs Discovery",     tool:"api_docs",      endpoint:"/api/recon/api_docs",      desc:"Swagger/GraphQL/Actuator exposed"},
-          {name:"TLS Deep Audit",         tool:"tls_deep",      endpoint:"/api/recon/tls_deep",      desc:"Heartbleed/POODLE/weak ciphers/expired certs"},
-          {name:"WordPress wp-json Enum", tool:"wpjson_enum",   endpoint:"/api/recon/wpjson_enum",   desc:"WP user enumeration via REST API"},
-          {name:"Admin Panel Exposure",   tool:"default_creds", endpoint:"/api/recon/default_creds", desc:"Jenkins/Tomcat/phpMyAdmin/Grafana detected"},
-          {name:"JS Library CVE",         tool:"jslib_cve",  endpoint:"/api/recon/jslib_cve",  desc:"Outdated jQuery/React/Angular with known CVEs"},
-          {name:"Git Repo Exposure",      tool:"git_recon",  endpoint:"/api/recon/git_recon",  desc:".git/ directory exposed -> source code leak"},
-          {name:"CDN Origin Discovery",   tool:"cdn_origin", endpoint:"/api/recon/cdn_origin", desc:"Real IP behind Cloudflare/AWS WAF"},
-          // Tier 6 — OSINT/human-side recon (89% -> 95% industry coverage)
-          {name:"Breach Search",          tool:"breach_search",      endpoint:"/api/recon/breach_search",      desc:"HIBP + paste-site search for domain in data breaches"},
-          {name:"GitHub Leaks",           tool:"github_leaks",       endpoint:"/api/recon/github_leaks",       desc:"GitHub org + leaked secrets in public repos"},
-          {name:"GraphQL Introspection",  tool:"graphql_introspect", endpoint:"/api/recon/graphql_introspect", desc:"/graphql exposed? schema enumerable?"},
-          {name:"Email Security",         tool:"email_security",     endpoint:"/api/recon/email_security",     desc:"SPF/DMARC/DKIM deep audit + spoofability"},
-          {name:"Search-Engine Dorks",    tool:"dork_harvest",       endpoint:"/api/recon/dork_harvest",       desc:"Google/Bing-indexed configs, dumps, admin panels"},
-          {name:"DNSSEC Validate",        tool:"dnssec_validate",    endpoint:"/api/recon/dnssec_validate",    desc:"Chain of trust + weak algorithms + zone walking"},
+const RECON_SECTIONS = [
+  {n:1, short:"Passive Footprint", label:"Passive Footprint"},
+  {n:2, short:"DNS Recon", label:"DNS Recon"},
+  {n:3, short:"Subdomain Enumeration", label:"Subdomain Enumeration"},
+  {n:4, short:"OSINT / Public Records", label:"OSINT / Public Records"},
+  {n:5, short:"Web App Recon", label:"Web App Recon"},
+  {n:6, short:"Cloud Asset Discovery", label:"Cloud Asset Discovery"},
+  {n:7, short:"Email / People Intel", label:"Email / People Intel"},
+  {n:8, short:"Threat Intel / Reputation", label:"Threat Intel / Reputation"},
+  {n:9, short:"Network / Infrastructure", label:"Network / Infrastructure"},
+  {n:10, short:"Code Repo / Secret Leak", label:"Code Repo / Secret Leak"},
+  {n:11, short:"Dark Web / Breach Intel", label:"Dark Web / Breach Intel"},
+  {n:12, short:"Mobile / IoT Discovery", label:"Mobile / IoT Discovery"},
+  {n:13, short:"AI/LLM-assisted Recon", label:"AI/LLM-assisted Recon"},
+  {n:99, short:"Other / Legacy", label:"Other / Legacy"},
 ];
 
-function ReconModule({token, onRunningChange}) {
+const SECTION_OF = {
+  "abuseipdb":8,
+  "ai_endpoint_guesser":13,
+  "ai_phishing_pretext_gen":13,
+  "ai_wordlist_subdomain":3,
+  "alienvault_otx":8,
+  "amass_passive":3,
+  "anycast_detect":2,
+  "apple_store_search":12,
+  "asn":1,
+  "azure_app_services":6,
+  "azure_blob_enum":6,
+  "banner_grab":9,
+  "breach_aggregator":7,
+  "bucket_perm_audit":6,
+  "caa_records":2,
+  "cache_snooping":2,
+  "cargo_go_typosquat":10,
+  "censys_search":8,
+  "cert_san_aggregator":1,
+  "cloud_function_url_enum":6,
+  "cloudfront_disco":6,
+  "common_crawl":1,
+  "cors_misconfig":5,
+  "crawl_endpoints":5,
+  "crosslinked_emails":7,
+  "crt_search":1,
+  "dehashed_search":11,
+  "dependency_confusion":10,
+  "discord_channels":4,
+  "dns_0x20":2,
+  "dns_rebinding":2,
+  "dns_records":2,
+  "dnssec":2,
+  "docker_hub_search":10,
+  "docker_registry_exposed":6,
+  "doh_dot":2,
+  "domain_age":1,
+  "drone_adsb_ais_passive":12,
+  "email_harvester":7,
+  "email_security":2,
+  "email_smtp_validate":7,
+  "email_to_phone_pivot":7,
+  "facebook_instagram":4,
+  "favicon_hash":1,
+  "firebase_open_db_check":12,
+  "fofa_search":8,
+  "gcp_app_engine":6,
+  "gcs_bucket_enum":6,
+  "gha_runner_disco":6,
+  "gha_secret_leak_logs":10,
+  "ghunt_google_audit":7,
+  "github_code_search":10,
+  "github_oauth_abuse_map":10,
+  "github_org_recon":4,
+  "github_subdomains":3,
+  "gitlab_bitbucket_scan":10,
+  "google_play_search":12,
+  "graphql_intro_check":5,
+  "greynoise_check":8,
+  "helm_etcd_exposed":6,
+  "heroku_enum":6,
+  "hibp_breach_check":7,
+  "hibp_paste_search":11,
+  "holehe_email_audit":7,
+  "hsts_audit":5,
+  "http_banner":5,
+  "http_method_enum":5,
+  "hunter_io_email_pattern":7,
+  "intelligence_x_search":7,
+  "intelx_paste_leak":11,
+  "iot_device_fingerprint":12,
+  "ip_geo":1,
+  "ipmi_ilo_discovery":9,
+  "ipv6_alive_enum":9,
+  "job_postings":4,
+  "js_endpoint_extract":5,
+  "k8s_api_exposure":6,
+  "lb_detection":2,
+  "ldap_anon_bind":9,
+  "leakcheck_search":7,
+  "leakix_feed":11,
+  "linkedin_employees":4,
+  "llm_param_inference":13,
+  "llm_wordlist_curator":13,
+  "matter_thread_disco":12,
+  "misp_feed":8,
+  "mobile_backend_shodan":12,
+  "mx_enum":2,
+  "npm_package_audit":10,
+  "nse_vuln_scan":9,
+  "nsec_walking":2,
+  "origin_ip_bypass":5,
+  "os_fingerprint":9,
+  "osint_industries":4,
+  "param_discovery":5,
+  "passive_aggregation":3,
+  "passive_dns":1,
+  "pastebin_search":4,
+  "permutation_gen":3,
+  "phoneinfoga_lookup":7,
+  "pimeyes_face_search":7,
+  "pypi_package_audit":10,
+  "quake360_search":8,
+  "ransomware_leak_sites":11,
+  "rdap":1,
+  "reddit_search":4,
+  "reverse_dns":2,
+  "reverse_ip":1,
+  "reverse_ns":1,
+  "robots_sitemap":5,
+  "rpc_endpoint_enum":9,
+  "s3_bucket_enum":6,
+  "search_engine_scrape":3,
+  "sec_edgar":4,
+  "security_headers":5,
+  "security_txt":5,
+  "securitytrails_subdomains":3,
+  "service_version_detect":9,
+  "sherlock_username":4,
+  "shodan_keyed":8,
+  "shuffled_bruteforce":3,
+  "smb_netbios_enum":9,
+  "snmp_enum":9,
+  "source_code_rag_llm":13,
+  "sourcemap_check":5,
+  "ssl_labs_grade":5,
+  "ssl_tls_audit":5,
+  "stealer_log_search":11,
+  "subdomain_bruteforce":3,
+  "subdomain_takeover":2,
+  "tcp_port_scan":9,
+  "tech_stack_detect":5,
+  "telegram_channels":4,
+  "threatfox_check":8,
+  "tiktok_search":4,
+  "trademark_search":4,
+  "twitter_mining":4,
+  "udp_port_scan":9,
+  "upnp_ssdp_disco":12,
+  "urlhaus_check":8,
+  "uspto_patent":4,
+  "vercel_netlify":6,
+  "virustotal_full":8,
+  "virustotal_subdomains":3,
+  "voip_sip_enum":9,
+  "waf_cdn_detect":5,
+  "wayback_subdomain_extract":3,
+  "wayback_timeline":1,
+  "whois":1,
+  "whois_history":1,
+  "wildcard_detection":2,
+  "youtube_channel":4,
+  "zone_transfer":2,
+  "zoomeye_search":8,
+};
+
+const RECON_PHASES = [
+  // ── §1 ─────────────────────────────
+  {name:"ASN / IP Ownership", tool:"asn", endpoint:"/api/recon/asn", icon:"🌐"},
+  {name:"Cert San Aggregator", tool:"cert_san_aggregator", endpoint:"/api/recon/cert_san_aggregator", icon:"🌐"},
+  {name:"Common Crawl", tool:"common_crawl", endpoint:"/api/recon/common_crawl", icon:"🌐"},
+  {name:"Crt Search", tool:"crt_search", endpoint:"/api/recon/crt_search", icon:"🌐"},
+  {name:"Domain Age", tool:"domain_age", endpoint:"/api/recon/domain_age", icon:"🌐"},
+  {name:"Favicon Hash", tool:"favicon_hash", endpoint:"/api/recon/favicon_hash", icon:"🌐"},
+  {name:"IP Geo", tool:"ip_geo", endpoint:"/api/recon/ip_geo", icon:"🌐"},
+  {name:"Passive DNS", tool:"passive_dns", endpoint:"/api/recon/passive_dns", icon:"🌐"},
+  {name:"RDAP Lookup", tool:"rdap", endpoint:"/api/recon/rdap", icon:"🌐"},
+  {name:"Reverse IP", tool:"reverse_ip", endpoint:"/api/recon/reverse_ip", icon:"🌐"},
+  {name:"Reverse NS", tool:"reverse_ns", endpoint:"/api/recon/reverse_ns", icon:"🌐"},
+  {name:"Wayback Timeline", tool:"wayback_timeline", endpoint:"/api/recon/wayback_timeline", icon:"🌐"},
+  {name:"WHOIS Lookup", tool:"whois", endpoint:"/api/recon/whois", icon:"🌐"},
+  {name:"Whois History", tool:"whois_history", endpoint:"/api/recon/whois_history", icon:"🌐"},
+  // ── §2 ─────────────────────────────
+  {name:"Anycast Detect", tool:"anycast_detect", endpoint:"/api/recon/anycast_detect", icon:"🔎"},
+  {name:"Caa Records", tool:"caa_records", endpoint:"/api/recon/caa_records", icon:"🔎"},
+  {name:"Cache Snooping", tool:"cache_snooping", endpoint:"/api/recon/cache_snooping", icon:"🔎"},
+  {name:"DNS 0x20", tool:"dns_0x20", endpoint:"/api/recon/dns_0x20", icon:"🔎"},
+  {name:"DNS Rebinding", tool:"dns_rebinding", endpoint:"/api/recon/dns_rebinding", icon:"🔎"},
+  {name:"DNS Records", tool:"dns_records", endpoint:"/api/recon/dns_records", icon:"🔎"},
+  {name:"Dnssec", tool:"dnssec", endpoint:"/api/recon/dnssec", icon:"🔎"},
+  {name:"Doh Dot", tool:"doh_dot", endpoint:"/api/recon/doh_dot", icon:"🔎"},
+  {name:"Email Security", tool:"email_security", endpoint:"/api/recon/email_security", icon:"🔎"},
+  {name:"Lb Detection", tool:"lb_detection", endpoint:"/api/recon/lb_detection", icon:"🔎"},
+  {name:"Mx Enum", tool:"mx_enum", endpoint:"/api/recon/mx_enum", icon:"🔎"},
+  {name:"Nsec Walking", tool:"nsec_walking", endpoint:"/api/recon/nsec_walking", icon:"🔎"},
+  {name:"Reverse DNS", tool:"reverse_dns", endpoint:"/api/recon/reverse_dns", icon:"🔎"},
+  {name:"Subdomain Takeover", tool:"subdomain_takeover", endpoint:"/api/recon/subdomain_takeover", icon:"🔎"},
+  {name:"Wildcard Detection", tool:"wildcard_detection", endpoint:"/api/recon/wildcard_detection", icon:"🔎"},
+  {name:"Zone Transfer", tool:"zone_transfer", endpoint:"/api/recon/zone_transfer", icon:"🔎"},
+  // ── §3 ─────────────────────────────
+  {name:"AI Wordlist Subdomain", tool:"ai_wordlist_subdomain", endpoint:"/api/recon/ai_wordlist_subdomain", icon:"🌍"},
+  {name:"Amass Passive", tool:"amass_passive", endpoint:"/api/recon/amass_passive", icon:"🌍"},
+  {name:"Github Subdomains", tool:"github_subdomains", endpoint:"/api/recon/github_subdomains", icon:"🌍"},
+  {name:"Passive Aggregation", tool:"passive_aggregation", endpoint:"/api/recon/passive_aggregation", icon:"🌍"},
+  {name:"Permutation Gen", tool:"permutation_gen", endpoint:"/api/recon/permutation_gen", icon:"🌍"},
+  {name:"Search Engine Scrape", tool:"search_engine_scrape", endpoint:"/api/recon/search_engine_scrape", icon:"🌍"},
+  {name:"Securitytrails Subdomains", tool:"securitytrails_subdomains", endpoint:"/api/recon/securitytrails_subdomains", icon:"🌍"},
+  {name:"Shuffled Bruteforce", tool:"shuffled_bruteforce", endpoint:"/api/recon/shuffled_bruteforce", icon:"🌍"},
+  {name:"Subdomain Bruteforce", tool:"subdomain_bruteforce", endpoint:"/api/recon/subdomain_bruteforce", icon:"🌍"},
+  {name:"Virustotal Subdomains", tool:"virustotal_subdomains", endpoint:"/api/recon/virustotal_subdomains", icon:"🌍"},
+  {name:"Wayback Subdomain Extract", tool:"wayback_subdomain_extract", endpoint:"/api/recon/wayback_subdomain_extract", icon:"🌍"},
+  // ── §4 ─────────────────────────────
+  {name:"Discord Channels", tool:"discord_channels", endpoint:"/api/recon/discord_channels", icon:"🔬"},
+  {name:"Facebook Instagram", tool:"facebook_instagram", endpoint:"/api/recon/facebook_instagram", icon:"🔬"},
+  {name:"Github Org Recon", tool:"github_org_recon", endpoint:"/api/recon/github_org_recon", icon:"🔬"},
+  {name:"Job Postings", tool:"job_postings", endpoint:"/api/recon/job_postings", icon:"🔬"},
+  {name:"Linkedin Employees", tool:"linkedin_employees", endpoint:"/api/recon/linkedin_employees", icon:"🔬"},
+  {name:"OSINT Industries", tool:"osint_industries", endpoint:"/api/recon/osint_industries", icon:"🔬"},
+  {name:"Pastebin Search", tool:"pastebin_search", endpoint:"/api/recon/pastebin_search", icon:"🔬"},
+  {name:"Reddit Search", tool:"reddit_search", endpoint:"/api/recon/reddit_search", icon:"🔬"},
+  {name:"Sec Edgar", tool:"sec_edgar", endpoint:"/api/recon/sec_edgar", icon:"🔬"},
+  {name:"Sherlock Username", tool:"sherlock_username", endpoint:"/api/recon/sherlock_username", icon:"🔬"},
+  {name:"Telegram Channels", tool:"telegram_channels", endpoint:"/api/recon/telegram_channels", icon:"🔬"},
+  {name:"Tiktok Search", tool:"tiktok_search", endpoint:"/api/recon/tiktok_search", icon:"🔬"},
+  {name:"Trademark Search", tool:"trademark_search", endpoint:"/api/recon/trademark_search", icon:"🔬"},
+  {name:"Twitter Mining", tool:"twitter_mining", endpoint:"/api/recon/twitter_mining", icon:"🔬"},
+  {name:"Uspto Patent", tool:"uspto_patent", endpoint:"/api/recon/uspto_patent", icon:"🔬"},
+  {name:"Youtube Channel", tool:"youtube_channel", endpoint:"/api/recon/youtube_channel", icon:"🔬"},
+  // ── §5 ─────────────────────────────
+  {name:"Cors Misconfig", tool:"cors_misconfig", endpoint:"/api/recon/cors_misconfig", icon:"📁"},
+  {name:"Crawl Endpoints", tool:"crawl_endpoints", endpoint:"/api/recon/crawl_endpoints", icon:"📁"},
+  {name:"Graphql Intro Check", tool:"graphql_intro_check", endpoint:"/api/recon/graphql_intro_check", icon:"📁"},
+  {name:"Hsts Audit", tool:"hsts_audit", endpoint:"/api/recon/hsts_audit", icon:"📁"},
+  {name:"HTTP Banner", tool:"http_banner", endpoint:"/api/recon/http_banner", icon:"📁"},
+  {name:"HTTP Method Enum", tool:"http_method_enum", endpoint:"/api/recon/http_method_enum", icon:"📁"},
+  {name:"Js Endpoint Extract", tool:"js_endpoint_extract", endpoint:"/api/recon/js_endpoint_extract", icon:"📁"},
+  {name:"Origin IP Bypass", tool:"origin_ip_bypass", endpoint:"/api/recon/origin_ip_bypass", icon:"📁"},
+  {name:"Param Discovery", tool:"param_discovery", endpoint:"/api/recon/param_discovery", icon:"📁"},
+  {name:"Robots Sitemap", tool:"robots_sitemap", endpoint:"/api/recon/robots_sitemap", icon:"📁"},
+  {name:"Security Headers", tool:"security_headers", endpoint:"/api/recon/security_headers", icon:"📁"},
+  {name:"Security Txt", tool:"security_txt", endpoint:"/api/recon/security_txt", icon:"📁"},
+  {name:"Sourcemap Check", tool:"sourcemap_check", endpoint:"/api/recon/sourcemap_check", icon:"📁"},
+  {name:"SSL Labs Grade", tool:"ssl_labs_grade", endpoint:"/api/recon/ssl_labs_grade", icon:"📁"},
+  {name:"SSL TLS Audit", tool:"ssl_tls_audit", endpoint:"/api/recon/ssl_tls_audit", icon:"📁"},
+  {name:"Tech Stack Detect", tool:"tech_stack_detect", endpoint:"/api/recon/tech_stack_detect", icon:"📁"},
+  {name:"WAF CDN Detect", tool:"waf_cdn_detect", endpoint:"/api/recon/waf_cdn_detect", icon:"📁"},
+  // ── §6 ─────────────────────────────
+  {name:"Azure App Services", tool:"azure_app_services", endpoint:"/api/recon/azure_app_services", icon:"☁️"},
+  {name:"Azure Blob Enum", tool:"azure_blob_enum", endpoint:"/api/recon/azure_blob_enum", icon:"☁️"},
+  {name:"Bucket Perm Audit", tool:"bucket_perm_audit", endpoint:"/api/recon/bucket_perm_audit", icon:"☁️"},
+  {name:"Cloud Function URL Enum", tool:"cloud_function_url_enum", endpoint:"/api/recon/cloud_function_url_enum", icon:"☁️"},
+  {name:"Cloudfront Disco", tool:"cloudfront_disco", endpoint:"/api/recon/cloudfront_disco", icon:"☁️"},
+  {name:"Docker Registry Exposed", tool:"docker_registry_exposed", endpoint:"/api/recon/docker_registry_exposed", icon:"☁️"},
+  {name:"Gcp App Engine", tool:"gcp_app_engine", endpoint:"/api/recon/gcp_app_engine", icon:"☁️"},
+  {name:"GCS Bucket Enum", tool:"gcs_bucket_enum", endpoint:"/api/recon/gcs_bucket_enum", icon:"☁️"},
+  {name:"Gha Runner Disco", tool:"gha_runner_disco", endpoint:"/api/recon/gha_runner_disco", icon:"☁️"},
+  {name:"Helm Etcd Exposed", tool:"helm_etcd_exposed", endpoint:"/api/recon/helm_etcd_exposed", icon:"☁️"},
+  {name:"Heroku Enum", tool:"heroku_enum", endpoint:"/api/recon/heroku_enum", icon:"☁️"},
+  {name:"K8s API Exposure", tool:"k8s_api_exposure", endpoint:"/api/recon/k8s_api_exposure", icon:"☁️"},
+  {name:"S3 Bucket Enum", tool:"s3_bucket_enum", endpoint:"/api/recon/s3_bucket_enum", icon:"☁️"},
+  {name:"Vercel Netlify", tool:"vercel_netlify", endpoint:"/api/recon/vercel_netlify", icon:"☁️"},
+  // ── §7 ─────────────────────────────
+  {name:"Breach Aggregator", tool:"breach_aggregator", endpoint:"/api/recon/breach_aggregator", icon:"📧"},
+  {name:"Crosslinked Emails", tool:"crosslinked_emails", endpoint:"/api/recon/crosslinked_emails", icon:"📧"},
+  {name:"Email Harvester", tool:"email_harvester", endpoint:"/api/recon/email_harvester", icon:"📧"},
+  {name:"Email SMTP Validate", tool:"email_smtp_validate", endpoint:"/api/recon/email_smtp_validate", icon:"📧"},
+  {name:"Email To Phone Pivot", tool:"email_to_phone_pivot", endpoint:"/api/recon/email_to_phone_pivot", icon:"📧"},
+  {name:"Ghunt Google Audit", tool:"ghunt_google_audit", endpoint:"/api/recon/ghunt_google_audit", icon:"📧"},
+  {name:"HIBP Breach Check", tool:"hibp_breach_check", endpoint:"/api/recon/hibp_breach_check", icon:"📧"},
+  {name:"Holehe Email Audit", tool:"holehe_email_audit", endpoint:"/api/recon/holehe_email_audit", icon:"📧"},
+  {name:"Hunter Io Email Pattern", tool:"hunter_io_email_pattern", endpoint:"/api/recon/hunter_io_email_pattern", icon:"📧"},
+  {name:"Intelligence X Search", tool:"intelligence_x_search", endpoint:"/api/recon/intelligence_x_search", icon:"📧"},
+  {name:"Leakcheck Search", tool:"leakcheck_search", endpoint:"/api/recon/leakcheck_search", icon:"📧"},
+  {name:"Phoneinfoga Lookup", tool:"phoneinfoga_lookup", endpoint:"/api/recon/phoneinfoga_lookup", icon:"📧"},
+  {name:"Pimeyes Face Search", tool:"pimeyes_face_search", endpoint:"/api/recon/pimeyes_face_search", icon:"📧"},
+  // ── §8 ─────────────────────────────
+  {name:"Abuseipdb", tool:"abuseipdb", endpoint:"/api/recon/abuseipdb", icon:"🛡️"},
+  {name:"Alienvault Otx", tool:"alienvault_otx", endpoint:"/api/recon/alienvault_otx", icon:"🛡️"},
+  {name:"Censys Search", tool:"censys_search", endpoint:"/api/recon/censys_search", icon:"🛡️"},
+  {name:"Fofa Search", tool:"fofa_search", endpoint:"/api/recon/fofa_search", icon:"🛡️"},
+  {name:"Greynoise Check", tool:"greynoise_check", endpoint:"/api/recon/greynoise_check", icon:"🛡️"},
+  {name:"Misp Feed", tool:"misp_feed", endpoint:"/api/recon/misp_feed", icon:"🛡️"},
+  {name:"Quake360 Search", tool:"quake360_search", endpoint:"/api/recon/quake360_search", icon:"🛡️"},
+  {name:"Shodan Keyed", tool:"shodan_keyed", endpoint:"/api/recon/shodan_keyed", icon:"🛡️"},
+  {name:"Threatfox Check", tool:"threatfox_check", endpoint:"/api/recon/threatfox_check", icon:"🛡️"},
+  {name:"Urlhaus Check", tool:"urlhaus_check", endpoint:"/api/recon/urlhaus_check", icon:"🛡️"},
+  {name:"Virustotal Full", tool:"virustotal_full", endpoint:"/api/recon/virustotal_full", icon:"🛡️"},
+  {name:"Zoomeye Search", tool:"zoomeye_search", endpoint:"/api/recon/zoomeye_search", icon:"🛡️"},
+  // ── §9 ─────────────────────────────
+  {name:"Banner Grab", tool:"banner_grab", endpoint:"/api/recon/banner_grab", icon:"🔌"},
+  {name:"Ipmi Ilo Discovery", tool:"ipmi_ilo_discovery", endpoint:"/api/recon/ipmi_ilo_discovery", icon:"🔌"},
+  {name:"Ipv6 Alive Enum", tool:"ipv6_alive_enum", endpoint:"/api/recon/ipv6_alive_enum", icon:"🔌"},
+  {name:"Ldap Anon Bind", tool:"ldap_anon_bind", endpoint:"/api/recon/ldap_anon_bind", icon:"🔌"},
+  {name:"Nse Vuln Scan", tool:"nse_vuln_scan", endpoint:"/api/recon/nse_vuln_scan", icon:"🔌"},
+  {name:"Os Fingerprint", tool:"os_fingerprint", endpoint:"/api/recon/os_fingerprint", icon:"🔌"},
+  {name:"Rpc Endpoint Enum", tool:"rpc_endpoint_enum", endpoint:"/api/recon/rpc_endpoint_enum", icon:"🔌"},
+  {name:"Service Version Detect", tool:"service_version_detect", endpoint:"/api/recon/service_version_detect", icon:"🔌"},
+  {name:"Smb Netbios Enum", tool:"smb_netbios_enum", endpoint:"/api/recon/smb_netbios_enum", icon:"🔌"},
+  {name:"Snmp Enum", tool:"snmp_enum", endpoint:"/api/recon/snmp_enum", icon:"🔌"},
+  {name:"Tcp Port Scan", tool:"tcp_port_scan", endpoint:"/api/recon/tcp_port_scan", icon:"🔌"},
+  {name:"Udp Port Scan", tool:"udp_port_scan", endpoint:"/api/recon/udp_port_scan", icon:"🔌"},
+  {name:"Voip Sip Enum", tool:"voip_sip_enum", endpoint:"/api/recon/voip_sip_enum", icon:"🔌"},
+  // ── §10 ─────────────────────────────
+  {name:"Cargo Go Typosquat", tool:"cargo_go_typosquat", endpoint:"/api/recon/cargo_go_typosquat", icon:"📂"},
+  {name:"Dependency Confusion", tool:"dependency_confusion", endpoint:"/api/recon/dependency_confusion", icon:"📂"},
+  {name:"Docker Hub Search", tool:"docker_hub_search", endpoint:"/api/recon/docker_hub_search", icon:"📂"},
+  {name:"Gha Secret Leak Logs", tool:"gha_secret_leak_logs", endpoint:"/api/recon/gha_secret_leak_logs", icon:"📂"},
+  {name:"Github Code Search", tool:"github_code_search", endpoint:"/api/recon/github_code_search", icon:"📂"},
+  {name:"Github Oauth Abuse Map", tool:"github_oauth_abuse_map", endpoint:"/api/recon/github_oauth_abuse_map", icon:"📂"},
+  {name:"Gitlab Bitbucket Scan", tool:"gitlab_bitbucket_scan", endpoint:"/api/recon/gitlab_bitbucket_scan", icon:"📂"},
+  {name:"Npm Package Audit", tool:"npm_package_audit", endpoint:"/api/recon/npm_package_audit", icon:"📂"},
+  {name:"Pypi Package Audit", tool:"pypi_package_audit", endpoint:"/api/recon/pypi_package_audit", icon:"📂"},
+  // ── §11 ─────────────────────────────
+  {name:"Dehashed Search", tool:"dehashed_search", endpoint:"/api/recon/dehashed_search", icon:"🕳️"},
+  {name:"Hibp Paste Search", tool:"hibp_paste_search", endpoint:"/api/recon/hibp_paste_search", icon:"🕳️"},
+  {name:"Intelx Paste Leak", tool:"intelx_paste_leak", endpoint:"/api/recon/intelx_paste_leak", icon:"🕳️"},
+  {name:"Leakix Feed", tool:"leakix_feed", endpoint:"/api/recon/leakix_feed", icon:"🕳️"},
+  {name:"Ransomware Leak Sites", tool:"ransomware_leak_sites", endpoint:"/api/recon/ransomware_leak_sites", icon:"🕳️"},
+  {name:"Stealer Log Search", tool:"stealer_log_search", endpoint:"/api/recon/stealer_log_search", icon:"🕳️"},
+  // ── §12 ─────────────────────────────
+  {name:"Apple Store Search", tool:"apple_store_search", endpoint:"/api/recon/apple_store_search", icon:"📱"},
+  {name:"Drone Adsb Ais Passive", tool:"drone_adsb_ais_passive", endpoint:"/api/recon/drone_adsb_ais_passive", icon:"📱"},
+  {name:"Firebase Open Db Check", tool:"firebase_open_db_check", endpoint:"/api/recon/firebase_open_db_check", icon:"📱"},
+  {name:"Google Play Search", tool:"google_play_search", endpoint:"/api/recon/google_play_search", icon:"📱"},
+  {name:"Iot Device Fingerprint", tool:"iot_device_fingerprint", endpoint:"/api/recon/iot_device_fingerprint", icon:"📱"},
+  {name:"Matter Thread Disco", tool:"matter_thread_disco", endpoint:"/api/recon/matter_thread_disco", icon:"📱"},
+  {name:"Mobile Backend Shodan", tool:"mobile_backend_shodan", endpoint:"/api/recon/mobile_backend_shodan", icon:"📱"},
+  {name:"Upnp Ssdp Disco", tool:"upnp_ssdp_disco", endpoint:"/api/recon/upnp_ssdp_disco", icon:"📱"},
+  // ── §13 ─────────────────────────────
+  {name:"AI Endpoint Guesser", tool:"ai_endpoint_guesser", endpoint:"/api/recon/ai_endpoint_guesser", icon:"🤖"},
+  {name:"AI Phishing Pretext Gen", tool:"ai_phishing_pretext_gen", endpoint:"/api/recon/ai_phishing_pretext_gen", icon:"🤖"},
+  {name:"LLM Param Inference", tool:"llm_param_inference", endpoint:"/api/recon/llm_param_inference", icon:"🤖"},
+  {name:"LLM Wordlist Curator", tool:"llm_wordlist_curator", endpoint:"/api/recon/llm_wordlist_curator", icon:"🤖"},
+  {name:"Source Code Rag LLM", tool:"source_code_rag_llm", endpoint:"/api/recon/source_code_rag_llm", icon:"🤖"},
+];
+
+
+
+function ReconModule({token, onRunningChange, activeSections}) {
   const _notifyRunning = onRunningChange || (() => {});
   const [target,         setTarget]   = useState("");
   const [showPDFModal, setShowPDFModal] = useState(false);
@@ -10279,7 +10797,8 @@ function ReconModule({token, onRunningChange}) {
     stopRef.current = false; setStopped(false);
     setRunning(true); _notifyRunning(true); setDone([]); setFailed([]); setAll({}); setFinished(false);
     setTab("phases");
-    const active = RECON_PHASES.map((ph,i)=>({ph,i})).filter(({i})=>selectedPhases.has(i));
+    const active = RECON_PHASES.map((ph,i)=>({ph,i,_sec:SECTION_OF[ph.tool]||99}))
+      .filter(({i,_sec})=>selectedPhases.has(i) && (!activeSections||activeSections.size===0||activeSections.has(_sec)));
     // Warn loudly when the customer has deselected phases — silent omissions
     // are why "DNS records missing" surprises happen on report 2 of 2.
     if (active.length < RECON_PHASES.length) {
@@ -11071,7 +11590,12 @@ function ReconModule({token, onRunningChange}) {
           </div>
         </div>
         <div style={{width:"100%",border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
-          {RECON_PHASES.map((ph,i)=>{
+          {(()=>{
+            const _ordered = RECON_PHASES.map((ph,i)=>({ph,i,_sec:SECTION_OF[ph.tool]||99})).filter(o=>!activeSections||activeSections.size===0||activeSections.has(o._sec)).sort((a,b)=>a._sec-b._sec);
+            let _lastSec = null;
+            return _ordered.map(({ph,i,_sec})=>{
+              const _showHeader = _sec !== _lastSec; _lastSec = _sec;
+              const _secMeta = RECON_SECTIONS.find(s=>s.n===_sec) || {label:"Other"};
             const sel       = selectedPhases.has(i);
             const isDone    = done.includes(i);
             const isFailed  = failed.includes(i);
@@ -11092,6 +11616,11 @@ function ReconModule({token, onRunningChange}) {
             const _failReason = (res && (res.skipped_reason || res.error || res.detail)) || "scan failed";
             return (
               <React.Fragment key={i}>
+              {_showHeader && (
+                <div style={{padding:"14px 16px 10px",background:"#0f172a",borderTop:"2px solid #1e293b",fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:1.5,textTransform:"uppercase",fontFamily:"ui-monospace,SFMono-Regular,monospace"}}>
+                  {_secMeta.label}
+                </div>
+              )}
               <div onClick={()=>!running&&togglePhase(i)}
                 onMouseEnter={e=>{ if(!running) e.currentTarget.style.background="#111c33"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
@@ -11135,7 +11664,7 @@ function ReconModule({token, onRunningChange}) {
               )}
               </React.Fragment>
             );
-          })}
+          });})()}
         </div>
       </div>
 
@@ -17417,6 +17946,8 @@ export default function App() {
   const [waptRunning,setWaptRunning]       = useState(false);
   const [reconRunning,setReconRunning]     = useState(false);
   const [vulnRunning,setVulnRunning]       = useState(false);
+  const [reconExpanded, setReconExpanded] = useState(true);
+  const [reconSections, setReconSections] = useState(new Set());
 
   const handleLogin = (t, r, u, p) => {
     setToken(t); setRole(r); setUsername(u); setPlan(p);
@@ -17579,7 +18110,7 @@ export default function App() {
           <WebAppModule token={token} onRunningChange={setWaptRunning} isTrial={isTrial} isSuperAdmin={isSuperAdmin}/>
         </div>
         <div style={{display: active==="recon"    ? "block" : "none"}}>
-          <ReconModule token={token} onRunningChange={setReconRunning}/>
+          <ReconModule token={token} onRunningChange={setReconRunning} activeSections={reconSections}/>
         </div>
         <div style={{display: active==="vuln"     ? "block" : "none"}}>
           <VulnModule token={token} onRunningChange={setVulnRunning}/>
@@ -17763,6 +18294,34 @@ export default function App() {
                   const locked = !canAccess(m);
                   const isTrial = m.trial && !isPro && !isSuperAdmin;
                   const isActive = active === m.id;
+                  if (m.id === "recon" && !locked) {
+                    const toggleSec = (n) => setReconSections(prev => { const s = new Set(prev); if (s.has(n)) s.delete(n); else s.add(n); return s; });
+                    return (
+                      <React.Fragment key={m.id}>
+                        <button className="nav-btn" onClick={()=>{ setActive("recon"); setReconExpanded(e=>!e); }}
+                          style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
+                          <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
+                          <span style={{fontSize:13,color:isActive?"#f1f5f9":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35}}>{m.label}</span>
+                          {reconRunning && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
+                          <span style={{fontSize:9,color:"#64748b",transform:reconExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform .15s",display:"inline-block",width:10}}>{'\u25B6'}</span>
+                        </button>
+                        {reconExpanded && (
+                          <div style={{marginLeft:30,marginBottom:6,borderLeft:"1px solid #1e293b",paddingLeft:6}}>
+                            <button onClick={()=>{ setActive("recon"); setReconSections(new Set()); }}
+                              style={{width:"calc(100% - 12px)",background:(reconSections.size===0&&isActive)?"#172554":"transparent",border:"none",borderRadius:4,padding:"5px 10px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",margin:"1px 0"}}>
+                              <span style={{fontSize:11,color:(reconSections.size===0&&isActive)?"#60a5fa":"#94a3b8",fontWeight:reconSections.size===0?600:400}}>All sections</span>
+                            </button>
+                            {RECON_SECTIONS.filter(s=>s.n<99).map(sec=>(
+                              <button key={`rs-${sec.n}`} onClick={()=>{ setActive("recon"); toggleSec(sec.n); }}
+                                style={{width:"calc(100% - 12px)",background:(reconSections.has(sec.n)&&isActive)?"#172554":"transparent",border:"none",borderRadius:4,padding:"5px 10px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",margin:"1px 0"}}>
+                                <span style={{fontSize:11,color:(reconSections.has(sec.n)&&isActive)?"#60a5fa":"#94a3b8",fontWeight:reconSections.has(sec.n)?600:400}}>{sec.short}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </React.Fragment>
+                    );
+                  }
                   return (
                     <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
                       style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>

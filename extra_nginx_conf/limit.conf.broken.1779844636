@@ -1,0 +1,14 @@
+# Rate limiting — added after May 2026 .env-scan-then-register attack.
+# Applied to /api/auth/login via `limit_req` in default.conf.
+limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=5r/m;
+# Bumped from 30r/m to 5r/s (300r/m). Dashboard loads ~12 API calls on init
+# (admin/vault, backups, scans, tiles), and a v2 recon run still counts as ONE
+# request — so 30r/m starved the dashboard before the user even clicked Scan.
+# 5r/s + burst=10 still rejects automated abuse (>120r/min) but allows normal UI.
+limit_req_zone $binary_remote_addr zone=scan_limit:10m rate=5r/s;
+    # Force-redirect everything to vulnscan-engine (Cyber-project sidebar deprecated)
+    location = / {
+        return 302 /engine/;
+    }
+
+
