@@ -1,0 +1,15 @@
+{first}
+{last}
+{first}{last}
+{first}.{last}
+{first}_{last}
+{first}-{last}
+{f}{last}
+{first}{l}
+{f}.{last}
+{f}_{last}
+{first}{yyyy}
+{first}.{l}
+{first}{last}{nn}
+{first}_{nn}
+{first}.{last}{nn}
