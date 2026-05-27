@@ -1,95 +1,52 @@
-"""Recon module orchestrator endpoint — VL-FORGE v2.
-
-Single POST /api/recon/run_all replaces 41 sequential frontend calls.
-Backend fans out to every /api/recon/<tool> endpoint in parallel via
-the shared orchestrator engine in tools/_framework/orchestrator.py.
-
-Expected speedup: ~5 min (sequential) → ~30-60 sec (parallel) for a
-fresh scan of a Cloudflare-fronted target.
-
-Tier filtering: optional `tiers` field in the request body lets the
-frontend run only a subset — e.g. tiers=["tier1_dns", "tier2_subdomain"]
-for a 30-second smoke check before the full scan.
-"""
+"""Recon module orchestrator — auto-discovers real scanners from tools/recon/tier*/."""
 from typing import Optional
-
+from pathlib import Path
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
 from tools._shared import verify_scan_quota
-from tools._framework.orchestrator import (
-    run_module_parallel, run_module_streaming,
-)
+from tools._framework.orchestrator import run_module_parallel, run_module_streaming
 
 router = APIRouter()
 
+# ── Auto-discovery ──────────────────────────────────────────
+# Walks tools/recon/tier*_*/ at import time.
+# Excludes scaffold files (those with "scaffold" markers) so run_all only dispatches
+# real, working scanners. As you replace scaffolds with real code, they auto-register
+# on the next backend restart. No manual list-keeping.
 
-# Registry of every recon tool and its endpoint path. Tier-tagged so the
-# frontend can run subsets. ORDER MATTERS for display but not execution
-# (orchestrator runs in parallel regardless of list order).
-RECON_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
-    "tier1_dns": [
-        ("whois",         "/api/recon/whois"),
-        ("dns",           "/api/recon/dns"),
-        ("dnsrecon",      "/api/recon/dnsrecon"),
-        ("zone_transfer", "/api/recon/zone_transfer"),
-    ],
-    "tier2_subdomain": [
-        ("subdomains", "/api/recon/subdomains"),
-        ("crtsh",      "/api/recon/crtsh"),
-        ("amass",      "/api/recon/amass"),
-        ("cdn_origin", "/api/recon/cdn_origin"),
-    ],
-    "tier3_network": [
-        ("masscan",  "/api/recon/masscan"),   # portscan.py registers this route
-        ("nmap",     "/api/recon/nmap"),
-        ("services", "/api/recon/services"),
-        ("os",       "/api/recon/os"),
-        ("banner",   "/api/recon/banner"),
-    ],
-    "tier4_web": [
-        ("gobuster",    "/api/recon/gobuster"),
-        ("jsendpoints", "/api/recon/jsendpoints"),
-        ("wayback",     "/api/recon/wayback"),
-        ("robotsmap",   "/api/recon/robotsmap"),
-        ("crawl",       "/api/recon/crawl"),
-        ("params",      "/api/recon/params"),
-        ("favicon",     "/api/recon/favicon"),
-    ],
-    "tier5_cloud": [
-        ("cloudbuckets", "/api/recon/cloudbuckets"),
-        ("bucket_perms", "/api/recon/bucket_perms"),
-        ("asn",          "/api/recon/asn"),
-    ],
-    "tier6_threat": [
-        ("shodan",     "/api/recon/shodan"),
-        ("internetdb", "/api/recon/internetdb"),
-        ("cve_match",  "/api/recon/cve_match"),
-        ("waf_cdn",    "/api/recon/waf_cdn"),
-        ("harvester",  "/api/recon/harvester"),
-    ],
-    "tier7_app": [
-        ("sourcemap",     "/api/recon/sourcemap"),
-        ("api_docs",      "/api/recon/api_docs"),
-        ("tls_deep",      "/api/recon/tls_deep"),
-        ("wpjson_enum",   "/api/recon/wpjson_enum"),
-        ("default_creds", "/api/recon/default_creds"),
-        ("jslib_cve",     "/api/recon/jslib_cve"),
-        ("git_recon",     "/api/recon/git_recon"),
-    ],
-    "tier8_osint": [
-        ("breach_search",      "/api/recon/breach_search"),
-        ("github_leaks",       "/api/recon/github_leaks"),
-        ("graphql_introspect", "/api/recon/graphql_introspect"),
-        ("email_security",     "/api/recon/email_security"),
-        ("dork_harvest",       "/api/recon/dork_harvest"),
-        ("dnssec_validate",    "/api/recon/dnssec_validate"),
-    ],
-}
+_SCAFFOLD_MARKERS = ('state["scaffold"]', '"Scaffold:', 'scaffold = True', "ctx.source(\"scaffold")
+
+def _is_scaffold(py_file: Path) -> bool:
+    try:
+        txt = py_file.read_text(encoding="utf-8")
+        return any(m in txt for m in _SCAFFOLD_MARKERS)
+    except Exception:
+        return True  # if unreadable, skip safely
+
+def _discover_recon_tools():
+    out = {}
+    recon_root = Path(__file__).resolve().parent.parent / "tools" / "recon"
+    if not recon_root.is_dir():
+        return out
+    for tier_dir in sorted(recon_root.glob("tier*_*"),
+                            key=lambda p: int(p.name.split("_",1)[0].replace("tier",""))):
+        tools = []
+        for f in sorted(tier_dir.glob("*.py")):
+            if f.name == "__init__.py" or f.name.startswith("_"):
+                continue
+            if _is_scaffold(f):
+                continue  # skip until real
+            tool_name = f.stem
+            tools.append((tool_name, f"/api/recon/{tool_name}"))
+        if tools:
+            out[tier_dir.name] = tools
+    return out
+
+RECON_TOOLS_BY_TIER = _discover_recon_tools()
 
 
-def _all_tools() -> list[tuple[str, str]]:
+def _all_tools():
     out = []
     for tier in RECON_TOOLS_BY_TIER.values():
         out.extend(tier)
@@ -98,116 +55,32 @@ def _all_tools() -> list[tuple[str, str]]:
 
 class RunAllRequest(BaseModel):
     target: str
-    tiers: Optional[list[str]] = None       # subset, e.g. ["tier1_dns","tier2_subdomain"]
-    concurrency: Optional[int] = 8          # max in-flight tool calls
-    auth_cookie: Optional[str] = None       # SPA session cookie (forwarded to each tool)
-    auth_bearer: Optional[str] = None       # JWT bearer (forwarded to each tool)
-    shodan_api_key: Optional[str] = None    # tier6 shodan needs this
+    tiers: Optional[list[str]] = None
+    concurrency: Optional[int] = 8
 
 
-def _resolve_tools_and_jwt(req: "RunAllRequest", request: Request):
-    """Common request unpacking — used by both the streaming + buffered routes."""
+@router.post("/api/recon/run_all")
+async def recon_run_all(req: RunAllRequest, request: Request, _=Depends(verify_scan_quota)):
+    tools = []
     if req.tiers:
-        tools = []
-        for tier in req.tiers:
-            if tier in RECON_TOOLS_BY_TIER:
-                tools.extend(RECON_TOOLS_BY_TIER[tier])
+        for t in req.tiers:
+            if t in RECON_TOOLS_BY_TIER:
+                tools.extend(RECON_TOOLS_BY_TIER[t])
     else:
         tools = _all_tools()
-
-    extra = {}
-    if req.shodan_api_key:
-        extra["api_key"] = req.shodan_api_key
-
-    auth_header = request.headers.get("authorization") or ""
-    jwt_token = None
-    if auth_header.lower().startswith("bearer "):
-        jwt_token = auth_header.split(" ", 1)[1].strip()
-
-    return tools, extra, jwt_token
-
-
-# ─────────────────────────────────────────────────────────────────
-# /api/recon/run_all — NDJSON STREAMING (default since 2026-05-23)
-# ─────────────────────────────────────────────────────────────────
-# Streams one JSON line per tool completion + opening + closing events.
-# First byte goes out within ~1-3s, beating Cloudflare's 100s TTFB ceiling.
-# Frontend reads ReadableStream line-by-line and updates tiles as each
-# tool finishes — replaces the all-tiles-update-at-once UX of buffered v2.
-#
-# Header hints to bypass intermediary buffering:
-#   X-Accel-Buffering: no   — nginx (your frontend container's nginx)
-#   Cache-Control:    no-store, no-transform
-#   Content-Type:     application/x-ndjson
-@router.post("/api/recon/run_all")
-async def recon_run_all(req: "RunAllRequest",
-                          request: Request,
-                          _=Depends(verify_scan_quota)):
-    """Stream per-tool results as NDJSON. See run_module_streaming for shape."""
-    tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    # VL-TURBO — default concurrency 8→12. 41 recon tools / 12 ≈ 4 waves
-    # instead of 6; httpx connection pool already allows up to 36 keepalives.
-    concurrency = max(1, min(req.concurrency or 12, 16))
-
-    generator = run_module_streaming(
-        target=req.target,
-        tools=tools,
-        module_name="recon",
-        concurrency=concurrency,
-        auth_cookie=req.auth_cookie,
-        auth_bearer=req.auth_bearer,
-        extra_body=extra or None,
-        jwt_token=jwt_token,
-    )
-    return StreamingResponse(
-        generator,
-        media_type="application/x-ndjson",
-        headers={
-            "X-Accel-Buffering": "no",          # nginx must NOT buffer
-            "Cache-Control":     "no-store, no-transform",
-            "Connection":        "keep-alive",
-        },
-    )
-
-
-# Legacy buffered endpoint preserved for callers that don't want to deal with
-# streaming (CLI scripts, tests, internal automation). Same shape as the
-# original v2 response (single JSON object with tools{} + summary{}).
-@router.post("/api/recon/run_all_buffered")
-async def recon_run_all_buffered(req: "RunAllRequest",
-                                    request: Request,
-                                    _=Depends(verify_scan_quota)):
-    """Non-streaming v2 — buffers all results then returns one big JSON.
-    Use only when streaming isn't suitable (CLI tools, server-to-server)."""
-    tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    # VL-TURBO — default concurrency 8→12. 41 recon tools / 12 ≈ 4 waves
-    # instead of 6; httpx connection pool already allows up to 36 keepalives.
-    concurrency = max(1, min(req.concurrency or 12, 16))
-    return await run_module_parallel(
-        target=req.target,
-        tools=tools,
-        module_name="recon",
-        concurrency=concurrency,
-        auth_cookie=req.auth_cookie,
-        auth_bearer=req.auth_bearer,
-        extra_body=extra or None,
-        jwt_token=jwt_token,
-    )
+    auth = request.headers.get("authorization", "")
+    jwt = auth.split(" ",1)[1].strip() if auth.lower().startswith("bearer ") else None
+    gen = run_module_streaming(target=req.target, tools=tools, module_name="recon",
+                                concurrency=max(1, min(req.concurrency or 8, 16)), jwt_token=jwt)
+    return StreamingResponse(gen, media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering":"no", "Cache-Control":"no-store", "Connection":"keep-alive"})
 
 
 @router.get("/api/recon/run_all/tiers")
-async def recon_run_all_tiers():
-    """Discovery endpoint: list the tier IDs the frontend can select.
-
-    Used by the UI to render tier-filter checkboxes ("Quick scan: Tier 1-2 only").
-    """
+async def recon_tiers():
     return {
-        "tiers": [
-            {"id": tier_id, "tools": [name for name, _ in tools],
-              "count": len(tools)}
-            for tier_id, tools in RECON_TOOLS_BY_TIER.items()
-        ],
-        "total_tools": sum(len(t) for t in RECON_TOOLS_BY_TIER.values()),
+        "tiers": [{"id": k, "tools": [n for n,_ in v], "count": len(v)} for k,v in RECON_TOOLS_BY_TIER.items()],
+        "total_tools": sum(len(v) for v in RECON_TOOLS_BY_TIER.values()),
     }
 
 
