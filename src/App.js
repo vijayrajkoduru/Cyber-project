@@ -8702,16 +8702,22 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   // ─── VL-FOUNDRY canon ports (Gap 11 — 4 missing sections from Webapp canon) ───
   // Pre-collect findings from all recon scanners for risk math
   const _R_allFindings = [];
-  // Skip placeholder/scaffold findings — only count real findings with evidence
+  // Skip placeholder/scaffold findings + stale prior-scan data.
+  // Fresh scanner responses always carry verified_at OR a non-empty
+  // sources_used array — entries lacking BOTH are leftover state.
   Object.values(r).forEach(d => {
-    if (d && Array.isArray(d.findings)) {
-      d.findings.forEach(f => {
-        const ev = String(f.evidence||"").toLowerCase();
-        const nm = String(f.name||"").toLowerCase();
-        if (ev.includes("scaffold") || nm.startsWith("scaffold:") || ev.includes("endpoint registered (scaffold)")) return;
-        _R_allFindings.push(f);
-      });
-    }
+    if (!d || !Array.isArray(d.findings)) return;
+    const isFresh = !!d.verified_at
+                  || (Array.isArray(d.sources_used) && d.sources_used.length > 0)
+                  || d._failed === true
+                  || d._skipped === true;
+    if (!isFresh) return;
+    d.findings.forEach(f => {
+      const ev = String(f.evidence||"").toLowerCase();
+      const nm = String(f.name||"").toLowerCase();
+      if (ev.includes("scaffold") || nm.startsWith("scaffold:") || ev.includes("endpoint registered (scaffold)")) return;
+      _R_allFindings.push(f);
+    });
   });
   const _R_sevCount = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,POSITIVE:0,INFO:0};
   _R_allFindings.forEach(f => { const k = f.severity || "INFO"; _R_sevCount[k] = (_R_sevCount[k]||0) + 1; });
@@ -8848,6 +8854,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     {tool:"api_docs",      name:"API Docs Discovery",   isEmpty:d=>!d.exposed_endpoints||d.exposed_endpoints.length===0},
     {tool:"tls_deep",      name:"TLS Deep Audit",         isEmpty:d=>!d.findings||d.findings.length===0},
     {tool:"wpjson_enum",   name:"WordPress wp-json Enum", isEmpty:d=>(!d.users||d.users.length===0) && !d.wp_version},
+    {tool:"wp_plugin_brute", name:"WordPress Plugin Brute", isEmpty:d=>(!d.plugins_found||d.plugins_found.length===0) && !d.wp_detected},
     {tool:"default_creds", name:"Admin Panel Exposure",   isEmpty:d=>!d.panels_found||d.panels_found.length===0},
     {tool:"jslib_cve",  name:"JS Library CVE",       isEmpty:d=>(!d.libs_detected||d.libs_detected.length===0)},
     {tool:"git_recon",  name:"Git Repo Exposure",    isEmpty:d=>!d.exposed_files||d.exposed_files.length===0},
@@ -10572,6 +10579,7 @@ const SECTION_OF = {
   "cloudfront_disco":6,
   "common_crawl":1,
   "cors_misconfig":5,
+  "wp_plugin_brute":5,
   "crawl_endpoints":5,
   "crosslinked_emails":7,
   "crt_search":1,
@@ -10785,7 +10793,8 @@ const RECON_PHASES = [
   {name:"SSL TLS Audit", tool:"ssl_tls_audit", endpoint:"/api/recon/ssl_tls_audit", icon:"📁"},
   {name:"Tech Stack Detect", tool:"tech_stack_detect", endpoint:"/api/recon/tech_stack_detect", icon:"📁"},
   {name:"WAF CDN Detect", tool:"waf_cdn_detect", endpoint:"/api/recon/waf_cdn_detect", icon:"📁"},
-  // ── §6 ─────────────
+    {name:"WordPress Plugin Brute", tool:"wp_plugin_brute", endpoint:"/api/recon/wp_plugin_brute", icon:"📁"},
+// ── §6 ─────────────
   {name:"Azure App Services", tool:"azure_app_services", endpoint:"/api/recon/azure_app_services", icon:"☁️"},
   {name:"Azure Blob Enum", tool:"azure_blob_enum", endpoint:"/api/recon/azure_blob_enum", icon:"☁️"},
   {name:"Bucket Perm Audit", tool:"bucket_perm_audit", endpoint:"/api/recon/bucket_perm_audit", icon:"☁️"},
