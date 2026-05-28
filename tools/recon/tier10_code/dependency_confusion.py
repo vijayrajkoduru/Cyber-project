@@ -24,8 +24,8 @@ async def gather(ctx):
 def _r_vuln(s):
     n=s.get("unclaimed_count",0)
     if n==0: return None
-    return {"name":f"Dependency Confusion: {n} internal-looking names UNCLAIMED on public npm/pypi",
-        "severity":"HIGH","cvss":7.5,"cwe":"CWE-829","owasp":"A06:2021",
+    return {"name":f"Namespace hardening: {n} internal-looking package names unclaimed on npm/pypi - pre-register to prevent future dependency confusion",
+        "severity":"INFO","cwe":"CWE-829","owasp":"A06:2021",
         "evidence":f"npm: {s.get('unclaimed_npm')} | pypi: {s.get('unclaimed_pypi')}",
         "remediation":"Pre-register these names on npm OR configure .npmrc with scope-private registry"}
 def _r_safe(s):

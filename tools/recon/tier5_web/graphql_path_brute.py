@@ -1,6 +1,7 @@
 """GraphQL Path Brute — Route: /api/recon/graphql_path_brute
-Probes graphql_paths.txt for GraphQL endpoints, tests introspection if found."""
-import asyncio, json
+Probes graphql_paths.txt. A path counts ONLY if a POST returns GraphQL-shaped
+JSON (data/errors) — SPA HTML fallbacks are rejected, killing /query-style FPs."""
+import asyncio
 from pathlib import Path
 import requests
 from fastapi import APIRouter, Depends
@@ -18,7 +19,7 @@ def _load():
             return [l.strip() for l in _PAYLOAD.read_text(encoding="utf-8").splitlines()
                     if l.strip() and not l.startswith("#")]
     except Exception: pass
-    return ["/graphql","/api/graphql","/v1/graphql","/graphiql","/altair","/playground"]
+    return ["/graphql","/api/graphql","/v1/graphql","/graphiql","/altair","/playground","/query"]
 
 def _post(url, data):
     try:
@@ -35,18 +36,17 @@ def _get(url):
 
 def _probe(base, path):
     p = path if path.startswith("/") else "/" + path
-    r = _get(base + p)
-    if not r or r.status_code in (404, 0): return None
     pr = _post(base + p, _INTROSPECT)
-    introspect_open = False; schema_data = None
-    if pr and pr.status_code == 200:
-        try:
-            j = pr.json()
-            if isinstance(j, dict) and "data" in j and j["data"] and "__schema" in j["data"]:
-                introspect_open = True
-                schema_data = str(j["data"])[:100]
-        except Exception: pass
-    return {"path": p, "status": r.status_code, "introspect": introspect_open, "schema": schema_data}
+    if not pr or pr.status_code in (404, 0): return None
+    try:
+        j = pr.json()
+    except Exception:
+        return None  # HTML / SPA fallback => not GraphQL
+    if not isinstance(j, dict) or not ("data" in j or "errors" in j):
+        return None  # JSON but not GraphQL-shaped
+    introspect_open = bool(isinstance(j.get("data"), dict) and j["data"].get("__schema"))
+    schema_data = str(j["data"])[:100] if introspect_open else None
+    return {"path": p, "status": pr.status_code, "introspect": introspect_open, "schema": schema_data}
 
 async def gather(ctx: ScanContext):
     base = web_url(ctx.host).rstrip("/")
@@ -71,25 +71,22 @@ def r_introspect(s):
     o = s.get("introspect_open") or []
     if not o: return None
     return {"name": f"GraphQL introspection enabled on production ({len(o)})",
-            "severity": "HIGH", "cvss": 7.5, "cwe": "CWE-200",
-            "cwe_name": "Information Exposure",
+            "severity": "HIGH", "cvss": 7.5, "cwe": "CWE-200", "cwe_name": "Information Exposure",
             "owasp": "A05:2021 — Security Misconfiguration",
             "evidence": "; ".join(f"{h['path']}: {h['schema']}" for h in o[:3]),
-            "remediation": "Disable GraphQL introspection in production (Apollo: introspection:false; Hasura: HASURA_GRAPHQL_DEV_MODE=false). Introspection lets attackers map entire schema."}
+            "remediation": "Disable GraphQL introspection in production (Apollo: introspection:false; Hasura: HASURA_GRAPHQL_DEV_MODE=false)."}
 
 def r_endpoint(s):
     e = s.get("endpoints") or []
-    if not e: return None
-    if (s.get("introspect_open") or []): return None
-    return {"name": f"GraphQL endpoint(s) discovered ({len(e)})",
-            "severity": "INFO",
+    if not e or (s.get("introspect_open") or []): return None
+    return {"name": f"GraphQL endpoint(s) discovered ({len(e)})", "severity": "INFO",
             "evidence": ", ".join(f"{h['path']} ({h['status']})" for h in e[:5])}
 
 def r_clean(s):
     if not s.get("target_reachable"): return None
     if s.get("endpoints"): return None
     return {"name":"No GraphQL endpoints found","severity":"POSITIVE",
-            "evidence":f"Probed {s.get('probed',0)} common paths — all 404."}
+            "evidence":f"Probed {s.get('probed',0)} paths — none returned GraphQL-shaped JSON."}
 
 def r_unreach(s):
     if s.get("target_reachable"): return None

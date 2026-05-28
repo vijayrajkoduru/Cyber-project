@@ -56,12 +56,26 @@ _metrics = {"requests": 0, "rate_limited": 0, "errors": 0,
 class VLPrimeMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        is_scan = "/scan" in path or "/api/recon/" in path or "/api/webapp/" in path
         cid = _client_id(request)
         _metrics["requests"] += 1
 
-        # Session 1: rate limit scan endpoints
-        if is_scan and request.method == "POST":
+        # Exempt internal orchestrator fan-out (localhost + Docker bridge).
+        # run_all calls each scanner via http://localhost — those must NOT
+        # count against the customer's rate quota.
+        client_host = request.client.host if request.client else ""
+        is_internal = (client_host in ("127.0.0.1", "localhost", "::1")
+                       or client_host.startswith("172.")
+                       or client_host.startswith("10.")
+                       or client_host.startswith("192.168."))
+
+        # Only rate-limit EXTERNAL top-level scan entry points
+        is_scan_entry = (path.endswith("/run_all")
+                         or path.endswith("/scan/batch")
+                         or path.endswith("/run_all_buffered"))
+        is_scan = is_scan_entry  # for audit logging below
+
+        # Session 1: rate limit ONLY external entry points
+        if is_scan_entry and not is_internal and request.method == "POST":
             _metrics["scan_requests"] += 1
             if not _rate_check(cid):
                 _metrics["rate_limited"] += 1
