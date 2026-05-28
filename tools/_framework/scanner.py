@@ -33,11 +33,39 @@ Typical tool file (entire scanner):
 That's the entire DNS Records scanner — ~30 lines instead of ~300.
 """
 import asyncio
+import os
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Awaitable, Optional
 
 from tools._shared import standard_response
 from tools._framework.findings import run_rules
+
+# ═══════════════════ VL-TURBO Sessions 7-9 ═══════════════════
+_VL_TURBO_TIMEOUT = int(os.environ.get("VL_TURBO_SCANNER_TIMEOUT", "60"))
+_VL_TURBO_CACHE_TTL = int(os.environ.get("VL_TURBO_CACHE_TTL", "86400"))
+_VL_TURBO_TIER_CONCURRENCY = int(os.environ.get("VL_TURBO_TIER_CONCURRENCY", "12"))
+_vl_turbo_cache: dict = {}
+
+def _vl_turbo_cache_get(host, tool):
+    if _VL_TURBO_CACHE_TTL <= 0: return None
+    e = _vl_turbo_cache.get((host, tool))
+    if e and e[0] > time.time():
+        c = dict(e[1]); c["_vl_cached"] = True; return c
+    return None
+
+def _vl_turbo_cache_set(host, tool, result):
+    if _VL_TURBO_CACHE_TTL <= 0: return
+    _vl_turbo_cache[(host, tool)] = (time.time() + _VL_TURBO_CACHE_TTL, result)
+
+_vl_turbo_sems: dict = {}
+def _vl_turbo_tier_sem(tool):
+    g = (tool or "misc").split("_")[0]
+    s = _vl_turbo_sems.get(g)
+    if s is None:
+        s = asyncio.Semaphore(_VL_TURBO_TIER_CONCURRENCY); _vl_turbo_sems[g] = s
+    return s
+# ═════════════════════════════════════════════════════════════
 
 
 @dataclass
@@ -141,7 +169,7 @@ async def run_scanner(
         if k in ctx.state:
             raw_data[k] = ctx.state[k]
 
-    return standard_response(
+    _result = standard_response(
         tool=tool,
         target=host,
         findings=findings,
@@ -152,3 +180,5 @@ async def run_scanner(
                        f"{len(findings)} findings emitted."),
         raw_data=raw_data,
     )
+    _vl_turbo_cache_set(host, tool, _result)
+    return _result
