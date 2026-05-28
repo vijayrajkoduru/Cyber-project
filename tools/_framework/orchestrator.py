@@ -32,6 +32,19 @@ Returns: { "module": "...", "target": "...", "duration_sec": 38.4,
 """
 import asyncio
 
+# VL-TURBO Session 5: NDJSON heartbeat — keeps proxy connection alive during long scans
+import asyncio as _vl_async
+import json as _vl_json
+async def _vl_turbo_heartbeat(queue, interval=15):
+    """Push a heartbeat event every 15s until cancelled."""
+    while True:
+        try:
+            await _vl_async.sleep(interval)
+            await queue.put(_vl_json.dumps({"event":"heartbeat","ts":__import__("time").time()}) + "\n")
+        except _vl_async.CancelledError:
+            break
+
+
 # VL-TURBO: per-scanner wall-clock cap (kills runaway scanners)
 import asyncio as _vl_asyncio
 import os as _vl_os
