@@ -1,39 +1,63 @@
-"""wayback_timeline — VL-FORGE Recon §1 Passive Footprint: Wayback Machine snapshot count"""
-import asyncio
-import requests
+"""Wayback Timeline v2 — VL-FORGE. Web archive snapshot history."""
+import asyncio, requests, json
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-
-try:
-    from tools._payloads.wayback_timeline_findings import WAYBACK_TIMELINE_FINDING_RULES as RULES
-except ImportError:
-    RULES = []
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
+router=APIRouter()
+def _g(u,t=15):
     try:
-        r = await asyncio.to_thread(requests.get,
-            f"http://web.archive.org/cdx/search/cdx?url={ctx.host}&output=json&limit=1000",
-            timeout=15)
-        if r.status_code == 200 and r.text.strip():
-            data = r.json()
-            count = max(0, len(data) - 1)
-            ctx.state['wayback_snapshots'] = count
-            if count > 0:
-                ctx.state['wayback_first'] = data[1][1]
-                ctx.state['wayback_last'] = data[-1][1]
-            ctx.source(f'archive.org {count} snapshots')
-    except Exception as e:
-        ctx.state['wayback_error'] = str(e)[:120]
-        ctx.source('wayback-error')
-
+        r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0"})
+        if r.status_code==200: return r.text
+    except: pass
+    return None
+async def gather(ctx):
+    host=ctx.host
+    t1,t2=await asyncio.gather(
+        asyncio.to_thread(_g,f"http://web.archive.org/cdx/search/cdx?url={host}&output=json&limit=200"),
+        asyncio.to_thread(_g,f"http://web.archive.org/cdx/search/cdx?url=*.{host}&output=json&limit=200"))
+    snapshots=[]; years=set()
+    for txt in [t1,t2]:
+        if not txt: continue
+        ctx.source("wayback")
+        try: data=json.loads(txt)
+        except: continue
+        if data and len(data)>1:
+            for row in data[1:]:
+                if len(row)>=6:
+                    ts=row[1]; url=row[2]; mime=row[3]; status=row[4]
+                    if ts and len(ts)>=4: years.add(ts[:4])
+                    snapshots.append({"ts":ts,"url":url[:120],"status":status})
+    ctx.state["snapshot_count"]=len(snapshots)
+    ctx.state["years_covered"]=sorted(years)
+    ctx.state["first_snapshot"]=min((s["ts"] for s in snapshots),default=None) if snapshots else None
+    ctx.state["last_snapshot"]=max((s["ts"] for s in snapshots),default=None) if snapshots else None
+    ctx.state["sample_urls"]=list({s["url"] for s in snapshots})[:10]
+    ctx.state["reachable"]=bool(snapshots)
+def _r_history(s):
+    n=s.get("snapshot_count") or 0
+    if n==0: return None
+    years=len(s.get("years_covered") or [])
+    return {"name":f"{n} Wayback snapshots across {years} year(s)","severity":"INFO","cwe":"T1596",
+        "evidence":f"First: {s.get('first_snapshot')} | Last: {s.get('last_snapshot')}",
+        "remediation":"Review historical snapshots for forgotten endpoints / leaked data."}
+def _r_old(s):
+    fs=s.get("first_snapshot","") or ""
+    if not fs or len(fs)<4: return None
+    yr=int(fs[:4])
+    if yr>2010: return None
+    return {"name":f"Long Wayback history (since {yr})","severity":"LOW","cwe":"CWE-200",
+        "evidence":f"Site indexed since {fs} — old content may have leaked secrets",
+        "remediation":"Audit early snapshots for hardcoded creds / API keys."}
+def _r_clean(s):
+    if (s.get("snapshot_count") or 0)>0: return None
+    return {"name":"No Wayback history","severity":"POSITIVE",
+        "evidence":"Domain not archived — minimal historical footprint"}
+FINDING_RULES=[_r_old,_r_history,_r_clean]
+INTEL_FIELDS=[("Snapshots","snapshot_count"),("Years","years_covered"),
+    ("First","first_snapshot"),("Last","last_snapshot")]
 @router.post("/api/recon/wayback_timeline")
-async def recon_wayback_timeline(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="wayback_timeline",
-                              gather_func=gather, finding_rules=RULES, intel_fields=[])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="wayback_timeline",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["snapshot_count","sample_urls","first_snapshot"])
+def register(app): app.include_router(router)

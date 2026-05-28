@@ -1,33 +1,72 @@
-"""whois_history — VL-FORGE Recon §1 Passive Footprint: Historical WHOIS via viewdns.info"""
-import asyncio
-import requests
+"""WHOIS History v2 — VL-FORGE. Historical WHOIS records (key-gated)."""
+import asyncio, requests, os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-
-try:
-    from tools._payloads.whois_history_findings import WHOIS_HISTORY_FINDING_RULES as RULES
-except ImportError:
-    RULES = []
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
+router=APIRouter()
+def _g(u,h=None,t=12):
     try:
-        r = await asyncio.to_thread(requests.get,
-            f"https://viewdns.info/iphistory/?domain={ctx.host}", timeout=10,
-            headers={'User-Agent': 'VulnusLab/1.0'})
-        ctx.state['whois_history_found'] = 'IP Address' in r.text
-        ctx.source('viewdns-iphistory')
-    except Exception as e:
-        ctx.state['whois_history_error'] = str(e)[:120]
-        ctx.source('whois-history-error')
-
+        r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0",**(h or {})})
+        if r.status_code==200: return r.json()
+    except: pass
+    return None
+async def gather(ctx):
+    host=ctx.host
+    st_key=os.environ.get("SECURITYTRAILS_API_KEY","")
+    whoxy_key=os.environ.get("WHOXY_API_KEY","")
+    history=[]
+    if st_key:
+        d=await asyncio.to_thread(_g,f"https://api.securitytrails.com/v1/history/{host}/whois",
+            {"APIKEY":st_key})
+        if d:
+            ctx.source("securitytrails-history")
+            for h in d.get("result",{}).get("items",[]) or []:
+                history.append({"source":"securitytrails",
+                    "registrar":(h.get("registrarName") or [None])[0] if isinstance(h.get("registrarName"),list) else h.get("registrarName"),
+                    "registrant":h.get("registrantName"),
+                    "created":h.get("createdDate"),
+                    "expires":h.get("expiresDate")})
+    if whoxy_key:
+        d=await asyncio.to_thread(_g,f"https://api.whoxy.com/?key={whoxy_key}&history={host}")
+        if d:
+            ctx.source("whoxy-history")
+            for h in d.get("whois_records",[]) or []:
+                history.append({"source":"whoxy","registrar":h.get("domain_registrar",{}).get("registrar_name"),
+                    "created":h.get("create_date"),"expires":h.get("expiry_date")})
+    # Detect ownership changes
+    registrars=set(h["registrar"] for h in history if h.get("registrar"))
+    registrants=set(h.get("registrant") for h in history if h.get("registrant"))
+    ctx.state.update({"history_count":len(history),"history_sample":history[:5],
+        "registrar_changes":len(registrars),"registrant_changes":len(registrants),
+        "reachable":bool(history),"keys_configured":bool(st_key or whoxy_key)})
+def _r_unkeyed(s):
+    if s.get("keys_configured"): return None
+    return {"name":"WHOIS history requires API key","severity":"INFO",
+        "evidence":"Set SECURITYTRAILS_API_KEY or WHOXY_API_KEY to enable history lookup",
+        "remediation":"Free SecurityTrails tier gives limited history queries/month."}
+def _r_owner_change(s):
+    n=s.get("registrant_changes") or 0
+    if n<2: return None
+    return {"name":f"Domain ownership changed {n-1} time(s)","severity":"MEDIUM","cwe":"T1583",
+        "evidence":f"Distinct registrants in history: {n}",
+        "remediation":"Verify legitimacy if recent transfer; could indicate hijack or M&A."}
+def _r_registrar_change(s):
+    n=s.get("registrar_changes") or 0
+    if n<2: return None
+    return {"name":f"Registrar changed {n-1} time(s)","severity":"LOW",
+        "evidence":f"Distinct registrars: {n}",
+        "remediation":"Multiple registrar switches can indicate panic moves."}
+def _r_history(s):
+    n=s.get("history_count") or 0
+    if n==0: return None
+    return {"name":f"{n} WHOIS history records found","severity":"INFO",
+        "evidence":"Pull full history via SecurityTrails / Whoxy for ownership timeline"}
+FINDING_RULES=[_r_owner_change,_r_registrar_change,_r_history,_r_unkeyed]
+INTEL_FIELDS=[("History records","history_count"),("Registrar changes","registrar_changes"),
+    ("Registrant changes","registrant_changes"),("Keys configured","keys_configured")]
 @router.post("/api/recon/whois_history")
-async def recon_whois_history(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="whois_history",
-                              gather_func=gather, finding_rules=RULES, intel_fields=[])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="whois_history",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["history_sample","history_count"])
+def register(app): app.include_router(router)

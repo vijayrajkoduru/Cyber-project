@@ -1,43 +1,66 @@
-"""cert_san_aggregator — VL-FORGE Recon §1 Passive Footprint: Active certificate SAN aggregation (⭐ NEW)"""
-import asyncio
-import requests
+"""Cert SAN Aggregator v2 — VL-FORGE. Pull SAN list from live cert + CT logs."""
+import asyncio, ssl, socket, requests, json
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-
-try:
-    from tools._payloads.cert_san_aggregator_findings import CERT_SAN_AGGREGATOR_FINDING_RULES as RULES
-except ImportError:
-    RULES = []
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
+router=APIRouter()
+def _live_cert(host):
     try:
-        r = await asyncio.to_thread(requests.get,
-            f"https://api.certspotter.com/v1/issuances?include_subdomains=true&expand=dns_names&domain=%25.{ctx.host}&output=json", timeout=15)
-        if r.status_code == 200 and r.text.strip():
-            certs = r.json()
-            sans = set()
-            for c in certs:
-                for d in (c.get('name_value','') or '').split('\n'):
-                    d = d.strip().lower()
-                    if d and '*' not in d:
-                        sans.add(d)
-            ctx.state['ct_san_total'] = len(sans)
-            ctx.state['ct_san_sample'] = list(sans)[:20]
-            ctx.source(f'crt.sh {len(sans)} unique SANs')
-        else:
-            ctx.source('crt-san-no-data')
-    except Exception as e:
-        ctx.state['cert_san_error'] = str(e)[:120]
-        ctx.source('cert-san-error')
-
+        c=ssl.create_default_context(); c.check_hostname=False; c.verify_mode=ssl.CERT_NONE
+        with socket.create_connection((host,443),timeout=6) as s:
+            with c.wrap_socket(s,server_hostname=host) as ss:
+                cert=ss.getpeercert()
+                return [x[1] for x in (cert.get("subjectAltName") or []) if x[0]=="DNS"]
+    except: return []
+def _ct_sans(host):
+    try:
+        r=requests.get(f"https://crt.sh/?q={host}&output=json",timeout=15)
+        if r.status_code==200:
+            data=r.json()
+            sans=set()
+            for e in data[:200]:
+                nv=(e.get("name_value","") or "")
+                for n in nv.split("\n"):
+                    n=n.strip().lower()
+                    if n and "*" not in n: sans.add(n)
+            return sorted(sans)
+    except: pass
+    return []
+async def gather(ctx):
+    host=ctx.host
+    live,ct=await asyncio.gather(
+        asyncio.to_thread(_live_cert,host),
+        asyncio.to_thread(_ct_sans,host))
+    if live: ctx.source("live-cert-tls")
+    if ct: ctx.source(f"ct-logs ({len(ct)})")
+    merged=set(live) | set(ct)
+    ctx.state.update({"live_sans":live,"ct_sans":ct[:50],"all_sans":sorted(merged)[:100],
+        "san_count":len(merged),"live_san_count":len(live),"ct_san_count":len(ct),
+        "reachable":bool(merged)})
+def _r_many(s):
+    n=s.get("san_count") or 0
+    if n<10: return None
+    sev="INFO" if n<50 else ("LOW" if n<200 else "MEDIUM")
+    return {"name":f"{n} SANs across CT + live cert","severity":sev,"cwe":"T1596.001",
+        "evidence":"Sample: "+", ".join((s.get("all_sans") or [])[:5]),
+        "remediation":"SAN list = subdomain attack surface map."}
+def _r_diff(s):
+    live=set(s.get("live_sans") or [])
+    ct=set(s.get("ct_sans") or [])
+    only_ct = ct - live
+    if len(only_ct)<5: return None
+    return {"name":f"{len(only_ct)} subdomains in CT but not live cert","severity":"LOW",
+        "evidence":"Sample: "+", ".join(list(only_ct)[:5]),
+        "remediation":"Old/decommissioned subdomains? Check for orphan DNS records."}
+def _r_clean(s):
+    if (s.get("san_count") or 0)>0: return None
+    return {"name":"No SAN data","severity":"INFO","evidence":"Cert + CT both empty"}
+FINDING_RULES=[_r_many,_r_diff,_r_clean]
+INTEL_FIELDS=[("Total SANs","san_count"),("Live cert SANs","live_san_count"),
+    ("CT log SANs","ct_san_count")]
 @router.post("/api/recon/cert_san_aggregator")
-async def recon_cert_san_aggregator(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="cert_san_aggregator",
-                              gather_func=gather, finding_rules=RULES, intel_fields=[])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="cert_san_aggregator",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["all_sans","live_sans","san_count"])
+def register(app): app.include_router(router)
