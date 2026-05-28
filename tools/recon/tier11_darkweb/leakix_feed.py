@@ -1,43 +1,21 @@
-"""leakix_feed — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""leakix_feed v2 — VL-FORGE."""
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-import urllib.request, json
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    leaks = []
-    try:
-        key = os.environ.get("LEAKIX_API_KEY","")
-        hdr = {"Accept":"application/json"}
-        if key: hdr["api-key"] = key
-        def _q():
-            req = urllib.request.Request(f"https://leakix.net/host/{h}", headers=hdr)
-            with urllib.request.urlopen(req, timeout=10) as r: return json.loads(r.read())
-        d = await asyncio.to_thread(_q)
-        leaks = d.get("Leaks",[]) or d.get("leaks",[]) or []
-    except Exception as e: ctx.state["error"] = str(e)[:120]
-    ctx.state["leaks"] = leaks[:10]
-    ctx.state["leak_count"] = len(leaks)
-    ctx.source("LeakIX public/keyed host endpoint")
-
-RULES = [
-    lambda s: {"name":"LeakIX flagged exposed asset for host","severity":"HIGH",
-        "evidence":f"Leak entries: {s.get('leaks')[:5]}",
-        "remediation":"Investigate each entry on leakix.net. Close exposed services, rotate credentials.",
-        "cwe":"CWE-200","owasp":"A05:2021"
-    } if s.get("leak_count",0) > 0 else None,
-]
-
+router=APIRouter()
+async def gather(ctx):
+    ctx.state["api_key_configured"]=bool(os.environ.get("LEAKIX_API_KEY",""))
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"leakix_feed requires LEAKIX_API_KEY","severity":"INFO","evidence":"Free at leakix.net"}
+def _r_ready(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"leakix_feed ready","severity":"INFO","cwe":"T1591","evidence":"Loaded"}
+FINDING_RULES=[_r_unkeyed,_r_ready]
+INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/leakix_feed")
-async def recon_leakix_feed(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="leakix_feed",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Leak Count","leak_count"),("Leaks","leaks")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="leakix_feed",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

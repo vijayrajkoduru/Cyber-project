@@ -1,46 +1,42 @@
-"""dependency_confusion — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""Dependency Confusion v2 — VL-FORGE."""
+import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-import urllib.request
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    base_name = ctx.host.split(".")[0]
-    suspect_names = [f"@{base_name}/internal", f"{base_name}-internal", f"{base_name}-private"]
-    available = []
-    for name in suspect_names:
-        try:
-            url = f"https://registry.npmjs.org/{name}"
-            req = urllib.request.Request(url, method="HEAD")
-            def _q(r=req):
-                try:
-                    with urllib.request.urlopen(r, timeout=5) as resp: return resp.status
-                except urllib.error.HTTPError as e: return e.code
-                except Exception: return 0
-            code = await asyncio.to_thread(_q)
-            if code == 404:  # available for typosquatting
-                available.append(name)
-        except Exception: pass
-    ctx.state["squattable_names"] = available
-    ctx.source("npm registry — dependency-confusion candidate check")
-
-RULES = [
-    lambda s: {"name":"Dependency Confusion: internal-looking names UNCLAIMED on public npm","severity":"HIGH",
-        "evidence":f"Names attacker could squat: {s.get('squattable_names')}",
-        "remediation":"Pre-register these names on npm OR configure .npmrc with scope-private registry for internal scopes",
-        "cwe":"CWE-829","owasp":"A06:2021"
-    } if s.get("squattable_names") else None,
-]
-
+router=APIRouter()
+def _npm(n):
+    try: return requests.get(f"https://registry.npmjs.org/{n}",timeout=6).status_code==200
+    except: return None
+def _pypi(n):
+    try: return requests.get(f"https://pypi.org/pypi/{n}/json",timeout=6).status_code==200
+    except: return None
+async def gather(ctx):
+    org=ctx.host.split(".")[0]
+    cands=[f"{org}-internal",f"{org}-shared",f"{org}-utils",f"{org}-common",f"{org}-core",
+        f"@{org}/internal",f"@{org}/shared",f"{org}-private",f"{org}-tools",f"internal-{org}"]
+    npm_res=await asyncio.gather(*[asyncio.to_thread(_npm,c) for c in cands])
+    pypi_res=await asyncio.gather(*[asyncio.to_thread(_pypi,c) for c in cands if "@" not in c])
+    unc_npm=[c for c,r in zip(cands,npm_res) if r is False]
+    unc_pypi=[c for c,r in zip([x for x in cands if "@" not in x],pypi_res) if r is False]
+    ctx.source(f"checked-{len(cands)*2}")
+    ctx.state.update({"unclaimed_npm":unc_npm,"unclaimed_pypi":unc_pypi,
+        "unclaimed_count":len(unc_npm)+len(unc_pypi)})
+def _r_vuln(s):
+    n=s.get("unclaimed_count",0)
+    if n==0: return None
+    return {"name":f"Dependency Confusion: {n} internal-looking names UNCLAIMED on public npm/pypi",
+        "severity":"HIGH","cvss":7.5,"cwe":"CWE-829","owasp":"A06:2021",
+        "evidence":f"npm: {s.get('unclaimed_npm')} | pypi: {s.get('unclaimed_pypi')}",
+        "remediation":"Pre-register these names on npm OR configure .npmrc with scope-private registry"}
+def _r_safe(s):
+    if s.get("unclaimed_count",0)>0: return None
+    return {"name":"No dependency confusion exposure","severity":"POSITIVE",
+        "evidence":"All internal-looking names already claimed"}
+FINDING_RULES=[_r_vuln,_r_safe]
+INTEL_FIELDS=[("Unclaimed npm","unclaimed_npm"),("Unclaimed pypi","unclaimed_pypi"),("Total","unclaimed_count")]
 @router.post("/api/recon/dependency_confusion")
-async def recon_dependency_confusion(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="dependency_confusion",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Squattable Names","squattable_names")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="dependency_confusion",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["unclaimed_npm","unclaimed_pypi","unclaimed_count"])
+def register(app): app.include_router(router)

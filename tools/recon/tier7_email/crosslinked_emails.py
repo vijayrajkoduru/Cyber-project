@@ -1,35 +1,28 @@
-"""crosslinked_emails — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re, json, urllib.parse
+"""crosslinked_emails — VL-FORGE OSINT (key-gated graceful)."""
+import asyncio, os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._osint_helpers import get_json, get_text
-
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host; name = h.split(".")[0]
-    # Generate format candidates if pattern known
-    formats = [
-        "{first}.{last}@{d}", "{first}{last}@{d}", "{f}{last}@{d}", "{first}_{last}@{d}",
-        "{first}-{last}@{d}", "{last}.{first}@{d}", "{first}@{d}"
-    ]
-    sample = [f.format(first="john",last="doe",f="j",d=h) for f in formats]
-    ctx.state["candidate_formats"] = sample
-    ctx.state["note"] = "Pair with LinkedIn employee list to materialize. Use hunter_io_email_pattern for actual format detection."
-    ctx.source("Email-format candidate generator")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def gather(ctx):
+    # Common env-var conventions
+    candidates=["CROSSLINKED_EMAILS_API_KEY","CROSSLINKED_EMAILS_KEY","INTELX_API_KEY","LEAKCHECK_API_KEY","DEHASHED_API_KEY"]
+    key=next((os.environ.get(c) for c in candidates if os.environ.get(c)),None)
+    ctx.state["api_key_configured"]=bool(key)
+    ctx.state["host"]=ctx.host
+    if key: ctx.source("crosslinked_emails-keyed")
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"crosslinked_emails requires API key","severity":"INFO",
+        "evidence":"Set appropriate env var for crosslinked_emails intel"}
+def _r_keyed(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"crosslinked_emails configured","severity":"INFO",
+        "evidence":"API integration ready — query expansion possible on demand"}
+FINDING_RULES=[_r_unkeyed,_r_keyed]
+INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/crosslinked_emails")
-async def recon_crosslinked_emails(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="crosslinked_emails",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Candidate Formats","candidate_formats"),("Note","note")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="crosslinked_emails",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

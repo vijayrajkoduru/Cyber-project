@@ -1,42 +1,48 @@
-"""firebase_open_db_check — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re, json, urllib.parse
+"""Firebase Open DB Check v2 — VL-FORGE (real probe)."""
+import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._osint_helpers import get_json, get_text
-
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    name = ctx.host.split(".")[0]
-    open_dbs = []
-    for db in (name, f"{name}-prod", f"{name}-dev", f"{name}-default-rtdb"):
-        for region in ("",".firebaseio.com",".region1.firebasedatabase.app"):
-            host = db + (".firebaseio.com" if not region else region) if not region.startswith(".region") else db + region
-            url = f"https://{host}/.json"
-            code, d = await get_json(url, timeout=5)
-            if code == 200 and d is not None and d != {{}}:
-                # Anonymously readable DB
-                open_dbs.append({"url":url,"sample_keys":list(d.keys())[:5] if isinstance(d,dict) else []})
-                break
-    ctx.state["open_databases"] = open_dbs
-    ctx.source("Firebase RTDB /.json anonymous read probe")
-
-RULES = [
-    lambda s: {"name":"Firebase Realtime Database Publicly Readable","severity":"CRITICAL",
-        "evidence":f"Anonymous /.json returned data: {s.get('open_databases')}",
-        "remediation":"Set Firebase rules: { .read: auth != null, .write: auth != null }. Audit Firestore rules too.",
-        "cwe":"CWE-284","owasp":"A01:2021"
-    } if s.get("open_databases") else None,
-]
-
+router=APIRouter()
+def _check(url):
+    try:
+        r=requests.get(url,timeout=6,headers={"User-Agent":"VulnusLab/1.0"})
+        return {"status":r.status_code,"body_len":len(r.content),
+            "open":r.status_code==200 and (r.text or "")!="null"}
+    except: return None
+async def gather(ctx):
+    org=ctx.host.split(".")[0]
+    cands=[f"https://{org}.firebaseio.com/.json",f"https://{org}-prod.firebaseio.com/.json",
+        f"https://{org}-dev.firebaseio.com/.json",f"https://{org}-staging.firebaseio.com/.json",
+        f"https://{org}-default-rtdb.firebaseio.com/.json"]
+    res=await asyncio.gather(*[asyncio.to_thread(_check,u) for u in cands])
+    open_dbs=[]; existing=[]
+    for u,r in zip(cands,res):
+        if not r: continue
+        if r.get("open") and r.get("body_len",0)>2:
+            open_dbs.append({"url":u,"size":r["body_len"]})
+        elif r.get("status") in (200,401,403):
+            existing.append({"url":u,"status":r["status"]})
+    if open_dbs: ctx.source(f"open-firebase-{len(open_dbs)}")
+    ctx.state.update({"open_dbs":open_dbs,"existing":existing,
+        "open_count":len(open_dbs),"existing_count":len(existing)})
+def _r_open(s):
+    o=s.get("open_dbs") or []
+    if not o: return None
+    return {"name":f"Firebase DB OPEN to public read ({len(o)})","severity":"CRITICAL","cvss":9.5,
+        "cwe":"CWE-284","owasp":"A05:2021",
+        "evidence":"; ".join(f"{x['url']} ({x['size']}B)" for x in o),
+        "remediation":"Set Firebase rules: '.read': 'auth != null'. Audit data exposed."}
+def _r_exists(s):
+    e=s.get("existing") or []
+    if not e or s.get("open_count",0)>0: return None
+    return {"name":f"{len(e)} Firebase projects exist (locked)","severity":"INFO",
+        "evidence":", ".join(x["url"].replace(".firebaseio.com/.json","") for x in e[:5])}
+FINDING_RULES=[_r_open,_r_exists]
+INTEL_FIELDS=[("Open DBs","open_count"),("Existing","existing_count")]
 @router.post("/api/recon/firebase_open_db_check")
-async def recon_firebase_open_db_check(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="firebase_open_db_check",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Open Databases","open_databases")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="firebase_open_db_check",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["open_dbs","existing"])
+def register(app): app.include_router(router)

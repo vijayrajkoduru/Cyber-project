@@ -1,33 +1,46 @@
-"""rpc_endpoint_enum — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""RPC Endpoint Enum v2 — VL-FORGE. Portmap (port 111) RPC enumeration."""
+import asyncio, socket, struct
+import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._network_helpers import tcp_open, resolve_host
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    ip = resolve_host(ctx.host)
-    if not ip: ctx.state["unresolved"]=True; ctx.source("DNS"); return
-    rpc_open = await tcp_open(ip, 135, timeout=3)
-    ctx.state["rpc_135_open"] = rpc_open
-    ctx.source("RPC Endpoint Mapper TCP 135 probe")
-
-RULES = [
-    lambda s: {"name":"RPC Endpoint Mapper Exposed","severity":"MEDIUM",
-        "evidence":"TCP 135 reachable — Windows RPC enumeration possible",
-        "remediation":"Block TCP 135 at firewall. Use IPSec or RPC over HTTPS if remote RPC needed.",
-        "cwe":"CWE-200","owasp":"A05:2021"
-    } if s.get("rpc_135_open") else None,
-]
-
+router=APIRouter()
+async def _resolve(h):
+    try:
+        r=dns.asyncresolver.Resolver();r.timeout=4
+        return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
+    except: return []
+def _portmap_dump(ip,timeout=4):
+    # RPC dump call: pmap_dump (proc=4)
+    xid=0x12345678
+    msg=struct.pack(">IIIIIIIII",xid,0,2,100000,2,4,0,0,0)
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as s:
+            s.settimeout(timeout)
+            s.sendto(msg,(ip,111))
+            data,_=s.recvfrom(8192)
+            return data
+    except: return None
+async def gather(ctx):
+    ips=await _resolve(ctx.host)
+    if not ips: ctx.state["reachable"]=False; return
+    ctx.state["reachable"]=True; ctx.state["ip"]=ips[0]
+    data=await asyncio.to_thread(_portmap_dump,ips[0])
+    if data:
+        ctx.source("portmap-111")
+        ctx.state["portmap_exposed"]=True
+        ctx.state["response_bytes"]=len(data)
+def _r_exposed(s):
+    if not s.get("portmap_exposed"): return None
+    return {"name":"RPC portmap (port 111) exposed","severity":"HIGH","cvss":7.0,
+        "cwe":"CWE-200","owasp":"A05:2021",
+        "evidence":f"Returned {s.get('response_bytes',0)} bytes — services enumerable",
+        "remediation":"Firewall RPC ports (111, 2049/NFS) to trusted IPs."}
+FINDING_RULES=[_r_exposed]
+INTEL_FIELDS=[("IP","ip"),("Portmap exposed","portmap_exposed")]
 @router.post("/api/recon/rpc_endpoint_enum")
-async def recon_rpc_endpoint_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="rpc_endpoint_enum",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("RPC 135 Open","rpc_135_open")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="rpc_endpoint_enum",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["portmap_exposed"])
+def register(app): app.include_router(router)

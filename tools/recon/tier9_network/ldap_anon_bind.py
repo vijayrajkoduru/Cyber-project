@@ -1,37 +1,45 @@
-"""ldap_anon_bind — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""LDAP Anonymous Bind v2 — VL-FORGE. Test anon bind on port 389/636."""
+import asyncio, socket
+import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._network_helpers import tcp_banner, resolve_host
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    ip = resolve_host(ctx.host)
-    if not ip: ctx.state["unresolved"]=True; ctx.source("DNS"); return
-    # LDAP anonymous bind request (BindRequest version=3 name="" auth=simple)
-    pkt = bytes.fromhex("300c020101600702010304008000")
-    resp = await tcp_banner(ip, 389, timeout=3, send=pkt)
-    success = resp.startswith(b"\x30") and len(resp) > 5
-    ctx.state["anon_bind_succeeded"] = success
-    ctx.state["bytes_returned"] = len(resp) if resp else 0
-    ctx.source("LDAP anonymous bind probe")
-
-RULES = [
-    lambda s: {"name":"LDAP Anonymous Bind Allowed","severity":"HIGH",
-        "evidence":"LDAP 389 accepted anonymous bind — directory enumeration possible",
-        "remediation":"Disable anonymous bind. Restrict LDAP to authenticated queries. Prefer LDAPS (636).",
-        "cwe":"CWE-287","owasp":"A07:2021"
-    } if s.get("anon_bind_succeeded") else None,
-]
-
+router=APIRouter()
+async def _resolve(h):
+    try:
+        r=dns.asyncresolver.Resolver();r.timeout=4
+        return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
+    except: return []
+def _probe(ip,port,timeout=4):
+    bind_req=b"\x30\x0c\x02\x01\x01\x60\x07\x02\x01\x03\x04\x00\x80\x00"
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
+            s.settimeout(timeout); s.connect((ip,port))
+            s.send(bind_req)
+            r=s.recv(1024)
+            return b"\x0a\x01\x00" in r  # BindResponse with resultCode=success
+    except: return False
+async def gather(ctx):
+    ips=await _resolve(ctx.host)
+    if not ips: ctx.state["reachable"]=False; return
+    ctx.state["reachable"]=True; ctx.state["ip"]=ips[0]
+    res389,res636=await asyncio.gather(
+        asyncio.to_thread(_probe,ips[0],389),
+        asyncio.to_thread(_probe,ips[0],636))
+    if res389: ctx.source("ldap-389-anon")
+    if res636: ctx.source("ldaps-636-anon")
+    ctx.state["anon_bind_389"]=res389; ctx.state["anon_bind_636"]=res636
+def _r_anon(s):
+    if not (s.get("anon_bind_389") or s.get("anon_bind_636")): return None
+    return {"name":"LDAP anonymous bind allowed","severity":"HIGH","cvss":7.5,
+        "cwe":"CWE-287","owasp":"A07:2021",
+        "evidence":f"389: {s.get('anon_bind_389')} | 636: {s.get('anon_bind_636')}",
+        "remediation":"Disable anonymous bind. OpenLDAP: 'olcDisallows: bind_anon'"}
+FINDING_RULES=[_r_anon]
+INTEL_FIELDS=[("IP","ip"),("389 anon","anon_bind_389"),("636 anon","anon_bind_636")]
 @router.post("/api/recon/ldap_anon_bind")
-async def recon_ldap_anon_bind(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="ldap_anon_bind",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Anon Bind Succeeded","anon_bind_succeeded"),("Bytes Returned","bytes_returned")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="ldap_anon_bind",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["anon_bind_389","anon_bind_636"])
+def register(app): app.include_router(router)

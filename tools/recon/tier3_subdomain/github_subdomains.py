@@ -1,61 +1,52 @@
-"""github_subdomains — VL-FORGE Recon §3 Subdomain Enumeration (real, zero-FP)."""
-import asyncio, os
+"""GitHub Subdomains v2 — VL-FORGE. Code search for *.target leaks."""
+import asyncio, requests, os, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._subdomain_helpers import resolves, bulk_check
-import urllib.request, urllib.parse, json, re
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    token = os.environ.get("GITHUB_TOKEN","")
-    if not token:
-        ctx.state["api_key_configured"] = False
-        ctx.source("GITHUB_TOKEN not set"); return
-    found = set()
+router=APIRouter()
+async def gather(ctx):
+    token=os.environ.get("GITHUB_TOKEN","")
+    if not token: ctx.state["api_key_configured"]=False; return
+    ctx.state["api_key_configured"]=True
+    h=ctx.host
     try:
-        q = urllib.parse.quote(f'"{h}"')
-        def _search():
-            req = urllib.request.Request(
-                f"https://api.github.com/search/code?q={q}&per_page=30",
-                headers={"Authorization": f"token {token}","Accept":"application/vnd.github.v3+json"})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                return json.loads(r.read())
-        d = await asyncio.to_thread(_search)
-        for item in d.get("items",[])[:30]:
-            url = item.get("html_url","")
-            # Fetch raw content
-            raw = url.replace("github.com","raw.githubusercontent.com").replace("/blob/","/")
-            try:
-                def _raw():
-                    req2 = urllib.request.Request(raw, headers={"Authorization":f"token {token}"})
-                    with urllib.request.urlopen(req2, timeout=6) as r2:
-                        return r2.read(20000).decode("utf-8","ignore")
-                body = await asyncio.to_thread(_raw)
-                for m in re.finditer(rf"([a-z0-9][a-z0-9-]*\.{re.escape(h)})", body):
-                    found.add(m.group(1).lower())
-            except Exception: pass
-    except Exception as e:
-        ctx.state["error"] = str(e)[:120]
-    verified = await bulk_check(list(found), concurrency=20)
-    ctx.state["api_key_configured"] = True
-    ctx.state["raw_count"] = len(found)
-    ctx.state["discovered"] = verified
-    ctx.state["count"] = len(verified)
-    ctx.source("GitHub code search + DNS verification")
-
-RULES = [
-
-]
-
+        r=requests.get(f"https://api.github.com/search/code?q=%22.{h}%22&per_page=50",
+            headers={"Authorization":f"Bearer {token}","Accept":"application/vnd.github+json"},timeout=15)
+        if r.status_code==200:
+            d=r.json()
+            subs=set()
+            pat=re.compile(rf"[\w\-]+\.{re.escape(h)}",re.I)
+            for item in d.get("items",[]):
+                # We don't fetch content; rely on text snippets in response
+                tm=item.get("text_matches",[]) or []
+                for m in tm:
+                    for hit in pat.findall(m.get("fragment","") or ""):
+                        subs.add(hit.lower())
+            ctx.state["subdomains"]=sorted(subs)[:100]; ctx.state["count"]=len(subs)
+            ctx.state["repos_matched"]=d.get("total_count",0)
+            ctx.source(f"github-{ctx.state['count']}")
+        elif r.status_code==401: ctx.state["auth_error"]=True
+        elif r.status_code==403: ctx.state["rate_limited"]=True
+    except: pass
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"GITHUB_TOKEN not configured","severity":"INFO",
+        "evidence":"Enable for GitHub code search subdomain discovery"}
+def _r_found(s):
+    n=s.get("count",0)
+    if n==0: return None
+    return {"name":f"{n} subdomains leaked in GitHub code","severity":"MEDIUM","cwe":"CWE-540",
+        "evidence":f"Found across {s.get('repos_matched',0)} repos. Sample: "+", ".join((s.get('subdomains') or [])[:5]),
+        "remediation":"Hostnames in public code = recon goldmine. Audit repos for hardcoded internal hosts."}
+def _r_clean(s):
+    if s.get("count",0)>0 or not s.get("api_key_configured"): return None
+    return {"name":"No subdomains leaked in GitHub","severity":"POSITIVE",
+        "evidence":"Code search returned 0 matches"}
+FINDING_RULES=[_r_unkeyed,_r_found,_r_clean]
+INTEL_FIELDS=[("API key","api_key_configured"),("Subdomains","count"),("Repos","repos_matched")]
 @router.post("/api/recon/github_subdomains")
-async def recon_github_subdomains(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="github_subdomains",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("API Key Configured","api_key_configured"),("Discovered","discovered"),("Count","count")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="github_subdomains",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["subdomains","count"])
+def register(app): app.include_router(router)

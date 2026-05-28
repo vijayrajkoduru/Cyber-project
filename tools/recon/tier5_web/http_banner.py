@@ -1,41 +1,42 @@
-"""http_banner — VL-FORGE Recon §5 Web App Recon (real, zero-FP)."""
-import asyncio, re
+"""HTTP Banner v2 — VL-FORGE."""
+import asyncio, requests
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import ScanContext, run_scanner
-from tools.recon._web_helpers import fetch, base_url
-
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    url = base_url(ctx.host)
-    code, hdrs, _ = await fetch(url)
-    ctx.state["status"] = code
-    ctx.state["server"] = hdrs.get("Server","") or hdrs.get("server","")
-    ctx.state["powered_by"] = hdrs.get("X-Powered-By","") or hdrs.get("x-powered-by","")
-    ctx.state["via"] = hdrs.get("Via","")
-    ctx.source("HTTP banner probe")
-
-RULES = [
-    lambda s: {"name":"Server software version disclosed","severity":"LOW",
-        "evidence":f"Server header: {s['server']}",
-        "remediation":"Strip Server/X-Powered-By headers via reverse proxy (server_tokens off in nginx)",
-        "cwe":"CWE-200","owasp":"A05:2021"
-    } if any(c.isdigit() for c in s.get("server","")) else None,
-    lambda s: {"name":"X-Powered-By header leaks framework","severity":"LOW",
-        "evidence":f"X-Powered-By: {s['powered_by']}",
-        "remediation":"Remove X-Powered-By header — exposes framework version to attackers",
-        "cwe":"CWE-200","owasp":"A05:2021"
-    } if s.get("powered_by") else None,
-]
-
+router=APIRouter()
+def _g(u):
+    try:
+        return requests.head(u,timeout=8,verify=False,allow_redirects=True,
+            headers={"User-Agent":"VulnusLab/1.0"})
+    except: return None
+async def gather(ctx):
+    r=await asyncio.to_thread(_g,web_url(ctx.host))
+    if not r: ctx.state["reachable"]=False; return
+    ctx.state["reachable"]=True
+    h={k:v for k,v in r.headers.items()}
+    ctx.state["headers"]=h
+    ctx.state["server"]=h.get("Server",h.get("server","unknown"))
+    ctx.state["powered_by"]=h.get("X-Powered-By",h.get("x-powered-by",""))
+    ctx.state["status_code"]=r.status_code
+    ctx.source(f"http-{r.status_code}")
+def _r_server_version(s):
+    srv=s.get("server","")
+    if "/" in srv and any(c.isdigit() for c in srv):
+        return {"name":f"Server version disclosed: {srv}","severity":"LOW","cwe":"CWE-200",
+            "evidence":f"Server: {srv}","remediation":"Hide server tokens"}
+def _r_powered_by(s):
+    pb=s.get("powered_by","")
+    if not pb: return None
+    return {"name":f"X-Powered-By: {pb}","severity":"LOW","cwe":"CWE-200","evidence":pb,
+        "remediation":"Remove X-Powered-By header"}
+def _r_server(s):
+    if not s.get("server"): return None
+    return {"name":f"Server: {s['server']}","severity":"INFO","evidence":f"Status: {s.get('status_code')}"}
+FINDING_RULES=[_r_server_version,_r_powered_by,_r_server]
+INTEL_FIELDS=[("Server","server"),("X-Powered-By","powered_by"),("Status","status_code")]
 @router.post("/api/recon/http_banner")
-async def recon_http_banner(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="http_banner",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Status","status"),("Server","server"),("Powered By","powered_by"),("Via","via")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="http_banner",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["server","powered_by","status_code","headers"])
+def register(app): app.include_router(router)

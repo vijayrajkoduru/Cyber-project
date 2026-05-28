@@ -1,35 +1,57 @@
-"""smb_netbios_enum — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""SMB/NetBIOS Enum v2 — VL-FORGE. TCP 139/445 + UDP 137 probe."""
+import asyncio, socket
+import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._network_helpers import tcp_open, tcp_banner, resolve_host
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    ip = resolve_host(ctx.host)
-    if not ip: ctx.state["unresolved"]=True; ctx.source("DNS"); return
-    smb_445 = await tcp_open(ip, 445, timeout=3)
-    nb_139  = await tcp_open(ip, 139, timeout=3)
-    ctx.state["smb_445_open"] = smb_445
-    ctx.state["netbios_139_open"] = nb_139
-    ctx.source("SMB/NetBIOS TCP port probe")
-
-RULES = [
-    lambda s: {"name":"SMB Port Exposed to Internet","severity":"HIGH",
-        "evidence":"TCP 445 reachable — SMB historically critical (WannaCry/EternalBlue)",
-        "remediation":"Block 139/445 at perimeter firewall. SMB should never be internet-facing.",
-        "cwe":"CWE-668","owasp":"A05:2021"
-    } if s.get("smb_445_open") or s.get("netbios_139_open") else None,
-]
-
+router=APIRouter()
+async def _resolve(h):
+    try:
+        r=dns.asyncresolver.Resolver();r.timeout=4
+        return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
+    except: return []
+def _tcp(ip,port,timeout=3):
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            return s.connect_ex((ip,port))==0
+    except: return False
+def _nbns(ip,timeout=3):
+    payload=b"\x12\x34\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00 CKAAAAAAAAAAAAAAAAAAAAAAAAAAAA\x00\x00\x21\x00\x01"
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as s:
+            s.settimeout(timeout); s.sendto(payload,(ip,137))
+            data,_=s.recvfrom(2048)
+            return len(data)>0
+    except: return False
+async def gather(ctx):
+    ips=await _resolve(ctx.host)
+    if not ips: ctx.state["reachable"]=False; return
+    ctx.state["reachable"]=True; ctx.state["ip"]=ips[0]
+    res445,res139,res137=await asyncio.gather(
+        asyncio.to_thread(_tcp,ips[0],445),
+        asyncio.to_thread(_tcp,ips[0],139),
+        asyncio.to_thread(_nbns,ips[0]))
+    if res445: ctx.source("smb-445")
+    if res139: ctx.source("netbios-139")
+    if res137: ctx.source("nbns-137")
+    ctx.state.update({"smb_445":res445,"netbios_139":res139,"nbns_137":res137,
+        "exposed":res445 or res139 or res137})
+def _r_exposed(s):
+    if not s.get("exposed"): return None
+    ports=[]; 
+    if s.get("smb_445"): ports.append("445/SMB")
+    if s.get("netbios_139"): ports.append("139/NetBIOS")
+    if s.get("nbns_137"): ports.append("137/NBNS")
+    return {"name":f"SMB/NetBIOS exposed to internet ({', '.join(ports)})","severity":"HIGH","cvss":7.5,
+        "cwe":"CWE-200","owasp":"A05:2021",
+        "evidence":", ".join(ports),
+        "remediation":"Block SMB/NetBIOS at perimeter firewall. Never expose to internet — ransomware vector."}
+FINDING_RULES=[_r_exposed]
+INTEL_FIELDS=[("IP","ip"),("SMB 445","smb_445"),("NetBIOS 139","netbios_139"),("NBNS 137","nbns_137")]
 @router.post("/api/recon/smb_netbios_enum")
-async def recon_smb_netbios_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="smb_netbios_enum",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("SMB 445 Open","smb_445_open"),("Netbios 139 Open","netbios_139_open")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="smb_netbios_enum",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["smb_445","netbios_139","nbns_137"])
+def register(app): app.include_router(router)

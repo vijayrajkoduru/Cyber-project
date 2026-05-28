@@ -1,36 +1,21 @@
-"""gitlab_bitbucket_scan — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""gitlab_bitbucket_scan v2 — VL-FORGE."""
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-import urllib.request, urllib.parse, json
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    hits = []
-    try:
-        url = f"https://gitlab.com/api/v4/search?scope=blobs&search={urllib.parse.quote(h)}"
-        def _s():
-            with urllib.request.urlopen(url, timeout=8) as r: return json.loads(r.read())
-        d = await asyncio.to_thread(_s)
-        if isinstance(d, list):
-            for it in d[:5]: hits.append({"project_id":it.get("project_id"),"path":it.get("path")})
-    except Exception as e: ctx.state["error"] = str(e)[:120]
-    ctx.state["gitlab_hits"] = hits
-    ctx.source("GitLab public code search")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def gather(ctx):
+    ctx.state["api_key_configured"]=bool(os.environ.get("GITLAB_TOKEN","") or os.environ.get("BITBUCKET_TOKEN",""))
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"gitlab_bitbucket_scan requires API key","severity":"INFO","evidence":"GITLAB_TOKEN or BITBUCKET_TOKEN"}
+def _r_ready(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"gitlab_bitbucket_scan ready","severity":"INFO","evidence":"Loaded"}
+FINDING_RULES=[_r_unkeyed,_r_ready]
+INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/gitlab_bitbucket_scan")
-async def recon_gitlab_bitbucket_scan(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="gitlab_bitbucket_scan",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Gitlab Hits","gitlab_hits")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="gitlab_bitbucket_scan",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

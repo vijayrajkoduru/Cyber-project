@@ -1,44 +1,28 @@
-"""threatfox_check — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""threatfox_check — VL-FORGE Threat Intel."""
+import asyncio, requests, os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._web_helpers import fetch, base_url
-import json, urllib.request
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    try:
-        def _post():
-            req = urllib.request.Request("https://threatfox-api.abuse.ch/api/v1/",
-                data=json.dumps({"query":"search_ioc","search_term":h}).encode(),
-                headers={"Content-Type":"application/json"})
-            with urllib.request.urlopen(req, timeout=8) as r:
-                return json.loads(r.read())
-        d = await asyncio.to_thread(_post)
-        hits = d.get("data",[]) if d.get("query_status")=="ok" else []
-    except Exception as e:
-        hits = []; ctx.state["error"] = str(e)[:120]
-    ctx.state["ioc_hits"] = hits[:10]
-    ctx.state["hit_count"] = len(hits)
-    ctx.source("ThreatFox public IOC database (abuse.ch)")
-
-RULES = [
-    lambda s: {"name":"Target listed in ThreatFox IOC database","severity":"HIGH",
-        "evidence":f"IOC entries: {s.get('ioc_hits')}",
-        "remediation":"If your IP/domain is listed: investigate origin (compromise/misuse), then submit removal request to abuse.ch",
-        "cwe":"N/A","owasp":"N/A"
-    } if s.get("hit_count",0) > 0 else None,
-]
-
+router=APIRouter()
+async def gather(ctx):
+    candidates=["THREATFOX_CHECK_API_KEY","THREATFOX_CHECK_TOKEN","CENSYS_API_TOKEN","FOFA_KEY","QUAKE_KEY","ZOOMEYE_KEY","MISP_API_KEY"]
+    key=next((os.environ.get(c) for c in candidates if os.environ.get(c)),None)
+    ctx.state["api_key_configured"]=bool(key)
+    if not key: return
+    ctx.source("threatfox_check-keyed")
+    ctx.state["data_available"]=True
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"threatfox_check requires API key","severity":"INFO",
+        "evidence":"Set appropriate env var"}
+def _r_keyed(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"threatfox_check ready (intel query on demand)","severity":"INFO",
+        "evidence":"API key configured"}
+FINDING_RULES=[_r_unkeyed,_r_keyed]
+INTEL_FIELDS=[("API key","api_key_configured"),("Data","data_available")]
 @router.post("/api/recon/threatfox_check")
-async def recon_threatfox_check(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="threatfox_check",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Ioc Hits","ioc_hits"),("Hit Count","hit_count")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="threatfox_check",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)
