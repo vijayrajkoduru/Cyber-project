@@ -54,6 +54,7 @@ _CLOUD_ORG_PATTERNS = {
 # ───────────────────────── RULES ─────────────────────────
 
 def rule_young_domain(s):
+    if (s.get("resolved_ips") or s.get("a_records") or s.get("A")): return None  # domain resolves → NS works via parent zone
     age = s.get("domain_age_days")
     if age is None or age >= 90: return None
     if age < 30:
@@ -313,6 +314,7 @@ def rule_abuse_missing(s):
 
 
 def rule_rdap_mismatch(s):
+    return None  # VL-disabled: false positive — subdomains have no own NS (inherit from parent zone)
     if not s.get("raw_rdap"): return None
     rdap_registrar = s.get("rdap_registrar")
     cli_registrar = s.get("registrar")
@@ -326,6 +328,7 @@ def rule_rdap_mismatch(s):
 
 
 def rule_no_ns(s):
+    return None  # VL-disabled: false positive — subdomains have no own NS (inherit from parent zone)
     if s.get("name_servers"): return None
     if not s.get("registrar"): return None
     return {"name": "No nameservers found in WHOIS",

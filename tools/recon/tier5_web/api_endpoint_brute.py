@@ -1,6 +1,7 @@
 """API Endpoint Brute — Route: /api/recon/api_endpoint_brute
-Probes common API paths from api_endpoints.txt. Confirms via non-404 status + JSON content-type."""
-import asyncio, re
+Probes common API paths. Confirms via non-404 + JSON/auth. Suppresses SPA
+catch-all false positives (Netlify/Vercel return 200+index.html for every path)."""
+import asyncio, random, string
 from pathlib import Path
 import requests
 from fastapi import APIRouter, Depends
@@ -44,6 +45,9 @@ async def gather(ctx: ScanContext):
         ctx.state["target_reachable"] = False; return
     ctx.state["target_reachable"] = True
     ctx.source("homepage")
+    # SPA catch-all baseline — a path that cannot legitimately exist
+    _nonsense = "/" + "".join(random.choices(string.ascii_lowercase, k=24)) + "-vlnope"
+    _bl = await asyncio.to_thread(_probe, base, _nonsense)
     paths = _load()
     ctx.state["probed"] = len(paths)
     sem = asyncio.Semaphore(_CONC)
@@ -51,6 +55,15 @@ async def gather(ctx: ScanContext):
         async with sem: return await asyncio.to_thread(_probe, base, p)
     results = await asyncio.gather(*[one(p) for p in paths])
     hits = [h for h in results if h]
+    # If the nonsense path "exists" and is not JSON, the site soft-200s every
+    # path (SPA fallback). Drop hits matching that status+size; keep real
+    # JSON/auth endpoints (genuine API surface differs from index.html).
+    spa = bool(_bl and not _bl["is_json"])
+    if spa:
+        _bs, _bsz = _bl["status"], _bl["size"]
+        hits = [h for h in hits if h["is_json"] or h["is_auth"]
+                or not (h["status"] == _bs and abs(h["size"] - _bsz) <= 64)]
+    ctx.state["spa_catchall"] = spa
     ctx.state["hits"] = hits
     ctx.state["hits_count"] = len(hits)
     ctx.state["json_endpoints"] = [h for h in hits if h["is_json"] and not h["is_auth"]]
@@ -61,8 +74,7 @@ def r_open_json(s):
     j = s.get("json_endpoints") or []
     if not j: return None
     return {"name": f"Unauthenticated JSON API endpoints exposed ({len(j)})",
-            "severity": "HIGH", "cwe": "CWE-285",
-            "cwe_name": "Improper Authorization",
+            "severity": "HIGH", "cwe": "CWE-285", "cwe_name": "Improper Authorization",
             "owasp": "A01:2021 — Broken Access Control",
             "evidence": ", ".join(f"{h['path']} ({h['status']}, {h['size']}B)" for h in j[:5]),
             "remediation": "Require authentication on all API endpoints. Audit each for sensitive data exposure."}
@@ -78,9 +90,9 @@ def r_auth(s):
 def r_clean(s):
     if not s.get("target_reachable"): return None
     if s.get("hits"): return None
-    return {"name": "No common API endpoints found",
-            "severity": "POSITIVE",
-            "evidence": f"Probed {s.get('probed',0)} paths — all returned 404."}
+    base = f"Probed {s.get('probed',0)} paths"
+    return {"name": "No common API endpoints found", "severity": "POSITIVE",
+            "evidence": (base + " — SPA catch-all suppressed.") if s.get("spa_catchall") else (base + " — all returned 404.")}
 
 def r_unreach(s):
     if s.get("target_reachable"): return None

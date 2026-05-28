@@ -6614,6 +6614,34 @@ function generateOsintPdf(results, target) {
     doc.text(guideLines,margin+5,y+6); y+=guideH+6;
   }
 
+    // ═══ INDUSTRY-STANDARD: GLOSSARY ═══
+  chk(60); y = sHead("Glossary", y);
+  fillR(margin,y,contentW,7,[15,23,42]); txt("TERM",margin+3,y+5,8,[255,255,255],true); txt("DEFINITION",margin+38,y+5,8,[255,255,255],true); y+=7;
+  const _gloss = [
+    ["CVE","Common Vulnerabilities and Exposures — unique ID for a publicly disclosed security flaw"],
+    ["CVSS","Common Vulnerability Scoring System — 0-10 numeric severity (v3.1)"],
+    ["CWE","Common Weakness Enumeration — classification of underlying defect type"],
+    ["OWASP","Open Web Application Security Project — industry security non-profit"],
+    ["PTES","Penetration Testing Execution Standard — 7-phase methodology"],
+    ["WSTG","Web Security Testing Guide — OWASP's web-app pentest manual"],
+    ["DAST","Dynamic Application Security Testing — black-box runtime scanning"],
+    ["SAST","Static Application Security Testing — source-code scanning"],
+    ["AXFR","DNS Zone Transfer — full zone copy from master to secondary"],
+    ["CT log","Certificate Transparency log — public log of issued TLS certs"],
+    ["WAF","Web Application Firewall"],
+    ["CDN","Content Delivery Network"],
+    ["SPF/DKIM/DMARC","Email authentication standards (sender validation, signing, policy)"],
+    ["DNSSEC","DNS Security Extensions — cryptographic signing of DNS records"],
+  ];
+  _gloss.forEach((g,i)=>{
+    chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
+    txt(g[0],margin+3,y+5,8,BLUE,true);
+    const vl = doc.splitTextToSize(g[1],138);
+    doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
+    doc.text(vl[0]||"",margin+38,y+5); y+=7;
+  });
+  y += 6;
+
   // ── END OF REPORT ──
   if(y+32>284){doc.addPage();y=18;drawHeader();} y+=4;
   fillR(margin,y,contentW,30,LBLUE); fillR(margin,y,3,30,BLUE);
@@ -8673,7 +8701,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     return [
       "Hit the " + (toolKey || "scanner") + " endpoint with the target",
       "Observe response — look for: " + (ev || "the documented signal"),
-      "Compare to the rule logic in tools/recon/" + (toolKey || "")
+      "Compare to the rule logic in the " + String(toolKey||"scanner").toLowerCase() + " scanner module"
     ];
   };
 
@@ -8726,8 +8754,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _R_rawSum = _R_sevCount.CRITICAL*15 + _R_sevCount.HIGH*8 + _R_sevCount.MEDIUM*3 + _R_sevCount.LOW*1;
   const _R_maxC   = _R_sevCount.CRITICAL>0?30:_R_sevCount.HIGH>0?22:_R_sevCount.MEDIUM>0?12:5;
   const _R_riskScore = Math.round(Math.min(100, Math.max(5, Math.min(70, _R_rawSum) + _R_maxC)));
-  const _R_riskLabel = _R_riskScore>=80?"CRITICAL RISK":_R_riskScore>=60?"HIGH RISK":_R_riskScore>=40?"MODERATE RISK":_R_riskScore>=20?"LOW RISK":"MINIMAL RISK";
-  const _R_riskColor = _R_riskScore>=80?[162,28,28]:_R_riskScore>=60?[194,65,12]:_R_riskScore>=40?[133,79,11]:_R_riskScore>=20?[202,138,4]:[15,118,82];
+  const _R_riskLabel = (_R_riskScore>=80&&_R_sevCount.CRITICAL>0)?"CRITICAL RISK":_R_riskScore>=60?"HIGH RISK":_R_riskScore>=40?"MODERATE RISK":_R_riskScore>=20?"LOW RISK":"MINIMAL RISK";
+  const _R_riskColor = (_R_riskScore>=80&&_R_sevCount.CRITICAL>0)?[162,28,28]:_R_riskScore>=60?[194,65,12]:_R_riskScore>=40?[133,79,11]:_R_riskScore>=20?[202,138,4]:[15,118,82];
 
   // Report ID + Content Hash (deterministic per (target, date, findings))
   const _R_genId = (t,d) => { const s=String(t)+"|"+String(d)+"|"+Date.now(); let h=0; for(let i=0;i<s.length;i++) h=((h<<5)-h+s.charCodeAt(i))|0; return "VL-"+(String(d||"").replace(/[^0-9]/g,"").substring(0,8)||"00000000")+"-"+Math.abs(h).toString(16).toUpperCase().padStart(6,"0").substring(0,6); };
@@ -8807,7 +8835,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._R_riskColor);
   doc.text(String(_R_riskScore), margin+8, y+15);
   txt(_R_riskLabel, margin+38, y+8, 11, _R_riskColor, true);
-  txt(`Report ID: ${_R_REPORT_ID}  ·  ${_R_allFindings.length} findings across recon tools`, margin+38, y+14, 7.5, GRAY);
+  txt(`Report ID: ${_R_REPORT_ID}  ·  ${(_R_sevCount.CRITICAL+_R_sevCount.HIGH+_R_sevCount.MEDIUM+_R_sevCount.LOW+_R_sevCount.INFO)} findings across recon tools`, margin+38, y+14, 7.5, GRAY);
   fillR(margin+38, y+17, contentW-40, 2, [226,232,240]);
   fillR(margin+38, y+17, Math.max((_R_riskScore/100)*(contentW-40), 2), 2, _R_riskColor);
   y += 24;
@@ -8882,7 +8910,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       case "favicon":    return d.found ? `Hash ${d.shodan_hash}` : "no favicon";
       case "cloudbuckets":return `${(d.open_buckets||[]).length} OPEN · ${(d.existing_buckets||[]).length} existing`;
       case "secrets":    return `${(d.findings||[]).length} secret(s)`;
-      case "asn":        return d.asn ? `${String(d.asn).toUpperCase().startsWith("AS") ? d.asn : "AS"+d.asn} — ${String(d.org||d.as_owner||"").substring(0,40)}` : "ASN done";
+      case "asn":        return d.asn ? `${String(d.asn).toUpperCase().startsWith("AS") ? d.asn : "AS"+d.asn} — ${String(d.org||d.as_owner||d.asn_org||d.organization||d.owner||"").substring(0,40)}` : "ASN done";
       case "internetdb": return d.found ? `${(d.ports||[]).length}p · ${(d.vulns||[]).length} CVE` : "no record";
       case "cve_match":  return d.summary ? `${d.summary.total_cves||0} CVE(s) · ${d.summary.critical_cves||0} critical · ${d.summary.high_cves||0} high` : "no match";
       case "subdomain_takeover": return (d.total_vulnerable||0) > 0 ? `${d.total_vulnerable} VULN takeover(s) on ${d.checked||0} subs` : `0 takeovers (${d.checked||0} subs checked)`;
@@ -8963,6 +8991,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     let _posture="STRONG", _pCol=[16,185,129];
     if (_sc.CRITICAL>0){_posture="CRITICAL ATTENTION";_pCol=[220,38,38];}
     else if (_sc.HIGH>2){_posture="NEEDS REMEDIATION";_pCol=[245,158,11];}
+    else if (_sc.HIGH>0){_posture="REQUIRES REVIEW";_pCol=[245,158,11];}
     else if (_sc.HIGH+_sc.MEDIUM>5){_posture="REQUIRES REVIEW";_pCol=[245,158,11];}
     fillR(margin, y, contentW, 22, [248,250,252]);
     fillR(margin, y, 4, 22, _pCol);
@@ -9091,7 +9120,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
     txt(row[0], margin+3, y+5, 8, DARK, true);
     txt(row[1], margin+78, y+5, 7.5, GRAY);
-    txt(_R_compOk?"✓ Aligned":"⚠ Findings", margin+150, y+5, 7.5, _R_compOk?[15,118,82]:[133,79,11], true);
+    {const _isRisk=/11\.2|RA-3|164\.308/.test(row[1]);const _ok=!(_isRisk&&!_R_compOk);txt(_ok?"COVERED":"REVIEW", margin+150, y+5, 7.5, _ok?[15,118,82]:[133,79,11], true);}
     y += 7;
   });
   y += 6;
@@ -9384,7 +9413,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const cwe = String(f.cwe||"").trim();
         const evLines = doc.splitTextToSize(evidence, 134);
         const remLines = remediation ? doc.splitTextToSize(remediation, 134) : [];
-        const rowH = 6 + 4 + (evLines.length * 3.5) + (sev !== 'INFO' ? (3.5 + 3 * 3.2 + 1.5) : 0) + (remLines.length ? (remLines.length * 3.5 + 1) : 0) + 3;
+        const rowH = 6 + 6.5 + (evLines.length * 3.5) + (sev !== 'INFO' ? (3.5 + 3 * 3.2 + 1.5) : 0) + (remLines.length ? (remLines.length * 3.5 + 1) : 0) + 3;
         chk(rowH + 2);
         fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
         rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
@@ -9416,7 +9445,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           txt(_mitre.id, _badgeX-11, y+5.8, 5.5, WHITE, true, "center");
           _badgeX -= 25;
         }
-        let textY = y + 8.5;
+        let textY = y + 11;
         // CVSS vector string — small mono
         const _vec = _CVSS_VECTORS[sev];
         if(_vec){
@@ -10262,7 +10291,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       _inv.push(["SSL Labs grade", r.ssl_labs_grade.grade]);
     }
     // ASN
-    if (r.asn && r.asn.asn) _inv.push(["ASN", `${r.asn.asn} — ${r.asn.org||""}`]);
+    if (r.asn && r.asn.asn) _inv.push(["ASN", `${r.asn.asn} — ${String(r.asn.org||r.asn.as_owner||r.asn.asn_org||r.asn.organization||r.asn.owner||"").substring(0,40)}`]);
     // WAF/CDN
     if (r.waf_cdn_detect && (r.waf_cdn_detect.fingerprints||[]).length) {
       _inv.push(["WAF / CDN", (r.waf_cdn_detect.fingerprints||[]).join(", ")]);
@@ -10270,7 +10299,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     // Email security
     if (r.email_security) {
       const _es = r.email_security;
-      _inv.push(["Email security", `SPF=${_es.spf?"yes":"no"} · DMARC=${_es.dmarc?"yes":"no"} · DKIM=${(_es.dkim_selectors||[]).length>0?"yes":"no"}`]);
+      _inv.push(["Email security", `SPF=${(_es.spf||_es.spf_record||_es.spf_present||_es.has_spf||_es.spf_valid)?"yes":"no"} · DMARC=${(_es.dmarc||_es.dmarc_record||_es.dmarc_present||_es.has_dmarc)?"yes":"no"} · DKIM=${((_es.dkim_selectors||[]).length>0||_es.dkim||_es.has_dkim)?"yes":"no"}`]);
     }
 
     // ── Always include target hostname as baseline asset ──
@@ -10417,7 +10446,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         fillR(margin, y, 4, 15, col);
         fillR(margin+4, y, contentW-4, 15, LIGHT);
         txt(`#${i+1}`, margin+8, y+6, 8, col, true);
-        txt(String(f.detail||f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||f.msg||f.text||f.label||f.id||(f.evidence?String(f.evidence).substring(0,60):"")||"Untitled finding").substring(0,75), margin+8, y+11, 8.5, DARK, true);
+        txt(String(f.detail||f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||f.msg||f.text||f.label||f.id||(f.evidence?String(f.evidence).substring(0,60):"")||"Untitled finding").substring(0,100), margin+8, y+11, 8.5, DARK, true);
         txt(sev, margin+contentW-22, y+6, 7, col, true);
         const remed = String(f.remediation||"See per-finding section").substring(0,100);
         txt(`Fix: ${remed}`, margin+8, y+11+3.5, 7, GRAY, false);
@@ -10529,11 +10558,6 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   if(y+32>284){doc.addPage();y=18;drawHeader();}
   const bY=y+5;
   fillR(margin,bY,contentW,30,LBLUE); fillR(margin,bY,3,30,BLUE);
-  txt("— END OF REPORT —",pageW/2,bY+8,10,BLUE,true,"center");
-  txt("Generated by VulnusLab — automated reconnaissance by VulnusLab engine.",pageW/2,bY+14,6.5,GRAY,false,"center");
-  txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,bY+18,6,GRAY,false,"center");
-  txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,bY+25,7,BLUE,true,"center");
-
   // ── BORDER + WATERMARK ALL PAGES ───────────────────────────
   const _wm = _cfg.watermark;
   const _conf = _cfg.confidentiality || "CONFIDENTIAL";
@@ -10556,35 +10580,12 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
     }
   }
-  // ═══ INDUSTRY-STANDARD: GLOSSARY ═══
-  chk(60); y = sHead("Glossary", y);
-  y = tHead(["TERM","DEFINITION"],[35,145],y);
-  const _gloss = [
-    ["CVE","Common Vulnerabilities and Exposures — unique ID for a publicly disclosed security flaw"],
-    ["CVSS","Common Vulnerability Scoring System — 0-10 numeric severity (v3.1)"],
-    ["CWE","Common Weakness Enumeration — classification of underlying defect type"],
-    ["OWASP","Open Web Application Security Project — industry security non-profit"],
-    ["PTES","Penetration Testing Execution Standard — 7-phase methodology"],
-    ["WSTG","Web Security Testing Guide — OWASP's web-app pentest manual"],
-    ["DAST","Dynamic Application Security Testing — black-box runtime scanning"],
-    ["SAST","Static Application Security Testing — source-code scanning"],
-    ["AXFR","DNS Zone Transfer — full zone copy from master to secondary"],
-    ["CT log","Certificate Transparency log — public log of issued TLS certs"],
-    ["WAF","Web Application Firewall"],
-    ["CDN","Content Delivery Network"],
-    ["SPF/DKIM/DMARC","Email authentication standards (sender validation, signing, policy)"],
-    ["DNSSEC","DNS Security Extensions — cryptographic signing of DNS records"],
-  ];
-  _gloss.forEach((g,i)=>{
-    chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
-    txt(g[0],margin+3,y+5,8,BLUE,true);
-    const vl = doc.splitTextToSize(g[1],138);
-    doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
-    doc.text(vl[0]||"",margin+38,y+5); y+=7;
-  });
-  y += 6;
+  txt("— END OF REPORT —",pageW/2,bY+8,10,BLUE,true,"center");
+  txt("Generated by VulnusLab — automated reconnaissance by VulnusLab engine.",pageW/2,bY+14,6.5,GRAY,false,"center");
+  txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.",pageW/2,bY+18,6,GRAY,false,"center");
+  txt("vulnuslab.com  ·  support@vulnuslab.com",pageW/2,bY+25,7,BLUE,true,"center");
 
-  doc.save(`recon_${_pdfFn(target)}_${_pdfDt()}.pdf`);
+doc.save(`recon_${_pdfFn(target)}_${_pdfDt()}.pdf`);
   }; // end _doGen
   _doGen();
 }
