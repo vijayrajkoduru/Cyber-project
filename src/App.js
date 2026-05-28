@@ -8747,6 +8747,21 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       _R_allFindings.push(f);
     });
   });
+  // Dedup: collapse same-named findings emitted by multiple scanners -- keep highest severity
+  (function(){
+    const _sr = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,POSITIVE:4,INFO:5};
+    const _bn = new Map(); const _kl = [];
+    _R_allFindings.forEach(f => {
+      const k = String(f.name||f.detail||f.title||"").trim().toLowerCase();
+      if (!k) { _kl.push(f); return; }
+      const rkv = _sr[String(f.severity||"INFO").toUpperCase()];
+      const rk = (rkv != null) ? rkv : 9;
+      const cur = _bn.get(k);
+      if (!cur || rk < cur.__rk) _bn.set(k, Object.assign({__rk: rk}, f));
+    });
+    const _dd = _kl.concat(Array.from(_bn.values()).map(f => { const g = Object.assign({}, f); delete g.__rk; return g; }));
+    _R_allFindings.splice(0, _R_allFindings.length, ..._dd);
+  })();
   const _R_sevCount = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,POSITIVE:0,INFO:0};
   _R_allFindings.forEach(f => { const k = f.severity || "INFO"; _R_sevCount[k] = (_R_sevCount[k]||0) + 1; });
 
@@ -9067,18 +9082,32 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   doc.addPage(); y=18; drawHeader();
 
   chk(85); y = sHead("Scan Coverage", y);
-  fillR(margin, y, contentW, 16, LIGHT);
-  fillR(margin, y, 4, 16, _covColor);
+  fillR(margin, y, contentW, 20, LIGHT);
+  fillR(margin, y, 4, 20, _covColor);
   doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
   doc.text(`${_covPct}%`, margin+10, y+11);
   doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
   doc.text(`${_completeness}/${_PHASE_DEFS.length} phases completed cleanly`, margin+30, y+7);
   doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-  doc.text(`${_ran} ran with data · ${_empty} empty · ${_failed} failed · ${_skipped} skipped · ${_notrun} not selected`, margin+30, y+12);
-  y += 19;
+  { let _sx = margin+30;
+    const _seg = [[_ran,"DATA",[15,118,82]],[_empty,"EMPTY",[100,116,139]],[_skipped,"SKIPPED",[133,79,11]],[_failed,"ERROR",[162,28,28]]];
+    _seg.forEach(function(g,gi){
+      doc.setTextColor(g[2][0],g[2][1],g[2][2]);
+      doc.setFont("Arial","bold"); doc.setFontSize(13); doc.text(String(g[0]), _sx, y+15.5); _sx += doc.getTextWidth(String(g[0]));
+      doc.setFontSize(8.5); doc.text(" "+g[1], _sx, y+15.5); _sx += doc.getTextWidth(" "+g[1]);
+      if(gi<3){ doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(148,163,184); doc.text("   ·   ", _sx, y+15.5); _sx += doc.getTextWidth("   ·   "); }
+    });
+  }
+  y += 23;
+  // -- status key legend --
+  { let _kx = margin;
+    const _key = [["DATA",[15,118,82],"returned findings"],["EMPTY",[55,65,81],"ran clean, no data"],["SKIPPED",[120,53,15],"not applicable"],["ERROR",[162,28,28],"tool had a problem"]];
+    _key.forEach(function(it){ doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(it[1][0],it[1][1],it[1][2]); doc.text(it[0],_kx,y+2.5); var lw=doc.getTextWidth(it[0]); doc.setFont("Arial","normal"); doc.setTextColor(100,116,139); doc.text(" "+it[2],_kx+lw,y+2.5); _kx += lw + doc.getTextWidth(" "+it[2]) + 7; });
+    y += 6;
+  }
   // Per-phase coverage table
   y = tHead(["PHASE","STATUS","DETAIL"],[55,25,100],y);
-  _coverageRows.forEach((p,i)=>{
+  _coverageRows.filter(p=>p.status==="RAN").forEach((p,i)=>{
     const stColor = p.status==="RAN"     ? [15,118,82]
                   : p.status==="EMPTY"   ? [55,65,81]
                   : p.status==="FAILED"  ? [162,28,28]
@@ -9094,7 +9123,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     doc.text(p.name, margin+3, y+4.8);
     rrect(margin+58, y+1.5, 22, 5, 1, stBg);
     doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...stColor);
-    doc.text(p.status, margin+59.5, y+5);
+    doc.text(p.status==="RAN"?"DATA":p.status==="FAILED"?"ERROR":p.status, margin+59.5, y+5);
     doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
     doc.text(String(p.detail||"").substring(0,95), margin+84, y+4.8);
     y += 6.5;
@@ -9126,6 +9155,32 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   y += 6;
 
   // ── Findings — synthesized severity-ranked actionable risks ──
+  // -- Detailed Findings: consolidated table (Finding | Severity | CVSS | CWE) --
+  {
+    const _sevRk = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3};
+    const _df = _R_allFindings
+      .filter(function(f){ return _sevRk[String(f.severity||"").toUpperCase()] !== undefined; })
+      .slice()
+      .sort(function(a,b){ return (_sevRk[String(a.severity||"").toUpperCase()] - _sevRk[String(b.severity||"").toUpperCase()]) || (Number(b.cvss||0) - Number(a.cvss||0)); });
+    if (_df.length > 0) {
+      chk(30); y = sHead("Detailed Findings", y);
+      y = tHead(["FINDING","SEVERITY","CVSS","CWE"], [108,26,22,30], y);
+      _df.forEach(function(f,i){
+        const sev = String(f.severity||"").toUpperCase();
+        const sc = sev==="CRITICAL"?[162,28,28]:sev==="HIGH"?[194,65,12]:sev==="MEDIUM"?[202,138,4]:[55,65,81];
+        const nm = String(f.name||f.detail||f.title||"Finding");
+        const _cm={CRITICAL:9.8,HIGH:7.5,MEDIUM:5.3,LOW:3.1}; const _cn=Number(f.cvss)||0; const cv=(_cn>0?_cn:(_cm[sev]||0)).toFixed(1);
+        const cw = (String(f.cwe||"").trim() || String(f.references||"").split(",")[0].trim() || "-");
+        chk(7); fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
+        txt(nm.substring(0,70), margin+3, y+4.6, 7.5, DARK);
+        rrect(margin+109, y+1.4, 23, 4.8, 1, sc); txt(sev, margin+120.5, y+4.7, 6.5, WHITE, true, "center");
+        txt(cv, margin+138, y+4.6, 11, sc, true);
+        txt(cw, margin+159, y+4.6, 8, DARK, true);
+        y += 6.5;
+      });
+      y += 6;
+    }
+  }
   const _findings = synthesizeReconFindings(r);
   if (_findings.length > 0) {
     chk(40); y = sHead("Findings", y);
@@ -9423,11 +9478,11 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const _cvss = (typeof f.cvss === "number" ? f.cvss : parseFloat(f.cvss)) || _cvssMap[sev] || 0.0;
         if (_cvss > 0) {
           rrect(margin+22, y+2, 16, 5.5, 1, sevColor);
-          txt(`CVSS ${_cvss.toFixed(1)}`, margin+30, y+5.8, 6.2, WHITE, true, "center");
+          txt(`CVSS ${_cvss.toFixed(1)}`, margin+30, y+5.8, 8.5, WHITE, true, "center");
         }
         if(cwe && cwe !== "N/A"){
           rrect(margin+contentW-18, y+2, 16, 5.5, 1, DARK);
-          txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 6.5, WHITE, true, "center");
+          txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 8.5, WHITE, true, "center");
         }
         txt(name, margin+(_cvss>0?41:25), y+5, 8.5, DARK, true);
         // KEV badge (CISA Known Exploited Vulnerabilities) — red pill
@@ -9442,7 +9497,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const _mitre = _mitreFor(f);
         if(_mitre){
           rrect(_badgeX-22, y+2, 22, 5.5, 1, [124,58,237]);
-          txt(_mitre.id, _badgeX-11, y+5.8, 5.5, WHITE, true, "center");
+          txt(_mitre.id, _badgeX-11, y+5.8, 8.5, WHITE, true, "center");
           _badgeX -= 25;
         }
         let textY = y + 11;
@@ -12751,7 +12806,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
       doc.text(p.tool, margin+3, y+4.8);
       rrect(margin+58, y+1.5, 22, 5, 1, stBg);
       doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...stColor);
-      doc.text(p.status, margin+59.5, y+5);
+      doc.text(p.status==="RAN"?"DATA":p.status==="FAILED"?"ERROR":p.status, margin+59.5, y+5);
       doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
       doc.text(String(p.detail||"").substring(0,95), margin+84, y+4.8);
       y += 6.5;
