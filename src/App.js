@@ -968,7 +968,7 @@ function generatePDF(reportData) {
     const _allF = Array.isArray(findings) ? findings : [];
     const _topF = _allF.find(f=>f.severity==="CRITICAL") || _allF.find(f=>f.severity==="HIGH") || _allF.find(f=>f.severity==="MEDIUM") || null;
     const _critN = (summary.critical||0), _highN = (summary.high||0), _medN = (summary.medium||0);
-    let _hlBgColor = [240,253,244], _hlAccent = [15,118,82], _hlTag = "POSTURE OK", _hlTitle = "No critical issues found", _hlSub = "Security posture is acceptable. Review LOW findings for hardening opportunities.";
+    let _hlBgColor = [240,253,244], _hlAccent = [15,118,82], _hlTag = "STRONG", _hlTitle = "No critical issues found", _hlSub = "Security posture is acceptable. Review LOW findings for hardening opportunities.";
     if (_critN > 0) {
       _hlBgColor = [254,242,242]; _hlAccent = [162,28,28]; _hlTag = "FIX IMMEDIATELY";
       _hlTitle = `${_critN} CRITICAL finding(s) — patch within 24 hours`;
@@ -8785,7 +8785,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   // ─── KEY RISK HEADLINE (canon section 4) — color-coded box + SLA ───
   chk(28);
   const _R_hlBg = _R_riskScore>=60?[254,242,242]:_R_riskScore>=20?[255,247,237]:[240,253,244];
-  const _R_hlTag = _R_riskScore>=60?"FIX THIS WEEK":_R_riskScore>=20?"REVIEW SOON":"POSTURE OK";
+  const _R_hlTag = _R_riskScore>=60?"FIX THIS WEEK":_R_riskScore>=20?"REVIEW SOON":"STRONG";
   const _R_hlTitle = _R_sevCount.CRITICAL>0?`${_R_sevCount.CRITICAL} CRITICAL recon exposure(s) — patch within 24 hours`:
                      _R_sevCount.HIGH>0?`${_R_sevCount.HIGH} HIGH recon exposure(s) — patch within 7 days`:
                      _R_sevCount.MEDIUM>0?`${_R_sevCount.MEDIUM} MEDIUM exposure(s) — hardening recommended`:
@@ -8821,52 +8821,30 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   // Eliminates the "DNS missing — why?" question customers shouldn't
   // need to ask. If a section is absent from this PDF, this table tells
   // them WHY.
-  const _PHASE_DEFS = [
-    {tool:"whois",       name:"WHOIS Lookup",          isEmpty:d=>!d.registrar && !d.raw_output},
-    {tool:"dns",         name:"DNS Records",           isEmpty:d=>!d.records || (Array.isArray(d.records) ? d.records.length===0 : Object.keys(d.records).length===0)},
-    {tool:"dnsrecon",    name:"DNS Recon",             isEmpty:d=>!d.records || d.records.length===0},
-    // Framework tools (VL-FORGE) — count findings[] OR intel{} OR legacy field as data
-    {tool:"subdomains",  name:"Subdomain Discovery",   isEmpty:d=>(!d.findings||d.findings.length===0) && (!d.subdomains || d.subdomains.length===0)},
-    {tool:"crtsh",       name:"Cert Transparency",     isEmpty:d=>(!d.findings||d.findings.length===0) && (!d.subdomains || d.subdomains.length===0)},
-    {tool:"amass",       name:"Deep Subdomain (amass)",isEmpty:d=>!d.subdomains || d.subdomains.length===0},
-    {tool:"harvester",   name:"OSINT Harvesting",      isEmpty:d=>(!d.emails||d.emails.length===0) && (!d.hosts||d.hosts.length===0)},
-    {tool:"shodan",      name:"Shodan Lookup",         isEmpty:d=>!d.ports || d.ports.length===0},
-    {tool:"masscan",     name:"Fast Port Scan",        isEmpty:d=>!d.ports || d.ports.length===0},
-    {tool:"nmap",        name:"Deep Port Scan",        isEmpty:d=>!d.ports || d.ports.length===0},
-    {tool:"services",    name:"Service Detection",     isEmpty:d=>!d.ports || d.ports.length===0},
-    {tool:"os",          name:"OS Fingerprinting",     isEmpty:d=>!d.os && !d.os_match},
-    {tool:"banner",      name:"Banner Grabbing",       isEmpty:d=>!d.banners || Object.keys(d.banners).length===0},
-    {tool:"gobuster",    name:"Directory Enumeration", isEmpty:d=>!d.found || d.found.length===0},
-    {tool:"jsendpoints", name:"JS Endpoint Extractor", isEmpty:d=>(!d.paths||d.paths.length===0) && (!d.discovered||d.discovered.length===0)},
-    {tool:"wayback",     name:"Wayback Machine",       isEmpty:d=>(d.total||0)===0},
-    {tool:"robotsmap",   name:"robots + sitemap",      isEmpty:d=>(d.total||0)===0},
-    {tool:"crawl",       name:"BFS Crawler",           isEmpty:d=>(d.total||0)===0},
-    {tool:"params",      name:"Parameter Discovery",   isEmpty:d=>!d.params || d.params.length===0},
-    {tool:"favicon",     name:"Favicon Fingerprint",   isEmpty:d=>!d.found},
-    {tool:"cloudbuckets",name:"Cloud Bucket Finder",   isEmpty:d=>(!d.open_buckets||d.open_buckets.length===0) && (!d.existing_buckets||d.existing_buckets.length===0)},
-    {tool:"asn",         name:"ASN / IP Ownership",    isEmpty:d=>!d.asn && !d.ip},
-    {tool:"internetdb",  name:"Free Shodan (InternetDB)",isEmpty:d=>!d.found},
-    {tool:"cve_match",   name:"CVE Matching (NVD)", isEmpty:d=>!d.summary || (d.summary.total_cves||0)===0},
-    {tool:"waf_cdn",     name:"WAF / CDN Fingerprint", isEmpty:d=>(!d.findings||d.findings.length===0) && (!d.detected || d.detected.length===0)},
-    {tool:"zone_transfer", name:"DNS Zone Transfer",    isEmpty:d=>!d.vulnerable && (!d.transfers||d.transfers.length===0)},
-    {tool:"sourcemap",     name:"Source Map Exposure",  isEmpty:d=>!d.maps_found||d.maps_found.length===0},
-    {tool:"bucket_perms",  name:"Bucket Permissions",   isEmpty:d=>!d.buckets_exist},
-    {tool:"api_docs",      name:"API Docs Discovery",   isEmpty:d=>!d.exposed_endpoints||d.exposed_endpoints.length===0},
-    {tool:"tls_deep",      name:"TLS Deep Audit",         isEmpty:d=>!d.findings||d.findings.length===0},
-    {tool:"wpjson_enum",   name:"WordPress wp-json Enum", isEmpty:d=>(!d.users||d.users.length===0) && !d.wp_version},
-    {tool:"wp_plugin_brute", name:"WordPress Plugin Brute", isEmpty:d=>(!d.plugins_found||d.plugins_found.length===0) && !d.wp_detected},
-    {tool:"default_creds", name:"Admin Panel Exposure",   isEmpty:d=>!d.panels_found||d.panels_found.length===0},
-    {tool:"jslib_cve",  name:"JS Library CVE",       isEmpty:d=>(!d.libs_detected||d.libs_detected.length===0)},
-    {tool:"git_recon",  name:"Git Repo Exposure",    isEmpty:d=>!d.exposed_files||d.exposed_files.length===0},
-    {tool:"cdn_origin", name:"CDN Origin Discovery", isEmpty:d=>!d.cdn_detected||d.cdn_detected.length===0},
-    // Tier 6 — OSINT
-    {tool:"breach_search",      name:"Breach Search",          isEmpty:d=>(d.breach_count||0)===0 && (d.paste_count||0)===0},
-    {tool:"github_leaks",       name:"GitHub Leaks",           isEmpty:d=>(!d.matched_repos||d.matched_repos.length===0) && (!d.secret_hits||d.secret_hits.length===0) && !d.org_name},
-    {tool:"graphql_introspect", name:"GraphQL Introspection",  isEmpty:d=>!d.endpoint_found},
-    {tool:"email_security",     name:"Email Security",         isEmpty:d=>!d.spf_record && !d.dmarc_record && (!d.dkim_selectors_found||d.dkim_selectors_found.length===0)},
-    {tool:"dork_harvest",       name:"Search-Engine Dorks",    isEmpty:d=>(!d.critical_hits||d.critical_hits.length===0) && (!d.indexed_files||d.indexed_files.length===0)},
-    {tool:"dnssec_validate",    name:"DNSSEC Validate",        isEmpty:d=>!d.dnssec_enabled && !d.chain_broken && (!d.weak_algorithms||d.weak_algorithms.length===0)},
-  ];
+  // _PHASE_DEFS derived from RECON_PHASES (single source of truth).
+  // Avoids orphan entries when backend scanners are renamed.
+  const _PHASE_DEFS = RECON_PHASES.map(_ph => ({
+    tool: _ph.tool,
+    name: _ph.name,
+    isEmpty: d => (!d.findings || d.findings.length === 0) &&
+                  (!d.intel || Object.keys(d.intel).length === 0),
+  }));
+  // Auto-extend _PHASE_DEFS with any tool that's in the scan response but
+  // not in the static list — covers the 100+ scanners added since the
+  // original 42-row _PHASE_DEFS was written. Default isEmpty = no findings.
+  const _PD_known = new Set(_PHASE_DEFS.map(p => p.tool));
+  Object.keys(r || {}).forEach(toolKey => {
+    if (_PD_known.has(toolKey)) return;
+    if (typeof toolKey !== "string" || toolKey.startsWith("_")) return;
+    const phEntry = (typeof RECON_PHASES !== "undefined" ? RECON_PHASES : []).find(x => x.tool === toolKey);
+    const displayName = (phEntry && phEntry.name)
+      || toolKey.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    _PHASE_DEFS.push({
+      tool: toolKey,
+      name: displayName,
+      isEmpty: d => !d.findings || d.findings.length === 0,
+    });
+  });
   const _coverageRows = _PHASE_DEFS.map(p => {
     const d = r[p.tool];
     if (!d) return {...p, status:"NOT RUN",  detail:"Phase tile was deselected before this scan"};
@@ -8998,7 +8976,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     const _scope = [
       ["Target", target],
       ["Scan Date", date || new Date().toISOString().slice(0,10)],
-      ["Methodology", "VulnusLab Recon — 154 scanners, 13 categories"],
+      ["Methodology", `VulnusLab Recon — ${RECON_PHASES.length} scanners, 13 categories`],
       ["Frameworks", "PTES · OWASP WSTG · NIST SP 800-115 · MITRE PRE-ATT&CK"],
       ["Engagement Type", authenticated ? "Authenticated recon (session captured)" : "Black-box (public surface only)"],
     ];
@@ -10295,6 +10273,83 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       _inv.push(["Email security", `SPF=${_es.spf?"yes":"no"} · DMARC=${_es.dmarc?"yes":"no"} · DKIM=${(_es.dkim_selectors||[]).length>0?"yes":"no"}`]);
     }
 
+    // ── Always include target hostname as baseline asset ──
+    if (target) _inv.push(["Target hostname", target]);
+
+    // ── Server header from any web-app scanner that captured it ──
+    const _serverKeys = ["security_headers","http_banner","hsts_audit","cors_misconfig"];
+    for (const k of _serverKeys) {
+      const d = r[k] || {};
+      const intel = d.intel || {};
+      const hdrs = d.headers || intel.headers || {};
+      const srv = hdrs.Server || hdrs.server || intel.server || d.server;
+      if (srv) { _inv.push(["Server header", String(srv).slice(0,80)]); break; }
+    }
+
+    // ── Findings totals from §5 scanners that ran ──
+    const _ran5 = [];
+    ["security_headers","sourcemap_check","security_txt","ssl_tls_audit",
+     "ssl_labs_grade","tech_stack_detect","waf_cdn_detect","cors_misconfig",
+     "hsts_audit","http_banner","http_method_enum","robots_sitemap",
+     "crawl_endpoints","js_endpoint_extract","param_discovery","origin_ip_bypass",
+     "graphql_intro_check"].forEach(k => {
+      const d = r[k]; if (!d) return;
+      const fc = Array.isArray(d.findings) ? d.findings.length : 0;
+      if (fc > 0 || d.verified_at) _ran5.push(`${k} (${fc})`);
+    });
+    if (_ran5.length) _inv.push(["Web App scanners ran", `${_ran5.length} of 17 — ${_ran5.slice(0,5).join(", ")}${_ran5.length>5?"...":""}`]);
+
+    // ── API endpoints discovered ──
+    const _apiHits = (r.api_endpoint_brute && r.api_endpoint_brute.hits) || [];
+    if (_apiHits.length) _inv.push(["API endpoints discovered", `${_apiHits.length}: ${_apiHits.slice(0,5).map(h=>h.path).join(", ")}`]);
+
+    // ── GraphQL endpoints discovered ──
+    const _gqlHits = (r.graphql_path_brute && r.graphql_path_brute.endpoints) || [];
+    if (_gqlHits.length) _inv.push(["GraphQL endpoints", _gqlHits.slice(0,3).map(h=>h.path).join(", ")]);
+
+    // ── WordPress plugins discovered ──
+    const _wpHits = (r.wp_plugin_brute && r.wp_plugin_brute.plugins_found) || [];
+    if (_wpHits.length) _inv.push(["WordPress plugins enumerated", `${_wpHits.length}: ${_wpHits.slice(0,5).map(p=>p.slug).join(", ")}`]);
+
+    // ── Security.txt presence ──
+    if (r.security_txt && (r.security_txt.found || (r.security_txt.intel||{}).found)) {
+      _inv.push(["security.txt", "Published"]);
+    }
+
+    // ── OSINT enrichment: candidates, employees, social ──
+    const _userCands = (r.username_permutation_gen && r.username_permutation_gen.candidates) || [];
+    if (_userCands.length) _inv.push(["Username candidates generated", `${_userCands.length}: ${_userCands.slice(0,5).join(", ")}`]);
+
+    const _emailCands = (r.email_pattern_generator && r.email_pattern_generator.candidates) || [];
+    if (_emailCands.length) _inv.push(["Email candidates generated", `${_emailCands.length}: ${_emailCands.slice(0,4).join(", ")}`]);
+
+    const _linkedin = r.linkedin_employees || {};
+    const _employees = _linkedin.employees || (_linkedin.intel||{}).employees || [];
+    if (_employees.length) _inv.push(["LinkedIn employees discovered", `${_employees.length}`]);
+
+    const _ghOrg = r.github_org_recon || {};
+    if (_ghOrg.org_name || (_ghOrg.intel||{}).org_name) _inv.push(["GitHub org identified", _ghOrg.org_name || (_ghOrg.intel||{}).org_name]);
+
+    const _socials = ["twitter_mining","facebook_instagram","reddit_search","youtube_channel","tiktok_search"];
+    const _socialHits = _socials.filter(k => {
+        const d = r[k] || {};
+        return d.found || (d.profiles||[]).length > 0 || (d.handles||[]).length > 0;
+    });
+    if (_socialHits.length) _inv.push(["Social media presence", `${_socialHits.length} platform(s): ${_socialHits.join(", ")}`]);
+
+    // ── Threat intel hits ──
+    const _threatKeys = ["censys_search","shodan_keyed","abuseipdb","threatfox_check",
+                         "greynoise_check","virustotal_full","alienvault_otx","urlhaus_check"];
+    const _threatHits = _threatKeys.filter(k => {
+        const d = r[k] || {};
+        return (d.findings||[]).length > 0;
+    });
+    if (_threatHits.length) _inv.push(["Threat intel matches", `${_threatHits.length} feed(s): ${_threatHits.slice(0,4).join(", ")}`]);
+
+    // ── Source maps exposed (real intel, not just finding) ──
+    const _maps = (r.sourcemap_check && (r.sourcemap_check.maps_found || (r.sourcemap_check.intel||{}).maps_found)) || [];
+    if (_maps.length) _inv.push(["Source maps exposed", `${_maps.length} file(s)`]);
+
     if (_inv.length === 0) {
       fillR(margin, y, contentW, 18, [248,250,252]);
       txt("No assets discovered for this target.", margin+8, y+11, 9.5, GRAY, false);
@@ -10711,6 +10766,14 @@ const SECTION_OF = {
   "youtube_channel":4,
   "zone_transfer":2,
   "zoomeye_search":8,
+  "jwt_secret_brute":5,
+  "secret_pattern_scanner":10,
+  "api_endpoint_brute":5,
+  "graphql_path_brute":5,
+  "webhook_endpoint_brute":5,
+  "cloud_function_brute":6,
+  "email_pattern_generator":7,
+  "username_permutation_gen":4
 };
 
 const RECON_PHASES = [
@@ -10775,7 +10838,8 @@ const RECON_PHASES = [
   {name:"Twitter Mining", tool:"twitter_mining", endpoint:"/api/recon/twitter_mining", icon:"🔬"},
   {name:"Uspto Patent", tool:"uspto_patent", endpoint:"/api/recon/uspto_patent", icon:"🔬"},
   {name:"Youtube Channel", tool:"youtube_channel", endpoint:"/api/recon/youtube_channel", icon:"🔬"},
-  // ── §5 ─────────────
+    {name:"Username Permutation Gen", tool:"username_permutation_gen", endpoint:"/api/recon/username_permutation_gen", icon:"🔬"},
+// ── §5 ─────────────
   {name:"Cors Misconfig", tool:"cors_misconfig", endpoint:"/api/recon/cors_misconfig", icon:"📁"},
   {name:"Crawl Endpoints", tool:"crawl_endpoints", endpoint:"/api/recon/crawl_endpoints", icon:"📁"},
   {name:"Graphql Intro Check", tool:"graphql_intro_check", endpoint:"/api/recon/graphql_intro_check", icon:"📁"},
@@ -10794,6 +10858,10 @@ const RECON_PHASES = [
   {name:"Tech Stack Detect", tool:"tech_stack_detect", endpoint:"/api/recon/tech_stack_detect", icon:"📁"},
   {name:"WAF CDN Detect", tool:"waf_cdn_detect", endpoint:"/api/recon/waf_cdn_detect", icon:"📁"},
     {name:"WordPress Plugin Brute", tool:"wp_plugin_brute", endpoint:"/api/recon/wp_plugin_brute", icon:"📁"},
+  {name:"JWT Secret Brute", tool:"jwt_secret_brute", endpoint:"/api/recon/jwt_secret_brute", icon:"📁"},
+  {name:"API Endpoint Brute", tool:"api_endpoint_brute", endpoint:"/api/recon/api_endpoint_brute", icon:"📁"},
+  {name:"GraphQL Path Brute", tool:"graphql_path_brute", endpoint:"/api/recon/graphql_path_brute", icon:"📁"},
+  {name:"Webhook Endpoint Brute", tool:"webhook_endpoint_brute", endpoint:"/api/recon/webhook_endpoint_brute", icon:"📁"},
 // ── §6 ─────────────
   {name:"Azure App Services", tool:"azure_app_services", endpoint:"/api/recon/azure_app_services", icon:"☁️"},
   {name:"Azure Blob Enum", tool:"azure_blob_enum", endpoint:"/api/recon/azure_blob_enum", icon:"☁️"},
@@ -10809,7 +10877,8 @@ const RECON_PHASES = [
   {name:"K8s API Exposure", tool:"k8s_api_exposure", endpoint:"/api/recon/k8s_api_exposure", icon:"☁️"},
   {name:"S3 Bucket Enum", tool:"s3_bucket_enum", endpoint:"/api/recon/s3_bucket_enum", icon:"☁️"},
   {name:"Vercel Netlify", tool:"vercel_netlify", endpoint:"/api/recon/vercel_netlify", icon:"☁️"},
-  // ── §7 ─────────────
+    {name:"Cloud Function Brute", tool:"cloud_function_brute", endpoint:"/api/recon/cloud_function_brute", icon:"☁️"},
+// ── §7 ─────────────
   {name:"Breach Aggregator", tool:"breach_aggregator", endpoint:"/api/recon/breach_aggregator", icon:"📧"},
   {name:"Crosslinked Emails", tool:"crosslinked_emails", endpoint:"/api/recon/crosslinked_emails", icon:"📧"},
   {name:"Email Harvester", tool:"email_harvester", endpoint:"/api/recon/email_harvester", icon:"📧"},
@@ -10823,7 +10892,8 @@ const RECON_PHASES = [
   {name:"Leakcheck Search", tool:"leakcheck_search", endpoint:"/api/recon/leakcheck_search", icon:"📧"},
   {name:"Phoneinfoga Lookup", tool:"phoneinfoga_lookup", endpoint:"/api/recon/phoneinfoga_lookup", icon:"📧"},
   {name:"Pimeyes Face Search", tool:"pimeyes_face_search", endpoint:"/api/recon/pimeyes_face_search", icon:"📧"},
-  // ── §8 ─────────────
+    {name:"Email Pattern Generator", tool:"email_pattern_generator", endpoint:"/api/recon/email_pattern_generator", icon:"📧"},
+// ── §8 ─────────────
   {name:"Abuseipdb", tool:"abuseipdb", endpoint:"/api/recon/abuseipdb", icon:"🛡️"},
   {name:"Alienvault Otx", tool:"alienvault_otx", endpoint:"/api/recon/alienvault_otx", icon:"🛡️"},
   {name:"Censys Search", tool:"censys_search", endpoint:"/api/recon/censys_search", icon:"🛡️"},
@@ -10860,7 +10930,8 @@ const RECON_PHASES = [
   {name:"Gitlab Bitbucket Scan", tool:"gitlab_bitbucket_scan", endpoint:"/api/recon/gitlab_bitbucket_scan", icon:"📂"},
   {name:"Npm Package Audit", tool:"npm_package_audit", endpoint:"/api/recon/npm_package_audit", icon:"📂"},
   {name:"Pypi Package Audit", tool:"pypi_package_audit", endpoint:"/api/recon/pypi_package_audit", icon:"📂"},
-  // ── §11 ─────────────
+    {name:"Secret Pattern Scanner", tool:"secret_pattern_scanner", endpoint:"/api/recon/secret_pattern_scanner", icon:"📂"},
+// ── §11 ─────────────
   {name:"Dehashed Search", tool:"dehashed_search", endpoint:"/api/recon/dehashed_search", icon:"🕳️"},
   {name:"Hibp Paste Search", tool:"hibp_paste_search", endpoint:"/api/recon/hibp_paste_search", icon:"🕳️"},
   {name:"Intelx Paste Leak", tool:"intelx_paste_leak", endpoint:"/api/recon/intelx_paste_leak", icon:"🕳️"},
@@ -12366,7 +12437,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     chk(28);
     const _critN = sevCount.CRITICAL, _highN = sevCount.HIGH, _medN = sevCount.MEDIUM, _lowN = sevCount.LOW;
     const _topF = allFindings.find(f=>f.severity==="CRITICAL") || allFindings.find(f=>f.severity==="HIGH") || allFindings.find(f=>f.severity==="MEDIUM") || null;
-    let _hlBgColor=[240,253,244], _hlAccent=[15,118,82], _hlTag="POSTURE OK", _hlTitle="No critical issues found", _hlSub="Vulnerability scan completed — no actionable findings. Review LOW findings for hardening.";
+    let _hlBgColor=[240,253,244], _hlAccent=[15,118,82], _hlTag="STRONG", _hlTitle="No critical issues found", _hlSub="Vulnerability scan completed — no actionable findings. Review LOW findings for hardening.";
     if (_critN > 0)      { _hlBgColor=[254,242,242]; _hlAccent=[162,28,28];  _hlTag="FIX IMMEDIATELY"; _hlTitle=`${_critN} CRITICAL finding(s) — patch within 24 hours`; _hlSub=_topF ? String(_topF.detail||"").substring(0,160) : "See Per-Tool Findings."; }
     else if (_highN > 0) { _hlBgColor=[255,247,237]; _hlAccent=[133,79,11];  _hlTag="FIX THIS WEEK";   _hlTitle=`${_highN} HIGH finding(s) — patch within 7 days`;     _hlSub=_topF ? String(_topF.detail||"").substring(0,160) : "See Per-Tool Findings."; }
     else if (_medN > 0)  { _hlBgColor=[254,252,232]; _hlAccent=[120,89,15];  _hlTag="HARDENING";       _hlTitle=`${_medN} MEDIUM finding(s) — hardening recommended`;  _hlSub=_topF ? String(_topF.detail||"").substring(0,160) : "Review per the severity table below."; }
@@ -13032,7 +13103,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
 
   // ── SECTION 4: KEY RISK HEADLINE ───────────────────────────────
   chk(28);const _hlBg=riskScore>=60?[254,242,242]:riskScore>=20?[255,247,237]:[240,253,244];
-  const _hlTag=riskScore>=60?"FIX THIS WEEK":riskScore>=20?"REVIEW SOON":"POSTURE OK";
+  const _hlTag=riskScore>=60?"FIX THIS WEEK":riskScore>=20?"REVIEW SOON":"STRONG";
   const _hlTitle=sevCount.CRITICAL>0?`${sevCount.CRITICAL} CRITICAL ${M_NAME} finding(s) — patch within 24 hours`:sevCount.HIGH>0?`${sevCount.HIGH} HIGH ${M_NAME} finding(s) — patch within 7 days`:sevCount.MEDIUM>0?`${sevCount.MEDIUM} MEDIUM ${M_NAME} finding(s) — hardening recommended`:`No exposed ${M_NAME} surface above LOW severity`;
   fillR(margin,y,contentW,24,_hlBg);fillR(margin,y,3,24,riskColor);
   txt(_hlTag,margin+8,y+6,8,riskColor,true);txt(_hlTitle,margin+8,y+13,11,DARK,true);
