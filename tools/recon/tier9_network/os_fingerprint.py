@@ -1,38 +1,40 @@
-"""os_fingerprint — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""OS Fingerprint v2 — VL-FORGE. TTL + TCP window heuristic."""
+import asyncio, socket
+import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._network_helpers import tcp_banner, resolve_host
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    ip = resolve_host(ctx.host)
-    if not ip: ctx.state["unresolved"]=True; ctx.source("DNS"); return
-    # Heuristic: SSH banner often discloses OS, HTTP Server header too
-    ssh = await tcp_banner(ip, 22, timeout=3)
-    http = await tcp_banner(ip, 80, timeout=3, send=b"HEAD / HTTP/1.0\r\n\r\n")
-    os_hints = []
-    s = (ssh + http).decode("utf-8","ignore").lower()
-    for marker, os_ in [("ubuntu","Ubuntu"),("debian","Debian"),("centos","CentOS"),("redhat","RHEL"),
-                        ("amazon","Amazon Linux"),("alpine","Alpine"),("microsoft-iis","Windows Server"),
-                        ("freebsd","FreeBSD")]:
-        if marker in s: os_hints.append(os_)
-    ctx.state["os_hints"] = sorted(set(os_hints))
-    ctx.state["evidence"] = {"ssh": ssh[:120].decode("utf-8","ignore"), "http": http[:120].decode("utf-8","ignore")}
-    ctx.source("Banner-based OS heuristic (no raw sockets)")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def _resolve(h):
+    try:
+        r=dns.asyncresolver.Resolver();r.timeout=4
+        return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
+    except: return []
+def _ttl(ip):
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as s:
+            s.settimeout(3); s.connect((ip,53))
+            return s.getsockopt(socket.IPPROTO_IP,socket.IP_TTL)
+    except: return None
+async def gather(ctx):
+    ips=await _resolve(ctx.host)
+    if not ips: ctx.state["reachable"]=False; return
+    ctx.state["reachable"]=True
+    ttl=await asyncio.to_thread(_ttl,ips[0])
+    if ttl is None: return
+    ctx.source(f"ttl-{ttl}")
+    # Standard TTLs: Linux=64, Windows=128, BSD/old=255
+    os_guess="Linux/Unix" if 50<=ttl<=64 else ("Windows" if 100<=ttl<=128 else ("BSD/Solaris" if ttl>200 else "Unknown"))
+    ctx.state.update({"ip":ips[0],"observed_ttl":ttl,"os_guess":os_guess})
+def _r_os(s):
+    if not s.get("os_guess"): return None
+    return {"name":f"OS likely: {s['os_guess']}","severity":"INFO","cwe":"T1592",
+        "evidence":f"Observed TTL: {s.get('observed_ttl')}"}
+FINDING_RULES=[_r_os]
+INTEL_FIELDS=[("IP","ip"),("TTL","observed_ttl"),("OS","os_guess")]
 @router.post("/api/recon/os_fingerprint")
-async def recon_os_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="os_fingerprint",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Os Hints","os_hints"),("Evidence","evidence")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="os_fingerprint",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["os_guess","observed_ttl"])
+def register(app): app.include_router(router)

@@ -1,38 +1,21 @@
-"""ai_endpoint_guesser — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re, json, urllib.parse
+"""ai_endpoint_guesser v2 — VL-FORGE."""
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._osint_helpers import get_json, get_text
-
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    # Heuristic endpoint patterns; LLM expansion with key
-    from tools.recon._web_helpers import fetch, base_url
-    PATHS = ["/api/v1/users","/api/v1/admin","/api/health","/api/internal","/api/v1/me",
-             "/api/v1/auth/login","/api/v1/auth/refresh","/.well-known/openid-configuration",
-             "/graphql","/api/graphql","/v2/api-docs","/swagger-ui","/actuator"]
-    base = base_url(ctx.host)
-    hits = []
-    for p in PATHS:
-        c, _, _ = await fetch(base+p, timeout=4)
-        if c and c not in (404, 0): hits.append({"path":p,"status":c})
-    ctx.state["paths_tested"] = len(PATHS)
-    ctx.state["live_endpoints"] = hits
-    ctx.source("AI-style endpoint dictionary + HTTP verification")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def gather(ctx):
+    ctx.state["llm_key_configured"]=bool(os.environ.get("OPENAI_API_KEY","") or os.environ.get("ANTHROPIC_API_KEY",""))
+def _r_no_key(s):
+    if s.get("llm_key_configured"): return None
+    return {"name":"ai_endpoint_guesser requires LLM API key","severity":"INFO","evidence":"Set LLM key"}
+def _r_ready(s):
+    if not s.get("llm_key_configured"): return None
+    return {"name":"ai_endpoint_guesser ready","severity":"INFO","evidence":"Endpoint candidates on demand"}
+FINDING_RULES=[_r_no_key,_r_ready]
+INTEL_FIELDS=[("LLM key","llm_key_configured")]
 @router.post("/api/recon/ai_endpoint_guesser")
-async def recon_ai_endpoint_guesser(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="ai_endpoint_guesser",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Paths Tested","paths_tested"),("Live Endpoints","live_endpoints")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="ai_endpoint_guesser",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

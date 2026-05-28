@@ -31,6 +31,22 @@ Returns: { "module": "...", "target": "...", "duration_sec": 38.4,
            "summary": {...aggregate counts...} }
 """
 import asyncio
+
+# VL-TURBO: per-scanner wall-clock cap (kills runaway scanners)
+import asyncio as _vl_asyncio
+import os as _vl_os
+_VL_TURBO_TIMEOUT = int(_vl_os.environ.get("VL_TURBO_SCANNER_TIMEOUT", "60"))
+
+async def _vl_turbo_capped(coro, tool_name="unknown"):
+    """Wrap any awaitable with a wall-clock cap. Returns FAILED dict on timeout."""
+    try:
+        return await _vl_asyncio.wait_for(coro, timeout=_VL_TURBO_TIMEOUT)
+    except _vl_asyncio.TimeoutError:
+        return {"ok": False, "_failed": True, "tool": tool_name,
+                "error": f"Scanner exceeded {_VL_TURBO_TIMEOUT}s wall-clock cap (VL-TURBO killed)",
+                "suggested_action": "Increase VL_TURBO_SCANNER_TIMEOUT or fix slow scanner",
+                "findings": [], "intel": {}, "sources_used": []}
+
 import datetime
 import json
 import os

@@ -1,50 +1,63 @@
-"""email_smtp_validate — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re, json, urllib.parse
+"""Email SMTP Validate v2 — VL-FORGE. Test MX + VRFY/EXPN/RCPT."""
+import asyncio, socket
+import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._osint_helpers import get_json, get_text
-import smtplib, dns.resolver, socket
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
+router=APIRouter()
+async def _mx(h):
     try:
-        mx_recs = await asyncio.to_thread(dns.resolver.resolve, h, "MX", lifetime=5)
-        mx_host = str(sorted(mx_recs, key=lambda r: r.preference)[0].exchange).rstrip(".")
-    except Exception:
-        ctx.state["mx_resolved"] = False; ctx.source("No MX records"); return
-    catchall = False; banner = ""
-    def _probe():
-        try:
-            s = smtplib.SMTP(mx_host, 25, timeout=8); s.set_debuglevel(0)
-            s.helo("vulnuslab.com")
-            code1, _ = s.mail(f"audit@vulnuslab.com")
-            code2, _ = s.rcpt(f"this-very-unlikely-mailbox-83fjk2@{h}")
-            return code1, code2, s.sock.getpeername() if s.sock else None
-        except Exception as e: return 0, 0, str(e)[:120]
-    res = await asyncio.to_thread(_probe)
-    ctx.state["mx_resolved"] = True
-    ctx.state["mx_host"] = mx_host
-    ctx.state["mail_code"] = res[0]; ctx.state["rcpt_code"] = res[1]
-    ctx.state["catchall_suspected"] = res[1] == 250
-    ctx.source("SMTP RCPT TO with unlikely mailbox")
-
-RULES = [
-    lambda s: {"name":"SMTP server accepts catch-all addresses (deliverability + verification risk)","severity":"LOW",
-        "evidence":f"RCPT TO unlikely-mailbox@{s.get('mx_host','')} returned 250",
-        "remediation":"Configure MTA to reject invalid recipients (550). Catch-all enables email-validation bypass attacks.",
-        "cwe":"CWE-203","owasp":"N/A"
-    } if s.get("catchall_suspected") else None,
-]
-
+        r=dns.asyncresolver.Resolver();r.timeout=4
+        return [str(x).split()[-1].rstrip(".") for x in await r.resolve(h,"MX")]
+    except: return []
+def _smtp_probe(mx_host,timeout=6):
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect((mx_host,25))
+            banner=s.recv(1024).decode("utf-8",errors="ignore")
+            s.send(b"HELO vulnuslab.com\r\n")
+            s.recv(1024)
+            s.send(b"VRFY postmaster\r\n")
+            vrfy=s.recv(1024).decode("utf-8",errors="ignore")
+            s.send(b"EXPN list\r\n")
+            expn=s.recv(1024).decode("utf-8",errors="ignore")
+            s.send(b"QUIT\r\n")
+            return {"banner":banner[:200],"vrfy":vrfy[:200],"expn":expn[:200]}
+    except Exception as e: return {"error":type(e).__name__}
+async def gather(ctx):
+    mx=await _mx(ctx.host)
+    if not mx: ctx.state["reachable"]=False; return
+    ctx.state["reachable"]=True; ctx.state["mx_hosts"]=mx
+    ctx.source(f"mx-{len(mx)}")
+    r=await asyncio.to_thread(_smtp_probe,mx[0])
+    if r.get("banner"): ctx.source("smtp-25")
+    ctx.state["smtp_response"]=r
+    # Check VRFY/EXPN supported
+    vrfy_resp=r.get("vrfy","")
+    expn_resp=r.get("expn","")
+    ctx.state["vrfy_enabled"]="250" in vrfy_resp or "252" in vrfy_resp
+    ctx.state["expn_enabled"]="250" in expn_resp
+def _r_vrfy(s):
+    if not s.get("vrfy_enabled"): return None
+    return {"name":"SMTP VRFY enabled — user enumeration possible","severity":"MEDIUM","cwe":"CWE-204",
+        "evidence":(s.get("smtp_response") or {}).get("vrfy","")[:120],
+        "remediation":"Disable VRFY. Postfix: 'disable_vrfy_command = yes'"}
+def _r_expn(s):
+    if not s.get("expn_enabled"): return None
+    return {"name":"SMTP EXPN enabled — mailing list disclosure","severity":"MEDIUM","cwe":"CWE-200",
+        "evidence":(s.get("smtp_response") or {}).get("expn","")[:120],
+        "remediation":"Disable EXPN command at MTA."}
+def _r_banner(s):
+    b=(s.get("smtp_response") or {}).get("banner","")
+    if not b: return None
+    return {"name":"SMTP banner exposed","severity":"INFO",
+        "evidence":b[:80],"remediation":"Hide MTA version in banner if specific version present."}
+FINDING_RULES=[_r_vrfy,_r_expn,_r_banner]
+INTEL_FIELDS=[("MX hosts","mx_hosts"),("VRFY","vrfy_enabled"),("EXPN","expn_enabled")]
 @router.post("/api/recon/email_smtp_validate")
-async def recon_email_smtp_validate(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="email_smtp_validate",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("MX Resolved","mx_resolved"),("MX Host","mx_host"),("Catchall Suspected","catchall_suspected")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="email_smtp_validate",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["mx_hosts","vrfy_enabled","expn_enabled","smtp_response"])
+def register(app): app.include_router(router)

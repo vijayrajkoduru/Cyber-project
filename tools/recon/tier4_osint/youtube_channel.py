@@ -1,34 +1,38 @@
-"""youtube_channel — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re, json, urllib.parse
+"""YouTube Channel v2 — VL-FORGE."""
+import asyncio, requests, os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._osint_helpers import get_json, get_text
-
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    name = ctx.host.split(".")[0]
-    key = os.environ.get("YOUTUBE_API_KEY","")
-    if not key:
-        ctx.state["api_key_configured"] = False; ctx.source("YOUTUBE_API_KEY not set"); return
-    code, d = await get_json(f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={urllib.parse.quote(name)}&type=channel&key={key}")
-    items = (d or {{}}).get("items",[]) if isinstance(d, dict) else []
-    ctx.state["api_key_configured"] = True
-    ctx.state["channels"] = [{"id":i.get("id",{{}}).get("channelId"),"title":i.get("snippet",{{}}).get("channelTitle")} for i in items[:10]]
-    ctx.source("YouTube Data API v3 — channel search")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def gather(ctx):
+    org=ctx.host.split(".")[0]
+    key=os.environ.get("YOUTUBE_API_KEY","")
+    ctx.state["api_key_configured"]=bool(key)
+    if not key: return
+    try:
+        r=requests.get(f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={org}&type=channel&maxResults=5&key={key}",
+            timeout=12)
+        if r.status_code==200:
+            d=r.json()
+            channels=[{"title":i["snippet"].get("title"),"id":i["snippet"].get("channelId"),
+                "description":(i["snippet"].get("description") or "")[:200]} for i in d.get("items",[])]
+            ctx.state["channels"]=channels; ctx.state["channel_count"]=len(channels)
+            if channels: ctx.source(f"yt-{len(channels)}")
+    except: pass
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"YOUTUBE_API_KEY not set","severity":"INFO",
+        "evidence":"Free 10k quota/day at console.cloud.google.com"}
+def _r_found(s):
+    n=s.get("channel_count",0)
+    if n==0: return None
+    return {"name":f"{n} YouTube channel(s) match brand","severity":"INFO","cwe":"T1593",
+        "evidence":f"Top: {(s.get('channels') or [{}])[0].get('title','')}"}
+FINDING_RULES=[_r_unkeyed,_r_found]
+INTEL_FIELDS=[("API key","api_key_configured"),("Channels","channel_count")]
 @router.post("/api/recon/youtube_channel")
-async def recon_youtube_channel(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="youtube_channel",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("API Key Configured","api_key_configured"),("Channels","channels")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="youtube_channel",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["channels","channel_count"])
+def register(app): app.include_router(router)

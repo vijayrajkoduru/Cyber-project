@@ -1,44 +1,45 @@
-"""search_engine_scrape — VL-FORGE Recon §3 Subdomain Enumeration (real, zero-FP)."""
-import asyncio, os
+"""Search Engine Scrape v2 — VL-FORGE. site: dorking."""
+import asyncio, requests, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._subdomain_helpers import resolves, bulk_check
-import urllib.request, urllib.parse, re
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    found = set()
+router=APIRouter()
+def _g(u,t=12):
     try:
-        q = urllib.parse.quote(f"site:{h} -site:www.{h}")
-        url = f"https://www.bing.com/search?q={q}&count=50"
-        def _fetch():
-            req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=8) as r:
-                return r.read().decode("utf-8","ignore")
-        body = await asyncio.to_thread(_fetch)
-        for m in re.finditer(rf"https?://([a-z0-9-]+\.{re.escape(h)})", body):
-            found.add(m.group(1).lower())
-    except Exception as e:
-        ctx.state["error"] = str(e)[:120]
-    verified = await bulk_check(list(found), concurrency=15)
-    ctx.state["raw_count"] = len(found)
-    ctx.state["discovered"] = verified
-    ctx.state["count"] = len(verified)
-    ctx.source("Bing site: search + DNS verification")
-
-RULES = [
-
-]
-
+        r=requests.get(u,timeout=t,headers={"User-Agent":"Mozilla/5.0 (compatible; VulnusLab)"})
+        if r.status_code==200: return r.text
+    except: pass
+    return None
+async def gather(ctx):
+    h=ctx.host
+    # Bing scrape (no API key needed)
+    bing,duckduckgo=await asyncio.gather(
+        asyncio.to_thread(_g,f"https://www.bing.com/search?q=site%3A*.{h}&count=50"),
+        asyncio.to_thread(_g,f"https://html.duckduckgo.com/html/?q=site%3A*.{h}"))
+    subs=set()
+    pat=re.compile(rf"https?://([\w\-]+\.{re.escape(h)})",re.I)
+    for src,name in [(bing,"bing"),(duckduckgo,"ddg")]:
+        if not src: continue
+        ctx.source(name)
+        for m in pat.findall(src):
+            subs.add(m.lower())
+    ctx.state.update({"subdomains":sorted(subs)[:50],"count":len(subs),
+        "sources":sum(1 for x in [bing,duckduckgo] if x)})
+def _r_found(s):
+    n=s.get("count",0)
+    if n==0: return None
+    return {"name":f"{n} subdomains indexed by search engines","severity":"INFO","cwe":"T1596.001",
+        "evidence":"Sample: "+", ".join((s.get("subdomains") or [])[:5]),
+        "remediation":"Public indexing = public knowledge. No remediation other than de-index sensitive endpoints."}
+def _r_clean(s):
+    if s.get("count",0)>0: return None
+    return {"name":"No subdomains in search engines","severity":"POSITIVE",
+        "evidence":"Bing + DDG site:* returned 0"}
+FINDING_RULES=[_r_found,_r_clean]
+INTEL_FIELDS=[("Subdomains","count"),("Sources","sources")]
 @router.post("/api/recon/search_engine_scrape")
-async def recon_search_engine_scrape(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="search_engine_scrape",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Discovered","discovered"),("Count","count")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="search_engine_scrape",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["subdomains","count"])
+def register(app): app.include_router(router)

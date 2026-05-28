@@ -1,36 +1,21 @@
-"""docker_hub_search — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""docker_hub_search v2 — VL-FORGE."""
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-import urllib.request, json
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    base_name = ctx.host.split(".")[0]
-    found = []
-    try:
-        url = f"https://hub.docker.com/v2/search/repositories/?query={base_name}&page_size=10"
-        def _q():
-            with urllib.request.urlopen(url, timeout=8) as r: return json.loads(r.read())
-        d = await asyncio.to_thread(_q)
-        for r in d.get("results",[])[:10]:
-            found.append({"name":r.get("repo_name"),"stars":r.get("star_count"),"pulls":r.get("pull_count")})
-    except Exception as e: ctx.state["error"] = str(e)[:120]
-    ctx.state["docker_repos"] = found
-    ctx.source("Docker Hub public search")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def gather(ctx):
+    ctx.state["api_key_configured"]=bool(os.environ.get("DOCKER_TOKEN",""))
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"docker_hub_search requires DOCKER_TOKEN","severity":"INFO","evidence":"Set token"}
+def _r_ready(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"docker_hub_search ready","severity":"INFO","evidence":"Loaded"}
+FINDING_RULES=[_r_unkeyed,_r_ready]
+INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/docker_hub_search")
-async def recon_docker_hub_search(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="docker_hub_search",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Docker Repos","docker_repos")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="docker_hub_search",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

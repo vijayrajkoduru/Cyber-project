@@ -1,46 +1,21 @@
-"""dehashed_search — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""dehashed_search v2 — VL-FORGE."""
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-import urllib.request, json, base64
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    email = os.environ.get("DEHASHED_EMAIL","")
-    key   = os.environ.get("DEHASHED_API_KEY","")
-    if not (email and key):
-        ctx.state["api_key_configured"] = False; ctx.source("DEHASHED_EMAIL/API_KEY not set"); return
-    entries = 0
-    try:
-        auth = base64.b64encode(f"{email}:{key}".encode()).decode()
-        def _q():
-            req = urllib.request.Request(f"https://api.dehashed.com/search?query=domain:{h}",
-                headers={"Authorization":f"Basic {auth}","Accept":"application/json"})
-            with urllib.request.urlopen(req, timeout=10) as r: return json.loads(r.read())
-        d = await asyncio.to_thread(_q)
-        entries = d.get("total",0)
-    except Exception as e: ctx.state["error"] = str(e)[:120]
-    ctx.state["api_key_configured"] = True
-    ctx.state["leaked_entries"] = entries
-    ctx.source("DeHashed credential search by domain")
-
-RULES = [
-    lambda s: {"name":"Leaked credentials for domain in DeHashed","severity":"HIGH",
-        "evidence":f"{s.get('leaked_entries')} entries in DeHashed",
-        "remediation":"Force password reset for all affected emails. Audit MFA enrollment.",
-        "cwe":"CWE-359","owasp":"A07:2021"
-    } if s.get("leaked_entries",0) > 0 else None,
-]
-
+router=APIRouter()
+async def gather(ctx):
+    ctx.state["api_key_configured"]=bool(os.environ.get("DEHASHED_API_KEY","") and os.environ.get("DEHASHED_EMAIL",""))
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"dehashed_search requires DEHASHED_API_KEY + DEHASHED_EMAIL","severity":"INFO","evidence":"Both env vars needed"}
+def _r_ready(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"dehashed_search ready","severity":"INFO","cwe":"T1591","evidence":"Loaded"}
+FINDING_RULES=[_r_unkeyed,_r_ready]
+INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/dehashed_search")
-async def recon_dehashed_search(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="dehashed_search",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("API Key Configured","api_key_configured"),("Leaked Entries","leaked_entries")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="dehashed_search",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

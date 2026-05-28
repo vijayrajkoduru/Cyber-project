@@ -1,46 +1,44 @@
-"""banner_grab — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""Banner Grab v2 — VL-FORGE. Raw TCP banner grabbing."""
+import asyncio, socket
+import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._network_helpers import tcp_banner, resolve_host
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    ip = resolve_host(ctx.host)
-    if not ip: ctx.state["unresolved"]=True; ctx.source("DNS"); return
-    banners = {}
-    for port in (21,22,25,110,143,2375,2376,3306,5432,6379,8080,8443,9200,11211,27017):
-        b = await tcp_banner(ip, port, timeout=2)
-        if b: banners[port] = b[:200].decode("utf-8","ignore").strip()
-    ctx.state["banners"] = banners
-    ctx.source("Raw banner grab — 15 service ports")
-
-RULES = [
-    lambda s: {"name":"Redis Exposed Without Auth","severity":"CRITICAL",
-        "evidence":f"Redis banner on 6379: {s.get('banners',{}).get(6379,'')}",
-        "remediation":"Set requirepass; bind to internal IP; firewall 6379",
-        "cwe":"CWE-306","owasp":"A07:2021"
-    } if "redis" in (s.get("banners",{}).get(6379,"") or "").lower() else None,
-    lambda s: {"name":"Memcached Exposed (UDP amplification risk)","severity":"HIGH",
-        "evidence":"Memcached responsive on 11211",
-        "remediation":"Bind memcached to localhost or -U 0 to disable UDP",
-        "cwe":"CWE-306","owasp":"A07:2021"
-    } if 11211 in s.get("banners",{}) else None,
-    lambda s: {"name":"Docker Daemon API Exposed","severity":"CRITICAL",
-        "evidence":f"Docker socket on 2375/2376: {s.get('banners',{}).get(2375,'')}",
-        "remediation":"NEVER expose 2375 (unencrypted) to network. Use TLS-only 2376 or Unix socket.",
-        "cwe":"CWE-306","owasp":"A07:2021"
-    } if 2375 in s.get("banners",{}) or 2376 in s.get("banners",{}) else None,
-]
-
+router=APIRouter()
+_PORTS=[21,22,23,25,80,110,143,443,587,993,995,3306,5432,6379,11211]
+async def _resolve(h):
+    try:
+        r=dns.asyncresolver.Resolver();r.timeout=4
+        return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
+    except: return []
+def _grab(ip,port,timeout=3):
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect((ip,port))
+            return s.recv(1024).decode("utf-8",errors="ignore")[:300]
+    except: return ""
+async def gather(ctx):
+    ips=await _resolve(ctx.host)
+    if not ips: ctx.state["reachable"]=False; return
+    ctx.state["reachable"]=True; ctx.state["ip"]=ips[0]
+    res=await asyncio.gather(*[asyncio.to_thread(_grab,ips[0],p) for p in _PORTS])
+    banners={p:b for p,b in zip(_PORTS,res) if b}
+    if banners: ctx.source(f"banners-{len(banners)}")
+    ctx.state["banners"]=banners; ctx.state["banner_count"]=len(banners)
+def _r_banners(s):
+    b=s.get("banners") or {}
+    if not b: return None
+    return {"name":f"Service banners exposed on {len(b)} port(s)","severity":"INFO","cwe":"CWE-200",
+        "evidence":"; ".join(f":{p} - {bn[:50]}" for p,bn in list(b.items())[:5])}
+def _r_clean(s):
+    if s.get("banner_count",0)>0 or not s.get("reachable"): return None
+    return {"name":"No banners exposed","severity":"POSITIVE","evidence":"All probed ports silent"}
+FINDING_RULES=[_r_banners,_r_clean]
+INTEL_FIELDS=[("Target IP","ip"),("Banners","banners"),("Count","banner_count")]
 @router.post("/api/recon/banner_grab")
-async def recon_banner_grab(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="banner_grab",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Banners","banners")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="banner_grab",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["banners","banner_count"])
+def register(app): app.include_router(router)

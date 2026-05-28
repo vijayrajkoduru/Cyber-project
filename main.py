@@ -17,6 +17,8 @@ import importlib
 import logging
 from pathlib import Path
 
+from tools._framework.turbo import init_turbo
+init_turbo()  # VL-TURBO: thread pool 256 + HTTP pool 100 + 60s wall-clock cap
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

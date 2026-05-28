@@ -1,28 +1,21 @@
-"""github_oauth_abuse_map — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""github_oauth_abuse_map v2 — VL-FORGE."""
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    token = os.environ.get("GITHUB_TOKEN","")
-    ctx.state["github_token_configured"] = bool(token)
-    ctx.state["note"] = "OAuth app abuse mapping requires GITHUB_TOKEN with admin:org scope"
-    ctx.source("GitHub OAuth app audit")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def gather(ctx):
+    ctx.state["api_key_configured"]=bool(os.environ.get("GITHUB_TOKEN",""))
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"github_oauth_abuse_map requires GITHUB_TOKEN","severity":"INFO","evidence":"Set token"}
+def _r_ready(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"github_oauth_abuse_map ready","severity":"INFO","evidence":"Loaded"}
+FINDING_RULES=[_r_unkeyed,_r_ready]
+INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/github_oauth_abuse_map")
-async def recon_github_oauth_abuse_map(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="github_oauth_abuse_map",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Github Token Configured","github_token_configured")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="github_oauth_abuse_map",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

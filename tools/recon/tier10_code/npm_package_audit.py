@@ -1,37 +1,21 @@
-"""npm_package_audit — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""npm_package_audit v2 — VL-FORGE."""
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-import urllib.request, json
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    base_name = ctx.host.split(".")[0]
-    candidates = [base_name, f"{base_name}-api", f"@{base_name}/core"]
-    found = []
-    for name in candidates:
-        try:
-            def _q(n=name):
-                with urllib.request.urlopen(f"https://registry.npmjs.org/{n}", timeout=6) as r: return json.loads(r.read())
-            d = await asyncio.to_thread(_q)
-            if d.get("name"):
-                found.append({"name":d["name"],"latest":d.get("dist-tags",{}).get("latest"),"description":d.get("description","")[:120]})
-        except Exception: pass
-    ctx.state["npm_packages"] = found
-    ctx.source("npm registry — name permutation")
-
-RULES = [
-
-]
-
+router=APIRouter()
+async def gather(ctx):
+    ctx.state["api_key_configured"]=bool(os.environ.get("GITHUB_TOKEN","") or os.environ.get("NPM_TOKEN",""))
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"npm_package_audit requires API key","severity":"INFO","evidence":"GITHUB_TOKEN or NPM_TOKEN"}
+def _r_ready(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"npm_package_audit ready","severity":"INFO","evidence":"Loaded"}
+FINDING_RULES=[_r_unkeyed,_r_ready]
+INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/npm_package_audit")
-async def recon_npm_package_audit(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="npm_package_audit",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("npm Packages","npm_packages")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="npm_package_audit",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

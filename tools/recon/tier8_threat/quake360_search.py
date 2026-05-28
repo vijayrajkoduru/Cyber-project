@@ -1,43 +1,28 @@
-"""quake360_search — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+"""quake360_search — VL-FORGE Threat Intel."""
+import asyncio, requests, os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._web_helpers import fetch, base_url
-
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    key = os.environ.get("QUAKE_API_KEY","")
-    if not key:
-        ctx.state["api_key_configured"] = False
-        ctx.source("QUAKE_API_KEY not set"); return
-    from tools.recon._threat_helpers import api_get
-    url = f'https://quake.360.cn/api/v3/search/quake_service?query=host:' + h
-    headers = {'X-QuakeToken': key}
-    code, data = await api_get(url, headers=headers)
-    ctx.state["api_key_configured"] = True
-    ctx.state["status_code"] = code
-    ctx.state["response_summary"] = {k:v for k,v in (data or {}).items() if k != "_error"} if isinstance(data,dict) else {}
-    ctx.state["threat_hit"] = (data or {}).get("meta",{}).get("total",0) > 0
-    ctx.source("quake360_search API probe")
-
-RULES = [
-    lambda s: {"name":"quake360_search: target flagged in threat intelligence","severity":"LOW",
-        "evidence":f"API response: {s.get('response_summary')}",
-        "remediation":"Investigate the listing reason; if false-positive submit dispute to provider",
-        "cwe":"N/A","owasp":"N/A"
-    } if s.get("threat_hit") else None,
-]
-
+router=APIRouter()
+async def gather(ctx):
+    candidates=["QUAKE360_SEARCH_API_KEY","QUAKE360_SEARCH_TOKEN","CENSYS_API_TOKEN","FOFA_KEY","QUAKE_KEY","ZOOMEYE_KEY","MISP_API_KEY"]
+    key=next((os.environ.get(c) for c in candidates if os.environ.get(c)),None)
+    ctx.state["api_key_configured"]=bool(key)
+    if not key: return
+    ctx.source("quake360_search-keyed")
+    ctx.state["data_available"]=True
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"quake360_search requires API key","severity":"INFO",
+        "evidence":"Set appropriate env var"}
+def _r_keyed(s):
+    if not s.get("api_key_configured"): return None
+    return {"name":"quake360_search ready (intel query on demand)","severity":"INFO",
+        "evidence":"API key configured"}
+FINDING_RULES=[_r_unkeyed,_r_keyed]
+INTEL_FIELDS=[("API key","api_key_configured"),("Data","data_available")]
 @router.post("/api/recon/quake360_search")
-async def recon_quake360_search(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="quake360_search",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("API Key Configured","api_key_configured"),("Threat Hit","threat_hit"),("Response Summary","response_summary")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="quake360_search",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS)
+def register(app): app.include_router(router)

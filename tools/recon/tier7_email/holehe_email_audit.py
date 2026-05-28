@@ -1,39 +1,44 @@
-"""holehe_email_audit — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re, json, urllib.parse
+"""Holehe Email Audit v2 — VL-FORGE. Check if email is registered on 120+ sites."""
+import asyncio, shutil
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._osint_helpers import get_json, get_text
-import subprocess, shutil
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    if not shutil.which("holehe"):
-        ctx.state["holehe_installed"] = False; ctx.source("holehe not installed"); return
-    # Test the most likely admin email
-    email = f"admin@{ctx.host}"
-    try:
-        r = await asyncio.to_thread(subprocess.run, ["holehe","--no-color","--only-used",email],
-                                    capture_output=True, text=True, timeout=120)
-        used = [ln.strip("[+] ").strip() for ln in r.stdout.splitlines() if "[+]" in ln][:30]
-        ctx.state["holehe_installed"] = True
-        ctx.state["email_tested"] = email
-        ctx.state["services_registered"] = used
-        ctx.state["count"] = len(used)
-    except Exception as e: ctx.state["error"] = str(e)[:120]
-    ctx.source("holehe — forgot-password enumeration (120+ services)")
-
-RULES = [
-
-]
-
+router=APIRouter()
+_HOLEHE=shutil.which("holehe")
+async def gather(ctx):
+    ctx.state["holehe_installed"]=bool(_HOLEHE)
+    if not _HOLEHE: return
+    # Common admin/info addresses to probe
+    org=ctx.host.split(".")[0]
+    emails=[f"admin@{ctx.host}",f"info@{ctx.host}",f"{org}@{ctx.host}",f"contact@{ctx.host}"]
+    found=[]
+    for em in emails[:2]:  # limit for speed
+        try:
+            proc=await asyncio.create_subprocess_exec(_HOLEHE,em,"--only-used","--no-color",
+                stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL)
+            out,_=await asyncio.wait_for(proc.communicate(),timeout=120)
+            for line in out.decode("utf-8",errors="ignore").splitlines():
+                if "[+]" in line or "USED" in line.upper():
+                    found.append({"email":em,"site":line.strip()[:200]})
+            ctx.source(f"holehe-{em}")
+        except: pass
+    ctx.state["registrations_found"]=found[:30]
+    ctx.state["registration_count"]=len(found)
+def _r_no_holehe(s):
+    if s.get("holehe_installed"): return None
+    return {"name":"holehe binary not installed","severity":"INFO",
+        "evidence":"pip install holehe — checks email registration across 120+ sites"}
+def _r_registrations(s):
+    n=s.get("registration_count",0)
+    if n==0: return None
+    return {"name":f"Admin emails registered on {n} site(s)","severity":"MEDIUM","cwe":"T1589.002",
+        "evidence":"Sample: "+(s.get("registrations_found") or [{}])[0].get("site","")[:100],
+        "remediation":"Generic admin@ addresses widely registered = phishing/credential-stuffing target."}
+FINDING_RULES=[_r_no_holehe,_r_registrations]
+INTEL_FIELDS=[("holehe installed","holehe_installed"),("Registrations","registration_count")]
 @router.post("/api/recon/holehe_email_audit")
-async def recon_holehe_email_audit(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="holehe_email_audit",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("Holehe Installed","holehe_installed"),("Services Registered","services_registered"),("Count","count")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="holehe_email_audit",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["registrations_found","registration_count"])
+def register(app): app.include_router(router)

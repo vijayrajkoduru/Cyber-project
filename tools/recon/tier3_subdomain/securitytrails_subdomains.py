@@ -1,48 +1,47 @@
-"""securitytrails_subdomains — VL-FORGE Recon §3 Subdomain Enumeration (real, zero-FP)."""
-import asyncio, os
+"""SecurityTrails Subdomains v2 — VL-FORGE (key-gated)."""
+import asyncio, requests, os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._subdomain_helpers import resolves, bulk_check
-import urllib.request, json
-
-router = APIRouter()
-
-async def gather(ctx: ScanContext):
-    h = ctx.host
-    key = os.environ.get("SECURITYTRAILS_API_KEY","")
-    if not key:
-        ctx.state["api_key_configured"] = False
-        ctx.source("SECURITYTRAILS_API_KEY not set"); return
-    found = set()
+router=APIRouter()
+async def gather(ctx):
+    key=os.environ.get("SECURITYTRAILS_API_KEY","")
+    if not key: ctx.state["api_key_configured"]=False; return
+    ctx.state["api_key_configured"]=True
     try:
-        def _fetch():
-            req = urllib.request.Request(f"https://api.securitytrails.com/v1/domain/{h}/subdomains",
-                headers={"APIKEY": key, "Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=12) as r:
-                return json.loads(r.read())
-        d = await asyncio.to_thread(_fetch)
-        for s in d.get("subdomains", []):
-            found.add(f"{s}.{h}")
-    except Exception as e:
-        ctx.state["error"] = str(e)[:120]
-    verified = await bulk_check(list(found), concurrency=20)
-    ctx.state["api_key_configured"] = True
-    ctx.state["raw_count"] = len(found)
-    ctx.state["discovered"] = verified
-    ctx.state["count"] = len(verified)
-    ctx.source("SecurityTrails API + DNS verification")
-
-RULES = [
-
-]
-
+        r=requests.get(f"https://api.securitytrails.com/v1/domain/{ctx.host}/subdomains",
+            headers={"APIKEY":key,"User-Agent":"VulnusLab/1.0"},timeout=15)
+        if r.status_code==200:
+            d=r.json()
+            subs=sorted([f"{s}.{ctx.host}" for s in d.get("subdomains",[])])
+            ctx.state["subdomains"]=subs[:200]
+            ctx.state["count"]=len(subs)
+            ctx.source(f"securitytrails-{len(subs)}")
+        elif r.status_code==401: ctx.state["auth_error"]=True
+        elif r.status_code==429: ctx.state["rate_limited"]=True
+    except: pass
+def _r_unkeyed(s):
+    if s.get("api_key_configured"): return None
+    return {"name":"SECURITYTRAILS_API_KEY not configured","severity":"INFO",
+        "evidence":"Set env var to enable SecurityTrails subdomain lookup (50 free queries/month)"}
+def _r_auth(s):
+    if not s.get("auth_error"): return None
+    return {"name":"SecurityTrails auth failed","severity":"INFO",
+        "evidence":"API key rejected — verify SECURITYTRAILS_API_KEY"}
+def _r_rate(s):
+    if not s.get("rate_limited"): return None
+    return {"name":"SecurityTrails rate-limited","severity":"INFO",
+        "evidence":"Free tier 50/month exceeded — upgrade or wait"}
+def _r_found(s):
+    n=s.get("count",0)
+    if n==0: return None
+    return {"name":f"{n} subdomains via SecurityTrails","severity":"INFO","cwe":"T1596.001",
+        "evidence":"Sample: "+", ".join((s.get("subdomains") or [])[:5])}
+FINDING_RULES=[_r_unkeyed,_r_auth,_r_rate,_r_found]
+INTEL_FIELDS=[("API key","api_key_configured"),("Subdomains","count")]
 @router.post("/api/recon/securitytrails_subdomains")
-async def recon_securitytrails_subdomains(req: ScanRequest, _=Depends(verify_scan_quota)):
-    host = recon_host(req.target)
-    return await run_scanner(host=host, tool="securitytrails_subdomains",
-                              gather_func=gather, finding_rules=RULES,
-                              intel_fields=[("API Key Configured","api_key_configured"),("Discovered","discovered"),("Count","count")])
-
-def register(app):
-    app.include_router(router)
+async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target),tool="securitytrails_subdomains",
+        gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
+        flat_field_keys=["subdomains","count"])
+def register(app): app.include_router(router)
