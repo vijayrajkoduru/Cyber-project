@@ -74,6 +74,9 @@ async def run_scanner(
     flat_field_keys: Optional[list] = None,
     skip_if_empty: bool = True,
 ) -> dict:
+    # VL-TURBO Session 6: timing telemetry
+    import time as _vl_time, logging as _vl_log
+    _vl_start = _vl_time.time()
     """Run a recon scanner using the framework pattern.
 
     Args:
