@@ -89,7 +89,7 @@ def r_missing_low(s):
 def r_grade(s):
     g = s.get("grade_letter")
     if not g: return None
-    sev = "INFO" if g in ("A","B") else ("LOW" if g == "C" else "MEDIUM")
+    sev = "INFO"  # summary metric; real severity carried by the r_missing_* rules
     return {"name":f"Security headers grade: {g} ({s.get('grade_pct')}%)",
             "severity": sev, "evidence":f"{len(s.get('present_headers') or [])} of {len(_HEADERS_AUDIT)} hardening headers present"}
 

@@ -8,7 +8,7 @@ router=APIRouter()
 async def _ns(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
-        return [str(x).rstrip(".") for x in await r.resolve(h,"NS")]
+        return sorted(str(x).rstrip(".") for x in await r.resolve(h,"NS"))
     except: return []
 def _axfr(host,ns):
     try:
@@ -43,13 +43,7 @@ def _r_safe(s):
     if not s.get("ns_list"): return None
     return {"name":"AXFR refused on all NS","severity":"POSITIVE",
         "evidence":f"All {len(s['ns_list'])} authoritative NS rejected zone transfer"}
-def _r_partial(s):
-    attempts=s.get("transfer_attempts") or []
-    errs=set(r.get("error") for r in attempts if not r.get("success"))
-    if not errs: return None
-    return {"name":f"AXFR refused (NotAuthoritative/Refused)","severity":"INFO",
-        "evidence":f"Errors: {', '.join(errs)}"}
-FINDING_RULES=[_r_vuln,_r_safe,_r_partial]
+FINDING_RULES=[_r_vuln,_r_safe]
 INTEL_FIELDS=[("NS list","ns_list"),("Vulnerable","vulnerable"),
     ("Leaked records","leaked_records"),("Vulnerable NS","vulnerable_ns")]
 @router.post("/api/recon/zone_transfer")

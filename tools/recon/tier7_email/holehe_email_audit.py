@@ -31,9 +31,11 @@ def _r_no_holehe(s):
 def _r_registrations(s):
     n=s.get("registration_count",0)
     if n==0: return None
-    return {"name":f"Admin emails registered on {n} site(s)","severity":"MEDIUM","cwe":"T1589.002",
-        "evidence":"Sample: "+(s.get("registrations_found") or [{}])[0].get("site","")[:100],
-        "remediation":"Generic admin@ addresses widely registered = phishing/credential-stuffing target."}
+    sites=[(rr.get("site") or "") for rr in (s.get("registrations_found") or []) if rr.get("site")]
+    _sample=", ".join(sites[:6])+(f" (+{len(sites)-6} more)" if len(sites)>6 else "")
+    return {"name":f"Discovered email registered on {n} external site(s)","severity":"LOW","cwe":"T1589.002",
+        "evidence":(f"Sites: {_sample}" if _sample else f"{n} site(s) matched"),
+        "remediation":"Generic shared mailboxes (admin@, support@) widely reused expand the phishing / credential-stuffing surface; prefer per-service addresses."}
 FINDING_RULES=[_r_no_holehe,_r_registrations]
 INTEL_FIELDS=[("holehe installed","holehe_installed"),("Registrations","registration_count")]
 @router.post("/api/recon/holehe_email_audit")

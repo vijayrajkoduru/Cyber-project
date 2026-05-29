@@ -112,7 +112,7 @@ def r_records_summary(s):
     return {"name":f"DNS records: {', '.join(nonzero)}","severity":"INFO",
             "evidence":"From 3-resolver merged query"}
 
-FINDING_RULES = [r_no_spf, r_weak_spf, r_no_dmarc, r_dmarc_none, r_dmarc_strict,
+FINDING_RULES = [
                  r_caa_missing, r_caa_present, r_resolver_inconsistent, r_resolver_consistent,
                  r_records_summary]
 

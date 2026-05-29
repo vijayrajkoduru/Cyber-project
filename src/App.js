@@ -8699,9 +8699,9 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _reproSteps = (f, toolKey) => {
     const ev = String(f.evidence_marker||f.evidence||"").substring(0, 90);
     return [
-      "Hit the " + (toolKey || "scanner") + " endpoint with the target",
-      "Observe response — look for: " + (ev || "the documented signal"),
-      "Compare to the rule logic in the " + String(toolKey||"scanner").toLowerCase() + " scanner module"
+      "Re-run the " + (toolKey || "recon") + " check against the target",
+      "Review the returned evidence: " + (ev || "the documented signal"),
+      "Independently confirm with a standard tool (dig / whois / curl / openssl) before acting"
     ];
   };
 
@@ -8752,7 +8752,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     const _sr = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,POSITIVE:4,INFO:5};
     const _bn = new Map(); const _kl = [];
     _R_allFindings.forEach(f => {
-      const k = String(f.name||f.detail||f.title||"").trim().toLowerCase();
+      const k = String(f.name||f.detail||f.title||"").toLowerCase().replace(/\s*\([^)]*\)\s*$/,"").trim();
       if (!k) { _kl.push(f); return; }
       const rkv = _sr[String(f.severity||"INFO").toUpperCase()];
       const rk = (rkv != null) ? rkv : 9;
@@ -8989,10 +8989,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
   // ═══ INDUSTRY-STANDARD: EXECUTIVE SUMMARY ═══
   {
-    const _allF = [];
-    Object.values(r).forEach(res => { if (res && Array.isArray(res.findings)) _allF.push(...res.findings); });
-    const _sc = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,INFO:0};
-    _allF.forEach(f => { const s=(f.severity||"INFO").toUpperCase(); if(_sc[s]!==undefined) _sc[s]++; });
+    const _allF = _R_allFindings;
+    const _sc = {CRITICAL:_R_sevCount.CRITICAL,HIGH:_R_sevCount.HIGH,MEDIUM:_R_sevCount.MEDIUM,LOW:_R_sevCount.LOW,INFO:_R_sevCount.INFO};
     const _sevOrder = {CRITICAL:1,HIGH:2,MEDIUM:3,LOW:4,INFO:5};
     const _top3 = _allF
       .filter(f => ["CRITICAL","HIGH","MEDIUM"].includes((f.severity||"").toUpperCase()))
@@ -9106,7 +9104,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     y += 6;
   }
   // Per-phase coverage table
-  y = tHead(["PHASE","STATUS","DETAIL"],[55,25,100],y);
+  if(false){ y = tHead(["PHASE","STATUS","DETAIL"],[55,25,100],y);
   _coverageRows.filter(p=>p.status==="RAN").forEach((p,i)=>{
     const stColor = p.status==="RAN"     ? [15,118,82]
                   : p.status==="EMPTY"   ? [55,65,81]
@@ -9131,28 +9129,86 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   y += 6;
 
   // ─── COMPLIANCE COVERAGE (canon section 7) — 8 frameworks ───
+  }
   chk(80);
-  y = sHead("Compliance Coverage", y);
-  y = tHead(["FRAMEWORK","CONTROL","STATUS"], [75,75,30], y);
-  const _R_compRows = [
-    ["PCI-DSS",      "2.4 Asset inventory (subdomains + IPs)"],
-    ["PCI-DSS",      "11.2 Internal/external vuln scanning prereq"],
-    ["SOC 2",        "CC7.1 Detection (CT log monitoring)"],
-    ["ISO 27001",    "A.5.9 Asset register (resolved IPs + tech stack)"],
-    ["NIST 800-53",  "RA-3 Risk assessment (external attack surface)"],
-    ["NIST CSF",     "ID.AM-1 Hardware/software inventory"],
-    ["HIPAA",        "164.308(a)(1) Risk analysis prereq"],
-    ["CIS v8",       "1.1 Detailed enterprise asset inventory"],
-  ];
-  const _R_compOk = _R_sevCount.CRITICAL===0 && _R_sevCount.HIGH===0;
-  _R_compRows.forEach((row,i) => {
-    fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
-    txt(row[0], margin+3, y+5, 8, DARK, true);
-    txt(row[1], margin+78, y+5, 7.5, GRAY);
-    {const _isRisk=/11\.2|RA-3|164\.308/.test(row[1]);const _ok=!(_isRisk&&!_R_compOk);txt(_ok?"COVERED":"REVIEW", margin+150, y+5, 7.5, _ok?[15,118,82]:[133,79,11], true);}
-    y += 7;
-  });
-  y += 6;
+  y = sHead("Compliance Mapping", y);
+  doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+  doc.text("Each finding mapped to the framework control(s) it impacts. Automated mapping - validate with your auditor.", margin+2, y);
+  doc.setFont("Arial","normal"); y += 4;
+  {
+    const _R_cmpRules = [
+      [/dmarc/i,                               "PCI 5.4.1 · CIS 9.5 · NIST SI-8"],
+      [/\bspf\b/i,                             "PCI 5.4.1 · CIS 9.5 · NIST SI-8"],
+      [/dkim/i,                                "PCI 5.4.1 · CIS 9.5 · NIST SI-8"],
+      [/mta-sts/i,                             "NIST SC-8 · PCI 4.2.1 · ISO A.8.24"],
+      [/secret|api key|hardcoded|client code/i,"PCI 6.3.1 · NIST IA-5 · ISO A.8.28"],
+      [/source map/i,                          "OWASP A05 · NIST SI-11 · ISO A.8.28"],
+      [/hsts/i,                                "NIST SC-8 · PCI 4.2.1 · ISO A.8.24"],
+      [/header/i,                              "OWASP A05 · NIST CM-6 · ISO A.8.9"],
+      [/cache snoop/i,                         "NIST SC-20 · ISO A.8.20 · OWASP A05"],
+      [/caa record/i,                          "NIST SC-12 · ISO A.8.24 · CIS 16.x"],
+      [/vrfy|smtp/i,                           "NIST CM-7 · ISO A.8.9 · PCI 2.2.4"],
+      [/zone transfer|axfr/i,                  "NIST SC-20 · ISO A.8.20 · OWASP A05"],
+      [/version|banner/i,                      "NIST CM-6 · ISO A.8.9 · PCI 2.2.4"],
+      [/newly registered|domain age/i,         "NIST CSF ID.RA-3 (risk indicator)"],
+      [/registered on|email.*regist/i,         "NIST CSF PR.AT · ISO A.6.3"],
+      [/forward-reverse|dns mismatch/i,        "NIST SC-20 · ISO A.8.20"],
+      [/cors/i,                                "OWASP A05 · NIST CM-6 · ISO A.8.9"],
+      [/open redirect/i,                       "OWASP A01 · NIST SI-10 · ISO A.8.28"],
+      [/takeover/i,                            "OWASP A05 · NIST CM-8 · ISO A.8.9"],
+      [/exposed|disclos|leak/i,                "NIST CM-6 · ISO A.8.9 · OWASP A05"],
+      [/tls|ssl|cipher|certificate/i, "PCI 4.2.1 · NIST SC-8 · ISO A.8.24"],
+    ];
+    const _R_cmpCwe = {
+      "CWE-319":"NIST SC-8 · PCI 4.2.1 · ISO A.8.24",
+      "CWE-200":"NIST CM-6 · ISO A.8.9 · OWASP A05",
+      "CWE-693":"OWASP A05 · NIST CM-6 · ISO A.8.9",
+      "CWE-290":"PCI 5.4.1 · CIS 9.5 · NIST SI-8",
+      "CWE-295":"NIST SC-12 · ISO A.8.24 · CIS 16.x",
+      "CWE-540":"OWASP A05 · NIST SI-11 · ISO A.8.28",
+      "CWE-204":"NIST CM-7 · ISO A.8.9 · PCI 2.2.4",
+      "CWE-1325":"NIST CSF ID.RA-3",
+    };
+    const _R_cmpFor = function(nm, cwe){
+      for (var _i=0; _i<_R_cmpRules.length; _i++){ if (_R_cmpRules[_i][0].test(nm||"")) return _R_cmpRules[_i][1]; }
+      var _c=String(cwe||"").trim(); return _R_cmpCwe[_c] || "";
+    };
+    const _sevRk = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+    const _cf = _R_allFindings
+      .filter(function(f){ return _sevRk[String(f.severity||"").toUpperCase()] !== undefined; })
+      .map(function(f){ var _nm=String(f.name||f.detail||f.title||"Finding"); return {f:f, nm:_nm, cmp:_R_cmpFor(_nm, f.cwe)}; })
+      .filter(function(ob){ return ob.cmp; })
+      .sort(function(a,b){ if (a.cmp !== b.cmp) return a.cmp < b.cmp ? -1 : 1; return (_sevRk[String(a.f.severity||"").toUpperCase()] - _sevRk[String(b.f.severity||"").toUpperCase()]) || (Number(b.f.cvss||0)-Number(a.f.cvss||0)); });
+    if (_cf.length > 0){
+      y = tHead(["COMPLIANCE","FINDING","SEV","CVSS","CWE"], [52,76,20,16,22], y);
+      var _prevCmp = null;
+      _cf.forEach(function(ob,i){
+        var f=ob.f; var sev=String(f.severity||"").toUpperCase();
+        if (_prevCmp !== null && ob.cmp !== _prevCmp){ chk(8); fillR(margin, y, contentW, 0.5, [30,64,175]); y += 1.5; }
+        _prevCmp = ob.cmp;
+        var sc = sev==="CRITICAL"?[162,28,28]:sev==="HIGH"?[194,65,12]:sev==="MEDIUM"?[202,138,4]:sev==="LOW"?[55,65,81]:[100,116,139];
+        var _cm={CRITICAL:9.8,HIGH:7.5,MEDIUM:5.3,LOW:3.1,INFO:0}; var _cn=Number(f.cvss)||0; var cv=(_cn>0?_cn:(_cm[sev]||0)).toFixed(1);
+        var cw=(String(f.cwe||"").trim() || String(f.references||"").split(",")[0].trim() || "-");
+        var cmp=ob.cmp.length>38?ob.cmp.substring(0,38)+"...":ob.cmp;
+        var nm=ob.nm.length>50?ob.nm.substring(0,50)+"...":ob.nm;
+        chk(7); fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
+        txt(cmp, margin+3, y+4.6, 6.8, DARK);
+        txt(nm, margin+55, y+4.6, 7, GRAY);
+        rrect(margin+129, y+1.4, 18, 4.8, 1, sc); txt(sev, margin+138, y+4.7, 6, WHITE, true, "center");
+        txt(cv, margin+150, y+4.6, 9, sc, true);
+        txt(cw, margin+166, y+4.6, 7.5, DARK, true);
+        y += 6.5;
+      });
+      y += 6;
+    } else {
+      chk(16); fillR(margin, y, contentW, 14, LIGHT); fillR(margin, y, 3, 14, [22,163,74]);
+      doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor(15,118,82);
+      doc.text("No findings mapped to compliance controls", margin+6, y+6);
+      doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+      doc.text("No CRITICAL/HIGH/MEDIUM/LOW finding carried a control-mappable signature.", margin+6, y+11);
+      y += 18;
+    }
+  }
 
   // ── Findings — synthesized severity-ranked actionable risks ──
   // -- Detailed Findings: consolidated table (Finding | Severity | CVSS | CWE) --
@@ -9172,7 +9228,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const _cm={CRITICAL:9.8,HIGH:7.5,MEDIUM:5.3,LOW:3.1}; const _cn=Number(f.cvss)||0; const cv=(_cn>0?_cn:(_cm[sev]||0)).toFixed(1);
         const cw = (String(f.cwe||"").trim() || String(f.references||"").split(",")[0].trim() || "-");
         chk(7); fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
-        txt(nm.substring(0,70), margin+3, y+4.6, 7.5, DARK);
+        txt(nm.length>78?nm.substring(0,78)+"...":nm, margin+3, y+4.6, 7.5, DARK);
         rrect(margin+109, y+1.4, 23, 4.8, 1, sc); txt(sev, margin+120.5, y+4.7, 6.5, WHITE, true, "center");
         txt(cv, margin+138, y+4.6, 11, sc, true);
         txt(cw, margin+159, y+4.6, 8, DARK, true);
@@ -9472,17 +9528,17 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         chk(rowH + 2);
         fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
         rrect(margin+3, y+2, 18, 5.5, 1, sevColor);
-        txt(sev, margin+12, y+5.8, 6.5, WHITE, true, "center");
+        txt(sev, margin+12, y+5.8, 9, WHITE, true, "center");
         // CVSS pill — derived from severity (industry-standard CVSS v3.1 mid-range)
         const _cvssMap = {CRITICAL:9.8, HIGH:7.5, MEDIUM:5.3, LOW:3.1, INFO:0.0};
         const _cvss = (typeof f.cvss === "number" ? f.cvss : parseFloat(f.cvss)) || _cvssMap[sev] || 0.0;
         if (_cvss > 0) {
           rrect(margin+22, y+2, 16, 5.5, 1, sevColor);
-          txt(`CVSS ${_cvss.toFixed(1)}`, margin+30, y+5.8, 8.5, WHITE, true, "center");
+          txt(`CVSS ${_cvss.toFixed(1)}`, margin+30, y+5.8, 9, WHITE, true, "center");
         }
         if(cwe && cwe !== "N/A"){
           rrect(margin+contentW-18, y+2, 16, 5.5, 1, DARK);
-          txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 8.5, WHITE, true, "center");
+          txt(cwe.replace(/^CWE-/,""), margin+contentW-10, y+5.8, 9, WHITE, true, "center");
         }
         txt(name, margin+(_cvss>0?41:25), y+5, 8.5, DARK, true);
         // KEV badge (CISA Known Exploited Vulnerabilities) — red pill
@@ -9497,7 +9553,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const _mitre = _mitreFor(f);
         if(_mitre){
           rrect(_badgeX-22, y+2, 22, 5.5, 1, [124,58,237]);
-          txt(_mitre.id, _badgeX-11, y+5.8, 8.5, WHITE, true, "center");
+          txt(_mitre.id, _badgeX-11, y+5.8, 9, WHITE, true, "center");
           _badgeX -= 25;
         }
         let textY = y + 11;
@@ -10036,7 +10092,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   }
 
   // ─── ASN / IP Ownership ────────────────────────────────────
-  if(r.asn && (r.asn.asn || r.asn.ip)){
+  if(false){  /* sec17 removed - redundant with sec13/14 ASN */
     chk(30); y = sHead("ASN / IP Ownership (Team-Cymru)", y);
     const rows = [
       ["IP",        r.asn.ip],
@@ -10305,7 +10361,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       if (d && Array.isArray(d.subdomains)) d.subdomains.forEach(s=>_subs.add(s));
       if (d && Array.isArray(d.sans)) d.sans.forEach(s=>_subs.add(s));
     });
-    if (_subs.size > 0) _inv.push(["Subdomains discovered", `${_subs.size} unique`]);
+    const _subList = [...new Set([..._subs].map(x=>typeof x==="string"?x:((x&&(x.hostname||x.subdomain||x.name||x.value))||"")).filter(Boolean))].sort();
+    if (_subList.length > 0) _inv.push(["Subdomains discovered", `${_subList.length} unique: ${_subList.slice(0,6).join(", ")}${_subList.length>6?` (+${_subList.length-6} more)`:""}`]);
 
     // IP addresses
     const _ips = new Set();
@@ -10329,9 +10386,9 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     // DNS records
     const _dns = r.dns_records;
     if (_dns) {
-      if ((_dns.ns_records||[]).length) _inv.push(["Nameservers", (_dns.ns_records||[]).slice(0,3).join(", ")]);
-      if ((_dns.mx_records||[]).length) _inv.push(["Mail servers", (_dns.mx_records||[]).slice(0,3).join(", ")]);
-      if ((_dns.txt_records||[]).length) _inv.push(["TXT records", `${_dns.txt_records.length} entries`]);
+      if ((_dns.ns_records||[]).length) _inv.push(["Nameservers", [...(_dns.ns_records||[])].sort().slice(0,3).join(", ")]);
+      if ((_dns.mx_records||[]).length) _inv.push(["Mail servers", [...(_dns.mx_records||[])].map(m=>{const t=String(m).trim().split(/\s+/);return (t.length>=2 && /^\d+$/.test(t[0])) ? {p:parseInt(t[0],10),s:t.slice(1).join(" ")+" (pri "+t[0]+")"} : {p:0,s:String(m)};}).sort((a,b)=>a.p-b.p).slice(0,3).map(x=>x.s).join(", ")]);
+      if ((_dns.txt_records||[]).length) _inv.push(["TXT records", `${_dns.txt_records.length} ${_dns.txt_records.length===1?"entry":"entries"}: ${String(_dns.txt_records[0]||"").substring(0,48)}${String(_dns.txt_records[0]||"").length>48?"...":""}`]);
     }
 
     // Tech stack
@@ -10381,7 +10438,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       const fc = Array.isArray(d.findings) ? d.findings.length : 0;
       if (fc > 0 || d.verified_at) _ran5.push(`${k} (${fc})`);
     });
-    if (_ran5.length) _inv.push(["Web App scanners ran", `${_ran5.length} of 17 — ${_ran5.slice(0,5).join(", ")}${_ran5.length>5?"...":""}`]);
+    if (_ran5.length) _inv.push(["Web App scanners ran", `${_ran5.length} of 17 — ${_ran5.slice(0,3).join(", ")}${_ran5.length>3?` (+${_ran5.length-3} more)`:""}`]);
 
     // ── API endpoints discovered ──
     const _apiHits = (r.api_endpoint_brute && r.api_endpoint_brute.hits) || [];
@@ -10401,11 +10458,15 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }
 
     // ── OSINT enrichment: candidates, employees, social ──
+    const _hEmails = (r.email_harvester && (r.email_harvester.emails || ((r.email_harvester.intel||{}).emails))) || [];
+    if (_hEmails.length) _inv.push(["Emails discovered", `${_hEmails.length}: ${_hEmails.slice(0,6).join(", ")}${_hEmails.length>6?` (+${_hEmails.length-6} more)`:""}`]);
+    const _hUsers = (r.email_harvester && (r.email_harvester.usernames || ((r.email_harvester.intel||{}).usernames))) || [];
+    if (_hUsers.length) _inv.push(["Usernames discovered", `${_hUsers.length}: ${_hUsers.slice(0,8).join(", ")}${_hUsers.length>8?` (+${_hUsers.length-8} more)`:""}`]);
     const _userCands = (r.username_permutation_gen && r.username_permutation_gen.candidates) || [];
-    if (_userCands.length) _inv.push(["Username candidates generated", `${_userCands.length}: ${_userCands.slice(0,5).join(", ")}`]);
+    if (false) _inv.push(["Username candidates generated", `${_userCands.length}: ${_userCands.slice(0,5).join(", ")}${_userCands.length>5?` (+${_userCands.length-5} more)`:""}`]);
 
     const _emailCands = (r.email_pattern_generator && r.email_pattern_generator.candidates) || [];
-    if (_emailCands.length) _inv.push(["Email candidates generated", `${_emailCands.length}: ${_emailCands.slice(0,4).join(", ")}`]);
+    if (false) _inv.push(["Email candidates generated", `${_emailCands.length}: ${_emailCands.slice(0,3).join(", ")}${_emailCands.length>3?` (+${_emailCands.length-3} more)`:""}`]);
 
     const _linkedin = r.linkedin_employees || {};
     const _employees = _linkedin.employees || (_linkedin.intel||{}).employees || [];
@@ -10424,11 +10485,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     // ── Threat intel hits ──
     const _threatKeys = ["censys_search","shodan_keyed","abuseipdb","threatfox_check",
                          "greynoise_check","virustotal_full","alienvault_otx","urlhaus_check"];
-    const _threatHits = _threatKeys.filter(k => {
-        const d = r[k] || {};
-        return (d.findings||[]).length > 0;
-    });
-    if (_threatHits.length) _inv.push(["Threat intel matches", `${_threatHits.length} feed(s): ${_threatHits.slice(0,4).join(", ")}`]);
+    const _realThreatHits = _threatKeys.filter(k => { const _tr = r[k]; if (!_tr) return false; const _fs = (_tr.findings || (_tr.raw_data && _tr.raw_data.findings) || []); return _fs.some(f => ["CRITICAL","HIGH","MEDIUM"].includes(String((f && f.severity) || "").toUpperCase())); });
+    if (_realThreatHits.length) _inv.push(["Threat intel matches", `${_realThreatHits.length} feed(s): ${_realThreatHits.slice(0,4).join(", ")}`]);
 
     // ── Source maps exposed (real intel, not just finding) ──
     const _maps = (r.sourcemap_check && (r.sourcemap_check.maps_found || (r.sourcemap_check.intel||{}).maps_found)) || [];
@@ -10542,7 +10600,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     y += 18;
   }
 
-  chk(60); y = sHead("Verification Audit", y);
+  if(false){ chk(60); y = sHead("Verification Audit", y);
   fillR(margin, y, contentW, 7, DARK);
   doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...WHITE);
   doc.text("SCANNER", margin+3, y+5); doc.text("DISCOVERY PROBED", margin+50, y+5);
@@ -10573,7 +10631,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     ["Git Recon",        ".git/HEAD + .git/config + .git/index probe"],
     ["API Docs",         "Swagger/OpenAPI/GraphQL/Postman discovery"],
   ];
-  _audit.forEach((row,i)=>{
+  _coverageRows.filter(p=>p.status==="RAN").map(p=>[p.name,(p.detail&&p.detail!=="Completed")?p.detail:"Probed - returned verified data"]).forEach((row,i)=>{
     chk(7);
     fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
     doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
@@ -10586,6 +10644,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
   // ─── APPENDIX (vulntemplate block 11) ────────────────────────
   // A. Methodology · B. Discovery scope · C. References
+  }
   chk(80); y = sHead("Appendix", y);
   doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
   doc.text("A. Methodology", margin, y+5); y+=8;
