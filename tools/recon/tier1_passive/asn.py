@@ -17,7 +17,7 @@ async def _cymru(ip):
             if "|" not in line: continue
             p=[x.strip() for x in line.split("|")]
             if len(p)>=7 and p[0].isdigit():
-                return {"asn":"AS"+p[0],"prefix":p[1],"country":p[2],"registry":p[3],"org":p[6]}
+                return {"asn":"AS"+p[0],"prefix":p[2],"country":p[3],"registry":p[4],"org":p[6]}
     except: pass
     return None
 async def _resolve(host):

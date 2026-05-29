@@ -86,8 +86,8 @@ async def _team_cymru_asn(ip):
         if "|" not in line: continue
         parts = [p.strip() for p in line.split("|")]
         if len(parts) >= 7 and parts[0].isdigit():
-            return {"asn": "AS"+parts[0], "country": parts[2],
-                    "registry": parts[3], "org": parts[6]}
+            return {"asn": "AS"+parts[0], "prefix": parts[2], "country": parts[3],
+                    "registry": parts[4], "org": parts[6]}
     return None
 
 def _pywhois_sync(host):
@@ -386,7 +386,7 @@ def _r_sources_thin(s):
 
 _INLINE_RULES = [_r_expired, _r_expires_30, _r_expires_90, _r_newly_registered,
                  _r_free_dns, _r_no_abuse, _r_privacy_only, _r_long_runway,
-                 _r_abuse_present, _r_registrar, _r_cdn, _r_asn, _r_ct_subs,
+                 _r_registrar, _r_cdn, _r_ct_subs,
                  _r_age, _r_sources_consistent, _r_sources_thin]
 
 try:

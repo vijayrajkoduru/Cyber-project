@@ -98,6 +98,13 @@ async def gather(ctx: ScanContext):
     supported = {}
     for (name, _, ok_to_have), res in zip(_TLS_VERSIONS, proto_tests):
         supported[name] = bool(res) if not isinstance(res, Exception) else False
+    # Primary handshake already negotiated a protocol; that version is
+    # definitively supported. Per-version reprobes get throttled by a CDN
+    # (Cloudflare) and transiently fail -> previously caused a false grade-F on
+    # sites actually running TLS 1.3. Trust the negotiated version.
+    _neg = ctx.state.get("tls_version_negotiated")
+    if _neg in supported:
+        supported[_neg] = True
     ctx.state["protocols_supported"] = supported
     ctx.source(f"protocols-{sum(supported.values())}")
 
