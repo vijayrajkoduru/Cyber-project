@@ -20912,10 +20912,12 @@ export default function App() {
         {active === "health"    && <SystemHealth/>}
         {active === "metasploit" && <MetasploitAutoModule token={token} apiUrl={API}/>}
         {active === "guide"     && <GuideModule/>}
-        {!["webapp","recon","vuln","password","auth","network","sysexploit","cloud","buffer","exploit",
-            "osint","wireless","ad","privesc","tunnel","post","av","se","malware","supply","persist",
-            "client","mobile","api","pivot","report","tools","history","settings",
-            "dashboard","health","msf","guide","adminpanel","backups","vault","backupops"].includes(active) && <ComingSoon topic={topic}/>}
+        {/* ComingSoon fallback: only render if `active` is NOT a real module id
+            AND NOT one of the special internal view ids. Built dynamically from
+            MODULES so new modules can never drift back into "under development". */}
+        {!MODULES.map(m=>m.id).concat([
+            "dashboard","health","metasploit","guide","adminpanel","settings","history"
+          ]).includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
   };
