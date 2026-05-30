@@ -18420,6 +18420,45 @@ function AuthAttacksModule_legacy({token}) {
 //  Pattern mirrors live Recon scan tile UI (feedback_scan_tile_pattern_confirmed).
 // ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
+//  ModuleWithTabs — wraps any custom auto-panel with the same
+//  AUTO SCAN | MANUAL TESTS tab pattern used by ModuleAutoPanel.
+//  Applied to Recon/Vuln/Webapp/OSINT/Mobile (which have their own
+//  custom auto panels). Renders the same tab UI at the top so all
+//  35 modules share a consistent layout.
+// ═══════════════════════════════════════════════════════════════
+function ModuleWithTabs({moduleKey, moduleLabel, autoCount, manualTests, autoPanel, color}) {
+  const [tab, setTab] = useState("auto");
+  const accent = color || "#3b82f6";
+  return (
+    <div>
+      <div style={{display:"flex", gap:0, padding:"0 24px",
+                    borderBottom:"1px solid #334155", background:"#0f172a"}}>
+        {[
+          {id:"auto",   label:`AUTO SCAN · ${autoCount}`},
+          {id:"manual", label:`MANUAL TESTS · ${(manualTests || []).length}`},
+        ].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            style={{background:"transparent", border:"none",
+                    borderBottom: `2px solid ${tab === t.id ? accent : "transparent"}`,
+                    padding:"10px 18px", color: tab === t.id ? "#f1f5f9" : "#64748b",
+                    fontSize:11, fontWeight:700, cursor:"pointer",
+                    textTransform:"uppercase", letterSpacing:1}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "auto"   && autoPanel}
+      {tab === "manual" && (
+        <ManualTestsPanel
+          moduleKey={`${moduleKey}_manual`}
+          moduleLabel={`${moduleLabel} - Manual Pentest`}
+          tests={manualTests || []}/>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  Manual technique catalogue per module (extracted from playbook 👤 entries)
 //  3 cards × 26 modules = 78 distinct analyst tests
 // ═══════════════════════════════════════════════════════════════
@@ -20709,13 +20748,16 @@ export default function App() {
       <>
         {/* Always-mounted modules — scan survives tab switches */}
         <div style={{display: active==="webapp"   ? "block" : "none"}}>
-          <WebAppModule token={token} onRunningChange={setWaptRunning} isTrial={isTrial} isSuperAdmin={isSuperAdmin}/>
+          <ModuleWithTabs moduleKey="webapp" moduleLabel="Webapp" autoCount={64} manualTests={MANUAL_TESTS_WEBAPP} color="#3b82f6"
+            autoPanel={<WebAppModule token={token} onRunningChange={setWaptRunning} isTrial={isTrial} isSuperAdmin={isSuperAdmin}/>}/>
         </div>
         <div style={{display: active==="recon"    ? "block" : "none"}}>
-          <ReconModule token={token} onRunningChange={setReconRunning} activeSections={reconSections}/>
+          <ModuleWithTabs moduleKey="recon" moduleLabel="Recon" autoCount={56} manualTests={MANUAL_TESTS_RECON} color="#10b981"
+            autoPanel={<ReconModule token={token} onRunningChange={setReconRunning} activeSections={reconSections}/>}/>
         </div>
         <div style={{display: active==="vuln"     ? "block" : "none"}}>
-          <VulnModule token={token} onRunningChange={setVulnRunning}/>
+          <ModuleWithTabs moduleKey="vuln" moduleLabel="Vuln" autoCount={198} manualTests={MANUAL_TESTS_VULN} color="#ef4444"
+            autoPanel={<VulnModule token={token} onRunningChange={setVulnRunning}/>}/>
         </div>
         <div style={{display: active==="password" ? "block" : "none"}}>
           <PasswordModule token={token}/>
@@ -20742,7 +20784,8 @@ export default function App() {
           <ExploitationModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="osint"    ? "block" : "none"}}>
-          <OsintModule token={token} apiUrl={API}/>
+          <ModuleWithTabs moduleKey="osint" moduleLabel="OSINT" autoCount={12} manualTests={MANUAL_TESTS_OSINT} color="#8b5cf6"
+            autoPanel={<OsintModule token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="wireless" ? "block" : "none"}}>
           <WirelessModule token={token} apiUrl={API}/>
@@ -20812,19 +20855,24 @@ export default function App() {
         <div style={{display: active==="phishing_manual"       ? "block" : "none"}}><ManualTestsPanel moduleKey="phishing_manual"       moduleLabel="Phishing - Manual Pentest"         tests={MANUAL_TESTS_AUTO.phishing         || []}/></div>
         <div style={{display: active==="red_team_manual"       ? "block" : "none"}}><ManualTestsPanel moduleKey="red_team_manual"       moduleLabel="Red-Team - Manual Pentest"         tests={MANUAL_TESTS_AUTO.red_team         || []}/></div>
         <div style={{display: active==="mobile_static" ? "block" : "none"}}>
-          <MobileStaticModule token={token} apiUrl={API}/>
+          <ModuleWithTabs moduleKey="mobile_static" moduleLabel="Mobile-Static" autoCount={16} manualTests={MANUAL_TESTS_MOBILE_STATIC} color="#ec4899"
+            autoPanel={<MobileStaticModule token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="mobile_storage" ? "block" : "none"}}>
-          <MobileStorageModule token={token} apiUrl={API}/>
+          <ModuleWithTabs moduleKey="mobile_storage" moduleLabel="Mobile-Storage" autoCount={11} manualTests={MANUAL_TESTS_MOBILE_STORAGE} color="#ec4899"
+            autoPanel={<MobileStorageModule token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="mobile_runtime" ? "block" : "none"}}>
-          <MobileRuntimeModule token={token} apiUrl={API}/>
+          <ModuleWithTabs moduleKey="mobile_runtime" moduleLabel="Mobile-Runtime" autoCount={6} manualTests={MANUAL_TESTS_MOBILE_RUNTIME} color="#ec4899"
+            autoPanel={<MobileRuntimeModule token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="mobile_crypto" ? "block" : "none"}}>
-          <MobileCryptoModule token={token} apiUrl={API}/>
+          <ModuleWithTabs moduleKey="mobile_crypto" moduleLabel="Mobile-Crypto" autoCount={7} manualTests={MANUAL_TESTS_MOBILE_CRYPTO} color="#ec4899"
+            autoPanel={<MobileCryptoModule token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="mobile_network" ? "block" : "none"}}>
-          <MobileNetworkModule token={token} apiUrl={API}/>
+          <ModuleWithTabs moduleKey="mobile_network" moduleLabel="Mobile-Network" autoCount={8} manualTests={MANUAL_TESTS_MOBILE_NETWORK} color="#ec4899"
+            autoPanel={<MobileNetworkModule token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
