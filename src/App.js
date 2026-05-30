@@ -20762,8 +20762,8 @@ export default function App() {
             autoPanel={<ReconModule token={token} onRunningChange={setReconRunning} activeSections={reconSections}/>}/>
         </div>
         <div style={{display: active==="vuln"     ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="vuln" moduleLabel="Vuln" autoCount={198} manualTests={MANUAL_TESTS_VULN} color="#ef4444"
-            autoPanel={<VulnModule token={token} onRunningChange={setVulnRunning}/>}/>
+          <ModuleWithTabs moduleKey="vuln" moduleLabel="Vulnerability Scanning" autoCount={196} manualTests={MANUAL_TESTS_VULN} color="#ef4444"
+            autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="🛡️" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="password" ? "block" : "none"}}>
           <PasswordModule token={token}/>
