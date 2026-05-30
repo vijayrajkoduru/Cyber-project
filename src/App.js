@@ -90,11 +90,13 @@ const MODULES = [
   // ── FREE (everyone) ──────────────────────────────────────────
   { id:"dashboard", icon:"🏠", label:"Dashboard",                          cat:"core",    free:true  },
   { id:"recon",     icon:"🔍", label:"Information Gathering & Recon",      cat:"recon",   free:true  },
+  { id:"recon_manual", icon:"📋", label:"Recon - Manual Pentest Checklist", cat:"recon", free:true },
   { id:"guide",     icon:"📖", label:"Run Guide & Lab Targets",            cat:"tools",   free:true  },
   { id:"report",    icon:"📄", label:"Report Writing",                     cat:"tools",   free:true  },
 
   // ── TRIAL ACCESS (free tier gets these) ─────────────────────
   { id:"vuln",      icon:"🛡️", label:"Vulnerability Scanning",             cat:"scan",    free:false, trial:true },
+  { id:"vuln_manual", icon:"📋", label:"Vuln - Manual Pentest Checklist", cat:"scan", free:false, trial:true },
   { id:"webapp",    icon:"🌐", label:"Web Application Pentesting",         cat:"scan",    free:false, trial:true, featured:true },
 
   // ── SCANNING ────────────────────────────────────────────────
@@ -5601,149 +5603,691 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
 //    runs locally (Frida, Burp, etc.) with prereqs + step-by-step + evidence
 //    capture. State persisted to localStorage so re-opens preserve work.
 // ─────────────────────────────────────────────────────────────────
-function ManualTestsPanel({moduleKey, moduleLabel, tests}) {
+const MANUAL_TESTS_RECON = [
+  {
+    id: "osint_framework_chain", ref: "§1 #15",
+    title: "OSINT Framework Mind-Map Traversal",
+    difficulty: "easy", time: "1h", cost: "free", required: true,
+    tools_required: ["OSINT Framework (osintframework.com)", "IntelTechniques tools", "KeepNote / Obsidian"],
+    customer_prereqs: ["Target name / domain / email", "Web browser", "A scratchpad to track sources hit"],
+    steps: [
+      "Open https://osintframework.com — pick branch (Username / Email / Domain Name)",
+      "Walk EVERY leaf in the branch matching what you know about the target",
+      "Cross-walk via https://inteltechniques.com/tools/ — note any sources OSINT Framework missed",
+      "Log every confirmed hit (URL + what was found) in your mind-map",
+      "Pivot from confirmed hits (a leaked email -> new branches)",
+    ],
+    what_to_look_for: "Which OSINT branches yielded REAL data. Especially: subdomain hints (dev/staging/admin), historical employee emails (gone but indexed), leaked archive URLs (waybackmachine, archive.today). The deeper the mind-map, the more likely you find a forgotten internal asset.",
+    owasp_masvs: "PTES Intelligence Gathering / NIST SP 800-115 §4.2",
+  },
+  {
+    id: "nxns_feasibility", ref: "§2 #32",
+    title: "NXNS Attack Feasibility Test",
+    difficulty: "hard", time: "half-day", cost: "free", required: false,
+    tools_required: ["dig", "Custom auth DNS (e.g. NSD/PowerDNS)", "NXNSattack PoC"],
+    customer_prereqs: ["Authorization (this is amplification - risky)", "Isolated test resolver", "Your own attacker-controlled domain"],
+    steps: [
+      "Set up an authoritative DNS for attacker.com with 50+ NS records all delegating to target zone",
+      "$ dig @<target-resolver> evil-prefix.attacker.com +short",
+      "Measure query count generated at the victim NS",
+      "Compute amplification factor = (queries sent to victim) / (queries you sent to resolver)",
+    ],
+    what_to_look_for: "Amplification >> 50x = resolver vulnerable to NXNSattack. Modern BIND (>=9.16) / Unbound (>=1.10) / Knot Resolver have NXNS mitigation. Open recursive resolver + high amp = critical (DDoS amp risk).",
+    owasp_masvs: "CVE-2020-12662 / RFC 8482 / NIST 800-53 SC-5",
+  },
+  {
+    id: "dns_tunneling_detect", ref: "§2 #33",
+    title: "DNS Tunneling Detection (Entropy + Volume)",
+    difficulty: "hard", time: "half-day", cost: "free", required: false,
+    tools_required: ["tcpdump / Wireshark", "Splunk or ELK", "Python (Shannon entropy)"],
+    customer_prereqs: ["pcap of DNS traffic OR query logs from the resolver", "Knowledge of baseline DNS volume"],
+    steps: [
+      "$ tcpdump -i any port 53 -w dns.pcap (capture 1h baseline + suspect window)",
+      "Extract queried FQDNs and compute Shannon entropy per label",
+      "Flag labels with entropy > 4.0 bits/byte and length > 50 chars",
+      "Look for high query rate to a single 2LD (iodine, dnscat2 fingerprint)",
+      "Inspect TXT response sizes - tunnels often have large TXT replies",
+    ],
+    what_to_look_for: "Sustained high-entropy / long subdomain labels = covert channel (iodine/dnscat2/heyserial). Periodic A->TXT bursts with regular timing = beaconing C2. Volume spikes from one client to one zone = exfiltration.",
+    owasp_masvs: "MITRE T1071.004 (DNS C2) / NIST 800-53 SI-4",
+  },
+  {
+    id: "manual_subdomain_pivot", ref: "§3 #47",
+    title: "Creative Subdomain Pivot (Employee + Internal-Tool Guess)",
+    difficulty: "medium", time: "1h", cost: "free", required: true,
+    tools_required: ["dig", "Browser", "Your intuition"],
+    customer_prereqs: ["Target domain", "Employee names from §4/§7 OSINT", "Curiosity"],
+    steps: [
+      "From employee list, try {firstname}.{domain} / {firstname}-dev.{domain}",
+      "Probe internal-tool conventions: jira / confluence / jenkins / grafana / vault / vpn / portal / admin / status",
+      "Probe environment names: staging / qa / dev / dr / backup / canary / preview",
+      "$ dig +short for each - record everything that resolves",
+      "Pivot via crt.sh subject SAN: subdomains visible only in TLS cert history",
+    ],
+    what_to_look_for: "Subdomains resolving to RFC1918 addresses (10/8, 172.16/12, 192.168/16) = internal DNS leak. Forgotten dev/staging environments (often CVE-heavy and lower security posture). Exposed admin panels (jenkins/jira/grafana login pages on the internet).",
+    owasp_masvs: "PTES IG §3 / OSCP Enumeration / NIST 800-115",
+  },
+  {
+    id: "realname_photo_pivot", ref: "§4 #65",
+    title: "Real-Name + Profile Photo Pivot",
+    difficulty: "medium", time: "1h", cost: "paid", required: false,
+    tools_required: ["PimEyes", "Yandex Reverse Image", "TinEye", "LinkedIn"],
+    customer_prereqs: ["A real name OR a profile photo", "WRITTEN authorization (PII processing)"],
+    steps: [
+      "Run reverse-image on the photo via Yandex (best) + TinEye + PimEyes",
+      "Pivot to every social profile the face appears in (Insta, FB, dating apps, forums)",
+      "Cross-reference posts for timezone patterns + location clues",
+      "Build a timeline of online activity across platforms",
+      "Cross-link to email/phone via §7 tools (Holehe / GHunt) for the names you find",
+    ],
+    what_to_look_for: "Executive personal accounts that mirror corporate identity, leaked personal emails/phones, photos taken inside the corporate facility, travel patterns useful for vishing pretext.",
+    owasp_masvs: "PTES IG / GDPR Art. 6 (legal basis required) / DPDP",
+  },
+  {
+    id: "origin_cdn_bypass", ref: "§5 #86",
+    title: "Origin Server Discovery (CDN Bypass)",
+    difficulty: "medium", time: "1h", cost: "paid", required: true,
+    tools_required: ["CloudFlair", "Censys API", "Shodan API", "crt.sh"],
+    customer_prereqs: ["Target domain behind a CDN (Cloudflare / Akamai / Fastly)", "Censys + Shodan accounts"],
+    steps: [
+      "Confirm CDN: dig +short target.com -> Cloudflare IP range",
+      "Search Censys for cert subject = target.com on NON-Cloudflare IPs",
+      "Cross-reference Shodan hosts serving the same cert SHA-256",
+      "$ curl -k -H 'Host: target.com' https://<candidate-ip>/ -> does it return the real site?",
+      "If yes, you've found the origin - WAF/CDN bypassable",
+    ],
+    what_to_look_for: "A non-CDN IP returning the customer site when Host header is set = origin exposed. ALL CDN protections (DDoS, WAF rules, rate-limits, bot detection) are bypassable by hitting the origin directly. Critical recon finding.",
+    owasp_masvs: "OWASP WSTG-INFO-09 / PTES IG §5",
+  },
+  {
+    id: "auth_bound_endpoint_enum", ref: "§5 #87",
+    title: "Authenticated Endpoint Enumeration (vs Unauth Diff)",
+    difficulty: "easy", time: "1h", cost: "free", required: true,
+    tools_required: ["Burp Suite", "Browser", "grep"],
+    customer_prereqs: ["Valid app credentials (with authorization)", "Burp proxy intercepting"],
+    steps: [
+      "Open the target app in browser with Burp intercept",
+      "Click EVERY feature/menu systematically once logged in",
+      "In Burp History, sort by URL, dedupe -> get the authenticated endpoint set",
+      "Repeat browse anonymously -> unauth endpoint set",
+      "$ diff <(unauth.txt) <(auth.txt) -> the endpoints visible only after login",
+    ],
+    what_to_look_for: "Admin/internal endpoints discoverable ONLY after login (/api/admin/*, /internal/debug, /api/v1/users/{id}/notes). These typically have weaker authz checks (BOLA/BFLA targets for the vuln phase). Document for the next testing phase.",
+    owasp_masvs: "OWASP WSTG-INFO-04 / API1:2023 BOLA recon",
+  },
+  {
+    id: "oidc_trust_abuse_map", ref: "§6 #103",
+    title: "OIDC Trust Relationship Abuse Map",
+    difficulty: "hard", time: "half-day", cost: "free", required: false,
+    tools_required: ["cloudfox", "AWS / GCP / Azure CLI", "jq"],
+    customer_prereqs: ["Read-only IAM access to the cloud account", "Authorization for cloud recon"],
+    steps: [
+      "$ cloudfox aws role-trusts --profile <p>",
+      "Identify roles with sts:AssumeRoleWithWebIdentity",
+      "Inspect the Condition block - check sub: + aud: claims",
+      "Flag sub: wildcards OR overly broad like 'sub:repo:org/*'",
+      "Map identical pattern for GCP Workload Identity Federation",
+    ],
+    what_to_look_for: "IAM roles trusting GitHub OIDC with `sub:*` or `sub:repo:org/*` (lets ANY branch/PR assume the role - critical). Missing `aud:` verification.",
+    owasp_masvs: "NIST 800-204D / Cloud-Native Supply Chain Security",
+  },
+  {
+    id: "iam_role_abuse_mapping", ref: "§6 #104",
+    title: "Cloud IAM Role Abuse Path Mapping",
+    difficulty: "hard", time: "half-day", cost: "free", required: false,
+    tools_required: ["Pacu", "Cloudsplaining", "IAM-Floyd", "Stratus Red Team"],
+    customer_prereqs: ["Read-only IAM access", "Authorization", "Pacu installed in isolated env"],
+    steps: [
+      "$ pacu --module iam__enum_permissions",
+      "$ cloudsplaining scan --input-file iam.json",
+      "Identify roles with iam:PassRole + service-trust chains",
+      "Map cross-account assume-role relationships (sts:AssumeRole)",
+      "Emulate Stratus techniques in an ISOLATED subaccount only",
+    ],
+    what_to_look_for: "PassRole + RunInstances chain (escalate to any passable role). Wildcard `Resource:'*'` on dangerous actions. AdministratorAccess attached to CI/service principals.",
+    owasp_masvs: "MITRE ATT&CK Cloud / CIS AWS Foundations / NIST 800-53 AC-6",
+  },
+  {
+    id: "social_eng_pretext_build", ref: "§7 #118",
+    title: "Social-Engineering Pretext Build (Vendor Impersonation)",
+    difficulty: "medium", time: "half-day", cost: "free", required: false,
+    tools_required: ["LinkedIn", "Twitter/X", "Company press releases", "Partner pages"],
+    customer_prereqs: ["SIGNED engagement letter authorizing social engineering", "Org chart from §7 OSINT", "Client lead approves pretext before send"],
+    steps: [
+      "Map the target org chart from LinkedIn (reports-to relationships)",
+      "Identify a REAL vendor / auditor / partner the org actually works with",
+      "Build pretext call/email impersonating that real vendor with believable details",
+      "Verify every fact in pretext is publicly verifiable (no invented CVEs)",
+      "Get explicit client approval BEFORE sending - then send + log responses",
+    ],
+    what_to_look_for: "Response time, willingness to forward, password disclosure, link clicks, attachment opens. Document failure rate for the awareness-training section.",
+    owasp_masvs: "NIST 800-115 §4.4 / SET methodology / engagement-letter scope",
+  },
+  {
+    id: "voice_face_vishing_prep", ref: "§7 #119",
+    title: "Voice / Face Deepfake Susceptibility Test",
+    difficulty: "expert", time: "1+ day", cost: "paid", required: false,
+    tools_required: ["ElevenLabs / Resemble.AI", "Public conference videos", "Authorization"],
+    customer_prereqs: ["EXPLICIT written authorization to clone target voice (legal!)", "30+ sec clean audio of target", "Defined recipient list (not random employees)"],
+    steps: [
+      "Collect 30-60 sec of clean target audio (public talks, podcasts)",
+      "Train voice clone via ElevenLabs or Resemble",
+      "Generate a benign test phrase",
+      "Play to authorized panel of listeners blind - measure correct/incorrect identification",
+      "Document susceptibility rate - DO NOT use to extract real info",
+    ],
+    what_to_look_for: "How quickly a 30-sec sample yields convincing clone (usually <1 hour in 2026). Whether the org has voice-verification policy.",
+    owasp_masvs: "NIST 800-63B / FBI IC3 Deepfake Vishing Advisory",
+  },
+  {
+    id: "actor_attribution", ref: "§8 #132",
+    title: "Threat Actor Attribution Mapping",
+    difficulty: "hard", time: "1+ day", cost: "paid", required: false,
+    tools_required: ["Mandiant Advantage", "MITRE ATT&CK Navigator", "MISP", "OTX"],
+    customer_prereqs: ["IoCs (hashes / IPs / domains) from observed incident", "Threat-intel feed subscriptions"],
+    steps: [
+      "Pivot IoCs across MISP / OTX / Mandiant for named-campaign associations",
+      "Map observed TTPs to MITRE ATT&CK technique IDs",
+      "Compare technique set to known actor profiles",
+      "Score confidence: >=4 distinct TTPs + IoC overlap = HIGH",
+      "Document with confidence labels (HIGH/MEDIUM/LOW + rationale)",
+    ],
+    what_to_look_for: "Distinctive custom tooling, unique C2 patterns, specific exploit chains, target-industry pattern, language/timezone clues. Resist over-attribution.",
+    owasp_masvs: "MITRE ATT&CK / Diamond Model of Intrusion / NIST 800-150",
+  },
+  {
+    id: "ics_scada_discovery", ref: "§9 #146",
+    title: "ICS / SCADA Discovery (Modbus / S7 / EtherNet/IP)",
+    difficulty: "expert", time: "1+ day", cost: "free", required: false,
+    tools_required: ["nmap-ics scripts", "plcscan", "isf (ICS Exploitation Framework)"],
+    customer_prereqs: ["AUTHORIZATION - ICS scans can crash systems!", "Isolated test bench OR signed change-window", "ICS protocol knowledge"],
+    steps: [
+      "$ nmap -p 502,102,44818,2222,20000 --script modbus-discover,s7-info,enip-info <range>",
+      "Parse PLC banners (Modbus func-code 43 returns vendor / model / firmware)",
+      "Enumerate registers READ-ONLY first",
+      "NEVER write to coils/registers without explicit per-device authorization",
+      "Map detected vendor+firmware to vendor advisories",
+    ],
+    what_to_look_for: "Internet-exposed Modbus (502) / S7 (102) / EtherNet/IP (44818) - ANY public exposure is CRITICAL. Default HMI credentials. Outdated firmware mapped to known CVEs.",
+    owasp_masvs: "NIST SP 800-82r3 / IEC 62443",
+  },
+  {
+    id: "network_topology_map", ref: "§9 #148",
+    title: "Network Topology Mapping (Traceroute Variants)",
+    difficulty: "medium", time: "1h", cost: "free", required: false,
+    tools_required: ["mtr", "traceroute -T", "paris-traceroute", "scapy"],
+    customer_prereqs: ["Authorization", "Source host with route to target", "Root for ICMP/UDP probes"],
+    steps: [
+      "$ mtr -rwc 50 target.com (long-run, gives jitter + loss stats)",
+      "$ traceroute -T -p 80 target.com (TCP variant - works behind CDNs)",
+      "$ paris-traceroute target.com (handles ECMP load-balanced paths)",
+      "$ whois on each intermediate hop IP -> AS path",
+      "Build topology graph (yEd / draw.io / Maltego)",
+    ],
+    what_to_look_for: "Hops leaking RFC1918 (internal architecture exposure). Unexpected 3rd-party AS transit. CDN/anycast unwinding.",
+    owasp_masvs: "NIST SP 800-115 §4.2 / PTES Network Mapping",
+  },
+  {
+    id: "bgp_route_audit", ref: "§9 #149",
+    title: "BGP Route Announcement Audit",
+    difficulty: "hard", time: "1h", cost: "free", required: false,
+    tools_required: ["bgp.he.net", "RIPE Stat", "bgpview.io", "RPKI validator"],
+    customer_prereqs: ["Target ASN (look up at bgp.he.net by org name)"],
+    steps: [
+      "bgp.he.net search by org -> find ASN",
+      "Enumerate all prefixes announced by that ASN",
+      "Check RPKI / ROA status per prefix",
+      "Inspect upstream + peer ASes (potential MITM points)",
+      "Look at BGPmon / Cloudflare Radar for recent route anomalies",
+    ],
+    what_to_look_for: "Missing ROAs (prefix hijack-able), unannounced/dark prefixes, peer concentration (single upstream = SPOF + interception risk).",
+    owasp_masvs: "NIST SP 800-189 / MANRS",
+  },
+  {
+    id: "repo_deep_dive", ref: "§10 #159",
+    title: "Manual Repo Deep-Dive (PR Comments + Gists + Forks)",
+    difficulty: "medium", time: "1h", cost: "free", required: true,
+    tools_required: ["gh CLI", "git log", "grep", "your eyes"],
+    customer_prereqs: ["GitHub access (org-public or invited)", "Authorization"],
+    steps: [
+      "$ gh repo clone <org>/<repo>",
+      "$ git log --all --pretty='%H %an %s' | grep -iE 'fix|secret|token|password|key'",
+      "Read PR comments + issue threads for unintentional leaks",
+      "Check gists tied to org members ($ gh api users/<u>/gists)",
+      "Read READMEs of less-popular forks (dev experiments + leaked URLs)",
+    ],
+    what_to_look_for: "Secrets discussed in PR review then 'rotated' but still in git history (rotation rarely removes the commit). Dev URLs in commit messages. Internal Slack channel names.",
+    owasp_masvs: "OWASP API8:2023 / SLSA Source Track / NIST 800-218",
+  },
+  {
+    id: "tor_hidden_service_crawl", ref: "§11 #166",
+    title: "Tor Hidden Service / Leak Site Crawl",
+    difficulty: "hard", time: "half-day", cost: "free", required: false,
+    tools_required: ["Tor Browser", "OnionScan", "Ahmia search"],
+    customer_prereqs: ["Tor installed", "Awareness of legal/ethical boundaries", "Authorization for dark-web search"],
+    steps: [
+      "$ systemctl start tor",
+      "Search Ahmia (https://ahmia.fi) + Recon for target org/employee/domain",
+      "$ onionscan <known-leak-site.onion> (read-only metadata)",
+      "Monitor known ransomware leak boards (read-only - never transact)",
+      "Document references with timestamps for incident response",
+    ],
+    what_to_look_for: "Target name on a ransomware leak board (active breach). Employee credentials on stealer-log markets. Company data offered for sale.",
+    owasp_masvs: "MITRE T1583.003 / NIST 800-150",
+  },
+  {
+    id: "telegram_leak_monitor", ref: "§11 #167",
+    title: "Telegram Leak-Channel Monitoring",
+    difficulty: "medium", time: "half-day", cost: "free", required: false,
+    tools_required: ["tg-archive", "Telegram client (burner)", "Manual review"],
+    customer_prereqs: ["Burner Telegram account (NEVER your real one)", "Known leak-channel handles or seed list"],
+    steps: [
+      "Sign up Telegram with a burner number - read-only / log-only",
+      "Join known leak/stealer channels",
+      "Set up tg-archive for read-only post archival",
+      "$ grep -i <org-domain> archive/*.json",
+      "Cross-reference posts with HIBP / DeHashed for credential overlap",
+    ],
+    what_to_look_for: "Target credentials in stealer dumps. Ransomware groups posting target as a victim. Employee chatter leaking internal info.",
+    owasp_masvs: "MITRE T1593 (Search Open Sources) / NIST 800-150",
+  },
+  {
+    id: "adsb_passive_intercept", ref: "§12 #176",
+    title: "ADS-B / AIS / Drone Passive Intercept",
+    difficulty: "expert", time: "1+ day", cost: "paid", required: false,
+    tools_required: ["RTL-SDR USB dongle (~$30)", "dump1090", "GQRX", "Antenna with site-line"],
+    customer_prereqs: ["RTL-SDR hardware", "Authorization for site visit", "Target facility coordinates"],
+    steps: [
+      "$ dump1090 --interactive (live ADS-B reception of nearby aircraft)",
+      "Look for aircraft owned/leased by the target",
+      "Capture nearby AIS if maritime target",
+      "Note times of flights - correlate with corporate calendar / M&A activity",
+      "Cross-reference N-number / ICAO with public FAA / EASA registries",
+    ],
+    what_to_look_for: "Executive jet movements correlating with earnings calls or M&A rumors. Drone activity over corporate site.",
+    owasp_masvs: "PTES Physical / Electronic surveillance - niche, high-value targets only",
+  },
+  {
+    id: "image_face_cluster_osint", ref: "§13 #182",
+    title: "AI Image OCR + Face Clustering OSINT",
+    difficulty: "expert", time: "1+ day", cost: "paid", required: false,
+    tools_required: ["LLaVA / GPT-4o vision", "Tesseract OCR", "face_recognition (Python)", "PimEyes"],
+    customer_prereqs: ["Set of employee/facility photos from §4 OSINT", "Python ML env", "GDPR-compliant authorization"],
+    steps: [
+      "$ tesseract <photo>.jpg out (OCR every photo for badge IDs / room signs)",
+      "Cluster faces with face_recognition (Python) across the photo set",
+      "Build face-cluster -> real-name graph",
+      "Use LLaVA / GPT-4o vision",
+      "Map facility layouts from background details",
+    ],
+    what_to_look_for: "Employee badge designs photographed at conferences. Server-room photos posted on LinkedIn. Conference attendance patterns.",
+    owasp_masvs: "OSINT methodology / GDPR Art. 9",
+  },
+  {
+    id: "llm_cve_poc_draft", ref: "§13 #183",
+    title: "LLM-Drafted PoC from CVE Description",
+    difficulty: "hard", time: "half-day", cost: "paid", required: false,
+    tools_required: ["Claude / GPT-4o / Llama 3", "NVD CVE-DB", "Isolated test lab"],
+    customer_prereqs: ["A specific CVE ID", "Vulnerable software in isolated lab", "LLM API access", "Authorization for exploitation testing"],
+    steps: [
+      "Pull the CVE description + linked advisories + commit fixes from NVD",
+      "Prompt LLM: 'Given <CVE-ID> + advisory text, draft a minimal PoC exploit in Python'",
+      "Test PoC in isolated lab against the EXACT vulnerable version",
+      "Refine prompt iteratively until PoC triggers the vuln",
+      "NEVER run AI-drafted exploits in production without manual review",
+    ],
+    what_to_look_for: "Whether the LLM produces a working PoC. Code quality + accuracy vs the public PoC. Validates how urgent the patch is.",
+    owasp_masvs: "Emerging - treat as research-grade; document AI involvement in the report",
+  },
+  {
+    id: "llm_maltego_graph_expand", ref: "§13 #184",
+    title: "AI-Augmented Maltego Graph Expansion",
+    difficulty: "hard", time: "half-day", cost: "paid", required: false,
+    tools_required: ["Maltego CE", "Claude / GPT-4o", "Custom Python transforms"],
+    customer_prereqs: ["Maltego installed", "LLM API keys", "Target entity (domain / email / name)"],
+    steps: [
+      "Build base Maltego graph with stock transforms (WHOIS / DNS / social)",
+      "Export graph entities (JSON / TSV)",
+      "For each entity, prompt LLM: 'Suggest 5 non-obvious OSINT pivots from this entity'",
+      "Add suggested transforms (validate each - LLMs hallucinate sources)",
+      "Iterate 2-3 rounds - final graph captures pivots stock transforms miss",
+    ],
+    what_to_look_for: "Non-obvious pivots LLM surfaces. Entity clusters not visible without LLM context. Validate every LLM source.",
+    owasp_masvs: "PTES IG / OSINT methodology (LLM-augmented)",
+  },
+];
+
+const MANUAL_TESTS_VULN = [
+  { id:"chained_exploitation", ref:"§1 #14", title:"Chained Exploitation (Manual Pivot)",
+    difficulty:"hard", time:"1+ day", cost:"free", required:true,
+    tools_required:["Metasploit Framework","Burp Suite","Manual analyst skill"],
+    customer_prereqs:["Authorized scope including lateral movement","Confirmed initial foothold","Network access to target environment"],
+    steps:["Identify initial entry vuln from automated scan","Use Metasploit to gain initial shell/access","Enumerate privileges + reachable subnets","Pivot through compromised host to internal targets","Document each hop with screenshots + commands"],
+    what_to_look_for:"Multi-step exploit chains that aggregate low-severity findings into a critical attack path (e.g., XSS -> token theft -> admin takeover). These are the real-world attack patterns scanners miss.",
+    owasp_masvs:"PTES Exploitation / MITRE ATT&CK / NIST SP 800-115 §5"},
+  { id:"insecure_design_fuzz", ref:"§3 #34", title:"A04 Insecure Design (Logic-Flaw Fuzzing)",
+    difficulty:"hard", time:"1+ day", cost:"free", required:true,
+    tools_required:["Burp Suite","Manual analyst creativity","Custom scripts"],
+    customer_prereqs:["Authenticated app access","Full feature understanding","Authorization for state manipulation"],
+    steps:["Map every state transition in the app workflow","Try skipping steps (e.g., checkout without payment)","Manipulate hidden fields, prices, quantities","Replay completed actions out of sequence","Document any state that violates business rules"],
+    what_to_look_for:"Logic flaws scanners CAN'T find: skip-payment, negative-quantity, race conditions, workflow bypass, free-trial gaming. The crown jewel of manual web pentesting.",
+    owasp_masvs:"OWASP A04:2021 Insecure Design / OWASP WSTG-BUSL"},
+  { id:"business_flow_abuse", ref:"§5 #66", title:"API6: Unrestricted Business Flow Access",
+    difficulty:"medium", time:"half-day", cost:"free", required:true,
+    tools_required:["Burp Suite Intruder","Custom scripts","Manual judgment"],
+    customer_prereqs:["Authenticated API access","Understanding of business flows","Authorization for high-volume testing"],
+    steps:["Identify revenue-impacting flows (purchase, signup, voting)","Send legitimate request, capture in Burp","Replay 100x via Intruder - is there a rate limit?","Try concurrent requests for race conditions","Document any flow that allows abuse at scale"],
+    what_to_look_for:"Bot-abusable flows: signup farming, vote stuffing, coupon abuse, scalper bot patterns. Often missing rate limits or CAPTCHAs on critical flows.",
+    owasp_masvs:"OWASP API6:2023 / API Security Top 10"},
+  { id:"business_logic_chain", ref:"§5 #82", title:"Manual Business-Logic Chain Audit",
+    difficulty:"hard", time:"1+ day", cost:"free", required:true,
+    tools_required:["Burp Suite","Whiteboard","Domain expertise"],
+    customer_prereqs:["Full app access (multiple roles)","Business documentation","Authorization"],
+    steps:["Map critical business flows from documentation","For each, identify trust assumptions","Test breaking each assumption","Chain together multiple subtle bugs","Document each chain with reproducer steps"],
+    what_to_look_for:"Multi-step logic abuse (e.g., create coupon -> use -> refund partial -> reuse). These chains often slip past auto scanners but cause major revenue loss.",
+    owasp_masvs:"OWASP WSTG-BUSL / NIST SP 800-115"},
+  { id:"binary_protocol_fuzz", ref:"§6 #95", title:"Custom Binary Protocol Fuzzing",
+    difficulty:"expert", time:"1+ day", cost:"free", required:false,
+    tools_required:["boofuzz","AFL++","Wireshark","Custom dissector"],
+    customer_prereqs:["Protocol documentation OR pcap samples","Isolated test environment","Authorization"],
+    steps:["Capture protocol traffic with Wireshark","Reverse-engineer message structure","Write boofuzz definition","Run fuzzer against target","Triage crashes for exploitability"],
+    what_to_look_for:"Custom protocols often skip auth/validation. Buffer overflows, integer overflows, auth bypass via malformed headers, command injection in TLV fields.",
+    owasp_masvs:"NIST SP 800-115 / PTES Custom Application"},
+  { id:"proto_reverse_fuzz", ref:"§6 #96", title:"Proprietary Protocol Reverse + Fuzz",
+    difficulty:"expert", time:"1+ day", cost:"free", required:false,
+    tools_required:["Ghidra","Wireshark","boofuzz","IDA Pro (optional)"],
+    customer_prereqs:["Client binary","Network capture","Reverse engineering skill"],
+    steps:["Decompile client with Ghidra","Find packet-construction functions","Document message format + encryption","Build custom fuzzer for the protocol","Test server with malformed messages"],
+    what_to_look_for:"Closed protocols often have weak auth (preshared keys hardcoded), no integrity (replay attacks), or buffer issues. Major audit value for IoT/SCADA/embedded.",
+    owasp_masvs:"PTES Custom Application / NIST IR 8259"},
+  { id:"falco_runtime_analysis", ref:"§8 #125", title:"Runtime Container Behavioral Analysis (Falco)",
+    difficulty:"hard", time:"half-day", cost:"free", required:false,
+    tools_required:["Falco","Kubernetes cluster","kubectl"],
+    customer_prereqs:["Kubernetes cluster access","Authorization for runtime probes","Falco deployed"],
+    steps:["Deploy Falco to monitor target namespace","Trigger normal app actions - baseline","Try escape primitives (mount /proc, write to /sys)","Check Falco alerts for detection coverage","Document detection gaps for defenders"],
+    what_to_look_for:"Container behaviors that should trigger Falco but don't. Custom Falco rules needed for app-specific threats. Privileged container ops without alerts.",
+    owasp_masvs:"NIST SP 800-190 / CIS Kubernetes Benchmark"},
+  { id:"container_breakout", ref:"§8 #126", title:"Container Breakout Testing (Manual)",
+    difficulty:"expert", time:"1+ day", cost:"free", required:false,
+    tools_required:["Manual analyst skill","CVE exploit code","Isolated lab"],
+    customer_prereqs:["AUTHORIZATION (can crash host!)","Isolated test cluster","Snapshot of vulnerable container"],
+    steps:["Identify container runtime + version","Check for known escapes (CVE-2022-0185, CVE-2024-21626 'Leaky Vessels')","Try /proc/self/exe overwrite (runc CVE)","Test capability abuse (CAP_SYS_ADMIN, CAP_DAC_OVERRIDE)","If breakout, document host-level access scope"],
+    what_to_look_for:"Successful escape = critical. Lateral movement to host means access to ALL containers + cluster secrets. Outdated runc/containerd is the most common cause.",
+    owasp_masvs:"NIST SP 800-190 / MITRE T1611"},
+  { id:"cloud_attack_path", ref:"§9 #144", title:"Manual Cloud Attack-Path Mapping",
+    difficulty:"hard", time:"1+ day", cost:"free", required:false,
+    tools_required:["Pacu","cloudfox","IAM-Floyd","Stratus Red Team"],
+    customer_prereqs:["Read-only cloud access","Authorization for cloud recon","Isolated subaccount for emulation"],
+    steps:["Enumerate IAM roles + trust policies","Build privilege-escalation graph","Test PassRole + RunInstances chain","Map cross-account assume-role relationships","Emulate Stratus techniques in isolated subaccount"],
+    what_to_look_for:"Cloud attack paths CSPM scanners miss: IAM role chains, cross-account trust abuse, service-account exposure, OIDC misconfig.",
+    owasp_masvs:"MITRE ATT&CK Cloud / CIS AWS Foundations / NIST 800-53 AC-6"},
+  { id:"falco_rules_audit", ref:"§10 #158", title:"Falco Runtime Rule Effectiveness Audit",
+    difficulty:"hard", time:"half-day", cost:"free", required:false,
+    tools_required:["Falco","Custom syscall scripts","kubectl"],
+    customer_prereqs:["Production-mirror cluster","Falco deployed with custom rules","Authorization"],
+    steps:["Review existing Falco rules in falco_rules.yaml","Identify TTPs that should be detected","Manually execute each TTP in test cluster","Check if rules fired - document gaps","Tune rules to close gaps without false positives"],
+    what_to_look_for:"Detection coverage gaps. Most defaults miss: lateral movement, persistence via cron, secrets-store access. Manual audit reveals real blind spots.",
+    owasp_masvs:"MITRE ATT&CK Containers / NIST CSF DE.AE-3"},
+  { id:"tetragon_ebpf", ref:"§10 #159", title:"Tetragon eBPF Runtime Detection",
+    difficulty:"hard", time:"1+ day", cost:"free", required:false,
+    tools_required:["Tetragon","Cilium","eBPF tooling","kubectl"],
+    customer_prereqs:["Cluster with eBPF support","Tetragon installed","Authorization"],
+    steps:["Deploy Tetragon with TracingPolicy CRDs","Test policy coverage (file integrity, syscall trace)","Try evasion techniques (process injection, anti-forensics)","Document detection latency + accuracy","Compare vs Falco coverage"],
+    what_to_look_for:"Kernel-level visibility that user-space tools miss. eBPF detects rootkit-level evasion. Latency should be sub-second for high-value events.",
+    owasp_masvs:"MITRE ATT&CK / CNCF Tetragon docs"},
+  { id:"container_escape_poc", ref:"§10 #160", title:"Container Escape PoC (Manual)",
+    difficulty:"expert", time:"1+ day", cost:"free", required:false,
+    tools_required:["Public exploit code","Isolated lab","Manual analyst skill"],
+    customer_prereqs:["AUTHORIZATION - DESTRUCTIVE","Snapshot-rollback environment","Specific CVE target"],
+    steps:["Identify runtime version (containerd/runc/CRI-O)","Find matching public PoC","Adapt PoC for target environment","Execute in isolated container","Verify host-level breakout via /proc"],
+    what_to_look_for:"Confirmed escape = critical. Time-to-exploit matters: minutes-to-mass-exploit means immediate patch priority. CVE-2024-21626 family is current top threat.",
+    owasp_masvs:"NIST SP 800-190 / MITRE T1611"},
+  { id:"custom_hardening_audit", ref:"§11 #173", title:"Custom Hardening Profile Audit",
+    difficulty:"medium", time:"half-day", cost:"free", required:false,
+    tools_required:["OpenSCAP","Custom XCCDF profile","Lynis"],
+    customer_prereqs:["Host SSH access","Hardening baseline document","Authorization"],
+    steps:["Pull current hardening baseline","Generate custom XCCDF profile","Run OpenSCAP scan against target hosts","Cross-check with Lynis","Document deviations + risk per finding"],
+    what_to_look_for:"Drift from baseline. Custom hardening unique to org context (industry regs, ISO 27001 specifics). Auditor-grade evidence for compliance.",
+    owasp_masvs:"CIS Benchmarks / NIST SP 800-53 CM-6"},
+  { id:"drift_detection", ref:"§11 #174", title:"Configuration Drift Detection",
+    difficulty:"medium", time:"half-day", cost:"free", required:false,
+    tools_required:["osquery","Custom queries","Ansible/Salt"],
+    customer_prereqs:["Host fleet access","Known-good baseline config","Authorization"],
+    steps:["Build osquery pack for critical configs","Run queries across fleet","Compare against baseline snapshots","Flag any host that drifted","Document drift sources (manual edits, failed patches)"],
+    what_to_look_for:"Drift = silent risk. Hosts that fell behind patching, manual config changes that bypassed CM, failed Ansible runs. Often correlates with breach root cause.",
+    owasp_masvs:"NIST CSF PR.IP-1 / CIS Control 5"},
+  { id:"saml_golden_ticket", ref:"§12 #183", title:"SAML Golden Ticket Abuse",
+    difficulty:"expert", time:"1+ day", cost:"free", required:false,
+    tools_required:["SAMLRaider","adfsdump","Burp Suite","Custom XML signer"],
+    customer_prereqs:["IDP signing key (compromised scenario)","Authorized red-team scope","SAML SP target"],
+    steps:["Extract IDP signing cert via adfsdump (if access)","Forge SAMLResponse with arbitrary user","Sign with stolen key","Replay against SP - verify access","Document IR detection signals (audit logs, anomaly alerts)"],
+    what_to_look_for:"Golden Ticket success = total IdP compromise. Detect signal: unexpected NameID values, weird ACS-URL targeting, signing time anomalies.",
+    owasp_masvs:"MITRE T1606.002 / NIST SP 800-63B"},
+  { id:"mfa_bypass_fallback", ref:"§12 #187", title:"MFA Bypass via Fallback Method",
+    difficulty:"hard", time:"half-day", cost:"free", required:true,
+    tools_required:["Manual analyst skill","Burp Suite","SMS/email access (own account)"],
+    customer_prereqs:["Test account with MFA enrolled","Authorization","Recovery flow access"],
+    steps:["Trigger MFA challenge - capture in Burp","Try selecting weaker fallback (SMS OTP vs TOTP)","Test account recovery flow - does it bypass MFA?","Try social-engineering recovery (low-friction reset)","Document downgrade paths"],
+    what_to_look_for:"MFA strength = weakest fallback. SMS OTP is interceptable, email reset often bypasses everything, security questions are guessable. Real MFA must lock recovery too.",
+    owasp_masvs:"NIST SP 800-63B / OWASP API2:2023"},
+  { id:"sbob_manual", ref:"§13 #202", title:"Software Bill of Behaviors (SBOB / SBOM-runtime)",
+    difficulty:"hard", time:"1+ day", cost:"free", required:false,
+    tools_required:["Tetragon","eBPF","syft","Custom behavioral profiler"],
+    customer_prereqs:["Container runtime access","SBOM for target image","Authorization"],
+    steps:["Generate SBOM with syft","Profile runtime behaviors (syscalls, network, files)","Compare actual vs SBOM-declared behaviors","Flag undocumented behaviors","Document runtime-spec mismatches"],
+    what_to_look_for:"Components that DO more than they declare. Stealth backdoors, unexpected outbound network, hidden file access. Emerging supply-chain attack vector.",
+    owasp_masvs:"SLSA Build / CNCF SBOB working group"},
+  { id:"llm_data_poisoning", ref:"§14 #206", title:"LLM04: Data and Model Poisoning",
+    difficulty:"expert", time:"1+ day", cost:"paid", required:false,
+    tools_required:["Custom poisoning scripts","HuggingFace datasets","LLM API access"],
+    customer_prereqs:["LLM training/fine-tune pipeline access","Authorized red-team scope","Isolated test environment"],
+    steps:["Identify training data ingestion sources","Inject poisoned samples (trigger phrases)","Observe model behavior post-training","Test specific trigger phrases at inference","Document attack persistence + detection difficulty"],
+    what_to_look_for:"Backdoors that activate on trigger phrases. Models that produce malicious output for crafted inputs. Hard to detect post-training - emphasize input validation.",
+    owasp_masvs:"OWASP LLM04:2025 / NIST AI RMF"},
+  { id:"model_extraction", ref:"§14 #214", title:"Model Extraction Attack",
+    difficulty:"expert", time:"1+ day", cost:"paid", required:false,
+    tools_required:["Custom query scripts","LLM API access","Distillation framework"],
+    customer_prereqs:["Target model API access","Authorization for high-volume queries","Compute for student model"],
+    steps:["Generate diverse query corpus","Query target model at scale","Train smaller model on input-output pairs","Compare student vs teacher accuracy","Document leakage risk (IP theft)"],
+    what_to_look_for:"Models leak via outputs. After enough queries, attacker recreates model functionality. Mitigation: rate limit, watermarking, query monitoring.",
+    owasp_masvs:"OWASP LLM10 / NIST AI 100-2"},
+  { id:"membership_inference", ref:"§14 #215", title:"Membership Inference Attack",
+    difficulty:"expert", time:"1+ day", cost:"paid", required:false,
+    tools_required:["Shadow models","ML privacy tools","Statistical analysis"],
+    customer_prereqs:["Target model access","Suspected training data samples","Authorization"],
+    steps:["Train shadow models with known data","Build attack classifier","Query target with suspect samples","Predict 'was this in training data?'","Document privacy leakage"],
+    what_to_look_for:"PII leakage via inference. If attacker can determine 'X was in training data', GDPR/HIPAA implications. Models trained on sensitive data must add differential privacy.",
+    owasp_masvs:"OWASP LLM02 / GDPR Art. 32 / NIST Privacy"},
+  { id:"rag_poisoning", ref:"§14 #216", title:"RAG (Retrieval-Augmented Generation) Poisoning",
+    difficulty:"hard", time:"half-day", cost:"paid", required:false,
+    tools_required:["Vector DB access","Custom embedding poisoning","LLM client"],
+    customer_prereqs:["RAG pipeline understanding","Vector store access (or scope)","Authorization"],
+    steps:["Identify embedding model used","Craft documents that embed close to target queries","Inject via authorized doc-ingestion path","Trigger queries that match poisoned content","Observe LLM response manipulation"],
+    what_to_look_for:"Vector DBs trust their embeddings. Adversarial docs in the corpus = LLM gives attacker-controlled answers. Critical for trusted-assistant use cases.",
+    owasp_masvs:"OWASP LLM01:2025 / NIST AI RMF"},
+  { id:"nfc_rfid_clone", ref:"§15 #225", title:"NFC / RFID Clone Test",
+    difficulty:"hard", time:"half-day", cost:"paid", required:false,
+    tools_required:["Proxmark3","Flipper Zero","Mifare Classic Tool"],
+    customer_prereqs:["Authorized physical access","Target badge sample","Hardware (Proxmark3 ~$300)"],
+    steps:["Identify badge tech (Mifare, HID, etc.)","Scan target badge with Proxmark","Crack key (if Mifare Classic) - hardnested attack","Write to blank card / Flipper","Test clone at access reader"],
+    what_to_look_for:"Successful clone = physical access bypass. Mifare Classic is broken (1995); upgrade to DESFire EV2/3. HID Prox is also easily cloned.",
+    owasp_masvs:"PTES Physical / NIST SP 800-116"},
+];
+
+function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESIGN-V3
   const STORAGE_PREFIX = `vl_manual:${moduleKey}:`;
+  const ONB_KEY = `vl_onb:${moduleKey}`;
   const [findings, setFindings] = React.useState(() => {
     const out = {};
     (tests || []).forEach(t => {
-      try {
-        const raw = localStorage.getItem(STORAGE_PREFIX + t.id);
-        if (raw) out[t.id] = JSON.parse(raw);
-      } catch(_){}
+      try { const raw = localStorage.getItem(STORAGE_PREFIX + t.id); if (raw) out[t.id] = JSON.parse(raw); } catch(_){}
     });
     return out;
   });
   const [expanded, setExpanded] = React.useState({});
-
+  const [search, setSearch] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("all");
+  const [saveFlash, setSaveFlash] = React.useState({});
+  const [onbDismissed, setOnbDismissed] = React.useState(() => {
+    try { return !!localStorage.getItem(ONB_KEY); } catch(_) { return false; }
+  });
   const update = (testId, patch) => {
     setFindings(p => {
       const next = {...p, [testId]: {...(p[testId]||{}), ...patch, updated_at: Date.now()}};
       try { localStorage.setItem(STORAGE_PREFIX + testId, JSON.stringify(next[testId])); } catch(_){}
       return next;
     });
+    setSaveFlash(p => ({...p, [testId]: Date.now()}));
+    setTimeout(() => setSaveFlash(p => { const n={...p}; delete n[testId]; return n; }), 1500);
   };
-
+  const dismissOnb = () => { setOnbDismissed(true); try { localStorage.setItem(ONB_KEY, "1"); } catch(_){} };
+  const groups = React.useMemo(() => {
+    const g = {};
+    (tests||[]).forEach(t => {
+      const m = (t.ref||"").match(/§\s*(\d+)/);
+      const key = m ? "§" + m[1] : "Other";
+      (g[key] = g[key] || []).push(t);
+    });
+    return g;
+  }, [tests]);
+  const groupKeys = Object.keys(groups).sort((a,b) => {
+    const na = parseInt(a.replace("§",""))||999, nb = parseInt(b.replace("§",""))||999;
+    return na - nb;
+  });
   const completedCount = Object.values(findings).filter(f => f && f.status && f.status !== "not_run").length;
   const totalCount = (tests || []).length;
-  const SEV_COLORS = {HIGH:"#ef4444", MEDIUM:"#f59e0b", LOW:"#22c55e", "no-finding":"#64748b"};
-
+  const requiredCount = (tests||[]).filter(t => t.required).length;
+  const pct = totalCount ? Math.round(100 * completedCount / totalCount) : 0;
+  const SEV_COLORS = {HIGH:"#ef4444", MEDIUM:"#f59e0b", LOW:"#22c55e", "no-finding":"#22c55e", na:"#64748b", not_run:"#475569", required:"#fbbf24", all:"#7c3aed"};
+  const SECTION_COLORS = {"§1":"#3b82f6","§2":"#06b6d4","§3":"#8b5cf6","§4":"#ec4899","§5":"#f97316","§6":"#84cc16","§7":"#eab308","§8":"#10b981","§9":"#ef4444","§10":"#a855f7","§11":"#0ea5e9","§12":"#f472b6","§13":"#facc15","§14":"#fb923c","§15":"#22d3ee"};
+  const DIFF_BADGES = {easy:{emoji:"🟢",label:"Easy",color:"#22c55e"},medium:{emoji:"🟡",label:"Med",color:"#f59e0b"},hard:{emoji:"🔴",label:"Hard",color:"#ef4444"},expert:{emoji:"⚫",label:"Expert",color:"#64748b"}};
+  const matches = (t) => {
+    if (search) {
+      const q = search.toLowerCase();
+      const hay = (t.title||"") + " " + (t.ref||"") + " " + (t.tools_required||[]).join(",");
+      if (!hay.toLowerCase().includes(q)) return false;
+    }
+    if (statusFilter === "required") { if (!t.required) return false; }
+    else if (statusFilter !== "all") {
+      const f = findings[t.id] || {};
+      const st = f.status === "na" ? "na" : ((f.status === "not_run" || !f.status) ? "not_run" : (f.severity || "no-finding"));
+      if (st !== statusFilter) return false;
+    }
+    return true;
+  };
   if (!tests || tests.length === 0) return null;
-
   return (
-    <div style={{background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:10, padding:16}}>
-      {/* Header */}
-      <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, paddingBottom:10, borderBottom:"1px solid #1e3a5f"}}>
-        <div>
-          <div style={{fontSize:14, fontWeight:700, color:"#fbbf24", marginBottom:3}}>
-            🔧 Manual Tests — {moduleLabel}
+    <div style={{background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:10, overflow:"hidden"}}>
+      {!onbDismissed && (
+        <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
+            <div style={{fontSize:13, fontWeight:700, color:"#fbbf24"}}>👋 First time? Here is the 5-step workflow</div>
+            <button onClick={dismissOnb} style={{background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:14, padding:0, lineHeight:1}}>✕</button>
           </div>
-          <div style={{fontSize:11, color:"#94a3b8"}}>
-            These {totalCount} techniques cannot be fully automated. Run them locally — paste your findings below for the PDF report.
-          </div>
+          <ol style={{margin:"0 0 8px 0", paddingLeft:18, fontSize:11, color:"#cbd5e1", lineHeight:1.7}}>
+            <li>Click a card to expand it</li>
+            <li>Read <b>What customer needs</b> + <b>Steps</b></li>
+            <li>Run the steps locally (or on the target with authorization)</li>
+            <li>Paste output in the evidence box, mark severity (OK / Low / Med / High) — or <b>N/A</b> if out of scope</li>
+            <li>Click <b>📄 Export PDF</b> when done</li>
+          </ol>
+          {requiredCount > 0 && (
+            <div style={{fontSize:10, color:"#fbbf24", marginTop:6}}>💡 Tip: click <span style={{padding:"1px 6px", border:"1px solid #fbbf24", borderRadius:3, fontWeight:700}}>⭐ Required</span> to see the {requiredCount} must-do techniques.</div>
+          )}
         </div>
-        <div style={{display:"flex", alignItems:"center", gap:12}}>
-          <div style={{fontSize:12, color:"#94a3b8"}}>
-            <span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>
-              {completedCount}/{totalCount}
-            </span> completed
+      )}
+      <div style={{position:"sticky", top:0, zIndex:5, background:"#0a1628", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
+        <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, gap:12}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:14, fontWeight:700, color:"#fbbf24"}}>🔧 Manual Tests — {moduleLabel}</div>
+            <div style={{fontSize:10, color:"#94a3b8", marginTop:2}}>{totalCount} techniques{requiredCount ? (" · " + requiredCount + " ⭐ required") : ""} · run locally · paste evidence for the PDF</div>
           </div>
-          <button onClick={() => {
-              try {
-                generateManualTestsReport({
-                  moduleKey, moduleLabel, tests, findings,
-                  date: new Date().toLocaleString(),
-                });
-              } catch(e) { alert("PDF error: " + (e.message || e)); }
-            }}
-            disabled={completedCount === 0}
-            style={{
-              background: completedCount === 0 ? "#374151" : "#7c3aed",
-              border:"none", borderRadius:6, padding:"7px 14px",
-              color:"#fff", fontSize:12, fontWeight:700,
-              cursor: completedCount === 0 ? "not-allowed" : "pointer",
-              opacity: completedCount === 0 ? 0.5 : 1,
-            }}>
-            📄 Manual Tests Report
-          </button>
+          <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "#374151" : "#7c3aed", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>📄 Export PDF</button>
+        </div>
+        <div style={{height:5, background:"#1e293b", borderRadius:3, overflow:"hidden", marginBottom:8}}>
+          <div style={{height:"100%", width:`${pct}%`, background: pct === 100 ? "#22c55e" : "#7c3aed", transition:"width 0.3s"}}/>
+        </div>
+        <div style={{fontSize:10, color:"#94a3b8", marginBottom:10}}><span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>{completedCount}/{totalCount}</span> covered · {pct}%</div>
+        <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search title / ref / tool…" style={{flex:"1 1 160px", minWidth:120, background:"#020617", border:"1px solid #334155", borderRadius:6, color:"#cbd5e1", fontSize:11, padding:"6px 10px", outline:"none"}}/>
+          {[["all","All"],["required","⭐ Required"],["not_run","Not Run"],["no-finding","✓ OK"],["LOW","Low"],["MEDIUM","Med"],["HIGH","High"],["na","N/A"]].map(([val,label])=>(
+            <button key={val} onClick={()=>setStatusFilter(val)} style={{background: statusFilter===val ? (SEV_COLORS[val] || "#7c3aed") : "transparent", color: statusFilter===val ? "#fff" : (SEV_COLORS[val] || "#94a3b8"), border:`1px solid ${SEV_COLORS[val] || "#475569"}`, borderRadius:4, padding:"4px 9px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>
+          ))}
         </div>
       </div>
-
-      {/* Cards */}
-      <div style={{display:"grid", gap:10}}>
-        {tests.map(t => {
-          const f = findings[t.id] || {};
-          const isOpen = !!expanded[t.id];
-          const status = f.status || "not_run";
-          const sev = f.severity || "no-finding";
-          const statusColor = status === "not_run" ? "#64748b" : SEV_COLORS[sev] || "#64748b";
+      <div style={{padding:"14px 16px"}}>
+        {groupKeys.map(gk => {
+          const groupTests = groups[gk].filter(matches);
+          if (groupTests.length === 0) return null;
+          const groupColor = SECTION_COLORS[gk] || "#7c3aed";
+          const groupReq = groupTests.filter(t => t.required).length;
           return (
-            <div key={t.id} style={{background:"#0f172a", border:`1px solid ${isOpen ? "#3b82f6" : "#1e293b"}`, borderRadius:8, overflow:"hidden"}}>
-              {/* Card header (clickable to expand) */}
-              <div onClick={() => setExpanded(p => ({...p, [t.id]: !p[t.id]}))}
-                   style={{display:"flex", alignItems:"center", padding:"10px 14px", cursor:"pointer", gap:10, background: isOpen ? "#0d2138" : "transparent"}}>
-                <div style={{width:8, height:8, borderRadius:4, background: statusColor}}/>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13, fontWeight:600, color:"#e2e8f0"}}>{t.title}</div>
-                  <div style={{fontSize:10, color:"#64748b", marginTop:2}}>
-                    {t.ref} · Tools: {(t.tools_required||[]).join(", ")}
-                  </div>
-                </div>
-                {status !== "not_run" && (
-                  <span style={{background: statusColor, color:"#fff", padding:"2px 8px", borderRadius:4, fontSize:10, fontWeight:700, textTransform:"uppercase"}}>
-                    {sev === "no-finding" ? "OK" : sev}
-                  </span>
-                )}
-                <span style={{color:"#64748b", fontSize:12}}>{isOpen ? "▼" : "▶"}</span>
+            <div key={gk} style={{marginBottom:18}}>
+              <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8, paddingBottom:6, borderBottom:`1px solid ${groupColor}33`}}>
+                <div style={{width:3, height:14, background: groupColor, borderRadius:2}}/>
+                <div style={{fontSize:11, fontWeight:700, color: groupColor, textTransform:"uppercase", letterSpacing:0.5}}>{gk}</div>
+                <div style={{fontSize:10, color:"#64748b"}}>{groupTests.length} technique{groupTests.length>1?"s":""}{groupReq ? (" · " + groupReq + " ⭐") : ""}</div>
               </div>
-
-              {/* Expanded body */}
-              {isOpen && (
-                <div style={{padding:"4px 14px 14px", borderTop:"1px solid #1e293b"}}>
-                  <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginTop:12}}>
-                    {/* Left: prereqs + steps */}
-                    <div>
-                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase"}}>What customer needs</div>
-                      <ul style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>
-                        {(t.customer_prereqs||[]).map((p,i)=><li key={i}>{p}</li>)}
-                      </ul>
-                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginTop:12, marginBottom:6, textTransform:"uppercase"}}>Steps</div>
-                      <ol style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>
-                        {(t.steps||[]).map((s,i)=>(
-                          <li key={i} style={{marginBottom:4}}>
-                            {s.startsWith("$") ? (
-                              <code style={{background:"#020617", color:"#4ade80", padding:"2px 6px", borderRadius:3, fontSize:10, fontFamily:"monospace"}}>{s.slice(1).trim()}</code>
-                            ) : s}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                    {/* Right: what to look for + evidence form */}
-                    <div>
-                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase"}}>What to look for</div>
-                      <div style={{fontSize:11, color:"#cbd5e1", lineHeight:1.5, marginBottom:12, padding:8, background:"#020617", borderRadius:4, border:"1px solid #1e293b"}}>
-                        {t.what_to_look_for}
+              <div style={{display:"grid", gap:8}}>
+                {groupTests.map(t => {
+                  const f = findings[t.id] || {};
+                  const isOpen = !!expanded[t.id];
+                  const status = f.status || "not_run";
+                  const sev = f.severity || "no-finding";
+                  const isNA = status === "na";
+                  const statusColor = isNA ? "#64748b" : (status === "not_run" ? "#475569" : (SEV_COLORS[sev] || "#64748b"));
+                  const flashing = !!saveFlash[t.id];
+                  const diff = t.difficulty && DIFF_BADGES[t.difficulty];
+                  return (
+                    <div key={t.id} style={{background:"#0f172a", border:`1px solid ${isOpen ? groupColor : "#1e293b"}`, borderRadius:8, overflow:"hidden"}}>
+                      <div onClick={() => setExpanded(p => ({...p, [t.id]: !p[t.id]}))} style={{display:"flex", alignItems:"center", padding:"10px 14px", cursor:"pointer", gap:10, background: isOpen ? `${groupColor}11` : "transparent"}}>
+                        <div style={{width:8, height:8, borderRadius:4, background: statusColor, flexShrink:0}}/>
+                        <div style={{flex:1, minWidth:0}}>
+                          <div style={{fontSize:13, fontWeight:600, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{t.required && <span style={{color:"#fbbf24", marginRight:5}}>⭐</span>}{t.title}</div>
+                          <div style={{display:"flex", gap:4, flexWrap:"wrap", marginTop:3, alignItems:"center"}}>
+                            <span style={{fontSize:9, color:"#64748b", padding:"1px 5px", border:"1px solid #334155", borderRadius:3}}>{t.ref}</span>
+                            {diff && (<span style={{fontSize:9, color:diff.color, padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{diff.emoji} {diff.label}</span>)}
+                            {t.time && (<span style={{fontSize:9, color:"#94a3b8", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>⏱ {t.time}</span>)}
+                            {t.cost && (<span style={{fontSize:9, color: t.cost === "free" ? "#22c55e" : "#f59e0b", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{t.cost === "free" ? "🆓 Free" : "💵 Paid"}</span>)}
+                            {(t.tools_required||[]).slice(0,2).map((tool,i)=>(<span key={i} style={{fontSize:9, color:"#94a3b8", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{tool}</span>))}
+                            {(t.tools_required||[]).length > 2 && (<span style={{fontSize:9, color:"#64748b"}}>+{(t.tools_required||[]).length-2}</span>)}
+                          </div>
+                        </div>
+                        {status !== "not_run" && (<span style={{background: statusColor, color:"#fff", padding:"2px 8px", borderRadius:4, fontSize:9, fontWeight:700, textTransform:"uppercase", flexShrink:0}}>{isNA ? "N/A" : (sev === "no-finding" ? "OK" : sev)}</span>)}
+                        <span style={{color:"#64748b", fontSize:11, flexShrink:0}}>{isOpen ? "▼" : "▶"}</span>
                       </div>
-                      <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase"}}>Your findings</div>
-                      <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})}
-                                placeholder="Paste output / screenshot link / describe what happened..."
-                                style={{width:"100%", minHeight:80, background:"#020617", color:"#cbd5e1", border:"1px solid #334155", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"monospace", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
-                      <div style={{display:"flex", gap:6, marginTop:8, flexWrap:"wrap"}}>
-                        {[["not_run","Not Run","#64748b"],["no-finding","✓ No issue","#22c55e"],["LOW","Low","#22c55e"],["MEDIUM","Medium","#f59e0b"],["HIGH","High","#ef4444"]].map(([val,label,c])=>(
-                          <button key={val} onClick={()=>update(t.id, {status: val==="not_run"?"not_run":"done", severity: val==="not_run"?undefined:val})}
-                                  style={{background: (status==="not_run"?val==="not_run":f.severity===val)?c:"transparent", color: (status==="not_run"?val==="not_run":f.severity===val)?"#fff":c, border:`1px solid ${c}`, borderRadius:4, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer"}}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      {t.owasp_masvs && (
-                        <div style={{marginTop:8, fontSize:10, color:"#64748b"}}>
-                          MASVS: {t.owasp_masvs}
+                      {isOpen && (
+                        <div style={{padding:"4px 14px 14px", borderTop:"1px solid #1e293b"}}>
+                          <div style={{display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:14, marginTop:12}}>
+                            <div>
+                              <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>What customer needs</div>
+                              <ul style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>{(t.customer_prereqs||[]).map((p,i)=><li key={i}>{p}</li>)}</ul>
+                              <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginTop:12, marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>Steps</div>
+                              <ol style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>{(t.steps||[]).map((s,i)=>(<li key={i} style={{marginBottom:4}}>{s.startsWith("$") ? (<code style={{background:"#020617", color:"#4ade80", padding:"2px 6px", borderRadius:3, fontSize:10, fontFamily:"monospace"}}>{s.slice(1).trim()}</code>) : s}</li>))}</ol>
+                            </div>
+                            <div>
+                              <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>What to look for</div>
+                              <div style={{fontSize:11, color:"#cbd5e1", lineHeight:1.5, marginBottom:12, padding:8, background:"#020617", borderRadius:4, border:"1px solid #1e293b"}}>{t.what_to_look_for}</div>
+                              <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:6}}>
+                                <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", textTransform:"uppercase", letterSpacing:0.4}}>Your findings</div>
+                                {flashing && <span style={{fontSize:9, color:"#22c55e", fontWeight:700}}>✓ saved</span>}
+                              </div>
+                              <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})} placeholder="Paste output / screenshot link / describe what happened…" style={{width:"100%", minHeight:90, background:"#020617", color:"#cbd5e1", border:"1px solid #334155", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"monospace", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
+                              <div style={{display:"flex", gap:4, marginTop:8, flexWrap:"wrap"}}>
+                                {[["not_run","Not Run","#475569"],["no-finding","✓ OK","#22c55e"],["LOW","Low","#22c55e"],["MEDIUM","Med","#f59e0b"],["HIGH","High","#ef4444"],["na","N/A","#64748b"]].map(([val,label,c])=>{
+                                  const active = (val==="not_run" && status==="not_run") || (val==="na" && status==="na") || (val!=="not_run" && val!=="na" && f.severity===val);
+                                  return (<button key={val} onClick={()=>update(t.id, val==="not_run" ? {status:"not_run", severity:undefined} : val==="na" ? {status:"na", severity:undefined} : {status:"done", severity:val})} style={{background: active?c:"transparent", color: active?"#fff":c, border:`1px solid ${c}`, borderRadius:4, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>);
+                                })}
+                              </div>
+                              {t.owasp_masvs && (<div style={{marginTop:10, fontSize:10, color:"#64748b", paddingTop:8, borderTop:"1px solid #1e293b"}}><span style={{color:"#94a3b8", fontWeight:700}}>Standard:</span> {t.owasp_masvs}</div>)}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
-                  </div>
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -5854,7 +6398,9 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
   y += 22;
 
   // ── PER-TEST DETAILS ─────────────────────────────────────────
-  enriched.forEach((t, idx) => {
+  const _completedTests = enriched.filter(t => t._status === "done");
+  const _notRunTests = enriched.filter(t => t._status !== "done");
+  _completedTests.forEach((t, idx) => {
     chk(40);
     y = sHead(t.title, y);
     txt(`Reference: ${t.ref || "—"}`, margin, y, 7.5, GRAY); y += 5;
@@ -5909,40 +6455,59 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
       y += 10;
       const ev = _ascii(t.customer.evidence || "(no evidence text provided)");
       const evLines = doc.splitTextToSize(ev, contentW - 8);
-      fillR(margin, y, contentW, Math.min(evLines.length*4+4, 60), [248,250,252]);
-      evLines.slice(0, 14).forEach(ln => { chk(5); txt(ln, margin+4, y+3.5, 7.5, DARK); y += 4; });
-      if (evLines.length > 14) { txt(`... +${evLines.length-14} more lines (truncated)`, margin+4, y+3.5, 7, GRAY); y += 4; }
+      evLines.forEach(ln => { chk(5); txt(ln, margin+4, y+3.5, 7.5, DARK); y += 4; });
       y += 5;
     }
 
     // MASVS mapping
     if (t.owasp_masvs) {
       chk(8); fillR(margin, y, contentW, 6, [240,253,244]);
-      txt(`MASVS: ${t.owasp_masvs}`, margin+4, y+4, 7.5, GREEN, true);
+      txt(`Standard: ${t.owasp_masvs}`, margin+4, y+4, 7.5, GREEN, true);
       y += 9;
     }
 
     y += 4;
   });
 
+  if (_notRunTests.length > 0) {
+    chk(40); y = sHead("Tests Not Yet Executed (" + _notRunTests.length + ")", y);
+    txt("The following tests are defined in the playbook but were not executed", margin, y, 8, GRAY); y += 4;
+    txt("by the customer. Run them and re-export to include findings.", margin, y, 8, GRAY); y += 8;
+    _notRunTests.forEach(t => {
+      chk(6);
+      fillR(margin, y, contentW, 5, LIGHT);
+      txt(String(t.ref || ""), margin+3, y+3.5, 7.5, AMBER, true);
+      txt(_ascii(t.title || ""), margin+22, y+3.5, 7.5, DARK);
+      y += 5;
+    });
+    y += 6;
+  }
+
   // ── APPENDIX ────────────────────────────────────────────────
   chk(30); y = sHead("Methodology + References", y);
+  const MT_MODULE_DOCS = {
+    recon_manual: {
+      method: ["Manual tests complement the automated recon scanners by covering techniques","that require human creativity, judgment-based pivoting, or interactive analyst","tooling (OSINT mind-map walks, CDN-bypass to origin, IAM/OIDC trust mapping,","dark-web/leak-site monitoring, social-engineering pretext build).","Each test was executed locally by the customer using the steps documented","in this report. Evidence is self-reported and analyst-attested."],
+      refs: ["PTES Intelligence Gathering - http://www.pentest-standard.org","NIST SP 800-115 - https://csrc.nist.gov/publications/detail/sp/800-115/final","MITRE PRE-ATT&CK (TA0043) - https://attack.mitre.org/tactics/TA0043/","OSINT Framework - https://osintframework.com","OWASP WSTG-INFO - https://owasp.org/www-project-web-security-testing-guide/"],
+    },
+    vuln_manual: {
+      method: ["Manual tests complement the automated vulnerability scanners by covering","techniques that require human judgment or chained exploitation (business-logic","abuse, SAML golden-ticket, MFA bypass, container breakout, LLM model-extraction,","wireless/ICS recon). Each test was executed locally by the customer using the","steps documented in this report. Evidence is self-reported."],
+      refs: ["OWASP Top 10 - https://owasp.org/Top10/","OWASP API Top 10 - https://owasp.org/API-Security/","CISA KEV - https://www.cisa.gov/known-exploited-vulnerabilities-catalog","FIRST EPSS - https://www.first.org/epss/","NIST SP 800-115 - https://csrc.nist.gov/publications/detail/sp/800-115/final","MITRE ATT&CK - https://attack.mitre.org/"],
+    },
+  };
+  const _isMobile = String(moduleKey || "").startsWith("mobile");
+  const _mtDocs = MT_MODULE_DOCS[moduleKey] || (_isMobile ? {
+    method: ["Manual tests complement the automated scanners by covering techniques that","require a connected device, human creativity, or interactive tooling (Frida,","Burp, jailbroken iOS, rooted Android). Each test was executed locally by the","customer using the steps documented in this report. Evidence is self-reported."],
+    refs: ["OWASP MASVS v2 - https://mas.owasp.org/MASVS/","OWASP MASTG - https://mas.owasp.org/MASTG/","Frida CodeShare - https://codeshare.frida.re","Objection - https://github.com/sensepost/objection","Apktool - https://apktool.org"],
+  } : {
+    method: ["Manual tests complement the automated scanners by covering techniques that","require human judgment, creativity, or interactive tooling.","Each test was executed locally by the customer using the steps documented","in this report. Evidence is self-reported."],
+    refs: ["OWASP Testing Guide - https://owasp.org/www-project-web-security-testing-guide/","NIST SP 800-115 - https://csrc.nist.gov/publications/detail/sp/800-115/final","MITRE ATT&CK - https://attack.mitre.org/","PTES - http://www.pentest-standard.org"],
+  });
   txt("A. Methodology", margin, y+5, 9, DARK, true); y += 8;
-  [
-    "Manual tests complement the automated scanners by covering techniques that",
-    "require a connected device, human creativity, or interactive tooling (Frida,",
-    "Burp, jailbroken iOS, rooted Android). Each test was executed locally by the",
-    "customer using the steps documented in this report. Evidence is self-reported.",
-  ].forEach(l => { txt(l, margin+2, y+3.5, 7.5, GRAY); y += 4; });
+  _mtDocs.method.forEach(l => { chk(5); txt(l, margin+2, y+3.5, 7.5, GRAY); y += 4; });
   y += 4;
   txt("B. References", margin, y+5, 9, DARK, true); y += 8;
-  [
-    "OWASP MASVS v2 — https://mas.owasp.org/MASVS/",
-    "OWASP MASTG  — https://mas.owasp.org/MASTG/",
-    "Frida CodeShare — https://codeshare.frida.re",
-    "Objection — https://github.com/sensepost/objection",
-    "Apktool — https://apktool.org",
-  ].forEach(l => { txt(l, margin+2, y+3.5, 7.5, BLUE); y += 4.5; });
+  _mtDocs.refs.forEach(l => { chk(5); txt(l, margin+2, y+3.5, 7.5, BLUE); y += 4.5; });
   y += 6;
 
   // End block
@@ -18500,6 +19065,8 @@ export default function App() {
         <div style={{display: active==="mobile"   ? "block" : "none"}}>
           <MobileModule token={token} apiUrl={API}/>
         </div>
+        <div style={{display: active==="recon_manual" ? "block" : "none"}}><ManualTestsPanel moduleKey="recon_manual" moduleLabel="Recon - Manual Pentest" tests={MANUAL_TESTS_RECON}/></div>
+        <div style={{display: active==="vuln_manual" ? "block" : "none"}}><ManualTestsPanel moduleKey="vuln_manual" moduleLabel="Vuln - Manual Pentest" tests={MANUAL_TESTS_VULN}/></div>
         <div style={{display: active==="mobile_static" ? "block" : "none"}}>
           <MobileStaticModule token={token} apiUrl={API}/>
         </div>
