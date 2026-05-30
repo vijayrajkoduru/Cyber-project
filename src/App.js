@@ -18669,6 +18669,50 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     setExpanded(null);
   };
 
+  // ── Delta vs previous scan (same target) ──
+  const prevScan = (() => {
+    // For live current results: skip self (entry 0 = the just-saved scan)
+    // For history-loaded view: also skip self
+    return history.find(h => h.target === target && JSON.stringify(h.results) !== JSON.stringify(results));
+  })();
+  const sevRank = {CRITICAL:5,HIGH:4,MEDIUM:3,LOW:2,INFO:1,POSITIVE:0};
+  const delta = (() => {
+    if (!prevScan || Object.keys(results).length === 0) return null;
+    let newFindings = 0, fixed = 0, persisted = 0, worsened = 0;
+    const sevDelta = {CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0};
+    Object.entries(results).forEach(([tool, r]) => {
+      if (r.status !== "done") return;
+      const curSev = (r.severity || "INFO").toUpperCase();
+      const prev = prevScan.results[tool];
+      const prevSev = prev?.status === "done" ? (prev.severity || "INFO").toUpperCase() : null;
+      if (!prevSev) {
+        if (curSev !== "INFO" && curSev !== "POSITIVE") {
+          newFindings++; if (sevDelta[curSev] !== undefined) sevDelta[curSev]++;
+        }
+      } else if (prevSev === curSev) {
+        if (curSev !== "INFO" && curSev !== "POSITIVE") persisted++;
+      } else if (sevRank[curSev] < sevRank[prevSev]) {
+        if (prevSev !== "INFO" && prevSev !== "POSITIVE") fixed++;
+      } else if (sevRank[curSev] > sevRank[prevSev]) {
+        worsened++;
+      }
+    });
+    return {newFindings, fixed, persisted, worsened, sevDelta, prevDate: prevScan.ts};
+  })();
+
+  // Per-tile delta marker
+  const tileDelta = (tool) => {
+    if (!prevScan || !results[tool] || results[tool].status !== "done") return null;
+    const curSev = (results[tool].severity || "INFO").toUpperCase();
+    const prev = prevScan.results[tool];
+    const prevSev = prev?.status === "done" ? (prev.severity || "INFO").toUpperCase() : null;
+    if (!prevSev) return curSev !== "INFO" && curSev !== "POSITIVE" ? "NEW" : null;
+    if (prevSev === curSev) return null;
+    if (sevRank[curSev] < sevRank[prevSev] && prevSev !== "POSITIVE") return "FIXED";
+    if (sevRank[curSev] > sevRank[prevSev]) return "WORSE";
+    return null;
+  };
+
   const clearHistory = () => {
     if (!window.confirm("Clear all saved scans for this module?")) return;
     localStorage.removeItem(`vl_scans:${moduleKey}`);
@@ -19299,6 +19343,42 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </div>
       )}
 
+      {/* Delta banner — comparison to previous scan of same target */}
+      {activeTab === "auto" && delta && (delta.newFindings + delta.fixed + delta.worsened) > 0 && (
+        <div style={{display:"flex", alignItems:"center", gap:14, padding:"10px 14px",
+                      marginBottom:12, background:"#0f172a", border:"1px solid #334155",
+                      borderRadius:6}}>
+          <span style={{fontSize:20}}>📊</span>
+          <div style={{flex:1, fontSize:11, color:"#cbd5e1"}}>
+            <div style={{marginBottom:2}}>
+              <strong>Delta</strong> vs scan from {new Date(delta.prevDate).toLocaleDateString()}:
+            </div>
+            <div style={{display:"flex", gap:14, fontSize:11}}>
+              {delta.fixed > 0 && (
+                <span style={{color:"#22c55e", fontWeight:600}}>
+                  ✓ {delta.fixed} FIXED
+                </span>
+              )}
+              {delta.newFindings > 0 && (
+                <span style={{color:"#ef4444", fontWeight:600}}>
+                  ▲ {delta.newFindings} NEW
+                </span>
+              )}
+              {delta.worsened > 0 && (
+                <span style={{color:"#f97316", fontWeight:600}}>
+                  ↗ {delta.worsened} WORSENED
+                </span>
+              )}
+              {delta.persisted > 0 && (
+                <span style={{color:"#94a3b8"}}>
+                  {delta.persisted} persisting
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Severity filter chips + tool-name search (auto tab only) */}
       {activeTab === "auto" && tiers.length > 0 && completedCount > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:12,
@@ -19380,6 +19460,21 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                                       fontWeight:700, background:sevColor(r.severity),
                                       color:"#fff"}}>{r.severity}</span>
                       )}
+                      {(() => {
+                        const dm = tileDelta(tool);
+                        if (!dm) return null;
+                        const dmColor = dm === "FIXED" ? "#22c55e" :
+                                         dm === "WORSE" ? "#f97316" : "#ef4444";
+                        const dmSym = dm === "FIXED" ? "✓" :
+                                       dm === "WORSE" ? "↗" : "▲";
+                        return (
+                          <span style={{padding:"1px 5px", borderRadius:3, fontSize:8,
+                                        fontWeight:700, color:dmColor,
+                                        border:`1px solid ${dmColor}`}}>
+                            {dmSym} {dm}
+                          </span>
+                        );
+                      })()}
                       {typeof r.count === "number" && (
                         <span style={{color:"#64748b", fontSize:10}}>{r.count}</span>
                       )}
