@@ -19718,6 +19718,7 @@ function PhishingModule(p)         { return _autoMod(p, {moduleKey:"phishing",  
 function RedTeamModule(p)          { return _autoMod(p, {moduleKey:"red_team",        moduleLabel:"Adversary Emulation / Red Team",  emoji:"🎭", color:"#dc2626", playbook:"27_red_team.md"}); }
 function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"🔗", color:"#06b6d4", playbook:"15_tunnel.md"}); }
 function PivotModule(p)            { return _autoMod(p, {moduleKey:"pivot",           moduleLabel:"Pivoting & Lateral Movement",     emoji:"🔄", color:"#0ea5e9", playbook:"14_pivot.md"}); }
+function OsintModuleV2(p)          { return _autoMod(p, {moduleKey:"osint",           moduleLabel:"Advanced OSINT & Threat Intel",   emoji:"🌍", color:"#8b5cf6", playbook:"08_osint.md"}); }
 function AVEvasionModule(p)        { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"Antivirus / EDR Evasion",         emoji:"🥷", color:"#7c3aed", playbook:"20_av_evasion.md"}); }
 function PostExploitModule(p)      { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post Exploitation",               emoji:"🕵️", color:"#9333ea", playbook:"13_post_exploit.md"}); }
 function AuthAttacksModule(p)      { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",          emoji:"🛂", color:"#f59e0b", playbook:"17_auth_attacks.md"}); }
@@ -20790,8 +20791,7 @@ export default function App() {
           <ExploitationModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="osint"    ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="osint" moduleLabel="OSINT" autoCount={12} manualTests={MANUAL_TESTS_OSINT} color="#8b5cf6"
-            autoPanel={<OsintModule token={token} apiUrl={API}/>}/>
+          <OsintModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="wireless" ? "block" : "none"}}>
           <WirelessModule token={token} apiUrl={API}/>
