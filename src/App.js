@@ -18592,6 +18592,7 @@ function WirelessModule(p)         { return _autoMod(p, {moduleKey:"wireless",  
 function ActiveDirectoryModule(p)  { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",         emoji:"🏢", color:"#3b82f6", playbook:"19_ad.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"☁️", color:"#0ea5e9", playbook:"21_cloud.md"}); }
 function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"🔌", color:"#10b981", playbook:"22_apisec.md"}); }
+function MetasploitAutoModule(p)   { return _autoMod(p, {moduleKey:"metasploit",      moduleLabel:"Metasploit Framework",             emoji:"🧰", color:"#a855f7", playbook:"11_metasploit.md"}); }
 
 // ═══════════════════════════════════════════════════════════════
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
@@ -19761,7 +19762,7 @@ export default function App() {
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
-        {active === "metasploit" && <MetasploitModule/>}
+        {active === "metasploit" && <MetasploitAutoModule token={token} apiUrl={API}/>}
         {active === "guide"     && <GuideModule/>}
         {!["webapp","recon","vuln","password","auth","network","sysexploit","cloud","buffer","exploit",
             "osint","wireless","ad","privesc","tunnel","post","av","se","malware","supply","persist",

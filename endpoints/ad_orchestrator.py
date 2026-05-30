@@ -10,17 +10,17 @@ from tools.ad.ad_pack import T as TECHNIQUES
 router = APIRouter()
 
 _RANGES = [
-    ("tier1_discovery",       0, 16),
+    ("tier1_discovery",         0,  16),
     ("tier2_credential_access", 16, 29),
-    ("tier3_kerberoast_asrep", 29, 38),
-    ("tier4_lateral_movement", 38, 48),
-    ("tier5_privilege_esc",    48, 60),
-    ("tier6_adcs_abuse",       60, 75),
-    ("tier7_delegation",       75, 83),
-    ("tier8_coercion",         83, 90),
-    ("tier9_persistence",      90, 99),
-    # NOTE: TECHNIQUES has 99 entries total; defense_evasion (5) + modern_cve (9)
-    # need their tiers — but to stay within 99-count, we collapse them with persistence.
+    ("tier3_kerberoast_asrep",  29, 38),
+    ("tier4_lateral_movement",  38, 48),
+    ("tier5_privilege_esc",     48, 60),
+    ("tier6_adcs_abuse",        60, 75),
+    ("tier7_delegation",        75, 83),
+    ("tier8_coercion",          83, 90),
+    ("tier9_persistence",       90, 99),
+    ("tier10_defense_evasion",  99, 104),
+    ("tier11_modern_cve",       104, 113),
 ]
 
 AD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
