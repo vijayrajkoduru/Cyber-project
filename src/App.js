@@ -18892,6 +18892,168 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       });
     });
 
+    // ── Compliance Coverage (OWASP/CIS/NIST/PCI) ──
+    // Aggregate all CWE codes from auto-scan findings + map to frameworks
+    const allCwes = new Set();
+    const allOwasps = new Set();
+    Object.values(results).forEach(r => {
+      if (r.status === "done" && r.data?.findings) {
+        r.data.findings.forEach(f => {
+          if (f.cwe && f.cwe !== "N/A") allCwes.add(f.cwe);
+          if (f.owasp && f.owasp !== "N/A") allOwasps.add(f.owasp);
+        });
+      }
+    });
+
+    // CWE → framework mapping (compact, common patterns)
+    const cweToOwasp = {
+      // A01 Broken Access Control
+      "CWE-22":"A01","CWE-200":"A01","CWE-201":"A01","CWE-284":"A01","CWE-285":"A01",
+      "CWE-287":"A01","CWE-538":"A01","CWE-552":"A01","CWE-601":"A01","CWE-639":"A01",
+      "CWE-668":"A01","CWE-862":"A01","CWE-863":"A01","CWE-913":"A01","CWE-1275":"A01",
+      // A02 Cryptographic Failures
+      "CWE-261":"A02","CWE-319":"A02","CWE-321":"A02","CWE-326":"A02","CWE-327":"A02",
+      "CWE-328":"A02","CWE-330":"A02","CWE-347":"A02","CWE-798":"A02","CWE-916":"A02",
+      // A03 Injection
+      "CWE-20":"A03","CWE-74":"A03","CWE-77":"A03","CWE-78":"A03","CWE-79":"A03",
+      "CWE-89":"A03","CWE-90":"A03","CWE-91":"A03","CWE-94":"A03","CWE-95":"A03",
+      "CWE-917":"A03",
+      // A04 Insecure Design
+      "CWE-209":"A04","CWE-256":"A04","CWE-257":"A04","CWE-269":"A04","CWE-311":"A04",
+      "CWE-419":"A04","CWE-434":"A04","CWE-501":"A04","CWE-522":"A04","CWE-601":"A04",
+      // A05 Security Misconfiguration
+      "CWE-2":"A05","CWE-11":"A05","CWE-13":"A05","CWE-16":"A05","CWE-260":"A05",
+      "CWE-541":"A05","CWE-611":"A05","CWE-614":"A05","CWE-1004":"A05","CWE-1395":"A05",
+      // A06 Vulnerable Components
+      "CWE-937":"A06","CWE-1035":"A06","CWE-1104":"A06",
+      // A07 Auth Failures
+      "CWE-255":"A07","CWE-288":"A07","CWE-290":"A07","CWE-294":"A07","CWE-295":"A07",
+      "CWE-306":"A07","CWE-307":"A07","CWE-346":"A07","CWE-384":"A07","CWE-521":"A07",
+      "CWE-613":"A07","CWE-640":"A07",
+      // A08 Software/Data Integrity
+      "CWE-345":"A08","CWE-353":"A08","CWE-426":"A08","CWE-494":"A08","CWE-502":"A08",
+      "CWE-829":"A08","CWE-915":"A08",
+      // A09 Logging Failures
+      "CWE-117":"A09","CWE-223":"A09","CWE-532":"A09","CWE-778":"A09",
+      // A10 SSRF
+      "CWE-918":"A10",
+      // Misc → A05 default
+      "CWE-1021":"A05","CWE-1059":"A09","CWE-441":"A05","CWE-770":"A04",
+      "CWE-1336":"A03","CWE-1059":"A09","CWE-732":"A05","CWE-1336":"A03",
+    };
+    const cweToCis = {
+      "CWE-22":"CIS-3","CWE-200":"CIS-3","CWE-538":"CIS-3","CWE-552":"CIS-3","CWE-922":"CIS-3",
+      "CWE-16":"CIS-4","CWE-260":"CIS-4","CWE-1004":"CIS-4","CWE-1395":"CIS-4",
+      "CWE-287":"CIS-5","CWE-306":"CIS-5","CWE-521":"CIS-5","CWE-307":"CIS-5","CWE-798":"CIS-5",
+      "CWE-284":"CIS-6","CWE-285":"CIS-6","CWE-862":"CIS-6","CWE-863":"CIS-6","CWE-668":"CIS-6",
+      "CWE-937":"CIS-7","CWE-1035":"CIS-7","CWE-1104":"CIS-7",
+      "CWE-117":"CIS-8","CWE-223":"CIS-8","CWE-532":"CIS-8","CWE-778":"CIS-8",
+      "CWE-1021":"CIS-14","CWE-79":"CIS-16","CWE-89":"CIS-16","CWE-78":"CIS-16","CWE-94":"CIS-16",
+      "CWE-918":"CIS-16","CWE-77":"CIS-16","CWE-611":"CIS-16","CWE-502":"CIS-16","CWE-352":"CIS-16",
+    };
+    const cweToNist = {
+      "CWE-200":"PR.DS","CWE-201":"PR.DS","CWE-311":"PR.DS","CWE-319":"PR.DS","CWE-321":"PR.DS",
+      "CWE-287":"PR.AC","CWE-306":"PR.AC","CWE-284":"PR.AC","CWE-862":"PR.AC","CWE-863":"PR.AC",
+      "CWE-79":"PR.IP","CWE-89":"PR.IP","CWE-78":"PR.IP","CWE-94":"PR.IP","CWE-918":"PR.IP",
+      "CWE-16":"PR.IP","CWE-1395":"PR.IP","CWE-1004":"PR.IP",
+      "CWE-937":"ID.RA","CWE-1104":"ID.RA","CWE-1035":"ID.RA",
+      "CWE-117":"DE.AE","CWE-778":"DE.AE","CWE-532":"DE.AE",
+    };
+    const cweToPci = {
+      "CWE-16":"PCI-2","CWE-260":"PCI-2","CWE-1395":"PCI-2",
+      "CWE-311":"PCI-3","CWE-321":"PCI-3","CWE-326":"PCI-3","CWE-327":"PCI-3",
+      "CWE-79":"PCI-6","CWE-89":"PCI-6","CWE-78":"PCI-6","CWE-94":"PCI-6","CWE-918":"PCI-6",
+      "CWE-862":"PCI-7","CWE-863":"PCI-7","CWE-284":"PCI-7","CWE-285":"PCI-7",
+      "CWE-287":"PCI-8","CWE-306":"PCI-8","CWE-521":"PCI-8","CWE-307":"PCI-8",
+      "CWE-117":"PCI-10","CWE-532":"PCI-10","CWE-778":"PCI-10",
+    };
+
+    // Count findings per control category
+    const owaspCounts = {}, cisCounts = {}, nistCounts = {}, pciCounts = {};
+    Object.values(results).forEach(r => {
+      if (r.status === "done" && r.data?.findings) {
+        r.data.findings.forEach(f => {
+          const sev = (f.severity || r.severity || "INFO").toUpperCase();
+          if (sev === "INFO" || sev === "POSITIVE") return;
+          const cwe = f.cwe;
+          if (cwe && cwe !== "N/A") {
+            const ow = cweToOwasp[cwe]; if (ow) owaspCounts[ow] = (owaspCounts[ow]||0) + 1;
+            const ci = cweToCis[cwe];   if (ci) cisCounts[ci]   = (cisCounts[ci]||0) + 1;
+            const ni = cweToNist[cwe];  if (ni) nistCounts[ni]  = (nistCounts[ni]||0) + 1;
+            const pc = cweToPci[cwe];   if (pc) pciCounts[pc]   = (pciCounts[pc]||0) + 1;
+          }
+          if (f.owasp && f.owasp.startsWith("A")) {
+            const ow = f.owasp.split(":")[0];
+            owaspCounts[ow] = (owaspCounts[ow]||0) + 1;
+          }
+        });
+      }
+    });
+
+    if (completedCount > 0) {
+      chk(50);
+      y += 8;
+      doc.setFillColor("#1e293b"); doc.rect(0, y-5, W, 8, "F");
+      txt("Compliance Coverage", margin, y, 12, "#f1f5f9", true);
+      y += 12;
+      txt("Findings mapped to industry compliance frameworks. Zero counts indicate this scan exercised no controls in that category.",
+          margin, y, 9, "#64748b"); y += 8;
+
+      const renderFramework = (title, items) => {
+        chk(items.length * 5 + 10);
+        txt(title, margin, y, 10, "#0f172a", true); y += 5;
+        items.forEach(([code, label, count]) => {
+          const sevcol = count >= 5 ? sevColor("HIGH") :
+                          count >= 2 ? sevColor("MEDIUM") :
+                          count >= 1 ? sevColor("LOW") : "#cbd5e1";
+          doc.setFillColor(sevcol); doc.rect(margin, y-2.5, 3, 3, "F");
+          txt(code, margin+5, y, 9, "#0f172a", true);
+          txt(label, margin+20, y, 9, "#334155");
+          txt(count > 0 ? `${count} finding(s)` : "—", W - margin, y, 9, count > 0 ? sevcol : "#94a3b8", true, "right");
+          y += 4.5;
+        });
+        y += 4;
+      };
+
+      renderFramework("OWASP Top 10 (2021)", [
+        ["A01","Broken Access Control",           owaspCounts.A01||0],
+        ["A02","Cryptographic Failures",          owaspCounts.A02||0],
+        ["A03","Injection",                       owaspCounts.A03||0],
+        ["A04","Insecure Design",                 owaspCounts.A04||0],
+        ["A05","Security Misconfiguration",       owaspCounts.A05||0],
+        ["A06","Vulnerable & Outdated Components",owaspCounts.A06||0],
+        ["A07","Authentication Failures",         owaspCounts.A07||0],
+        ["A08","Software/Data Integrity",         owaspCounts.A08||0],
+        ["A09","Logging & Monitoring Failures",   owaspCounts.A09||0],
+        ["A10","Server-Side Request Forgery",     owaspCounts.A10||0],
+      ]);
+      renderFramework("CIS Critical Security Controls v8 (top 10)", [
+        ["CIS-3", "Data Protection",              cisCounts["CIS-3"]||0],
+        ["CIS-4", "Secure Configuration",         cisCounts["CIS-4"]||0],
+        ["CIS-5", "Account Management",           cisCounts["CIS-5"]||0],
+        ["CIS-6", "Access Control Management",    cisCounts["CIS-6"]||0],
+        ["CIS-7", "Continuous Vuln Management",   cisCounts["CIS-7"]||0],
+        ["CIS-8", "Audit Log Management",         cisCounts["CIS-8"]||0],
+        ["CIS-14","Security Awareness Training",  cisCounts["CIS-14"]||0],
+        ["CIS-16","Application Software Security",cisCounts["CIS-16"]||0],
+      ]);
+      renderFramework("NIST CSF 2.0 — function categories", [
+        ["ID.RA","Identify · Risk Assessment",    nistCounts["ID.RA"]||0],
+        ["PR.AC","Protect · Access Control",      nistCounts["PR.AC"]||0],
+        ["PR.DS","Protect · Data Security",       nistCounts["PR.DS"]||0],
+        ["PR.IP","Protect · Info Protection",     nistCounts["PR.IP"]||0],
+        ["DE.AE","Detect · Anomalies & Events",   nistCounts["DE.AE"]||0],
+      ]);
+      renderFramework("PCI DSS 4.0 — requirements covered", [
+        ["PCI-2", "Default Passwords / Hardening",pciCounts["PCI-2"]||0],
+        ["PCI-3", "Protect Stored Cardholder Data",pciCounts["PCI-3"]||0],
+        ["PCI-6", "Develop/Maintain Secure Apps", pciCounts["PCI-6"]||0],
+        ["PCI-7", "Access by Need-to-Know",       pciCounts["PCI-7"]||0],
+        ["PCI-8", "Identify/Authenticate Access", pciCounts["PCI-8"]||0],
+        ["PCI-10","Track All Network Access",     pciCounts["PCI-10"]||0],
+      ]);
+    }
+
     // ── Manual Pentest Evidence (analyst-attested cards) ──
     const moduleManual = MANUAL_TESTS_AUTO[moduleKey] || [];
     const completedManual = moduleManual
