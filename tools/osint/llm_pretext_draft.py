@@ -86,7 +86,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = [wrap_finding(
         f"Pretext draft generated — subject: {draft.get('subject', '?')[:80]}",
-        severity="INFO", cwe="CWE-1395",
+        severity="POSITIVE", cwe="CWE-1395",
         remediation="USE ONLY ON AUTHORIZED ENGAGEMENTS. Customize with target-"
                     "specific facts gathered from other OSINT (LinkedIn, GitHub, "
                     "SEC filings). Track in your phishing platform (GoPhish, etc.) "
