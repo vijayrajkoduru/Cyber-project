@@ -105,40 +105,66 @@ const MODULES = [
   { id:"osint_manual", icon:"📋", label:"OSINT - Manual Pentest Checklist", cat:"scan", free:false },
 
   // ── EXPLOITATION ─────────────────────────────────────────────
-  { id:"exploit",        icon:"💥", label:"Exploitation",                  cat:"exploit", free:false, featured:true },
-  { id:"bof",            icon:"💾", label:"Buffer Overflow",                cat:"exploit", free:false },
-  { id:"client_side",    icon:"🎯", label:"Client-Side Attacks",            cat:"exploit", free:false },
-  { id:"system_exploit", icon:"⚙️", label:"System Exploitation",           cat:"exploit", free:false },
-  { id:"metasploit",     icon:"🧰", label:"Metasploit Framework",           cat:"exploit", free:false },
+  { id:"exploit",          icon:"💥", label:"Exploitation",                  cat:"exploit", free:false, featured:true },
+  { id:"exploit_manual",   icon:"📋", label:"Exploit - Manual Pentest",      cat:"exploit", free:false },
+  { id:"bof",              icon:"💾", label:"Buffer Overflow",               cat:"exploit", free:false },
+  { id:"bof_manual",       icon:"📋", label:"BOF - Manual Pentest",          cat:"exploit", free:false },
+  { id:"client_side",      icon:"🎯", label:"Client-Side Attacks",           cat:"exploit", free:false },
+  { id:"client_side_manual", icon:"📋", label:"Client-Side - Manual Pentest",cat:"exploit", free:false },
+  { id:"system_exploit",   icon:"⚙️", label:"System Exploitation",          cat:"exploit", free:false },
+  { id:"system_exploit_manual", icon:"📋", label:"SysExploit - Manual",      cat:"exploit", free:false },
+  { id:"metasploit",       icon:"🧰", label:"Metasploit Framework",          cat:"exploit", free:false },
+  { id:"metasploit_manual",icon:"📋", label:"Metasploit - Manual",           cat:"exploit", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
-  { id:"privesc",      icon:"⬆️", label:"Privilege Escalation",            cat:"post",    free:false },
-  { id:"post_exploit", icon:"🕵️", label:"Post Exploitation",               cat:"post",    free:false },
-  { id:"pivot",        icon:"🔄", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
+  { id:"privesc",          icon:"⬆️", label:"Privilege Escalation",          cat:"post",    free:false },
+  { id:"privesc_manual",   icon:"📋", label:"PrivEsc - Manual Pentest",      cat:"post",    free:false },
+  { id:"post_exploit",     icon:"🕵️", label:"Post Exploitation",             cat:"post",    free:false },
+  { id:"post_exploit_manual",icon:"📋", label:"Post-Exploit - Manual",       cat:"post",    free:false },
+  { id:"pivot",            icon:"🔄", label:"Pivoting & Lateral Movement",   cat:"post",    free:false },
+  { id:"pivot_manual",     icon:"📋", label:"Pivot - Manual Pentest",        cat:"post",    free:false },
 
   // ── NETWORK & INFRA ──────────────────────────────────────────
-  { id:"network",      icon:"🌐", label:"Network Attacks",                 cat:"network", free:false },
-  { id:"tunnel",       icon:"🔗", label:"Port Redirection & Tunneling",    cat:"network", free:false },
-  { id:"password",     icon:"🔑", label:"Password Attacks",                cat:"network", free:false },
-  { id:"auth_attacks", icon:"🛂", label:"Authentication Attacks",          cat:"network", free:false },
-  { id:"wireless",     icon:"📶", label:"Wireless Network Attacks",        cat:"network", free:false },
+  { id:"network",          icon:"🌐", label:"Network Attacks",               cat:"network", free:false },
+  { id:"network_manual",   icon:"📋", label:"Network - Manual Pentest",      cat:"network", free:false },
+  { id:"tunnel",           icon:"🔗", label:"Port Redirection & Tunneling",  cat:"network", free:false },
+  { id:"tunnel_manual",    icon:"📋", label:"Tunnel - Manual Pentest",       cat:"network", free:false },
+  { id:"password",         icon:"🔑", label:"Password Attacks",              cat:"network", free:false },
+  { id:"password_manual",  icon:"📋", label:"Password - Manual Pentest",     cat:"network", free:false },
+  { id:"auth_attacks",     icon:"🛂", label:"Authentication Attacks",        cat:"network", free:false },
+  { id:"auth_attacks_manual",icon:"📋", label:"Auth-Attacks - Manual",       cat:"network", free:false },
+  { id:"wireless",         icon:"📶", label:"Wireless Network Attacks",      cat:"network", free:false },
+  { id:"wireless_manual",  icon:"📋", label:"Wireless - Manual Pentest",     cat:"network", free:false },
 
   // ── ADVANCED ─────────────────────────────────────────────────
-  { id:"ad",            icon:"🏢", label:"Active Directory Attacks",       cat:"advanced",free:false },
-  { id:"av_evasion",    icon:"🥷", label:"Antivirus / EDR Evasion",        cat:"advanced",free:false },
-  { id:"cloud",         icon:"☁️", label:"Cloud Security Testing",         cat:"advanced",free:false },
-  { id:"apisec",        icon:"🔌", label:"API Security Testing",           cat:"advanced",free:false },
-  { id:"ai_llm",        icon:"🤖", label:"AI / LLM Security",              cat:"advanced",free:false },
-  { id:"container_k8s", icon:"🐳", label:"Container / Kubernetes",         cat:"advanced",free:false },
-  { id:"supply_chain",  icon:"🔗", label:"Supply Chain Security",          cat:"advanced",free:false },
-  { id:"hybrid_identity", icon:"🪪", label:"Hybrid Identity (Entra ID)",   cat:"advanced",free:false },
-  { id:"sspm",          icon:"📊", label:"SaaS Security Posture (SSPM)",   cat:"advanced",free:false },
-  { id:"iot_ot",        icon:"🏭", label:"IoT / OT / ICS Security",        cat:"advanced",free:false },
-  { id:"firmware",      icon:"💿", label:"Firmware / Embedded",            cat:"advanced",free:false },
+  { id:"ad",                icon:"🏢", label:"Active Directory Attacks",     cat:"advanced",free:false },
+  { id:"ad_manual",         icon:"📋", label:"AD - Manual Pentest",          cat:"advanced",free:false },
+  { id:"av_evasion",        icon:"🥷", label:"Antivirus / EDR Evasion",      cat:"advanced",free:false },
+  { id:"av_evasion_manual", icon:"📋", label:"AV-Evasion - Manual",          cat:"advanced",free:false },
+  { id:"cloud",             icon:"☁️", label:"Cloud Security Testing",       cat:"advanced",free:false },
+  { id:"cloud_manual",      icon:"📋", label:"Cloud - Manual Pentest",       cat:"advanced",free:false },
+  { id:"apisec",            icon:"🔌", label:"API Security Testing",         cat:"advanced",free:false },
+  { id:"apisec_manual",     icon:"📋", label:"APISec - Manual Pentest",      cat:"advanced",free:false },
+  { id:"ai_llm",            icon:"🤖", label:"AI / LLM Security",            cat:"advanced",free:false },
+  { id:"ai_llm_manual",     icon:"📋", label:"AI/LLM - Manual Pentest",      cat:"advanced",free:false },
+  { id:"container_k8s",     icon:"🐳", label:"Container / Kubernetes",       cat:"advanced",free:false },
+  { id:"container_k8s_manual",icon:"📋", label:"Container/K8s - Manual",     cat:"advanced",free:false },
+  { id:"supply_chain",      icon:"🔗", label:"Supply Chain Security",        cat:"advanced",free:false },
+  { id:"supply_chain_manual",icon:"📋", label:"Supply-Chain - Manual",       cat:"advanced",free:false },
+  { id:"hybrid_identity",   icon:"🪪", label:"Hybrid Identity (Entra ID)",   cat:"advanced",free:false },
+  { id:"hybrid_identity_manual", icon:"📋", label:"Hybrid-Identity - Manual",cat:"advanced",free:false },
+  { id:"sspm",              icon:"📊", label:"SaaS Security Posture (SSPM)", cat:"advanced",free:false },
+  { id:"sspm_manual",       icon:"📋", label:"SSPM - Manual Pentest",        cat:"advanced",free:false },
+  { id:"iot_ot",            icon:"🏭", label:"IoT / OT / ICS Security",      cat:"advanced",free:false },
+  { id:"iot_ot_manual",     icon:"📋", label:"IoT-OT - Manual Pentest",      cat:"advanced",free:false },
+  { id:"firmware",          icon:"💿", label:"Firmware / Embedded",          cat:"advanced",free:false },
+  { id:"firmware_manual",   icon:"📋", label:"Firmware - Manual Pentest",    cat:"advanced",free:false },
 
   // ── ADVERSARY EMULATION ──────────────────────────────────────
-  { id:"phishing",     icon:"🎣", label:"Phishing & Social Engineering",   cat:"advanced",free:false },
-  { id:"red_team",     icon:"🎭", label:"Adversary Emulation / Red Team",  cat:"advanced",free:false },
+  { id:"phishing",          icon:"🎣", label:"Phishing & Social Engineering",cat:"advanced",free:false },
+  { id:"phishing_manual",   icon:"📋", label:"Phishing - Manual Pentest",    cat:"advanced",free:false },
+  { id:"red_team",          icon:"🎭", label:"Adversary Emulation / Red Team",cat:"advanced",free:false },
+  { id:"red_team_manual",   icon:"📋", label:"Red-Team - Manual Pentest",    cat:"advanced",free:false },
 
   // ── MOBILE ───────────────────────────────────────────────────
   { id:"mobile_static",  icon:"📱", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
@@ -20758,6 +20784,33 @@ export default function App() {
         <div style={{display: active==="vuln_manual" ? "block" : "none"}}><ManualTestsPanel moduleKey="vuln_manual" moduleLabel="Vuln - Manual Pentest" tests={MANUAL_TESTS_VULN}/></div>
         <div style={{display: active==="webapp_manual" ? "block" : "none"}}><ManualTestsPanel moduleKey="webapp_manual" moduleLabel="Webapp - Manual Pentest" tests={MANUAL_TESTS_WEBAPP}/></div>
         <div style={{display: active==="osint_manual" ? "block" : "none"}}><ManualTestsPanel moduleKey="osint_manual" moduleLabel="OSINT - Manual Pentest" tests={MANUAL_TESTS_OSINT}/></div>
+        {/* 26 module manual tiles — each renders ManualTestsPanel with cards from MANUAL_TESTS_AUTO */}
+        <div style={{display: active==="exploit_manual"        ? "block" : "none"}}><ManualTestsPanel moduleKey="exploit_manual"        moduleLabel="Exploit - Manual Pentest"          tests={MANUAL_TESTS_AUTO.exploit          || []}/></div>
+        <div style={{display: active==="bof_manual"            ? "block" : "none"}}><ManualTestsPanel moduleKey="bof_manual"            moduleLabel="BOF - Manual Pentest"              tests={MANUAL_TESTS_AUTO.bof              || []}/></div>
+        <div style={{display: active==="password_manual"       ? "block" : "none"}}><ManualTestsPanel moduleKey="password_manual"       moduleLabel="Password - Manual Pentest"         tests={MANUAL_TESTS_AUTO.password         || []}/></div>
+        <div style={{display: active==="client_side_manual"    ? "block" : "none"}}><ManualTestsPanel moduleKey="client_side_manual"    moduleLabel="Client-Side - Manual Pentest"      tests={MANUAL_TESTS_AUTO.client_side      || []}/></div>
+        <div style={{display: active==="system_exploit_manual" ? "block" : "none"}}><ManualTestsPanel moduleKey="system_exploit_manual" moduleLabel="System-Exploit - Manual Pentest"   tests={MANUAL_TESTS_AUTO.system_exploit   || []}/></div>
+        <div style={{display: active==="metasploit_manual"     ? "block" : "none"}}><ManualTestsPanel moduleKey="metasploit_manual"     moduleLabel="Metasploit - Manual Pentest"       tests={MANUAL_TESTS_AUTO.metasploit       || []}/></div>
+        <div style={{display: active==="privesc_manual"        ? "block" : "none"}}><ManualTestsPanel moduleKey="privesc_manual"        moduleLabel="PrivEsc - Manual Pentest"          tests={MANUAL_TESTS_AUTO.privesc          || []}/></div>
+        <div style={{display: active==="post_exploit_manual"   ? "block" : "none"}}><ManualTestsPanel moduleKey="post_exploit_manual"   moduleLabel="Post-Exploit - Manual Pentest"     tests={MANUAL_TESTS_AUTO.post_exploit     || []}/></div>
+        <div style={{display: active==="pivot_manual"          ? "block" : "none"}}><ManualTestsPanel moduleKey="pivot_manual"          moduleLabel="Pivot - Manual Pentest"            tests={MANUAL_TESTS_AUTO.pivot            || []}/></div>
+        <div style={{display: active==="tunnel_manual"         ? "block" : "none"}}><ManualTestsPanel moduleKey="tunnel_manual"         moduleLabel="Tunnel - Manual Pentest"           tests={MANUAL_TESTS_AUTO.tunnel           || []}/></div>
+        <div style={{display: active==="network_manual"        ? "block" : "none"}}><ManualTestsPanel moduleKey="network_manual"        moduleLabel="Network - Manual Pentest"          tests={MANUAL_TESTS_AUTO.network          || []}/></div>
+        <div style={{display: active==="auth_attacks_manual"   ? "block" : "none"}}><ManualTestsPanel moduleKey="auth_attacks_manual"   moduleLabel="Auth-Attacks - Manual Pentest"     tests={MANUAL_TESTS_AUTO.auth_attacks     || []}/></div>
+        <div style={{display: active==="wireless_manual"       ? "block" : "none"}}><ManualTestsPanel moduleKey="wireless_manual"       moduleLabel="Wireless - Manual Pentest"         tests={MANUAL_TESTS_AUTO.wireless         || []}/></div>
+        <div style={{display: active==="ad_manual"             ? "block" : "none"}}><ManualTestsPanel moduleKey="ad_manual"             moduleLabel="AD - Manual Pentest"               tests={MANUAL_TESTS_AUTO.ad               || []}/></div>
+        <div style={{display: active==="av_evasion_manual"     ? "block" : "none"}}><ManualTestsPanel moduleKey="av_evasion_manual"     moduleLabel="AV-Evasion - Manual Pentest"       tests={MANUAL_TESTS_AUTO.av_evasion       || []}/></div>
+        <div style={{display: active==="cloud_manual"          ? "block" : "none"}}><ManualTestsPanel moduleKey="cloud_manual"          moduleLabel="Cloud - Manual Pentest"            tests={MANUAL_TESTS_AUTO.cloud            || []}/></div>
+        <div style={{display: active==="apisec_manual"         ? "block" : "none"}}><ManualTestsPanel moduleKey="apisec_manual"         moduleLabel="APISec - Manual Pentest"           tests={MANUAL_TESTS_AUTO.apisec           || []}/></div>
+        <div style={{display: active==="ai_llm_manual"         ? "block" : "none"}}><ManualTestsPanel moduleKey="ai_llm_manual"         moduleLabel="AI/LLM - Manual Pentest"           tests={MANUAL_TESTS_AUTO.ai_llm           || []}/></div>
+        <div style={{display: active==="container_k8s_manual"  ? "block" : "none"}}><ManualTestsPanel moduleKey="container_k8s_manual"  moduleLabel="Container/K8s - Manual Pentest"    tests={MANUAL_TESTS_AUTO.container_k8s    || []}/></div>
+        <div style={{display: active==="supply_chain_manual"   ? "block" : "none"}}><ManualTestsPanel moduleKey="supply_chain_manual"   moduleLabel="Supply-Chain - Manual Pentest"     tests={MANUAL_TESTS_AUTO.supply_chain     || []}/></div>
+        <div style={{display: active==="hybrid_identity_manual"? "block" : "none"}}><ManualTestsPanel moduleKey="hybrid_identity_manual"moduleLabel="Hybrid-Identity - Manual Pentest"  tests={MANUAL_TESTS_AUTO.hybrid_identity  || []}/></div>
+        <div style={{display: active==="sspm_manual"           ? "block" : "none"}}><ManualTestsPanel moduleKey="sspm_manual"           moduleLabel="SSPM - Manual Pentest"             tests={MANUAL_TESTS_AUTO.sspm             || []}/></div>
+        <div style={{display: active==="iot_ot_manual"         ? "block" : "none"}}><ManualTestsPanel moduleKey="iot_ot_manual"         moduleLabel="IoT-OT - Manual Pentest"           tests={MANUAL_TESTS_AUTO.iot_ot           || []}/></div>
+        <div style={{display: active==="firmware_manual"       ? "block" : "none"}}><ManualTestsPanel moduleKey="firmware_manual"       moduleLabel="Firmware - Manual Pentest"         tests={MANUAL_TESTS_AUTO.firmware         || []}/></div>
+        <div style={{display: active==="phishing_manual"       ? "block" : "none"}}><ManualTestsPanel moduleKey="phishing_manual"       moduleLabel="Phishing - Manual Pentest"         tests={MANUAL_TESTS_AUTO.phishing         || []}/></div>
+        <div style={{display: active==="red_team_manual"       ? "block" : "none"}}><ManualTestsPanel moduleKey="red_team_manual"       moduleLabel="Red-Team - Manual Pentest"         tests={MANUAL_TESTS_AUTO.red_team         || []}/></div>
         <div style={{display: active==="mobile_static" ? "block" : "none"}}>
           <MobileStaticModule token={token} apiUrl={API}/>
         </div>
