@@ -19795,6 +19795,11 @@ function RedTeamModule(p)          { return _autoMod(p, {moduleKey:"red_team",  
 function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"🔗", color:"#06b6d4", playbook:"15_tunnel.md"}); }
 function PivotModule(p)            { return _autoMod(p, {moduleKey:"pivot",           moduleLabel:"Pivoting & Lateral Movement",     emoji:"🔄", color:"#0ea5e9", playbook:"14_pivot.md"}); }
 function OsintModuleV2(p)          { return _autoMod(p, {moduleKey:"osint",           moduleLabel:"Advanced OSINT & Threat Intel",   emoji:"🌍", color:"#8b5cf6", playbook:"08_osint.md"}); }
+function MobileStaticModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_static",   moduleLabel:"App Binary Analysis (Static)",    emoji:"📱", color:"#a855f7", playbook:"32_mobile_static.md"}); }
+function MobileStorageModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_storage",  moduleLabel:"Storage (Data-at-Rest)",          emoji:"🗄️", color:"#10b981", playbook:"33_mobile_storage.md"}); }
+function MobileRuntimeModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_runtime",  moduleLabel:"Runtime / Anti-Tamper",           emoji:"🪝", color:"#f97316", playbook:"34_mobile_runtime.md"}); }
+function MobileCryptoModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_crypto",   moduleLabel:"Crypto (Algorithms & TLS)",       emoji:"🔐", color:"#06b6d4", playbook:"35_mobile_crypto.md"}); }
+function MobileNetworkModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_network",  moduleLabel:"Network / Traffic",               emoji:"📡", color:"#3b82f6", playbook:"36_mobile_network.md"}); }
 function AVEvasionModule(p)        { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"Antivirus / EDR Evasion",         emoji:"🥷", color:"#7c3aed", playbook:"20_av_evasion.md"}); }
 function PostExploitModule(p)      { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post Exploitation",               emoji:"🕵️", color:"#9333ea", playbook:"13_post_exploit.md"}); }
 function AuthAttacksModule(p)      { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",          emoji:"🛂", color:"#f59e0b", playbook:"17_auth_attacks.md"}); }
@@ -20910,24 +20915,19 @@ export default function App() {
             longer carries duplicate _manual entries. ManualTestsPanel component
             itself is still used internally by both wrapper components. */}
         <div style={{display: active==="mobile_static" ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="mobile_static" moduleLabel="Mobile-Static" autoCount={12} manualTests={MANUAL_TESTS_MOBILE_STATIC} color="#ec4899"
-            autoPanel={<MobileStaticModule token={token} apiUrl={API}/>}/>
+          <MobileStaticModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="mobile_storage" ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="mobile_storage" moduleLabel="Mobile-Storage" autoCount={11} manualTests={MANUAL_TESTS_MOBILE_STORAGE} color="#ec4899"
-            autoPanel={<MobileStorageModule token={token} apiUrl={API}/>}/>
+          <MobileStorageModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="mobile_runtime" ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="mobile_runtime" moduleLabel="Mobile-Runtime" autoCount={6} manualTests={MANUAL_TESTS_MOBILE_RUNTIME} color="#ec4899"
-            autoPanel={<MobileRuntimeModule token={token} apiUrl={API}/>}/>
+          <MobileRuntimeModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="mobile_crypto" ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="mobile_crypto" moduleLabel="Mobile-Crypto" autoCount={7} manualTests={MANUAL_TESTS_MOBILE_CRYPTO} color="#ec4899"
-            autoPanel={<MobileCryptoModule token={token} apiUrl={API}/>}/>
+          <MobileCryptoModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="mobile_network" ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="mobile_network" moduleLabel="Mobile-Network" autoCount={8} manualTests={MANUAL_TESTS_MOBILE_NETWORK} color="#ec4899"
-            autoPanel={<MobileNetworkModule token={token} apiUrl={API}/>}/>
+          <MobileNetworkModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
