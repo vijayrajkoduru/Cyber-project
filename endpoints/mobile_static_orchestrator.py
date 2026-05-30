@@ -77,16 +77,19 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("android_manifest_audit",        "/api/mobile_static/android_manifest_audit"),
         ("ios_plist_audit",               "/api/mobile_static/ios_plist_audit"),
         ("network_security_config_audit", "/api/mobile_static/network_security_config_audit"),
+        ("content_provider_audit",        "/api/mobile_static/content_provider_audit"),
     ],
     "tier2_secret_and_crypto": [
         ("secret_extraction_audit",       "/api/mobile_static/secret_extraction_audit"),
         ("weak_crypto_audit",             "/api/mobile_static/weak_crypto_audit"),
         ("hardcoded_url_and_ip_audit",    "/api/mobile_static/hardcoded_url_and_ip_audit"),
+        ("firebase_config_leak_audit",    "/api/mobile_static/firebase_config_leak_audit"),
     ],
     "tier3_binary_hardening": [
         ("native_lib_hardening",          "/api/mobile_static/native_lib_hardening"),
         ("pe_hardening_audit",            "/api/mobile_static/pe_hardening_audit"),
         ("elf_symbol_audit",              "/api/mobile_static/elf_symbol_audit"),
+        ("certificate_pinning_static",    "/api/mobile_static/certificate_pinning_static"),
     ],
     "tier4_behavioral_and_aggregate": [
         ("bytecode_malware_signatures",   "/api/mobile_static/bytecode_malware_signatures"),
@@ -96,20 +99,25 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("wasm_module_audit",             "/api/mobile_static/wasm_module_audit"),
         ("file_provider_misconfig_audit", "/api/mobile_static/file_provider_misconfig_audit"),
         ("ios_privacy_manifest_audit",    "/api/mobile_static/ios_privacy_manifest_audit"),
+        ("ai_ml_model_detection",         "/api/mobile_static/ai_ml_model_detection"),
+        ("maven_dep_audit",               "/api/mobile_static/maven_dep_audit"),
     ],
     # ── VL-FORGE 2026-05-30: +6 new MASVS-aligned static scanners ──
     "tier5_resilience_static": [
         ("anti_root_detection_static",    "/api/mobile_static/anti_root_detection_static"),
         ("anti_debug_static_markers",     "/api/mobile_static/anti_debug_static_markers"),
+        ("emulator_detection_static",     "/api/mobile_static/emulator_detection_static"),
     ],
     "tier6_webview_security": [
         ("webview_config_audit",          "/api/mobile_static/webview_config_audit"),
         ("js_bridge_audit",               "/api/mobile_static/js_bridge_audit"),
+        ("deeplink_verification_audit",   "/api/mobile_static/deeplink_verification_audit"),
     ],
     "tier7_privacy_iap": [
         ("permission_overprivilege_audit","/api/mobile_static/permission_overprivilege_audit"),
         ("tracker_sdk_audit",             "/api/mobile_static/tracker_sdk_audit"),
         ("iap_billing_audit",             "/api/mobile_static/iap_billing_audit"),
+        ("biometric_auth_audit",          "/api/mobile_static/biometric_auth_audit"),
     ],
 }
 
