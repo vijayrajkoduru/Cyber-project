@@ -111,6 +111,30 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("certspotter_history",    "/api/osint/certspotter_history"),
         ("wayback_robots_history", "/api/osint/wayback_robots_history"),
     ],
+    # ── VL-FORGE 2026-05-30 round 3: +15 real probes across 4 new tiers ──
+    "tier15_identity_deep": [
+        ("holehe_email_check",     "/api/osint/holehe_email_check"),
+        ("ghunt_google_basic",     "/api/osint/ghunt_google_basic"),
+        ("greynoise_community",    "/api/osint/greynoise_community"),
+    ],
+    "tier16_platform_user_lookups": [
+        ("twitch_user_lookup",     "/api/osint/twitch_user_lookup"),
+        ("bluesky_user_lookup",    "/api/osint/bluesky_user_lookup"),
+        ("stackoverflow_user",     "/api/osint/stackoverflow_user"),
+        ("devto_user_lookup",      "/api/osint/devto_user_lookup"),
+        ("hashnode_user_lookup",   "/api/osint/hashnode_user_lookup"),
+        ("medium_user_intel",      "/api/osint/medium_user_intel"),
+    ],
+    "tier17_messaging_intel": [
+        ("discord_invite_intel",   "/api/osint/discord_invite_intel"),
+        ("telegram_public_channel","/api/osint/telegram_public_channel"),
+    ],
+    "tier18_dns_archive_geo": [
+        ("dns_zone_walk_nsec",     "/api/osint/dns_zone_walk_nsec"),
+        ("wayback_emails_grep",    "/api/osint/wayback_emails_grep"),
+        ("mapillary_location",     "/api/osint/mapillary_location"),
+        ("urlscan_io_search",      "/api/osint/urlscan_io_search"),
+    ],
 }
 
 
