@@ -112,22 +112,26 @@ const MODULES = [
   { id:"msf",       icon:"🧰", label:"Metasploit Framework",               cat:"exploit", free:false, comingSoon:true },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
-  { id:"privesc",   icon:"⬆️", label:"Privilege Escalation",               cat:"post",    free:false, comingSoon:true },
-  { id:"post",      icon:"🕵️", label:"Post Exploitation",                  cat:"post",    free:false, comingSoon:true },
-  { id:"pivot",     icon:"🔄", label:"Pivoting & Lateral Movement",        cat:"post",    free:false, comingSoon:true },
+  { id:"privesc",      icon:"⬆️", label:"Privilege Escalation",            cat:"post",    free:false, comingSoon:true },
+  { id:"post_exploit", icon:"🕵️", label:"Post Exploitation",               cat:"post",    free:false },
+  { id:"pivot",        icon:"🔄", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
 
   // ── NETWORK & INFRA ──────────────────────────────────────────
-  { id:"network",   icon:"🌐", label:"Network Attacks",                    cat:"network", free:false, comingSoon:true },
-  { id:"tunnel",    icon:"🔗", label:"Port Redirection & Tunneling",       cat:"network", free:false, comingSoon:true },
-  { id:"password",  icon:"🔑", label:"Password Attacks",                   cat:"network", free:false },
-  { id:"auth",      icon:"🛂", label:"Authentication Attacks",             cat:"network", free:false, comingSoon:true },
-  { id:"wireless",  icon:"📶", label:"Wireless Network Attacks",           cat:"network", free:false, comingSoon:true },
+  { id:"network",      icon:"🌐", label:"Network Attacks",                 cat:"network", free:false, comingSoon:true },
+  { id:"tunnel",       icon:"🔗", label:"Port Redirection & Tunneling",    cat:"network", free:false },
+  { id:"password",     icon:"🔑", label:"Password Attacks",                cat:"network", free:false },
+  { id:"auth_attacks", icon:"🛂", label:"Authentication Attacks",          cat:"network", free:false },
+  { id:"wireless",     icon:"📶", label:"Wireless Network Attacks",        cat:"network", free:false, comingSoon:true },
 
   // ── ADVANCED ─────────────────────────────────────────────────
-  { id:"ad",        icon:"🏢", label:"Active Directory Attacks",           cat:"advanced",free:false, comingSoon:true },
-  { id:"av",        icon:"🥷", label:"Antivirus Evasion",                  cat:"advanced",free:false, comingSoon:true },
-  { id:"cloud",     icon:"☁️", label:"Cloud Security Testing",             cat:"advanced",free:false, comingSoon:true },
-  { id:"api",       icon:"🔌", label:"API Security Testing",               cat:"advanced",free:false, comingSoon:true },
+  { id:"ad",           icon:"🏢", label:"Active Directory Attacks",        cat:"advanced",free:false, comingSoon:true },
+  { id:"av_evasion",   icon:"🥷", label:"Antivirus / EDR Evasion",         cat:"advanced",free:false },
+  { id:"cloud",        icon:"☁️", label:"Cloud Security Testing",          cat:"advanced",free:false, comingSoon:true },
+  { id:"api",          icon:"🔌", label:"API Security Testing",            cat:"advanced",free:false, comingSoon:true },
+
+  // ── ADVERSARY EMULATION ──────────────────────────────────────
+  { id:"phishing",     icon:"🎣", label:"Phishing & Social Engineering",   cat:"advanced",free:false },
+  { id:"red_team",     icon:"🎭", label:"Adversary Emulation / Red Team",  cat:"advanced",free:false },
 
   // ── MOBILE ───────────────────────────────────────────────────
   { id:"mobile_static",  icon:"📱", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
@@ -18375,6 +18379,34 @@ function AuthAttacksModule({token}) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  PHISHING MODULE — stub for module_playbooks/26_phishing.md
+//  Backend live at /api/phishing/* (70 endpoints). UI wiring TBD.
+// ═══════════════════════════════════════════════════════════════
+function PhishingModule({token, apiUrl}) {
+  return (
+    <div style={{padding:24,color:"#f1f5f9"}}>
+      <h1 style={{fontSize:24,marginBottom:8}}>🎣 Phishing &amp; Social Engineering</h1>
+      <p style={{color:"#94a3b8",marginBottom:16}}>Module backend live — 70 endpoints across 7 sections (Email / Site Cloning / AiTM / Smishing-Vishing-Quishing / OAuth Consent / Deepfake / Campaign Mgmt). Per <code>module_playbooks/26_phishing.md</code>.</p>
+      <p style={{color:"#64748b",fontSize:13}}>Full UI panel (technique tiles, run-all stream, manual cards) lands in the next session. Backend endpoints: <code>POST /api/phishing/&lt;tool&gt;</code> &middot; orchestrator <code>POST /api/phishing/run_all</code>.</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RED TEAM MODULE — stub for module_playbooks/27_red_team.md
+//  Backend live at /api/red_team/* (88 endpoints). UI wiring TBD.
+// ═══════════════════════════════════════════════════════════════
+function RedTeamModule({token, apiUrl}) {
+  return (
+    <div style={{padding:24,color:"#f1f5f9"}}>
+      <h1 style={{fontSize:24,marginBottom:8}}>🎭 Adversary Emulation / Red Team</h1>
+      <p style={{color:"#94a3b8",marginBottom:16}}>Module backend live — 88 endpoints across 8 sections (Emulation Plans / Atomic RT / Caldera / C2 Frameworks / Initial Access Sim / Detection Eng / Purple Team / Threat Actor TTP). Per <code>module_playbooks/27_red_team.md</code>.</p>
+      <p style={{color:"#64748b",fontSize:13}}>Full UI panel lands in the next session. Backend endpoints: <code>POST /api/red_team/&lt;tool&gt;</code> &middot; orchestrator <code>POST /api/red_team/run_all</code>.</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  METASPLOIT MODULE
 // ═══════════════════════════════════════════════════════════════
 function MetasploitModule(props) {
@@ -19378,8 +19410,14 @@ export default function App() {
         <div style={{display: active==="password" ? "block" : "none"}}>
           <PasswordModule token={token}/>
         </div>
-        <div style={{display: active==="auth" ? "block" : "none"}}>
+        <div style={{display: active==="auth_attacks" ? "block" : "none"}}>
           <AuthAttacksModule token={token}/>
+        </div>
+        <div style={{display: active==="phishing" ? "block" : "none"}}>
+          <PhishingModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="red_team" ? "block" : "none"}}>
+          <RedTeamModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="network" ? "block" : "none"}}>
           <NetworkAttacksModule token={token}/>
@@ -19411,10 +19449,10 @@ export default function App() {
         <div style={{display: active==="tunnel"   ? "block" : "none"}}>
           <TunnelModule token={token} apiUrl={API}/>
         </div>
-        <div style={{display: active==="post"     ? "block" : "none"}}>
+        <div style={{display: active==="post_exploit" ? "block" : "none"}}>
           <PostExploitModule token={token} apiUrl={API}/>
         </div>
-        <div style={{display: active==="av"       ? "block" : "none"}}>
+        <div style={{display: active==="av_evasion"   ? "block" : "none"}}>
           <AVEvasionModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="se"       ? "block" : "none"}}>
