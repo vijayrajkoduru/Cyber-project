@@ -84,12 +84,17 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("weak_crypto_audit",             "/api/mobile_static/weak_crypto_audit"),
         ("hardcoded_url_and_ip_audit",    "/api/mobile_static/hardcoded_url_and_ip_audit"),
         ("firebase_config_leak_audit",    "/api/mobile_static/firebase_config_leak_audit"),
+        ("hardcoded_jwt_secret_audit",    "/api/mobile_static/hardcoded_jwt_secret_audit"),
+        ("push_messaging_secret_audit",   "/api/mobile_static/push_messaging_secret_audit"),
     ],
     "tier3_binary_hardening": [
         ("native_lib_hardening",          "/api/mobile_static/native_lib_hardening"),
         ("pe_hardening_audit",            "/api/mobile_static/pe_hardening_audit"),
         ("elf_symbol_audit",              "/api/mobile_static/elf_symbol_audit"),
         ("certificate_pinning_static",    "/api/mobile_static/certificate_pinning_static"),
+        ("proguard_obfuscation_audit",    "/api/mobile_static/proguard_obfuscation_audit"),
+        ("dex_protection_audit",          "/api/mobile_static/dex_protection_audit"),
+        ("resource_id_obfuscation_audit", "/api/mobile_static/resource_id_obfuscation_audit"),
     ],
     "tier4_behavioral_and_aggregate": [
         ("bytecode_malware_signatures",   "/api/mobile_static/bytecode_malware_signatures"),
@@ -107,11 +112,14 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("anti_root_detection_static",    "/api/mobile_static/anti_root_detection_static"),
         ("anti_debug_static_markers",     "/api/mobile_static/anti_debug_static_markers"),
         ("emulator_detection_static",     "/api/mobile_static/emulator_detection_static"),
+        ("strandhogg_audit",              "/api/mobile_static/strandhogg_audit"),
     ],
     "tier6_webview_security": [
         ("webview_config_audit",          "/api/mobile_static/webview_config_audit"),
         ("js_bridge_audit",               "/api/mobile_static/js_bridge_audit"),
         ("deeplink_verification_audit",   "/api/mobile_static/deeplink_verification_audit"),
+        ("tapjacking_audit",              "/api/mobile_static/tapjacking_audit"),
+        ("external_url_loading_audit",    "/api/mobile_static/external_url_loading_audit"),
     ],
     "tier7_privacy_iap": [
         ("permission_overprivilege_audit","/api/mobile_static/permission_overprivilege_audit"),
