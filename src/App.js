@@ -11557,7 +11557,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _wm = _cfg.watermark;
   const _conf = _cfg.confidentiality || "CONFIDENTIAL";
   const _ftr = _cfg.customFooterText || ("VulnusLab | "+_conf+"  ·  vulnuslab.com");
-  // MANUAL-EVIDENCE-COMBINED-V1: append manual pentest evidence if any saved
+  // MANUAL-EVIDENCE-COMBINED-V1.1: append manual pentest evidence if any saved
   try {
     const _mtRecon = (typeof MANUAL_TESTS_RECON !== "undefined" ? MANUAL_TESTS_RECON : []);
     const _mtCompleted = _mtRecon.map(t => {
@@ -11567,8 +11567,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }).filter(t => t._f && t._f.status && t._f.status !== "not_run");
 
     if (_mtCompleted.length > 0) {
-      const _asc = v => String(v == null ? "" : v).replace(/[\u{1F000}-\u{1FFFF}]/gu, "").replace(/[—–]/g, "-").replace(/→/g, "->").replace(/·/g, "-");
-      chk(30); y = sHead("Manual Pentest Evidence (Analyst-Attested)", y);
+      const _asc = v => String(v == null ? "" : v).replace(/[\u{1F000}-\u{1FFFF}]/gu, "").replace(/[✓✔]/g, "v ").replace(/[✘✖]/g, "X ").replace(/[⚠⚑]/g, "[!] ").replace(/[—–]/g, "-").replace(/→/g, "->").replace(/←/g, "<-").replace(/·/g, "-");
+      chk(30); y = sHead("Manual Pentest Evidence (Analyst-Attested)", y); y += 3;
       txt(_mtCompleted.length + " manual technique(s) executed by analyst, complementing the automated scan above.", margin, y, 8, GRAY); y += 5;
       txt("All evidence below is self-reported by the analyst running each test locally.", margin, y, 7.5, GRAY); y += 9;
 
