@@ -74,10 +74,13 @@ async def mobile_static_upload(file: UploadFile = File(...),
 # ─── Scanner registry ────────────────────────────────────────────
 MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_manifest_and_config": [
-        ("android_manifest_audit",        "/api/mobile_static/android_manifest_audit"),
-        ("ios_plist_audit",               "/api/mobile_static/ios_plist_audit"),
-        ("network_security_config_audit", "/api/mobile_static/network_security_config_audit"),
-        ("content_provider_audit",        "/api/mobile_static/content_provider_audit"),
+        ("android_manifest_audit",            "/api/mobile_static/android_manifest_audit"),
+        ("ios_plist_audit",                   "/api/mobile_static/ios_plist_audit"),
+        ("network_security_config_audit",     "/api/mobile_static/network_security_config_audit"),
+        ("content_provider_audit",            "/api/mobile_static/content_provider_audit"),
+        ("broadcast_receiver_exposed_audit",  "/api/mobile_static/broadcast_receiver_exposed_audit"),
+        ("device_admin_perm_audit",           "/api/mobile_static/device_admin_perm_audit"),
+        ("install_unknown_apps_audit",        "/api/mobile_static/install_unknown_apps_audit"),
     ],
     "tier2_secret_and_crypto": [
         ("secret_extraction_audit",       "/api/mobile_static/secret_extraction_audit"),
@@ -86,6 +89,7 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("firebase_config_leak_audit",    "/api/mobile_static/firebase_config_leak_audit"),
         ("hardcoded_jwt_secret_audit",    "/api/mobile_static/hardcoded_jwt_secret_audit"),
         ("push_messaging_secret_audit",   "/api/mobile_static/push_messaging_secret_audit"),
+        ("auth_token_storage_audit",      "/api/mobile_static/auth_token_storage_audit"),
     ],
     "tier3_binary_hardening": [
         ("native_lib_hardening",          "/api/mobile_static/native_lib_hardening"),
@@ -106,6 +110,7 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("ios_privacy_manifest_audit",    "/api/mobile_static/ios_privacy_manifest_audit"),
         ("ai_ml_model_detection",         "/api/mobile_static/ai_ml_model_detection"),
         ("maven_dep_audit",               "/api/mobile_static/maven_dep_audit"),
+        ("prompt_injection_static_check", "/api/mobile_static/prompt_injection_static_check"),
     ],
     # ── VL-FORGE 2026-05-30: +6 new MASVS-aligned static scanners ──
     "tier5_resilience_static": [
@@ -113,6 +118,7 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("anti_debug_static_markers",     "/api/mobile_static/anti_debug_static_markers"),
         ("emulator_detection_static",     "/api/mobile_static/emulator_detection_static"),
         ("strandhogg_audit",              "/api/mobile_static/strandhogg_audit"),
+        ("accessibility_service_audit",   "/api/mobile_static/accessibility_service_audit"),
     ],
     "tier6_webview_security": [
         ("webview_config_audit",          "/api/mobile_static/webview_config_audit"),
@@ -126,6 +132,8 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("tracker_sdk_audit",             "/api/mobile_static/tracker_sdk_audit"),
         ("iap_billing_audit",             "/api/mobile_static/iap_billing_audit"),
         ("biometric_auth_audit",          "/api/mobile_static/biometric_auth_audit"),
+        ("ios_purpose_string_audit",      "/api/mobile_static/ios_purpose_string_audit"),
+        ("advertising_id_audit",          "/api/mobile_static/advertising_id_audit"),
     ],
 }
 
