@@ -18617,10 +18617,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [sevFilter, setSevFilter] = useState(null);
   const [expanded,  setExpanded]  = useState(null);
   const [searchTerm,setSearchTerm]= useState("");
-  const [activeTab, setActiveTab] = useState("auto");  // "auto" | "manual"
-  const [manualState, setManualState] = useState({}); // {id: {evidence, status, severity}}
+  const [activeTab, setActiveTab] = useState("auto");
+  const [manualState, setManualState] = useState({});
+  const [history, setHistory] = useState([]);          // [{ts, target, results, sevCounts}, ...]
+  const [showHistory, setShowHistory] = useState(false);
 
-  // Load manual attestations from localStorage on mount
+  // Load manual attestations + scan history from localStorage on mount
   useEffect(() => {
     const s = {};
     (MANUAL_TESTS_AUTO[moduleKey] || []).forEach(t => {
@@ -18630,7 +18632,49 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       } catch(_){}
     });
     setManualState(s);
+    try {
+      const raw = localStorage.getItem(`vl_scans:${moduleKey}`);
+      if (raw) setHistory(JSON.parse(raw) || []);
+    } catch(_){}
   }, [moduleKey]);
+
+  const saveScanToHistory = (scanResults) => {
+    const sevC = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,INFO:0,POSITIVE:0};
+    Object.values(scanResults).forEach(r => {
+      if (r.status === "done") sevC[(r.severity||"INFO").toUpperCase()] = (sevC[(r.severity||"INFO").toUpperCase()]||0) + 1;
+    });
+    const entry = {
+      ts: new Date().toISOString(),
+      target,
+      results: scanResults,
+      sevCounts: sevC,
+      executed: Object.values(scanResults).filter(r => r.status === "done").length,
+    };
+    const next = [entry, ...history].slice(0, 5);    // keep last 5
+    try {
+      localStorage.setItem(`vl_scans:${moduleKey}`, JSON.stringify(next));
+      setHistory(next);
+    } catch(e) {
+      // localStorage might be full — drop oldest first
+      try { localStorage.setItem(`vl_scans:${moduleKey}`, JSON.stringify(next.slice(0,2))); setHistory(next.slice(0,2)); } catch(_) {}
+    }
+  };
+
+  const loadFromHistory = (entry) => {
+    setTarget(entry.target || "");
+    setResults(entry.results || {});
+    setProgress({done: entry.executed || 0, total: totalTools});
+    setShowHistory(false);
+    setSevFilter(null);
+    setExpanded(null);
+  };
+
+  const clearHistory = () => {
+    if (!window.confirm("Clear all saved scans for this module?")) return;
+    localStorage.removeItem(`vl_scans:${moduleKey}`);
+    setHistory([]);
+    setShowHistory(false);
+  };
 
   const saveManual = (id, data) => {
     const next = {...manualState[id], ...data, updated_at: new Date().toISOString()};
@@ -18702,6 +18746,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       console.error("run_all failed", e);
     } finally {
       setRunning(false);
+      // Save scan to history (use a ref-style read of current results)
+      setResults(currentResults => {
+        if (Object.values(currentResults).some(r => r.status === "done")) {
+          setTimeout(() => saveScanToHistory(currentResults), 100);
+        }
+        return currentResults;
+      });
     }
   };
 
@@ -19173,6 +19224,61 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           📄 PDF
         </button>
       </div>
+
+      {/* Recent Scans dropdown */}
+      {history.length > 0 && (
+        <div style={{marginBottom:12, position:"relative"}}>
+          <button onClick={() => setShowHistory(!showHistory)}
+            style={{background:"#1e293b", border:"1px solid #334155",
+                    borderRadius:6, padding:"6px 12px", color:"#cbd5e1",
+                    fontSize:11, cursor:"pointer", display:"flex",
+                    alignItems:"center", gap:8}}>
+            <span>🕒</span>
+            <span>Recent scans ({history.length})</span>
+            <span style={{color:"#64748b"}}>{showHistory ? "▼" : "▶"}</span>
+          </button>
+          {showHistory && (
+            <div style={{position:"absolute", top:"100%", left:0, marginTop:4,
+                          background:"#0f172a", border:"1px solid #334155",
+                          borderRadius:6, minWidth:380, zIndex:100,
+                          boxShadow:"0 4px 12px rgba(0,0,0,0.4)"}}>
+              {history.map((entry, i) => {
+                const date = new Date(entry.ts);
+                const c = entry.sevCounts || {};
+                return (
+                  <div key={i} onClick={() => loadFromHistory(entry)}
+                       style={{padding:"10px 12px", cursor:"pointer",
+                                borderBottom: i < history.length-1 ? "1px solid #1e293b" : "none"}}
+                       onMouseEnter={e => e.currentTarget.style.background = "#1e293b"}
+                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <div style={{display:"flex", justifyContent:"space-between",
+                                  alignItems:"center", marginBottom:4}}>
+                      <span style={{color:"#f1f5f9", fontSize:12, fontWeight:600}}>
+                        {entry.target || "(no target)"}
+                      </span>
+                      <span style={{color:"#64748b", fontSize:10}}>
+                        {date.toLocaleString()}
+                      </span>
+                    </div>
+                    <div style={{display:"flex", gap:8, fontSize:10}}>
+                      <span style={{color:"#64748b"}}>{entry.executed}/{totalTools} executed</span>
+                      {c.CRITICAL > 0 && <span style={{color:sevColor("CRITICAL"), fontWeight:600}}>● {c.CRITICAL} CRITICAL</span>}
+                      {c.HIGH > 0     && <span style={{color:sevColor("HIGH"),     fontWeight:600}}>● {c.HIGH} HIGH</span>}
+                      {c.MEDIUM > 0   && <span style={{color:sevColor("MEDIUM"),   fontWeight:600}}>● {c.MEDIUM} MEDIUM</span>}
+                      {c.LOW > 0      && <span style={{color:sevColor("LOW")}}>{c.LOW} LOW</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              <div onClick={clearHistory}
+                   style={{padding:"6px 12px", cursor:"pointer", borderTop:"1px solid #1e293b",
+                            color:"#ef4444", fontSize:10, textAlign:"center"}}>
+                Clear history
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Auto / Manual tabs */}
       {(MANUAL_TESTS_AUTO[moduleKey] || []).length > 0 && (
