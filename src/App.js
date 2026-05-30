@@ -6863,7 +6863,7 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
 
 
 // ── WIRELESS ATTACKS ─────────────────────────────────────────
-function WirelessModule({token, apiUrl}) {
+function WirelessModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"interfaces",label:"List Interfaces",  icon:"📡",ep:"/api/wireless/interfaces",
      desc:"Show wireless network interfaces (iwconfig)",
@@ -6901,7 +6901,7 @@ function WirelessModule({token, apiUrl}) {
 }
 
 // ── ACTIVE DIRECTORY ─────────────────────────────────────────
-function ActiveDirectoryModule({token, apiUrl}) {
+function ActiveDirectoryModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"enum",       label:"AD Enumeration",    icon:"🗂", ep:"/api/ad/enum",
      desc:"enum4linux + LDAP — users, groups, shares, policies",
@@ -6946,7 +6946,7 @@ function ActiveDirectoryModule({token, apiUrl}) {
 }
 
 // ── PRIVILEGE ESCALATION ─────────────────────────────────────
-function PrivescModule({token, apiUrl}) {
+function PrivescModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"linpeas",      label:"LinPEAS",            icon:"🦅",ep:"/api/privesc/linpeas",
      desc:"Full automated Linux privilege escalation scan",
@@ -6983,7 +6983,7 @@ function PrivescModule({token, apiUrl}) {
 }
 
 // ── PIVOTING & TUNNELING ─────────────────────────────────────
-function TunnelModule({token, apiUrl}) {
+function TunnelModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"chisel", label:"Chisel Tunnel", icon:"🔧", ep:"/api/tunnel/chisel",
      desc:"SOCKS5/TCP tunnel — server + client commands",
@@ -7031,7 +7031,7 @@ function TunnelModule({token, apiUrl}) {
 }
 
 // ── POST EXPLOITATION ─────────────────────────────────────────
-function PostExploitModule({token, apiUrl}) {
+function PostExploitModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"hashdump", label:"Hash Dump", icon:"🔓", ep:"/api/post/hashdump",
      desc:"Dump /etc/shadow — extract password hashes",
@@ -7073,7 +7073,7 @@ function PostExploitModule({token, apiUrl}) {
 }
 
 // ── ANTIVIRUS EVASION ─────────────────────────────────────────
-function AVEvasionModule({token, apiUrl}) {
+function AVEvasionModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"check", label:"Detect AV/EDR", icon:"🛡", ep:"/api/av/check",
      desc:"Identify running antivirus and EDR on target",
@@ -7845,7 +7845,7 @@ function OsintModule({token, apiUrl}) {
 }
 
 // ── CLIENT-SIDE ATTACKS ───────────────────────────────────────
-function ClientSideModule({token, apiUrl}) {
+function ClientSideModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"beef", label:"BeEF Hook", icon:"🪝", ep:"/api/client/beef",
      desc:"Start BeEF XSS framework + JavaScript hook snippet",
@@ -8732,7 +8732,7 @@ function MobileNetworkModule({token, apiUrl}) {
 
 
 // ── API SECURITY ──────────────────────────────────────────────
-function ApiSecModule({token, apiUrl}) {
+function ApiSecModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"swagger", label:"OpenAPI Discovery", icon:"📋", ep:"/api/apisec/swagger",
      desc:"Fetch /swagger.json, /openapi.json, /api-docs",
@@ -8772,7 +8772,7 @@ function ApiSecModule({token, apiUrl}) {
 
 
 // ── PIVOTING & LATERAL MOVEMENT ───────────────────────────────
-function PivotModule({token, apiUrl}) {
+function PivotModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"ssh_local", label:"SSH Local Port Forward", icon:"🔀", ep:"/api/pivot/ssh_local",
      desc:"Forward remote port to localhost via SSH tunnel",
@@ -8814,7 +8814,7 @@ function PivotModule({token, apiUrl}) {
 }
 
 // ── CLOUD SECURITY ─────────────────────────────────────────────
-function CloudModule({token, apiUrl}) {
+function CloudModule_legacy({token, apiUrl}) {
   const attacks = [
     {id:"s3_enum", label:"S3 Bucket Enumeration", icon:"🪣", ep:"/api/cloud/s3_enum",
      desc:"Find exposed S3 buckets — list, read, write permissions",
@@ -16424,7 +16424,7 @@ function ShellPanel({
    /api/exploit/* endpoints + catalog. Adopting this pattern in every
    module gives us a single source of truth for the form+log+shell UI.
 */
-function ExploitationModule({token, apiUrl}) {
+function ExploitationModule_legacy({token, apiUrl}) {
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [_pendingResults, setPendingResults] = useState(null);
   return (
@@ -16821,7 +16821,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
   );
 }
 
-function BufferOverflowModule({token}) {
+function BufferOverflowModule_legacy({token}) {
   const apiUrl = getApiUrl();
   const [phase,      setPhase]      = useState(1);
   const [log,        setLog]        = useState([]);
@@ -17904,7 +17904,7 @@ function PasswordModule(props) {
 // ═══════════════════════════════════════════════════════════════
 //  NETWORK ATTACKS MODULE
 // ═══════════════════════════════════════════════════════════════
-function NetworkAttacksModule({token}) {
+function NetworkAttacksModule_legacy({token}) {
   const API = getApiUrl();
   const [target,    setTarget]    = useState("");
   const [gateway,   setGateway]   = useState("");
@@ -18034,7 +18034,7 @@ function NetworkAttacksModule({token}) {
 // ═══════════════════════════════════════════════════════════════
 //  SYSTEM EXPLOITATION MODULE
 // ═══════════════════════════════════════════════════════════════
-function SystemExploitModule({token}) {
+function SystemExploitModule_legacy({token}) {
   const API = getApiUrl();
   const [target, setTarget] = useState("");
   const [lhost,  setLhost]  = useState("");
@@ -18264,7 +18264,7 @@ function CloudAttacksModule({token}) {
 // ═══════════════════════════════════════════════════════════════
 //  AUTH ATTACKS MODULE
 // ═══════════════════════════════════════════════════════════════
-function AuthAttacksModule({token}) {
+function AuthAttacksModule_legacy({token}) {
   const API = getApiUrl();
   const [target,   setTarget]   = useState("");
   const [username, setUsername] = useState("admin");
@@ -18598,7 +18598,7 @@ function MetasploitAutoModule(p)   { return _autoMod(p, {moduleKey:"metasploit",
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
 //  Backend live at /api/phishing/* (70 endpoints). UI wiring TBD.
 // ═══════════════════════════════════════════════════════════════
-function PhishingModule({token, apiUrl}) {
+function PhishingModule_legacy({token, apiUrl}) {
   return (
     <div style={{padding:24,color:"#f1f5f9"}}>
       <h1 style={{fontSize:24,marginBottom:8}}>🎣 Phishing &amp; Social Engineering</h1>
@@ -18612,7 +18612,7 @@ function PhishingModule({token, apiUrl}) {
 //  RED TEAM MODULE — stub for module_playbooks/27_red_team.md
 //  Backend live at /api/red_team/* (88 endpoints). UI wiring TBD.
 // ═══════════════════════════════════════════════════════════════
-function RedTeamModule({token, apiUrl}) {
+function RedTeamModule_legacy({token, apiUrl}) {
   return (
     <div style={{padding:24,color:"#f1f5f9"}}>
       <h1 style={{fontSize:24,marginBottom:8}}>🎭 Adversary Emulation / Red Team</h1>
