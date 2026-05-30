@@ -18394,11 +18394,14 @@ function AuthAttacksModule_legacy({token}) {
 //  Pattern mirrors live Recon scan tile UI (feedback_scan_tile_pattern_confirmed).
 // ═══════════════════════════════════════════════════════════════
 function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
-  const [target,   setTarget]   = useState("");
-  const [tiers,    setTiers]    = useState([]);
-  const [running,  setRunning]  = useState(false);
-  const [results,  setResults]  = useState({});
-  const [progress, setProgress] = useState({done:0, total:0});
+  const [target,    setTarget]    = useState("");
+  const [tiers,     setTiers]     = useState([]);
+  const [running,   setRunning]   = useState(false);
+  const [results,   setResults]   = useState({});
+  const [progress,  setProgress]  = useState({done:0, total:0});
+  const [sevFilter, setSevFilter] = useState(null);    // null | "CRITICAL" | "HIGH" | ...
+  const [expanded,  setExpanded]  = useState(null);    // currently-expanded tool slug
+  const [searchTerm,setSearchTerm]= useState("");
 
   useEffect(() => {
     fetch(`${apiUrl}/api/${moduleKey}/run_all/tiers`)
@@ -18645,44 +18648,149 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </button>
       </div>
 
-      {tiers.map(tier => (
-        <div key={tier.id} style={{marginBottom:18}}>
-          <div style={{fontSize:11, fontWeight:700, color:"#94a3b8",
-                       textTransform:"uppercase", letterSpacing:1, marginBottom:6}}>
-            {tier.id} <span style={{color:"#475569"}}>· {tier.count}</span>
-          </div>
-          <div style={{display:"grid",
-                       gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))",
-                       gap:6}}>
-            {(tier.tools || []).map(tool => {
-              const r = results[tool] || {};
-              return (
-                <div key={tool} style={{display:"flex", alignItems:"center", gap:8,
-                                         padding:"6px 10px", background:"#0f172a",
-                                         border:"1px solid #1e293b", borderRadius:4,
-                                         fontSize:11}}>
-                  <span style={{width:8, height:8, borderRadius:"50%",
-                                background:dot(r), flexShrink:0}}></span>
-                  <span style={{flex:1, fontFamily:"monospace", color:"#cbd5e1",
-                                overflow:"hidden", textOverflow:"ellipsis",
-                                whiteSpace:"nowrap"}}>{tool}</span>
-                  {r.severity && r.severity !== "INFO" && r.severity !== "POSITIVE" && (
-                    <span style={{padding:"1px 6px", borderRadius:3, fontSize:9,
-                                  fontWeight:700, background:sevColor(r.severity),
-                                  color:"#fff"}}>{r.severity}</span>
-                  )}
-                  {typeof r.count === "number" && (
-                    <span style={{color:"#64748b", fontSize:10}}>{r.count}</span>
-                  )}
-                  {r.elapsed && (
-                    <span style={{color:"#475569", fontSize:10}}>{(r.elapsed/1000).toFixed(1)}s</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+      {/* Severity filter chips + tool-name search */}
+      {tiers.length > 0 && completedCount > 0 && (
+        <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:12,
+                     flexWrap:"wrap"}}>
+          {["CRITICAL","HIGH","MEDIUM","LOW","INFO","POSITIVE"].map(s => {
+            const n = Object.values(results).filter(r =>
+              r.status === "done" && (r.severity||"INFO").toUpperCase() === s
+            ).length;
+            if (n === 0) return null;
+            const active = sevFilter === s;
+            return (
+              <button key={s} onClick={() => setSevFilter(active ? null : s)}
+                style={{background: active ? sevColor(s) : "#1e293b",
+                        border: `1px solid ${active ? sevColor(s) : "#334155"}`,
+                        borderRadius:4, padding:"4px 10px", color: active ? "#fff" : "#cbd5e1",
+                        fontSize:10, fontWeight:600, cursor:"pointer",
+                        textTransform:"uppercase", letterSpacing:0.5}}>
+                {s} ({n})
+              </button>
+            );
+          })}
+          {sevFilter && (
+            <button onClick={() => setSevFilter(null)}
+              style={{background:"transparent", border:"1px solid #334155",
+                      borderRadius:4, padding:"4px 8px", color:"#94a3b8",
+                      fontSize:10, cursor:"pointer"}}>
+              clear ×
+            </button>
+          )}
+          <input type="text" placeholder="search tool name..." value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={{marginLeft:"auto", background:"#0f172a", border:"1px solid #334155",
+                    borderRadius:4, padding:"4px 8px", color:"#cbd5e1", fontSize:11,
+                    width:180, outline:"none"}}/>
         </div>
-      ))}
+      )}
+
+      {tiers.map(tier => {
+        const filteredTools = (tier.tools || []).filter(tool => {
+          const r = results[tool] || {};
+          if (sevFilter && r.status === "done") {
+            if ((r.severity||"INFO").toUpperCase() !== sevFilter) return false;
+          }
+          if (sevFilter && r.status !== "done") return false;
+          if (searchTerm && !tool.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+          return true;
+        });
+        if (filteredTools.length === 0 && (sevFilter || searchTerm)) return null;
+        return (
+          <div key={tier.id} style={{marginBottom:18}}>
+            <div style={{fontSize:11, fontWeight:700, color:"#94a3b8",
+                         textTransform:"uppercase", letterSpacing:1, marginBottom:6}}>
+              {tier.id} <span style={{color:"#475569"}}>· {filteredTools.length}/{tier.count}</span>
+            </div>
+            <div style={{display:"grid",
+                         gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))",
+                         gap:6}}>
+              {filteredTools.map(tool => {
+                const r = results[tool] || {};
+                const isExp = expanded === tool;
+                const hasData = r.status === "done" && r.data?.findings?.length > 0;
+                return (
+                  <div key={tool}
+                       style={{gridColumn: isExp ? "1 / -1" : "auto"}}>
+                    <div onClick={() => hasData && setExpanded(isExp ? null : tool)}
+                         style={{display:"flex", alignItems:"center", gap:8,
+                                  padding:"6px 10px", background:"#0f172a",
+                                  border:`1px solid ${isExp ? sevColor(r.severity) : "#1e293b"}`,
+                                  borderRadius: isExp ? "4px 4px 0 0" : 4,
+                                  fontSize:11,
+                                  cursor: hasData ? "pointer" : "default"}}>
+                      <span style={{width:8, height:8, borderRadius:"50%",
+                                    background:dot(r), flexShrink:0}}></span>
+                      <span style={{flex:1, fontFamily:"monospace", color:"#cbd5e1",
+                                    overflow:"hidden", textOverflow:"ellipsis",
+                                    whiteSpace:"nowrap"}}>{tool}</span>
+                      {r.severity && r.severity !== "INFO" && r.severity !== "POSITIVE" && (
+                        <span style={{padding:"1px 6px", borderRadius:3, fontSize:9,
+                                      fontWeight:700, background:sevColor(r.severity),
+                                      color:"#fff"}}>{r.severity}</span>
+                      )}
+                      {typeof r.count === "number" && (
+                        <span style={{color:"#64748b", fontSize:10}}>{r.count}</span>
+                      )}
+                      {r.elapsed && (
+                        <span style={{color:"#475569", fontSize:10}}>{(r.elapsed/1000).toFixed(1)}s</span>
+                      )}
+                      {hasData && (
+                        <span style={{color:"#64748b", fontSize:10, marginLeft:4}}>
+                          {isExp ? "▼" : "▶"}
+                        </span>
+                      )}
+                    </div>
+                    {isExp && hasData && (
+                      <div style={{background:"#020617",
+                                    border:`1px solid ${sevColor(r.severity)}`,
+                                    borderTop:"none",
+                                    borderRadius:"0 0 4px 4px",
+                                    padding:"10px 12px"}}>
+                        {(r.data?.findings || []).map((f, i) => (
+                          <div key={i} style={{marginBottom:8, paddingBottom:8,
+                                                borderBottom: i < r.data.findings.length-1 ? "1px solid #1e293b" : "none"}}>
+                            <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
+                              <span style={{padding:"1px 6px", borderRadius:3, fontSize:9,
+                                            fontWeight:700, background:sevColor(f.severity || r.severity),
+                                            color:"#fff"}}>{f.severity || r.severity}</span>
+                              {f.cvss && <span style={{color:"#94a3b8", fontSize:10}}>CVSS {f.cvss}</span>}
+                              {f.cwe && f.cwe !== "N/A" && <span style={{color:"#94a3b8", fontSize:10}}>{f.cwe}</span>}
+                              {f.confidence && <span style={{color:"#22c55e", fontSize:9, fontWeight:600}}>{f.confidence}</span>}
+                            </div>
+                            {f.detail && (
+                              <div style={{color:"#f1f5f9", fontSize:12, marginBottom:6, lineHeight:1.4}}>
+                                {f.detail}
+                              </div>
+                            )}
+                            {f.evidence_marker && (
+                              <div style={{color:"#94a3b8", fontSize:11, marginBottom:6,
+                                            fontFamily:"monospace", background:"#0f172a",
+                                            padding:"4px 8px", borderRadius:3, wordBreak:"break-word"}}>
+                                🔍 {f.evidence_marker}
+                              </div>
+                            )}
+                            {f.remediation && (
+                              <div style={{color:"#86efac", fontSize:11, lineHeight:1.4}}>
+                                💡 {f.remediation}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {r.data?.tests_summary && (
+                          <div style={{color:"#475569", fontSize:10, marginTop:4, fontStyle:"italic"}}>
+                            {r.data.tests_summary}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
 
       {!tiers.length && (
         <p style={{color:"#64748b", fontSize:13}}>
