@@ -18760,11 +18760,35 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     setManualState(p => ({...p, [id]: next}));
   };
 
+  // tiersStatus: "loading" | "ready" | "failed"
+  const [tiersStatus, setTiersStatus] = useState("loading");
   useEffect(() => {
-    fetch(`${apiUrl}/api/${moduleKey}/run_all/tiers`)
-      .then(r => r.ok ? r.json() : {tiers:[], total_tools:0})
-      .then(d => setTiers(d.tiers || []))
-      .catch(() => setTiers([]));
+    let cancelled = false;
+    setTiersStatus("loading");
+    const fetchTiers = async () => {
+      const delays = [0, 400, 1200, 2500];  // 4 attempts total
+      for (let i = 0; i < delays.length; i++) {
+        if (cancelled) return;
+        if (delays[i]) await new Promise(res => setTimeout(res, delays[i]));
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 8000);
+          const r = await fetch(`${apiUrl}/api/${moduleKey}/run_all/tiers`, {signal: ctrl.signal});
+          clearTimeout(timer);
+          if (!r.ok) continue;
+          const d = await r.json();
+          if (cancelled) return;
+          if (Array.isArray(d.tiers) && d.tiers.length > 0) {
+            setTiers(d.tiers);
+            setTiersStatus("ready");
+            return;
+          }
+        } catch (_) { /* retry */ }
+      }
+      if (!cancelled) { setTiers([]); setTiersStatus("failed"); }
+    };
+    fetchTiers();
+    return () => { cancelled = true; };
   }, [moduleKey, apiUrl]);
 
   const totalTools = tiers.reduce((s, t) => s + (t.count || 0), 0);
@@ -19609,11 +19633,45 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         });
       })()}
 
-      {activeTab === "auto" && !tiers.length && (
-        <p style={{color:"#64748b", fontSize:13}}>
-          Loading technique catalogue from <code>GET /api/{moduleKey}/run_all/tiers</code>...
-          If the panel stays empty, the backend may not have <code>tools/{moduleKey}/</code> registered.
-        </p>
+      {activeTab === "auto" && !tiers.length && tiersStatus === "loading" && (
+        <div style={{padding:"40px 20px", textAlign:"center"}}>
+          <div style={{display:"inline-block", width:32, height:32, border:"3px solid #1e293b",
+                        borderTop:`3px solid ${color}`, borderRadius:"50%",
+                        animation:"spin 0.8s linear infinite", marginBottom:14}}/>
+          <p style={{color:"#94a3b8", fontSize:13, margin:0}}>
+            Loading technique catalogue<span className="dots">...</span>
+          </p>
+          <style>{`@keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }`}</style>
+        </div>
+      )}
+      {activeTab === "auto" && !tiers.length && tiersStatus === "failed" && (
+        <div style={{padding:"30px 20px", background:"#1e1b2e", border:"1px solid #5b21b6",
+                      borderRadius:6, marginTop:16}}>
+          <div style={{color:"#fca5a5", fontSize:14, fontWeight:600, marginBottom:8}}>
+            Could not load technique catalogue
+          </div>
+          <div style={{color:"#94a3b8", fontSize:12, marginBottom:14, lineHeight:1.5}}>
+            The backend at <code>GET /api/{moduleKey}/run_all/tiers</code> did not respond after
+            4 retries. Possible causes: backend cold-starting, network blip, or
+            <code> tools/{moduleKey}/</code> not registered. The most common fix is
+            clicking Retry — it usually works the second time.
+          </div>
+          <button onClick={() => {
+            setTiersStatus("loading");
+            fetch(`${apiUrl}/api/${moduleKey}/run_all/tiers`)
+              .then(r => r.ok ? r.json() : Promise.reject())
+              .then(d => {
+                if (Array.isArray(d.tiers) && d.tiers.length) {
+                  setTiers(d.tiers); setTiersStatus("ready");
+                } else { setTiersStatus("failed"); }
+              })
+              .catch(() => setTiersStatus("failed"));
+          }} style={{padding:"7px 16px", background:color, color:"#fff",
+                      border:"none", borderRadius:5, fontSize:12, fontWeight:600,
+                      cursor:"pointer"}}>
+            ⟲ Retry
+          </button>
+        </div>
       )}
 
       {/* Manual Tests tab */}
