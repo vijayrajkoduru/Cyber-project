@@ -18393,15 +18393,250 @@ function AuthAttacksModule_legacy({token}) {
 //  Used by 26 modules forged this session (commits 3bf9a18d + 057d053a).
 //  Pattern mirrors live Recon scan tile UI (feedback_scan_tile_pattern_confirmed).
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  Manual technique catalogue per module (extracted from playbook 👤 entries)
+//  3 cards × 26 modules = 78 distinct analyst tests
+// ═══════════════════════════════════════════════════════════════
+const MANUAL_TESTS_AUTO = {
+  exploit: [
+    {id:"exp_cve_triage", ref:"§1 #11", title:"Manual CVE → exploit triage", difficulty:"medium",
+     what_to_look_for:"For each CVE from auto scan: check ExploitDB + GitHub PoCs + CISA KEV; build proof-of-concept payload; verify against target."},
+    {id:"exp_web_chain", ref:"§2 #13", title:"Manual web exploitation chain", difficulty:"hard",
+     what_to_look_for:"Combine framework signature (Spring/Struts) + Actuator exposure + auth bypass into a chained RCE path. Document each link with HTTP request/response."},
+    {id:"exp_zeroday", ref:"§7 #9", title:"Manual 0-day triage", difficulty:"hard",
+     what_to_look_for:"Cross-reference recent CISA KEV alerts + EPSS high-score CVEs against your asset inventory. Prioritize patches by inthewild.io confirmation."},
+  ],
+  bof: [
+    {id:"bof_badchars", ref:"§3 #6", title:"Manual bad-char identification", difficulty:"medium",
+     what_to_look_for:"Generate shellcode with msfvenom; identify bad chars by inserting full \\x00-\\xff range; remove chars that truncate shellcode in target."},
+    {id:"bof_rop", ref:"§4 #4", title:"Manual ROP chain construction", difficulty:"hard",
+     what_to_look_for:"Use ropper/ROPgadget to find ret2libc gadgets; build ROP chain bypassing DEP+ASLR; verify in pwntools harness."},
+    {id:"bof_modern_bypass", ref:"§8 #3", title:"Manual ⭐ CET/PAuth bypass research", difficulty:"hard",
+     what_to_look_for:"Test Intel CET shadow stack bypass via signed branches; ARM Pointer Authentication (PAC) bypass via stripping/forging. Document mitigation efficacy."},
+  ],
+  password: [
+    {id:"pwd_online_brute", ref:"§1 #14", title:"Manual online brute design", difficulty:"medium",
+     what_to_look_for:"Build target-specific wordlist via CeWL + cupp; choose protocol (SSH/HTTP-form/SMB); set throttle to avoid lockout."},
+    {id:"pwd_hash_crack", ref:"§2 #16", title:"Manual hashcat crack workflow", difficulty:"hard",
+     what_to_look_for:"Identify hash type (hashid); pick attack mode (mask/dict/rule); benchmark vs cloud GPU cost; document recovery time."},
+    {id:"pwd_passkey", ref:"§8 #6", title:"Manual ⭐ Passkey downgrade test", difficulty:"medium",
+     what_to_look_for:"Force WebAuthn flow to fallback to password+TOTP; document conditions enabling downgrade; test cross-device sync security."},
+  ],
+  client_side: [
+    {id:"cs_macro_evasion", ref:"§2 #12", title:"Manual Office macro evasion", difficulty:"medium",
+     what_to_look_for:"Craft VBA macro with AMSI bypass + sandbox detection (recent files, user count, sleep evasion). Test against MDE."},
+    {id:"cs_browser_zeroday", ref:"§5 #1", title:"Manual Chrome 0-day exploitation", difficulty:"hard",
+     what_to_look_for:"Research recently disclosed Chrome V8 CVEs; build heap-grooming + RCE chain; test in sandboxed environment."},
+    {id:"cs_modern_ext", ref:"§7 #10", title:"Manual ⭐ ManifestV3 ext abuse", difficulty:"medium",
+     what_to_look_for:"Build malicious Chrome extension with declarativeNetRequest abuse + offscreen API; test installation via update vector."},
+  ],
+  system_exploit: [
+    {id:"sys_linux_priv", ref:"§1 #14", title:"Manual Linux kernel exploit", difficulty:"hard",
+     what_to_look_for:"Identify kernel version + distro; check Dirty Pipe / Dirty COW / PwnKit applicability; compile + run + verify root."},
+    {id:"sys_win_priv", ref:"§2 #14", title:"Manual Windows token impersonation", difficulty:"medium",
+     what_to_look_for:"Check for SeImpersonate privilege via whoami /priv; use JuicyPotato/RoguePotato to impersonate SYSTEM token."},
+    {id:"sys_container_escape", ref:"§8 #8", title:"Manual ⭐ Container escape via Leaky Vessels", difficulty:"hard",
+     what_to_look_for:"Test CVE-2024-21626 runc escape; mount host filesystem via WORKDIR manipulation; document escape primitive."},
+  ],
+  metasploit: [
+    {id:"msf_handler", ref:"§2 #12", title:"Manual exploit module selection", difficulty:"medium",
+     what_to_look_for:"From recon output, pick exploit module by CVE + target version match; set RHOST/RPORT/LHOST/LPORT; tune options before run."},
+    {id:"msf_payload", ref:"§3 #10", title:"Manual payload-encoder pairing", difficulty:"medium",
+     what_to_look_for:"Match payload (meterpreter/reverse_https) to AV posture; layer encoders (shikata x5 + xor); test bypass against Defender."},
+    {id:"msf_modern_evasion", ref:"§8 #6", title:"Manual ⭐ msfvenom + Sliver chain", difficulty:"hard",
+     what_to_look_for:"Generate msfvenom shellcode → wrap in Donut → load via Sliver agent. Document AV/EDR bypass effectiveness."},
+  ],
+  privesc: [
+    {id:"pe_linux_review", ref:"§1 #18", title:"Manual Linux privesc review", difficulty:"medium",
+     what_to_look_for:"Run LinPEAS; cross-check sudo -l + SUID binaries against GTFOBins; identify writable services/cron; choose escalation vector."},
+    {id:"pe_windows_review", ref:"§2 #18", title:"Manual Windows privesc review", difficulty:"medium",
+     what_to_look_for:"Run WinPEAS + Seatbelt; check AlwaysInstallElevated + unquoted services + writable scheduled tasks; identify path to SYSTEM."},
+    {id:"pe_cloud_chain", ref:"§7 #6", title:"Manual ⭐ Cloud privesc chain", difficulty:"hard",
+     what_to_look_for:"From pod/host, hit IMDS for IAM credentials; map IAM privilege graph (cloudfox); identify cross-account/cross-service escalation."},
+  ],
+  post_exploit: [
+    {id:"pe_creds", ref:"§2 #12", title:"Manual credential dump chain", difficulty:"medium",
+     what_to_look_for:"Dump LSASS (mimikatz/NanoDump) → extract NTLM hashes + Kerberos tickets → pass-the-hash → DCSync."},
+    {id:"pe_loot", ref:"§3 #11", title:"Manual loot triage", difficulty:"medium",
+     what_to_look_for:"trufflehog + gitleaks on local FS; identify cloud creds (.aws, .kube, .docker); document findings + IOCs."},
+    {id:"pe_cloud_lateral", ref:"§7 #9", title:"Manual ⭐ Cross-cloud OIDC chain", difficulty:"hard",
+     what_to_look_for:"From compromised GHA OIDC token → AWS role → assume cross-account → reach prod data plane. Document trust path."},
+  ],
+  pivot: [
+    {id:"piv_proxy_chain", ref:"§2 #9", title:"Manual creative proxy chain", difficulty:"hard",
+     what_to_look_for:"Build proxychains.conf chaining 3+ SOCKS proxies (SSH+chisel+ligolo); test bandwidth + reliability for internal scanning."},
+    {id:"piv_tunnel_chain", ref:"§3 #10", title:"Manual creative tunnel chain", difficulty:"hard",
+     what_to_look_for:"Combine reverse SSH + chisel HTTP/2 fallback + Ligolo TUN; bypass strict egress filters; document throughput."},
+    {id:"piv_cloud", ref:"§6 #9", title:"Manual ⭐ Cross-cloud pivot", difficulty:"hard",
+     what_to_look_for:"From AWS EKS pod → IRSA → AWS Lambda → GCP Workload Identity via OIDC federation. Document pivot path."},
+  ],
+  tunnel: [
+    {id:"tun_chain", ref:"§2 #22", title:"Manual creative tunnel chain", difficulty:"hard",
+     what_to_look_for:"Stack tunnels: client → cloudflared → ngrok → corporate egress proxy → internal target. Verify each layer's encryption."},
+    {id:"tun_covert", ref:"§3 #8", title:"Manual covert channel design", difficulty:"hard",
+     what_to_look_for:"Design custom protocol over allowed traffic (DNS TXT / ICMP payload / image stego); measure detection probability."},
+    {id:"tun_vpn_pivot", ref:"§5 #10", title:"Manual ⭐ VPN-pivot chain", difficulty:"hard",
+     what_to_look_for:"Compromise WireGuard config → join target VPN as authorized peer → access internal subnet. Document key exfil."},
+  ],
+  network: [
+    {id:"net_lan_l2", ref:"§2 #14", title:"Manual L2 LAN attack design", difficulty:"medium",
+     what_to_look_for:"On physical LAN: ARP spoof + DHCP starvation + VLAN hop with yersinia; document network impact + detection."},
+    {id:"net_mitm", ref:"§3 #12", title:"Manual MITM with ettercap", difficulty:"medium",
+     what_to_look_for:"Position between target + gateway via ARP spoof; run ettercap with SSLstrip + DNS spoof; capture credentials."},
+    {id:"net_ipv6", ref:"§7 #8", title:"Manual ⭐ IPv6 RA spoof (mitm6)", difficulty:"hard",
+     what_to_look_for:"Run mitm6 on IPv4-only network to force IPv6 priority; relay credentials to LDAP via ntlmrelayx; document AD takeover."},
+  ],
+  auth_attacks: [
+    {id:"aa_mfa_fatigue", ref:"§2 #14", title:"Manual MFA fatigue / push bomb", difficulty:"medium",
+     what_to_look_for:"Trigger 30+ MFA push notifications in 5min; document user response time + accept rate; verify Conditional Access policies."},
+    {id:"aa_saml", ref:"§4 #44", title:"Manual SAML chain", difficulty:"hard",
+     what_to_look_for:"Test SAML XSW signature wrapping with SAMLRaider; modify NameID + roles; verify IdP trust boundary."},
+    {id:"aa_passkey_phish", ref:"§7 #10", title:"Manual ⭐ Passkey phishing", difficulty:"hard",
+     what_to_look_for:"Build AiTM proxy that captures WebAuthn ceremony; test if relying party allows authenticator downgrade after capture."},
+  ],
+  wireless: [
+    {id:"wl_wpa2_capture", ref:"§2 #14", title:"Manual WPA2 capture + crack", difficulty:"medium",
+     what_to_look_for:"airodump-ng to capture 4-way handshake; aircrack-ng with rockyou.txt; benchmark vs hashcat GPU rate."},
+    {id:"wl_wpa3_downgrade", ref:"§3 #8", title:"Manual ⭐ WPA3 transition downgrade", difficulty:"hard",
+     what_to_look_for:"Force client downgrade to WPA2 via deauth; capture handshake; test cryptographic group downgrade in SAE."},
+    {id:"wl_evil_twin", ref:"§5 #10", title:"Manual evil twin + captive portal", difficulty:"medium",
+     what_to_look_for:"Clone target SSID with hostapd; deploy captive portal harvesting AD credentials; verify client autoconnect behavior."},
+  ],
+  ad: [
+    {id:"ad_blood_chain", ref:"§1 #18", title:"Manual BloodHound attack path", difficulty:"medium",
+     what_to_look_for:"From low-priv user → run SharpHound; in BloodHound: find shortest path to Domain Admin; document each hop."},
+    {id:"ad_kerberoast", ref:"§3 #10", title:"Manual Kerberoast → crack", difficulty:"medium",
+     what_to_look_for:"GetUserSPNs.py → extract TGS; hashcat -m 13100 with rockyou + best64.rule; document weak SPN accounts."},
+    {id:"ad_modern_cve", ref:"§11 #10", title:"Manual ⭐ BadSuccessor / dMSA chain", difficulty:"hard",
+     what_to_look_for:"Test dMSA service account takeover via password derivation; verify Kerberos ticket forgery against affected DC."},
+  ],
+  av_evasion: [
+    {id:"av_amsi_bypass", ref:"§2 #17", title:"Manual AMSI bypass", difficulty:"hard",
+     what_to_look_for:"Patch amsi.dll!AmsiScanBuffer in-process; verify with Get-AMSIStatus; run blocked payload."},
+    {id:"av_etw_bypass", ref:"§3 #24", title:"Manual kernel ETW bypass", difficulty:"hard",
+     what_to_look_for:"Patch ntdll!NtTraceEvent via direct syscall; verify Sysmon stops receiving events; document recovery."},
+    {id:"av_byovd", ref:"§7 #11", title:"Manual ⭐ BYOVD chain", difficulty:"hard",
+     what_to_look_for:"Identify Microsoft-vulnerable-driver-list gap; load driver via KDMapper; terminate EDR process from kernel."},
+  ],
+  cloud: [
+    {id:"cl_ciem_review", ref:"§5 #9", title:"Manual CIEM identity path review", difficulty:"medium",
+     what_to_look_for:"Use cloudfox aws all-checks → map IAM principal → cross-service privilege paths; identify shadow admin roles."},
+    {id:"cl_serverless", ref:"§6 #9", title:"Manual serverless chain", difficulty:"hard",
+     what_to_look_for:"Exploit Lambda env-var leak → assume IAM role → invoke privileged Lambda → escalate to data plane access."},
+    {id:"cl_oidc_pivot", ref:"§11 #5", title:"Manual ⭐ Cross-cloud OIDC pivot", difficulty:"hard",
+     what_to_look_for:"From compromised GHA workflow → AWS OIDC trust → assume admin role; document subject claim wildcard abuse."},
+  ],
+  apisec: [
+    {id:"api_bola_chain", ref:"§4 #11", title:"Manual BOLA discovery chain", difficulty:"medium",
+     what_to_look_for:"Intercept 50 API calls with Burp; identify object IDs in URLs/bodies; swap IDs across user contexts; document horizontal/vertical access."},
+    {id:"api_graphql", ref:"§6 #11", title:"Manual GraphQL chain", difficulty:"hard",
+     what_to_look_for:"Use introspection → map sensitive queries; build nested query DoS; test field-level authz with role swap."},
+    {id:"api_modern_proto", ref:"§8 #11", title:"Manual ⭐ modern protocol review", difficulty:"hard",
+     what_to_look_for:"Verify WS Origin validation + gRPC mTLS enforcement + WebTransport auth. Document any cross-origin gaps."},
+  ],
+  ai_llm: [
+    {id:"ai_pi_chain", ref:"§2 #15", title:"Manual prompt injection chain", difficulty:"medium",
+     what_to_look_for:"Build indirect PI via doc/web/email integration; test exfiltration via output rendering; document tool-call abuse."},
+    {id:"ai_jailbreak", ref:"§3 #9", title:"Manual jailbreak chain", difficulty:"medium",
+     what_to_look_for:"Multi-turn evolution: roleplay + hypothetical + token smuggling; document refusal-rate vs published baselines."},
+    {id:"ai_agent_abuse", ref:"§7 #9", title:"Manual ⭐ Agent tool-use abuse", difficulty:"hard",
+     what_to_look_for:"Test indirect PI → tool execution; force agent to read sensitive file; verify human-in-loop bypass."},
+  ],
+  container_k8s: [
+    {id:"ck_runtime_review", ref:"§3 #14", title:"Manual container runtime review", difficulty:"medium",
+     what_to_look_for:"Audit pod specs for privileged + hostPath + hostNetwork + CAP_SYS_ADMIN; test escape from priv container."},
+    {id:"ck_rbac", ref:"§5 #13", title:"Manual RBAC review", difficulty:"medium",
+     what_to_look_for:"Use rbac-tool / kube-hunter; identify cluster-admin overuse + pod exec/create gaps; document escalation paths."},
+    {id:"ck_ebpf", ref:"§10 #8", title:"Manual ⭐ eBPF runtime detection", difficulty:"hard",
+     what_to_look_for:"Verify Falco/Tetragon catches escape primitives (mount namespace abuse, capability drops). Test detection coverage."},
+  ],
+  supply_chain: [
+    {id:"sc_sbom_review", ref:"§1 #14", title:"Manual SBOM review", difficulty:"medium",
+     what_to_look_for:"Cross-reference SBOM components against KEV + GHSA + OSV; identify high-risk transitive deps; build patch priority."},
+    {id:"sc_dep_confusion", ref:"§3 #10", title:"Manual dep confusion review", difficulty:"hard",
+     what_to_look_for:"Identify internal pkg names; check public registry collisions; test if build picks public over private."},
+    {id:"sc_oss_health", ref:"§8 #9-10", title:"Manual ⭐ OSS project health audit", difficulty:"medium",
+     what_to_look_for:"Use OpenSSF Scorecards on top deps; flag bus-factor=1 + unmaintained + missing SECURITY.md; prioritize replacements."},
+  ],
+  phishing: [
+    {id:"ph_pretext", ref:"§1 #12", title:"Manual creative pretext design", difficulty:"medium",
+     what_to_look_for:"From target OSINT: craft personalized scenario (vendor invoice / IT password reset); A/B test 2 variants on small batch."},
+    {id:"ph_aitm", ref:"§3 #9", title:"Manual EvilGinx2 phishlet", difficulty:"hard",
+     what_to_look_for:"Build custom phishlet for target IdP (M365/Okta); deploy via fronting; capture session token + MFA bypass."},
+    {id:"ph_deepfake", ref:"§6 #9", title:"Manual ⭐ deepfake refinement", difficulty:"hard",
+     what_to_look_for:"AI voice clone with ElevenLabs (CEO sample); use in vishing pretext; document detection signals."},
+  ],
+  red_team: [
+    {id:"rt_scenario", ref:"§1 #9", title:"Manual scenario design", difficulty:"medium",
+     what_to_look_for:"Pick threat actor (APT29/FIN7); map their TTPs to your environment; build emulation plan with explicit hop sequence."},
+    {id:"rt_c2_chain", ref:"§4 #14", title:"Manual creative C2 chain", difficulty:"hard",
+     what_to_look_for:"Multi-stage: Donut shellcode → Sliver implant → Cobalt Strike beacon; test EDR detection at each stage."},
+    {id:"rt_ttp_emul", ref:"§8 #11", title:"Manual ⭐ threat-intel-driven emulation", difficulty:"hard",
+     what_to_look_for:"From recent CISA AA advisory: extract IOCs + TTPs; emulate full kill chain; verify SOC detection at each step."},
+  ],
+  hybrid_identity: [
+    {id:"hi_aadconnect", ref:"§2 #10", title:"Manual AADConnect review", difficulty:"hard",
+     what_to_look_for:"Test MSOL service account password recovery via DCSync; verify hybrid PHS + PTA agent abuse pathways."},
+    {id:"hi_ca_bypass", ref:"§3 #7", title:"Manual Conditional Access bypass", difficulty:"hard",
+     what_to_look_for:"Identify legacy protocol exemptions (IMAP/POP3); test device compliance bypass; document risky-sign-in evasion."},
+    {id:"hi_token_chain", ref:"§4 #8", title:"Manual ⭐ Token theft chain", difficulty:"hard",
+     what_to_look_for:"Steal refresh token via AiTM; replay to assume identity; test cross-tenant token validity with B2B trust."},
+  ],
+  sspm: [
+    {id:"sp_m365_review", ref:"§1 #16", title:"Manual M365 posture review", difficulty:"medium",
+     what_to_look_for:"Audit Secure Score recommendations; check Exchange forwarding rules + Sharing external + inbox rules; quantify exposure."},
+    {id:"sp_oauth_apps", ref:"§7 #7", title:"Manual ⭐ OAuth app review", difficulty:"medium",
+     what_to_look_for:"Inventory all OAuth grants across M365/GWS/Salesforce; flag high-risk scopes (read all mail, modify users); revoke unused."},
+    {id:"sp_dlp_chain", ref:"§8 #8", title:"Manual ⭐ Cross-SaaS DLP chain", difficulty:"hard",
+     what_to_look_for:"Trace sensitive doc lifecycle: M365 → Slack → external share; verify DLP policy enforcement at each transition."},
+  ],
+  iot_ot: [
+    {id:"ot_discovery", ref:"§1 #12", title:"Manual ICS discovery + safety", difficulty:"medium",
+     what_to_look_for:"Use plcscan + GRASSMARLIN passively; NEVER active-probe production OT. Map Purdue model levels + DMZ trust boundaries."},
+    {id:"ot_modbus", ref:"§2 #9-10", title:"Manual Modbus review", difficulty:"hard",
+     what_to_look_for:"Read holding registers passively; identify writable coils + control points; document IEC 62443 compliance gap."},
+    {id:"ot_methodology", ref:"§8 #6", title:"Manual ⭐ OT pentest planning", difficulty:"medium",
+     what_to_look_for:"Document safety-first procedure: lockout/tagout, off-hours testing, rollback plan, plant manager sign-off. NO live exploitation."},
+  ],
+  firmware: [
+    {id:"fw_acquisition", ref:"§1 #4", title:"Manual firmware acquisition", difficulty:"hard",
+     what_to_look_for:"SPI flash dump via chip-off / OTA capture / vendor download. Verify hash + cross-check vendor signature."},
+    {id:"fw_static", ref:"§4 #4", title:"Manual binary RE", difficulty:"hard",
+     what_to_look_for:"Load in Ghidra/IDA; identify hardcoded creds + crypto keys + backdoor functions; map attack surface."},
+    {id:"fw_modern", ref:"§8 #6", title:"Manual ⭐ UEFI/BMC review", difficulty:"hard",
+     what_to_look_for:"Dump UEFI firmware via SPI; check for unsigned modules + lock bits; audit BMC IPMI default creds + Web UI exposure."},
+  ],
+};
+
 function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
   const [target,    setTarget]    = useState("");
   const [tiers,     setTiers]     = useState([]);
   const [running,   setRunning]   = useState(false);
   const [results,   setResults]   = useState({});
   const [progress,  setProgress]  = useState({done:0, total:0});
-  const [sevFilter, setSevFilter] = useState(null);    // null | "CRITICAL" | "HIGH" | ...
-  const [expanded,  setExpanded]  = useState(null);    // currently-expanded tool slug
+  const [sevFilter, setSevFilter] = useState(null);
+  const [expanded,  setExpanded]  = useState(null);
   const [searchTerm,setSearchTerm]= useState("");
+  const [activeTab, setActiveTab] = useState("auto");  // "auto" | "manual"
+  const [manualState, setManualState] = useState({}); // {id: {evidence, status, severity}}
+
+  // Load manual attestations from localStorage on mount
+  useEffect(() => {
+    const s = {};
+    (MANUAL_TESTS_AUTO[moduleKey] || []).forEach(t => {
+      try {
+        const raw = localStorage.getItem(`vl_manual_auto:${moduleKey}:${t.id}`);
+        if (raw) s[t.id] = JSON.parse(raw);
+      } catch(_){}
+    });
+    setManualState(s);
+  }, [moduleKey]);
+
+  const saveManual = (id, data) => {
+    const next = {...manualState[id], ...data, updated_at: new Date().toISOString()};
+    localStorage.setItem(`vl_manual_auto:${moduleKey}:${id}`, JSON.stringify(next));
+    setManualState(p => ({...p, [id]: next}));
+  };
 
   useEffect(() => {
     fetch(`${apiUrl}/api/${moduleKey}/run_all/tiers`)
@@ -18648,8 +18883,27 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </button>
       </div>
 
-      {/* Severity filter chips + tool-name search */}
-      {tiers.length > 0 && completedCount > 0 && (
+      {/* Auto / Manual tabs */}
+      {(MANUAL_TESTS_AUTO[moduleKey] || []).length > 0 && (
+        <div style={{display:"flex", gap:0, marginBottom:16, borderBottom:"1px solid #334155"}}>
+          {[
+            {id:"auto",   label:`AUTO SCAN · ${totalTools}`},
+            {id:"manual", label:`MANUAL TESTS · ${(MANUAL_TESTS_AUTO[moduleKey] || []).length}`},
+          ].map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              style={{background:"transparent", border:"none",
+                      borderBottom: `2px solid ${activeTab === t.id ? (color || "#3b82f6") : "transparent"}`,
+                      padding:"8px 16px", color: activeTab === t.id ? "#f1f5f9" : "#64748b",
+                      fontSize:11, fontWeight:700, cursor:"pointer",
+                      textTransform:"uppercase", letterSpacing:1}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Severity filter chips + tool-name search (auto tab only) */}
+      {activeTab === "auto" && tiers.length > 0 && completedCount > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:12,
                      flexWrap:"wrap"}}>
           {["CRITICAL","HIGH","MEDIUM","LOW","INFO","POSITIVE"].map(s => {
@@ -18685,7 +18939,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </div>
       )}
 
-      {tiers.map(tier => {
+      {activeTab === "auto" && tiers.map(tier => {
         const filteredTools = (tier.tools || []).filter(tool => {
           const r = results[tool] || {};
           if (sevFilter && r.status === "done") {
@@ -18792,11 +19046,87 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         );
       })}
 
-      {!tiers.length && (
+      {activeTab === "auto" && !tiers.length && (
         <p style={{color:"#64748b", fontSize:13}}>
           Loading technique catalogue from <code>GET /api/{moduleKey}/run_all/tiers</code>...
           If the panel stays empty, the backend may not have <code>tools/{moduleKey}/</code> registered.
         </p>
+      )}
+
+      {/* Manual Tests tab */}
+      {activeTab === "manual" && (
+        <div>
+          <p style={{color:"#94a3b8", fontSize:12, marginBottom:16, lineHeight:1.5}}>
+            Analyst-attested manual techniques from <code>module_playbooks/{playbook}</code>. These
+            require hands-on testing by a qualified analyst (cannot be auto-probed from external SaaS).
+            Mark each as <strong>PASS</strong> / <strong>FAIL</strong> / <strong>N/A</strong> with evidence.
+            Saved to browser localStorage; export via PDF.
+          </p>
+          <div style={{display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(450px, 1fr))", gap:12}}>
+            {(MANUAL_TESTS_AUTO[moduleKey] || []).map(test => {
+              const state = manualState[test.id] || {};
+              const sev = state.severity || "INFO";
+              return (
+                <div key={test.id} style={{background:"#0f172a", border:`1px solid ${state.status === "FAIL" ? sevColor(sev) : "#1e293b"}`,
+                                             borderRadius:6, padding:14}}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"start", marginBottom:8}}>
+                    <div style={{flex:1, marginRight:8}}>
+                      <div style={{color:"#cbd5e1", fontSize:10, fontFamily:"monospace", marginBottom:2}}>
+                        {test.ref}  ·  {test.difficulty || "medium"}
+                      </div>
+                      <div style={{color:"#f1f5f9", fontSize:13, fontWeight:600, lineHeight:1.3}}>
+                        {test.title}
+                      </div>
+                    </div>
+                    <div style={{display:"flex", gap:4, flexShrink:0}}>
+                      {["NOT_RUN","PASS","FAIL","NA"].map(s => (
+                        <button key={s} onClick={() => saveManual(test.id, {status:s})}
+                          style={{background: state.status === s
+                                    ? (s === "PASS" ? "#22c55e" : s === "FAIL" ? "#ef4444" : s === "NA" ? "#475569" : "#334155")
+                                    : "#1e293b",
+                                  border:"1px solid #334155", borderRadius:3,
+                                  padding:"2px 6px", color:"#fff", fontSize:9, fontWeight:700,
+                                  cursor:"pointer"}}>
+                          {s.replace("_"," ")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{color:"#94a3b8", fontSize:11, marginBottom:10, lineHeight:1.5,
+                                background:"#020617", padding:"6px 8px", borderRadius:3}}>
+                    🔍 {test.what_to_look_for}
+                  </div>
+                  {state.status === "FAIL" && (
+                    <div style={{display:"flex", gap:8, marginBottom:8}}>
+                      <select value={sev} onChange={e => saveManual(test.id, {severity:e.target.value})}
+                        style={{background:"#0f172a", border:"1px solid #334155", borderRadius:3,
+                                color:"#cbd5e1", fontSize:10, padding:"3px 6px"}}>
+                        {["CRITICAL","HIGH","MEDIUM","LOW","INFO"].map(s =>
+                          <option key={s} value={s}>{s}</option>
+                        )}
+                      </select>
+                    </div>
+                  )}
+                  {(state.status === "FAIL" || state.status === "PASS") && (
+                    <textarea
+                      placeholder="Evidence (commands, screenshots, output samples)..."
+                      value={state.evidence || ""}
+                      onChange={e => saveManual(test.id, {evidence:e.target.value})}
+                      rows={3}
+                      style={{width:"100%", background:"#020617", border:"1px solid #1e293b",
+                              borderRadius:3, padding:"6px 8px", color:"#cbd5e1", fontSize:10,
+                              fontFamily:"monospace", resize:"vertical", outline:"none"}}/>
+                  )}
+                  {state.updated_at && (
+                    <div style={{color:"#475569", fontSize:9, marginTop:6}}>
+                      saved {new Date(state.updated_at).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
