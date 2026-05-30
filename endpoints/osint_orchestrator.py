@@ -44,6 +44,49 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("search_dorks",     "/api/osint/search_dorks"),
         ("gravatar_check",   "/api/osint/gravatar_check"),
     ],
+    # ── VL-FORGE 2026-05-30: +30 new real probes across 6 new tiers ──────
+    "tier5_people_identity_deep": [
+        ("hibp_passwords",       "/api/osint/hibp_passwords"),
+        ("email_pattern_guess",  "/api/osint/email_pattern_guess"),
+        ("email_validate_mx",    "/api/osint/email_validate_mx"),
+        ("github_user_intel",    "/api/osint/github_user_intel"),
+        ("github_org_intel",     "/api/osint/github_org_intel"),
+        ("sherlock_username",    "/api/osint/sherlock_username"),
+    ],
+    "tier6_domain_infra_deep": [
+        ("rdap_domain",            "/api/osint/rdap_domain"),
+        ("crtsh_full_certs",       "/api/osint/crtsh_full_certs"),
+        ("shodan_internetdb",      "/api/osint/shodan_internetdb"),
+        ("bgp_he_asn",             "/api/osint/bgp_he_asn"),
+        ("hackertarget_reverseip", "/api/osint/hackertarget_reverseip"),
+        ("wayback_cdx_search",     "/api/osint/wayback_cdx_search"),
+        ("favicon_hash_mmh3",      "/api/osint/favicon_hash_mmh3"),
+        ("dns_propagation_check",  "/api/osint/dns_propagation_check"),
+    ],
+    "tier7_threat_intel": [
+        ("urlhaus_lookup",       "/api/osint/urlhaus_lookup"),
+        ("threatfox_iocs",       "/api/osint/threatfox_iocs"),
+        ("malwarebazaar_hash",   "/api/osint/malwarebazaar_hash"),
+        ("otx_indicators",       "/api/osint/otx_indicators"),
+        ("feodotracker_ip",      "/api/osint/feodotracker_ip"),
+    ],
+    "tier8_breach_darkweb": [
+        ("hibp_breaches_domain", "/api/osint/hibp_breaches_domain"),
+        ("hudson_rock_cavalier", "/api/osint/hudson_rock_cavalier"),
+        ("leakix_search",        "/api/osint/leakix_search"),
+    ],
+    "tier9_corporate_financial": [
+        ("sec_edgar_company",    "/api/osint/sec_edgar_company"),
+        ("uspto_patent_search",  "/api/osint/uspto_patent_search"),
+        ("opencorporates_search","/api/osint/opencorporates_search"),
+        ("crunchbase_basic",     "/api/osint/crunchbase_basic"),
+    ],
+    "tier10_ai_llm_osint": [
+        ("llm_entity_extraction","/api/osint/llm_entity_extraction"),
+        ("llm_pretext_draft",    "/api/osint/llm_pretext_draft"),
+        ("llm_disinfo_detect",   "/api/osint/llm_disinfo_detect"),
+        ("llm_image_to_text",    "/api/osint/llm_image_to_text"),
+    ],
 }
 
 
