@@ -92,6 +92,24 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("bytecode_malware_signatures",   "/api/mobile_static/bytecode_malware_signatures"),
         ("third_party_sdk_audit",         "/api/mobile_static/third_party_sdk_audit"),
         ("mobsf_aggregate_scan",          "/api/mobile_static/mobsf_aggregate_scan"),
+        ("flutter_rn_bundle_audit",       "/api/mobile_static/flutter_rn_bundle_audit"),
+        ("wasm_module_audit",             "/api/mobile_static/wasm_module_audit"),
+        ("file_provider_misconfig_audit", "/api/mobile_static/file_provider_misconfig_audit"),
+        ("ios_privacy_manifest_audit",    "/api/mobile_static/ios_privacy_manifest_audit"),
+    ],
+    # ── VL-FORGE 2026-05-30: +6 new MASVS-aligned static scanners ──
+    "tier5_resilience_static": [
+        ("anti_root_detection_static",    "/api/mobile_static/anti_root_detection_static"),
+        ("anti_debug_static_markers",     "/api/mobile_static/anti_debug_static_markers"),
+    ],
+    "tier6_webview_security": [
+        ("webview_config_audit",          "/api/mobile_static/webview_config_audit"),
+        ("js_bridge_audit",               "/api/mobile_static/js_bridge_audit"),
+    ],
+    "tier7_privacy_iap": [
+        ("permission_overprivilege_audit","/api/mobile_static/permission_overprivilege_audit"),
+        ("tracker_sdk_audit",             "/api/mobile_static/tracker_sdk_audit"),
+        ("iap_billing_audit",             "/api/mobile_static/iap_billing_audit"),
     ],
 }
 
