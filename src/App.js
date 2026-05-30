@@ -105,29 +105,36 @@ const MODULES = [
   { id:"osint_manual", icon:"📋", label:"OSINT - Manual Pentest Checklist", cat:"scan", free:false },
 
   // ── EXPLOITATION ─────────────────────────────────────────────
-  { id:"exploit",   icon:"💥", label:"Exploitation",                       cat:"exploit", free:false, featured:true },
-  { id:"buffer",    icon:"💾", label:"Buffer Overflow",                    cat:"exploit", free:false },
-  { id:"client",    icon:"🎯", label:"Client-Side Attacks",                cat:"exploit", free:false, comingSoon:true },
-  { id:"sysexploit",icon:"⚙️", label:"System Exploitation",               cat:"exploit", free:false, comingSoon:true },
-  { id:"msf",       icon:"🧰", label:"Metasploit Framework",               cat:"exploit", free:false, comingSoon:true },
+  { id:"exploit",        icon:"💥", label:"Exploitation",                  cat:"exploit", free:false, featured:true },
+  { id:"bof",            icon:"💾", label:"Buffer Overflow",                cat:"exploit", free:false },
+  { id:"client_side",    icon:"🎯", label:"Client-Side Attacks",            cat:"exploit", free:false },
+  { id:"system_exploit", icon:"⚙️", label:"System Exploitation",           cat:"exploit", free:false },
+  { id:"metasploit",     icon:"🧰", label:"Metasploit Framework",           cat:"exploit", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
-  { id:"privesc",      icon:"⬆️", label:"Privilege Escalation",            cat:"post",    free:false, comingSoon:true },
+  { id:"privesc",      icon:"⬆️", label:"Privilege Escalation",            cat:"post",    free:false },
   { id:"post_exploit", icon:"🕵️", label:"Post Exploitation",               cat:"post",    free:false },
   { id:"pivot",        icon:"🔄", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
 
   // ── NETWORK & INFRA ──────────────────────────────────────────
-  { id:"network",      icon:"🌐", label:"Network Attacks",                 cat:"network", free:false, comingSoon:true },
+  { id:"network",      icon:"🌐", label:"Network Attacks",                 cat:"network", free:false },
   { id:"tunnel",       icon:"🔗", label:"Port Redirection & Tunneling",    cat:"network", free:false },
   { id:"password",     icon:"🔑", label:"Password Attacks",                cat:"network", free:false },
   { id:"auth_attacks", icon:"🛂", label:"Authentication Attacks",          cat:"network", free:false },
-  { id:"wireless",     icon:"📶", label:"Wireless Network Attacks",        cat:"network", free:false, comingSoon:true },
+  { id:"wireless",     icon:"📶", label:"Wireless Network Attacks",        cat:"network", free:false },
 
   // ── ADVANCED ─────────────────────────────────────────────────
-  { id:"ad",           icon:"🏢", label:"Active Directory Attacks",        cat:"advanced",free:false, comingSoon:true },
-  { id:"av_evasion",   icon:"🥷", label:"Antivirus / EDR Evasion",         cat:"advanced",free:false },
-  { id:"cloud",        icon:"☁️", label:"Cloud Security Testing",          cat:"advanced",free:false, comingSoon:true },
-  { id:"api",          icon:"🔌", label:"API Security Testing",            cat:"advanced",free:false, comingSoon:true },
+  { id:"ad",            icon:"🏢", label:"Active Directory Attacks",       cat:"advanced",free:false },
+  { id:"av_evasion",    icon:"🥷", label:"Antivirus / EDR Evasion",        cat:"advanced",free:false },
+  { id:"cloud",         icon:"☁️", label:"Cloud Security Testing",         cat:"advanced",free:false },
+  { id:"apisec",        icon:"🔌", label:"API Security Testing",           cat:"advanced",free:false },
+  { id:"ai_llm",        icon:"🤖", label:"AI / LLM Security",              cat:"advanced",free:false },
+  { id:"container_k8s", icon:"🐳", label:"Container / Kubernetes",         cat:"advanced",free:false },
+  { id:"supply_chain",  icon:"🔗", label:"Supply Chain Security",          cat:"advanced",free:false },
+  { id:"hybrid_identity", icon:"🪪", label:"Hybrid Identity (Entra ID)",   cat:"advanced",free:false },
+  { id:"sspm",          icon:"📊", label:"SaaS Security Posture (SSPM)",   cat:"advanced",free:false },
+  { id:"iot_ot",        icon:"🏭", label:"IoT / OT / ICS Security",        cat:"advanced",free:false },
+  { id:"firmware",      icon:"💿", label:"Firmware / Embedded",            cat:"advanced",free:false },
 
   // ── ADVERSARY EMULATION ──────────────────────────────────────
   { id:"phishing",     icon:"🎣", label:"Phishing & Social Engineering",   cat:"advanced",free:false },
@@ -18379,6 +18386,27 @@ function AuthAttacksModule({token}) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  STUB MODULES — backends live per module_playbooks/; full UI panels
+//  (per-technique tiles + run_all stream + manual cards) land next session.
+// ═══════════════════════════════════════════════════════════════
+function _stubModule(emoji, title, count, sections, slug, playbook) {
+  return (
+    <div style={{padding:24,color:"#f1f5f9"}}>
+      <h1 style={{fontSize:24,marginBottom:8}}>{emoji} {title}</h1>
+      <p style={{color:"#94a3b8",marginBottom:16}}>Module backend live — {count} endpoints across {sections} sections. Per <code>module_playbooks/{playbook}</code>.</p>
+      <p style={{color:"#64748b",fontSize:13}}>Full UI panel lands next session. Backend: <code>POST /api/{slug}/&lt;tool&gt;</code> &middot; orchestrator <code>POST /api/{slug}/run_all</code>.</p>
+    </div>
+  );
+}
+function AILLMModule({token, apiUrl})          { return _stubModule("🤖", "AI / LLM Security",            87, 10, "ai_llm",          "23_ai_llm.md"); }
+function ContainerK8sModule({token, apiUrl})   { return _stubModule("🐳", "Container / Kubernetes",       103, 10, "container_k8s",   "24_container_k8s.md"); }
+function SupplyChainModuleV2({token, apiUrl})  { return _stubModule("🔗", "Supply Chain Security",        95, 8,  "supply_chain",    "25_supply_chain.md"); }
+function HybridIdentityModule({token, apiUrl}) { return _stubModule("🪪", "Hybrid Identity (Entra ID)",   74, 8,  "hybrid_identity", "28_hybrid_identity.md"); }
+function SSPMModule({token, apiUrl})           { return _stubModule("📊", "SaaS Security Posture (SSPM)", 77, 8,  "sspm",            "29_sspm.md"); }
+function IoTOTModule({token, apiUrl})          { return _stubModule("🏭", "IoT / OT / ICS Security",      58, 8,  "iot_ot",          "30_iot_ot.md"); }
+function FirmwareModule({token, apiUrl})       { return _stubModule("💿", "Firmware / Embedded",          47, 8,  "firmware",        "31_firmware.md"); }
+
+// ═══════════════════════════════════════════════════════════════
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
 //  Backend live at /api/phishing/* (70 endpoints). UI wiring TBD.
 // ═══════════════════════════════════════════════════════════════
@@ -19422,13 +19450,10 @@ export default function App() {
         <div style={{display: active==="network" ? "block" : "none"}}>
           <NetworkAttacksModule token={token}/>
         </div>
-        <div style={{display: active==="sysexploit" ? "block" : "none"}}>
+        <div style={{display: active==="system_exploit" ? "block" : "none"}}>
           <SystemExploitModule token={token}/>
         </div>
-        <div style={{display: active==="cloud" ? "block" : "none"}}>
-          <CloudAttacksModule token={token}/>
-        </div>
-        <div style={{display: active==="buffer"   ? "block" : "none"}}>
+        <div style={{display: active==="bof"   ? "block" : "none"}}>
           <BufferOverflowModule token={token}/>
         </div>
         <div style={{display: active==="exploit"  ? "block" : "none"}}>
@@ -19467,7 +19492,7 @@ export default function App() {
         <div style={{display: active==="persist"  ? "block" : "none"}}>
           <PersistenceModule token={token} apiUrl={API}/>
         </div>
-        <div style={{display: active==="client"   ? "block" : "none"}}>
+        <div style={{display: active==="client_side"   ? "block" : "none"}}>
           <ClientSideModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="mobile"   ? "block" : "none"}}>
@@ -19492,7 +19517,7 @@ export default function App() {
         <div style={{display: active==="mobile_network" ? "block" : "none"}}>
           <MobileNetworkModule token={token} apiUrl={API}/>
         </div>
-        <div style={{display: active==="api"      ? "block" : "none"}}>
+        <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="pivot"    ? "block" : "none"}}>
@@ -19500,6 +19525,27 @@ export default function App() {
         </div>
         <div style={{display: active==="cloud"    ? "block" : "none"}}>
           <CloudModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="ai_llm"   ? "block" : "none"}}>
+          <AILLMModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="container_k8s" ? "block" : "none"}}>
+          <ContainerK8sModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="supply_chain" ? "block" : "none"}}>
+          <SupplyChainModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="hybrid_identity" ? "block" : "none"}}>
+          <HybridIdentityModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="sspm"     ? "block" : "none"}}>
+          <SSPMModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="iot_ot"   ? "block" : "none"}}>
+          <IoTOTModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="firmware" ? "block" : "none"}}>
+          <FirmwareModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="report"   ? "block" : "none"}}>
           <ReportModule token={token} apiUrl={API}/>
@@ -19528,7 +19574,7 @@ export default function App() {
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
-        {active === "msf"       && <MetasploitModule/>}
+        {active === "metasploit" && <MetasploitModule/>}
         {active === "guide"     && <GuideModule/>}
         {!["webapp","recon","vuln","password","auth","network","sysexploit","cloud","buffer","exploit",
             "osint","wireless","ad","privesc","tunnel","post","av","se","malware","supply","persist",
