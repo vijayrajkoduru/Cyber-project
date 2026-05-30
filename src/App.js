@@ -11557,6 +11557,60 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _wm = _cfg.watermark;
   const _conf = _cfg.confidentiality || "CONFIDENTIAL";
   const _ftr = _cfg.customFooterText || ("VulnusLab | "+_conf+"  ·  vulnuslab.com");
+  // MANUAL-EVIDENCE-COMBINED-V1: append manual pentest evidence if any saved
+  try {
+    const _mtRecon = (typeof MANUAL_TESTS_RECON !== "undefined" ? MANUAL_TESTS_RECON : []);
+    const _mtCompleted = _mtRecon.map(t => {
+      let _f = {};
+      try { const raw = localStorage.getItem("vl_manual:recon_manual:" + t.id); if (raw) _f = JSON.parse(raw); } catch(_){}
+      return Object.assign({}, t, {_f: _f});
+    }).filter(t => t._f && t._f.status && t._f.status !== "not_run");
+
+    if (_mtCompleted.length > 0) {
+      const _asc = v => String(v == null ? "" : v).replace(/[\u{1F000}-\u{1FFFF}]/gu, "").replace(/[—–]/g, "-").replace(/→/g, "->").replace(/·/g, "-");
+      chk(30); y = sHead("Manual Pentest Evidence (Analyst-Attested)", y);
+      txt(_mtCompleted.length + " manual technique(s) executed by analyst, complementing the automated scan above.", margin, y, 8, GRAY); y += 5;
+      txt("All evidence below is self-reported by the analyst running each test locally.", margin, y, 7.5, GRAY); y += 9;
+
+      _mtCompleted.forEach(t => {
+        chk(35);
+        const sev = t._f.status === "na" ? "N/A" : (t._f.severity || "no-finding");
+        const sevColor = sev === "HIGH" ? [220,38,38] : sev === "MEDIUM" ? [234,88,12] : sev === "LOW" ? [15,118,82] : sev === "N/A" ? [100,116,139] : [15,118,82];
+        const sevLabel = sev === "no-finding" ? "OK" : sev;
+
+        fillR(margin, y, contentW, 8, [248,250,252]);
+        fillR(margin, y, 3, 8, sevColor);
+        txt(_asc(t.title), margin+6, y+5.5, 9, [15,23,42], true);
+        txt(_asc(t.ref || ""), margin+contentW-3, y+5.5, 8, [100,116,139], false, "right");
+        y += 10;
+
+        doc.setFillColor.apply(doc, sevColor);
+        doc.roundedRect(margin, y, 24, 5, 1, 1, "F");
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(255,255,255);
+        doc.text(sevLabel, margin+1.5, y+3.6);
+        y += 7;
+
+        if (t.owasp_masvs) {
+          txt("Standard: " + _asc(t.owasp_masvs), margin, y+3.5, 7.5, [100,116,139]); y += 5;
+        }
+        if (t.tools_required && t.tools_required.length) {
+          const toolStr = "Tools: " + (t.tools_required || []).join(", ");
+          txt(_asc(toolStr.substring(0, 130)), margin, y+3.5, 7.5, [100,116,139]); y += 5;
+        }
+        y += 2;
+
+        txt("EVIDENCE (analyst-supplied):", margin, y+3.5, 7.5, [124,58,237], true); y += 6;
+
+        const ev = _asc(t._f.evidence || "(no evidence text provided)");
+        const lines = doc.splitTextToSize(ev, contentW - 4);
+        lines.forEach(ln => { chk(5); txt(ln, margin+3, y+3.5, 7.5, [15,23,42]); y += 4; });
+        y += 8;
+      });
+    }
+  } catch(e) {
+    console.warn("Combined PDF: manual evidence section skipped:", e);
+  }
+
   const total = doc.internal.getNumberOfPages();
   for(let i=1;i<=total;i++){
     doc.setPage(i);
