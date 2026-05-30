@@ -43,7 +43,11 @@ def run_rules(state: dict, rules: list) -> list:
         findings.append(wrap_finding(
             res["name"],
             res["severity"],
+            cvss=res.get("cvss", "0.0"),
+            cve=res.get("cve", "N/A"),
             cwe=res.get("cwe", "N/A"),
+            cwe_name=res.get("cwe_name", ""),
+            owasp=res.get("owasp", "N/A"),
             remediation=res.get("remediation", ""),
             evidence_marker=res.get("evidence", ""),
         ))

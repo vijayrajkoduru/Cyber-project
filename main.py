@@ -138,6 +138,7 @@ app.state.tools_failed = []
 app.state.tools_healed = []
 
 # Discover atomic tool cores first, then module orchestrators
+import sys as _sys; _sys.setrecursionlimit(10000)  # FastAPI merged_lifespan nests per-router; 500+ routers exceed default 1000
 _autoload("tools", "tool")
 _autoload("endpoints", "module endpoint")
 
