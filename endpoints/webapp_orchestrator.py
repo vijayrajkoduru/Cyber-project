@@ -129,6 +129,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("joomla_scan",           "/api/webapp/joomla_scan"),
         ("file_upload_bypass",    "/api/webapp/file_upload_bypass"),
     ],
+    # ── VL-FORGE 2026-05-30: +8 modern attack-surface scanners ──
+    "tier14_modern_attack_surface": [
+        ("graphql_batching_abuse",         "/api/webapp/scan/graphql_batching_abuse"),
+        ("websocket_auth_audit",           "/api/webapp/scan/websocket_auth_audit"),
+        ("jwt_algorithm_confusion",        "/api/webapp/scan/jwt_algorithm_confusion"),
+        ("oauth_state_validation",         "/api/webapp/scan/oauth_state_validation"),
+        ("postmessage_origin_audit",       "/api/webapp/scan/postmessage_origin_audit"),
+        ("dom_clobbering_probe",           "/api/webapp/scan/dom_clobbering_probe"),
+        ("cookie_security_advanced_audit", "/api/webapp/scan/cookie_security_advanced_audit"),
+        ("csp3_audit",                      "/api/webapp/scan/csp3_audit"),
+    ],
 }
 
 
