@@ -2,6 +2,41 @@
 
 Each pack module imports `make_advisory_router(module_name, techniques)`
 and registers it. Eliminates ~30 lines of boilerplate per module.
+
+═══════════════════════════════════════════════════════════════
+VL FRAMEWORK PASSES — inheritance map for modules using this helper:
+
+  VL-TURBO ✅ inherited via tools/_framework/scanner.py + orchestrator.py:
+    - 60s wall-clock cap per endpoint (VL_TURBO_SCANNER_TIMEOUT env)
+    - Tier-aware semaphore concurrency (VL_TURBO_TIER_CONCURRENCY=12)
+    - 24h result cache (VL_TURBO_CACHE_TTL=86400)
+    - Per-module run_all uses run_module_streaming() with NDJSON +
+      Cloudflare-safe 15s heartbeats + max-concurrency cap of 16.
+
+  VL-PRIME ✅ inherited via endpoints/recon_prime.py:
+    - Rate-limiter exempts internal IPs (127.0.0.1, 172.x, 10.x, 192.168.x)
+      so /run_all fan-out doesn't 429-storm. All new modules' orchestrators
+      pass through this same logic via run_module_streaming.
+    - JWT bearer forwarding through fan-out preserves user identity.
+
+  VL-FORGE 🟡 advisory-only by default:
+    - Modules built with make_advisory_router ship structured findings
+      (severity / CVSS / CWE / OWASP / remediation / evidence) but NOT
+      live probes. Real probing requires per-technique implementation
+      (see tools/recon/tier*/ for the canonical pattern).
+    - Modules whose techniques are post-compromise / require physical or
+      privileged access (AD, AV-Evasion, Post-Exploit, Container/K8s,
+      Phishing, Red-Team, Wireless, Firmware, IoT-OT) are CORRECTLY
+      advisory-only — they can't be live-probed from external SaaS.
+    - Externally-probeable modules to upgrade next: Network, Cloud,
+      APISec, AI-LLM (when LLM endpoint provided).
+
+  VL-FLOW 🟢 inherited via src/App.js:ModuleAutoPanel:
+    - Generic React panel loads /api/<module>/run_all/tiers + streams
+      /api/<module>/run_all NDJSON + renders Recon-style tile grid.
+    - All 26 modules using make_advisory_router get the same UI.
+    - Per-module PDF report integration is per-module work (not inherited).
+═══════════════════════════════════════════════════════════════
 """
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, wrap_finding

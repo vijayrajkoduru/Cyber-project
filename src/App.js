@@ -18386,25 +18386,212 @@ function AuthAttacksModule({token}) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  STUB MODULES — backends live per module_playbooks/; full UI panels
-//  (per-technique tiles + run_all stream + manual cards) land next session.
+//  ModuleAutoPanel — VL-FLOW: generic per-module panel for advisory-pack
+//  modules. Loads /api/{slug}/run_all/tiers for technique list, streams
+//  /api/{slug}/run_all NDJSON, renders per-tile status grid.
+//
+//  Used by 26 modules forged this session (commits 3bf9a18d + 057d053a).
+//  Pattern mirrors live Recon scan tile UI (feedback_scan_tile_pattern_confirmed).
 // ═══════════════════════════════════════════════════════════════
-function _stubModule(emoji, title, count, sections, slug, playbook) {
+function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
+  const [target,   setTarget]   = useState("");
+  const [tiers,    setTiers]    = useState([]);
+  const [running,  setRunning]  = useState(false);
+  const [results,  setResults]  = useState({});
+  const [progress, setProgress] = useState({done:0, total:0});
+
+  useEffect(() => {
+    fetch(`${apiUrl}/api/${moduleKey}/run_all/tiers`)
+      .then(r => r.ok ? r.json() : {tiers:[], total_tools:0})
+      .then(d => setTiers(d.tiers || []))
+      .catch(() => setTiers([]));
+  }, [moduleKey, apiUrl]);
+
+  const totalTools = tiers.reduce((s, t) => s + (t.count || 0), 0);
+
+  const runAll = async () => {
+    if (!target.trim() || running) return;
+    setRunning(true);
+    setResults({});
+    setProgress({done:0, total: totalTools});
+
+    const all = [];
+    tiers.forEach(t => (t.tools || []).forEach(tool => all.push({tool, tier:t.id})));
+    const initial = {};
+    all.forEach(x => { initial[x.tool] = {status:"queued", tier:x.tier, started:Date.now()}; });
+    setResults(initial);
+
+    try {
+      const r = await fetch(`${apiUrl}/api/${moduleKey}/run_all`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json", "Authorization":`Bearer ${token}`},
+        body: JSON.stringify({target, concurrency: 16}),
+      });
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let done = 0;
+      while (true) {
+        const {value, done:eof} = await reader.read();
+        if (eof) break;
+        buf += dec.decode(value, {stream:true});
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const ev = JSON.parse(line);
+            if (ev.type === "result" && ev.tool) {
+              const f = (ev.data?.findings || []);
+              const sev = ev.data?.severity || "INFO";
+              const start = (initial[ev.tool] || {}).started || Date.now();
+              done++;
+              setResults(p => ({...p, [ev.tool]: {
+                status: "done", tier: (initial[ev.tool]||{}).tier,
+                severity: sev, count: f.length, elapsed: Date.now() - start,
+                data: ev.data,
+              }}));
+              setProgress({done, total: totalTools});
+            } else if (ev.type === "error" && ev.tool) {
+              done++;
+              setResults(p => ({...p, [ev.tool]: {status:"error", tier: (initial[ev.tool]||{}).tier, message: ev.message}}));
+              setProgress({done, total: totalTools});
+            }
+          } catch(_){}
+        }
+      }
+    } catch(e) {
+      console.error("run_all failed", e);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const sevColor = (s) => ({
+    CRITICAL:"#ef4444", HIGH:"#f97316", MEDIUM:"#eab308",
+    LOW:"#3b82f6", INFO:"#64748b", POSITIVE:"#22c55e"
+  }[String(s||"").toUpperCase()] || "#64748b");
+
+  const dot = (r) => {
+    if (!r) return "#475569";
+    if (r.status === "queued") return "#475569";
+    if (r.status === "error")  return "#7f1d1d";
+    return sevColor(r.severity);
+  };
+
   return (
-    <div style={{padding:24,color:"#f1f5f9"}}>
-      <h1 style={{fontSize:24,marginBottom:8}}>{emoji} {title}</h1>
-      <p style={{color:"#94a3b8",marginBottom:16}}>Module backend live — {count} endpoints across {sections} sections. Per <code>module_playbooks/{playbook}</code>.</p>
-      <p style={{color:"#64748b",fontSize:13}}>Full UI panel lands next session. Backend: <code>POST /api/{slug}/&lt;tool&gt;</code> &middot; orchestrator <code>POST /api/{slug}/run_all</code>.</p>
+    <div style={{padding:24, color:"#f1f5f9"}}>
+      <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:8}}>
+        <span style={{fontSize:28}}>{emoji}</span>
+        <h1 style={{fontSize:22, fontWeight:700}}>{moduleLabel}</h1>
+        <span style={{color:"#64748b", fontSize:12, marginLeft:8}}>
+          {totalTools} techniques · {tiers.length} sections · <code>module_playbooks/{playbook}</code>
+        </span>
+      </div>
+
+      <div style={{display:"flex", gap:8, marginBottom:16}}>
+        <input
+          type="text" placeholder="Target (host / URL / IP)" value={target}
+          onChange={e => setTarget(e.target.value)}
+          disabled={running}
+          style={{flex:1, background:"#0f172a", border:"1px solid #334155",
+                  borderRadius:6, padding:"10px 12px", color:"#f1f5f9",
+                  fontSize:13, outline:"none"}}/>
+        <button
+          onClick={runAll} disabled={!target.trim() || running}
+          style={{background: running ? "#475569" : (color || "#3b82f6"),
+                  border:"none", borderRadius:6, padding:"10px 18px",
+                  color:"#fff", fontWeight:600, fontSize:13,
+                  cursor: running || !target.trim() ? "not-allowed" : "pointer"}}>
+          {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
+        </button>
+      </div>
+
+      {tiers.map(tier => (
+        <div key={tier.id} style={{marginBottom:18}}>
+          <div style={{fontSize:11, fontWeight:700, color:"#94a3b8",
+                       textTransform:"uppercase", letterSpacing:1, marginBottom:6}}>
+            {tier.id} <span style={{color:"#475569"}}>· {tier.count}</span>
+          </div>
+          <div style={{display:"grid",
+                       gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))",
+                       gap:6}}>
+            {(tier.tools || []).map(tool => {
+              const r = results[tool] || {};
+              return (
+                <div key={tool} style={{display:"flex", alignItems:"center", gap:8,
+                                         padding:"6px 10px", background:"#0f172a",
+                                         border:"1px solid #1e293b", borderRadius:4,
+                                         fontSize:11}}>
+                  <span style={{width:8, height:8, borderRadius:"50%",
+                                background:dot(r), flexShrink:0}}></span>
+                  <span style={{flex:1, fontFamily:"monospace", color:"#cbd5e1",
+                                overflow:"hidden", textOverflow:"ellipsis",
+                                whiteSpace:"nowrap"}}>{tool}</span>
+                  {r.severity && r.severity !== "INFO" && r.severity !== "POSITIVE" && (
+                    <span style={{padding:"1px 6px", borderRadius:3, fontSize:9,
+                                  fontWeight:700, background:sevColor(r.severity),
+                                  color:"#fff"}}>{r.severity}</span>
+                  )}
+                  {typeof r.count === "number" && (
+                    <span style={{color:"#64748b", fontSize:10}}>{r.count}</span>
+                  )}
+                  {r.elapsed && (
+                    <span style={{color:"#475569", fontSize:10}}>{(r.elapsed/1000).toFixed(1)}s</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {!tiers.length && (
+        <p style={{color:"#64748b", fontSize:13}}>
+          Loading technique catalogue from <code>GET /api/{moduleKey}/run_all/tiers</code>...
+          If the panel stays empty, the backend may not have <code>tools/{moduleKey}/</code> registered.
+        </p>
+      )}
     </div>
   );
 }
-function AILLMModule({token, apiUrl})          { return _stubModule("🤖", "AI / LLM Security",            87, 10, "ai_llm",          "23_ai_llm.md"); }
-function ContainerK8sModule({token, apiUrl})   { return _stubModule("🐳", "Container / Kubernetes",       103, 10, "container_k8s",   "24_container_k8s.md"); }
-function SupplyChainModuleV2({token, apiUrl})  { return _stubModule("🔗", "Supply Chain Security",        95, 8,  "supply_chain",    "25_supply_chain.md"); }
-function HybridIdentityModule({token, apiUrl}) { return _stubModule("🪪", "Hybrid Identity (Entra ID)",   74, 8,  "hybrid_identity", "28_hybrid_identity.md"); }
-function SSPMModule({token, apiUrl})           { return _stubModule("📊", "SaaS Security Posture (SSPM)", 77, 8,  "sspm",            "29_sspm.md"); }
-function IoTOTModule({token, apiUrl})          { return _stubModule("🏭", "IoT / OT / ICS Security",      58, 8,  "iot_ot",          "30_iot_ot.md"); }
-function FirmwareModule({token, apiUrl})       { return _stubModule("💿", "Firmware / Embedded",          47, 8,  "firmware",        "31_firmware.md"); }
+
+// ═══════════════════════════════════════════════════════════════
+//  Per-module wrappers — each calls ModuleAutoPanel with its slug.
+//  This collapses 26 module React components into one shared panel.
+// ═══════════════════════════════════════════════════════════════
+function _autoMod(props, args) {
+  return <ModuleAutoPanel {...props} {...args}/>;
+}
+function AILLMModule(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",            emoji:"🤖", color:"#8b5cf6", playbook:"23_ai_llm.md"}); }
+function ContainerK8sModule(p)   { return _autoMod(p, {moduleKey:"container_k8s",   moduleLabel:"Container / Kubernetes",       emoji:"🐳", color:"#06b6d4", playbook:"24_container_k8s.md"}); }
+function SupplyChainModuleV2(p)  { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",        emoji:"🔗", color:"#10b981", playbook:"25_supply_chain.md"}); }
+function HybridIdentityModule(p) { return _autoMod(p, {moduleKey:"hybrid_identity", moduleLabel:"Hybrid Identity (Entra ID)",   emoji:"🪪", color:"#3b82f6", playbook:"28_hybrid_identity.md"}); }
+function SSPMModule(p)           { return _autoMod(p, {moduleKey:"sspm",            moduleLabel:"SaaS Security Posture (SSPM)", emoji:"📊", color:"#f59e0b", playbook:"29_sspm.md"}); }
+function IoTOTModule(p)          { return _autoMod(p, {moduleKey:"iot_ot",          moduleLabel:"IoT / OT / ICS Security",      emoji:"🏭", color:"#ef4444", playbook:"30_iot_ot.md"}); }
+function FirmwareModule(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware / Embedded",          emoji:"💿", color:"#ec4899", playbook:"31_firmware.md"}); }
+
+// ── Legacy module overrides (JS hoisting: latest function declaration wins) ──
+// These 17 names are defined elsewhere with stub UIs wired to old short-form
+// endpoint paths. These wrappers below override them so all 26 modules render
+// via ModuleAutoPanel against the playbook-aligned tier-based backend.
+function PhishingModule(p)         { return _autoMod(p, {moduleKey:"phishing",        moduleLabel:"Phishing & Social Engineering",   emoji:"🎣", color:"#ec4899", playbook:"26_phishing.md"}); }
+function RedTeamModule(p)          { return _autoMod(p, {moduleKey:"red_team",        moduleLabel:"Adversary Emulation / Red Team",  emoji:"🎭", color:"#dc2626", playbook:"27_red_team.md"}); }
+function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"🔗", color:"#06b6d4", playbook:"15_tunnel.md"}); }
+function PivotModule(p)            { return _autoMod(p, {moduleKey:"pivot",           moduleLabel:"Pivoting & Lateral Movement",     emoji:"🔄", color:"#0ea5e9", playbook:"14_pivot.md"}); }
+function AVEvasionModule(p)        { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"Antivirus / EDR Evasion",         emoji:"🥷", color:"#7c3aed", playbook:"20_av_evasion.md"}); }
+function PostExploitModule(p)      { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post Exploitation",               emoji:"🕵️", color:"#9333ea", playbook:"13_post_exploit.md"}); }
+function AuthAttacksModule(p)      { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",          emoji:"🛂", color:"#f59e0b", playbook:"17_auth_attacks.md"}); }
+function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"💥", color:"#ef4444", playbook:"06_exploit.md"}); }
+function BufferOverflowModule(p)   { return _autoMod(p, {moduleKey:"bof",             moduleLabel:"Buffer Overflow",                  emoji:"💾", color:"#f97316", playbook:"07_bof.md"}); }
+function ClientSideModule(p)       { return _autoMod(p, {moduleKey:"client_side",     moduleLabel:"Client-Side Attacks",              emoji:"🎯", color:"#f43f5e", playbook:"09_client_side.md"}); }
+function SystemExploitModule(p)    { return _autoMod(p, {moduleKey:"system_exploit",  moduleLabel:"System Exploitation",              emoji:"⚙️", color:"#ef4444", playbook:"10_system_exploit.md"}); }
+function PrivescModule(p)          { return _autoMod(p, {moduleKey:"privesc",         moduleLabel:"Privilege Escalation",             emoji:"⬆️", color:"#a855f7", playbook:"12_privesc.md"}); }
+function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"🌐", color:"#3b82f6", playbook:"16_network.md"}); }
+function WirelessModule(p)         { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Network Attacks",         emoji:"📶", color:"#06b6d4", playbook:"18_wireless.md"}); }
+function ActiveDirectoryModule(p)  { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",         emoji:"🏢", color:"#3b82f6", playbook:"19_ad.md"}); }
+function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"☁️", color:"#0ea5e9", playbook:"21_cloud.md"}); }
+function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"🔌", color:"#10b981", playbook:"22_apisec.md"}); }
 
 // ═══════════════════════════════════════════════════════════════
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
