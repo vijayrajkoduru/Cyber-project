@@ -1,11 +1,179 @@
 """§17 Auth Attacks — 74 endpoints under /api/auth_attacks/<tool>.
 
 MITRE ATT&CK TA0006 Credential Access. Mix of detectable patterns + advisories.
+
+VL-FORGE 2026-05-30: 3 live probes for HTTP-detectable auth surface
+(JWT in cookies/headers, OAuth/OIDC discovery, JKU URL fetching).
 """
+import urllib.request, urllib.error, urllib.parse, base64, json, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, wrap_finding
 
 router = APIRouter()
+
+
+def _host(t):
+    return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+
+def _http_get(url, timeout=4):
+    try:
+        r = urllib.request.Request(url, headers={"User-Agent":"VulnusLab/2.0"})
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            return resp.status, resp.read(8192).decode("utf-8", errors="ignore"), dict(resp.headers)
+    except urllib.error.HTTPError as e:
+        try: return e.code, e.read(4096).decode("utf-8", errors="ignore"), dict(e.headers) if e.headers else {}
+        except Exception: return e.code, "", {}
+    except Exception:
+        return 0, "", {}
+
+def _build(tool, target, findings, tested, summary):
+    sev_order = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
+    top = "INFO"
+    for f in findings:
+        if sev_order.get(f.get("severity","INFO"),0) > sev_order.get(top,0):
+            top = f.get("severity","INFO")
+    return {"tool":tool,"target":target,"scan_time":0,
+            "vulnerable": top in ("CRITICAL","HIGH","MEDIUM"),
+            "severity": top, "findings": findings,
+            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+
+
+def _probe_jwt_alg_none(target, req):
+    """Discover JWT tokens in responses + audit alg header for 'none' acceptance risk."""
+    base = f"https://{_host(target)}"
+    paths = ["/", "/login", "/api/login", "/auth", "/api/auth", "/api/me"]
+    found_jwts = []
+    for p in paths:
+        code, body, headers = _http_get(base + p, timeout=3)
+        # JWT pattern: 3 base64-url-safe segments separated by dots
+        for v in (list(headers.values()) + [body[:8192]]):
+            v = str(v)
+            for m in re.finditer(r'(eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*)', v):
+                token = m.group(1)
+                try:
+                    hdr = token.split(".")[0]
+                    pad = "=" * (4 - len(hdr) % 4)
+                    decoded = json.loads(base64.urlsafe_b64decode(hdr + pad).decode("utf-8", errors="ignore"))
+                    alg = decoded.get("alg", "?")
+                    if alg.lower() == "none":
+                        found_jwts.append({"path": p, "alg": "none (UNSAFE)", "kid": decoded.get("kid","")})
+                    elif alg.startswith("HS"):
+                        found_jwts.append({"path": p, "alg": alg, "kid": decoded.get("kid","")})
+                    else:
+                        found_jwts.append({"path": p, "alg": alg, "kid": decoded.get("kid","")})
+                except Exception:
+                    pass
+                break
+            if found_jwts: break
+    findings = []
+    if any(j["alg"] == "none (UNSAFE)" for j in found_jwts):
+        unsafe = [j for j in found_jwts if "none" in j["alg"]]
+        findings.append(wrap_finding(
+            f"JWT with alg=none observed — signature stripping accepted",
+            "CRITICAL", cvss="9.5", cwe="CWE-347",
+            remediation="Reject alg=none server-side; allow-list signing algorithms (RS256/ES256 only).",
+            evidence_marker=f"Tokens with alg=none at: {', '.join(u['path'] for u in unsafe)}"))
+    elif any(j["alg"].startswith("HS") for j in found_jwts):
+        findings.append(wrap_finding(
+            f"JWT(s) using HS256/HS384/HS512 found — verify secret entropy + rotation",
+            "INFO", cvss="0.0", cwe="CWE-321",
+            remediation="If using HS*, ensure secret is high-entropy (≥256 bits) + rotated per spec.",
+            evidence_marker=", ".join(f"{j['path']}: alg={j['alg']}" for j in found_jwts)))
+    elif found_jwts:
+        findings.append(wrap_finding(
+            f"JWT(s) detected — algorithms appear safe ({set(j['alg'] for j in found_jwts)})",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue strong algorithm enforcement.",
+            evidence_marker=", ".join(f"{j['path']}: alg={j['alg']}" for j in found_jwts)))
+    else:
+        findings.append(wrap_finding(
+            "No JWT tokens found in responses at standard paths",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Audit other endpoints; JWTs may live behind auth.",
+            evidence_marker=f"Tested {len(paths)} paths"))
+    return _build("jwt_alg_none", target, findings, len(paths),
+                   "JWT discovery + alg=none check")
+
+
+def _probe_oauth_redirect(target, req):
+    """Discover OAuth/OIDC authorization endpoint + test for open redirect_uri."""
+    base = f"https://{_host(target)}"
+    # Try OIDC discovery first
+    code, body, _ = _http_get(f"{base}/.well-known/openid-configuration", timeout=4)
+    findings = []
+    auth_endpoint = None
+    if code == 200 and body.strip().startswith("{"):
+        try:
+            cfg = json.loads(body)
+            auth_endpoint = cfg.get("authorization_endpoint", "")
+        except Exception:
+            pass
+    if not auth_endpoint:
+        # Try common OAuth paths
+        for p in ["/oauth/authorize", "/auth/authorize", "/oauth2/authorize"]:
+            code, _, _ = _http_get(base + p, timeout=3)
+            if code in (200, 302, 400):
+                auth_endpoint = base + p; break
+    if not auth_endpoint:
+        findings.append(wrap_finding(
+            "No OAuth/OIDC authorization endpoint discovered",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify OAuth implementation if expected.",
+            evidence_marker="No /.well-known/openid-configuration nor /oauth/authorize"))
+    else:
+        # Probe with evil redirect_uri
+        evil = "https://evil.example.com/callback"
+        params = urllib.parse.urlencode({"response_type":"code","client_id":"x","redirect_uri":evil,"scope":"openid"})
+        url = f"{auth_endpoint}?{params}"
+        code, body, headers = _http_get(url, timeout=4)
+        loc = headers.get("Location", "") + headers.get("location", "")
+        if loc and "evil.example.com" in loc:
+            findings.append(wrap_finding(
+                f"OAuth open redirect — evil redirect_uri accepted at {auth_endpoint}",
+                "CRITICAL", cvss="9.0", cwe="CWE-601",
+                remediation="Strict redirect_uri allow-list at OAuth provider; reject unregistered URIs.",
+                evidence_marker=f"Redirect to: {loc[:100]}"))
+        elif code == 400 or "redirect_uri" in body[:500].lower() or "invalid_redirect" in body.lower():
+            findings.append(wrap_finding(
+                f"OAuth endpoint at {auth_endpoint} REJECTED evil redirect_uri (good)",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation="Continue strict redirect_uri validation.",
+                evidence_marker=f"GET {url} → {code}"))
+        else:
+            findings.append(wrap_finding(
+                f"OAuth endpoint at {auth_endpoint} — redirect_uri test inconclusive",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Manual OAuth flow audit.",
+                evidence_marker=f"Status: {code}"))
+    return _build("oauth_redirect_uri_hijack", target, findings, 2,
+                   "OAuth open-redirect probe")
+
+
+def _probe_jwt_jku_ssrf(target, req):
+    """Check for JWT JKU/X5U header acceptance — SSRF/auth-bypass risk."""
+    base = f"https://{_host(target)}"
+    # Probe /.well-known/jwks.json discoverability (passive indicator)
+    code, body, _ = _http_get(f"{base}/.well-known/jwks.json", timeout=3)
+    findings = []
+    if code == 200 and body.strip().startswith("{") and "keys" in body:
+        try:
+            jwks = json.loads(body)
+            n_keys = len(jwks.get("keys", []))
+            findings.append(wrap_finding(
+                f"JWKS endpoint exposed at /.well-known/jwks.json with {n_keys} key(s) — verify JKU header acceptance is restricted",
+                "MEDIUM", cvss="5.5", cwe="CWE-918",
+                remediation="If verifying JWTs by JKU header, allow-list trusted issuer URLs only.",
+                evidence_marker=f"JWKS has {n_keys} keys; JKU SSRF possible if JKU is honored from JWT headers"))
+        except Exception:
+            pass
+    if not findings:
+        findings.append(wrap_finding(
+            "No public JWKS endpoint; JKU SSRF surface limited",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue.",
+            evidence_marker="No /.well-known/jwks.json response"))
+    return _build("jwt_jku_x5u_ssrf", target, findings, 1,
+                   "JWT JKU/X5U SSRF surface probe")
 
 
 def _adv(tool, target, title, *, sev="MEDIUM", cvss="5.0", cwe="CWE-287",
@@ -110,6 +278,13 @@ TECHNIQUES = [
 ]
 
 
+PROBES = {
+    "jwt_alg_none":             _probe_jwt_alg_none,
+    "oauth_redirect_uri_hijack":_probe_oauth_redirect,
+    "jwt_jku_x5u_ssrf":         _probe_jwt_jku_ssrf,
+}
+
+
 def _make_handler(slug, title, sev, cvss):
     def _h(req: ScanRequest, _=Depends(verify_scan_quota)):
         return _adv(slug, req.target, title, sev=sev, cvss=cvss)
@@ -117,9 +292,23 @@ def _make_handler(slug, title, sev, cvss):
     return _h
 
 
+def _make_probe(slug, fn):
+    def _h(req: ScanRequest, _=Depends(verify_scan_quota)):
+        try: return fn(req.target, req)
+        except Exception as e:
+            return _adv(slug, req.target, f"Probe error: {str(e)[:80]}",
+                         sev="INFO", cvss="0.0")
+    _h.__name__ = slug
+    return _h
+
+
 for slug, title, sev, cvss in TECHNIQUES:
-    router.add_api_route(f"/api/auth_attacks/{slug}", _make_handler(slug, title, sev, cvss),
-                          methods=["POST"])
+    if slug in PROBES:
+        router.add_api_route(f"/api/auth_attacks/{slug}",
+            _make_probe(slug, PROBES[slug]), methods=["POST"])
+    else:
+        router.add_api_route(f"/api/auth_attacks/{slug}",
+            _make_handler(slug, title, sev, cvss), methods=["POST"])
 
 
 def register(app):

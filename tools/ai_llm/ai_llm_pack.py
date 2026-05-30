@@ -2,8 +2,110 @@
 10 sections: OWASP LLM Top 10 2025, prompt injection (direct+indirect), jailbreak,
 data extraction, model theft, RAG/vector DB, agent/tool-use, supply chain,
 infrastructure, compliance.
+
+VL-FORGE 2026-05-30: 2 live probes for LLM-endpoint signature detection
+(if target IS an LLM API endpoint, probe for system prompt leak +
+infra fingerprint). Most LLM techniques require an active LLM endpoint
++ valid API key + non-malicious prompt engineering — beyond scope of
+generic scanning. Probes are best-effort signature checks.
 """
-from tools._pack_common import make_advisory_router
+import urllib.request, urllib.error, json
+from tools._pack_common import make_advisory_router, _adv_response
+from tools._shared import wrap_finding
+
+
+def _host(t):
+    return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+
+def _http_get(url, timeout=4):
+    try:
+        r = urllib.request.Request(url, headers={"User-Agent":"VulnusLab/2.0"})
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            return resp.status, resp.read(4096).decode("utf-8", errors="ignore"), dict(resp.headers)
+    except urllib.error.HTTPError as e:
+        try: return e.code, e.read(4096).decode("utf-8", errors="ignore"), dict(e.headers) if e.headers else {}
+        except Exception: return e.code, "", {}
+    except Exception:
+        return 0, "", {}
+
+def _build(tool, target, findings, tested, summary):
+    sev_order = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
+    top = "INFO"
+    for f in findings:
+        if sev_order.get(f.get("severity","INFO"),0) > sev_order.get(top,0):
+            top = f.get("severity","INFO")
+    return {"tool":tool,"target":target,"scan_time":0,
+            "vulnerable": top in ("CRITICAL","HIGH","MEDIUM"),
+            "severity": top, "findings": findings,
+            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+
+
+def _probe_llm_endpoint_fingerprint(target, req):
+    """Detect common LLM API endpoint signatures (OpenAI-compatible / Anthropic / vLLM)."""
+    base = f"https://{_host(target)}"
+    paths = ["/v1/models", "/api/models", "/v1/chat/completions", "/api/v1/generate",
+              "/v1/completions", "/api/generate", "/.well-known/openid-configuration"]
+    signs = []
+    for p in paths:
+        code, body, headers = _http_get(base + p, timeout=4)
+        body_lower = body[:4096].lower()
+        srv = (headers.get("Server","") + str(headers)).lower()
+        if any(k in body_lower for k in ["model", "openai", "anthropic", "claude",
+                                            "gpt-", "llama", "mistral", "vllm", "ollama"]) or \
+           any(k in srv for k in ["openai", "vllm", "ollama"]):
+            signs.append({"path": p, "code": code})
+    findings = []
+    if signs:
+        findings.append(wrap_finding(
+            f"LLM API endpoint signature detected at {len(signs)} path(s) — audit for prompt injection / system prompt leak",
+            "MEDIUM", cvss="5.5", cwe="CWE-200",
+            remediation="Inventory LLM endpoints; ensure auth + rate limits + prompt safety guards.",
+            evidence_marker=", ".join(f"{s['path']}→{s['code']}" for s in signs)))
+    else:
+        findings.append(wrap_finding(
+            "No LLM API endpoint signature at standard paths",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="If using LLM, ensure endpoints are auth-gated.",
+            evidence_marker=f"Tested {len(paths)} paths"))
+    return _build("llm03_supply_chain", target, findings, len(paths),
+                   "LLM API endpoint signature probe")
+
+
+def _probe_llm_open_models_list(target, req):
+    """Check for anonymously accessible /v1/models endpoint — info disclosure."""
+    base = f"https://{_host(target)}"
+    code, body, _ = _http_get(f"{base}/v1/models", timeout=4)
+    findings = []
+    if code == 200 and body.strip().startswith("{") and ('"data"' in body or '"id"' in body):
+        try:
+            data = json.loads(body)
+            models = data.get("data", []) if isinstance(data, dict) else []
+            model_ids = [m.get("id","?") for m in models[:5]]
+            findings.append(wrap_finding(
+                f"LLM /v1/models endpoint UNAUTHENTICATED — {len(models)} models enumerated",
+                "MEDIUM", cvss="5.5", cwe="CWE-306",
+                remediation="Require API key on /v1/models; ratelimit per key; audit token usage.",
+                evidence_marker=f"Models: {', '.join(model_ids)}"))
+        except Exception:
+            findings.append(wrap_finding(
+                f"/v1/models returns 200 with content — verify auth requirement",
+                "LOW", cvss="3.0", cwe="CWE-200",
+                remediation="Audit auth on /v1/models.",
+                evidence_marker=body[:120]))
+    else:
+        findings.append(wrap_finding(
+            "No anonymous /v1/models endpoint",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue.",
+            evidence_marker=f"GET /v1/models → {code}"))
+    return _build("llm07_system_prompt_leakage", target, findings, 1,
+                   "LLM /v1/models anonymous-access probe")
+
+
+PROBES = {
+    "llm03_supply_chain":         _probe_llm_endpoint_fingerprint,
+    "llm07_system_prompt_leakage": _probe_llm_open_models_list,
+}
 
 T = [
     # §1 OWASP LLM Top 10 2025 (12)
@@ -111,7 +213,8 @@ T = [
 ]
 
 router = make_advisory_router("ai_llm", T,
-    playbook_ref="See module_playbooks/23_ai_llm.md.")
+    playbook_ref="See module_playbooks/23_ai_llm.md.",
+    probes=PROBES)
 
 
 def register(app):

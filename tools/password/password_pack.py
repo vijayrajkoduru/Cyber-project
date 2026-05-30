@@ -1,8 +1,147 @@
 """§8 Password Attacks — 79 endpoints per module_playbooks/08_password.md.
 8 sections: online attacks, offline cracking, stuffing/spray, hash ID,
 wordlists/rules, cloud distributed cracking, OS extraction, modern auth bypass.
+
+VL-FORGE 2026-05-30: 2 live probes for HTTP form posture (form discovery
++ rate-limit / lockout detection). Other techniques correctly stay
+advisory (offline cracking, OS extraction, cloud GPU require non-external
+resources).
 """
-from tools._pack_common import make_advisory_router
+import urllib.request, urllib.error, urllib.parse
+import time
+from tools._pack_common import make_advisory_router, _adv_response
+from tools._shared import wrap_finding
+
+
+def _host(t):
+    return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+
+def _http_get(url, timeout=4):
+    try:
+        r = urllib.request.Request(url, headers={"User-Agent":"VulnusLab/2.0"})
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            return resp.status, resp.read(4096).decode("utf-8", errors="ignore"), dict(resp.headers)
+    except urllib.error.HTTPError as e:
+        try: return e.code, e.read(4096).decode("utf-8", errors="ignore"), dict(e.headers) if e.headers else {}
+        except Exception: return e.code, "", {}
+    except Exception:
+        return 0, "", {}
+
+def _http_post_form(url, data, timeout=3):
+    try:
+        body = urllib.parse.urlencode(data).encode()
+        r = urllib.request.Request(url, data=body, headers={
+            "User-Agent":"VulnusLab/2.0",
+            "Content-Type":"application/x-www-form-urlencoded"
+        }, method="POST")
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            return resp.status, resp.read(2048).decode("utf-8", errors="ignore")
+    except urllib.error.HTTPError as e:
+        try: return e.code, e.read(2048).decode("utf-8", errors="ignore")
+        except Exception: return e.code, ""
+    except Exception:
+        return 0, ""
+
+def _build(tool, target, findings, tested, summary):
+    sev_order = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
+    top = "INFO"
+    for f in findings:
+        if sev_order.get(f.get("severity","INFO"),0) > sev_order.get(top,0):
+            top = f.get("severity","INFO")
+    return {"tool":tool,"target":target,"scan_time":0,
+            "vulnerable": top in ("CRITICAL","HIGH","MEDIUM"),
+            "severity": top, "findings": findings,
+            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+
+
+def _probe_login_form_brute(target, req):
+    """Detect login forms + check basic posture (CSRF token, rate limit hints)."""
+    base = f"https://{_host(target)}"
+    paths = ["/login", "/signin", "/account/login", "/user/login",
+              "/wp-login.php", "/admin/login", "/api/login", "/api/auth/login"]
+    forms_found = []
+    for p in paths:
+        code, body, headers = _http_get(base + p, timeout=3)
+        if code == 200 and ('<form' in body.lower() or '"password"' in body.lower()):
+            has_csrf = any(s in body.lower() for s in ["csrf", "csrfmiddlewaretoken",
+                                                          "authenticity_token", "x-xsrf"])
+            forms_found.append({"path": p, "csrf": has_csrf})
+    findings = []
+    if forms_found:
+        no_csrf = [f for f in forms_found if not f["csrf"]]
+        if no_csrf:
+            findings.append(wrap_finding(
+                f"Login form(s) found WITHOUT CSRF tokens: {len(no_csrf)} — brute-force + CSRF risk",
+                "HIGH", cvss="7.0", cwe="CWE-352",
+                remediation="Add CSRF tokens to all auth forms; implement rate limit + lockout.",
+                evidence_marker=", ".join(f["path"] for f in no_csrf)))
+        else:
+            findings.append(wrap_finding(
+                f"Login form(s) with CSRF tokens detected at {len(forms_found)} path(s)",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Continue CSRF + add rate limit.",
+                evidence_marker=", ".join(f["path"] for f in forms_found)))
+    else:
+        findings.append(wrap_finding(
+            "No standard login forms detected",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue.",
+            evidence_marker=f"Tested {len(paths)} paths"))
+    return _build("hydra_http_form", target, findings, len(paths),
+                   "Login form discovery + CSRF posture")
+
+
+def _probe_login_rate_limit(target, req):
+    """Burst 8 invalid login attempts; check for 429/lockout response."""
+    base = f"https://{_host(target)}"
+    # First find a form path
+    form_path = None
+    for p in ["/login", "/signin", "/wp-login.php", "/api/login", "/api/auth/login"]:
+        code, body, _ = _http_get(base + p, timeout=3)
+        if code in (200, 405) and ('form' in body.lower() or '"password"' in body.lower() or code == 405):
+            form_path = p; break
+    if not form_path:
+        return _adv_response("password_spray_hydra", target,
+            "No login form found — rate limit probe skipped",
+            "INFO", "0.0", evidence="No form path detected")
+    url = base + form_path
+    codes = []
+    start = time.time()
+    for i in range(8):
+        code, _ = _http_post_form(url,
+            {"username": f"nonexistent_{i}", "password": "wrong",
+             "user": f"nonexistent_{i}", "pass": "wrong", "email": f"x{i}@x.com"},
+            timeout=3)
+        codes.append(code)
+        if code == 429: break
+    elapsed = time.time() - start
+    findings = []
+    if 429 in codes:
+        findings.append(wrap_finding(
+            f"Rate limit ENFORCED on {form_path} — 429 after {codes.index(429)+1} attempts",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue rate-limiting; consider per-account lockout.",
+            evidence_marker=f"Codes: {codes}"))
+    elif all(c and c == codes[0] for c in codes):
+        findings.append(wrap_finding(
+            f"Rate limit NOT enforced on {form_path} — 8 invalid logins all returned {codes[0]}",
+            "HIGH", cvss="7.5", cwe="CWE-307",
+            remediation="Implement rate limit (e.g. 5 attempts / 15 min per IP+account) + CAPTCHA after N attempts.",
+            evidence_marker=f"All 8 attempts: {codes[0]} in {elapsed:.1f}s"))
+    else:
+        findings.append(wrap_finding(
+            f"Rate limit posture unclear — mixed codes",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Manual verification needed.",
+            evidence_marker=f"Codes: {codes}"))
+    return _build("password_spray_hydra", target, findings, 8,
+                   "Login rate-limit burst probe")
+
+
+PROBES = {
+    "hydra_http_form":     _probe_login_form_brute,
+    "password_spray_hydra": _probe_login_rate_limit,
+}
 
 TECHNIQUES = [
     # §1 Online Password Attacks (13)
@@ -95,7 +234,8 @@ TECHNIQUES = [
 ]
 
 router = make_advisory_router("password", TECHNIQUES,
-    playbook_ref="See module_playbooks/08_password.md.")
+    playbook_ref="See module_playbooks/08_password.md.",
+    probes=PROBES)
 
 
 def register(app):
