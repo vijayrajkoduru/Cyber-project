@@ -18831,6 +18831,70 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       });
     });
 
+    // ── Manual Pentest Evidence (analyst-attested cards) ──
+    const moduleManual = MANUAL_TESTS_AUTO[moduleKey] || [];
+    const completedManual = moduleManual
+      .map(t => ({...t, _state: manualState[t.id] || {}}))
+      .filter(t => t._state.status && t._state.status !== "NOT_RUN");
+
+    if (completedManual.length > 0) {
+      chk(30);
+      y += 8;
+      doc.setFillColor("#1e293b"); doc.rect(0, y-5, W, 8, "F");
+      txt("Manual Pentest Evidence (Analyst-Attested)", margin, y, 12, "#f1f5f9", true);
+      y += 12;
+
+      txt(`${completedManual.length} of ${moduleManual.length} manual technique(s) executed by analyst, complementing the automated scan above.`,
+          margin, y, 9, "#64748b"); y += 4;
+      txt(`All evidence below is self-reported by the analyst running each test locally.`,
+          margin, y, 9, "#64748b"); y += 8;
+
+      const statusColor = (st) => {
+        if (st.status === "FAIL") return sevColor(st.severity || "MEDIUM");
+        if (st.status === "PASS") return "#22c55e";
+        if (st.status === "NA")   return "#475569";
+        return "#64748b";
+      };
+
+      completedManual.forEach(t => {
+        const st = t._state;
+        chk(45);
+
+        // Status colour bar
+        doc.setFillColor(statusColor(st)); doc.rect(margin, y-3, 3, 12, "F");
+
+        // Title
+        txt(t.title, margin+5, y, 10, "#0f172a", true); y += 4;
+        txt(`${t.ref}  ·  ${t.difficulty || "medium"}  ·  status: ${st.status}${st.status === "FAIL" && st.severity ? "  ·  severity: " + st.severity : ""}`,
+            margin+5, y, 8, "#64748b"); y += 5;
+
+        // What to look for
+        if (t.what_to_look_for) {
+          doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor("#334155");
+          const lines = doc.splitTextToSize(asc("Looking for: " + t.what_to_look_for), W-2*margin-6);
+          lines.forEach(ln => { chk(4); doc.text(ln, margin+6, y); y += 3.5; });
+          y += 1;
+        }
+
+        // Evidence
+        if (st.evidence) {
+          chk(8);
+          txt("Evidence:", margin+5, y, 8, "#64748b", true); y += 4;
+          doc.setFont("courier","normal"); doc.setFontSize(8); doc.setTextColor("#0f172a");
+          const lines = doc.splitTextToSize(asc(st.evidence), W-2*margin-6);
+          lines.forEach(ln => { chk(4); doc.text(ln, margin+6, y); y += 3.5; });
+        }
+
+        if (st.updated_at) {
+          doc.setFont("helvetica","italic"); doc.setFontSize(7); doc.setTextColor("#64748b");
+          doc.text("attested " + new Date(st.updated_at).toISOString().split("T")[0],
+                   W - margin, y, {align:"right"});
+          y += 4;
+        }
+        y += 5;
+      });
+    }
+
     // Footer on every page
     const total = doc.internal.getNumberOfPages();
     for (let p = 1; p <= total; p++) {
@@ -18873,12 +18937,16 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </button>
         <button
           onClick={generatePDF}
-          disabled={running || completedCount === 0}
-          title={completedCount === 0 ? "Run a scan first" : `Download PDF (${completedCount} results)`}
-          style={{background: (running || completedCount === 0) ? "#334155" : "#10b981",
+          disabled={running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)}
+          title={
+            completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0
+              ? "Run a scan or complete manual tests first"
+              : `Download PDF (${completedCount} auto + ${Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length} manual)`
+          }
+          style={{background: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "#334155" : "#10b981",
                   border:"none", borderRadius:6, padding:"10px 14px",
                   color:"#fff", fontWeight:600, fontSize:13,
-                  cursor: (running || completedCount === 0) ? "not-allowed" : "pointer"}}>
+                  cursor: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "not-allowed" : "pointer"}}>
           📄 PDF
         </button>
       </div>
