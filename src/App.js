@@ -20835,7 +20835,7 @@ export default function App() {
             autoPanel={<WebAppModule token={token} onRunningChange={setWaptRunning} isTrial={isTrial} isSuperAdmin={isSuperAdmin}/>}/>
         </div>
         <div style={{display: active==="recon"    ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="recon" moduleLabel="Recon" autoCount={56} manualTests={MANUAL_TESTS_RECON} color="#10b981"
+          <ModuleWithTabs moduleKey="recon" moduleLabel="Recon" autoCount={163} manualTests={MANUAL_TESTS_RECON} color="#10b981"
             autoPanel={<ReconModule token={token} onRunningChange={setReconRunning} activeSections={reconSections}/>}/>
         </div>
         <div style={{display: active==="vuln"     ? "block" : "none"}}>
@@ -20910,7 +20910,7 @@ export default function App() {
             longer carries duplicate _manual entries. ManualTestsPanel component
             itself is still used internally by both wrapper components. */}
         <div style={{display: active==="mobile_static" ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="mobile_static" moduleLabel="Mobile-Static" autoCount={16} manualTests={MANUAL_TESTS_MOBILE_STATIC} color="#ec4899"
+          <ModuleWithTabs moduleKey="mobile_static" moduleLabel="Mobile-Static" autoCount={12} manualTests={MANUAL_TESTS_MOBILE_STATIC} color="#ec4899"
             autoPanel={<MobileStaticModule token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="mobile_storage" ? "block" : "none"}}>
