@@ -20978,34 +20978,9 @@ export default function App() {
                   const locked = !canAccess(m);
                   const isTrial = m.trial && !isPro && !isSuperAdmin;
                   const isActive = active === m.id;
-                  if (m.id === "recon" && !locked) {
-                    const toggleSec = (n) => setReconSections(prev => { const s = new Set(prev); if (s.has(n)) s.delete(n); else s.add(n); return s; });
-                    return (
-                      <React.Fragment key={m.id}>
-                        <button className="nav-btn" onClick={()=>{ setActive("recon"); setReconExpanded(e=>!e); }}
-                          style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
-                          <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-                          <span style={{fontSize:13,color:isActive?"#f1f5f9":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35}}>{m.label}</span>
-                          {reconRunning && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0}}/>}
-                          <span style={{fontSize:9,color:"#64748b",transform:reconExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform .15s",display:"inline-block",width:10}}>{'\u25B6'}</span>
-                        </button>
-                        {reconExpanded && (
-                          <div style={{marginLeft:30,marginBottom:6,borderLeft:"1px solid #1e293b",paddingLeft:6}}>
-                            <button onClick={()=>{ setActive("recon"); setReconSections(new Set()); }}
-                              style={{width:"calc(100% - 12px)",background:(reconSections.size===0&&isActive)?"#172554":"transparent",border:"none",borderRadius:4,padding:"5px 10px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",margin:"1px 0"}}>
-                              <span style={{fontSize:11,color:(reconSections.size===0&&isActive)?"#60a5fa":"#94a3b8",fontWeight:reconSections.size===0?600:400}}>All sections</span>
-                            </button>
-                            {RECON_SECTIONS.filter(s=>s.n<99).map(sec=>(
-                              <button key={`rs-${sec.n}`} onClick={()=>{ setActive("recon"); toggleSec(sec.n); }}
-                                style={{width:"calc(100% - 12px)",background:(reconSections.has(sec.n)&&isActive)?"#172554":"transparent",border:"none",borderRadius:4,padding:"5px 10px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",margin:"1px 0"}}>
-                                <span style={{fontSize:11,color:(reconSections.has(sec.n)&&isActive)?"#60a5fa":"#94a3b8",fontWeight:reconSections.has(sec.n)?600:400}}>{sec.short}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </React.Fragment>
-                    );
-                  }
+                  // Recon's expandable section navigator removed \u2014 in-panel
+                  // SECTION headers (commit 2ce07fba) already group scanners
+                  // by section, making sidebar tier nav redundant.
                   return (
                     <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
                       style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
