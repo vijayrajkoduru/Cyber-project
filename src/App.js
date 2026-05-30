@@ -18825,22 +18825,40 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           if (!line.trim()) continue;
           try {
             const ev = JSON.parse(line);
-            if (ev.type === "result" && ev.tool) {
-              const f = (ev.data?.findings || []);
-              const sev = ev.data?.severity || "INFO";
-              const start = (initial[ev.tool] || {}).started || Date.now();
-              done++;
-              setResults(p => ({...p, [ev.tool]: {
-                status: "done", tier: (initial[ev.tool]||{}).tier,
-                severity: sev, count: f.length, elapsed: Date.now() - start,
-                data: ev.data,
-              }}));
+            // Backend orchestrator (tools/_framework/orchestrator.py) emits
+            // NDJSON events with `event:` field: scan_started, heartbeat,
+            // tool_complete, scan_complete. Each tool_complete carries the
+            // tool's data under `result`. (Legacy `type:result|error` schema
+            // also accepted for any older orchestrator instances still alive.)
+            const kind = ev.event || ev.type;
+            const payload = ev.result || ev.data || {};
+            if ((kind === "tool_complete" || kind === "result") && ev.tool) {
+              const failed = payload._failed || payload.error;
+              if (failed) {
+                done++;
+                setResults(p => ({...p, [ev.tool]: {
+                  status: "error", tier: (initial[ev.tool]||{}).tier,
+                  message: payload.error || payload._failed || "scanner failed",
+                }}));
+              } else {
+                const f = payload.findings || [];
+                const sev = payload.severity || "INFO";
+                const start = (initial[ev.tool] || {}).started || Date.now();
+                done++;
+                setResults(p => ({...p, [ev.tool]: {
+                  status: "done", tier: (initial[ev.tool]||{}).tier,
+                  severity: sev, count: f.length, elapsed: Date.now() - start,
+                  data: payload,
+                }}));
+              }
               setProgress({done, total: totalTools});
-            } else if (ev.type === "error" && ev.tool) {
+            } else if ((kind === "error") && ev.tool) {
               done++;
               setResults(p => ({...p, [ev.tool]: {status:"error", tier: (initial[ev.tool]||{}).tier, message: ev.message}}));
               setProgress({done, total: totalTools});
             }
+            // scan_started / heartbeat / scan_complete: no UI update needed,
+            // just keeps the stream alive past Cloudflare's 100s TTFB ceiling.
           } catch(_){}
         }
       }
