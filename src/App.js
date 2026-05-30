@@ -18738,22 +18738,83 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       doc.text(asc(s), x, yy, {align});
     };
 
+    // Severity counts + risk score (computed before render for cover + headline)
+    const sevCounts = {CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0, POSITIVE:0};
+    Object.values(results).forEach(r => {
+      if (r.status === "done") sevCounts[(r.severity||"INFO").toUpperCase()] = (sevCounts[(r.severity||"INFO").toUpperCase()]||0) + 1;
+    });
+    const totalFindings = sevCounts.CRITICAL + sevCounts.HIGH + sevCounts.MEDIUM + sevCounts.LOW;
+    // Risk score 0-100: weighted by severity, normalized
+    const riskScore = totalFindings === 0 ? 0 : Math.min(100, Math.round(
+      (sevCounts.CRITICAL * 25 + sevCounts.HIGH * 10 + sevCounts.MEDIUM * 3 + sevCounts.LOW * 1) /
+      Math.max(1, completedCount) * 4
+    ));
+    const riskBand = riskScore >= 75 ? "CRITICAL" : riskScore >= 50 ? "HIGH" :
+                      riskScore >= 25 ? "MEDIUM"   : riskScore > 0  ? "LOW" : "POSITIVE";
+
+    // Report ID — sha-256 lite hash of (module + target + date + counts)
+    const _hashSeed = `${moduleKey}|${target}|${new Date().toISOString().split("T")[0]}|${JSON.stringify(sevCounts)}`;
+    let _h = 5381;
+    for (let i = 0; i < _hashSeed.length; i++) _h = ((_h << 5) + _h + _hashSeed.charCodeAt(i)) >>> 0;
+    const reportId = `VL-${moduleKey.toUpperCase()}-${_h.toString(16).padStart(8,"0").toUpperCase()}`;
+
     // Cover page
     doc.setFillColor("#0f172a"); doc.rect(0,0,W,40,"F");
     txt("VulnusLab", margin, 14, 10, "#94a3b8", true);
     txt(moduleLabel, margin, 24, 18, "#f1f5f9", true);
     txt(`module_playbooks/${playbook}`, margin, 32, 8, "#64748b");
+    // Report ID on cover (top-right)
+    txt(reportId, W-margin, 14, 8, "#64748b", true, "right");
+    txt(`generated ${new Date().toISOString().replace("T"," ").split(".")[0]}Z`, W-margin, 19, 7, "#64748b", false, "right");
+
     y = 50;
     txt("Target:",            margin,      y, 9, "#64748b"); txt(target || "(none)",   margin+25, y, 10, "#0f172a", true); y += 6;
     txt("Scan date:",         margin,      y, 9, "#64748b"); txt(new Date().toISOString().split("T")[0], margin+25, y, 10, "#0f172a"); y += 6;
     txt("Total techniques:",  margin,      y, 9, "#64748b"); txt(`${totalTools} across ${tiers.length} sections`, margin+34, y, 10, "#0f172a"); y += 6;
-    txt("Executed:",          margin,      y, 9, "#64748b"); txt(`${completedCount} / ${totalTools}`, margin+25, y, 10, "#0f172a"); y += 12;
+    txt("Executed:",          margin,      y, 9, "#64748b"); txt(`${completedCount} / ${totalTools}`, margin+25, y, 10, "#0f172a"); y += 10;
+
+    // ── Risk Score Bar ──
+    const barW = W - 2*margin;
+    txt("Risk Score", margin, y, 12, "#0f172a", true);
+    txt(`${riskScore} / 100`, W-margin, y, 14, sevColor(riskBand), true, "right");
+    y += 6;
+    // Background
+    doc.setFillColor("#e2e8f0"); doc.rect(margin, y, barW, 6, "F");
+    // Fill bar proportional to risk
+    doc.setFillColor(sevColor(riskBand)); doc.rect(margin, y, barW * (riskScore / 100), 6, "F");
+    // Threshold ticks
+    [25, 50, 75].forEach(t => {
+      doc.setDrawColor("#94a3b8"); doc.setLineWidth(0.2);
+      doc.line(margin + barW * (t/100), y, margin + barW * (t/100), y + 6);
+    });
+    y += 9;
+    txt("LOW", margin, y, 7, "#64748b");
+    txt("MEDIUM", margin + barW * 0.25, y, 7, "#64748b", false, "center");
+    txt("HIGH", margin + barW * 0.5, y, 7, "#64748b", false, "center");
+    txt("CRITICAL", margin + barW * 0.75, y, 7, "#64748b", false, "center");
+    txt(`Band: ${riskBand}`, W-margin, y, 7, sevColor(riskBand), true, "right");
+    y += 10;
+
+    // ── Key Risk Headline ──
+    if (totalFindings > 0) {
+      const headline = sevCounts.CRITICAL > 0
+        ? `${sevCounts.CRITICAL} CRITICAL finding${sevCounts.CRITICAL > 1 ? "s" : ""} require immediate attention`
+        : sevCounts.HIGH > 0
+        ? `${sevCounts.HIGH} HIGH severity finding${sevCounts.HIGH > 1 ? "s" : ""} need remediation`
+        : sevCounts.MEDIUM > 0
+        ? `${sevCounts.MEDIUM} MEDIUM finding${sevCounts.MEDIUM > 1 ? "s" : ""} to address`
+        : `${sevCounts.LOW} LOW finding${sevCounts.LOW > 1 ? "s" : ""} for review`;
+      doc.setFillColor(sevColor(riskBand)); doc.rect(margin, y-3, 3, 8, "F");
+      txt("Key Risk:", margin+5, y, 9, "#64748b"); y += 4;
+      txt(headline, margin+5, y, 11, sevColor(riskBand), true); y += 8;
+    } else if (completedCount > 0) {
+      doc.setFillColor("#22c55e"); doc.rect(margin, y-3, 3, 8, "F");
+      txt("Key Risk:", margin+5, y, 9, "#64748b"); y += 4;
+      txt("No actionable findings — module scan returned clean", margin+5, y, 11, "#22c55e", true); y += 8;
+    }
+    y += 4;
 
     // Severity breakdown
-    const sevCounts = {CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0, POSITIVE:0};
-    Object.values(results).forEach(r => {
-      if (r.status === "done") sevCounts[(r.severity||"INFO").toUpperCase()] = (sevCounts[(r.severity||"INFO").toUpperCase()]||0) + 1;
-    });
     txt("Severity breakdown", margin, y, 12, "#0f172a", true); y += 8;
     Object.entries(sevCounts).forEach(([s, n]) => {
       doc.setFillColor(sevColor(s)); doc.rect(margin, y-3.5, 4, 4, "F");
@@ -18895,13 +18956,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       });
     }
 
-    // Footer on every page
+    // Footer on every page (with Report ID for tamper-evidence)
     const total = doc.internal.getNumberOfPages();
     for (let p = 1; p <= total; p++) {
       doc.setPage(p);
       doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor("#94a3b8");
       doc.text(`${moduleLabel} · ${target || "(no target)"} · page ${p}/${total}`, margin, 292);
-      doc.text("vulnuslab.com", W-margin, 292, {align:"right"});
+      doc.text(`${reportId} · vulnuslab.com`, W-margin, 292, {align:"right"});
     }
 
     const date = new Date().toISOString().split("T")[0];
