@@ -244,5 +244,24 @@ async def webapp_run_all_tiers():
     }
 
 
+# ─── ModuleAutoPanel-compatible aliases (no /scan/ middle path) ────────
+# The dashboard's generic ModuleAutoPanel fetches /api/<mod>/run_all/tiers
+# and POSTs to /api/<mod>/run_all. Webapp's original endpoints use
+# /api/webapp/scan/run_all (legacy from the pre-orchestrator era). These
+# two aliases let the standard tier UI work without rewriting the legacy
+# routes that the custom WebappModule still calls.
+
+@router.get("/api/webapp/run_all/tiers")
+async def webapp_run_all_tiers_alias():
+    return await webapp_run_all_tiers()
+
+
+@router.post("/api/webapp/run_all")
+async def webapp_run_all_alias(req: "WebAppRunAllRequest",
+                                 request: Request,
+                                 _=Depends(verify_scan_quota)):
+    return await webapp_run_all(req, request, _)
+
+
 def register(app):
     app.include_router(router)
