@@ -2,8 +2,11 @@
 
 MITRE T1566 + SET canon + AiTM + 2024+ deepfake additions.
 Most techniques require campaign infrastructure — rendered as structured
-advisories describing the technique + defender detection patterns.
+advisories. VL-FORGE 2026-05-30: 2 live probes for email-spoof posture
+(SPF + DMARC DNS lookups). Other techniques correctly remain advisory
+(campaign infra / requires victim interaction).
 """
+import socket
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, wrap_finding
 
@@ -19,6 +22,97 @@ def _adv(tool, target, title, *, sev="MEDIUM", cvss="5.0", cwe="CWE-1021",
             "findings":[wrap_finding(title, sev, cvss=cvss, cwe=cwe, owasp="A07:2021",
                 remediation=remediation, evidence_marker=evidence)],
             "tests_performed":1, "tests_summary":title[:80], "raw_data":{}}
+
+
+def _host(t):
+    return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+
+
+def _dns_txt(domain: str) -> list:
+    """Best-effort DNS TXT lookup. Returns list of strings."""
+    try:
+        import dns.resolver
+        try:
+            answers = dns.resolver.resolve(domain, "TXT", lifetime=4)
+            return [str(rdata).strip('"') for rdata in answers]
+        except Exception:
+            return []
+    except ImportError:
+        return []
+
+
+def _probe_mailspoof(target, req):
+    """SPF/DMARC posture check via live DNS TXT lookups."""
+    domain = _host(target)
+    spf_records = [t for t in _dns_txt(domain) if t.startswith("v=spf1")]
+    dmarc_records = [t for t in _dns_txt(f"_dmarc.{domain}") if t.startswith("v=DMARC1")]
+    findings = []
+    # SPF analysis
+    if not spf_records:
+        findings.append(wrap_finding(
+            "No SPF record — sender spoofing possible",
+            "HIGH", cvss="7.5", cwe="CWE-290",
+            remediation="Publish SPF record: v=spf1 include:... -all (strict)",
+            evidence_marker=f"_dns_query TXT {domain} → no v=spf1"))
+    else:
+        spf = spf_records[0]
+        if " -all" in spf:
+            spf_strict = "strict (-all)"; sev = "POSITIVE"; cvss = "0.0"
+        elif " ~all" in spf:
+            spf_strict = "soft-fail (~all)"; sev = "MEDIUM"; cvss = "5.0"
+        elif " ?all" in spf or " +all" in spf:
+            spf_strict = "neutral or permit-all (DANGEROUS)"; sev = "HIGH"; cvss = "7.5"
+        else:
+            spf_strict = "no terminating qualifier"; sev = "MEDIUM"; cvss = "5.0"
+        findings.append(wrap_finding(
+            f"SPF record present — {spf_strict}",
+            sev, cvss=cvss, cwe="CWE-290",
+            remediation="Strict -all is recommended once SPF is fully populated.",
+            evidence_marker=f"SPF: {spf[:150]}"))
+    # DMARC analysis
+    if not dmarc_records:
+        findings.append(wrap_finding(
+            "No DMARC record — receiving servers won't enforce SPF/DKIM alignment",
+            "HIGH", cvss="7.5", cwe="CWE-290",
+            remediation="Publish DMARC: v=DMARC1; p=reject; rua=mailto:dmarc@yourdomain (start at p=none then ramp up).",
+            evidence_marker=f"_dns_query TXT _dmarc.{domain} → empty"))
+    else:
+        dmarc = dmarc_records[0]
+        if "p=reject" in dmarc:
+            sev = "POSITIVE"; cvss = "0.0"; status = "reject (strongest)"
+        elif "p=quarantine" in dmarc:
+            sev = "LOW"; cvss = "3.0"; status = "quarantine (medium)"
+        elif "p=none" in dmarc:
+            sev = "MEDIUM"; cvss = "5.0"; status = "none (monitor-only)"
+        else:
+            sev = "MEDIUM"; cvss = "5.0"; status = "no p= policy"
+        findings.append(wrap_finding(
+            f"DMARC policy: {status}",
+            sev, cvss=cvss, cwe="CWE-290",
+            remediation="Ramp p=none → p=quarantine → p=reject as confidence grows.",
+            evidence_marker=f"DMARC: {dmarc[:150]}"))
+    sev_top = "INFO"
+    sev_order = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
+    for f in findings:
+        if sev_order.get(f.get("severity","INFO"),0) > sev_order.get(sev_top,0):
+            sev_top = f.get("severity","INFO")
+    return {"tool":"mailspoof_spoofcheck","target":target,"scan_time":0,
+            "vulnerable": sev_top in ("CRITICAL","HIGH","MEDIUM"),
+            "severity": sev_top, "findings": findings,
+            "tests_performed": 2, "tests_summary": "SPF + DMARC live DNS check",
+            "raw_data": {"spf": spf_records, "dmarc": dmarc_records}}
+
+
+def _probe_spf_dkim_dmarc_bypass(target, req):
+    """Same as mailspoof but reports under the bypass slug for parity."""
+    r = _probe_mailspoof(target, req)
+    return r | {"tool": "spf_dkim_dmarc_bypass"}
+
+
+PROBES = {
+    "mailspoof_spoofcheck":   _probe_mailspoof,
+    "spf_dkim_dmarc_bypass":  _probe_spf_dkim_dmarc_bypass,
+}
 
 
 TECHNIQUES = [
@@ -115,9 +209,24 @@ def _make_handler(slug, title, sev, cvss):
     return _h
 
 
+def _make_probe_handler(slug, probe_fn):
+    def _h(req: ScanRequest, _=Depends(verify_scan_quota)):
+        try:
+            return probe_fn(req.target, req)
+        except Exception as e:
+            return _adv(slug, req.target, f"Probe error: {str(e)[:80]}",
+                         sev="INFO", cvss="0.0")
+    _h.__name__ = slug
+    return _h
+
+
 for slug, title, sev, cvss in TECHNIQUES:
-    router.add_api_route(f"/api/phishing/{slug}", _make_handler(slug, title, sev, cvss),
-                          methods=["POST"])
+    if slug in PROBES:
+        router.add_api_route(f"/api/phishing/{slug}",
+            _make_probe_handler(slug, PROBES[slug]), methods=["POST"])
+    else:
+        router.add_api_route(f"/api/phishing/{slug}",
+            _make_handler(slug, title, sev, cvss), methods=["POST"])
 
 
 def register(app):
