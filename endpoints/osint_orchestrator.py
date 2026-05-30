@@ -87,6 +87,30 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("llm_disinfo_detect",   "/api/osint/llm_disinfo_detect"),
         ("llm_image_to_text",    "/api/osint/llm_image_to_text"),
     ],
+    # ── VL-FORGE 2026-05-30 round 2: +15 real probes across 4 new tiers ──
+    "tier11_social_media": [
+        ("nitter_twitter_recent",  "/api/osint/nitter_twitter_recent"),
+        ("reddit_user_history",    "/api/osint/reddit_user_history"),
+        ("mastodon_user_lookup",   "/api/osint/mastodon_user_lookup"),
+        ("youtube_channel_rss",    "/api/osint/youtube_channel_rss"),
+        ("github_activity_recent", "/api/osint/github_activity_recent"),
+    ],
+    "tier12_image_geo": [
+        ("exif_metadata_url",      "/api/osint/exif_metadata_url"),
+        ("reverse_image_search",   "/api/osint/reverse_image_search"),
+        ("osm_location_lookup",    "/api/osint/osm_location_lookup"),
+    ],
+    "tier13_corporate_extra": [
+        ("uk_companies_house",     "/api/osint/uk_companies_house"),
+        ("mca_indian_company",     "/api/osint/mca_indian_company"),
+        ("censys_certs_free",      "/api/osint/censys_certs_free"),
+    ],
+    "tier14_developer_intel": [
+        ("github_secrets_scan",    "/api/osint/github_secrets_scan"),
+        ("commoncrawl_cdx",        "/api/osint/commoncrawl_cdx"),
+        ("certspotter_history",    "/api/osint/certspotter_history"),
+        ("wayback_robots_history", "/api/osint/wayback_robots_history"),
+    ],
 }
 
 

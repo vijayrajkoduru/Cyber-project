@@ -59,7 +59,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = [wrap_finding(
         f"Email pattern candidates for {first} {last} @ {domain}",
-        severity="INFO", cwe="CWE-200", owasp="A05:2021",
+        severity="POSITIVE", cwe="CWE-200", owasp="A05:2021",
         remediation="Verify candidates via hunter.io domain-search or SMTP "
                     "validation. Most B2B orgs use {first}.{last} (~45% of "
                     "mid-market per Hunter data 2024).",
