@@ -20766,10 +20766,10 @@ export default function App() {
             autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="🛡️" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="password" ? "block" : "none"}}>
-          <PasswordModule token={token}/>
+          <PasswordModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="auth_attacks" ? "block" : "none"}}>
-          <AuthAttacksModule token={token}/>
+          <AuthAttacksModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="phishing" ? "block" : "none"}}>
           <PhishingModule token={token} apiUrl={API}/>
@@ -20778,13 +20778,13 @@ export default function App() {
           <RedTeamModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="network" ? "block" : "none"}}>
-          <NetworkAttacksModule token={token}/>
+          <NetworkAttacksModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="system_exploit" ? "block" : "none"}}>
-          <SystemExploitModule token={token}/>
+          <SystemExploitModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="bof"   ? "block" : "none"}}>
-          <BufferOverflowModule token={token}/>
+          <BufferOverflowModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="exploit"  ? "block" : "none"}}>
           <ExploitationModule token={token} apiUrl={API}/>
