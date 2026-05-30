@@ -18479,6 +18479,134 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     return sevColor(r.severity);
   };
 
+  // ── VL-FLOW PDF export (universal across all 26 ModuleAutoPanel modules) ──
+  const completedCount = Object.values(results).filter(r => r.status === "done").length;
+  const generatePDF = () => {
+    const asc = v => String(v == null ? "" : v)
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+      .replace(/[→]/g, "->").replace(/[←]/g, "<-")
+      .replace(/[✓✔]/g, "v ").replace(/[✘✖]/g, "X ")
+      .replace(/[—–]/g, "-").replace(/[·]/g, "-")
+      .replace(/[ ]/g, " ");
+    const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+    const W = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    let y = 14;
+    const chk = (n) => { if (y + n > 285) { doc.addPage(); y = 14; } };
+    const line = (x1,y1,x2,y2,col="#cbd5e1") => { doc.setDrawColor(col); doc.line(x1,y1,x2,y2); };
+    const txt = (s, x, yy, sz=10, col="#0f172a", bold=false, align="left") => {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(sz); doc.setTextColor(col);
+      doc.text(asc(s), x, yy, {align});
+    };
+
+    // Cover page
+    doc.setFillColor("#0f172a"); doc.rect(0,0,W,40,"F");
+    txt("VulnusLab", margin, 14, 10, "#94a3b8", true);
+    txt(moduleLabel, margin, 24, 18, "#f1f5f9", true);
+    txt(`module_playbooks/${playbook}`, margin, 32, 8, "#64748b");
+    y = 50;
+    txt("Target:",            margin,      y, 9, "#64748b"); txt(target || "(none)",   margin+25, y, 10, "#0f172a", true); y += 6;
+    txt("Scan date:",         margin,      y, 9, "#64748b"); txt(new Date().toISOString().split("T")[0], margin+25, y, 10, "#0f172a"); y += 6;
+    txt("Total techniques:",  margin,      y, 9, "#64748b"); txt(`${totalTools} across ${tiers.length} sections`, margin+34, y, 10, "#0f172a"); y += 6;
+    txt("Executed:",          margin,      y, 9, "#64748b"); txt(`${completedCount} / ${totalTools}`, margin+25, y, 10, "#0f172a"); y += 12;
+
+    // Severity breakdown
+    const sevCounts = {CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0, INFO:0, POSITIVE:0};
+    Object.values(results).forEach(r => {
+      if (r.status === "done") sevCounts[(r.severity||"INFO").toUpperCase()] = (sevCounts[(r.severity||"INFO").toUpperCase()]||0) + 1;
+    });
+    txt("Severity breakdown", margin, y, 12, "#0f172a", true); y += 8;
+    Object.entries(sevCounts).forEach(([s, n]) => {
+      doc.setFillColor(sevColor(s)); doc.rect(margin, y-3.5, 4, 4, "F");
+      txt(s, margin+7, y, 10, "#0f172a", true);
+      txt(`${n}`, margin+45, y, 10, "#0f172a");
+      y += 6;
+    });
+    y += 4;
+
+    // Per-tier section
+    chk(20);
+    txt("Findings by section", margin, y, 12, "#0f172a", true); y += 8;
+    tiers.forEach(tier => {
+      chk(15);
+      doc.setFillColor("#1e293b"); doc.rect(margin, y-4, W-2*margin, 6, "F");
+      txt(`${tier.id}  ·  ${tier.count} techniques`, margin+2, y, 10, "#f1f5f9", true);
+      y += 8;
+      (tier.tools || []).forEach(tool => {
+        const r = results[tool] || {};
+        chk(8);
+        doc.setFillColor(dot(r)); doc.rect(margin, y-3.5, 3, 3.5, "F");
+        txt(tool, margin+6, y, 9, "#0f172a");
+        if (r.severity && r.severity !== "INFO") {
+          doc.setFillColor(sevColor(r.severity));
+          doc.rect(W-margin-30, y-3.5, 18, 4, "F");
+          txt(r.severity, W-margin-21, y-0.5, 7, "#fff", true, "center");
+        }
+        if (typeof r.count === "number") {
+          txt(`${r.count} finding(s)`, W-margin-10, y, 8, "#64748b", false, "right");
+        }
+        y += 5;
+      });
+      y += 3;
+    });
+
+    // Detailed findings — every non-INFO scanner that returned >=1 finding
+    chk(30);
+    y += 5;
+    txt("Detailed findings (non-INFO)", margin, y, 12, "#0f172a", true); y += 8;
+    const sevOrder = {CRITICAL:5, HIGH:4, MEDIUM:3, LOW:2, INFO:1, POSITIVE:0};
+    const detailed = Object.entries(results)
+      .filter(([_, r]) => r.status === "done" && r.data?.findings?.length > 0)
+      .sort((a, b) => (sevOrder[(b[1].severity||"INFO").toUpperCase()]||0) -
+                       (sevOrder[(a[1].severity||"INFO").toUpperCase()]||0));
+    if (!detailed.length) {
+      txt("No findings to report.", margin, y, 9, "#64748b"); y += 8;
+    }
+    detailed.forEach(([tool, r]) => {
+      (r.data?.findings || []).forEach(f => {
+        chk(35);
+        doc.setFillColor(sevColor(f.severity || r.severity));
+        doc.rect(margin, y-3, 2, 8, "F");
+        txt(`${tool}  ·  ${f.severity || r.severity}`, margin+4, y, 10, "#0f172a", true);
+        if (f.cvss) txt(`CVSS ${f.cvss}`, W-margin-30, y, 8, "#64748b", false, "right");
+        if (f.cwe) txt(`${f.cwe}`, W-margin-12, y, 8, "#64748b", false, "right");
+        y += 5;
+        if (f.detail) {
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor("#334155");
+          const lines = doc.splitTextToSize(asc(f.detail), W-2*margin-4);
+          lines.forEach(ln => { chk(5); doc.text(ln, margin+4, y); y += 4; });
+        }
+        if (f.evidence_marker) {
+          chk(5);
+          doc.setFont("helvetica","italic"); doc.setFontSize(8); doc.setTextColor("#64748b");
+          const lines = doc.splitTextToSize(asc("Evidence: " + f.evidence_marker), W-2*margin-4);
+          lines.forEach(ln => { chk(4); doc.text(ln, margin+4, y); y += 3.5; });
+        }
+        if (f.remediation) {
+          chk(5);
+          doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor("#0f172a");
+          const lines = doc.splitTextToSize(asc("Remediation: " + f.remediation), W-2*margin-4);
+          lines.forEach(ln => { chk(4); doc.text(ln, margin+4, y); y += 3.5; });
+        }
+        y += 3;
+      });
+    });
+
+    // Footer on every page
+    const total = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= total; p++) {
+      doc.setPage(p);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor("#94a3b8");
+      doc.text(`${moduleLabel} · ${target || "(no target)"} · page ${p}/${total}`, margin, 292);
+      doc.text("vulnuslab.com", W-margin, 292, {align:"right"});
+    }
+
+    const date = new Date().toISOString().split("T")[0];
+    const safeTarget = (target || "untargeted").replace(/[^a-z0-9.-]/gi, "_");
+    doc.save(`${moduleKey}_${safeTarget}_${date}.pdf`);
+  };
+
   return (
     <div style={{padding:24, color:"#f1f5f9"}}>
       <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:8}}>
@@ -18504,6 +18632,16 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   color:"#fff", fontWeight:600, fontSize:13,
                   cursor: running || !target.trim() ? "not-allowed" : "pointer"}}>
           {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
+        </button>
+        <button
+          onClick={generatePDF}
+          disabled={running || completedCount === 0}
+          title={completedCount === 0 ? "Run a scan first" : `Download PDF (${completedCount} results)`}
+          style={{background: (running || completedCount === 0) ? "#334155" : "#10b981",
+                  border:"none", borderRadius:6, padding:"10px 14px",
+                  color:"#fff", fontWeight:600, fontSize:13,
+                  cursor: (running || completedCount === 0) ? "not-allowed" : "pointer"}}>
+          📄 PDF
         </button>
       </div>
 
