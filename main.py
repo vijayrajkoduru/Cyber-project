@@ -77,6 +77,66 @@ async def health():
         "healing_engine": "active" if _HEAL_AVAILABLE else "unavailable",
     }
 
+
+@app.get("/api/manifest")
+async def manifest():
+    """Returns the full module catalogue: every module → its tiers →
+    technique counts → playbook reference. Used by:
+      - External integrators (CI/CD, partner dashboards)
+      - Frontend auto-generation of capability views
+      - CLI tool discovery (vulnuslab list)
+      - Sales/marketing capability matrix
+
+    Walks every registered route and groups by module slug. Free, no auth.
+    """
+    from collections import defaultdict
+    modules = defaultdict(lambda: {"endpoints": [], "tiers": {}, "run_all": False})
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/"): continue
+        parts = path.split("/")
+        if len(parts) < 4: continue
+        module = parts[2]
+        # skip non-module routes
+        if module in ("health","manifest","auth","admin","user","login","register",
+                       "auth_login","auth_register","logout","verify","scan_quota"): continue
+        endpoint = "/".join(parts[3:])
+        modules[module]["endpoints"].append(endpoint)
+        if endpoint == "run_all" or endpoint.startswith("run_all"):
+            modules[module]["run_all"] = True
+    playbook_map = {
+        "recon":"01_recon.md","vuln":"02_vuln.md","webapp":"03_webapp.md","osint":"04_osint.md",
+        "mobile_static":"05_mobile.md","mobile_storage":"05_mobile.md","mobile_runtime":"05_mobile.md",
+        "mobile_crypto":"05_mobile.md","mobile_network":"05_mobile.md",
+        "exploit":"06_exploit.md","bof":"07_bof.md","password":"08_password.md",
+        "client_side":"09_client_side.md","system_exploit":"10_system_exploit.md",
+        "metasploit":"11_metasploit.md","privesc":"12_privesc.md","post_exploit":"13_post_exploit.md",
+        "pivot":"14_pivot.md","tunnel":"15_tunnel.md","network":"16_network.md",
+        "auth_attacks":"17_auth_attacks.md","wireless":"18_wireless.md","ad":"19_ad.md",
+        "av_evasion":"20_av_evasion.md","cloud":"21_cloud.md","apisec":"22_apisec.md",
+        "ai_llm":"23_ai_llm.md","container_k8s":"24_container_k8s.md","supply_chain":"25_supply_chain.md",
+        "phishing":"26_phishing.md","red_team":"27_red_team.md","hybrid_identity":"28_hybrid_identity.md",
+        "sspm":"29_sspm.md","iot_ot":"30_iot_ot.md","firmware":"31_firmware.md",
+    }
+    out = []
+    for slug, data in sorted(modules.items()):
+        eps = sorted(set(data["endpoints"]))
+        out.append({
+            "slug": slug,
+            "playbook": playbook_map.get(slug),
+            "endpoint_count": len(eps),
+            "has_run_all": data["run_all"],
+            "endpoints": eps[:200],  # cap for response size
+        })
+    return {
+        "service": "vulnuslab-api",
+        "version": "2.0.0",
+        "modules": out,
+        "total_modules": len(out),
+        "total_endpoints": sum(m["endpoint_count"] for m in out),
+        "playbooks_available": list(playbook_map.values()),
+    }
+
 # ── Tool + endpoint auto-discovery ──────────────────────────────────
 # At startup, walk tools/<category>/<tool>.py and endpoints/<module>.py.
 # Each file that exports `register(app)` gets called. Exceptions during
