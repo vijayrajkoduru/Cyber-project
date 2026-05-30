@@ -1,5 +1,198 @@
-"""§30 IoT/OT/ICS Security — 58 endpoints per 30_iot_ot.md."""
-from tools._pack_common import make_advisory_router
+"""§30 IoT/OT/ICS Security — 58 endpoints per 30_iot_ot.md.
+
+VL-FORGE upgrade 2026-05-30: 6 live probes for externally-observable
+ICS/SCADA protocols on standard ports (Modbus 502, Siemens S7 102,
+EtherNet/IP 44818, BACnet 47808, DNP3 20000, Mirai-era IoT telnet 23/2323).
+"""
+import socket
+from contextlib import closing
+from tools._pack_common import make_advisory_router, _adv_response
+from tools._shared import wrap_finding
+
+
+def _host(t):
+    return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+
+def _tcp_open(host, port, timeout=2.0):
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.settimeout(timeout)
+            return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+
+def _udp_probe(host, port, payload=b"\x00", timeout=1.5):
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
+            s.settimeout(timeout)
+            s.sendto(payload, (host, port))
+            try:
+                data, _ = s.recvfrom(512)
+                return True, data
+            except socket.timeout:
+                return False, b""
+    except Exception:
+        return False, b""
+
+def _build(tool, target, findings, tested, summary):
+    sev_order = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
+    top = "INFO"
+    for f in findings:
+        if sev_order.get(f.get("severity","INFO"),0) > sev_order.get(top,0):
+            top = f.get("severity","INFO")
+    return {"tool":tool,"target":target,"scan_time":0,
+            "vulnerable": top in ("CRITICAL","HIGH","MEDIUM"),
+            "severity": top, "findings": findings,
+            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+
+
+def _probe_modbus(target, req):
+    host = _host(target)
+    findings = []
+    if _tcp_open(host, 502):
+        # Send Modbus function code 0x01 (Read Coils)
+        try:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+                s.settimeout(3.0)
+                if s.connect_ex((host, 502)) == 0:
+                    req_pkt = b"\x00\x01\x00\x00\x00\x06\x01\x01\x00\x00\x00\x01"
+                    s.send(req_pkt)
+                    resp = s.recv(256)
+                    if resp and len(resp) >= 8 and resp[7] == 0x01:
+                        findings.append(wrap_finding(
+                            "Modbus TCP/502 service responding — UNAUTH critical-control protocol exposed",
+                            "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
+                            remediation="NEVER expose Modbus to internet. Segregate OT network from corporate; use Modbus-Sec or VPN.",
+                            evidence_marker=f"TCP/502 open; Function 01 (Read Coils) accepted"))
+                    else:
+                        findings.append(wrap_finding(
+                            "TCP/502 open but no Modbus response",
+                            "HIGH", cvss="7.0", cwe="CWE-306",
+                            remediation="Verify what listens on 502; if Modbus, restrict immediately.",
+                            evidence_marker="TCP/502 open, no protocol confirm"))
+        except Exception as e:
+            findings.append(wrap_finding(
+                f"TCP/502 open but probe error: {str(e)[:50]}",
+                "MEDIUM", cvss="5.0", cwe="CWE-306",
+                remediation="Manual review.", evidence_marker=str(e)[:80]))
+    else:
+        findings.append(wrap_finding(
+            "Modbus TCP/502 not externally reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue OT-network segregation.",
+            evidence_marker="TCP/502 closed"))
+    return _build("modbus_502_probe", target, findings, 1, "Modbus TCP/502 protocol probe")
+
+
+def _probe_siemens_s7(target, req):
+    host = _host(target)
+    findings = []
+    if _tcp_open(host, 102):
+        findings.append(wrap_finding(
+            "Siemens S7 TCP/102 (ISO-TSAP) reachable — likely PLC exposed",
+            "CRITICAL", cvss="9.5", cwe="CWE-306",
+            remediation="NEVER expose PLC management to internet. Use industrial firewall + VPN.",
+            evidence_marker="TCP/102 open"))
+    else:
+        findings.append(wrap_finding(
+            "Siemens S7 TCP/102 not reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue PLC network isolation.",
+            evidence_marker="TCP/102 closed"))
+    return _build("siemens_s7_102_probe", target, findings, 1, "Siemens S7 PLC probe")
+
+
+def _probe_ethernet_ip(target, req):
+    host = _host(target)
+    findings = []
+    if _tcp_open(host, 44818):
+        findings.append(wrap_finding(
+            "EtherNet/IP TCP/44818 reachable — Allen-Bradley/Rockwell PLC likely exposed",
+            "CRITICAL", cvss="9.5", cwe="CWE-306",
+            remediation="Block EtherNet/IP at corporate firewall; segregate OT.",
+            evidence_marker="TCP/44818 open"))
+    else:
+        findings.append(wrap_finding(
+            "EtherNet/IP TCP/44818 not reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue OT segregation.",
+            evidence_marker="TCP/44818 closed"))
+    return _build("ethernet_ip_probe", target, findings, 1, "EtherNet/IP probe")
+
+
+def _probe_bacnet(target, req):
+    host = _host(target)
+    findings = []
+    # BACnet/IP uses UDP/47808 with a Who-Is broadcast
+    bacnet_who_is = b"\x81\x0b\x00\x0c\x01\x20\xff\xff\x00\xff\x10\x08"
+    reachable, data = _udp_probe(host, 47808, bacnet_who_is, timeout=2.0)
+    if reachable or _tcp_open(host, 47808):
+        findings.append(wrap_finding(
+            "BACnet UDP/47808 reachable — building automation system exposed",
+            "HIGH", cvss="7.5", cwe="CWE-306",
+            remediation="Restrict BACnet to building network; firewall internet exposure.",
+            evidence_marker=f"UDP/47808 probe {'returned data' if reachable else 'no response (possibly filtered)'}"))
+    else:
+        findings.append(wrap_finding(
+            "BACnet UDP/47808 not reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue BMS network segregation.",
+            evidence_marker="UDP/47808 silent"))
+    return _build("bacnet_47808_probe", target, findings, 1, "BACnet UDP/47808 probe")
+
+
+def _probe_dnp3(target, req):
+    host = _host(target)
+    findings = []
+    if _tcp_open(host, 20000):
+        findings.append(wrap_finding(
+            "DNP3 TCP/20000 reachable — power/water SCADA likely exposed",
+            "CRITICAL", cvss="9.5", cwe="CWE-306",
+            remediation="DNP3 must be on isolated network; use DNP3-SA + VPN.",
+            evidence_marker="TCP/20000 open"))
+    else:
+        findings.append(wrap_finding(
+            "DNP3 TCP/20000 not reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue SCADA isolation.",
+            evidence_marker="TCP/20000 closed"))
+    return _build("dnp3_unauth_advisory", target, findings, 1, "DNP3 TCP/20000 probe")
+
+
+def _probe_iot_telnet(target, req):
+    host = _host(target)
+    findings = []
+    for port in [23, 2323]:
+        if _tcp_open(host, port, timeout=2):
+            try:
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+                    s.settimeout(2)
+                    if s.connect_ex((host, port)) == 0:
+                        banner = s.recv(128).decode("utf-8", errors="ignore").strip()
+                        findings.append(wrap_finding(
+                            f"Telnet {port}/tcp open — IoT/Mirai-era backdoor risk",
+                            "HIGH", cvss="8.0", cwe="CWE-319",
+                            remediation="Disable telnet; use SSH + key auth; check for embedded default creds.",
+                            evidence_marker=f"TCP/{port} banner: {banner[:80] if banner else '(empty)'}"))
+            except Exception:
+                pass
+    if not findings:
+        findings.append(wrap_finding(
+            "Telnet 23/2323 not externally reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue.",
+            evidence_marker="Both ports closed"))
+    return _build("iot_telnet_2323_probe", target, findings, 2, "IoT telnet port probe")
+
+
+PROBES = {
+    "modbus_502_probe":          _probe_modbus,
+    "siemens_s7_102_probe":      _probe_siemens_s7,
+    "ethernet_ip_probe":         _probe_ethernet_ip,
+    "bacnet_47808_probe":        _probe_bacnet,
+    "dnp3_unauth_advisory":      _probe_dnp3,
+    "iot_telnet_2323_probe":     _probe_iot_telnet,
+}
 
 T = [
     # §1 ICS/SCADA Discovery (11)
@@ -71,7 +264,8 @@ T = [
 ]
 
 router = make_advisory_router("iot_ot", T,
-    playbook_ref="See module_playbooks/30_iot_ot.md.")
+    playbook_ref="See module_playbooks/30_iot_ot.md.",
+    probes=PROBES)
 
 
 def register(app):
