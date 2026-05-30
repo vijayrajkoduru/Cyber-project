@@ -1,5 +1,106 @@
-"""§29 SaaS Security Posture Management — 77 endpoints per 29_sspm.md."""
-from tools._pack_common import make_advisory_router
+"""§29 SaaS Security Posture Management — 77 endpoints per 29_sspm.md.
+
+VL-FORGE 2026-05-30: 2 live probes for SaaS tenant detection via anonymous
+Microsoft endpoints (M365 + Google Workspace MX lookup).
+"""
+import urllib.request, urllib.error, socket
+from tools._pack_common import make_advisory_router, _adv_response
+from tools._shared import wrap_finding
+
+
+def _host(t):
+    return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+
+def _http_get(url, timeout=4):
+    try:
+        r = urllib.request.Request(url, headers={"User-Agent":"VulnusLab/2.0"})
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            return resp.status, resp.read(4096).decode("utf-8", errors="ignore")
+    except urllib.error.HTTPError as e:
+        try: return e.code, e.read(2048).decode("utf-8", errors="ignore")
+        except Exception: return e.code, ""
+    except Exception:
+        return 0, ""
+
+def _dns_mx(domain):
+    """Best-effort DNS MX lookup."""
+    try:
+        import dns.resolver
+        try:
+            answers = dns.resolver.resolve(domain, "MX", lifetime=4)
+            return [str(r.exchange).rstrip(".") for r in answers]
+        except Exception:
+            return []
+    except ImportError:
+        return []
+
+def _build(tool, target, findings, tested, summary):
+    sev_order = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
+    top = "INFO"
+    for f in findings:
+        if sev_order.get(f.get("severity","INFO"),0) > sev_order.get(top,0):
+            top = f.get("severity","INFO")
+    return {"tool":tool,"target":target,"scan_time":0,
+            "vulnerable": top in ("CRITICAL","HIGH","MEDIUM"),
+            "severity": top, "findings": findings,
+            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+
+
+def _probe_m365_detect(target, req):
+    """Detect M365 tenant via login.microsoftonline.com OpenID + MX lookup."""
+    domain = _host(target)
+    code, body = _http_get(f"https://login.microsoftonline.com/{domain}/.well-known/openid-configuration", timeout=4)
+    mx_records = _dns_mx(domain)
+    is_m365_mx = any(("mail.protection.outlook.com" in mx.lower()) for mx in mx_records)
+    findings = []
+    if code == 200 and body.strip().startswith("{"):
+        findings.append(wrap_finding(
+            f"M365 tenant detected — OpenID config present + {'MX → outlook.com' if is_m365_mx else 'MX inconclusive'}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Audit M365 posture: Secure Score, Conditional Access, basic auth disabled, DKIM/SPF/DMARC.",
+            evidence_marker=f"OpenID 200; MX: {mx_records[:3]}"))
+    elif is_m365_mx:
+        findings.append(wrap_finding(
+            f"MX records → M365 ({', '.join(mx_records[:2])}) but no OpenID config",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify M365 tenant association.",
+            evidence_marker=f"MX: {mx_records[:3]}"))
+    else:
+        findings.append(wrap_finding(
+            f"No M365 signature detected for {domain}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue.",
+            evidence_marker=f"OpenID: {code}; MX: {mx_records[:3] if mx_records else 'none'}"))
+    return _build("m365_secure_score_audit", target, findings, 2,
+                   "M365 tenant detection (OpenID + MX)")
+
+
+def _probe_gws_detect(target, req):
+    """Detect Google Workspace via MX records."""
+    domain = _host(target)
+    mx_records = _dns_mx(domain)
+    is_gws = any("aspmx.l.google.com" in mx.lower() or "googlemail.com" in mx.lower() for mx in mx_records)
+    findings = []
+    if is_gws:
+        findings.append(wrap_finding(
+            f"Google Workspace detected via MX records ({', '.join(mx_records[:3])})",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Audit GWS posture: 2SV enforcement, Advanced Protection, OAuth scope audit, DLP.",
+            evidence_marker=f"MX: {mx_records[:3]}"))
+    else:
+        findings.append(wrap_finding(
+            f"No Google Workspace signature detected for {domain}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue.",
+            evidence_marker=f"MX: {mx_records[:3] if mx_records else 'none'}"))
+    return _build("gws_2sv_enforcement", target, findings, 1,
+                   "Google Workspace tenant MX detection")
+
+
+PROBES = {
+    "m365_secure_score_audit":  _probe_m365_detect,
+    "gws_2sv_enforcement":      _probe_gws_detect,
+}
 
 T = [
     # §1 M365 Posture (15)
@@ -90,7 +191,8 @@ T = [
 ]
 
 router = make_advisory_router("sspm", T,
-    playbook_ref="See module_playbooks/29_sspm.md.")
+    playbook_ref="See module_playbooks/29_sspm.md.",
+    probes=PROBES)
 
 
 def register(app):
