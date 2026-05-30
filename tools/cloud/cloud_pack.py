@@ -199,11 +199,129 @@ def _probe_oidc_discovery(target, req):
             "raw_data": data}
 
 
+def _probe_recon_cloud_dns(target, req):
+    """Identify which cloud provider a target's DNS resolves to (AWS/Azure/GCP/CF)."""
+    host = _host(target)
+    try:
+        ip = socket.gethostbyname(host)
+    except Exception:
+        return _adv_response("recon_cloud_dns", target,
+            f"DNS resolution failed for {host}", "INFO", "0.0", evidence=host)
+    findings = []
+    code, body, headers = _http_get(f"https://{host}", timeout=4)
+    cloud_hints = []
+    server_hdr = (headers.get("Server") or headers.get("server") or "").lower()
+    if "cf-ray" in {k.lower() for k in headers.keys()}: cloud_hints.append("Cloudflare")
+    if "x-amz-" in str(headers).lower() or "amazon" in server_hdr: cloud_hints.append("AWS")
+    if "x-ms-" in str(headers).lower() or "azure" in server_hdr: cloud_hints.append("Azure")
+    if "x-goog-" in str(headers).lower() or "gws" in server_hdr: cloud_hints.append("GCP")
+    if "x-fastly-" in str(headers).lower(): cloud_hints.append("Fastly")
+    if "akamai" in server_hdr: cloud_hints.append("Akamai")
+    findings.append(wrap_finding(
+        f"Cloud surface: {', '.join(cloud_hints) if cloud_hints else 'no recognizable cloud headers'}",
+        "INFO", cvss="0.0", cwe="CWE-200",
+        remediation="Inventory cloud providers in use; ensure WAF/CDN protections active.",
+        evidence_marker=f"IP={ip}; hints={cloud_hints or 'none'}; server={server_hdr or 'unknown'}"))
+    return {"tool":"recon_cloud_dns","target":target,"scan_time":0,
+            "vulnerable": False, "severity": "INFO", "findings": findings,
+            "tests_performed": 1, "tests_summary": "Cloud-provider DNS+header recon",
+            "raw_data": {"ip": ip, "cloud_hints": cloud_hints, "server": server_hdr}}
+
+
+def _probe_ecr_public_access(target, req):
+    """Check if a public ECR repository is anonymously pullable."""
+    host = _host(target)
+    if "public.ecr.aws" not in host:
+        return _adv_response("ecr_public_access", target,
+            "Target not on public.ecr.aws — skipping live probe",
+            "INFO", "0.0", evidence=host)
+    code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
+    is_public = code == 200 and ('"errors"' not in body[:200])
+    return {"tool":"ecr_public_access","target":target,"scan_time":0,
+            "vulnerable": is_public, "severity": "HIGH" if is_public else "POSITIVE",
+            "findings":[wrap_finding(
+                f"ECR public registry {'allows anonymous /v2 enum' if is_public else 'denied anonymous /v2 enum'}",
+                "HIGH" if is_public else "POSITIVE",
+                cvss="7.0" if is_public else "0.0", cwe="CWE-200",
+                remediation="If unintended, switch to private ECR; require IAM-signed pulls.",
+                evidence_marker=f"GET https://{host}/v2/ → {code}")],
+            "tests_performed": 1, "tests_summary": "ECR public anonymous-pull check",
+            "raw_data": {"host": host, "status": code}}
+
+
+def _probe_gcr_public_access(target, req):
+    """Check if GCR repository is anonymously accessible."""
+    host = _host(target)
+    if not any(x in host for x in ["gcr.io", "pkg.dev"]):
+        return _adv_response("gcr_public_access", target,
+            "Target not on gcr.io / pkg.dev — skipping live probe",
+            "INFO", "0.0", evidence=host)
+    code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
+    return {"tool":"gcr_public_access","target":target,"scan_time":0,
+            "vulnerable": code == 200, "severity": "HIGH" if code == 200 else "POSITIVE",
+            "findings":[wrap_finding(
+                f"GCR registry {'allows anonymous /v2 enum' if code == 200 else 'requires auth'}",
+                "HIGH" if code == 200 else "POSITIVE",
+                cvss="7.0" if code == 200 else "0.0", cwe="CWE-200",
+                remediation="If unintended, require IAM-signed pulls.",
+                evidence_marker=f"GET https://{host}/v2/ → {code}")],
+            "tests_performed": 1, "tests_summary": "GCR anonymous-pull check",
+            "raw_data": {"host": host, "status": code}}
+
+
+def _probe_docker_hub_public_image(target, req):
+    """Check if a Docker Hub image manifest is publicly fetchable."""
+    host = _host(target)
+    img = host.replace("hub.docker.com", "").replace("/r/", "").strip("/") or "library/alpine"
+    url = f"https://hub.docker.com/v2/repositories/{img}/"
+    code, body, _ = _http_get(url, timeout=4)
+    return {"tool":"docker_hub_public_image_secrets","target":target,"scan_time":0,
+            "vulnerable": code == 200,
+            "severity": "INFO" if code == 200 else "POSITIVE",
+            "findings":[wrap_finding(
+                f"Docker Hub image '{img}' {'is public' if code == 200 else 'not found / private'}",
+                "INFO" if code == 200 else "POSITIVE",
+                cvss="0.0", cwe="N/A",
+                remediation="Inventory public images for embedded secrets; consider private hub.",
+                evidence_marker=f"GET {url} → {code}")],
+            "tests_performed": 1, "tests_summary": "Docker Hub image public-access check",
+            "raw_data": {"image": img, "status": code}}
+
+
+def _probe_iac_manifest_exposed(target, req):
+    """Probe for IaC manifests (terraform.tfstate, helm values, ansible inventories)."""
+    base = f"https://{_host(target)}"
+    paths = [".terraform.tfstate", "terraform.tfstate", ".terraform/terraform.tfstate",
+              ".tfvars", "values.yaml", "ansible/inventory", "playbook.yml",
+              ".kube/config", "kustomization.yaml", "deployment.yaml"]
+    leaked = []
+    for p in paths:
+        code, body, _ = _http_get(f"{base}/{p}", timeout=3)
+        if code == 200 and len(body) > 50:
+            leaked.append({"path": p, "size": len(body)})
+    return {"tool":"compliance_cis_aws_benchmark","target":target,"scan_time":0,
+            "vulnerable": bool(leaked),
+            "severity": "CRITICAL" if leaked else "POSITIVE",
+            "findings":[wrap_finding(
+                f"IaC manifest exposure: {len(leaked)} files publicly fetchable",
+                "CRITICAL" if leaked else "POSITIVE",
+                cvss="9.0" if leaked else "0.0", cwe="CWE-538",
+                remediation="Never commit .tfstate or kubeconfig to public webroots.",
+                evidence_marker=", ".join(f"{l['path']} ({l['size']}b)" for l in leaked) or "None exposed")],
+            "tests_performed": len(paths), "tests_summary": "IaC manifest exposure probe",
+            "raw_data": {"leaked": leaked}}
+
+
 PROBES = {
-    "s3_bucket_public_static_site": _probe_s3_public,
-    "azure_blob_public_anon":       _probe_azure_blob_public,
-    "gcs_bucket_acl_legacy":        _probe_gcs_bucket_public,
+    "s3_bucket_public_static_site":   _probe_s3_public,
+    "azure_blob_public_anon":         _probe_azure_blob_public,
+    "gcs_bucket_acl_legacy":          _probe_gcs_bucket_public,
     "oidc_provider_thumbprint_audit": _probe_oidc_discovery,
+    "recon_cloud_dns":                _probe_recon_cloud_dns,
+    "ecr_public_access":              _probe_ecr_public_access,
+    "gcr_public_access":              _probe_gcr_public_access,
+    "docker_hub_public_image_secrets":_probe_docker_hub_public_image,
+    "compliance_cis_aws_benchmark":   _probe_iac_manifest_exposed,
 }
 
 T = [
