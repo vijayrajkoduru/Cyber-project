@@ -1,0 +1,27 @@
+"""AWS CDK/Pulumi config scan - advisory (access-gated). VL-FORGE Vuln tier9_iac.
+Requires IaC source files / cloud account credentials; for an external URL scan it cleanly SKIPS (no false positive).
+Canonical: cdk-nag"""
+from fastapi import APIRouter, Depends
+from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._framework import run_scanner
+
+router = APIRouter()
+
+
+async def gather(ctx):
+    ctx.state["skipped_reason"] = ("cdk_nag_scan: requires IaC source files / cloud account credentials - not applicable to an "
+                                   "external URL scan. Canonical check: cdk-nag")
+
+
+FINDING_RULES = []
+INTEL_FIELDS = []
+
+
+@router.post("/api/vuln/cdk_nag_scan")
+async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
+    return await run_scanner(host=recon_host(req.target), tool="cdk_nag_scan",
+                             gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
+
+
+def register(app):
+    app.include_router(router)
