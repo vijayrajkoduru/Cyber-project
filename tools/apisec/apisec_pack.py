@@ -248,6 +248,163 @@ def _probe_hidden_api_versions(target, req):
             "raw_data": {"versions_found": found}}
 
 
+def _probe_rate_limit(target, req):
+    """Probe API rate-limit posture by rapid-fire (10 reqs) to /api/health or /."""
+    base = _base_url(target)
+    paths = ["/api/health", "/health", "/api", "/"]
+    findings = []
+    for p in paths:
+        url = base + p
+        codes = []
+        import time
+        start = time.time()
+        for _ in range(10):
+            code, _, h = _http_get(url, timeout=2)
+            codes.append(code)
+            if code == 429: break
+        elapsed = time.time() - start
+        if 429 in codes:
+            findings.append(wrap_finding(
+                f"Rate limit ENFORCED at {p} — 429 after {codes.index(429)+1} requests",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation="Continue rate-limiting; consider per-endpoint limits.",
+                evidence_marker=f"Codes: {codes[:5]}..."))
+        elif all(c == codes[0] and c < 400 for c in codes if c):
+            findings.append(wrap_finding(
+                f"Rate limit NOT enforced at {p} — 10 rapid requests all succeeded",
+                "HIGH", cvss="7.0", cwe="CWE-770",
+                remediation="Implement token-bucket or sliding-window rate limit per IP/user.",
+                evidence_marker=f"10 requests in {elapsed:.1f}s, all {codes[0]}"))
+        if findings: break
+    if not findings:
+        findings.append(wrap_finding(
+            "Rate-limit probe inconclusive — endpoint unreachable or non-200",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Test against an actual reachable endpoint.",
+            evidence_marker=f"Paths probed: {paths}"))
+    return {"tool":"rate_limit_ip_bypass","target":target,"scan_time":0,
+            "vulnerable": any(f.get("severity") == "HIGH" for f in findings),
+            "severity": findings[0].get("severity","INFO"),
+            "findings": findings, "tests_performed": 10,
+            "tests_summary": "Rate-limit rapid-fire probe (10 req burst)",
+            "raw_data": {}}
+
+
+def _probe_ws_origin(target, req):
+    """Detect WebSocket endpoint + check origin enforcement via HTTP Upgrade probe."""
+    base = _base_url(target)
+    paths = ["/ws", "/websocket", "/socket", "/socket.io/", "/api/ws", "/realtime"]
+    found = []
+    for p in paths:
+        url = base + p
+        try:
+            r = urllib.request.Request(url, headers={
+                "User-Agent": "VulnusLab/2.0",
+                "Upgrade": "websocket",
+                "Connection": "Upgrade",
+                "Origin": "https://evil.example.com",
+                "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+                "Sec-WebSocket-Version": "13",
+            })
+            with urllib.request.urlopen(r, timeout=3) as resp:
+                if resp.status in (101, 200):
+                    found.append({"path": p, "code": resp.status, "accepted_evil_origin": True})
+        except urllib.error.HTTPError as e:
+            if e.code in (101, 426):
+                found.append({"path": p, "code": e.code, "accepted_evil_origin": False})
+        except Exception:
+            pass
+    findings = []
+    if any(f["accepted_evil_origin"] for f in found):
+        findings.append(wrap_finding(
+            f"WebSocket accepted cross-origin handshake from evil.example.com",
+            "HIGH", cvss="7.5", cwe="CWE-346",
+            remediation="Validate Origin header server-side; reject non-allow-listed origins.",
+            evidence_marker=", ".join(f["path"] for f in found if f["accepted_evil_origin"])))
+    elif found:
+        findings.append(wrap_finding(
+            f"WebSocket endpoint(s) found at {len(found)} path(s), origin enforcement looks ok",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Continue origin validation.",
+            evidence_marker=", ".join(f"{f['path']}→{f['code']}" for f in found)))
+    else:
+        findings.append(wrap_finding(
+            "No WebSocket endpoint at standard paths",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="If using WS, ensure origin validation in place.",
+            evidence_marker=f"Tested {len(paths)} paths"))
+    return {"tool":"ws_origin_audit","target":target,"scan_time":0,
+            "vulnerable": any(f["accepted_evil_origin"] for f in found),
+            "severity": findings[0].get("severity","INFO"),
+            "findings": findings, "tests_performed": len(paths),
+            "tests_summary": "WebSocket cross-origin handshake probe",
+            "raw_data": {"found": found}}
+
+
+def _probe_sse_origin(target, req):
+    """Probe Server-Sent Events endpoint discovery + origin check."""
+    base = _base_url(target)
+    paths = ["/events", "/stream", "/api/events", "/api/stream", "/sse"]
+    found = []
+    for p in paths:
+        url = base + p
+        code, body, headers = _http_get(url, timeout=3)
+        ct = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
+        if "text/event-stream" in ct:
+            found.append({"path": p, "code": code, "content_type": ct})
+    findings = []
+    if found:
+        findings.append(wrap_finding(
+            f"SSE endpoint discovered: {', '.join(f['path'] for f in found)}",
+            "INFO", cvss="0.0", cwe="CWE-346",
+            remediation="Ensure SSE endpoints validate Origin + require auth.",
+            evidence_marker=", ".join(f"{f['path']} ({f['content_type']})" for f in found)))
+    else:
+        findings.append(wrap_finding(
+            "No SSE endpoint at standard paths",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue.",
+            evidence_marker=f"Tested {len(paths)} paths"))
+    return {"tool":"sse_origin_audit","target":target,"scan_time":0,
+            "vulnerable": False, "severity": findings[0].get("severity","INFO"),
+            "findings": findings, "tests_performed": len(paths),
+            "tests_summary": "SSE endpoint discovery",
+            "raw_data": {"found": found}}
+
+
+def _probe_api_key_in_url(target, req):
+    """Check if a target's response references credentials in URL parameters."""
+    base = _base_url(target)
+    code, body, _ = _http_get(base, timeout=4)
+    if not body:
+        return _adv_response("api_key_in_url_leak", target,
+            "Target unreachable — skipping URL-credential probe",
+            "INFO", "0.0", evidence=f"GET {base} → {code}")
+    import re
+    patterns = [
+        (r'[?&](api[_-]?key|token|secret|access[_-]?token)=([A-Za-z0-9_\-]{16,})', "credential in URL param"),
+        (r'(AKIA|ASIA)[A-Z0-9]{16}', "AWS access key in body"),
+        (r'sk_live_[A-Za-z0-9]{20,}', "Stripe live key in body"),
+        (r'AIza[A-Za-z0-9_-]{35}', "Google API key in body"),
+    ]
+    leaks = []
+    for pat, label in patterns:
+        m = re.search(pat, body[:8192])
+        if m: leaks.append({"label": label, "match": m.group(0)[:60]})
+    return {"tool":"api_key_in_url_leak","target":target,"scan_time":0,
+            "vulnerable": bool(leaks),
+            "severity": "CRITICAL" if leaks else "POSITIVE",
+            "findings":[wrap_finding(
+                f"Credential exposure: {len(leaks)} match(es)" if leaks else "No credential patterns in response body",
+                "CRITICAL" if leaks else "POSITIVE",
+                cvss="9.0" if leaks else "0.0", cwe="CWE-798",
+                remediation="Never embed API keys in URLs; use headers/cookies with HttpOnly+Secure.",
+                evidence_marker=", ".join(f"{l['label']}: {l['match']}" for l in leaks) or "Clean")],
+            "tests_performed": len(patterns),
+            "tests_summary": "API key/secret leak pattern scan",
+            "raw_data": {"leaks": leaks}}
+
+
 PROBES = {
     "openapi_swagger_discovery":  _probe_openapi_swagger,
     "openapi_swagger_exposed":    _probe_openapi_exposed,
@@ -256,6 +413,10 @@ PROBES = {
     "grpc_reflection_discovery":  _probe_grpc_reflection,
     "api_endpoint_brute":         _probe_api_endpoint_brute,
     "hidden_api_versions":        _probe_hidden_api_versions,
+    "rate_limit_ip_bypass":       _probe_rate_limit,
+    "ws_origin_audit":            _probe_ws_origin,
+    "sse_origin_audit":           _probe_sse_origin,
+    "api_key_in_url_leak":        _probe_api_key_in_url,
 }
 
 T = [

@@ -75,6 +75,8 @@ def _live_port_advisory(tool, target, port, name, sev="MEDIUM", cvss="5.0", reme
         evidence_marker=f"TCP/{port} closed")], tested=1, what=f"{name} reachability")
 
 
+
+
 # ─── §1 SSH-based Tunneling (10) — mostly shared with /api/tunnel; here are pivot variants ───
 @router.post("/api/pivot/ssh_local_pf_advisory")
 def ssh_local_pf_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
