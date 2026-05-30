@@ -1,0 +1,20 @@
+{
+  "bof": {
+    "score": 4.3
+  },
+  "exploit": {
+    "score": 4.3
+  },
+  "password": {
+    "score": 0.0
+  },
+  "recon": {
+    "score": 97.4
+  },
+  "vuln": {
+    "score": 44.2
+  },
+  "webapp": {
+    "score": 61.4
+  }
+}
