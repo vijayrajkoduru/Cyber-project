@@ -5256,6 +5256,8 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
 
       {/* Target + Inputs */}
       <div style={{padding:"12px 24px 0"}}>
+        <TestTargets targets={(typeof MODULE_TEST_TARGETS !== "undefined" && MODULE_TEST_TARGETS[moduleKey]) || []}
+          onSelect={(v) => setTarget(v)}/>
         <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
           {/* Honeypot inputs absorb Chrome's username/password autofill so the
               real target field stays clean. Without this, Chrome was filling
@@ -7162,6 +7164,8 @@ function OsintModule({token, apiUrl}) {
 
       {/* Config */}
       <div style={C.card}>
+        <TestTargets targets={MODULE_TEST_TARGETS.osint || []}
+          onSelect={(v) => setTarget(v)}/>
         <div style={C.row}>
           <div style={{flex:2}}>
             <label style={C.label}>Target (Domain / IP / Username for Sherlock)</label>
@@ -18020,6 +18024,175 @@ const MODULE_INPUT_SCHEMAS = {
   mobile_network:  { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
 };
 
+// Per-module curated test targets. Every entry is either a publicly-legal
+// vulnerable lab (scanme.nmap.org, testphp.vulnweb.com, juice-shop, etc.) or
+// a syntactic format example. Click on one to populate the target input.
+const MODULE_TEST_TARGETS = {
+  recon: [
+    {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
+    {label:"example.com",         value:"example.com",                           desc:"IANA reserved demo domain"},
+    {label:"hackerone.com",       value:"hackerone.com",                         desc:"Bug-bounty platform (public surface)"},
+    {label:"testphp.vulnweb.com", value:"testphp.vulnweb.com",                   desc:"Acunetix public test web app"},
+  ],
+  vuln: [
+    {label:"scanme.nmap.org",       value:"scanme.nmap.org",                     desc:"Legal nmap test target"},
+    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com",          desc:"Acunetix public test web app"},
+    {label:"demo.testfire.net",     value:"http://demo.testfire.net",            desc:"IBM AltoroMutual demo app"},
+    {label:"juice-shop.herokuapp",  value:"https://juice-shop.herokuapp.com",    desc:"OWASP Juice Shop online"},
+  ],
+  webapp: [
+    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com",          desc:"Acunetix legal pentest app"},
+    {label:"demo.testfire.net",     value:"http://demo.testfire.net",            desc:"IBM AltoroMutual demo"},
+    {label:"juice-shop.herokuapp",  value:"https://juice-shop.herokuapp.com",    desc:"OWASP Juice Shop online"},
+    {label:"testhtml5.vulnweb.com", value:"http://testhtml5.vulnweb.com",        desc:"Acunetix HTML5 vulnerable app"},
+    {label:"google-gruyere",        value:"https://google-gruyere.appspot.com",  desc:"Google's deliberately vulnerable lab"},
+  ],
+  osint: [
+    {label:"example.com",                value:"example.com",                desc:"Domain — passive DNS / cert / OSINT"},
+    {label:"test@example.com",           value:"test@example.com",           desc:"Email — breach + social lookups"},
+    {label:"@elonmusk",                  value:"@elonmusk",                  desc:"Username — Sherlock social walk"},
+    {label:"8.8.8.8",                    value:"8.8.8.8",                    desc:"IP — geoip / ASN / Shodan"},
+    {label:"google.com",                 value:"google.com",                 desc:"Domain — Shodan / Censys public records"},
+  ],
+  exploit: [
+    {label:"CVE-2024-3094 (xz)",   value:"CVE-2024-3094",                         desc:"Recent KEV-listed supply-chain CVE"},
+    {label:"CVE-2023-44487",       value:"CVE-2023-44487",                        desc:"HTTP/2 Rapid Reset DoS"},
+    {label:"scanme.nmap.org:80",   value:"scanme.nmap.org:80",                    desc:"Legal nmap test (HTTP)"},
+  ],
+  bof: [
+    {label:"crackmes.one",         value:"https://crackmes.one",                  desc:"Reversing/BOF challenge corpus"},
+    {label:"protostar.exploit.edu",value:"protostar.exploit.edu",                 desc:"Exploit-edu protostar series"},
+    {label:"vulnserver:9999",      value:"vulnserver.local:9999",                 desc:"Stephen Bradshaw vulnerable TCP server"},
+  ],
+  password: [
+    {label:"scanme.nmap.org:22",   value:"scanme.nmap.org:22",                    desc:"Legal SSH brute target"},
+    {label:"example.com:22",       value:"example.com:22",                        desc:"SSH host (lockout-safe spray)"},
+    {label:"hash file path",       value:"/tmp/hashes.txt",                       desc:"Local NTLM/bcrypt file for hashcat"},
+  ],
+  client_side: [
+    {label:"juice-shop.herokuapp", value:"https://juice-shop.herokuapp.com",      desc:"OWASP Juice Shop (XSS / clickjack)"},
+    {label:"testphp.vulnweb.com",  value:"http://testphp.vulnweb.com",            desc:"Acunetix legal pentest app"},
+    {label:"google-gruyere",       value:"https://google-gruyere.appspot.com",    desc:"Google's vulnerable lab"},
+  ],
+  system_exploit: [
+    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
+    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (local)"},
+    {label:"htb starting point",   value:"10.10.10.x",                            desc:"HackTheBox Starting Point IP"},
+  ],
+  metasploit: [
+    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (local lab)"},
+    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
+    {label:"CVE-2024-XXXX",        value:"CVE-2024-XXXX",                         desc:"Recent exploitable CVE id"},
+  ],
+  privesc: [
+    {label:"localhost",            value:"localhost",                             desc:"Run linpeas/winpeas on this host"},
+    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (post-foothold)"},
+    {label:"compromised-host",     value:"compromised-host.local",                desc:"Your post-compromise context"},
+  ],
+  post_exploit: [
+    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (post-foothold)"},
+    {label:"compromised-host",     value:"compromised-host.local",                desc:"Your established session"},
+    {label:"htb starting point",   value:"10.10.10.x",                            desc:"HackTheBox machine"},
+  ],
+  pivot: [
+    {label:"local jump",           value:"192.168.56.101",                        desc:"Local Metasploitable jump host"},
+    {label:"dual-homed example",   value:"192.168.1.50",                          desc:"Pivot-point host IP"},
+  ],
+  tunnel: [
+    {label:"chisel public",        value:"chisel.attacker.example.com",           desc:"Reverse-tunnel attacker host"},
+    {label:"egress-restricted",    value:"192.168.1.50",                          desc:"Host on egress-restricted segment"},
+  ],
+  network: [
+    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
+    {label:"local /24",            value:"192.168.1.0/24",                        desc:"Local LAN scan (auth required)"},
+    {label:"htb /24",              value:"10.10.10.0/24",                         desc:"HackTheBox network range"},
+  ],
+  auth_attacks: [
+    {label:"juice-shop login",     value:"https://juice-shop.herokuapp.com/#/login", desc:"OWASP Juice Shop login (auth testing)"},
+    {label:"testphp login",        value:"http://testphp.vulnweb.com/login.php",     desc:"Acunetix login form"},
+    {label:"demo.testfire login",  value:"http://demo.testfire.net/login.jsp",       desc:"IBM AltoroMutual login"},
+  ],
+  wireless: [
+    {label:"sample BSSID",         value:"AA:BB:CC:DD:EE:FF",                     desc:"Example BSSID format"},
+    {label:"sample SSID",          value:"CorpWiFi",                              desc:"Example SSID format"},
+    {label:"channel 6",            value:"6",                                     desc:"Channel number"},
+  ],
+  ad: [
+    {label:"corp.local",           value:"corp.local",                            desc:"Default AD domain example"},
+    {label:"htb sandbox",          value:"htb.local",                             desc:"HackTheBox AD lab"},
+    {label:"DC hostname",          value:"dc01.corp.local",                       desc:"Domain controller hostname"},
+  ],
+  av_evasion: [
+    {label:"sample payload",       value:"/tmp/payload.exe",                      desc:"Local PE payload to obfuscate"},
+    {label:"sha256 hash",          value:"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", desc:"Empty-string SHA-256 example"},
+    {label:"msfvenom output",      value:"shell.bin",                             desc:"msfvenom raw shellcode file"},
+  ],
+  cloud: [
+    {label:"example.com",          value:"example.com",                           desc:"Public domain — bucket discovery"},
+    {label:"AWS account id",       value:"123456789012",                          desc:"12-digit AWS account number"},
+    {label:"S3 bucket",            value:"s3://example-bucket",                   desc:"S3 bucket URL"},
+    {label:"GCP project id",       value:"my-gcp-project-id",                     desc:"GCP project identifier"},
+  ],
+  apisec: [
+    {label:"crapi.apisec.ai",      value:"https://crapi.apisec.ai",               desc:"OWASP crAPI demo (vulnerable API)"},
+    {label:"httpbin.org",          value:"https://httpbin.org",                   desc:"HTTP request echo / introspection"},
+    {label:"reqres.in",            value:"https://reqres.in/api/",                desc:"Test REST API"},
+    {label:"swapi.dev",            value:"https://swapi.dev/api/",                desc:"Star Wars test REST API"},
+  ],
+  ai_llm: [
+    {label:"api.openai.com",       value:"https://api.openai.com/v1/chat/completions", desc:"OpenAI Chat Completions"},
+    {label:"api.anthropic.com",    value:"https://api.anthropic.com/v1/messages", desc:"Anthropic Messages API"},
+    {label:"local ollama",         value:"http://localhost:11434/api/generate",   desc:"Local Ollama LLM endpoint"},
+  ],
+  container_k8s: [
+    {label:"docker hub",           value:"registry-1.docker.io",                  desc:"Docker Hub registry"},
+    {label:"gcr.io",               value:"gcr.io",                                desc:"Google Container Registry"},
+    {label:"local k8s api",        value:"https://kubernetes.default.svc:443",    desc:"Cluster API from inside a pod"},
+  ],
+  supply_chain: [
+    {label:"npm lodash",           value:"lodash",                                desc:"Popular npm package"},
+    {label:"pypi requests",        value:"requests",                              desc:"Popular PyPI package"},
+    {label:"github example",       value:"https://github.com/octocat/Hello-World", desc:"Public GitHub repo"},
+  ],
+  hybrid_identity: [
+    {label:"contoso.onmicrosoft",  value:"contoso.onmicrosoft.com",               desc:"Microsoft demo tenant"},
+    {label:"yourtenant",           value:"yourtenant.onmicrosoft.com",            desc:"Entra ID tenant format"},
+  ],
+  sspm: [
+    {label:"yourorg.salesforce",   value:"https://yourorg.my.salesforce.com",     desc:"Salesforce instance URL"},
+    {label:"M365 admin",           value:"https://admin.microsoft.com",           desc:"M365 admin portal"},
+    {label:"workspace admin",      value:"https://admin.google.com",              desc:"Google Workspace admin"},
+  ],
+  iot_ot: [
+    {label:"shodan modbus",        value:"shodan.io/search?query=port%3A502",     desc:"Find exposed Modbus on Shodan"},
+    {label:"local Modbus",         value:"192.168.1.50:502",                      desc:"Modbus default port (502)"},
+    {label:"BACnet",               value:"192.168.1.51:47808",                    desc:"BACnet default port (47808)"},
+  ],
+  firmware: [
+    {label:"DVRF",                 value:"https://github.com/praetorian-inc/DVRF", desc:"Damn Vulnerable Router Firmware"},
+    {label:"firmware-mod-kit",     value:"https://github.com/rampageX/firmware-mod-kit", desc:"FMK extraction toolkit"},
+    {label:"local fw.bin",         value:"/tmp/firmware.bin",                     desc:"Local firmware dump to analyze"},
+  ],
+  phishing: [
+    {label:"example.com",          value:"example.com",                           desc:"Phishing-surface OSINT of domain"},
+    {label:"hackerone.com",        value:"hackerone.com",                         desc:"Public bug-bounty surface"},
+  ],
+  red_team: [
+    {label:"example.com",          value:"example.com",                           desc:"Engagement scope (domain)"},
+    {label:"corp.local",           value:"corp.local",                            desc:"Internal AD domain scope"},
+    {label:"10.0.0.0/8",           value:"10.0.0.0/8",                            desc:"Engagement network range"},
+  ],
+  mobile_static: [
+    {label:"DVHMA",                value:"https://github.com/logicalhacking/DVHMA", desc:"Damn Vulnerable Hybrid Mobile App"},
+    {label:"InsecureBankv2",       value:"https://github.com/dineshshetty/Android-InsecureBankv2", desc:"Insecure banking APK"},
+    {label:"OWASP iGoat",          value:"https://github.com/OWASP/iGoat-Swift",   desc:"iOS deliberately vulnerable app"},
+  ],
+  mobile_storage:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_runtime:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_crypto:   [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_network:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+};
+
 function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
   const schema = MODULE_INPUT_SCHEMAS[moduleKey] || { ph: "Target", hint: "Target value" };
   const [target,    setTarget]    = useState("");
@@ -18327,6 +18500,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </span>
       </div>
 
+      <TestTargets targets={MODULE_TEST_TARGETS[moduleKey] || []}
+        onSelect={(v) => setTarget(v)}/>
       <div style={{display:"flex", gap:8, marginBottom:6}}>
         <input
           type="text" placeholder={schema.ph} value={target}
