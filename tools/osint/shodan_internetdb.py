@@ -1,4 +1,4 @@
-"""Shodan InternetDB free host fingerprint — playbook §2 #26 ⭐.
+"""Shodan InternetDB free host fingerprint — playbook §2 #26 .
 
 InternetDB is Shodan's free read-only API for host info: open ports,
 CPE software, vulnerabilities, hostnames, tags. No API key needed.

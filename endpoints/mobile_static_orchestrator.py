@@ -81,6 +81,8 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("broadcast_receiver_exposed_audit",  "/api/mobile_static/broadcast_receiver_exposed_audit"),
         ("device_admin_perm_audit",           "/api/mobile_static/device_admin_perm_audit"),
         ("install_unknown_apps_audit",        "/api/mobile_static/install_unknown_apps_audit"),
+        ("hce_nfc_payment_audit",             "/api/mobile_static/hce_nfc_payment_audit"),
+        ("ios_sandbox_entitlements_audit",    "/api/mobile_static/ios_sandbox_entitlements_audit"),
     ],
     "tier2_secret_and_crypto": [
         ("secret_extraction_audit",       "/api/mobile_static/secret_extraction_audit"),
@@ -111,6 +113,7 @@ MOBILE_STATIC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("ai_ml_model_detection",         "/api/mobile_static/ai_ml_model_detection"),
         ("maven_dep_audit",               "/api/mobile_static/maven_dep_audit"),
         ("prompt_injection_static_check", "/api/mobile_static/prompt_injection_static_check"),
+        ("cordova_capacitor_plugin_audit","/api/mobile_static/cordova_capacitor_plugin_audit"),
     ],
     # ── VL-FORGE 2026-05-30: +6 new MASVS-aligned static scanners ──
     "tier5_resilience_static": [

@@ -1,4 +1,4 @@
-"""ai_ml_model_detection — detect bundled AI/ML model files. ⭐ 2025+
+"""ai_ml_model_detection — detect bundled AI/ML model files. 2025+
 
 Mobile apps are increasingly shipping local LLMs / vision models / on-device
 inference. These can leak via: (a) model file extraction → competitor IP

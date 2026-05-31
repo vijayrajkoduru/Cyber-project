@@ -1,4 +1,4 @@
-"""Mapillary street-level imagery search — playbook §6 #82 ⭐.
+"""Mapillary street-level imagery search — playbook §6 #82 .
 
 Mapillary (Meta-owned) has a free Graph API for street-level imagery
 with an API key (free tier 50k requests/month). Without key, returns

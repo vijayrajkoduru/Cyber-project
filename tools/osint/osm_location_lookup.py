@@ -1,4 +1,4 @@
-"""OpenStreetMap Nominatim geocode + reverse-geocode — playbook §6 #81 ⭐.
+"""OpenStreetMap Nominatim geocode + reverse-geocode — playbook §6 #81 .
 
 Free, no API key (1 req/sec rate limit, UA required). Forward-geocode
 addresses to lat/lon; reverse-geocode lat,lon to nearest place. Target

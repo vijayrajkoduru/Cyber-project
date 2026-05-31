@@ -1,4 +1,4 @@
-"""GHunt-style Google account basic recon — playbook §1 #8 ⭐.
+"""GHunt-style Google account basic recon — playbook §1 #8 .
 
 Full GHunt requires Google session cookies (anti-account-takeover policy).
 This basic version checks the public Gmail-account existence via the

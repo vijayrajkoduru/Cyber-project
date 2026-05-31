@@ -1,4 +1,4 @@
-"""LLM phishing-pretext drafting — playbook §8 #101 ⭐.
+"""LLM phishing-pretext drafting — playbook §8 #101 .
 
 Generates a phishing pretext draft from a brief scenario description.
 Target format: "scenario: <text>" — e.g. "scenario: CTO of TechCorp,
