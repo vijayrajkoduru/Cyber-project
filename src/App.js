@@ -6635,10 +6635,16 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
   // doesn't render them as garbage bytes ("Ø=ßà", "!'", spaced-out chars).
   const _ascii = s => String(s == null ? "" : s)
       .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
-      .replace(//g, "[OK] ").replace(/[]/g, "v ").replace(/[]/g, "[!] ")
-      .replace(/[]/g, "X ").replace(/[—–]/g, "-").replace(/→/g, "->")
-      .replace(/←/g, "<-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
-      .replace(/·/g, "-").replace(/[︎️]/g, "");
+      .replace(/[✓✔]/g, "v ")               // check / heavy check
+      .replace(/[✘✖❌]/g, "X ")         // cross / heavy cross / X
+      .replace(/[⚠]/g, "[!] ")                   // warning sign
+      .replace(/[—–]/g, "-")                // em-dash / en-dash
+      .replace(/[→]/g, "->")                     // right arrow
+      .replace(/[←]/g, "<-")                     // left arrow
+      .replace(/[‘’]/g, "'")                // curly single quotes
+      .replace(/[“”]/g, '"')                // curly double quotes
+      .replace(/[·]/g, "-")                      // middle dot
+      .replace(/[︎️]/g, "");                // variation selectors VS-15/VS-16
   const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
   const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(_ascii(t),x,yy,{align:align||"left"});};
   const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
