@@ -195,6 +195,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("cors_preflight_cache_abuse", "/api/webapp/scan/cors_preflight_cache_abuse"),
         ("x_original_url_bypass",      "/api/webapp/scan/x_original_url_bypass"),
     ],
+    # ── VL-FORGE round 7: +8 upload/export/file/framework scanners ──
+    "tier20_upload_export_framework": [
+        ("xss_via_filename_upload",      "/api/webapp/scan/xss_via_filename_upload"),
+        ("csv_injection_export",         "/api/webapp/scan/csv_injection_export"),
+        ("lfi_log_injection",            "/api/webapp/scan/lfi_log_injection"),
+        ("nextjs_rsc_audit",             "/api/webapp/scan/nextjs_rsc_audit"),
+        ("websocket_message_size_dos",   "/api/webapp/scan/websocket_message_size_dos"),
+        ("odata_query_bypass",           "/api/webapp/scan/odata_query_bypass"),
+        ("graphql_subscription_auth",    "/api/webapp/scan/graphql_subscription_auth"),
+        ("proto_pollution_chain",        "/api/webapp/scan/proto_pollution_chain"),
+    ],
 }
 
 
