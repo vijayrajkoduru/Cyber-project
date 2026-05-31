@@ -5102,6 +5102,9 @@ journalctl -u uvicorn -n 50
           ))}
         </div>
       )}
+      <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
+        moduleLabel={(title || "Module") + " Report"}
+        onGenerate={cfg => _runReport(cfg)}/>
     </div>
   );
 }
@@ -5403,6 +5406,14 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
   const [loading,setLoading]= useState("");
   const [results,setResults]= useState({});
   const [guide,  setGuide]  = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const _runReport = (cfg) => {
+    const args = {title, icon, target, attacks, results, pdfConfig: cfg || {}};
+    try {
+      if (typeof reportFn === "function") reportFn(args);
+      else generateShellReport(args);
+    } catch(e) { alert("PDF error: " + (e.message || e)); }
+  };
   const sevColor = s => s==="CRITICAL"?"#ef4444":s==="HIGH"?"#f97316":s==="MEDIUM"?"#eab308":s==="LOW"?"#22c55e":"#64748b";
   const hasResults = attacks.some(a => results[a.id]);
 
@@ -5439,13 +5450,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
               style={{background:guide?"#1e3a5f":"#0f172a",border:`1px solid ${guide?"#3b82f6":"#334155"}`,borderRadius:6,padding:"6px 12px",color:guide?"#93c5fd":"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
               {guide?"Hide Guide":"How to Use"}
             </button>
-            <button onClick={()=>{
-                const args={title,icon,target,attacks,results};
-                try {
-                  if (typeof reportFn === "function") reportFn(args);
-                  else generateShellReport(args);
-                } catch(e) { alert("PDF error: "+(e.message||e)); }
-              }}
+            <button onClick={() => setShowPDFModal(true)}
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               Report
             </button>
@@ -5467,13 +5472,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                 {guide?"Hide Guide":"How to Use"}
               </button>
               {hasResults && (
-                <button onClick={()=>{
-                    const args={title,icon,target,attacks,results};
-                    try {
-                      if (typeof reportFn === "function") reportFn(args);
-                      else generateShellReport(args);
-                    } catch(e) { alert("PDF error: "+(e.message||e)); }
-                  }}
+                <button onClick={() => setShowPDFModal(true)}
                   style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
                   Report
                 </button>
@@ -7274,7 +7273,10 @@ function PersistenceModule({token, apiUrl}) {
 }
 
 // ── OSINT PDF ─────────────────────────────────────────────────
-function generateOsintPdf(results, target) {
+function generateOsintPdf(results, target, _pdfConfig) {
+  // _pdfConfig accepted (companyName, watermark, password, etc.) for parity
+  // with the universal report flow; this v1 generator does not yet honour
+  // every field, but accepts the arg so the call sites stay consistent.
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const pageW=210, margin=15, contentW=180;
   const DARK=[15,23,42], BLUE=[37,99,235], GRAY=[100,116,139], WHITE=[255,255,255];
@@ -7567,6 +7569,7 @@ function OsintModule({token, apiUrl}) {
   const [done,    setDone]    = useState([]);
   const [results, setResults] = useState({});
   const [log,     setLog]     = useState([]);
+  const [showPDFModal, setShowPDFModal] = useState(false);
 
   const addLog = msg => setLog(p=>[...p, msg]);
 
@@ -7678,7 +7681,7 @@ function OsintModule({token, apiUrl}) {
             {running ? `Running... ${progress}%` : "Run All OSINT Tools"}
           </button>
           {Object.keys(results).length>0 && !running && (
-            <button style={{...C.btn,background:"#ef4444",marginTop:0}} onClick={()=>generateOsintPdf(results,target)}>
+            <button style={{...C.btn,background:"#ef4444",marginTop:0}} onClick={() => setShowPDFModal(true)}>
               Report
             </button>
           )}
@@ -7841,6 +7844,9 @@ function OsintModule({token, apiUrl}) {
         ))}
 
       </>)}
+      <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
+        moduleLabel="OSINT Intelligence Report"
+        onGenerate={cfg => { try { generateOsintPdf(results, target, cfg); } catch(e){ alert("PDF error: "+(e.message||e)); } }}/>
     </div>
   );
 }
@@ -19963,17 +19969,17 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 
   // ── VL-FLOW PDF export (universal across all 26 ModuleAutoPanel modules) ──
   const completedCount = Object.values(results).filter(r => r.status === "done").length;
-  const generatePDF = () => {
-    // VL-FLOW PDF export now delegates to the shared Recon-style template
-    // (generateUniversalVLReport). Manual-pentest evidence still posts a
-    // separate analyst-attested appendix via the dedicated manual generator.
-    // The universal generator handles all 21 industry-standard sections.
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const runPDFExport = (cfg) => {
+    // VL-FLOW PDF export delegates to the shared Recon-style template
+    // (generateUniversalVLReport). pdfConfig is passed in from PDFConfigModal
+    // (company, reporter, watermark, password, theme, etc.).
     generateUniversalVLReport({
       target: target || "(none)",
       allResults: results,
-      date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
+      date: (cfg && cfg.date) || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
       authenticated: !!(authBearer || authCookie),
-      pdfConfig: {},
+      pdfConfig: cfg || {},
       moduleKey:      moduleKey,
       moduleLabel:    moduleLabel,
       moduleTitle:    moduleLabel.toUpperCase() + " REPORT",
@@ -19994,6 +20000,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       ]
     });
   };
+  const generatePDF = () => setShowPDFModal(true);
 
   return (
     <div style={{padding:24, color:"#f1f5f9"}}>
@@ -20608,6 +20615,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </div>
         );
       })()}
+      <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
+        moduleLabel={moduleLabel + " Report"}
+        onGenerate={cfg => { try { runPDFExport(cfg); } catch(e){ alert("PDF error: "+(e.message||e)); } }}/>
     </div>
   );
 }
