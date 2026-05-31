@@ -149,6 +149,18 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("zoomeye_search",             "/api/osint/zoomeye_search"),
         ("domaintools_historical",     "/api/osint/domaintools_historical"),
     ],
+    # ── VL-FORGE round 5: +9 enterprise threat-intel + people-search (advisory) ──
+    "tier21_enterprise_intel_people": [
+        ("censys_hosts_search",         "/api/osint/censys_hosts_search"),
+        ("greynoise_paid_advisory",     "/api/osint/greynoise_paid_advisory"),
+        ("misp_threat_feed_advisory",   "/api/osint/misp_threat_feed_advisory"),
+        ("mandiant_advantage_advisory", "/api/osint/mandiant_advantage_advisory"),
+        ("crowdstrike_falcon_advisory", "/api/osint/crowdstrike_falcon_advisory"),
+        ("recorded_future_advisory",    "/api/osint/recorded_future_advisory"),
+        ("spokeo_whitepages_advisory",  "/api/osint/spokeo_whitepages_advisory"),
+        ("pimeyes_face_advisory",       "/api/osint/pimeyes_face_advisory"),
+        ("osint_industries_aggregator", "/api/osint/osint_industries_aggregator"),
+    ],
 }
 
 
