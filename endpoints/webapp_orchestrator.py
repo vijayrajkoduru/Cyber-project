@@ -140,6 +140,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("cookie_security_advanced_audit", "/api/webapp/scan/cookie_security_advanced_audit"),
         ("csp3_audit",                      "/api/webapp/scan/csp3_audit"),
     ],
+    # ── VL-FORGE round 2: +8 edge / proxy / signature-attack scanners ──
+    "tier15_edge_proxy_signature": [
+        ("saml_xml_signature_wrap",  "/api/webapp/scan/saml_xml_signature_wrap"),
+        ("http2_request_smuggling",  "/api/webapp/scan/http2_request_smuggling"),
+        ("web_cache_deception",      "/api/webapp/scan/web_cache_deception"),
+        ("service_worker_audit",     "/api/webapp/scan/service_worker_audit"),
+        ("esi_injection_probe",      "/api/webapp/scan/esi_injection_probe"),
+        ("request_forgery_origin",   "/api/webapp/scan/request_forgery_origin"),
+        ("content_type_confusion",   "/api/webapp/scan/content_type_confusion"),
+        ("xs_leaks_probe",           "/api/webapp/scan/xs_leaks_probe"),
+    ],
 }
 
 
