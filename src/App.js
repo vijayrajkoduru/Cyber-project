@@ -3748,18 +3748,14 @@ function WebAppModule(props) {
           {finished && <Badge label="SCAN COMPLETE" color="green"/>}
         </div>
 
-        {/* Progress bar when running */}
-        {(running || finished) && (
-          <div style={{marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-              <span style={{fontSize:11,color:"#64748b",fontFamily:"JetBrains Mono,monospace"}}>
-                {running ? `Phase ${done.length+1} of ${PHASES.length} running...` : `${done.length} / ${PHASES.length} phases complete`}
-              </span>
-              <span style={{fontSize:11,color:"#64748b",fontFamily:"JetBrains Mono,monospace"}}>{Math.round((done.length/PHASES.length)*100)}%</span>
-            </div>
-            <div style={{height:4,background:"#0f172a",borderRadius:4,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${(done.length/PHASES.length)*100}%`,background:finished?"#22c55e":"linear-gradient(90deg,#3b82f6,#06b6d4)",borderRadius:4,transition:"width 0.4s ease"}}/>
-            </div>
+        {/* Compact "X / Y phases complete" footer shown ONLY when scan
+            finished (rich SCANNING panel below covers the live progress). */}
+        {finished && !running && (
+          <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:11,color:"#22c55e",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>
+              {done.length} / {PHASES.length} phases complete
+            </span>
+            <span style={{fontSize:11,color:"#22c55e",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>100%</span>
           </div>
         )}
 
