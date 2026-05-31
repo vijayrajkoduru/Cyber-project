@@ -3808,7 +3808,7 @@ function WebAppModule(props) {
             <label style={{fontSize:11,color:"#64748b",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
             {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
           </div>
-          {showHistory && targetHistory.length>0 && (
+          {showHistory && targetHistory.length>0 && !running && (
             <div style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
               {targetHistory.map((t,i)=>(
                 <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid #1e293b":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#93c5fd",fontFamily:"JetBrains Mono,monospace"}}
@@ -3891,7 +3891,7 @@ function WebAppModule(props) {
                 annoyance for good. */}
             <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
             <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
-            <input value={target} onChange={e=>setTarget(e.target.value)} onFocus={()=>setShowHistory(targetHistory.length>0)}
+            <input value={target} onChange={e=>setTarget(e.target.value)}
               placeholder="example.com  or  http://192.168.1.1:8080"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
