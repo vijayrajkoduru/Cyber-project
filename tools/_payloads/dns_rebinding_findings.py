@@ -1,4 +1,4 @@
-"""dns_rebinding — findings rules. ⭐ NEW 2024+."""
+"""dns_rebinding — findings rules. NEW 2024+."""
 def rule_private_ips_in_public_dns(s):
     if not s.get("dr_susceptible"): return None
     return {"name":f"Private/internal IPs in public DNS ({s.get('dr_private_count',0)} found)","severity":"HIGH","cvss":"7.1",

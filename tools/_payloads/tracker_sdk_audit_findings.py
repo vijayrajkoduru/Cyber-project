@@ -56,3 +56,11 @@ def rule_tracker_inventory(s):
             "remediation": "Map each to your Privacy Policy + Data Safety disclosure. "
                            "Apple App Privacy Nutrition Label and Google Play Data "
                            "Safety form REQUIRE accurate listing per category."}
+
+
+TRACKER_SDK_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_session_replay,
+    rule_high_tracker_count,
+    rule_tracker_inventory,
+]

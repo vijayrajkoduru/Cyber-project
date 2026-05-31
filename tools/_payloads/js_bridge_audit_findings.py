@@ -30,3 +30,9 @@ def rule_js_bridge_present(s):
                            "@JavascriptInterface annotation IS the protection — verify "
                            "every exposed method has it. (5) Prefer postMessage / "
                            "WebMessagePort over JS interface for new code."}
+
+
+JS_BRIDGE_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_js_bridge_present,
+]

@@ -39,3 +39,9 @@ def rule_prompt_injection_risk(s):
                            "(4) Read OWASP LLM Top 10 #1 (Prompt Injection) + "
                            "Anthropic's API safety guidance. (5) Add a content filter "
                            "to detect jailbreak patterns before sending to LLM."}
+
+
+PROMPT_INJECTION_STATIC_CHECK_FINDING_RULES = [
+    rule_positive_emit,
+    rule_prompt_injection_risk,
+]

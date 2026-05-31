@@ -43,3 +43,10 @@ def rule_realtime_db_url(s):
                             "is publicly readable. Same for /USERS.json / /MESSAGES.json. "
                             "Lock down via Firebase Console → Realtime DB → Rules → "
                             "'.read': 'auth != null'.")}
+
+
+FIREBASE_CONFIG_LEAK_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_firebase_present,
+    rule_realtime_db_url,
+]

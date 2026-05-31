@@ -22,3 +22,9 @@ def rule_device_admin_present(s):
                            "suspicious and Google Play will likely reject. Note: legacy "
                            "Device Admin is being DEPRECATED in favor of Device Policy "
                            "Controller (DPC) + Work Profile for true MDM. Migrate."}
+
+
+DEVICE_ADMIN_PERM_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_device_admin_present,
+]

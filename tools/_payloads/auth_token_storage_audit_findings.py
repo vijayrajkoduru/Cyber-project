@@ -48,3 +48,10 @@ def rule_mixed_storage(s):
             "remediation": "Some code paths use Keystore/Keychain; others fall back "
                            "to plain prefs. Audit the fallback paths — usually a leftover "
                            "from migration. Remove plain storage paths entirely."}
+
+
+AUTH_TOKEN_STORAGE_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_insecure_token_storage,
+    rule_mixed_storage,
+]

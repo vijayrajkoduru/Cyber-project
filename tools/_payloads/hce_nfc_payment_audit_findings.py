@@ -21,3 +21,9 @@ def rule_hce_present(s):
                            "scheme, (2) NFC + READ_PHONE_STATE NOT combined "
                            "(IMSI deanonymization), (3) sensitive APDUs not "
                            "logged. PCI-DSS contactless requirements apply."}
+
+
+HCE_NFC_PAYMENT_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_hce_present,
+]

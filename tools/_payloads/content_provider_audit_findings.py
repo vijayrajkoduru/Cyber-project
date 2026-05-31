@@ -28,3 +28,9 @@ def rule_risky_provider(s):
                            "checks in your provider methods. Default-exposed providers "
                            "= classic data-leak (SQLite query via content:// URI by "
                            "any app on device)."}
+
+
+CONTENT_PROVIDER_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_risky_provider,
+]

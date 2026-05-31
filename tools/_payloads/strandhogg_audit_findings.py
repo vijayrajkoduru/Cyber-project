@@ -31,3 +31,9 @@ def rule_strandhogg_risky(s):
                            "(3) set android:allowTaskReparenting='false'. "
                            "Apps NOT patched have lost banking creds via fake-overlay "
                            "task-hijack since 2019 (CVE-2020-0096, 36+ malware in Play 2020)."}
+
+
+STRANDHOGG_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_strandhogg_risky,
+]

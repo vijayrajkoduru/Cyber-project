@@ -27,3 +27,9 @@ def rule_risky_receivers(s):
                            "(2) Add android:permission='YourApp.SENSITIVE_BROADCAST' "
                            "with signature-level grant for trusted callers, "
                            "(3) Verify caller UID in onReceive() via Binder.getCallingUid()."}
+
+
+BROADCAST_RECEIVER_EXPOSED_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_risky_receivers,
+]

@@ -1,4 +1,4 @@
-"""grpc_reflection_discovery — findings (⭐ Recon §5 #83)."""
+"""grpc_reflection_discovery — findings (Recon §5 #83)."""
 def rule_positive_emit(s):
     if s.get("grpc_reflection_discovery_total"): return None
     return {"name": "No gRPC services detected on common ports", "severity": "POSITIVE",

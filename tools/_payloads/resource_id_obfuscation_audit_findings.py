@@ -40,3 +40,10 @@ def rule_oversized_res(s):
                            "Consider Play Asset Delivery for large drawables. Use "
                            "vector drawables instead of multiple PNG densities. "
                            "Audit res/drawable-* for forgotten assets."}
+
+
+RESOURCE_ID_OBFUSCATION_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_no_shrink,
+    rule_oversized_res,
+]

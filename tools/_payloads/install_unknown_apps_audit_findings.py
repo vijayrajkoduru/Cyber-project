@@ -27,3 +27,9 @@ def rule_sideload_perms(s):
                            "Galaxy Store), (b) you do your own A/B updates (rare). "
                            "Google Play scrutinizes this perm heavily — declare exact "
                            "use case in your Play Store listing or face rejection."}
+
+
+INSTALL_UNKNOWN_APPS_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_sideload_perms,
+]

@@ -43,3 +43,10 @@ def rule_insecure_tls(s):
                            "Remove these. If you need staging/dev bypass: use a "
                            "Network Security Config debug-overrides block, not "
                            "production-shipped code paths."}
+
+
+CERTIFICATE_PINNING_STATIC_FINDING_RULES = [
+    rule_positive_emit,
+    rule_no_pinning_no_insecure,
+    rule_insecure_tls,
+]

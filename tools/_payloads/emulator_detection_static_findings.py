@@ -26,3 +26,9 @@ def rule_emulator_detection_present(s):
                            "ctsProfileMatch verdicts server-side for defense in depth. "
                            "Note: emulator detection alone is bypassable — used to "
                            "raise the cost of automated fraud, not stop targeted attacks."}
+
+
+EMULATOR_DETECTION_STATIC_FINDING_RULES = [
+    rule_positive_emit,
+    rule_emulator_detection_present,
+]

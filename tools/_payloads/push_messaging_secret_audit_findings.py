@@ -58,3 +58,11 @@ def rule_ambiguous_api_key(s):
                            "server-side keys (NOT safe). Restrict each in Google Cloud "
                            "Console → Credentials → API restrictions (limit to expected "
                            "API + application restrictions limit to Android package name)."}
+
+
+PUSH_MESSAGING_SECRET_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_critical_leak,
+    rule_high_severity_leak,
+    rule_ambiguous_api_key,
+]

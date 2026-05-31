@@ -1,4 +1,4 @@
-"""cert_san_aggregator — findings rules. ⭐ NEW 2024+."""
+"""cert_san_aggregator — findings rules. NEW 2024+."""
 def rule_found(s):
     if not s.get("cert_san_found"): return None
     return {"name":f"Active certificates: {s.get('total_active_certs',0)} certs, {s.get('own_sans_count',0)} unique subdomains in SANs","severity":"POSITIVE",

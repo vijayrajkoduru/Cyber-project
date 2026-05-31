@@ -25,3 +25,9 @@ def rule_anti_debug_present(s):
             "remediation": "Good. Combine static-marker detection with runtime "
                            "integrity checks (e.g. periodic re-check, code signature "
                            "verify, server-side attestation)."}
+
+
+ANTI_DEBUG_STATIC_MARKERS_FINDING_RULES = [
+    rule_positive_emit,
+    rule_anti_debug_present,
+]

@@ -22,3 +22,8 @@ def rule_positive_emit(s):
                            "includes: anti-debug, anti-Frida, root/jailbreak detect, "
                            "anti-emulator, string encryption, control-flow obfuscation, "
                            "RASP integrity check."}
+
+
+DEX_PROTECTION_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+]
