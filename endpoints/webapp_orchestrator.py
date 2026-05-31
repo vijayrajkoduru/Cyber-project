@@ -228,6 +228,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("oauth_front_channel_logout",     "/api/webapp/scan/oauth_front_channel_logout"),
         ("apache_modrewrite_confusion",    "/api/webapp/scan/apache_modrewrite_confusion"),
     ],
+    # ── VL-FORGE round 10: +8 protocol/CMS/CI scanners (closing to 95%) ──
+    "tier23_protocol_cms_ci": [
+        ("xxe_json_xml_conversion",   "/api/webapp/scan/xxe_json_xml_conversion"),
+        ("h2c_smuggling",             "/api/webapp/scan/h2c_smuggling"),
+        ("webdav_exposure",           "/api/webapp/scan/webdav_exposure"),
+        ("nestjs_pipe_injection",     "/api/webapp/scan/nestjs_pipe_injection"),
+        ("strapi_admin_default",      "/api/webapp/scan/strapi_admin_default"),
+        ("postman_api_discovery",     "/api/webapp/scan/postman_api_discovery"),
+        ("cache_stampede_detect",     "/api/webapp/scan/cache_stampede_detect"),
+        ("github_actions_oidc_leak",  "/api/webapp/scan/github_actions_oidc_leak"),
+    ],
 }
 
 
