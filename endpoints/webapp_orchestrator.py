@@ -239,6 +239,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("cache_stampede_detect",     "/api/webapp/scan/cache_stampede_detect"),
         ("github_actions_oidc_leak",  "/api/webapp/scan/github_actions_oidc_leak"),
     ],
+    # ── VL-FORGE round 11: +8 cloud/data/identity scanners — 100% playbook ──
+    "tier24_cloud_data_identity": [
+        ("mtls_server_cert_pin_audit",     "/api/webapp/scan/mtls_server_cert_pin_audit"),
+        ("opa_policy_bypass",              "/api/webapp/scan/opa_policy_bypass"),
+        ("k8s_serviceaccount_token_leak",  "/api/webapp/scan/k8s_serviceaccount_token_leak"),
+        ("trino_presto_sql_injection",     "/api/webapp/scan/trino_presto_sql_injection"),
+        ("opensearch_query_injection",     "/api/webapp/scan/opensearch_query_injection"),
+        ("trino_metadata_leak",            "/api/webapp/scan/trino_metadata_leak"),
+        ("kafka_rest_proxy_exposure",      "/api/webapp/scan/kafka_rest_proxy_exposure"),
+        ("aws_cognito_unauth_admin",       "/api/webapp/scan/aws_cognito_unauth_admin"),
+    ],
 }
 
 
