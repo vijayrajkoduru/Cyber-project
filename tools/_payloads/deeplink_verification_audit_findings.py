@@ -41,3 +41,10 @@ def rule_custom_scheme(s):
                            "migrate to App Links (HTTPS + assetlinks.json). For "
                            "in-app navigation, use NavController instead of intents. "
                            "OAuth flows MUST use App Links since iOS 9 / Android 6+."}
+
+
+DEEPLINK_VERIFICATION_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_unverified_https,
+    rule_custom_scheme,
+]

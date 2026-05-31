@@ -1,4 +1,4 @@
-"""dns_0x20 — findings rules. ⭐ NEW 2024+."""
+"""dns_0x20 — findings rules. NEW 2024+."""
 def rule_supported(s):
     if not s.get("case_preserved"): return None
     return {"name":"DNS 0x20 case randomization preserved (RFC 5452 anti-spoofing)","severity":"POSITIVE",

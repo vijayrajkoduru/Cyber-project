@@ -54,3 +54,11 @@ def rule_perm_explosion(s):
             "remediation": "Too many permissions = bundled SDK overreach. Audit "
                            "each SDK dependency — common cause: 3-4 analytics SDKs "
                            "each requesting LOCATION + PHONE_STATE + CONTACTS."}
+
+
+PERMISSION_OVERPRIVILEGE_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_privileged_perms,
+    rule_dangerous_perms,
+    rule_perm_explosion,
+]

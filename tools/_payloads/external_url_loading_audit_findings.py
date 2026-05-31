@@ -41,3 +41,10 @@ def rule_third_party_https_load(s):
             "remediation": "WebView loading third-party HTTPS content can expose your app "
                            "context to remote XSS / phishing-clone risks. Verify each URL "
                            "is YOUR domain or a TRUSTED partner (CDN, payment processor)."}
+
+
+EXTERNAL_URL_LOADING_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_http_urls_present,
+    rule_third_party_https_load,
+]

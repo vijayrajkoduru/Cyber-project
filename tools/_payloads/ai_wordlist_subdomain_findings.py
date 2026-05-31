@@ -1,4 +1,4 @@
-"""ai_wordlist_subdomain — findings rules. ⭐ NEW 2024+."""
+"""ai_wordlist_subdomain — findings rules. NEW 2024+."""
 def rule_found(s):
     c = s.get("ai_wl_count") or 0
     if c == 0: return None

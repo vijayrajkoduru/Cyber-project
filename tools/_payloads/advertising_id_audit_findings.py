@@ -68,3 +68,12 @@ def rule_ad_id_inventory(s):
             "remediation": "Declare in App Privacy Nutrition + Play Data Safety: "
                             "category = Identifiers, used-for = Advertising/marketing. "
                             "Honor user's tracking-permission choice in your analytics SDK."}
+
+
+ADVERTISING_ID_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_ios_idfa_no_att,
+    rule_ios_idfa_no_purpose_string,
+    rule_android_ad_id_missing_perm,
+    rule_ad_id_inventory,
+]

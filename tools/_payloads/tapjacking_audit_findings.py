@@ -25,3 +25,9 @@ def rule_no_tapjacking_protection(s):
                            "in layout XML. View.setFilterTouchesWhenObscured(true) for "
                            "programmatic views. Mitigates overlay attacks from "
                            "draw-over-other-apps permission misuse."}
+
+
+TAPJACKING_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_no_tapjacking_protection,
+]

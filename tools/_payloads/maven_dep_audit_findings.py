@@ -39,3 +39,10 @@ def rule_dep_explosion(s):
                            "vector. Audit for transitive bloat — most apps don't need "
                            "all of Guava + AndroidX + Kotlin-stdlib + 3 JSON libs. "
                            "Use './gradlew app:dependencies' to see what's actually used."}
+
+
+MAVEN_DEP_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_dep_inventory,
+    rule_dep_explosion,
+]

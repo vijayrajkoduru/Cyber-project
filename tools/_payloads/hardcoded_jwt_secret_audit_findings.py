@@ -38,3 +38,10 @@ def rule_jwt_lib_in_use(s):
                            "JWTs themselves (no HS256 secret in client). Audit DEX for "
                            "setSigningKey / HMAC256 calls — those need a secret that "
                            "shouldn't be in the binary."}
+
+
+HARDCODED_JWT_SECRET_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_embedded_jwt,
+    rule_jwt_lib_in_use,
+]

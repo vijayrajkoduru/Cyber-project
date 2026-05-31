@@ -52,3 +52,11 @@ def rule_js_enabled(s):
                            "your own HTML / HTTPS sources. NEVER mix with "
                            "@JavascriptInterface unless interface methods are "
                            "API-26+ @JavascriptInterface restricted."}
+
+
+WEBVIEW_CONFIG_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_universal_file_access,
+    rule_high_severity_setters,
+    rule_js_enabled,
+]

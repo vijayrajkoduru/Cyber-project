@@ -66,3 +66,11 @@ def rule_iap_inventory(s):
             "remediation": "Document each in your Privacy Policy + Store listing. "
                            "Multiple payment providers can confuse users — consider "
                            "consolidating."}
+
+
+IAP_BILLING_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_third_party_payment_on_store,
+    rule_no_receipt_verify,
+    rule_iap_inventory,
+]

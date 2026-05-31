@@ -33,3 +33,10 @@ def rule_plugin_inventory(s):
             "remediation": "Cross-reference each plugin against Snyk/OSV.dev. "
                            "Capacitor 5+ has automatic CVE checks via `npm audit`. "
                            "For Cordova: cordova-check-plugins."}
+
+
+CORDOVA_CAPACITOR_PLUGIN_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_bad_plugins,
+    rule_plugin_inventory,
+]

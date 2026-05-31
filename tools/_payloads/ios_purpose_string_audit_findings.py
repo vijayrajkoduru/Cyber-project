@@ -43,3 +43,10 @@ def rule_short_descriptions(s):
             "remediation": "Short purpose strings are technically valid but suboptimal "
                            "for user trust. Aim for 1-2 sentences explaining feature + "
                            "value."}
+
+
+IOS_PURPOSE_STRING_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_generic_descriptions,
+    rule_short_descriptions,
+]

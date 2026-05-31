@@ -1,4 +1,4 @@
-"""websocket_endpoint_discovery — findings (⭐ Recon §5 #84)."""
+"""websocket_endpoint_discovery — findings (Recon §5 #84)."""
 def rule_positive_emit(s):
     if s.get("websocket_endpoint_discovery_total"): return None
     return {"name": "No WebSocket endpoints discovered on common paths", "severity": "POSITIVE",

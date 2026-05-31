@@ -27,3 +27,9 @@ def rule_root_detection_present(s):
             "remediation": "Good. Continue monitoring detection-evasion advisories "
                            "and update detection libraries regularly. Add Play Integrity "
                            "/ App Attest server-side verification as defense in depth."}
+
+
+ANTI_ROOT_DETECTION_STATIC_FINDING_RULES = [
+    rule_positive_emit,
+    rule_root_detection_present,
+]

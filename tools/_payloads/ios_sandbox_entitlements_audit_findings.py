@@ -30,3 +30,9 @@ def rule_risky_entitlements(s):
                            "unsigned dylib injection. (3) allow-jit = breaks "
                            "W^X mitigation. Review per Apple Code Signing Guide; "
                            "REMOVE entitlements not strictly required by App Store reviewer."}
+
+
+IOS_SANDBOX_ENTITLEMENTS_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_risky_entitlements,
+]

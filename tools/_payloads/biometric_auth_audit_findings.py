@@ -41,3 +41,10 @@ def rule_deprecated_biometric(s):
                            "biometric strength selection + crypto-object binding. "
                            "Old API doesn't gate on biometric class strength → weak-class "
                            "biometric can unlock."}
+
+
+BIOMETRIC_AUTH_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_no_biometric_at_all,
+    rule_deprecated_biometric,
+]

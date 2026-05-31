@@ -52,3 +52,11 @@ def rule_ai_sdk_inventory(s):
                            "CVE history. Subscribe to their security advisories. "
                            "For on-device LLM apps: implement prompt-injection defense "
                            "(separator tokens, OWASP LLM Top 10 #1)."}
+
+
+AI_ML_MODEL_DETECTION_FINDING_RULES = [
+    rule_positive_emit,
+    rule_large_model_bundled,
+    rule_models_inventory,
+    rule_ai_sdk_inventory,
+]

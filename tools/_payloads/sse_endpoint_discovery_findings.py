@@ -1,4 +1,4 @@
-"""sse_endpoint_discovery — findings (⭐ Recon §5 #85)."""
+"""sse_endpoint_discovery — findings (Recon §5 #85)."""
 def rule_positive_emit(s):
     if s.get("sse_endpoint_discovery_total"): return None
     return {"name": "No SSE endpoints detected on common paths", "severity": "POSITIVE",

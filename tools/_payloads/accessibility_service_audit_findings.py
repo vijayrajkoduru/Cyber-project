@@ -27,3 +27,9 @@ def rule_a11y_present(s):
                            "non-justified use → suspension. Test against Play Store "
                            "policy: support.google.com/googleplay/android-developer/"
                            "answer/14094618."}
+
+
+ACCESSIBILITY_SERVICE_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_a11y_present,
+]

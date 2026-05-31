@@ -49,3 +49,10 @@ def rule_partial_obfuscation(s):
                            "@Keep annotations or proguard-rules.pro keep-statements. "
                            "Audit which classes are exempted and confirm exemptions are "
                            "necessary (reflection, serialization)."}
+
+
+PROGUARD_OBFUSCATION_AUDIT_FINDING_RULES = [
+    rule_positive_emit,
+    rule_no_obfuscation,
+    rule_partial_obfuscation,
+]
