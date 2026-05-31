@@ -151,6 +151,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("content_type_confusion",   "/api/webapp/scan/content_type_confusion"),
         ("xs_leaks_probe",           "/api/webapp/scan/xs_leaks_probe"),
     ],
+    # ── VL-FORGE round 3: +8 protocol / TLS / identity scanners ──
+    "tier16_protocol_tls_identity": [
+        ("webrtc_stun_audit",              "/api/webapp/scan/webrtc_stun_audit"),
+        ("regex_dos_probe",                "/api/webapp/scan/regex_dos_probe"),
+        ("hsts_audit_deep",                "/api/webapp/scan/hsts_audit_deep"),
+        ("mtls_audit",                     "/api/webapp/scan/mtls_audit"),
+        ("oidc_discovery_audit",           "/api/webapp/scan/oidc_discovery_audit"),
+        ("graphql_introspection_authz",    "/api/webapp/scan/graphql_introspection_authz"),
+        ("path_normalization_bypass",      "/api/webapp/scan/path_normalization_bypass"),
+        ("open_redirect_oauth_extension",  "/api/webapp/scan/open_redirect_oauth_extension"),
+    ],
 }
 
 
