@@ -206,6 +206,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("graphql_subscription_auth",    "/api/webapp/scan/graphql_subscription_auth"),
         ("proto_pollution_chain",        "/api/webapp/scan/proto_pollution_chain"),
     ],
+    # ── VL-FORGE round 8: +8 enterprise + supply-chain + URL-scheme ──
+    "tier21_enterprise_url_scheme": [
+        ("client_side_template_injection","/api/webapp/scan/client_side_template_injection"),
+        ("fetch_metadata_audit",          "/api/webapp/scan/fetch_metadata_audit"),
+        ("scim_endpoint_enumeration",     "/api/webapp/scan/scim_endpoint_enumeration"),
+        ("ms_graph_api_leak",             "/api/webapp/scan/ms_graph_api_leak"),
+        ("grpc_reflection_audit",         "/api/webapp/scan/grpc_reflection_audit"),
+        ("webhook_secret_validation",     "/api/webapp/scan/webhook_secret_validation"),
+        ("svg_xss_upload",                "/api/webapp/scan/svg_xss_upload"),
+        ("ssrf_url_schema_smuggle",       "/api/webapp/scan/ssrf_url_schema_smuggle"),
+    ],
 }
 
 
