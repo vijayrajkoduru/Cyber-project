@@ -4845,9 +4845,6 @@ journalctl -u uvicorn -n 50
           ))}
         </div>
       )}
-      <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
-        moduleLabel={(title || "Module") + " Report"}
-        onGenerate={cfg => _runReport(cfg)}/>
     </div>
   );
 }
@@ -5345,6 +5342,9 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
           </div>
         )}
       </div>
+      <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
+        moduleLabel={(title || "Module") + " Report"}
+        onGenerate={cfg => _runReport(cfg)}/>
     </div>
   );
 }
