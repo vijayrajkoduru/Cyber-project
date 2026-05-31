@@ -11579,7 +11579,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }).filter(t => t._f && t._f.status && t._f.status !== "not_run");
 
     if (_mtCompleted.length > 0) {
-      const _asc = v => String(v == null ? "" : v).replace(/[\u{1F000}-\u{1FFFF}]/gu, "").replace(/[]/g, "v ").replace(/[]/g, "X ").replace(/[]/g, "[!] ").replace(/[—–]/g, "-").replace(/→/g, "->").replace(/←/g, "<-").replace(/·/g, "-");
+      const _asc = v => String(v == null ? "" : v).replace(/[\u{1F000}-\u{1FFFF}]/gu, "").replace(/[✓✔]/g, "v ").replace(/[✘✖❌]/g, "X ").replace(/[⚠]/g, "[!] ").replace(/[—–]/g, "-").replace(/[→]/g, "->").replace(/[←]/g, "<-").replace(/[·]/g, "-");
       chk(30); y = sHead("Manual Pentest Evidence (Analyst-Attested)", y); y += 3;
       txt(_mtCompleted.length + " manual technique(s) executed by analyst, complementing the automated scan above.", margin, y, 8, GRAY); y += 5;
       txt("All evidence below is self-reported by the analyst running each test locally.", margin, y, 7.5, GRAY); y += 9;
@@ -14098,18 +14098,18 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   // any string to doc.text(). Applied via the txt() wrapper so every caller
   // is automatically safe.
   const _ascii = s => String(s == null ? "" : s)
-      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")             // emoji blocks
-      .replace(//g, "[OK] ")                         //
-      .replace(/[]/g, "v ")                    //
-      .replace(/[]/g, "[!] ")                  //
-      .replace(/[]/g, "X ")                    //
-      .replace(/[—–]/g, "-")                     // em/en dash
-      .replace(/→/g, "->")                       // U+2192 RIGHTWARDS ARROW (unicode-escaped so future sed can't break this regex)
-      .replace(/←/g, "<-")                            // ←
-      .replace(/[‘’]/g, "'")                     // smart quotes
-      .replace(/[“”]/g, '"')                     // smart double quotes
-      .replace(/·/g, "-")                             // middle dot ·
-      .replace(/[︎️]/g, "");                     // variation selectors
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+      .replace(/[✅]/g, "[OK] ")
+      .replace(/[✓✔]/g, "v ")
+      .replace(/[⚠]/g, "[!] ")
+      .replace(/[✘✖❌]/g, "X ")
+      .replace(/[—–]/g, "-")
+      .replace(/[→]/g, "->")
+      .replace(/[←]/g, "<-")
+      .replace(/[‘’]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/[·]/g, "-")
+      .replace(/[︎️]/g, "");
   const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
   const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(_ascii(t),x,yy,{align:align||"left"});};
   const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHeader();}};
@@ -18954,7 +18954,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     const asc = v => String(v == null ? "" : v)
       .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
       .replace(/[→]/g, "->").replace(/[←]/g, "<-")
-      .replace(/[]/g, "v ").replace(/[]/g, "X ")
+      .replace(/[✓✔]/g, "v ").replace(/[✘✖❌]/g, "X ")
       .replace(/[—–]/g, "-").replace(/[·]/g, "-")
       .replace(/[ ]/g, " ");
     const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
