@@ -88,68 +88,68 @@ const LOGO = "/logo.svg";
 
 const MODULES = [
   // ── FREE (everyone) ──────────────────────────────────────────
-  { id:"dashboard", icon:"🏠", label:"Dashboard",                          cat:"core",    free:true  },
-  { id:"recon",     icon:"🔍", label:"Information Gathering & Recon",      cat:"recon",   free:true  },
-  { id:"guide",     icon:"📖", label:"Run Guide & Lab Targets",            cat:"tools",   free:true  },
-  { id:"report",    icon:"📄", label:"Report Writing",                     cat:"tools",   free:true  },
+  { id:"dashboard", icon:"", label:"Dashboard",                          cat:"core",    free:true  },
+  { id:"recon",     icon:"", label:"Information Gathering & Recon",      cat:"recon",   free:true  },
+  { id:"guide",     icon:"", label:"Run Guide & Lab Targets",            cat:"tools",   free:true  },
+  { id:"report",    icon:"", label:"Report Writing",                     cat:"tools",   free:true  },
 
   // ── TRIAL ACCESS (free tier gets these) ─────────────────────
-  { id:"vuln",      icon:"🛡️", label:"Vulnerability Scanning",             cat:"scan",    free:false, trial:true },
-  { id:"webapp",    icon:"🌐", label:"Web Application Pentesting",         cat:"scan",    free:false, trial:true, featured:true },
+  { id:"vuln",      icon:"", label:"Vulnerability Scanning",             cat:"scan",    free:false, trial:true },
+  { id:"webapp",    icon:"", label:"Web Application Pentesting",         cat:"scan",    free:false, trial:true, featured:true },
 
   // ── SCANNING ────────────────────────────────────────────────
-  { id:"osint",     icon:"🌍", label:"Advanced OSINT & Threat Intel",      cat:"scan",    free:false },
+  { id:"osint",     icon:"", label:"Advanced OSINT & Threat Intel",      cat:"scan",    free:false },
 
   // ── EXPLOITATION ─────────────────────────────────────────────
-  { id:"exploit",        icon:"💥", label:"Exploitation",                    cat:"exploit", free:false, featured:true },
-  { id:"bof",            icon:"💾", label:"Buffer Overflow",                 cat:"exploit", free:false },
-  { id:"client_side",    icon:"🎯", label:"Client-Side Attacks",             cat:"exploit", free:false },
-  { id:"system_exploit", icon:"⚙️", label:"System Exploitation",            cat:"exploit", free:false },
-  { id:"metasploit",     icon:"🧰", label:"Metasploit Framework",            cat:"exploit", free:false },
+  { id:"exploit",        icon:"", label:"Exploitation",                    cat:"exploit", free:false, featured:true },
+  { id:"bof",            icon:"", label:"Buffer Overflow",                 cat:"exploit", free:false },
+  { id:"client_side",    icon:"", label:"Client-Side Attacks",             cat:"exploit", free:false },
+  { id:"system_exploit", icon:"", label:"System Exploitation",            cat:"exploit", free:false },
+  { id:"metasploit",     icon:"", label:"Metasploit Framework",            cat:"exploit", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
-  { id:"privesc",        icon:"⬆️", label:"Privilege Escalation",            cat:"post",    free:false },
-  { id:"post_exploit",   icon:"🕵️", label:"Post Exploitation",               cat:"post",    free:false },
-  { id:"pivot",          icon:"🔄", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
+  { id:"privesc",        icon:"", label:"Privilege Escalation",            cat:"post",    free:false },
+  { id:"post_exploit",   icon:"", label:"Post Exploitation",               cat:"post",    free:false },
+  { id:"pivot",          icon:"", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
 
   // ── NETWORK & INFRA ──────────────────────────────────────────
-  { id:"network",        icon:"🌐", label:"Network Attacks",                 cat:"network", free:false },
-  { id:"tunnel",         icon:"🔗", label:"Port Redirection & Tunneling",    cat:"network", free:false },
-  { id:"password",       icon:"🔑", label:"Password Attacks",                cat:"network", free:false },
-  { id:"auth_attacks",   icon:"🛂", label:"Authentication Attacks",          cat:"network", free:false },
-  { id:"wireless",       icon:"📶", label:"Wireless Network Attacks",        cat:"network", free:false },
+  { id:"network",        icon:"", label:"Network Attacks",                 cat:"network", free:false },
+  { id:"tunnel",         icon:"", label:"Port Redirection & Tunneling",    cat:"network", free:false },
+  { id:"password",       icon:"", label:"Password Attacks",                cat:"network", free:false },
+  { id:"auth_attacks",   icon:"", label:"Authentication Attacks",          cat:"network", free:false },
+  { id:"wireless",       icon:"", label:"Wireless Network Attacks",        cat:"network", free:false },
 
   // ── ADVANCED ─────────────────────────────────────────────────
-  { id:"ad",             icon:"🏢", label:"Active Directory Attacks",        cat:"advanced",free:false },
-  { id:"av_evasion",     icon:"🥷", label:"Antivirus / EDR Evasion",         cat:"advanced",free:false },
-  { id:"cloud",          icon:"☁️", label:"Cloud Security Testing",          cat:"advanced",free:false },
-  { id:"apisec",         icon:"🔌", label:"API Security Testing",            cat:"advanced",free:false },
-  { id:"ai_llm",         icon:"🤖", label:"AI / LLM Security",               cat:"advanced",free:false },
-  { id:"container_k8s",  icon:"🐳", label:"Container / Kubernetes",          cat:"advanced",free:false },
-  { id:"supply_chain",   icon:"🔗", label:"Supply Chain Security",           cat:"advanced",free:false },
-  { id:"hybrid_identity",icon:"🪪", label:"Hybrid Identity (Entra ID)",      cat:"advanced",free:false },
-  { id:"sspm",           icon:"📊", label:"SaaS Security Posture (SSPM)",    cat:"advanced",free:false },
-  { id:"iot_ot",         icon:"🏭", label:"IoT / OT / ICS Security",         cat:"advanced",free:false },
-  { id:"firmware",       icon:"💿", label:"Firmware / Embedded",             cat:"advanced",free:false },
+  { id:"ad",             icon:"", label:"Active Directory Attacks",        cat:"advanced",free:false },
+  { id:"av_evasion",     icon:"", label:"Antivirus / EDR Evasion",         cat:"advanced",free:false },
+  { id:"cloud",          icon:"", label:"Cloud Security Testing",          cat:"advanced",free:false },
+  { id:"apisec",         icon:"", label:"API Security Testing",            cat:"advanced",free:false },
+  { id:"ai_llm",         icon:"", label:"AI / LLM Security",               cat:"advanced",free:false },
+  { id:"container_k8s",  icon:"", label:"Container / Kubernetes",          cat:"advanced",free:false },
+  { id:"supply_chain",   icon:"", label:"Supply Chain Security",           cat:"advanced",free:false },
+  { id:"hybrid_identity",icon:"", label:"Hybrid Identity (Entra ID)",      cat:"advanced",free:false },
+  { id:"sspm",           icon:"", label:"SaaS Security Posture (SSPM)",    cat:"advanced",free:false },
+  { id:"iot_ot",         icon:"", label:"IoT / OT / ICS Security",         cat:"advanced",free:false },
+  { id:"firmware",       icon:"", label:"Firmware / Embedded",             cat:"advanced",free:false },
 
   // ── ADVERSARY EMULATION ──────────────────────────────────────
-  { id:"phishing",       icon:"🎣", label:"Phishing & Social Engineering",   cat:"advanced",free:false },
-  { id:"red_team",       icon:"🎭", label:"Adversary Emulation / Red Team",  cat:"advanced",free:false },
+  { id:"phishing",       icon:"", label:"Phishing & Social Engineering",   cat:"advanced",free:false },
+  { id:"red_team",       icon:"", label:"Adversary Emulation / Red Team",  cat:"advanced",free:false },
 
   // ── MOBILE ───────────────────────────────────────────────────
-  { id:"mobile_static",  icon:"📱", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
-  { id:"mobile_storage", icon:"🗄️", label:"Storage (Data-at-Rest)",         cat:"mobile",  free:false },
-  { id:"mobile_runtime", icon:"🪝", label:"Runtime / Anti-Tamper",           cat:"mobile",  free:false },
-  { id:"mobile_crypto",  icon:"🔐", label:"Crypto (Algorithms & TLS)",       cat:"mobile",  free:false },
-  { id:"mobile_network", icon:"📡", label:"Network / Traffic",               cat:"mobile",  free:false },
+  { id:"mobile_static",  icon:"", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
+  { id:"mobile_storage", icon:"", label:"Storage (Data-at-Rest)",         cat:"mobile",  free:false },
+  { id:"mobile_runtime", icon:"", label:"Runtime / Anti-Tamper",           cat:"mobile",  free:false },
+  { id:"mobile_crypto",  icon:"", label:"Crypto (Algorithms & TLS)",       cat:"mobile",  free:false },
+  { id:"mobile_network", icon:"", label:"Network / Traffic",               cat:"mobile",  free:false },
 
   // ── DATA PROTECTION ──────────────────────────────────────────
-  { id:"backups",   icon:"📦", label:"My Backups",                          cat:"data",    free:true  },
-  { id:"vault",     icon:"🔐", label:"VAULT — Master Archive",              cat:"admin",   free:false, admin:true },
-  { id:"backupops", icon:"💾", label:"BACKUP Operations",                   cat:"admin",   free:false, admin:true },
+  { id:"backups",   icon:"", label:"My Backups",                          cat:"data",    free:true  },
+  { id:"vault",     icon:"", label:"VAULT — Master Archive",              cat:"admin",   free:false, admin:true },
+  { id:"backupops", icon:"", label:"BACKUP Operations",                   cat:"admin",   free:false, admin:true },
 
   // ── TOOLS ────────────────────────────────────────────────────
-  { id:"tools",     icon:"🛠️", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
+  { id:"tools",     icon:"", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
 ];
 
 const CSS = `
@@ -378,7 +378,7 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
     try {
       const r = await api("/api/tool_refresh", "POST", {module}, token);
       if (r && r.ok) {
-        setLastMsg(`✓ Cleared ${r.files_deleted||0} file(s) · ${((r.freed_bytes||0)/1024).toFixed(1)} KB freed`);
+        setLastMsg(`Cleared ${r.files_deleted||0} file(s) · ${((r.freed_bytes||0)/1024).toFixed(1)} KB freed`);
       } else {
         setLastMsg(`! ${r && r.error || "backend clear failed"}`);
       }
@@ -429,7 +429,7 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
         <span style={{
           fontSize:11,
           fontFamily:"JetBrains Mono,monospace",
-          color: lastMsg.startsWith("✓") ? "#4ade80" : "#fb923c",
+          color: lastMsg.startsWith("") ? "#4ade80" : "#fb923c",
           padding:"2px 8px",
           background:"#020617",
           borderRadius:4,
@@ -705,8 +705,8 @@ function Terminal(props) {
       </div>
       <div ref={ref} style={{padding:14,height:height,overflowY:"auto"}}>
         {lines.map((l,i) => {
-          const isOk    = l.startsWith("✓");
-          const isErr   = l.startsWith("✗");
+          const isOk    = l.startsWith("");
+          const isErr   = l.startsWith("");
           const isArrow = l.startsWith("->") || l.startsWith("[*]");
           const color   = isOk?"#22c55e":isErr?"#ef4444":isArrow?"#60a5fa":"#64748b";
           return (
@@ -737,7 +737,7 @@ function TestTargets({targets, onSelect}) {
     <div style={{marginBottom:10}}>
       <button onClick={()=>open ? close() : setOpen(true)}
         style={{background:"none",border:"1px solid #1e3a8a",borderRadius:5,padding:"4px 12px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-        🎯 Test Targets {open?"▲":"▼"}
+        Test Targets {open?"▲":"▼"}
       </button>
       {open && (
         <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,marginTop:6,overflow:"hidden",
@@ -751,12 +751,12 @@ function TestTargets({targets, onSelect}) {
               <span style={{fontSize:14}}>{t.icon}</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:600,color:"#f1f5f9"}}>{t.label}
-                  {t.lab && <span style={{fontSize:9,color:"#4ade80",marginLeft:8,fontWeight:700,background:"#052e16",padding:"1px 5px",borderRadius:3}}>AUTO-LOGIN ✓</span>}
+                  {t.lab && <span style={{fontSize:9,color:"#4ade80",marginLeft:8,fontWeight:700,background:"#052e16",padding:"1px 5px",borderRadius:3}}>AUTO-LOGIN </span>}
                 </div>
                 <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
                 {t.desc && <div style={{fontSize:9,color:"#64748b",marginTop:1}}>{t.desc}</div>}
               </div>
-              <span style={{fontSize:10,color:copied===i?"#4ade80":"#334155",fontWeight:700,flexShrink:0}}>{copied===i?"✓ Selected":"Click"}</span>
+              <span style={{fontSize:10,color:copied===i?"#4ade80":"#334155",fontWeight:700,flexShrink:0}}>{copied===i?"Selected":"Click"}</span>
             </div>
           ))}
         </div>
@@ -1512,7 +1512,7 @@ function generatePDF(reportData) {
           doc.text(`${t.ran}/${t.total}`, _trackX + _trackW + 3, y+5);
           if (flagged) {
             doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...RED);
-            doc.text(`⚑ ${t.flagged}`, _trackX + _trackW + 17, y+5);
+            doc.text(`${t.flagged}`, _trackX + _trackW + 17, y+5);
           }
           y += 8;
         });
@@ -2461,15 +2461,15 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>📄 Customize {moduleLabel||"Report"}</div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}>✕</button>
+          <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>Customize {moduleLabel||"Report"}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}></button>
         </div>
         <div style={{color:"#64748b",fontSize:11,marginBottom:14,fontStyle:"italic"}}>
           All fields are optional — fill only what you need. Empty fields use sensible defaults.
         </div>
         <button onClick={()=>{ onClose(); setTimeout(()=>onGenerate({...cfg, encrypt:false}), 50); }}
           style={{width:"100%",background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 14px",color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:16}}>
-          ⚡ Skip & Generate with Defaults (no password, no watermark)
+          Skip & Generate with Defaults (no password, no watermark)
         </button>
         {fld("Company / Client Name (optional)", cfg.companyName, "companyName", "e.g. Acme Corporation")}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -2482,7 +2482,7 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
           <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
           <div style={{display:"flex",gap:10,alignItems:"center"}}>
             <label style={{background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 18px",color:"#93c5fd",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-              📁 Upload Logo
+              Upload Logo
               <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
                 const file = e.target.files[0]; if(!file) return;
                 const reader = new FileReader();
@@ -2541,7 +2541,7 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
           <label style={{display:"flex",alignItems:"center",gap:8,color:"#93c5fd",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
             <input type="checkbox" checked={cfg.encrypt!==false} onChange={e=>setCfg(p=>({...p,encrypt:e.target.checked}))}
               style={{accentColor:"#3b82f6",cursor:"pointer"}}/>
-            🔒 PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
+            PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
           </label>
           {cfg.encrypt!==false && (
             <>
@@ -2549,9 +2549,9 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
                 <input value={cfg.password||""} onChange={e=>setCfg(p=>({...p,password:e.target.value}))}
                   style={{flex:1,background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,padding:"8px 12px",color:"#fbbf24",fontFamily:"JetBrains Mono,monospace",fontSize:13,fontWeight:700,outline:"none",boxSizing:"border-box"}}/>
                 <button onClick={()=>setCfg(p=>({...p,password:_genPwd()}))}
-                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>🎲 Regenerate</button>
+                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Regenerate</button>
                 <button onClick={()=>navigator.clipboard.writeText(cfg.password).then(()=>alert("Password copied:\n\n"+cfg.password+"\n\nSave it — you'll need it to open the PDF."))}
-                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#22c55e",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>📋 Copy</button>
+                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#22c55e",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Copy</button>
               </div>
               <div style={{color:"#64748b",fontSize:10,marginTop:8,fontStyle:"italic"}}>Recipient prompted for this password when opening the PDF. Cannot be recovered if lost.</div>
             </>
@@ -2559,7 +2559,7 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
         </div>
         <button onClick={()=>{ onClose(); setTimeout(()=>onGenerate(cfg), 50); }}
           style={{width:"100%",background:"#ef4444",border:"none",borderRadius:7,padding:"12px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-          📄 Generate Report
+          Generate Report
         </button>
       </div>
     </div>
@@ -2803,78 +2803,78 @@ function generateModuleReport(reportData) {
 // (idor_detector / nosqli / forced_browsing / directory_brute). Final: 60 phases.
 const PHASES = [
   // ── tier1_discovery (1) — runs FIRST, populates scan_state.json ─────
-  {name:"SPA Crawler",            tool:"spa_crawler",       endpoint:"/api/webapp/scan/spa_crawler",     icon:"🕷️"},
+  {name:"SPA Crawler",            tool:"spa_crawler",       endpoint:"/api/webapp/scan/spa_crawler",     icon:""},
   // ── tier2_recon (2) ────────────────────────────────────────────────
-  {name:"CMS Detection",          tool:"cms",               endpoint:"/api/webapp/scan/cms",             icon:"📦"},
-  {name:"Port Scanning",          tool:"portscan",          endpoint:"/api/webapp/scan/portscan",        icon:"🔌"},
+  {name:"CMS Detection",          tool:"cms",               endpoint:"/api/webapp/scan/cms",             icon:""},
+  {name:"Port Scanning",          tool:"portscan",          endpoint:"/api/webapp/scan/portscan",        icon:""},
   // ── tier3_injection (4) — highest customer impact ──────────────────
-  {name:"XSS Testing",            tool:"xss",               endpoint:"/api/webapp/scan/xss",             icon:"⚡"},
-  {name:"SQL Injection",          tool:"sqli",              endpoint:"/api/webapp/scan/sqli",            icon:"💉"},
-  {name:"Command Injection",      tool:"cmd_injection",     endpoint:"/api/webapp/scan/cmd_injection",   icon:"💻"},
-  {name:"XXE Injection",          tool:"xxe",               endpoint:"/api/webapp/scan/xxe",             icon:"📄"},
+  {name:"XSS Testing",            tool:"xss",               endpoint:"/api/webapp/scan/xss",             icon:""},
+  {name:"SQL Injection",          tool:"sqli",              endpoint:"/api/webapp/scan/sqli",            icon:""},
+  {name:"Command Injection",      tool:"cmd_injection",     endpoint:"/api/webapp/scan/cmd_injection",   icon:""},
+  {name:"XXE Injection",          tool:"xxe",               endpoint:"/api/webapp/scan/xxe",             icon:""},
   // ── tier4_auth (4) — auth & session ────────────────────────────────
-  {name:"Security Headers",       tool:"headers",           endpoint:"/api/webapp/scan/headers",         icon:"📋"},
-  {name:"Cookie Analysis",        tool:"cookies",           endpoint:"/api/webapp/scan/cookies",         icon:"🍪"},
-  {name:"CSRF Testing",           tool:"csrf",              endpoint:"/api/webapp/scan/csrf",            icon:"🛡"},
-  {name:"JWT Attacks",            tool:"jwt",               endpoint:"/api/webapp/scan/jwt",             icon:"🎟"},
+  {name:"Security Headers",       tool:"headers",           endpoint:"/api/webapp/scan/headers",         icon:""},
+  {name:"Cookie Analysis",        tool:"cookies",           endpoint:"/api/webapp/scan/cookies",         icon:""},
+  {name:"CSRF Testing",           tool:"csrf",              endpoint:"/api/webapp/scan/csrf",            icon:""},
+  {name:"JWT Attacks",            tool:"jwt",               endpoint:"/api/webapp/scan/jwt",             icon:""},
   // ── tier5_file_path (2) ────────────────────────────────────────────
-  {name:"Path Traversal / LFI",   tool:"lfi",               endpoint:"/api/webapp/scan/lfi",             icon:"📂"},
-  {name:"Exposed Files",          tool:"exposed_files",     endpoint:"/api/webapp/scan/exposed_files",   icon:"🗂"},
+  {name:"Path Traversal / LFI",   tool:"lfi",               endpoint:"/api/webapp/scan/lfi",             icon:""},
+  {name:"Exposed Files",          tool:"exposed_files",     endpoint:"/api/webapp/scan/exposed_files",   icon:""},
   // ── tier6_network (5) — protocol attacks ───────────────────────────
-  {name:"CORS Testing",           tool:"cors",              endpoint:"/api/webapp/scan/cors",            icon:"🌐"},
-  {name:"SSRF Testing",           tool:"ssrf",              endpoint:"/api/webapp/scan/ssrf",            icon:"🔄"},
-  {name:"HTTP Methods",           tool:"http_methods",      endpoint:"/api/webapp/scan/http_methods",    icon:"🔀"},
+  {name:"CORS Testing",           tool:"cors",              endpoint:"/api/webapp/scan/cors",            icon:""},
+  {name:"SSRF Testing",           tool:"ssrf",              endpoint:"/api/webapp/scan/ssrf",            icon:""},
+  {name:"HTTP Methods",           tool:"http_methods",      endpoint:"/api/webapp/scan/http_methods",    icon:""},
   {name:"Open Redirect",          tool:"open_redirect",     endpoint:"/api/webapp/scan/open_redirect",   icon:"↩"},
-  {name:"Clickjacking",           tool:"clickjacking",      endpoint:"/api/webapp/scan/clickjacking",    icon:"🖱"},
+  {name:"Clickjacking",           tool:"clickjacking",      endpoint:"/api/webapp/scan/clickjacking",    icon:""},
   // ── tier7_access (4) — access control & modern API ─────────────────
-  {name:"IDOR",                   tool:"idor",              endpoint:"/api/webapp/scan/idor",            icon:"🔓"},
-  {name:"Mass Assignment",        tool:"mass_assignment",   endpoint:"/api/webapp/scan/mass_assignment", icon:"🧬"},
-  {name:"NoSQL Injection",        tool:"nosql",             endpoint:"/api/webapp/scan/nosql",           icon:"🍃"},
-  {name:"Broken Access Control",  tool:"access_control",    endpoint:"/api/webapp/scan/access_control",  icon:"🚧"},
+  {name:"IDOR",                   tool:"idor",              endpoint:"/api/webapp/scan/idor",            icon:""},
+  {name:"Mass Assignment",        tool:"mass_assignment",   endpoint:"/api/webapp/scan/mass_assignment", icon:""},
+  {name:"NoSQL Injection",        tool:"nosql",             endpoint:"/api/webapp/scan/nosql",           icon:""},
+  {name:"Broken Access Control",  tool:"access_control",    endpoint:"/api/webapp/scan/access_control",  icon:""},
   // ── tier8_framework (9) — heavy / Kali-style ───────────────────────
-  {name:"Nikto",                  tool:"nikto",             endpoint:"/api/webapp/scan/nikto",           icon:"🦷"},
-  {name:"Nuclei Templates",       tool:"nuclei",            endpoint:"/api/webapp/scan/nuclei",          icon:"☢️"},
-  {name:"Force Browse",           tool:"force_browse",      endpoint:"/api/webapp/scan/force_browse",    icon:"🔦"},
-  {name:"File Upload",            tool:"file_upload",       endpoint:"/api/webapp/scan/file_upload",     icon:"🗃️"},
-  {name:"SSTI",                   tool:"ssti",              endpoint:"/api/webapp/scan/ssti",            icon:"📜"},
+  {name:"Nikto",                  tool:"nikto",             endpoint:"/api/webapp/scan/nikto",           icon:""},
+  {name:"Nuclei Templates",       tool:"nuclei",            endpoint:"/api/webapp/scan/nuclei",          icon:""},
+  {name:"Force Browse",           tool:"force_browse",      endpoint:"/api/webapp/scan/force_browse",    icon:""},
+  {name:"File Upload",            tool:"file_upload",       endpoint:"/api/webapp/scan/file_upload",     icon:""},
+  {name:"SSTI",                   tool:"ssti",              endpoint:"/api/webapp/scan/ssti",            icon:""},
   {name:"GraphQL Audit",          tool:"graphql",           endpoint:"/api/webapp/scan/graphql",         icon:"◈"},
-  {name:"Sensitive Data",         tool:"sensitive_data",    endpoint:"/api/webapp/scan/sensitive_data",  icon:"🔍"},
-  {name:"Stored XSS",             tool:"stored_xss",        endpoint:"/api/webapp/scan/stored_xss",      icon:"💾"},
-  {name:"WordPress Scanner",      tool:"wpscan",            endpoint:"/api/webapp/scan/wpscan",          icon:"📝"},
+  {name:"Sensitive Data",         tool:"sensitive_data",    endpoint:"/api/webapp/scan/sensitive_data",  icon:""},
+  {name:"Stored XSS",             tool:"stored_xss",        endpoint:"/api/webapp/scan/stored_xss",      icon:""},
+  {name:"WordPress Scanner",      tool:"wpscan",            endpoint:"/api/webapp/scan/wpscan",          icon:""},
   // ── tier9_ai_curated_discovery (3) ─────────────────────────────────
-  {name:"Param Discovery",        tool:"param_discovery",   endpoint:"/api/webapp/param_discovery",      icon:"🧪"},
-  {name:"HTML Crawler",           tool:"crawler",           endpoint:"/api/webapp/crawler",              icon:"🕸"},
-  {name:"Secrets Hunt",           tool:"secrets",           endpoint:"/api/webapp/secrets",              icon:"🔑"},
+  {name:"Param Discovery",        tool:"param_discovery",   endpoint:"/api/webapp/param_discovery",      icon:""},
+  {name:"HTML Crawler",           tool:"crawler",           endpoint:"/api/webapp/crawler",              icon:""},
+  {name:"Secrets Hunt",           tool:"secrets",           endpoint:"/api/webapp/secrets",              icon:""},
   // ── tier10_modern_attacks (7) — AI-curated payload lists ───────────
-  {name:"LDAP Injection",         tool:"ldap_injection",    endpoint:"/api/webapp/ldap_injection",       icon:"📚"},
+  {name:"LDAP Injection",         tool:"ldap_injection",    endpoint:"/api/webapp/ldap_injection",       icon:""},
   {name:"CRLF Injection",         tool:"crlf_injection",    endpoint:"/api/webapp/crlf_injection",       icon:"↵"},
-  {name:"Prototype Pollution",    tool:"prototype_pollution", endpoint:"/api/webapp/prototype_pollution", icon:"🧬"},
-  {name:"Host Header Injection",  tool:"host_header_injection", endpoint:"/api/webapp/host_header_injection", icon:"📨"},
-  {name:"Cache Poisoning",        tool:"cache_poisoning",   endpoint:"/api/webapp/cache_poisoning",      icon:"💧"},
-  {name:"Deserialization Probe",  tool:"deserialization_probe", endpoint:"/api/webapp/deserialization_probe", icon:"📦"},
-  {name:"HTTP Smuggling",         tool:"http_smuggling",    endpoint:"/api/webapp/http_smuggling",       icon:"📦"},
+  {name:"Prototype Pollution",    tool:"prototype_pollution", endpoint:"/api/webapp/prototype_pollution", icon:""},
+  {name:"Host Header Injection",  tool:"host_header_injection", endpoint:"/api/webapp/host_header_injection", icon:""},
+  {name:"Cache Poisoning",        tool:"cache_poisoning",   endpoint:"/api/webapp/cache_poisoning",      icon:""},
+  {name:"Deserialization Probe",  tool:"deserialization_probe", endpoint:"/api/webapp/deserialization_probe", icon:""},
+  {name:"HTTP Smuggling",         tool:"http_smuggling",    endpoint:"/api/webapp/http_smuggling",       icon:""},
   // ── tier11_discovery_deep (7) ──────────────────────────────────────
-  {name:"Backup Files",           tool:"backup_files",      endpoint:"/api/webapp/backup_files",         icon:"💾"},
-  {name:"Directory Listing",      tool:"directory_listing", endpoint:"/api/webapp/directory_listing",    icon:"📁"},
-  {name:"Swagger Discovery",      tool:"swagger_discovery", endpoint:"/api/webapp/swagger_discovery",    icon:"📘"},
+  {name:"Backup Files",           tool:"backup_files",      endpoint:"/api/webapp/backup_files",         icon:""},
+  {name:"Directory Listing",      tool:"directory_listing", endpoint:"/api/webapp/directory_listing",    icon:""},
+  {name:"Swagger Discovery",      tool:"swagger_discovery", endpoint:"/api/webapp/swagger_discovery",    icon:""},
   {name:"GraphQL Introspection",  tool:"graphql_introspection", endpoint:"/api/webapp/graphql_introspection", icon:"◇"},
-  {name:"Retire.js",              tool:"retire_js",         endpoint:"/api/webapp/retire_js",            icon:"📜"},
-  {name:"API Endpoint Fuzz",      tool:"api_endpoint_fuzz", endpoint:"/api/webapp/api_endpoint_fuzz",    icon:"🔬"},
-  {name:"Param Reflection",       tool:"param_reflection",  endpoint:"/api/webapp/param_reflection",     icon:"🪞"},
+  {name:"Retire.js",              tool:"retire_js",         endpoint:"/api/webapp/retire_js",            icon:""},
+  {name:"API Endpoint Fuzz",      tool:"api_endpoint_fuzz", endpoint:"/api/webapp/api_endpoint_fuzz",    icon:""},
+  {name:"Param Reflection",       tool:"param_reflection",  endpoint:"/api/webapp/param_reflection",     icon:""},
   // ── tier12_auth_session (6) ────────────────────────────────────────
-  {name:"Broken Auth",            tool:"broken_auth",       endpoint:"/api/webapp/broken_auth",          icon:"🔐"},
-  {name:"Session Fixation",       tool:"session_fixation",  endpoint:"/api/webapp/session_fixation",     icon:"🪪"},
-  {name:"OAuth Redirect Bypass",  tool:"oauth_redirect_bypass", endpoint:"/api/webapp/oauth_redirect_bypass", icon:"🪝"},
-  {name:"Password Reset Flaws",   tool:"password_reset_flaws", endpoint:"/api/webapp/password_reset_flaws", icon:"🔁"},
-  {name:"Privilege Escalation",   tool:"privilege_escalation", endpoint:"/api/webapp/privilege_escalation", icon:"⬆"},
-  {name:"Authenticated Scan",     tool:"authenticated_scan", endpoint:"/api/webapp/authenticated_scan",  icon:"🪟"},
+  {name:"Broken Auth",            tool:"broken_auth",       endpoint:"/api/webapp/broken_auth",          icon:""},
+  {name:"Session Fixation",       tool:"session_fixation",  endpoint:"/api/webapp/session_fixation",     icon:""},
+  {name:"OAuth Redirect Bypass",  tool:"oauth_redirect_bypass", endpoint:"/api/webapp/oauth_redirect_bypass", icon:""},
+  {name:"Password Reset Flaws",   tool:"password_reset_flaws", endpoint:"/api/webapp/password_reset_flaws", icon:""},
+  {name:"Privilege Escalation",   tool:"privilege_escalation", endpoint:"/api/webapp/privilege_escalation", icon:""},
+  {name:"Authenticated Scan",     tool:"authenticated_scan", endpoint:"/api/webapp/authenticated_scan",  icon:""},
   // ── tier13_modern_framework (6) ────────────────────────────────────
-  {name:"CSP Bypass",             tool:"csp_bypass",        endpoint:"/api/webapp/csp_bypass",           icon:"🛡"},
-  {name:"Weak Crypto",            tool:"weak_crypto",       endpoint:"/api/webapp/weak_crypto",          icon:"🔐"},
-  {name:"Race Condition",         tool:"race_condition",    endpoint:"/api/webapp/race_condition",       icon:"🏁"},
-  {name:"Drupal Scan",            tool:"drupal_scan",       endpoint:"/api/webapp/drupal_scan",          icon:"🟦"},
-  {name:"Joomla Scan",            tool:"joomla_scan",       endpoint:"/api/webapp/joomla_scan",          icon:"🟧"},
-  {name:"File Upload Bypass",     tool:"file_upload_bypass", endpoint:"/api/webapp/file_upload_bypass",  icon:"📎"},
+  {name:"CSP Bypass",             tool:"csp_bypass",        endpoint:"/api/webapp/csp_bypass",           icon:""},
+  {name:"Weak Crypto",            tool:"weak_crypto",       endpoint:"/api/webapp/weak_crypto",          icon:""},
+  {name:"Race Condition",         tool:"race_condition",    endpoint:"/api/webapp/race_condition",       icon:""},
+  {name:"Drupal Scan",            tool:"drupal_scan",       endpoint:"/api/webapp/drupal_scan",          icon:""},
+  {name:"Joomla Scan",            tool:"joomla_scan",       endpoint:"/api/webapp/joomla_scan",          icon:""},
+  {name:"File Upload Bypass",     tool:"file_upload_bypass", endpoint:"/api/webapp/file_upload_bypass",  icon:""},
 ];
 
 // Section header definitions — keyed by the first tool in each section.
@@ -3021,8 +3021,8 @@ function WebAppModule(props) {
     const needsAuth = authRequiredLabs.some(l => normTarget.includes(l));
     const hasAuth   = !!(authCookie || authBearer);
     if (needsAuth && !hasAuth) {
-      add("⚠ WARNING: " + normTarget + " requires authentication for full scanning.");
-      add("💡 Click the target button again to auto-login, then restart the scan.");
+      add("WARNING: " + normTarget + " requires authentication for full scanning.");
+      add("Click the target button again to auto-login, then restart the scan.");
       add("   Without auth: only headers/SSL/recon will be tested. Injection vulns will be missed.");
     }
     setLines(p => [...p, "[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "") + (hasAuth?" — authenticated":"") + (customWordlist?" — custom wordlist":"")]);
@@ -3105,7 +3105,7 @@ function WebAppModule(props) {
               const elapsed = ((Date.now() - scanStart)/1000).toFixed(1);
               const ph = PHASES.find(p => p.tool === evt.tool);
               const phName = ph ? ph.name : evt.tool;
-              const status = data._failed ? "✗" : (data._skipped || data.skipped_reason) ? "○" : "✓";
+              const status = data._failed ? "" : (data._skipped || data.skipped_reason) ? "○" : "";
               add("  " + status + " [" + _completedCount + "/" + PHASES.length + "] " + phName + " (" + evt.duration_sec + "s, +" + elapsed + "s)");
             }
             else if (evt.event === "scan_complete") {
@@ -3118,7 +3118,7 @@ function WebAppModule(props) {
         if (!stopRef.current && !_finalSummary) {
           const missing = PHASES.filter(ph => !(ph.tool in results));
           if (missing.length > 0) {
-            add("⚠ stream ended without scan_complete — " + missing.length + " scanner(s) didn't report");
+            add("stream ended without scan_complete — " + missing.length + " scanner(s) didn't report");
             missing.forEach(ph => {
               const idx = _toolToIdx[ph.tool];
               results[ph.tool] = {ok:false, _failed:true,
@@ -3132,7 +3132,7 @@ function WebAppModule(props) {
         }
         if (!stopRef.current && _finalSummary) {
           const sum = _finalSummary.summary || {};
-          add("✓ v2 complete in " + _finalSummary.duration_sec + "s — " + (sum.ok||0) + " ok, " + (sum.failed||0) + " failed, " + (sum.skipped||0) + " skipped, " + (sum.total_findings||0) + " finding(s)");
+          add("v2 complete in " + _finalSummary.duration_sec + "s — " + (sum.ok||0) + " ok, " + (sum.failed||0) + " failed, " + (sum.skipped||0) + " skipped, " + (sum.total_findings||0) + " finding(s)");
           if (sum.by_severity) {
             const sev = sum.by_severity;
             add("  Severity: " + (sev.CRITICAL||0) + " CRIT · " + (sev.HIGH||0) + " HIGH · " + (sev.MEDIUM||0) + " MED · " + (sev.LOW||0) + " LOW");
@@ -3144,7 +3144,7 @@ function WebAppModule(props) {
         }
       } catch(e) {
         const msg = (e && e.message) ? e.message : String(e);
-        add("✗ v2 stream failed: " + msg);
+        add("v2 stream failed: " + msg);
       }
       setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
       return;
@@ -3177,7 +3177,7 @@ function WebAppModule(props) {
         // orange badge instead of misleading green PASSED.
         if (data && (data.skipped_reason || data.skipped)) {
           const reason = data.skipped_reason || "Not applicable to this target";
-          add("⚠ " + ph.name + " skipped: " + reason);
+          add("" + ph.name + " skipped: " + reason);
           setSkipped(p => [...p, i]);
           setDone(p => [...p, i]);
           setAll(Object.assign({}, results));
@@ -3186,33 +3186,33 @@ function WebAppModule(props) {
           }
           continue;
         }
-        if (ph.tool==="sqlmap"  && data.vulnerable)  add("✗ SQL INJECTION FOUND — CRITICAL!");
-        else if (ph.tool==="xss" && data.vulnerable) add("✗ XSS VULNERABILITY FOUND — CRITICAL!");
-        else if (ph.tool==="cors"&& data.vulnerable) add("✗ CORS MISCONFIGURATION FOUND — HIGH!");
-        else if (ph.tool==="ssl" && data.issues && data.issues.some(i=>i.severity==="CRITICAL")) add("✗ CRITICAL SSL/TLS ISSUES FOUND!");
-        else if (ph.tool==="ffuf"          && data.discovered && data.discovered.length>0) add("✓ Web Fuzzing: " + data.discovered.length + " paths found");
-        else if (ph.tool==="commix"        && data.vulnerable) add("✗ COMMAND INJECTION FOUND — CRITICAL!");
-        else if (ph.tool==="lfi"           && data.vulnerable) add("✗ PATH TRAVERSAL/LFI FOUND — CRITICAL!");
-        else if (ph.tool==="openredirect"  && data.vulnerable) add("✗ OPEN REDIRECT FOUND — " + data.total + " param(s)");
-        else if (ph.tool==="sensitivefiles"&& data.total>0)    add("✗ SENSITIVE FILES EXPOSED: " + data.total + " found");
-        else if (ph.tool==="hydra" && data.skipped)    { add("⚠ Auth Brute Force skipped for external target — use Password Attacks module."); setSkipped(p=>[...p,i]); setDone(p=>[...p,i]); setAll(Object.assign({},results)); continue; }
-        else if (ph.tool==="hydra"         && data.vulnerable) add("✗ WEAK CREDENTIALS FOUND — CRITICAL!");
-        else if (ph.tool==="ssrf"          && data.vulnerable) add("✗ SSRF VULNERABILITY FOUND — HIGH!");
-        else if (ph.tool==="xxe"           && data.vulnerable) add("✗ XXE INJECTION FOUND — CRITICAL!");
-        else if (ph.tool==="clickjacking"  && data.vulnerable) add("✗ CLICKJACKING VULNERABLE — MEDIUM");
-        else if (ph.tool==="verbtamper"    && data.vulnerable) add("✗ DANGEROUS HTTP METHODS ALLOWED: " + data.total);
-        else if (ph.tool==="pollution"     && data.vulnerable) add("✗ PARAMETER POLLUTION FOUND — HIGH!");
-        else if (ph.tool==="csrf"          && data.vulnerable) add("✗ CSRF VULNERABILITY FOUND — " + data.total + " issue(s)");
-        else if (ph.tool==="idor"          && data.vulnerable) add("✗ IDOR / ACCESS CONTROL ISSUE FOUND — HIGH!");
-        else if (ph.tool==="ssti"          && data.vulnerable) add("✗ SSTI TEMPLATE INJECTION FOUND — CRITICAL!");
-        else if (ph.tool==="fileupload"    && data.vulnerable) add("✗ DANGEROUS FILE UPLOAD ACCEPTED — CRITICAL!");
-        else add("✓ " + ph.name + " complete");
+        if (ph.tool==="sqlmap"  && data.vulnerable)  add("SQL INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="xss" && data.vulnerable) add("XSS VULNERABILITY FOUND — CRITICAL!");
+        else if (ph.tool==="cors"&& data.vulnerable) add("CORS MISCONFIGURATION FOUND — HIGH!");
+        else if (ph.tool==="ssl" && data.issues && data.issues.some(i=>i.severity==="CRITICAL")) add("CRITICAL SSL/TLS ISSUES FOUND!");
+        else if (ph.tool==="ffuf"          && data.discovered && data.discovered.length>0) add("Web Fuzzing: " + data.discovered.length + " paths found");
+        else if (ph.tool==="commix"        && data.vulnerable) add("COMMAND INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="lfi"           && data.vulnerable) add("PATH TRAVERSAL/LFI FOUND — CRITICAL!");
+        else if (ph.tool==="openredirect"  && data.vulnerable) add("OPEN REDIRECT FOUND — " + data.total + " param(s)");
+        else if (ph.tool==="sensitivefiles"&& data.total>0)    add("SENSITIVE FILES EXPOSED: " + data.total + " found");
+        else if (ph.tool==="hydra" && data.skipped)    { add("Auth Brute Force skipped for external target — use Password Attacks module."); setSkipped(p=>[...p,i]); setDone(p=>[...p,i]); setAll(Object.assign({},results)); continue; }
+        else if (ph.tool==="hydra"         && data.vulnerable) add("WEAK CREDENTIALS FOUND — CRITICAL!");
+        else if (ph.tool==="ssrf"          && data.vulnerable) add("SSRF VULNERABILITY FOUND — HIGH!");
+        else if (ph.tool==="xxe"           && data.vulnerable) add("XXE INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="clickjacking"  && data.vulnerable) add("CLICKJACKING VULNERABLE — MEDIUM");
+        else if (ph.tool==="verbtamper"    && data.vulnerable) add("DANGEROUS HTTP METHODS ALLOWED: " + data.total);
+        else if (ph.tool==="pollution"     && data.vulnerable) add("PARAMETER POLLUTION FOUND — HIGH!");
+        else if (ph.tool==="csrf"          && data.vulnerable) add("CSRF VULNERABILITY FOUND — " + data.total + " issue(s)");
+        else if (ph.tool==="idor"          && data.vulnerable) add("IDOR / ACCESS CONTROL ISSUE FOUND — HIGH!");
+        else if (ph.tool==="ssti"          && data.vulnerable) add("SSTI TEMPLATE INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="fileupload"    && data.vulnerable) add("DANGEROUS FILE UPLOAD ACCEPTED — CRITICAL!");
+        else add("" + ph.name + " complete");
         setDone(p => [...p, i]);
         setAll(Object.assign({}, results));
       } catch(e) {
         const msg = e.message||"unknown error";
         const hint = msg.includes("404") ? " (endpoint missing — add to main.py)" : msg.includes("Failed to fetch")||msg.includes("NetworkError") ? " (backend offline)" : "";
-        add("✗ " + ph.name + " failed: " + msg + hint);
+        add("" + ph.name + " failed: " + msg + hint);
         // CRITICAL: save the error to allResults so the tile's Details panel
         // can render it. Without this, the customer sees a red ERROR badge
         // with no way to know what went wrong — exactly the gap this whole
@@ -3230,7 +3230,7 @@ function WebAppModule(props) {
           findings: [], total: 0,
         };
         if (ph.tool === "hydra") {
-          add("💡 Tip: Use the Password Attacks module for targeted brute force with custom wordlists and protocols.");
+          add("Tip: Use the Password Attacks module for targeted brute force with custom wordlists and protocols.");
           setSkipped(p => [...p, i]);
         } else {
           setFailed(p => [...p, i]);
@@ -3243,7 +3243,7 @@ function WebAppModule(props) {
       }
     }
     if (!stopRef.current) {
-      add("✓ Pentest complete — " + activePhases.length + " phases done");
+      add("Pentest complete — " + activePhases.length + " phases done");
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         new Notification("Pentest Complete", { body: normTarget + " — " + activePhases.length + " phases done", icon: "" });
       }
@@ -3274,8 +3274,8 @@ function WebAppModule(props) {
         const oldLast = localStorage.getItem("vulnuslab_lastScan_" + normTarget);
         if (oldLast) localStorage.setItem("vulnuslab_previousScan_" + normTarget, oldLast);
         localStorage.setItem("vulnuslab_lastScan_" + normTarget, JSON.stringify(snapshot));
-        if (oldLast) add("📊 Snapshot saved — next PDF will show remediation progress vs this scan");
-        else add("📊 Baseline snapshot saved — re-scan this target to see remediation deltas");
+        if (oldLast) add("Snapshot saved — next PDF will show remediation progress vs this scan");
+        else add("Baseline snapshot saved — re-scan this target to see remediation deltas");
       } catch(e) { /* localStorage full or disabled — non-fatal */ }
     }
     setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
@@ -3294,7 +3294,7 @@ function WebAppModule(props) {
       const data = await api(ph.endpoint, "POST", body, token);
       setAll(prev => ({...prev, [ph.tool]: data}));
       setDone(p => [...p.filter(x => x !== i), i]);
-      add("✓ " + ph.name + " complete");
+      add("" + ph.name + " complete");
     } catch(e) {
       const msg = e.message || "unknown error (check backend logs)";
       // Save error to allResults so the tile's Details panel can render it.
@@ -3308,7 +3308,7 @@ function WebAppModule(props) {
       setAll(prev => ({...prev, [ph.tool]: {ok: false, _failed: true, error: msg || (e && (e.message || e.name)) || "Network/fetch error (no exception message)", suggested_action, findings: [], total: 0}}));
       setFailed(p => [...p.filter(x => x !== i), i]);
       setDone(p => [...p.filter(x => x !== i), i]);
-      add("✗ " + ph.name + " failed: " + msg);
+      add("" + ph.name + " failed: " + msg);
     }
     setCurPhase(-1); setRunningState(false);
   };
@@ -3743,7 +3743,7 @@ function WebAppModule(props) {
       <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:8,padding:20,marginBottom:16}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
-          <span style={{fontSize:20}}>🌐</span>
+          <span style={{fontSize:20}}></span>
           <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",margin:0}}>Web Application Penetration Testing</h2>
           <Badge label={PHASES.length+" PHASES"} color="blue"/>
           <Badge label="REAL TOOLS" color="green"/>
@@ -3806,7 +3806,7 @@ function WebAppModule(props) {
         <div style={{marginTop:8}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
             <label style={{fontSize:11,color:"#64748b",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
-            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:10,cursor:"pointer"}}>🕐 History ({targetHistory.length})</button>}
+            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
           </div>
           {showHistory && targetHistory.length>0 && (
             <div style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
@@ -3824,10 +3824,10 @@ function WebAppModule(props) {
             <div onClick={()=>setShowAuthPanel(o=>!o)} style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <span style={{fontSize:11}}>{showAuthPanel?"▼":"▶"}</span>
-                <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
+                <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Authenticated scan (optional)</span>
                 <span style={{fontSize:10,color:"#64748b"}}>— behind-login: IDOR, stored XSS, mass-assignment</span>
               </div>
-              {(authCookie||authBearer) && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ credentials ready</span>}
+              {(authCookie||authBearer) && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
             </div>
             {showAuthPanel && (
               <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
@@ -3835,7 +3835,7 @@ function WebAppModule(props) {
                   <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
                 </div>
                 <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
-                  <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>🔐 Auto-login (recommended)</div>
+                  <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>Auto-login (recommended)</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                     <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                     <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-wap-u" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
@@ -3860,10 +3860,10 @@ function WebAppModule(props) {
                         finally { setAutoLoginBusy(false); }
                       }} disabled={autoLoginBusy}
                       style={{background:autoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
-                      {autoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
+                      {autoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
                     </button>
-                    {(autoLoginStatus && autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured</span>}
-                    {(autoLoginStatus && !autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {autoLoginStatus}</span>}
+                    {(autoLoginStatus && autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>Logged in — cookie captured</span>}
+                    {(autoLoginStatus && !autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>{autoLoginStatus}</span>}
                   </div>
                 </div>
                 <div style={{fontSize:10,color:"#475569",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
@@ -3878,7 +3878,7 @@ function WebAppModule(props) {
                   </div>
                 </div>
                 {(authCookie||authBearer) && (
-                  <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAutoLoginStatus(null);localStorage.removeItem("cyberAuthCookie");localStorage.removeItem("cyberAuthBearer");}} style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>✕ Clear auth credentials</button>
+                  <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAutoLoginStatus(null);localStorage.removeItem("cyberAuthCookie");localStorage.removeItem("cyberAuthBearer");}} style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
                 )}
               </div>
             )}
@@ -3898,7 +3898,7 @@ function WebAppModule(props) {
               style={{flex:3,minWidth:220,background:"#020617",border:"1px solid "+(running?"#3b82f6":"#1e3a8a"),borderRadius:6,padding:"11px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
             {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
               <div style={{background:"#451a03",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"#fb923c",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
-                ⚠ Auth required — click the target button to auto-login first
+                Auth required — click the target button to auto-login first
               </div>
             )}
             {!running ? (
@@ -3929,8 +3929,8 @@ function WebAppModule(props) {
               const lb=sc<40?"CRITICAL":sc<70?"HIGH":sc<90?"MEDIUM":sc<100?"LOW":"SAFE";
               const col={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",SAFE:"#16a34a"}[lb];
               return <>
-                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>⚠ RISK: {lb} ({sc}/100)</div>
-                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>📄 Report</button>
+                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
+                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Report</button>
                 <div style={{position:"relative"}}>
                   <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"11px 16px",color:"#cbd5e1",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                     Export <span style={{fontSize:10,opacity:0.8}}>{showExportMenu?"▴":"▾"}</span>
@@ -3974,9 +3974,9 @@ function WebAppModule(props) {
       {/* TABS */}
       <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
         {[
-          {id:"phases",    label:"📡 Scan Phases"},
-          {id:"findings",  label:"🚨 Findings"},
-          {id:"methodology",label:"📚 Methodology"},
+          {id:"phases",    label:"Scan Phases"},
+          {id:"findings",  label:"Findings"},
+          {id:"methodology",label:"Methodology"},
         ].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
             style={{background:tab===t.id?"#1e3a8a":"#0f172a",border:"1px solid "+(tab===t.id?"#3b82f6":"#1e293b"),borderRadius:6,padding:"7px 14px",color:tab===t.id?"#fff":"#64748b",fontSize:12,fontWeight:600,cursor:"pointer"}}>
@@ -4141,7 +4141,7 @@ function WebAppModule(props) {
                 <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
               ) : (
                 <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
-                  {isDone?(isSkipped?"⚠":isFailed?"✗":isSQLi||isVuln?"!":"✓"):"○"}
+                  {isDone?(isSkipped?"":isFailed?"":isSQLi||isVuln?"!":""):"○"}
                 </span>
               )}
               <span style={{fontSize:13,fontWeight:500,color:toolLocked?"#64748b":"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
@@ -4167,7 +4167,7 @@ function WebAppModule(props) {
               <div style={{marginTop:-4,marginBottom:8,padding:"14px 18px",background:"#0a1224",border:"1px solid "+(isFailed?"#7f1d1d":isVuln||isSQLi?"#7c2d12":"#14532d"),borderLeft:"3px solid "+(isFailed?"#ef4444":isVuln||isSQLi?"#f97316":"#22c55e"),borderRadius:"0 8px 8px 0",fontSize:12,lineHeight:1.55}}>
                 {/* Header */}
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <span style={{fontSize:14}}>{isFailed?"❌":isVuln||isSQLi?"⚠️":"✅"}</span>
+                  <span style={{fontSize:14}}>{isFailed?"":isVuln||isSQLi?"":""}</span>
                   <span style={{fontSize:12,fontWeight:800,letterSpacing:1.2,color:isFailed?"#fca5a5":isVuln||isSQLi?"#fdba74":"#86efac"}}>
                     {isFailed?"SCAN FAILED — DETAILS":isVuln||isSQLi?"FINDINGS — REVIEW":"SCAN COMPLETE — NO ISSUES"}
                   </span>
@@ -4184,7 +4184,7 @@ function WebAppModule(props) {
                 {/* Suggested action — the friendly "what to try" hint */}
                 {res.suggested_action && (
                   <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(251,191,36,0.10)",border:"1px solid rgba(251,191,36,0.35)",borderRadius:6,color:"#fde68a"}}>
-                    <span style={{fontSize:11,fontWeight:800,color:"#fbbf24",marginRight:6}}>💡 What to try:</span>
+                    <span style={{fontSize:11,fontWeight:800,color:"#fbbf24",marginRight:6}}>What to try:</span>
                     {res.suggested_action}
                   </div>
                 )}
@@ -4257,7 +4257,7 @@ function WebAppModule(props) {
             the ternary remains a single expression. */}
         <div style={{marginTop:18}}>
           <div style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
-            📡 Live Scan Terminal
+            Live Scan Terminal
           </div>
           <Terminal lines={lines} height={160}/>
         </div>
@@ -4341,115 +4341,115 @@ function WebAppModule(props) {
       {tab==="methodology" && (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:8,padding:"12px 16px",marginBottom:4}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#93c5fd",marginBottom:4}}>📚 WAPT Methodology — 15 Categories</div>
-            <div style={{fontSize:11,color:"#475569"}}>✅ = Tool available in your platform | ⚠ = Partially covered | ❌ = Manual/external tool needed</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#93c5fd",marginBottom:4}}>WAPT Methodology — 15 Categories</div>
+            <div style={{fontSize:11,color:"#475569"}}>= Tool available in your platform | = Partially covered | = Manual/external tool needed</div>
           </div>
           {[
-            {num:"01",cat:"Web Fundamentals",icon:"🌐",color:"#3b82f6",tools:[
-              {name:"HTTP/HTTPS Headers Analysis",tool:"curl",status:"✅",desc:"Security headers check — Phase 6"},
-              {name:"TLS/SSL Misconfigurations",tool:"sslscan",status:"✅",desc:"SSL/TLS scan — Phase 5"},
-              {name:"CORS Bypass Testing",tool:"curl",status:"✅",desc:"CORS test — Phase 8"},
-              {name:"Cookie & Session Analysis",tool:"curl",status:"✅",desc:"Cookie flags check — Phase 7"},
-              {name:"JWT Token Analysis",tool:"manual",status:"❌",desc:"Use jwt.io or Burp Suite manually"},
+            {num:"01",cat:"Web Fundamentals",icon:"",color:"#3b82f6",tools:[
+              {name:"HTTP/HTTPS Headers Analysis",tool:"curl",status:"",desc:"Security headers check — Phase 6"},
+              {name:"TLS/SSL Misconfigurations",tool:"sslscan",status:"",desc:"SSL/TLS scan — Phase 5"},
+              {name:"CORS Bypass Testing",tool:"curl",status:"",desc:"CORS test — Phase 8"},
+              {name:"Cookie & Session Analysis",tool:"curl",status:"",desc:"Cookie flags check — Phase 7"},
+              {name:"JWT Token Analysis",tool:"manual",status:"",desc:"Use jwt.io or Burp Suite manually"},
             ]},
-            {num:"02",cat:"Recon & Enumeration",icon:"🔍",color:"#22c55e",tools:[
-              {name:"Subdomain Enumeration",tool:"sublist3r",status:"✅",desc:"Subdomain discovery — Phase 10"},
-              {name:"Directory Brute-Force",tool:"gobuster",status:"✅",desc:"Dir enumeration — Phase 9"},
-              {name:"Technology Fingerprinting",tool:"whatweb",status:"✅",desc:"Tech stack — Phase 2"},
-              {name:"DNS Enumeration",tool:"dig/dnsrecon",status:"✅",desc:"DNS records — Phase 14"},
-              {name:"Virtual Host Discovery",tool:"ffuf",status:"✅",desc:"ffuf vhost fuzzing — available"},
-              {name:"Parameter Discovery",tool:"arjun",status:"✅",desc:"arjun parameter discovery — available"},
+            {num:"02",cat:"Recon & Enumeration",icon:"",color:"#22c55e",tools:[
+              {name:"Subdomain Enumeration",tool:"sublist3r",status:"",desc:"Subdomain discovery — Phase 10"},
+              {name:"Directory Brute-Force",tool:"gobuster",status:"",desc:"Dir enumeration — Phase 9"},
+              {name:"Technology Fingerprinting",tool:"whatweb",status:"",desc:"Tech stack — Phase 2"},
+              {name:"DNS Enumeration",tool:"dig/dnsrecon",status:"",desc:"DNS records — Phase 14"},
+              {name:"Virtual Host Discovery",tool:"ffuf",status:"",desc:"ffuf vhost fuzzing — available"},
+              {name:"Parameter Discovery",tool:"arjun",status:"",desc:"arjun parameter discovery — available"},
             ]},
-            {num:"03",cat:"Tools Mastery",icon:"⚙️",color:"#f59e0b",tools:[
-              {name:"WAF Detection",tool:"wafw00f",status:"✅",desc:"WAF check — Phase 1"},
-              {name:"CMS Detection",tool:"whatweb",status:"✅",desc:"CMS scan — Phase 3"},
-              {name:"Nuclei Templates",tool:"nuclei",status:"✅",desc:"nuclei 3.8.0 — template-based scanning"},
-              {name:"Custom Python Scripts",tool:"python",status:"⚠",desc:"Use Kali terminal for custom scripts"},
+            {num:"03",cat:"Tools Mastery",icon:"",color:"#f59e0b",tools:[
+              {name:"WAF Detection",tool:"wafw00f",status:"",desc:"WAF check — Phase 1"},
+              {name:"CMS Detection",tool:"whatweb",status:"",desc:"CMS scan — Phase 3"},
+              {name:"Nuclei Templates",tool:"nuclei",status:"",desc:"nuclei 3.8.0 — template-based scanning"},
+              {name:"Custom Python Scripts",tool:"python",status:"",desc:"Use Kali terminal for custom scripts"},
             ]},
-            {num:"04",cat:"Injection Attacks",icon:"💉",color:"#dc2626",tools:[
-              {name:"SQL Injection (Error-based)",tool:"sqlmap",status:"✅",desc:"SQLMap auto — Phase 13"},
-              {name:"Blind SQL Injection",tool:"sqlmap",status:"✅",desc:"SQLMap --level=2 flag enabled"},
-              {name:"Time-based SQLi",tool:"sqlmap",status:"✅",desc:"SQLMap handles time-based automatically"},
-              {name:"XSS (Reflected/Stored)",tool:"xsser",status:"✅",desc:"XSS test — Phase 11"},
-              {name:"Command Injection",tool:"manual",status:"❌",desc:"Test manually via Burp Repeater"},
-              {name:"SSTI (Template Injection)",tool:"manual",status:"❌",desc:"Use tplmap: pip install tplmap"},
-              {name:"NoSQL Injection",tool:"manual",status:"❌",desc:"Manual testing with Burp Suite"},
+            {num:"04",cat:"Injection Attacks",icon:"",color:"#dc2626",tools:[
+              {name:"SQL Injection (Error-based)",tool:"sqlmap",status:"",desc:"SQLMap auto — Phase 13"},
+              {name:"Blind SQL Injection",tool:"sqlmap",status:"",desc:"SQLMap --level=2 flag enabled"},
+              {name:"Time-based SQLi",tool:"sqlmap",status:"",desc:"SQLMap handles time-based automatically"},
+              {name:"XSS (Reflected/Stored)",tool:"xsser",status:"",desc:"XSS test — Phase 11"},
+              {name:"Command Injection",tool:"manual",status:"",desc:"Test manually via Burp Repeater"},
+              {name:"SSTI (Template Injection)",tool:"manual",status:"",desc:"Use tplmap: pip install tplmap"},
+              {name:"NoSQL Injection",tool:"manual",status:"",desc:"Manual testing with Burp Suite"},
             ]},
-            {num:"05",cat:"XSS & Client-Side",icon:"🌐",color:"#a855f7",tools:[
-              {name:"Reflected XSS",tool:"xsser",status:"✅",desc:"XSS automated test — Phase 11"},
-              {name:"DOM XSS",tool:"manual",status:"❌",desc:"Manual browser testing required"},
-              {name:"CSP Analysis",tool:"curl",status:"✅",desc:"Checked in headers scan — Phase 6"},
-              {name:"Clickjacking",tool:"curl",status:"✅",desc:"X-Frame-Options checked — Phase 6"},
-              {name:"XSS Filter Evasion",tool:"xsser",status:"⚠",desc:"xsser has built-in evasion payloads"},
+            {num:"05",cat:"XSS & Client-Side",icon:"",color:"#a855f7",tools:[
+              {name:"Reflected XSS",tool:"xsser",status:"",desc:"XSS automated test — Phase 11"},
+              {name:"DOM XSS",tool:"manual",status:"",desc:"Manual browser testing required"},
+              {name:"CSP Analysis",tool:"curl",status:"",desc:"Checked in headers scan — Phase 6"},
+              {name:"Clickjacking",tool:"curl",status:"",desc:"X-Frame-Options checked — Phase 6"},
+              {name:"XSS Filter Evasion",tool:"xsser",status:"",desc:"xsser has built-in evasion payloads"},
             ]},
-            {num:"06",cat:"Auth & Authorization",icon:"🔐",color:"#f97316",tools:[
-              {name:"Brute Force Login",tool:"hydra",status:"✅",desc:"Hydra — Password Attacks module"},
-              {name:"Cookie Security",tool:"curl",status:"✅",desc:"HttpOnly/Secure flags — Phase 7"},
-              {name:"Session Analysis",tool:"curl",status:"⚠",desc:"Basic session check in cookies scan"},
-              {name:"IDOR Testing",tool:"manual",status:"❌",desc:"Manual testing with Burp Repeater"},
-              {name:"MFA Bypass",tool:"manual",status:"❌",desc:"Manual testing required"},
-              {name:"Privilege Escalation",tool:"manual",status:"❌",desc:"Manual logic testing"},
+            {num:"06",cat:"Auth & Authorization",icon:"",color:"#f97316",tools:[
+              {name:"Brute Force Login",tool:"hydra",status:"",desc:"Hydra — Password Attacks module"},
+              {name:"Cookie Security",tool:"curl",status:"",desc:"HttpOnly/Secure flags — Phase 7"},
+              {name:"Session Analysis",tool:"curl",status:"",desc:"Basic session check in cookies scan"},
+              {name:"IDOR Testing",tool:"manual",status:"",desc:"Manual testing with Burp Repeater"},
+              {name:"MFA Bypass",tool:"manual",status:"",desc:"Manual testing required"},
+              {name:"Privilege Escalation",tool:"manual",status:"",desc:"Manual logic testing"},
             ]},
-            {num:"07",cat:"API Security",icon:"📡",color:"#06b6d4",tools:[
-              {name:"API Endpoint Discovery",tool:"gobuster",status:"✅",desc:"gobuster finds API endpoints — Phase 9"},
-              {name:"REST API Testing",tool:"curl",status:"⚠",desc:"Basic curl tests in headers scan"},
-              {name:"GraphQL Attacks",tool:"manual",status:"❌",desc:"Use GraphQL Voyager + Burp Suite"},
-              {name:"BOLA/IDOR",tool:"manual",status:"❌",desc:"Manual testing required"},
-              {name:"Rate Limit Bypass",tool:"manual",status:"❌",desc:"Test with Burp Intruder"},
-              {name:"API Fuzzing",tool:"ffuf",status:"❌",desc:"Install ffuf for API fuzzing"},
+            {num:"07",cat:"API Security",icon:"",color:"#06b6d4",tools:[
+              {name:"API Endpoint Discovery",tool:"gobuster",status:"",desc:"gobuster finds API endpoints — Phase 9"},
+              {name:"REST API Testing",tool:"curl",status:"",desc:"Basic curl tests in headers scan"},
+              {name:"GraphQL Attacks",tool:"manual",status:"",desc:"Use GraphQL Voyager + Burp Suite"},
+              {name:"BOLA/IDOR",tool:"manual",status:"",desc:"Manual testing required"},
+              {name:"Rate Limit Bypass",tool:"manual",status:"",desc:"Test with Burp Intruder"},
+              {name:"API Fuzzing",tool:"ffuf",status:"",desc:"Install ffuf for API fuzzing"},
             ]},
-            {num:"08",cat:"File & Resource Attacks",icon:"📁",color:"#84cc16",tools:[
-              {name:"File Upload Testing",tool:"manual",status:"❌",desc:"Upload shell via Burp Suite"},
-              {name:"Path Traversal (LFI/RFI)",tool:"nikto",status:"⚠",desc:"nikto checks basic LFI — Phase 12"},
-              {name:"Directory Listing",tool:"gobuster+nikto",status:"✅",desc:"Both tools check this automatically"},
-              {name:"Backup File Leakage",tool:"gobuster",status:"✅",desc:"gobuster finds .bak .zip .conf files"},
-              {name:"Deserialization",tool:"manual",status:"❌",desc:"Use ysoserial manually"},
+            {num:"08",cat:"File & Resource Attacks",icon:"",color:"#84cc16",tools:[
+              {name:"File Upload Testing",tool:"manual",status:"",desc:"Upload shell via Burp Suite"},
+              {name:"Path Traversal (LFI/RFI)",tool:"nikto",status:"",desc:"nikto checks basic LFI — Phase 12"},
+              {name:"Directory Listing",tool:"gobuster+nikto",status:"",desc:"Both tools check this automatically"},
+              {name:"Backup File Leakage",tool:"gobuster",status:"",desc:"gobuster finds .bak .zip .conf files"},
+              {name:"Deserialization",tool:"manual",status:"",desc:"Use ysoserial manually"},
             ]},
-            {num:"09",cat:"Business Logic",icon:"🔗",color:"#ec4899",tools:[
-              {name:"Workflow Bypass",tool:"manual",status:"❌",desc:"Manual testing — think like attacker"},
-              {name:"Payment Manipulation",tool:"manual",status:"❌",desc:"Intercept with Burp Suite proxy"},
-              {name:"Race Conditions",tool:"manual",status:"❌",desc:"Use Burp Turbo Intruder"},
-              {name:"Logic Flaws",tool:"manual",status:"❌",desc:"Requires deep manual analysis"},
-              {name:"Parameter Tampering",tool:"manual",status:"❌",desc:"Modify hidden params in Burp Repeater"},
+            {num:"09",cat:"Business Logic",icon:"",color:"#ec4899",tools:[
+              {name:"Workflow Bypass",tool:"manual",status:"",desc:"Manual testing — think like attacker"},
+              {name:"Payment Manipulation",tool:"manual",status:"",desc:"Intercept with Burp Suite proxy"},
+              {name:"Race Conditions",tool:"manual",status:"",desc:"Use Burp Turbo Intruder"},
+              {name:"Logic Flaws",tool:"manual",status:"",desc:"Requires deep manual analysis"},
+              {name:"Parameter Tampering",tool:"manual",status:"",desc:"Modify hidden params in Burp Repeater"},
             ]},
-            {num:"10",cat:"Modern Web Attacks",icon:"☁️",color:"#0ea5e9",tools:[
-              {name:"SSRF Testing",tool:"curl",status:"⚠",desc:"Basic SSRF via curl payload test"},
-              {name:"XXE (XML External Entity)",tool:"manual",status:"❌",desc:"Manual XML payload injection"},
-              {name:"CSRF Testing",tool:"curl",status:"⚠",desc:"CORS/SameSite checked in Phase 8"},
-              {name:"WebSocket Security",tool:"manual",status:"❌",desc:"Use Burp Suite WebSocket feature"},
+            {num:"10",cat:"Modern Web Attacks",icon:"",color:"#0ea5e9",tools:[
+              {name:"SSRF Testing",tool:"curl",status:"",desc:"Basic SSRF via curl payload test"},
+              {name:"XXE (XML External Entity)",tool:"manual",status:"",desc:"Manual XML payload injection"},
+              {name:"CSRF Testing",tool:"curl",status:"",desc:"CORS/SameSite checked in Phase 8"},
+              {name:"WebSocket Security",tool:"manual",status:"",desc:"Use Burp Suite WebSocket feature"},
             ]},
-            {num:"11",cat:"CMS Pentesting",icon:"🧬",color:"#8b5cf6",tools:[
-              {name:"CMS Detection",tool:"whatweb",status:"✅",desc:"CMS auto-detected — Phase 3"},
-              {name:"WordPress Scanning",tool:"wpscan",status:"✅",desc:"wpscan 3.8.28 — auto WordPress audit"},
-              {name:"Plugin Vulnerabilities",tool:"wpscan",status:"✅",desc:"wpscan checks plugin CVEs automatically"},
-              {name:"Framework Detection",tool:"whatweb",status:"✅",desc:"whatweb detects Laravel/Django/etc"},
+            {num:"11",cat:"CMS Pentesting",icon:"",color:"#8b5cf6",tools:[
+              {name:"CMS Detection",tool:"whatweb",status:"",desc:"CMS auto-detected — Phase 3"},
+              {name:"WordPress Scanning",tool:"wpscan",status:"",desc:"wpscan 3.8.28 — auto WordPress audit"},
+              {name:"Plugin Vulnerabilities",tool:"wpscan",status:"",desc:"wpscan checks plugin CVEs automatically"},
+              {name:"Framework Detection",tool:"whatweb",status:"",desc:"whatweb detects Laravel/Django/etc"},
             ]},
-            {num:"12",cat:"Fuzzing & Automation",icon:"🧪",color:"#f43f5e",tools:[
-              {name:"Directory Fuzzing",tool:"gobuster",status:"✅",desc:"gobuster with common wordlist — Phase 9"},
-              {name:"Parameter Fuzzing",tool:"ffuf/arjun",status:"✅",desc:"ffuf + arjun — both installed"},
-              {name:"Subdomain Fuzzing",tool:"sublist3r",status:"✅",desc:"sublist3r — Phase 10"},
-              {name:"Payload Fuzzing",tool:"wfuzz",status:"⚠",desc:"wfuzz available in Recon module"},
+            {num:"12",cat:"Fuzzing & Automation",icon:"",color:"#f43f5e",tools:[
+              {name:"Directory Fuzzing",tool:"gobuster",status:"",desc:"gobuster with common wordlist — Phase 9"},
+              {name:"Parameter Fuzzing",tool:"ffuf/arjun",status:"",desc:"ffuf + arjun — both installed"},
+              {name:"Subdomain Fuzzing",tool:"sublist3r",status:"",desc:"sublist3r — Phase 10"},
+              {name:"Payload Fuzzing",tool:"wfuzz",status:"",desc:"wfuzz available in Recon module"},
             ]},
-            {num:"13",cat:"WAF Evasion & Bypass",icon:"🛡️",color:"#f97316",tools:[
-              {name:"WAF Detection",tool:"wafw00f",status:"✅",desc:"wafw00f — Phase 1"},
-              {name:"Encoding Tricks",tool:"sqlmap",status:"✅",desc:"sqlmap handles encoding automatically"},
-              {name:"WAF Bypass Payloads",tool:"sqlmap",status:"✅",desc:"sqlmap --tamper scripts available"},
-              {name:"IP Spoofing Headers",tool:"curl",status:"⚠",desc:"Manual X-Forwarded-For header test"},
+            {num:"13",cat:"WAF Evasion & Bypass",icon:"",color:"#f97316",tools:[
+              {name:"WAF Detection",tool:"wafw00f",status:"",desc:"wafw00f — Phase 1"},
+              {name:"Encoding Tricks",tool:"sqlmap",status:"",desc:"sqlmap handles encoding automatically"},
+              {name:"WAF Bypass Payloads",tool:"sqlmap",status:"",desc:"sqlmap --tamper scripts available"},
+              {name:"IP Spoofing Headers",tool:"curl",status:"",desc:"Manual X-Forwarded-For header test"},
             ]},
-            {num:"14",cat:"Reporting & Methodology",icon:"📊",color:"#22c55e",tools:[
-              {name:"PDF Report Generation",tool:"built-in",status:"✅",desc:"One-click PDF with CVSS/CWE/OWASP"},
-              {name:"CSV Export",tool:"built-in",status:"✅",desc:"Export findings to spreadsheet"},
-              {name:"Risk Score (0-100)",tool:"built-in",status:"✅",desc:"Auto-calculated risk score"},
-              {name:"CVSS Scoring",tool:"built-in",status:"✅",desc:"CVSS assigned to each finding"},
-              {name:"OWASP Mapping",tool:"built-in",status:"✅",desc:"Each finding mapped to OWASP Top 10"},
-              {name:"CVE References",tool:"built-in",status:"✅",desc:"CVE IDs extracted from nikto output"},
+            {num:"14",cat:"Reporting & Methodology",icon:"",color:"#22c55e",tools:[
+              {name:"PDF Report Generation",tool:"built-in",status:"",desc:"One-click PDF with CVSS/CWE/OWASP"},
+              {name:"CSV Export",tool:"built-in",status:"",desc:"Export findings to spreadsheet"},
+              {name:"Risk Score (0-100)",tool:"built-in",status:"",desc:"Auto-calculated risk score"},
+              {name:"CVSS Scoring",tool:"built-in",status:"",desc:"CVSS assigned to each finding"},
+              {name:"OWASP Mapping",tool:"built-in",status:"",desc:"Each finding mapped to OWASP Top 10"},
+              {name:"CVE References",tool:"built-in",status:"",desc:"CVE IDs extracted from nikto output"},
             ]},
-            {num:"15",cat:"Real-World Exploitation",icon:"💻",color:"#dc2626",tools:[
-              {name:"Full DVWA Pentest",tool:"all-phases",status:"✅",desc:"Target: any web application"},
-              {name:"SQL Injection on DVWA",tool:"sqlmap",status:"✅",desc:"Auto-tests SQLi on target"},
-              {name:"XSS on DVWA",tool:"xsser",status:"✅",desc:"Auto-tests XSS on target"},
-              {name:"Chain Vulnerabilities",tool:"manual+platform",status:"⚠",desc:"Use findings to chain attacks manually"},
-              {name:"Post-Exploitation",tool:"manual",status:"❌",desc:"Use Metasploit Framework module"},
+            {num:"15",cat:"Real-World Exploitation",icon:"",color:"#dc2626",tools:[
+              {name:"Full DVWA Pentest",tool:"all-phases",status:"",desc:"Target: any web application"},
+              {name:"SQL Injection on DVWA",tool:"sqlmap",status:"",desc:"Auto-tests SQLi on target"},
+              {name:"XSS on DVWA",tool:"xsser",status:"",desc:"Auto-tests XSS on target"},
+              {name:"Chain Vulnerabilities",tool:"manual+platform",status:"",desc:"Use findings to chain attacks manually"},
+              {name:"Post-Exploitation",tool:"manual",status:"",desc:"Use Metasploit Framework module"},
             ]},
           ].map((cat,ci)=>(
             <div key={ci} style={{background:"#0f172a",border:`1px solid ${cat.color}30`,borderRadius:8,overflow:"hidden"}}>
@@ -4459,13 +4459,13 @@ function WebAppModule(props) {
                 <span style={{fontSize:13,fontWeight:700,color:"#f1f5f9"}}>{cat.cat}</span>
                 <div style={{marginLeft:"auto",display:"flex",gap:4}}>
                   <span style={{fontSize:9,background:"#052e1650",color:"#22c55e",padding:"2px 6px",borderRadius:3}}>
-                    ✅ {cat.tools.filter(t=>t.status==="✅").length}
+                    {cat.tools.filter(t=>t.status==="").length}
                   </span>
                   <span style={{fontSize:9,background:"#78350f50",color:"#f59e0b",padding:"2px 6px",borderRadius:3}}>
-                    ⚠ {cat.tools.filter(t=>t.status==="⚠").length}
+                    {cat.tools.filter(t=>t.status==="").length}
                   </span>
                   <span style={{fontSize:9,background:"#7f1d1d50",color:"#f87171",padding:"2px 6px",borderRadius:3}}>
-                    ❌ {cat.tools.filter(t=>t.status==="❌").length}
+                    {cat.tools.filter(t=>t.status==="").length}
                   </span>
                 </div>
               </div>
@@ -4491,8 +4491,8 @@ function WebAppModule(props) {
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>📄 Customize PDF Report</div>
-            <button onClick={()=>setShowPDFModal(false)} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}>✕</button>
+            <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>Customize PDF Report</div>
+            <button onClick={()=>setShowPDFModal(false)} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}></button>
           </div>
           <div style={{color:"#64748b",fontSize:11,marginBottom:14,fontStyle:"italic"}}>
             All fields are optional — fill only what you need. Empty fields use sensible defaults.
@@ -4506,7 +4506,7 @@ function WebAppModule(props) {
               } catch(e){ alert("PDF error: "+(e.message||e)); }
             }}
             style={{width:"100%",background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 14px",color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:16}}>
-            ⚡ Skip & Generate with Defaults (no password, no watermark)
+            Skip & Generate with Defaults (no password, no watermark)
           </button>
 
           {/* Company Name */}
@@ -4549,7 +4549,7 @@ function WebAppModule(props) {
             <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               <label style={{background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 18px",color:"#93c5fd",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-                📁 Upload Logo
+                Upload Logo
                 <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
                   const file = e.target.files[0];
                   if(!file) return;
@@ -4662,7 +4662,7 @@ function WebAppModule(props) {
             <label style={{display:"flex",alignItems:"center",gap:8,color:"#93c5fd",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
               <input type="checkbox" checked={pdfConfig.encrypt!==false} onChange={e=>setPDFConfig(p=>({...p,encrypt:e.target.checked}))}
                 style={{accentColor:"#3b82f6",cursor:"pointer"}}/>
-              🔒 PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
+              PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
             </label>
             {pdfConfig.encrypt!==false && (
               <>
@@ -4674,7 +4674,7 @@ function WebAppModule(props) {
                       setPDFConfig(p=>({...p,password:newPwd}));
                     }}
                     style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
-                    🎲 Regenerate
+                    Regenerate
                   </button>
                   <button type="button" onClick={()=>{
                       navigator.clipboard.writeText(pdfConfig.password).then(()=>{
@@ -4682,7 +4682,7 @@ function WebAppModule(props) {
                       });
                     }}
                     style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#22c55e",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
-                    📋 Copy
+                    Copy
                   </button>
                 </div>
                 <div style={{color:"#64748b",fontSize:10,marginTop:8,fontStyle:"italic"}}>The recipient will be prompted for this password when they open the PDF. Cannot be recovered if lost.</div>
@@ -4705,7 +4705,7 @@ function WebAppModule(props) {
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                     <div style={{width:14,height:14,borderRadius:"50%",background:t.accent,flexShrink:0}}/>
                     <span style={{color:"#e2e8f0",fontWeight:700,fontSize:12}}>{t.label}</span>
-                    {pdfConfig.template===t.id && <span style={{color:t.accent,fontSize:10,fontWeight:700,marginLeft:"auto"}}>✓ Selected</span>}
+                    {pdfConfig.template===t.id && <span style={{color:t.accent,fontSize:10,fontWeight:700,marginLeft:"auto"}}>Selected</span>}
                   </div>
                   <div style={{color:"#64748b",fontSize:11}}>{t.desc}</div>
                   <div style={{display:"flex",gap:3,marginTop:8}}>
@@ -4739,7 +4739,7 @@ function WebAppModule(props) {
             }
           }}
             style={{width:"100%",background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-            📄 Report
+            Report
           </button>
         </div>
       </div>
@@ -4826,7 +4826,7 @@ function ScanHistory(props) {
                   background:clearing?"#374151":"#dc2626",color:"#fff",
                   border:"none",borderRadius:6,cursor:clearing?"wait":"pointer",
                   letterSpacing:.3}}>
-                {clearing ? "Clearing..." : "🗑 Clear All"}
+                {clearing ? "Clearing..." : "Clear All"}
               </button>
             )}
           </div>
@@ -4891,7 +4891,7 @@ function GuideModule() {
       color: copied===id ? G : "#94a3b8",
       borderRadius:6, padding:"4px 12px", fontSize:11, cursor:"pointer",
       fontFamily:"monospace", fontWeight:700, transition:"all 0.2s", whiteSpace:"nowrap"
-    }}>{copied===id ? "✓ COPIED" : "COPY"}</button>
+    }}>{copied===id ? "COPIED" : "COPY"}</button>
   );
 
   const Block = ({id, label, code, comment}) => (
@@ -4963,11 +4963,11 @@ journalctl -u uvicorn -n 50
 # Or check terminal where uvicorn is running`;
 
   const labs = [
-    { name:"DVWA",                   url:"http://lab_dvwa",                    type:"🟢 LIVE", desc:"Damn Vulnerable Web App — login admin/password. SQLi, XSS, CSRF, File Upload, LFI.", color:"#22c55e" },
-    { name:"WebGoat",               url:"http://lab_webgoat:8080/WebGoat",       type:"🟢 LIVE", desc:"OWASP WebGoat — guided lessons for all OWASP Top 10 vulnerabilities.", color:"#22c55e" },
-    { name:"Juice Shop",            url:"http://lab_juiceshop:3000",               type:"🟢 LIVE", desc:"OWASP Juice Shop — 100+ challenges: JWT, SQLi, IDOR, XSS, SSRF. Login admin@juice-sh.op/admin123.", color:"#22c55e" },
-    { name:"Mutillidae II",         url:"http://lab_mutillidae",                  type:"🟢 LIVE", desc:"OWASP Mutillidae — SQLi, XXE, CSRF, Clickjacking. Login admin/adminpass.", color:"#22c55e" },
-    { name:"bWAPP",                 url:"http://lab_bwapp/bWAPP/login.php",       type:"🟢 LIVE", desc:"Buggy Web App — 100+ web vulnerabilities. Login bee/bug.", color:"#22c55e" },
+    { name:"DVWA",                   url:"http://lab_dvwa",                    type:"LIVE", desc:"Damn Vulnerable Web App — login admin/password. SQLi, XSS, CSRF, File Upload, LFI.", color:"#22c55e" },
+    { name:"WebGoat",               url:"http://lab_webgoat:8080/WebGoat",       type:"LIVE", desc:"OWASP WebGoat — guided lessons for all OWASP Top 10 vulnerabilities.", color:"#22c55e" },
+    { name:"Juice Shop",            url:"http://lab_juiceshop:3000",               type:"LIVE", desc:"OWASP Juice Shop — 100+ challenges: JWT, SQLi, IDOR, XSS, SSRF. Login admin@juice-sh.op/admin123.", color:"#22c55e" },
+    { name:"Mutillidae II",         url:"http://lab_mutillidae",                  type:"LIVE", desc:"OWASP Mutillidae — SQLi, XXE, CSRF, Clickjacking. Login admin/adminpass.", color:"#22c55e" },
+    { name:"bWAPP",                 url:"http://lab_bwapp/bWAPP/login.php",       type:"LIVE", desc:"Buggy Web App — 100+ web vulnerabilities. Login bee/bug.", color:"#22c55e" },
     { name:"HackTheBox",             url:"https://www.hackthebox.com",                    type:"ONLINE",   desc:"Professional CTF platform. Real-world machines. Highly recommended for OSCP prep.", color:"#a855f7" },
     { name:"TryHackMe",              url:"https://tryhackme.com",                         type:"ONLINE",   desc:"Beginner-friendly guided rooms. Great learning path for web app pentesting.", color:"#3b82f6" },
     { name:"PentesterLab",           url:"https://pentesterlab.com",                      type:"ONLINE",   desc:"Web app security exercises. Excellent for SQLi, XSS, JWT attacks.", color:"#f59e0b" },
@@ -4982,23 +4982,23 @@ journalctl -u uvicorn -n 50
   return (
     <div style={{padding:"28px 32px", maxWidth:960, margin:"0 auto"}}>
       <div style={{marginBottom:24}}>
-        <div style={{color:G, fontWeight:800, fontSize:22, fontFamily:"monospace", letterSpacing:2, marginBottom:4}}>📖 RUN GUIDE & LAB TARGETS</div>
+        <div style={{color:G, fontWeight:800, fontSize:22, fontFamily:"monospace", letterSpacing:2, marginBottom:4}}>RUN GUIDE & LAB TARGETS</div>
         <div style={{color:DIM, fontSize:13}}>Copy-paste commands to start everything · Vulnerable lab URLs for testing</div>
       </div>
 
       {/* Tabs */}
       <div style={{display:"flex", gap:4, borderBottom:`1px solid ${BORDER}`, marginBottom:24, flexWrap:"wrap"}}>
-        {tabBtn("startup",   "Startup",        "🚀")}
-        {tabBtn("fix",       "Fix Endpoints",  "🔧")}
-        {tabBtn("labs",      "Lab Targets",    "🎯")}
-        {tabBtn("howscan",   "How Scanning Works","🔬")}
-        {tabBtn("checklist", "Daily Checklist", "✅")}
+        {tabBtn("startup",   "Startup",        "")}
+        {tabBtn("fix",       "Fix Endpoints",  "")}
+        {tabBtn("labs",      "Lab Targets",    "")}
+        {tabBtn("howscan",   "How Scanning Works","")}
+        {tabBtn("checklist", "Daily Checklist", "")}
       </div>
 
       {tab === "startup" && (
         <div>
           <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
-            ⚡ Run STEP 1 (Kali) first, then STEP 2 (Windows). Always in this order.
+            Run STEP 1 (Kali) first, then STEP 2 (Windows). Always in this order.
           </div>
           <Block id="step1" label="STEP 1 — KALI TERMINAL" code={startupKali} comment="Paste all at once into Kali terminal. Leave it running." />
           <Block id="step2" label="STEP 2 — WINDOWS TERMINAL" code={startupWindows} comment="Open new terminal on Windows. Browser opens automatically at localhost:3000" />
@@ -5019,7 +5019,7 @@ journalctl -u uvicorn -n 50
       {tab === "fix" && (
         <div>
           <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
-            🔧 If any scan phase shows ERROR — endpoint missing, use these commands on Kali.
+            If any scan phase shows ERROR — endpoint missing, use these commands on Kali.
           </div>
           <Block id="fix1" label="CHECK & FIX MISSING ENDPOINTS (KALI)" code={fixEndpoints} comment="Run on Kali. Checks what's in main.py then appends missing endpoints." />
           <div style={{background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"16px 18px", marginTop:8}}>
@@ -5049,7 +5049,7 @@ journalctl -u uvicorn -n 50
       {tab === "labs" && (
         <div>
           <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
-            🎯 Click COPY next to any URL then paste into the scanner target field. Local targets need Kali VM running.
+            Click COPY next to any URL then paste into the scanner target field. Local targets need Kali VM running.
           </div>
           <div style={{display:"flex", gap:10, marginBottom:16, flexWrap:"wrap"}}>
             {[["LOCAL","#22c55e"],["ONLINE","#a855f7"],["DOWNLOAD","#64748b"],["LOCAL VM","#22c55e"]].map(([t,c])=>(
@@ -5064,7 +5064,7 @@ journalctl -u uvicorn -n 50
       {tab === "checklist" && (
         <div>
           <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
-            ✅ Run through this every session before scanning.
+            Run through this every session before scanning.
           </div>
           {[
             { step:"01", title:"Start VirtualBox", detail:"Open VirtualBox -> Start Kali VM -> Wait for desktop", ok:true },
@@ -5200,7 +5200,7 @@ function generateShellReport({title, icon, target, attacks, results}) {
   const ran=attacks.filter(a=>results[a.id]);
   sHead("Executive Summary",[30,64,175]);
   [["Module",title],["Target",target||"—"],["Tests Run",`${ran.length} of ${attacks.length}`],
-   ["Total Findings",allF.length],["Critical",`${C.CRITICAL} ${C.CRITICAL>0?"⚠ Immediate action required":""}`],
+   ["Total Findings",allF.length],["Critical",`${C.CRITICAL} ${C.CRITICAL>0?"Immediate action required":""}`],
    ["High",C.HIGH],["Medium",C.MEDIUM],["Low",C.LOW],
    ["Risk Level",C.CRITICAL>0?"CRITICAL":C.HIGH>0?"HIGH":C.MEDIUM>0?"MEDIUM":"LOW"],
    ["Date",new Date().toLocaleDateString()]].forEach(([k,v],i)=>row(k,v,i));
@@ -5312,8 +5312,8 @@ function generateShellReport({title, icon, target, attacks, results}) {
     doc.setFontSize(9); doc.setTextColor(148,163,184); doc.setFont("helvetica","bold");
     doc.text(_safe(atk.label),M+3,y+5.5);
     if(res.message){
-      const msgClean=res.message.replace(/[❌✅⚠]/g,"").trim();
-      doc.setTextColor(...(res.message.includes("❌")?[239,68,68]:[34,197,94]));
+      const msgClean=res.message.replace(/[]/g,"").trim();
+      doc.setTextColor(...(res.message.includes("")?[239,68,68]:[34,197,94]));
       doc.setFontSize(7); doc.setFont("helvetica","italic");
       doc.text(msgClean.slice(0,60),W-M-62,y+5.5);
     }
@@ -5437,7 +5437,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
           <div style={{display:"flex", justifyContent:"flex-end", gap:8, padding:"10px 24px 0"}}>
             <button onClick={()=>setGuide(g=>!g)}
               style={{background:guide?"#1e3a5f":"#0f172a",border:`1px solid ${guide?"#3b82f6":"#334155"}`,borderRadius:6,padding:"6px 12px",color:guide?"#93c5fd":"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-              {guide?"✕ Hide Guide":"📋 How to Use"}
+              {guide?"Hide Guide":"How to Use"}
             </button>
             <button onClick={()=>{
                 const args={title,icon,target,attacks,results};
@@ -5447,7 +5447,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                 } catch(e) { alert("PDF error: "+(e.message||e)); }
               }}
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              📄 Report
+              Report
             </button>
           </div>
         ))
@@ -5464,7 +5464,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setGuide(g=>!g)}
                 style={{background:guide?"#1e3a5f":"#0f172a",border:`1px solid ${guide?"#3b82f6":"#334155"}`,borderRadius:6,padding:"6px 12px",color:guide?"#93c5fd":"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                {guide?"✕ Hide Guide":"📋 How to Use"}
+                {guide?"Hide Guide":"How to Use"}
               </button>
               {hasResults && (
                 <button onClick={()=>{
@@ -5475,7 +5475,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                     } catch(e) { alert("PDF error: "+(e.message||e)); }
                   }}
                   style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                  📄 Report
+                  Report
                 </button>
               )}
             </div>
@@ -5486,7 +5486,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
       {/* How To Use Guide */}
       {guide && (
         <div style={{margin:"12px 24px 0",background:"#0a1628",border:"1px solid #1e3a5f",borderRadius:8,padding:"14px 16px"}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:10}}>📋 How to Run This Module</div>
+          <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:10}}>How to Run This Module</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
             {attacks.map(atk=>(
               <div key={atk.id} style={{background:"#0d1f35",borderRadius:6,padding:"10px 12px",border:"1px solid #1e3a5f"}}>
@@ -5494,22 +5494,22 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                   <span style={{fontSize:14}}>{atk.icon}</span>
                   <span style={{fontSize:11,fontWeight:700,color:"#f1f5f9"}}>{atk.label}</span>
                 </div>
-                {atk.target_type && <div style={{fontSize:9,color:"#fbbf24",marginBottom:4}}>🎯 Target: {atk.target_type}</div>}
+                {atk.target_type && <div style={{fontSize:9,color:"#fbbf24",marginBottom:4}}>Target: {atk.target_type}</div>}
                 {atk.howto && <div style={{fontSize:10,color:"#94a3b8",marginBottom:5,lineHeight:1.5}}>{atk.howto}</div>}
-                {atk.requires && <div style={{fontSize:9,color:"#f97316",marginBottom:5}}>⚠ Requires: {atk.requires}</div>}
+                {atk.requires && <div style={{fontSize:9,color:"#f97316",marginBottom:5}}>Requires: {atk.requires}</div>}
                 {atk.vulns && atk.vulns.length>0 && (
                   <div style={{marginBottom:5}}>
                     <div style={{fontSize:9,color:"#64748b",marginBottom:3,textTransform:"uppercase",fontWeight:700}}>Vulnerabilities Detected:</div>
                     {atk.vulns.map((v,i)=>(
                       <div key={i} style={{fontSize:9,color:"#4ade80",display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
-                        <span style={{color:"#22c55e",flexShrink:0}}>✓</span>{v}
+                        <span style={{color:"#22c55e",flexShrink:0}}></span>{v}
                       </div>
                     ))}
                   </div>
                 )}
                 {atk.hackerImpact && (
                   <div style={{background:"#1a0505",border:"1px solid #7f1d1d",borderRadius:4,padding:"6px 8px",marginTop:4}}>
-                    <div style={{fontSize:9,color:"#f87171",fontWeight:700,marginBottom:3}}>🔴 Hacker Impact:</div>
+                    <div style={{fontSize:9,color:"#f87171",fontWeight:700,marginBottom:3}}>Hacker Impact:</div>
                     <div style={{fontSize:9,color:"#fca5a5",lineHeight:1.5}}>{atk.hackerImpact}</div>
                   </div>
                 )}
@@ -5570,9 +5570,9 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
                 </div>
                 {res && (
                   <div style={{padding:"10px 14px",maxHeight:240,overflowY:"auto"}}>
-                    {res.error && <div style={{color:"#ef4444",fontSize:11,marginBottom:4}}>⚠ {res.error}</div>}
+                    {res.error && <div style={{color:"#ef4444",fontSize:11,marginBottom:4}}>{res.error}</div>}
                     {res.message && (
-                      <div style={{color:res.message.includes("❌")?"#f87171":res.message.includes("✅")?"#4ade80":"#94a3b8",fontSize:11,marginBottom:6,fontWeight:600}}>{res.message}</div>
+                      <div style={{color:res.message.includes("")?"#f87171":res.message.includes("")?"#4ade80":"#94a3b8",fontSize:11,marginBottom:6,fontWeight:600}}>{res.message}</div>
                     )}
                     {findings.length>0 && findings.slice(0,12).map((f,i)=>(
                       <div key={i} style={{display:"flex",gap:6,alignItems:"flex-start",marginBottom:4,fontSize:11}}>
@@ -6482,7 +6482,7 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
   const pct = totalCount ? Math.round(100 * completedCount / totalCount) : 0;
   const SEV_COLORS = {HIGH:"#ef4444", MEDIUM:"#f59e0b", LOW:"#22c55e", "no-finding":"#22c55e", na:"#64748b", not_run:"#475569", required:"#fbbf24", all:"#7c3aed"};
   const SECTION_COLORS = {"§1":"#3b82f6","§2":"#06b6d4","§3":"#8b5cf6","§4":"#ec4899","§5":"#f97316","§6":"#84cc16","§7":"#eab308","§8":"#10b981","§9":"#ef4444","§10":"#a855f7","§11":"#0ea5e9","§12":"#f472b6","§13":"#facc15","§14":"#fb923c","§15":"#22d3ee"};
-  const DIFF_BADGES = {easy:{emoji:"🟢",label:"Easy",color:"#22c55e"},medium:{emoji:"🟡",label:"Med",color:"#f59e0b"},hard:{emoji:"🔴",label:"Hard",color:"#ef4444"},expert:{emoji:"⚫",label:"Expert",color:"#64748b"}};
+  const DIFF_BADGES = {easy:{emoji:"",label:"Easy",color:"#22c55e"},medium:{emoji:"",label:"Med",color:"#f59e0b"},hard:{emoji:"",label:"Hard",color:"#ef4444"},expert:{emoji:"",label:"Expert",color:"#64748b"}};
   const matches = (t) => {
     if (search) {
       const q = search.toLowerCase();
@@ -6503,36 +6503,36 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
       {!onbDismissed && (
         <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
-            <div style={{fontSize:13, fontWeight:700, color:"#fbbf24"}}>👋 First time? Here is the 5-step workflow</div>
-            <button onClick={dismissOnb} style={{background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:14, padding:0, lineHeight:1}}>✕</button>
+            <div style={{fontSize:13, fontWeight:700, color:"#fbbf24"}}>First time? Here is the 5-step workflow</div>
+            <button onClick={dismissOnb} style={{background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:14, padding:0, lineHeight:1}}></button>
           </div>
           <ol style={{margin:"0 0 8px 0", paddingLeft:18, fontSize:11, color:"#cbd5e1", lineHeight:1.7}}>
             <li>Click a card to expand it</li>
             <li>Read <b>What customer needs</b> + <b>Steps</b></li>
             <li>Run the steps locally (or on the target with authorization)</li>
             <li>Paste output in the evidence box, mark severity (OK / Low / Med / High) — or <b>N/A</b> if out of scope</li>
-            <li>Click <b>📄 Export PDF</b> when done</li>
+            <li>Click <b>Export PDF</b> when done</li>
           </ol>
           {requiredCount > 0 && (
-            <div style={{fontSize:10, color:"#fbbf24", marginTop:6}}>💡 Tip: click <span style={{padding:"1px 6px", border:"1px solid #fbbf24", borderRadius:3, fontWeight:700}}>⭐ Required</span> to see the {requiredCount} must-do techniques.</div>
+            <div style={{fontSize:10, color:"#fbbf24", marginTop:6}}>Tip: click <span style={{padding:"1px 6px", border:"1px solid #fbbf24", borderRadius:3, fontWeight:700}}>Required</span> to see the {requiredCount} must-do techniques.</div>
           )}
         </div>
       )}
       <div style={{position:"sticky", top:0, zIndex:5, background:"#0a1628", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
         <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, gap:12}}>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:14, fontWeight:700, color:"#fbbf24"}}>🔧 Manual Tests — {moduleLabel}</div>
-            <div style={{fontSize:10, color:"#94a3b8", marginTop:2}}>{totalCount} techniques{requiredCount ? (" · " + requiredCount + " ⭐ required") : ""} · run locally · paste evidence for the PDF</div>
+            <div style={{fontSize:14, fontWeight:700, color:"#fbbf24"}}>Manual Tests — {moduleLabel}</div>
+            <div style={{fontSize:10, color:"#94a3b8", marginTop:2}}>{totalCount} techniques{requiredCount ? (" · " + requiredCount + " required") : ""} · run locally · paste evidence for the PDF</div>
           </div>
-          <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "#374151" : "#7c3aed", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>📄 Export PDF</button>
+          <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "#374151" : "#7c3aed", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>Export PDF</button>
         </div>
         <div style={{height:5, background:"#1e293b", borderRadius:3, overflow:"hidden", marginBottom:8}}>
           <div style={{height:"100%", width:`${pct}%`, background: pct === 100 ? "#22c55e" : "#7c3aed", transition:"width 0.3s"}}/>
         </div>
         <div style={{fontSize:10, color:"#94a3b8", marginBottom:10}}><span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>{completedCount}/{totalCount}</span> covered · {pct}%</div>
         <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
-          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search title / ref / tool…" style={{flex:"1 1 160px", minWidth:120, background:"#020617", border:"1px solid #334155", borderRadius:6, color:"#cbd5e1", fontSize:11, padding:"6px 10px", outline:"none"}}/>
-          {[["all","All"],["required","⭐ Required"],["not_run","Not Run"],["no-finding","✓ OK"],["LOW","Low"],["MEDIUM","Med"],["HIGH","High"],["na","N/A"]].map(([val,label])=>(
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search title / ref / tool…" style={{flex:"1 1 160px", minWidth:120, background:"#020617", border:"1px solid #334155", borderRadius:6, color:"#cbd5e1", fontSize:11, padding:"6px 10px", outline:"none"}}/>
+          {[["all","All"],["required","Required"],["not_run","Not Run"],["no-finding","OK"],["LOW","Low"],["MEDIUM","Med"],["HIGH","High"],["na","N/A"]].map(([val,label])=>(
             <button key={val} onClick={()=>setStatusFilter(val)} style={{background: statusFilter===val ? (SEV_COLORS[val] || "#7c3aed") : "transparent", color: statusFilter===val ? "#fff" : (SEV_COLORS[val] || "#94a3b8"), border:`1px solid ${SEV_COLORS[val] || "#475569"}`, borderRadius:4, padding:"4px 9px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>
           ))}
         </div>
@@ -6548,7 +6548,7 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
               <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8, paddingBottom:6, borderBottom:`1px solid ${groupColor}33`}}>
                 <div style={{width:3, height:14, background: groupColor, borderRadius:2}}/>
                 <div style={{fontSize:11, fontWeight:700, color: groupColor, textTransform:"uppercase", letterSpacing:0.5}}>{gk}</div>
-                <div style={{fontSize:10, color:"#64748b"}}>{groupTests.length} technique{groupTests.length>1?"s":""}{groupReq ? (" · " + groupReq + " ⭐") : ""}</div>
+                <div style={{fontSize:10, color:"#64748b"}}>{groupTests.length} technique{groupTests.length>1?"s":""}{groupReq ? (" · " + groupReq + " ") : ""}</div>
               </div>
               <div style={{display:"grid", gap:8}}>
                 {groupTests.map(t => {
@@ -6565,12 +6565,12 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
                       <div onClick={() => setExpanded(p => ({...p, [t.id]: !p[t.id]}))} style={{display:"flex", alignItems:"center", padding:"10px 14px", cursor:"pointer", gap:10, background: isOpen ? `${groupColor}11` : "transparent"}}>
                         <div style={{width:8, height:8, borderRadius:4, background: statusColor, flexShrink:0}}/>
                         <div style={{flex:1, minWidth:0}}>
-                          <div style={{fontSize:13, fontWeight:600, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{t.required && <span style={{color:"#fbbf24", marginRight:5}}>⭐</span>}{t.title}</div>
+                          <div style={{fontSize:13, fontWeight:600, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{t.required && <span style={{color:"#fbbf24", marginRight:5}}></span>}{t.title}</div>
                           <div style={{display:"flex", gap:4, flexWrap:"wrap", marginTop:3, alignItems:"center"}}>
                             <span style={{fontSize:9, color:"#64748b", padding:"1px 5px", border:"1px solid #334155", borderRadius:3}}>{t.ref}</span>
                             {diff && (<span style={{fontSize:9, color:diff.color, padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{diff.emoji} {diff.label}</span>)}
-                            {t.time && (<span style={{fontSize:9, color:"#94a3b8", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>⏱ {t.time}</span>)}
-                            {t.cost && (<span style={{fontSize:9, color: t.cost === "free" ? "#22c55e" : "#f59e0b", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{t.cost === "free" ? "🆓 Free" : "💵 Paid"}</span>)}
+                            {t.time && (<span style={{fontSize:9, color:"#94a3b8", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{t.time}</span>)}
+                            {t.cost && (<span style={{fontSize:9, color: t.cost === "free" ? "#22c55e" : "#f59e0b", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{t.cost === "free" ? "Free" : "Paid"}</span>)}
                             {(t.tools_required||[]).slice(0,2).map((tool,i)=>(<span key={i} style={{fontSize:9, color:"#94a3b8", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{tool}</span>))}
                             {(t.tools_required||[]).length > 2 && (<span style={{fontSize:9, color:"#64748b"}}>+{(t.tools_required||[]).length-2}</span>)}
                           </div>
@@ -6592,11 +6592,11 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
                               <div style={{fontSize:11, color:"#cbd5e1", lineHeight:1.5, marginBottom:12, padding:8, background:"#020617", borderRadius:4, border:"1px solid #1e293b"}}>{t.what_to_look_for}</div>
                               <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:6}}>
                                 <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", textTransform:"uppercase", letterSpacing:0.4}}>Your findings</div>
-                                {flashing && <span style={{fontSize:9, color:"#22c55e", fontWeight:700}}>✓ saved</span>}
+                                {flashing && <span style={{fontSize:9, color:"#22c55e", fontWeight:700}}>saved</span>}
                               </div>
                               <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})} placeholder="Paste output / screenshot link / describe what happened…" style={{width:"100%", minHeight:90, background:"#020617", color:"#cbd5e1", border:"1px solid #334155", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"monospace", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
                               <div style={{display:"flex", gap:4, marginTop:8, flexWrap:"wrap"}}>
-                                {[["not_run","Not Run","#475569"],["no-finding","✓ OK","#22c55e"],["LOW","Low","#22c55e"],["MEDIUM","Med","#f59e0b"],["HIGH","High","#ef4444"],["na","N/A","#64748b"]].map(([val,label,c])=>{
+                                {[["not_run","Not Run","#475569"],["no-finding","OK","#22c55e"],["LOW","Low","#22c55e"],["MEDIUM","Med","#f59e0b"],["HIGH","High","#ef4444"],["na","N/A","#64748b"]].map(([val,label,c])=>{
                                   const active = (val==="not_run" && status==="not_run") || (val==="na" && status==="na") || (val!=="not_run" && val!=="na" && f.severity===val);
                                   return (<button key={val} onClick={()=>update(t.id, val==="not_run" ? {status:"not_run", severity:undefined} : val==="na" ? {status:"na", severity:undefined} : {status:"done", severity:val})} style={{background: active?c:"transparent", color: active?"#fff":c, border:`1px solid ${c}`, borderRadius:4, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>);
                                 })}
@@ -6635,8 +6635,8 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
   // doesn't render them as garbage bytes ("Ø=ßà", "!'", spaced-out chars).
   const _ascii = s => String(s == null ? "" : s)
       .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
-      .replace(/✅/g, "[OK] ").replace(/[✓✔]/g, "v ").replace(/[⚠⚑]/g, "[!] ")
-      .replace(/[✘✖]/g, "X ").replace(/[—–]/g, "-").replace(/→/g, "->")
+      .replace(//g, "[OK] ").replace(/[]/g, "v ").replace(/[]/g, "[!] ")
+      .replace(/[]/g, "X ").replace(/[—–]/g, "-").replace(/→/g, "->")
       .replace(/←/g, "<-").replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
       .replace(/·/g, "-").replace(/[︎️]/g, "");
   const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
@@ -6769,7 +6769,7 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
     chk(20); txt("CUSTOMER FINDINGS", margin, y+4, 8, [220,38,38], true); y += 7;
     if (t._status !== "done") {
       fillR(margin, y, contentW, 8, [254,243,199]);
-      txt("⚠ Test not yet executed by customer", margin+4, y+5.5, 8.5, AMBER, true);
+      txt("Test not yet executed by customer", margin+4, y+5.5, 8.5, AMBER, true);
       y += 11;
     } else {
       fillR(margin, y, contentW, 8, LIGHT);
@@ -6860,27 +6860,27 @@ function generateManualTestsReport({moduleKey, moduleLabel, tests, findings, dat
 // ── WIRELESS ATTACKS ─────────────────────────────────────────
 function WirelessModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"interfaces",label:"List Interfaces",  icon:"📡",ep:"/api/wireless/interfaces",
+    {id:"interfaces",label:"List Interfaces",  icon:"",ep:"/api/wireless/interfaces",
      desc:"Show wireless network interfaces (iwconfig)",
      howto:"No target needed. Shows all wireless NICs on Kali. You need a wireless adapter that supports monitor mode (e.g. Alfa AWUS036ACH). Note the interface name (wlan0, wlan1).",
      requires:"Wireless NIC with monitor mode support",
      vulns:["Adapter capability check","Monitor mode availability"]},
-    {id:"scan",      label:"Network Scan",     icon:"🔍",ep:"/api/wireless/scan",
+    {id:"scan",      label:"Network Scan",     icon:"",ep:"/api/wireless/scan",
      desc:"Scan nearby WiFi networks (airodump-ng)",
      howto:"Enter interface name (e.g. wlan0) as target. First put adapter in monitor mode: sudo airmon-ng start wlan0. Then scan shows all nearby APs with BSSID, channel, encryption.",
      requires:"Wireless NIC in monitor mode + physical proximity to targets",
      vulns:["Open networks (no encryption)","WEP encryption (broken)","WPS enabled","Hidden SSID broadcast","Rogue AP detection"]},
-    {id:"deauth",    label:"Deauth Attack",    icon:"💥",ep:"/api/wireless/deauth",
+    {id:"deauth",    label:"Deauth Attack",    icon:"",ep:"/api/wireless/deauth",
      desc:"Send deauthentication frames (aireplay-ng)",
      howto:"Enter interface as target. Fill BSSID field with AP MAC address from the scan. Forces clients to disconnect and reconnect — captures WPA handshake during reconnection.",
      requires:"Monitor mode NIC + BSSID from scan",
      vulns:["Wireless deauthentication (CVE-2004-0459)","WPA handshake capture","Denial of Service","Client disconnection attack"]},
-    {id:"wifite",    label:"Auto Attack",      icon:"🤖",ep:"/api/wireless/wifite",
+    {id:"wifite",    label:"Auto Attack",      icon:"",ep:"/api/wireless/wifite",
      desc:"Automated WiFi attack (wifite)",
      howto:"Enter interface name as target. Wifite automatically puts NIC in monitor mode, scans, captures handshakes and attacks WEP/WPA/WPS networks. Takes 1-5 minutes.",
      requires:"Wireless NIC + proximity to target networks",
      vulns:["WEP cracking (instant)","WPA/WPA2 handshake capture","WPS PIN brute force","PMKID attack"]},
-    {id:"crack",     label:"Crack Handshake",  icon:"🔓",ep:"/api/wireless/crack",
+    {id:"crack",     label:"Crack Handshake",  icon:"",ep:"/api/wireless/crack",
      desc:"Crack WPA handshake (aircrack-ng + rockyou)",
      howto:"Capture a .cap file first using scan or wifite. Enter .cap file path in target field. Uses rockyou.txt wordlist. For stronger passwords use hashcat with GPU.",
      requires:"WPA handshake .cap file + /usr/share/wordlists/rockyou.txt",
@@ -6892,38 +6892,38 @@ function WirelessModule_legacy({token, apiUrl}) {
     <input placeholder="BSSID (deauth)" value={opts.bssid||""} onChange={e=>setOpts(p=>({...p,bssid:e.target.value}))}
       style={{width:155,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Wireless Attacks" moduleKey="wireless" icon="📶" color="#8b5cf6" desc="WiFi penetration — network scan, WPA handshake capture, deauth, aircrack-ng cracking" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Wireless Attacks" moduleKey="wireless" icon="" color="#8b5cf6" desc="WiFi penetration — network scan, WPA handshake capture, deauth, aircrack-ng cracking" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── ACTIVE DIRECTORY ─────────────────────────────────────────
 function ActiveDirectoryModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"enum",       label:"AD Enumeration",    icon:"🗂", ep:"/api/ad/enum",
+    {id:"enum",       label:"AD Enumeration",    icon:"", ep:"/api/ad/enum",
      desc:"enum4linux + LDAP — users, groups, shares, policies",
      howto:"Enter DC IP as target. Fill in Domain (e.g. corp.local). No credentials needed for null session. Run on port 389/445.",
      requires:"Windows Active Directory Domain Controller",
      vulns:["Null session authentication","Anonymous LDAP bind","SMB share misconfiguration","Password policy exposure","User enumeration"]},
-    {id:"kerberoast", label:"Kerberoasting",     icon:"🎟", ep:"/api/ad/kerberoast",
+    {id:"kerberoast", label:"Kerberoasting",     icon:"", ep:"/api/ad/kerberoast",
      desc:"GetUserSPNs.py — extract service account hashes",
      howto:"Enter DC IP, fill Domain + Username + Password. Finds service accounts with SPNs and requests their TGS tickets for offline cracking.",
      requires:"Valid domain user credentials + Windows DC",
      vulns:["Service accounts with weak passwords","SPN misconfiguration","Kerberos ticket exposure","Offline password cracking risk"]},
-    {id:"asreproast", label:"AS-REP Roasting",   icon:"🍖", ep:"/api/ad/asreproast",
+    {id:"asreproast", label:"AS-REP Roasting",   icon:"", ep:"/api/ad/asreproast",
      desc:"GetNPUsers.py — no-preauth account hash extraction",
      howto:"Enter DC IP, fill Domain. Targets accounts with 'Do not require Kerberos pre-authentication' enabled. Hashes can be cracked with hashcat -m 18200.",
      requires:"Windows DC + known username list",
      vulns:["Kerberos pre-auth disabled on accounts","AS-REP hash cracking","Weak password policy"]},
-    {id:"bloodhound", label:"BloodHound Collect",icon:"🐕", ep:"/api/ad/bloodhound",
+    {id:"bloodhound", label:"BloodHound Collect",icon:"", ep:"/api/ad/bloodhound",
      desc:"bloodhound-python — map all paths to Domain Admin",
      howto:"Enter DC IP, fill Domain + credentials. Collects AD relationships and outputs ZIP. Import into BloodHound GUI to visualize attack paths to Domain Admin.",
      requires:"Valid domain credentials + BloodHound GUI installed",
      vulns:["Shortest path to Domain Admin","ACL abuse paths","Unconstrained delegation","DCSync rights","AdminTo relationships"]},
-    {id:"secretsdump",label:"Secrets Dump",      icon:"💾", ep:"/api/ad/secretsdump",
+    {id:"secretsdump",label:"Secrets Dump",      icon:"", ep:"/api/ad/secretsdump",
      desc:"secretsdump.py — extract NTLM hashes from DC",
      howto:"Enter DC IP + Domain Admin credentials. Dumps all NTLM password hashes from the domain. Use hashes for Pass-the-Hash or crack offline.",
      requires:"Domain Admin or replication rights",
      vulns:["NTLM hash extraction","DCSync attack","Pass-the-Hash potential","Credential exposure","Lateral movement risk"]},
-    {id:"psexec",     label:"PsExec Shell",      icon:"🖥", ep:"/api/ad/psexec",
+    {id:"psexec",     label:"PsExec Shell",      icon:"", ep:"/api/ad/psexec",
      desc:"psexec.py — shell via SMB with valid credentials",
      howto:"Enter target IP + Domain + credentials. Launches remote SYSTEM shell via SMB. Requires admin shares (C$) to be accessible.",
      requires:"Local or domain admin credentials + SMB port 445 open",
@@ -6937,78 +6937,78 @@ function ActiveDirectoryModule_legacy({token, apiUrl}) {
     <input type="password" placeholder="Password" value={opts.password||""} onChange={e=>setOpts(p=>({...p,password:e.target.value}))}
       style={{width:110,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Active Directory Attacks" moduleKey="ad" icon="🏰" color="#ef4444" desc="Full AD attack chain — Kerberoasting, AS-REP Roasting, BloodHound, DCSync, PsExec" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,dc_ip:t}})}/>;
+  return <ModuleShell title="Active Directory Attacks" moduleKey="ad" icon="" color="#ef4444" desc="Full AD attack chain — Kerberoasting, AS-REP Roasting, BloodHound, DCSync, PsExec" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,dc_ip:t}})}/>;
 }
 
 // ── PRIVILEGE ESCALATION ─────────────────────────────────────
 function PrivescModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"linpeas",      label:"LinPEAS",            icon:"🦅",ep:"/api/privesc/linpeas",
+    {id:"linpeas",      label:"LinPEAS",            icon:"",ep:"/api/privesc/linpeas",
      desc:"Full automated Linux privilege escalation scan",
      howto:"Run on the TARGET machine after gaining a shell. No target IP needed — runs locally on Kali or the victim machine. Place linpeas.sh at /tmp/linpeas.sh first.",
      requires:"Shell access on Linux target",
      vulns:["SUID/SGID binaries","Writable /etc/passwd","Sudo misconfigs","Writable cron","World-writable service files","PATH hijacking","NFS no_root_squash","Docker group membership"]},
-    {id:"suid",         label:"SUID Binaries",      icon:"🔑",ep:"/api/privesc/suid",
+    {id:"suid",         label:"SUID Binaries",      icon:"",ep:"/api/privesc/suid",
      desc:"Find SUID — cross-check against GTFOBins",
      howto:"Run locally after gaining shell. Finds all binaries with SUID bit set. CRITICAL results can be exploited via GTFOBins (gtfobins.github.io) to get root.",
      requires:"Shell access on Linux target",
      vulns:["SUID python/perl/bash -> instant root","SUID find/vim/nmap -> command execution","Custom SUID binaries","Shared library injection"]},
-    {id:"sudo",         label:"Sudo Analysis",      icon:"👑",ep:"/api/privesc/sudo",
+    {id:"sudo",         label:"Sudo Analysis",      icon:"",ep:"/api/privesc/sudo",
      desc:"sudo -l — detect exploitable allowed commands",
      howto:"Run locally after gaining shell. Checks what commands current user can run as root. CRITICAL if any GTFOBins binary is listed with NOPASSWD.",
      requires:"Shell access on Linux target",
      vulns:["NOPASSWD sudo on GTFOBins binary","sudo ALL privileges","Dangerous command allowed (vim, find, less)","sudo version exploit (CVE-2021-3156)"]},
-    {id:"capabilities", label:"Linux Capabilities", icon:"⚙", ep:"/api/privesc/capabilities",
+    {id:"capabilities", label:"Linux Capabilities", icon:"", ep:"/api/privesc/capabilities",
      desc:"getcap -r — find cap_setuid / cap_sys_admin",
      howto:"Run locally after gaining shell. Capabilities give programs elevated privileges without full root. cap_setuid on python = root shell instantly.",
      requires:"Shell access on Linux target",
      vulns:["cap_setuid -> root shell","cap_sys_admin -> container escape","cap_net_raw -> packet sniffing","cap_dac_override -> bypass file permissions"]},
-    {id:"cron",         label:"Cron Jobs",          icon:"⏰",ep:"/api/privesc/cron",
+    {id:"cron",         label:"Cron Jobs",          icon:"",ep:"/api/privesc/cron",
      desc:"Find world-writable cron scripts and paths",
      howto:"Run locally. Finds cron jobs running as root. If the script is world-writable, replace it with a reverse shell. PATH hijacking also possible.",
      requires:"Shell access on Linux target",
      vulns:["World-writable cron script","Cron runs script from writable directory","PATH hijacking in cron","Wildcard injection in cron tar/rsync"]},
-    {id:"suggest",      label:"Exploit Suggester",  icon:"💡",ep:"/api/privesc/linux_suggest",
+    {id:"suggest",      label:"Exploit Suggester",  icon:"",ep:"/api/privesc/linux_suggest",
      desc:"Kernel version -> matching public exploits",
      howto:"Run locally. Checks kernel version against known local privilege escalation exploits. Download matching exploit from exploit-db and compile on target.",
      requires:"Shell access on Linux target + les.py at /tmp/",
      vulns:["Dirty COW (CVE-2016-5195)","OverlayFS (CVE-2021-3493)","PwnKit (CVE-2021-4034)","Baron Samedit sudo (CVE-2021-3156)"]},
   ];
-  return <ModuleShell title="Privilege Escalation" moduleKey="privesc" icon="📈" color="#f59e0b" desc="Automated Linux privesc — LinPEAS, SUID abuse, sudo misconfig, capabilities, cron jobs" token={token} apiUrl={apiUrl} attacks={attacks}/>;
+  return <ModuleShell title="Privilege Escalation" moduleKey="privesc" icon="" color="#f59e0b" desc="Automated Linux privesc — LinPEAS, SUID abuse, sudo misconfig, capabilities, cron jobs" token={token} apiUrl={apiUrl} attacks={attacks}/>;
 }
 
 // ── PIVOTING & TUNNELING ─────────────────────────────────────
 function TunnelModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"chisel", label:"Chisel Tunnel", icon:"🔧", ep:"/api/tunnel/chisel",
+    {id:"chisel", label:"Chisel Tunnel", icon:"", ep:"/api/tunnel/chisel",
      desc:"SOCKS5/TCP tunnel — server + client commands",
      howto:"Enter pivot host IP as target. Fill LHOST (your Kali IP) and LPORT (e.g. 8080). Run chisel server on Kali, upload agent to compromised host. Routes traffic through the victim into internal network.",
      requires:"Shell access on pivot host + chisel binary uploaded to victim",
      target_type:"Linux/Windows pivot host after initial compromise",
      vulns:["Network segmentation bypass","Internal network access","Firewall evasion","Lateral movement enablement"],
      hackerImpact:"Attacker uses the compromised host as a jump point to reach internal servers not accessible from internet. Can attack internal databases, AD, and other systems."},
-    {id:"socat", label:"Socat Relay", icon:"🔀", ep:"/api/tunnel/socat",
+    {id:"socat", label:"Socat Relay", icon:"", ep:"/api/tunnel/socat",
      desc:"TCP port relay and forwarding",
      howto:"Enter pivot host IP as target. Set LHOST/LPORT (your Kali) and RHOST/RPORT (internal target). Socat relays your traffic through the pivot host to the internal target.",
      requires:"Shell access on pivot host + socat installed",
      target_type:"Linux pivot host",
      vulns:["Port forwarding through firewall","Protocol tunneling","Blind relay attack"],
      hackerImpact:"Creates a relay from attacker to internal server. All traffic looks like it originates from the pivot machine, bypassing network controls."},
-    {id:"ssh", label:"SSH Port Forwarding", icon:"🔐", ep:"/api/tunnel/ssh",
+    {id:"ssh", label:"SSH Port Forwarding", icon:"", ep:"/api/tunnel/ssh",
      desc:"Local, remote and dynamic SSH tunnels",
      howto:"Enter SSH server IP as target. Set username, LPORT (local port), and RHOST:RPORT (internal target). Local forward: access internal services. Dynamic: full SOCKS5 proxy.",
      requires:"SSH access to pivot machine (Linux)",
      target_type:"Linux server with SSH access",
      vulns:["SSH tunnel to bypass firewall","SOCKS5 proxy via SSH -D","Reverse tunnel from restricted network"],
      hackerImpact:"Attacker creates encrypted tunnel to access internal network. Even if only SSH port 22 is open, they can reach any internal service through it."},
-    {id:"proxychains", label:"Proxychains Config", icon:"⛓", ep:"/api/tunnel/proxychains",
+    {id:"proxychains", label:"Proxychains Config", icon:"", ep:"/api/tunnel/proxychains",
      desc:"Auto-generate proxychains.conf + usage guide",
      howto:"Enter proxy IP as target. Select proxy type (socks5/http) and fill proxy port. Generated config lets you run any tool through the proxy tunnel (nmap, curl, etc.).",
      requires:"An active SOCKS5/HTTP proxy (Chisel, SSH -D, or Metasploit route)",
      target_type:"Used after pivot tunnel is established",
      vulns:["Tool routing through compromised network","NAC/firewall bypass","Internal scanning"],
      hackerImpact:"Once proxy is set up, attacker can use any tool (nmap, sqlmap, hydra) against internal targets as if they were on the internal network."},
-    {id:"ligolo", label:"Ligolo-ng", icon:"🌐", ep:"/api/tunnel/ligolo",
+    {id:"ligolo", label:"Ligolo-ng", icon:"", ep:"/api/tunnel/ligolo",
      desc:"Ligolo-ng agent + proxy setup commands",
      howto:"Enter pivot host IP as target. Set LHOST (Kali) and LPORT. Upload Ligolo agent to victim, run proxy on Kali. Creates a tun interface — scan internal network directly without proxychains.",
      requires:"Shell access on pivot host + Ligolo binaries",
@@ -7022,41 +7022,41 @@ function TunnelModule_legacy({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"8080"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Pivoting & Tunneling" moduleKey="pivot" icon="🕳" color="#06b6d4" desc="Network pivoting through compromised hosts — Chisel, Ligolo-ng, Socat, SSH, Proxychains" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,rhost:t}})}/>;
+  return <ModuleShell title="Pivoting & Tunneling" moduleKey="pivot" icon="" color="#06b6d4" desc="Network pivoting through compromised hosts — Chisel, Ligolo-ng, Socat, SSH, Proxychains" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:{...o,rhost:t}})}/>;
 }
 
 // ── POST EXPLOITATION ─────────────────────────────────────────
 function PostExploitModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"hashdump", label:"Hash Dump", icon:"🔓", ep:"/api/post/hashdump",
+    {id:"hashdump", label:"Hash Dump", icon:"", ep:"/api/post/hashdump",
      desc:"Dump /etc/shadow — extract password hashes",
      howto:"Run locally on the compromised Linux machine. No target needed — reads /etc/shadow. Requires root or sudo. Hashes can be cracked with hashcat or john offline.",
      requires:"Root shell on Linux target",
      target_type:"Linux servers (web servers, VMs, Docker containers)",
      vulns:["Weak password hashes (MD5, SHA1)","Reused passwords across systems","Root account hash exposure","Service account credentials"],
      hackerImpact:"Attacker extracts all user passwords. Cracked passwords used to log in to other systems, email, VPN, cloud consoles. One weak password can compromise the entire organization."},
-    {id:"creds", label:"Credential Hunt", icon:"🔍", ep:"/api/post/creds",
+    {id:"creds", label:"Credential Hunt", icon:"", ep:"/api/post/creds",
      desc:"Search configs/env files for cleartext passwords",
      howto:"Run on compromised Linux/Windows machine. Searches common locations: .env files, config.php, web.config, wp-config.php, database.yml, .git folders, bash history.",
      requires:"Shell access on target",
      target_type:"Web servers (Apache, Nginx, Node.js, PHP, WordPress)",
      vulns:["Hardcoded database passwords","API keys in source code","AWS/cloud credentials in .env","Database connection strings","SSH private keys in repositories"],
      hackerImpact:"Developer puts database password in config file — attacker reads it and gets direct database access. AWS keys found = full cloud account takeover. This is how most real breaches happen."},
-    {id:"persistence_check", label:"Persistence Check", icon:"🕵", ep:"/api/post/persistence_check",
+    {id:"persistence_check", label:"Persistence Check", icon:"", ep:"/api/post/persistence_check",
      desc:"Detect persistence mechanisms already installed",
      howto:"Run on target system (defensive use or after compromise). Checks crontabs, startup scripts, systemd services, authorized_keys, .bashrc for backdoors.",
      requires:"Shell access on Linux target",
      target_type:"Any Linux server (incident response)",
      vulns:["Reverse shell in cron","Backdoor SSH key in authorized_keys","Malicious systemd service",".bashrc modification","Startup script injection"],
      hackerImpact:"Advanced attacker installs persistence so they keep access even after reboot or password change. Defenders use this to detect if they've been compromised."},
-    {id:"network_enum", label:"Internal Network", icon:"🌐", ep:"/api/post/network_enum",
+    {id:"network_enum", label:"Internal Network", icon:"", ep:"/api/post/network_enum",
      desc:"Map internal net — routes, ARP table, hosts file",
      howto:"Run on compromised machine. Discovers all internal subnets, nearby hosts, and open services. Use findings to plan lateral movement to other machines.",
      requires:"Shell access on any internal host",
      target_type:"Any compromised Linux/Windows machine inside network",
      vulns:["Internal network exposure","Unprotected internal services","Flat network (no segmentation)","Internal database servers reachable"],
      hackerImpact:"After hacking one machine, attacker maps the entire internal network. Finds database servers, backup systems, domain controllers — targets not exposed to internet."},
-    {id:"loot", label:"Loot Search", icon:"💎", ep:"/api/post/loot",
+    {id:"loot", label:"Loot Search", icon:"", ep:"/api/post/loot",
      desc:"Find SSH keys, AWS creds, .git credentials",
      howto:"Run on compromised machine. Searches /home, /root, ~/.ssh, ~/.aws, .git-credentials, KeePass files, browser stored passwords. Everything found is high-value.",
      requires:"Shell access on target",
@@ -7064,34 +7064,34 @@ function PostExploitModule_legacy({token, apiUrl}) {
      vulns:["Unencrypted SSH private keys","AWS/GCP credentials stored on disk","Password manager files","Browser saved passwords","Git credentials"],
      hackerImpact:"Developer machine often has SSH keys to production servers, cloud API keys, and git credentials. Attacker pivots from developer laptop to entire cloud infrastructure."},
   ];
-  return <ModuleShell title="Post Exploitation" moduleKey="post_exploit" icon="🎯" color="#10b981" desc="After gaining shell — credential harvesting, persistence detection, internal network mapping" token={token} apiUrl={apiUrl} attacks={attacks}/>;
+  return <ModuleShell title="Post Exploitation" moduleKey="post_exploit" icon="" color="#10b981" desc="After gaining shell — credential harvesting, persistence detection, internal network mapping" token={token} apiUrl={apiUrl} attacks={attacks}/>;
 }
 
 // ── ANTIVIRUS EVASION ─────────────────────────────────────────
 function AVEvasionModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"check", label:"Detect AV/EDR", icon:"🛡", ep:"/api/av/check",
+    {id:"check", label:"Detect AV/EDR", icon:"", ep:"/api/av/check",
      desc:"Identify running antivirus and EDR on target",
      howto:"Run on compromised Windows/Linux machine. Detects running AV processes (Defender, CrowdStrike, SentinelOne, Sophos, Carbon Black). Helps choose right evasion technique.",
      requires:"Shell access on target",
      target_type:"Windows servers and workstations",
      vulns:["No AV/EDR installed","Outdated AV signatures","AV gaps between scan intervals","EDR blind spots"],
      hackerImpact:"If no AV found, attacker can deploy payloads directly. Knowing which AV is running helps choose the right bypass technique. Missing AV = easy malware deployment."},
-    {id:"amsi", label:"AMSI Bypass", icon:"🚫", ep:"/api/av/amsi_bypass",
+    {id:"amsi", label:"AMSI Bypass", icon:"", ep:"/api/av/amsi_bypass",
      desc:"Windows AMSI bypass code snippets + techniques",
      howto:"Target is Windows machine. AMSI (Antimalware Scan Interface) blocks malicious PowerShell. These techniques patch AMSI in memory to allow running malicious PS scripts undetected.",
      requires:"PowerShell execution on Windows target",
      target_type:"Windows servers and workstations with PowerShell",
      vulns:["AMSI implementation in userspace (bypassable)","PowerShell script block logging disabled","Constrained Language Mode not enforced"],
      hackerImpact:"Once AMSI is bypassed, attacker can run Mimikatz, BloodHound, Empire, and other PowerShell-based attack tools that Defender would normally block."},
-    {id:"veil", label:"Veil Evasion", icon:"👻", ep:"/api/av/veil",
+    {id:"veil", label:"Veil Evasion", icon:"", ep:"/api/av/veil",
      desc:"Veil framework — AV-evading payload generation",
      howto:"Fill LHOST (your Kali IP) and LPORT. Veil generates exe/ps1 payload that bypasses most AV. Deliver to target via phishing or file upload vulnerability.",
      requires:"Kali Linux with Veil installed (apt install veil)",
      target_type:"Windows targets with antivirus",
      vulns:["AV signature-based detection bypass","Heuristic analysis evasion","Payload delivery to Windows systems"],
      hackerImpact:"Standard msfvenom payloads get caught by AV instantly. Veil-generated payloads use obfuscation to bypass signatures — attacker gets a shell even on protected Windows systems."},
-    {id:"obfuscate", label:"Payload Obfuscation", icon:"🌀", ep:"/api/av/obfuscate",
+    {id:"obfuscate", label:"Payload Obfuscation", icon:"", ep:"/api/av/obfuscate",
      desc:"msfvenom multi-encoder to evade signature detection",
      howto:"Fill LHOST and LPORT. Generates Windows x64 meterpreter payload encoded 5x with XOR cipher. Output .exe can be delivered via USB, email attachment, or file upload.",
      requires:"msfvenom + Kali Linux",
@@ -7105,34 +7105,34 @@ function AVEvasionModule_legacy({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"4444"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Antivirus Evasion" moduleKey="av_evasion" icon="👻" color="#a855f7" desc="AV/EDR detection, AMSI bypass, Veil Evasion framework, multi-encoder payload obfuscation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Antivirus Evasion" moduleKey="av_evasion" icon="" color="#a855f7" desc="AV/EDR detection, AMSI bypass, Veil Evasion framework, multi-encoder payload obfuscation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── SOCIAL ENGINEERING ────────────────────────────────────────
 function SocialEngineeringModule({token, apiUrl}) {
   const attacks = [
-    {id:"phishing", label:"Phishing Template", icon:"📧", ep:"/api/se/phishing",
+    {id:"phishing", label:"Phishing Template", icon:"", ep:"/api/se/phishing",
      desc:"Email lure + landing page HTML generator",
      howto:"Enter victim company domain/website as target. Set Org Name in the field. Generates a convincing phishing email template and a fake login page. Host page on Kali and send email to employees.",
      requires:"Web server to host fake page + email account for sending",
      target_type:"Any organization — email users, employees",
      vulns:["No email security (SPF/DKIM/DMARC missing)","Employees not trained in phishing awareness","No MFA on accounts"],
      hackerImpact:"Employee receives fake 'password reset' email, enters credentials on attacker's page. Attacker logs in to corporate email, VPN, or cloud systems. 90% of breaches start with phishing."},
-    {id:"clone", label:"Website Clone", icon:"🪞", ep:"/api/se/clone",
+    {id:"clone", label:"Website Clone", icon:"", ep:"/api/se/clone",
      desc:"Mirror target site for credential harvesting",
      howto:"Enter target website URL (e.g. https://company.com). Clone downloads exact copy. Add credential harvesting code, host on Kali, send link to victims via phishing email.",
      requires:"Target website URL + Kali HTTP server to host clone",
      target_type:"Any website — corporate login, VPN portal, webmail",
      vulns:["No certificate pinning","Users trust visual appearance over URL","Missing browser security headers"],
      hackerImpact:"Cloned site looks identical to real one. Victims enter real credentials which go to attacker. Works on any web-based login: Office 365, corporate VPN, banking portals."},
-    {id:"set_launcher", label:"SET Harvester", icon:"🎣", ep:"/api/se/set_launcher",
+    {id:"set_launcher", label:"SET Harvester", icon:"", ep:"/api/se/set_launcher",
      desc:"Social Engineering Toolkit credential harvester",
      howto:"Enter target company domain as target. Follow the menu: SET -> Website Attacks -> Credential Harvester -> Site Cloner. SET automates everything — cloning, hosting, and capturing credentials.",
      requires:"setoolkit installed (kali: apt install set)",
      target_type:"Any organization with web login portals",
      vulns:["Unaware employees","No phishing simulation training","Weak email filters"],
      hackerImpact:"Professional phishing framework used by real attackers. Captures usernames and passwords automatically. Supports multi-factor authentication bypass via real-time proxy."},
-    {id:"payload_delivery", label:"Payload Delivery", icon:"📎", ep:"/api/se/payload_delivery",
+    {id:"payload_delivery", label:"Payload Delivery", icon:"", ep:"/api/se/payload_delivery",
      desc:"HTA / VBA / PS1 malicious document generation",
      howto:"Enter your Kali IP as target. Fill LHOST/LPORT. Select payload type: HTA (email link), DOC (email attachment Word macro), PS1 (PowerShell script). Attach/link in phishing email.",
      requires:"nc/metasploit listener on LHOST:LPORT",
@@ -7148,20 +7148,20 @@ function SocialEngineeringModule({token, apiUrl}) {
       <option value="hta">HTA</option><option value="vbs">VBScript</option><option value="ps1">PS1</option><option value="doc">DOC</option>
     </select>
   </>);
-  return <ModuleShell title="Social Engineering" moduleKey="social_eng" icon="🎭" color="#f43f5e" desc="Phishing emails, site cloning, SET credential harvester, malicious document payloads" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Social Engineering" moduleKey="social_eng" icon="" color="#f43f5e" desc="Phishing emails, site cloning, SET credential harvester, malicious document payloads" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── MALWARE ANALYSIS ─────────────────────────────────────────
 function MalwareModule({token, apiUrl}) {
   const attacks = [
-    {id:"static", label:"Static Analysis", icon:"🔬", ep:"/api/malware/static",
+    {id:"static", label:"Static Analysis", icon:"", ep:"/api/malware/static",
      desc:"file + strings + objdump — no execution needed",
      howto:"Enter file path on Kali as target (e.g. /tmp/suspicious.exe). OR enter filepath in the extra field. Analyzes binary without running it — safe for malware samples. Checks file type, architecture, imports.",
      requires:"Suspicious file on Kali at known path. Tools: file, strings, objdump",
      target_type:"Suspicious files, malware samples, unknown executables (EXE, ELF, PDF, DOCX)",
      vulns:["Malware identification","Backdoored binary detection","Packed/obfuscated executable","Suspicious import table (CreateRemoteThread, VirtualAlloc)"],
      hackerImpact:"Blue team uses this to analyze malware without risking infection. If C2 URLs or shell commands found in strings, attacker's infrastructure can be identified and blocked."},
-    {id:"strings", label:"String Extraction", icon:"📝", ep:"/api/malware/strings",
+    {id:"strings", label:"String Extraction", icon:"", ep:"/api/malware/strings",
      desc:"Extract suspicious strings (URLs, keys, commands)",
      howto:"Enter file path in target or filepath field. Extracts all readable strings. Focus on: URLs (C2 servers), IP addresses, registry keys, commands (cmd.exe, powershell), hardcoded passwords.",
      requires:"Binary file at known path on Kali",
@@ -7175,7 +7175,7 @@ function MalwareModule({token, apiUrl}) {
      target_type:"Any suspicious file received via email, download, or found on system",
      vulns:["Known malware hash match","Zero-day (not detected by any AV)","Modified malware variant","File integrity violation"],
      hackerImpact:"If SHA256 matches known malware in VirusTotal, incident is confirmed. If zero detections, may be targeted/zero-day attack. Hash can be added to EDR blocklist to prevent further spread."},
-    {id:"yara", label:"YARA Scan", icon:"🎯", ep:"/api/malware/yara",
+    {id:"yara", label:"YARA Scan", icon:"", ep:"/api/malware/yara",
      desc:"Scan file with YARA rules for malware patterns",
      howto:"Enter file path in filepath field. YARA rules match malware families by patterns (byte sequences, string combinations, PE characteristics). Install rules: apt install yara; clone rules from github.com/Yara-Rules.",
      requires:"File at known path + YARA rules installed (/usr/share/yara-rules/)",
@@ -7187,27 +7187,27 @@ function MalwareModule({token, apiUrl}) {
     <input placeholder="File path on Kali (/tmp/sample.exe)" value={opts.filepath||""} onChange={e=>setOpts(p=>({...p,filepath:e.target.value}))}
       style={{flex:1,minWidth:260,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   );
-  return <ModuleShell title="Malware Analysis" moduleKey="malware" icon="🦠" color="#dc2626" desc="Static analysis, string extraction, YARA scanning, hash lookup — no sandbox required" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Malware Analysis" moduleKey="malware" icon="" color="#dc2626" desc="Static analysis, string extraction, YARA scanning, hash lookup — no sandbox required" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── SUPPLY CHAIN ─────────────────────────────────────────────
 function SupplyChainModule({token, apiUrl}) {
   const attacks = [
-    {id:"npm_audit", label:"Package Audit", icon:"📦", ep:"/api/supply/npm_audit",
+    {id:"npm_audit", label:"Package Audit", icon:"", ep:"/api/supply/npm_audit",
      desc:"npm audit / pip-audit — known CVEs in dependencies",
      howto:"Enter project directory path as target (e.g. /opt/webapp). Select npm or pip. Scans package.json or requirements.txt for dependencies with known CVEs. Use on web application source code.",
      requires:"Project source code with package.json or requirements.txt",
      target_type:"Web applications (Node.js, Python, Ruby, Java)",
      vulns:["Log4Shell (CVE-2021-44228) in Java deps","Prototype pollution in npm packages","RCE in outdated libraries","Path traversal in file-handling packages"],
      hackerImpact:"Attacker finds a CVE in an outdated npm package (e.g. RCE in lodash). Exploits the vulnerable dependency to gain code execution on the server. Supply chain attacks caused 650% increase in incidents (2021)."},
-    {id:"confusion", label:"Dependency Confusion", icon:"😵", ep:"/api/supply/confusion",
+    {id:"confusion", label:"Dependency Confusion", icon:"", ep:"/api/supply/confusion",
      desc:"Check if internal package names are on public registry",
      howto:"Enter internal package names (space-separated) as target or in packages field. Checks if your private package names exist on npm/PyPI public registry. If they do, an attacker could publish malicious version.",
      requires:"Knowledge of internal package names used by the organization",
      target_type:"Organizations using private npm/PyPI registries",
      vulns:["Dependency confusion (Alex Birsan attack)","Typosquatting attack","Private package namespace not claimed","CI/CD pipeline pulls from public registry"],
      hackerImpact:"Researcher Alex Birsan earned $130,000 using this technique against Apple, Microsoft, PayPal. Attacker publishes malicious package with same name as internal package — CI/CD pulls the public (malicious) version."},
-    {id:"sbom", label:"Generate SBOM", icon:"📋", ep:"/api/supply/sbom",
+    {id:"sbom", label:"Generate SBOM", icon:"", ep:"/api/supply/sbom",
      desc:"Software Bill of Materials from package manifests",
      howto:"Enter project path as target. Scans package.json, requirements.txt, go.mod, Gemfile, pom.xml. Generates a list of all dependencies with versions for security review and compliance reporting.",
      requires:"Project source code at known path",
@@ -7223,34 +7223,34 @@ function SupplyChainModule({token, apiUrl}) {
       <option value="npm">npm</option><option value="pip">pip</option>
     </select>
   </>);
-  return <ModuleShell title="Supply Chain Security" moduleKey="supply_chain" icon="⛓" color="#0ea5e9" desc="Dependency confusion, package auditing, SBOM generation — software supply chain security" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Supply Chain Security" moduleKey="supply_chain" icon="" color="#0ea5e9" desc="Dependency confusion, package auditing, SBOM generation — software supply chain security" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── ADVANCED PERSISTENCE ──────────────────────────────────────
 function PersistenceModule({token, apiUrl}) {
   const attacks = [
-    {id:"check_indicators", label:"Persistence Hunt", icon:"🔍", ep:"/api/persist/check_indicators",
+    {id:"check_indicators", label:"Persistence Hunt", icon:"", ep:"/api/persist/check_indicators",
      desc:"Find existing backdoors and persistence mechanisms",
      howto:"Run on any Linux server you want to check for compromise. Scans cron, systemd, authorized_keys, .bashrc, rc.local for suspicious entries. Use for incident response or post-compromise verification.",
      requires:"Shell access on Linux target (defensive use)",
      target_type:"Any Linux server — web servers, cloud instances, VMs",
      vulns:["Reverse shell in cron job","Backdoor SSH key added to authorized_keys","Malicious systemd service",".bashrc/profile modification","Rogue startup script"],
      hackerImpact:"Attacker installs persistence so they survive reboot and password changes. If found during IR, means the attacker still has access. All persistence must be removed and credentials rotated."},
-    {id:"rootkit_scan", label:"Rootkit Scan", icon:"🕵", ep:"/api/persist/rootkit_scan",
+    {id:"rootkit_scan", label:"Rootkit Scan", icon:"", ep:"/api/persist/rootkit_scan",
      desc:"rkhunter + chkrootkit — detect hidden rootkits",
      howto:"Run on Linux server. rkhunter checks for known rootkit file signatures, suspicious executables, and hidden processes. Run immediately when you suspect compromise. Install first: apt install rkhunter chkrootkit.",
      requires:"rkhunter or chkrootkit installed on target",
      target_type:"Linux servers, especially web-facing and critical infrastructure",
      vulns:["Kernel-level rootkit hiding processes","Trojanized system binaries (ls, ps, netstat)","Hidden network connections","Bootkit installation"],
      hackerImpact:"Rootkits are the most advanced persistence — they hide attacker's presence from standard tools. A rootkitted system cannot be trusted even after cleaning. Full OS reinstall is required."},
-    {id:"install_cron", label:"Cron Persistence", icon:"⏰", ep:"/api/persist/install_cron",
+    {id:"install_cron", label:"Cron Persistence", icon:"", ep:"/api/persist/install_cron",
      desc:"Generate cron reverse shell persistence (review only)",
      howto:"Fill LHOST (your Kali IP) and LPORT. Generates cron syntax and installation commands. In authorized pentests: install on target to verify detection. In blue team: use output to understand what to look for.",
      requires:"Shell access + LHOST/LPORT set",
      target_type:"Linux servers (authorized pentesting only)",
      vulns:["Unmonitored cron jobs","Missing cron change alerting","No file integrity monitoring on /etc/cron*"],
      hackerImpact:"Every 5 minutes the server calls back to attacker with a shell. Even if admin changes passwords and kills active sessions, attacker regains access automatically. Survives reboots."},
-    {id:"install_service", label:"Systemd Persistence", icon:"⚙", ep:"/api/persist/install_service",
+    {id:"install_service", label:"Systemd Persistence", icon:"", ep:"/api/persist/install_service",
      desc:"Generate systemd service for persistent backdoor",
      howto:"Fill LHOST and LPORT. Generates a systemd service file that looks like a legitimate system service. Shows install commands. Use in authorized tests to demonstrate persistence risk.",
      requires:"Root shell access + LHOST/LPORT set",
@@ -7264,7 +7264,7 @@ function PersistenceModule({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"4444"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Advanced Persistence" moduleKey="persistence" icon="👁" color="#7c3aed" desc="Rootkit detection, cron/systemd backdoors, persistence IoC hunting — offensive + defensive" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Advanced Persistence" moduleKey="persistence" icon="" color="#7c3aed" desc="Rootkit detection, cron/systemd backdoors, persistence IoC hunting — offensive + defensive" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── OSINT PDF ─────────────────────────────────────────────────
@@ -7570,17 +7570,17 @@ function OsintModule({token, apiUrl}) {
   const isUser   = t => !isIP(t) && !isDomain(t);
 
   const TOOLS = [
-    {id:"geoip",       label:"GeoIP Lookup",       icon:"🌍", ep:"/api/osint/geoip"},
-    {id:"email_osint", label:"Email Harvesting",    icon:"📧", ep:"/api/osint/email_osint", domainOnly:true},
-    {id:"recon_ng",    label:"Recon-ng",            icon:"🔭", ep:"/api/osint/recon_ng",    domainOnly:true},
-    {id:"spiderfoot",  label:"SpiderFoot",          icon:"🕷", ep:"/api/osint/spiderfoot",  domainOnly:true},
-    {id:"virustotal",  label:"VirusTotal",          icon:"🔴", ep:"/api/osint/virustotal",  needsVt:true},
-    {id:"abuseipdb",   label:"AbuseIPDB",           icon:"🚨", ep:"/api/osint/abuseipdb",   needsAb:true},
-    {id:"sherlock",    label:"Sherlock (Username)",  icon:"🔎", ep:"/api/osint/sherlock",    userOnly:true},
-    {id:"hibp",        label:"HaveIBeenPwned",       icon:"🔓", ep:"/api/osint/hibp",         domainOnly:true},
-    {id:"dnstwist",    label:"DNSTwist Phishing",    icon:"🎣", ep:"/api/osint/dnstwist",     domainOnly:true},
-    {id:"googledorks", label:"Google Dorks",         icon:"🔍", ep:"/api/osint/googledorks"},
-    {id:"maltego",     label:"Maltego Guide",        icon:"🕸", ep:"/api/osint/maltego"},
+    {id:"geoip",       label:"GeoIP Lookup",       icon:"", ep:"/api/osint/geoip"},
+    {id:"email_osint", label:"Email Harvesting",    icon:"", ep:"/api/osint/email_osint", domainOnly:true},
+    {id:"recon_ng",    label:"Recon-ng",            icon:"", ep:"/api/osint/recon_ng",    domainOnly:true},
+    {id:"spiderfoot",  label:"SpiderFoot",          icon:"", ep:"/api/osint/spiderfoot",  domainOnly:true},
+    {id:"virustotal",  label:"VirusTotal",          icon:"", ep:"/api/osint/virustotal",  needsVt:true},
+    {id:"abuseipdb",   label:"AbuseIPDB",           icon:"", ep:"/api/osint/abuseipdb",   needsAb:true},
+    {id:"sherlock",    label:"Sherlock (Username)",  icon:"", ep:"/api/osint/sherlock",    userOnly:true},
+    {id:"hibp",        label:"HaveIBeenPwned",       icon:"", ep:"/api/osint/hibp",         domainOnly:true},
+    {id:"dnstwist",    label:"DNSTwist Phishing",    icon:"", ep:"/api/osint/dnstwist",     domainOnly:true},
+    {id:"googledorks", label:"Google Dorks",         icon:"", ep:"/api/osint/googledorks"},
+    {id:"maltego",     label:"Maltego Guide",        icon:"", ep:"/api/osint/maltego"},
   ];
 
   const runAll = async () => {
@@ -7600,9 +7600,9 @@ function OsintModule({token, apiUrl}) {
         const r = await fetch(apiUrl+t.ep, {method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify(body)});
         const data = await r.json();
         setResults(p=>({...p,[t.id]:data}));
-        addLog(`✓ ${t.label} complete`);
+        addLog(`${t.label} complete`);
       } catch(e) {
-        addLog(`✗ ${t.label} failed: `+e.message);
+        addLog(`${t.label} failed: `+e.message);
         setResults(p=>({...p,[t.id]:{error:e.message}}));
       }
       setDone(p=>[...p,t.id]);
@@ -7673,7 +7673,7 @@ function OsintModule({token, apiUrl}) {
           </button>
           {Object.keys(results).length>0 && !running && (
             <button style={{...C.btn,background:"#ef4444",marginTop:0}} onClick={()=>generateOsintPdf(results,target)}>
-              📄 Report
+              Report
             </button>
           )}
         </div>
@@ -7690,7 +7690,7 @@ function OsintModule({token, apiUrl}) {
         <div style={C.row}>
           {geo.ip && (
             <div style={{...C.card,flex:1}}>
-              <div style={C.secHdr}>🌍 GeoIP / Location</div>
+              <div style={C.secHdr}>GeoIP / Location</div>
               {[["IP",geo.ip],["Hostname",geo.hostname],["City",geo.city],["Region",geo.region],["Country",geo.country],["ISP",geo.isp],["Org / ASN",geo.org||geo.as_info],["Timezone",geo.timezone],["Coordinates",geo.loc]].filter(([,v])=>v).map(([k,v])=>(
                 <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={C.gray}>{k}</span><span style={C.val}>{v}</span>
@@ -7700,7 +7700,7 @@ function OsintModule({token, apiUrl}) {
           )}
           {(vt.total_engines||vt.error) && (
             <div style={{...C.card,flex:1}}>
-              <div style={C.secHdr}>🔴 VirusTotal Reputation</div>
+              <div style={C.secHdr}>VirusTotal Reputation</div>
               {vt.error ? <div style={C.red}>{vt.error}</div> : (<>
                 <div style={{fontSize:28,fontWeight:900,color:vt.malicious>0?"#ef4444":"#22c55e",marginBottom:8}}>
                   {vt.malicious}/{vt.total_engines} <span style={{fontSize:13,fontWeight:400}}>engines flagged</span>
@@ -7716,7 +7716,7 @@ function OsintModule({token, apiUrl}) {
           )}
           {(ab.abuse_score!==undefined||ab.error) && (
             <div style={{...C.card,flex:1}}>
-              <div style={C.secHdr}>🚨 AbuseIPDB</div>
+              <div style={C.secHdr}>AbuseIPDB</div>
               {ab.error ? <div style={C.red}>{ab.error}</div> : (<>
                 <div style={{fontSize:28,fontWeight:900,color:ab.abuse_score>25?"#ef4444":ab.abuse_score>0?"#f59e0b":"#22c55e",marginBottom:8}}>
                   {ab.abuse_score}% <span style={{fontSize:13,fontWeight:400}}>confidence score</span>
@@ -7734,7 +7734,7 @@ function OsintModule({token, apiUrl}) {
         {/* Emails */}
         {allEmails.length>0 && (
           <div style={C.card}>
-            <div style={C.secHdr}>📧 Email Addresses Found ({allEmails.length})</div>
+            <div style={C.secHdr}>Email Addresses Found ({allEmails.length})</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {allEmails.map((e,i)=><span key={i} style={{...C.tag("#1e3a8a"),fontFamily:"monospace"}}>{e}</span>)}
             </div>
@@ -7744,7 +7744,7 @@ function OsintModule({token, apiUrl}) {
         {/* Subdomains / Hosts */}
         {allHosts.length>0 && (
           <div style={C.card}>
-            <div style={C.secHdr}>🌐 Subdomains / Hosts Discovered ({allHosts.length})</div>
+            <div style={C.secHdr}>Subdomains / Hosts Discovered ({allHosts.length})</div>
             <div style={{columns:3,columnGap:12}}>
               {allHosts.map((h,i)=><div key={i} style={{color:"#60a5fa",fontSize:12,marginBottom:3,breakInside:"avoid"}}>{h}</div>)}
             </div>
@@ -7754,7 +7754,7 @@ function OsintModule({token, apiUrl}) {
         {/* Sherlock */}
         {sher.accounts_found && (
           <div style={C.card}>
-            <div style={C.secHdr}>🔎 Social Media Accounts — Sherlock ({sher.total} found for "{sher.username}")</div>
+            <div style={C.secHdr}>Social Media Accounts — Sherlock ({sher.total} found for "{sher.username}")</div>
             {sher.total===0 ? <div style={C.gray}>No accounts found for this username.</div> : (
               <div style={{columns:2,columnGap:12}}>
                 {sher.accounts_found.map((a,i)=>(
@@ -7770,7 +7770,7 @@ function OsintModule({token, apiUrl}) {
         {/* HaveIBeenPwned */}
         {results.hibp?.checked && (
           <div style={C.card}>
-            <div style={C.secHdr}>🔓 HaveIBeenPwned — Data Breaches</div>
+            <div style={C.secHdr}>HaveIBeenPwned — Data Breaches</div>
             {results.hibp.error ? <div style={C.red}>{results.hibp.error}</div> :
              results.hibp.breaches?.length>0 ? (<>
               <div style={{...C.tag("#ef4444"),marginBottom:10,fontSize:13}}>{results.hibp.breaches.length} BREACH(ES) FOUND</div>
@@ -7784,7 +7784,7 @@ function OsintModule({token, apiUrl}) {
         {/* DNSTwist */}
         {results.dnstwist?.domains?.length>0 && (
           <div style={C.card}>
-            <div style={C.secHdr}>🎣 DNSTwist — Potential Phishing Domains ({results.dnstwist.domains.length} found)</div>
+            <div style={C.secHdr}>DNSTwist — Potential Phishing Domains ({results.dnstwist.domains.length} found)</div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                 <thead><tr style={{background:"#1e293b"}}>
@@ -7808,7 +7808,7 @@ function OsintModule({token, apiUrl}) {
         {/* Google Dorks */}
         {results.googledorks?.dorks?.length>0 && (
           <div style={C.card}>
-            <div style={C.secHdr}>🔍 Google Dorks — Copy & paste into Google</div>
+            <div style={C.secHdr}>Google Dorks — Copy & paste into Google</div>
             {results.googledorks.dorks.map((d,i)=>(
               <div key={i} style={{background:"#1e293b",borderRadius:6,padding:"6px 10px",marginBottom:6,fontFamily:"monospace",fontSize:11,color:"#60a5fa",cursor:"pointer",wordBreak:"break-all"}}
                 onClick={()=>window.open("https://www.google.com/search?q="+encodeURIComponent(d),"_blank")}>
@@ -7821,13 +7821,13 @@ function OsintModule({token, apiUrl}) {
         {/* Maltego guide */}
         {malt.guide && (
           <div style={C.card}>
-            <div style={C.secHdr}>🕸 Maltego Guide</div>
+            <div style={C.secHdr}>Maltego Guide</div>
             <pre style={{color:"#94a3b8",fontSize:11,whiteSpace:"pre-wrap",margin:0}}>{malt.guide}</pre>
           </div>
         )}
 
         {/* Raw outputs */}
-        {[["📧 theHarvester Raw",mail.raw_output],["🕷 SpiderFoot Raw",sf.raw_output],["🔭 Recon-ng Raw",rng.raw_output],["🔎 Sherlock Raw",sher.raw_output]].filter(([,v])=>v).map(([label,raw])=>(
+        {[["theHarvester Raw",mail.raw_output],["SpiderFoot Raw",sf.raw_output],["Recon-ng Raw",rng.raw_output],["Sherlock Raw",sher.raw_output]].filter(([,v])=>v).map(([label,raw])=>(
           <details key={label} style={{marginBottom:8}}>
             <summary style={{color:"#475569",fontSize:11,cursor:"pointer",padding:"6px 0"}}>{label}</summary>
             <pre style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:10,color:"#64748b",fontSize:10,whiteSpace:"pre-wrap",maxHeight:200,overflowY:"auto",margin:0}}>{raw}</pre>
@@ -7842,21 +7842,21 @@ function OsintModule({token, apiUrl}) {
 // ── CLIENT-SIDE ATTACKS ───────────────────────────────────────
 function ClientSideModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"beef", label:"BeEF Hook", icon:"🪝", ep:"/api/client/beef",
+    {id:"beef", label:"BeEF Hook", icon:"", ep:"/api/client/beef",
      desc:"Start BeEF XSS framework + JavaScript hook snippet",
      howto:"Fill LHOST (your Kali IP). BeEF starts on port 3000. Inject the hook.js URL into a website with XSS vulnerability, or send the hook URL directly via phishing. Every browser that loads it gets hooked.",
      requires:"LHOST set + Kali with BeEF (apt install beef-xss). Target website with XSS vulnerability OR direct browser access.",
      target_type:"Web applications with XSS vulnerability + end users (browsers)",
      vulns:["Reflected/Stored XSS vulnerability","Browser exploitation","Session hijacking","Internal network scanning from browser","Keylogging via browser","Webcam/microphone access"],
      hackerImpact:"Once hooked, attacker can steal session cookies (account takeover), scan victim's internal network, exploit browser vulnerabilities, take screenshots, or use victim's browser as a proxy into their corporate network."},
-    {id:"hta_payload", label:"HTA Payload", icon:"📄", ep:"/api/client/hta_payload",
+    {id:"hta_payload", label:"HTA Payload", icon:"", ep:"/api/client/hta_payload",
      desc:"HTML Application file that spawns reverse shell",
      howto:"Fill LHOST and LPORT. Generates a .hta file. Host it on Kali HTTP server, send link to victim via phishing email. When victim opens the link, HTA runs silently and connects back to your listener.",
      requires:"LHOST + LPORT set + nc listener running",
      target_type:"Windows users who receive phishing emails",
      vulns:["Windows allows .hta execution by default","No application whitelisting","Users click on email links","Missing email attachment filtering"],
      hackerImpact:"User receives email: 'Click here to view your invoice'. Clicking opens HTA file in Windows MSHTA.exe. Attacker gets command shell instantly. HTA bypasses many email filters because it's not a traditional executable."},
-    {id:"macro", label:"Office Macro", icon:"📊", ep:"/api/client/macro",
+    {id:"macro", label:"Office Macro", icon:"", ep:"/api/client/macro",
      desc:"Malicious VBA macro for Word/Excel document",
      howto:"Fill LHOST and LPORT. Generates VBA macro code. Open Word -> Developer -> Visual Basic -> paste macro -> save as .doc. Attach to phishing email as 'invoice.doc' or 'salary_review.doc'.",
      requires:"LHOST + LPORT set + nc/metasploit listener",
@@ -7870,7 +7870,7 @@ function ClientSideModule_legacy({token, apiUrl}) {
     <input placeholder="LPORT" value={opts.lport||"4444"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
       style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   </>);
-  return <ModuleShell title="Client-Side Attacks" moduleKey="client_side" icon="💻" color="#e11d48" desc="Browser exploitation with BeEF, HTA payloads, malicious Office macro VBA generation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Client-Side Attacks" moduleKey="client_side" icon="" color="#e11d48" desc="Browser exploitation with BeEF, HTA payloads, malicious Office macro VBA generation" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── MOBILE TESTING ────────────────────────────────────────────
@@ -7908,7 +7908,7 @@ function MobileModule({token, apiUrl}) {
   return <ModuleShell
     title="Mobile Application Testing"
     moduleKey="mobile"
-    icon="📱"
+    icon=""
     color="#0d9488"
     desc="VL-FOUNDRY 12-scanner passive surface — app store recon · APK secret leaks · Firebase exposure · CT log mobile APIs · TLS grades · Wayback endpoints · VirusTotal reputation · SDK CVEs · Shodan backend"
     token={token}
@@ -8072,7 +8072,7 @@ function MobileStaticModule({token, apiUrl}) {
 
   const pickSample = (s) => {
     setUploadedPath(s.path);
-    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+    setUploadStatus(`Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
   };
 
   const onFileChange = async (e) => {
@@ -8090,15 +8090,15 @@ function MobileStaticModule({token, apiUrl}) {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({detail: `HTTP ${r.status}`}));
-        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploadStatus(`Upload failed: ${err.detail || r.statusText}`);
         setUploading(false);
         return;
       }
       const data = await r.json();
       setUploadedPath(data.apk_path);
-      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
+      setUploadStatus(`Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
     } catch (e) {
-      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+      setUploadStatus(`Upload error: ${e.message || e}`);
     } finally {
       setUploading(false);
     }
@@ -8130,7 +8130,7 @@ function MobileStaticModule({token, apiUrl}) {
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
-        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA / PE / ELF"}
+        {uploading ? "Uploading..." : "Upload APK / IPA / PE / ELF"}
         <input type="file" accept=".apk,.ipa,.exe,.dll,.so" disabled={uploading}
                style={{display:"none"}} onChange={onFileChange}/>
       </label>
@@ -8144,7 +8144,7 @@ function MobileStaticModule({token, apiUrl}) {
                         border:"1px solid #475569", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
-          <option value="">🧪 Try Sample APK ▼</option>
+          <option value="">Try Sample APK ▼</option>
           {samples.map(s => (
             <option key={s.id} value={s.id}>
               {s.name} ({s.size_mb} MB)
@@ -8170,7 +8170,7 @@ function MobileStaticModule({token, apiUrl}) {
   return <ModuleShell
     title="Mobile App Binary Analysis"
     moduleKey="mobile_static"
-    icon="🔬"
+    icon=""
     color="#7c3aed"
     desc="§1 APP BINARY — 12 isolated static-analysis scanners across 4 tiers. Upload an APK/IPA/PE/ELF and the scanners audit manifests, secrets, crypto, native libraries, malware patterns, and bundled SDKs."
     hideHeader={true}
@@ -8215,7 +8215,7 @@ function MobileStorageModule({token, apiUrl}) {
 
   const pickSample = (s) => {
     setUploadedPath(s.path);
-    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+    setUploadStatus(`Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
   };
 
   const onFileChange = async (e) => {
@@ -8233,15 +8233,15 @@ function MobileStorageModule({token, apiUrl}) {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({detail: `HTTP ${r.status}`}));
-        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploadStatus(`Upload failed: ${err.detail || r.statusText}`);
         setUploading(false);
         return;
       }
       const data = await r.json();
       setUploadedPath(data.apk_path);
-      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
+      setUploadStatus(`Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
     } catch (e) {
-      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+      setUploadStatus(`Upload error: ${e.message || e}`);
     } finally {
       setUploading(false);
     }
@@ -8271,7 +8271,7 @@ function MobileStorageModule({token, apiUrl}) {
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
-        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        {uploading ? "Uploading..." : "Upload APK / IPA"}
         <input type="file" accept=".apk,.ipa" disabled={uploading}
                style={{display:"none"}} onChange={onFileChange}/>
       </label>
@@ -8285,7 +8285,7 @@ function MobileStorageModule({token, apiUrl}) {
                         border:"1px solid #475569", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
-          <option value="">🧪 Try Sample APK ▼</option>
+          <option value="">Try Sample APK ▼</option>
           {samples.map(s => (
             <option key={s.id} value={s.id}>
               {s.name} ({s.size_mb} MB)
@@ -8311,7 +8311,7 @@ function MobileStorageModule({token, apiUrl}) {
   return <ModuleShell
     title="Mobile Storage (Data-at-Rest)"
     moduleKey="mobile_storage"
-    icon="🗄️"
+    icon=""
     color="#10b981"
     desc="§3 STORAGE - 11 static-analysis scanners. Audits SharedPreferences, SQLite, SQLCipher, FLAG_SECURE, WebView cache, external-storage paths, logcat leaks, clipboard usage, and backup-extraction policy."
     hideHeader={true}
@@ -8357,7 +8357,7 @@ function MobileRuntimeModule({token, apiUrl}) {
 
   const pickSample = (s) => {
     setUploadedPath(s.path);
-    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) - click Run on any tile`);
+    setUploadStatus(`Sample selected: ${s.name} (${s.size_mb} MB) - click Run on any tile`);
   };
 
   const onFileChange = async (e) => {
@@ -8373,15 +8373,15 @@ function MobileRuntimeModule({token, apiUrl}) {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({detail:`HTTP ${r.status}`}));
-        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploadStatus(`Upload failed: ${err.detail || r.statusText}`);
         setUploading(false);
         return;
       }
       const data = await r.json();
       setUploadedPath(data.apk_path);
-      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) - scan_id=${data.scan_id}`);
+      setUploadStatus(`Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) - scan_id=${data.scan_id}`);
     } catch (e) {
-      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+      setUploadStatus(`Upload error: ${e.message || e}`);
     } finally {
       setUploading(false);
     }
@@ -8411,7 +8411,7 @@ function MobileRuntimeModule({token, apiUrl}) {
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
-        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        {uploading ? "Uploading..." : "Upload APK / IPA"}
         <input type="file" accept=".apk,.ipa" disabled={uploading}
                style={{display:"none"}} onChange={onFileChange}/>
       </label>
@@ -8425,7 +8425,7 @@ function MobileRuntimeModule({token, apiUrl}) {
                         border:"1px solid #475569", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
-          <option value="">🧪 Try Sample APK ▼</option>
+          <option value="">Try Sample APK ▼</option>
           {samples.map(s => (
             <option key={s.id} value={s.id}>{s.name} ({s.size_mb} MB)</option>
           ))}
@@ -8449,7 +8449,7 @@ function MobileRuntimeModule({token, apiUrl}) {
   return <ModuleShell
     title="Mobile Runtime / Anti-Tamper"
     moduleKey="mobile_runtime"
-    icon="🪝"
+    icon=""
     color="#dc2626"
     desc="§2 RUNTIME - 6 anti-tamper detection scanners. Catalogs root detection, anti-debug, anti-Frida, emulator detection, Play Integrity attestation, and iOS jailbreak detection mechanisms in the binary."
     hideHeader={true}
@@ -8490,7 +8490,7 @@ function MobileCryptoModule({token, apiUrl}) {
 
   const pickSample = (s) => {
     setUploadedPath(s.path);
-    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+    setUploadStatus(`Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
   };
 
   const onFileChange = async (e) => {
@@ -8506,15 +8506,15 @@ function MobileCryptoModule({token, apiUrl}) {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({detail: `HTTP ${r.status}`}));
-        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploadStatus(`Upload failed: ${err.detail || r.statusText}`);
         setUploading(false);
         return;
       }
       const data = await r.json();
       setUploadedPath(data.apk_path);
-      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
+      setUploadStatus(`Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
     } catch (e) {
-      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+      setUploadStatus(`Upload error: ${e.message || e}`);
     } finally {
       setUploading(false);
     }
@@ -8540,7 +8540,7 @@ function MobileCryptoModule({token, apiUrl}) {
       <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
                      padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
                      cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
-        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        {uploading ? "Uploading..." : "Upload APK / IPA"}
         <input type="file" accept=".apk,.ipa" disabled={uploading}
                style={{display:"none"}} onChange={onFileChange}/>
       </label>
@@ -8554,7 +8554,7 @@ function MobileCryptoModule({token, apiUrl}) {
                         border:"1px solid #475569", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
-          <option value="">🧪 Try Sample APK ▼</option>
+          <option value="">Try Sample APK ▼</option>
           {samples.map(s => (<option key={s.id} value={s.id}>{s.name} ({s.size_mb} MB)</option>))}
         </select>
       )}
@@ -8576,7 +8576,7 @@ function MobileCryptoModule({token, apiUrl}) {
   return <ModuleShell
     title="Mobile Crypto Audit"
     moduleKey="mobile_crypto"
-    icon="🔐"
+    icon=""
     color="#06b6d4"
     desc="§4 CRYPTO - 7 static scanners. Audits weak algorithms (DES/RC4/MD5/SHA-1/ECB), insecure PRNG, homebrew crypto, hardcoded keys, TLS configuration, and certificate-validation bypasses."
     hideHeader={true}
@@ -8617,7 +8617,7 @@ function MobileNetworkModule({token, apiUrl}) {
 
   const pickSample = (s) => {
     setUploadedPath(s.path);
-    setUploadStatus(`🧪 Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
+    setUploadStatus(`Sample selected: ${s.name} (${s.size_mb} MB) — click Run on any tile`);
   };
 
   const onFileChange = async (e) => {
@@ -8633,15 +8633,15 @@ function MobileNetworkModule({token, apiUrl}) {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({detail: `HTTP ${r.status}`}));
-        setUploadStatus(`❌ Upload failed: ${err.detail || r.statusText}`);
+        setUploadStatus(`Upload failed: ${err.detail || r.statusText}`);
         setUploading(false);
         return;
       }
       const data = await r.json();
       setUploadedPath(data.apk_path);
-      setUploadStatus(`✅ Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
+      setUploadStatus(`Uploaded: ${data.filename} (${(data.size/1024/1024).toFixed(1)} MB) — scan_id=${data.scan_id}`);
     } catch (e) {
-      setUploadStatus(`❌ Upload error: ${e.message || e}`);
+      setUploadStatus(`Upload error: ${e.message || e}`);
     } finally {
       setUploading(false);
     }
@@ -8667,7 +8667,7 @@ function MobileNetworkModule({token, apiUrl}) {
       <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
                      padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
                      cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
-        {uploading ? "⏳ Uploading..." : "📁 Upload APK / IPA"}
+        {uploading ? "Uploading..." : "Upload APK / IPA"}
         <input type="file" accept=".apk,.ipa" disabled={uploading}
                style={{display:"none"}} onChange={onFileChange}/>
       </label>
@@ -8681,7 +8681,7 @@ function MobileNetworkModule({token, apiUrl}) {
                         border:"1px solid #475569", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
-          <option value="">🧪 Try Sample APK ▼</option>
+          <option value="">Try Sample APK ▼</option>
           {samples.map(s => (<option key={s.id} value={s.id}>{s.name} ({s.size_mb} MB)</option>))}
         </select>
       )}
@@ -8703,7 +8703,7 @@ function MobileNetworkModule({token, apiUrl}) {
   return <ModuleShell
     title="Mobile Network / Traffic"
     moduleKey="mobile_network"
-    icon="📡"
+    icon=""
     color="#0ea5e9"
     desc="§5 NETWORK - 8 static scanners. Audits SSL pinning libraries, proxy-bypass code, HTTP methods, endpoint classification, WebSocket / gRPC / MQTT transports, network library versions, BLE / NFC attack surface."
     hideHeader={true}
@@ -8729,28 +8729,28 @@ function MobileNetworkModule({token, apiUrl}) {
 // ── API SECURITY ──────────────────────────────────────────────
 function ApiSecModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"swagger", label:"OpenAPI Discovery", icon:"📋", ep:"/api/apisec/swagger",
+    {id:"swagger", label:"OpenAPI Discovery", icon:"", ep:"/api/apisec/swagger",
      desc:"Fetch /swagger.json, /openapi.json, /api-docs",
      howto:"Enter API base URL as target (e.g. https://api.company.com). Automatically fetches Swagger/OpenAPI spec from common paths. Reveals all API endpoints, methods, parameters, and authentication schemes.",
      requires:"Target API URL accessible from Kali",
      target_type:"REST APIs, microservices, mobile app backends, web application APIs",
      vulns:["Public Swagger UI in production","API documentation exposing internal paths","Undocumented admin endpoints","Authentication requirements documented but not enforced"],
      hackerImpact:"Swagger exposed in production gives attacker a complete map of every API endpoint. Admin endpoints like /api/admin/users often discovered this way. Attacker uses the map to test each endpoint systematically."},
-    {id:"fuzz", label:"Endpoint Fuzzing", icon:"💥", ep:"/api/apisec/fuzz",
+    {id:"fuzz", label:"Endpoint Fuzzing", icon:"", ep:"/api/apisec/fuzz",
      desc:"ffuf — brute-force hidden API endpoints",
      howto:"Enter API base URL as target (e.g. https://api.company.com/api/v1). ffuf tries thousands of common API paths. Look for 200 (found), 301 (redirect), 403 (forbidden but exists) responses.",
      requires:"ffuf installed (Kali: apt install ffuf) + target API URL",
      target_type:"Any REST API or web application",
      vulns:["Hidden admin endpoints (/api/admin, /api/internal)","Debug endpoints left in production","Undocumented v1/v2 API versions","Health check endpoints leaking system info"],
      hackerImpact:"/api/admin/dump returns all user data. /api/debug shows stack traces with credentials. /api/v1/users returns all users without auth. Hidden endpoints often have weaker security than documented ones."},
-    {id:"arjun", label:"Parameter Hunt", icon:"🔍", ep:"/api/apisec/arjun",
+    {id:"arjun", label:"Parameter Hunt", icon:"", ep:"/api/apisec/arjun",
      desc:"arjun — discover hidden GET/POST parameters",
      howto:"Enter API endpoint URL as target. Arjun discovers hidden parameters by trying thousands of common names (id, user_id, admin, debug, test, internal). Hidden params often bypass security controls.",
      requires:"arjun installed (pip3 install arjun) + target endpoint URL",
      target_type:"Web APIs, REST endpoints, GraphQL endpoints",
      vulns:["Hidden debug parameter enabling verbose output","id parameter allowing IDOR","admin=true parameter granting elevated access","Internal parameter bypassing rate limiting"],
      hackerImpact:"API has hidden ?debug=true parameter that returns full stack trace with database credentials. Hidden ?admin=1 parameter grants admin access. These are found in real penetration tests frequently."},
-    {id:"auth_test", label:"Auth Testing", icon:"🔑", ep:"/api/apisec/auth_test",
+    {id:"auth_test", label:"Auth Testing", icon:"", ep:"/api/apisec/auth_test",
      desc:"Missing auth, expired JWT, IDOR on API endpoints",
      howto:"Enter API endpoint URL as target. Optionally add your JWT token. Tests: accessing endpoint without token, with tampered token, checking if admin endpoints require auth. Also tests IDOR by modifying IDs.",
      requires:"Target API URL. Optional: valid JWT token for authenticated tests",
@@ -8762,42 +8762,42 @@ function ApiSecModule_legacy({token, apiUrl}) {
     <input placeholder="Auth token (optional)" value={opts.token||""} onChange={e=>setOpts(p=>({...p,token:e.target.value}))}
       style={{width:220,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
   );
-  return <ModuleShell title="API Security Testing" moduleKey="apisec" icon="🔌" color="#2563eb" desc="OpenAPI discovery, ffuf endpoint fuzzing, arjun parameter discovery, auth bypass testing" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="API Security Testing" moduleKey="apisec" icon="" color="#2563eb" desc="OpenAPI discovery, ffuf endpoint fuzzing, arjun parameter discovery, auth bypass testing" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 
 // ── PIVOTING & LATERAL MOVEMENT ───────────────────────────────
 function PivotModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"ssh_local", label:"SSH Local Port Forward", icon:"🔀", ep:"/api/pivot/ssh_local",
+    {id:"ssh_local", label:"SSH Local Port Forward", icon:"", ep:"/api/pivot/ssh_local",
      desc:"Forward remote port to localhost via SSH tunnel",
      howto:"Target = compromised SSH host (user@ip). Set remote_port (e.g. 3306 for MySQL) and local_port (e.g. 13306). SSH tunnel binds remote port to your local machine so you can attack internal services.",
      requires:"SSH access to pivot host (username + password or key)",
      target_type:"Internal networks behind firewall, segmented environments",
      vulns:["Exposed internal database reachable via pivot","Internal RDP/SMB accessible through tunnel","Internal admin panels behind firewall"],
      hackerImpact:"Attacker compromises web server. Internal MySQL on 192.168.1.100:3306 not reachable from internet. SSH local forward: localhost:13306 -> pivot:3306. Now attacker runs sqlmap against localhost:13306."},
-    {id:"ssh_dynamic", label:"SSH SOCKS5 Proxy", icon:"🧅", ep:"/api/pivot/ssh_dynamic",
+    {id:"ssh_dynamic", label:"SSH SOCKS5 Proxy", icon:"", ep:"/api/pivot/ssh_dynamic",
      desc:"Dynamic SOCKS5 proxy through SSH — route all traffic via pivot",
      howto:"Target = compromised SSH host. Creates SOCKS5 proxy on localhost:1080. Configure proxychains or browser to use 127.0.0.1:1080 as proxy. All traffic routes through pivot into internal network.",
      requires:"SSH access to pivot host",
      target_type:"Full internal network access after compromise",
      vulns:["Full internal subnet access","Attack internal hosts not reachable from internet","Browse internal web apps via browser proxy"],
      hackerImpact:"Single compromised DMZ host becomes gateway to entire internal network. Attacker sets Firefox proxy to localhost:1080 and browses internal SharePoint, Jenkins, admin panels — all via one SSH command."},
-    {id:"chisel", label:"Chisel Reverse Tunnel", icon:"⛏️", ep:"/api/pivot/chisel",
+    {id:"chisel", label:"Chisel Reverse Tunnel", icon:"", ep:"/api/pivot/chisel",
      desc:"Chisel — fast HTTP tunnel when SSH not available",
      howto:"Run chisel server on your Kali. Target host runs chisel client. Creates reverse tunnel so Kali can reach internal network. Useful when target has no SSH but has HTTP/S outbound.",
      requires:"chisel binary on both Kali and target (apt install chisel or download from GitHub)",
      target_type:"Targets with outbound HTTP only, Windows hosts without SSH",
      vulns:["Internal network access via HTTP tunnel","Bypasses egress filtering","Works through proxies and CDNs"],
      hackerImpact:"Target company blocks all outbound SSH/VPN. Chisel tunnels over port 443 (HTTPS). Security team sees normal HTTPS traffic. Attacker reaches entire internal network. Used in real APT campaigns."},
-    {id:"proxychains", label:"Proxychains Config", icon:"⛓️", ep:"/api/pivot/proxychains",
+    {id:"proxychains", label:"Proxychains Config", icon:"", ep:"/api/pivot/proxychains",
      desc:"Generate proxychains config for multi-hop pivoting",
      howto:"Enter target SOCKS proxy details. Generates /etc/proxychains4.conf and usage commands. Allows nmap, curl, metasploit to route through your pivot chain.",
      requires:"SOCKS proxy running (SSH dynamic or chisel)",
      target_type:"Any tool that needs to pivot through compromised host",
      vulns:["nmap through pivot","Metasploit through pivot","Credential spraying internal services"],
      hackerImpact:"Chain 3 compromised hosts: Kali -> DMZ server -> internal server -> domain controller. Each hop adds a layer. Defenders can't trace attack back to attacker. Real APT groups use multi-hop pivoting."},
-    {id:"ligolo", label:"Ligolo-ng Setup", icon:"🌐", ep:"/api/pivot/ligolo",
+    {id:"ligolo", label:"Ligolo-ng Setup", icon:"", ep:"/api/pivot/ligolo",
      desc:"Ligolo-ng — kernel-level tunneling, fastest pivot tool",
      howto:"Ligolo creates a TUN interface on Kali that routes directly to internal network. No proxychains needed — use tools natively. Target agent connects to Kali listener.",
      requires:"ligolo-ng proxy on Kali + agent on target (download from GitHub releases)",
@@ -8805,34 +8805,34 @@ function PivotModule_legacy({token, apiUrl}) {
      vulns:["Full Layer 3 network access","No proxychains needed — native tool support","Fastest pivot method available"],
      hackerImpact:"Fastest pivot tool. OSCP students use this on exam. Creates real network interface — you can run nmap, metasploit, browser natively against internal 10.x.x.x subnet with zero proxy overhead."},
   ];
-  return <ModuleShell title="Pivoting & Lateral Movement" moduleKey="pivot" icon="🔄" color="#7c3aed" desc="SSH tunnels, SOCKS proxies, chisel, ligolo-ng — move through internal networks after initial compromise" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Pivoting & Lateral Movement" moduleKey="pivot" icon="" color="#7c3aed" desc="SSH tunnels, SOCKS proxies, chisel, ligolo-ng — move through internal networks after initial compromise" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── CLOUD SECURITY ─────────────────────────────────────────────
 function CloudModule_legacy({token, apiUrl}) {
   const attacks = [
-    {id:"s3_enum", label:"S3 Bucket Enumeration", icon:"🪣", ep:"/api/cloud/s3_enum",
+    {id:"s3_enum", label:"S3 Bucket Enumeration", icon:"", ep:"/api/cloud/s3_enum",
      desc:"Find exposed S3 buckets — list, read, write permissions",
      howto:"Enter company name or domain as target. Tool generates common bucket names (company-backup, company-dev, company-prod) and checks AWS S3 for public access. Reads content of open buckets.",
      requires:"AWS CLI or curl. No credentials needed for public buckets.",
      target_type:"Any company using AWS S3 for storage",
      vulns:["Public bucket with sensitive files","World-readable bucket with PII","World-writable bucket (upload malware)","Bucket listing enabled (directory traversal)"],
      hackerImpact:"Company named 'acme' -> check acme-backup.s3.amazonaws.com. File backup.sql found — full database dump with customer PII and password hashes. Capital One breach ($80M fine) happened this way."},
-    {id:"aws_enum", label:"AWS Metadata / SSRF", icon:"☁️", ep:"/api/cloud/aws_enum",
+    {id:"aws_enum", label:"AWS Metadata / SSRF", icon:"", ep:"/api/cloud/aws_enum",
      desc:"EC2 metadata endpoint — steal IAM credentials via SSRF",
      howto:"Target = URL of web app with SSRF vulnerability. Tool tests if app fetches http://169.254.169.254/latest/meta-data/iam/security-credentials/. This URL returns temporary AWS keys if vulnerable.",
      requires:"Web app with SSRF vulnerability (found via SSRF scanner)",
      target_type:"AWS EC2 instances running web applications",
      vulns:["IMDSv1 enabled — no auth required","IAM role credentials stolen","AWS account takeover via temporary keys"],
      hackerImpact:"SSRF in profile picture URL -> fetches 169.254.169.254 -> gets IAM keys -> attacker has full AWS account access. Capital One, Netflix, Twitch all had similar exposures. AWS now recommends IMDSv2."},
-    {id:"azure_enum", label:"Azure AD Enumeration", icon:"🔷", ep:"/api/cloud/azure_enum",
+    {id:"azure_enum", label:"Azure AD Enumeration", icon:"", ep:"/api/cloud/azure_enum",
      desc:"Enumerate Azure AD users, apps, permissions without auth",
      howto:"Enter target domain (e.g. company.com) as target. Checks Azure AD login endpoint for valid users (user enumeration), lists public apps, checks for common misconfigs.",
      requires:"Domain name. No Azure credentials needed for initial enum.",
      target_type:"Organizations using Microsoft 365, Azure AD, Entra ID",
      vulns:["Azure AD user enumeration without auth","Public app registrations exposing internal tools","Guest access enabled on sensitive resources"],
      hackerImpact:"company.com -> enumerate Azure AD -> find valid usernames -> password spray -> gain access to M365, Teams, SharePoint, internal apps. 85% of enterprises use Azure AD — high-value target."},
-    {id:"gcp_enum", label:"GCP Bucket & IAM", icon:"🔵", ep:"/api/cloud/gcp_enum",
+    {id:"gcp_enum", label:"GCP Bucket & IAM", icon:"", ep:"/api/cloud/gcp_enum",
      desc:"Google Cloud Storage buckets + IAM misconfiguration check",
      howto:"Enter company name or GCS bucket name as target. Checks for public GCS buckets, allUsers permissions, IAM bindings that allow unauthenticated access.",
      requires:"curl or gsutil CLI",
@@ -8840,7 +8840,7 @@ function CloudModule_legacy({token, apiUrl}) {
      vulns:["Public GCS bucket with sensitive data","allUsers IAM binding (world-readable)","Compute Engine metadata accessible","Service account key files exposed in bucket"],
      hackerImpact:"GCS bucket company-data open to allUsers -> contains service account JSON keys -> attacker authenticates to GCP with Owner role -> full cloud infrastructure access."},
   ];
-  return <ModuleShell title="Cloud Security Testing" moduleKey="cloud" icon="☁️" color="#0891b2" desc="AWS S3 enumeration, SSRF metadata attacks, Azure AD enumeration, GCP bucket misconfigurations" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Cloud Security Testing" moduleKey="cloud" icon="" color="#0891b2" desc="AWS S3 enumeration, SSRF metadata attacks, Azure AD enumeration, GCP bucket misconfigurations" token={token} apiUrl={apiUrl} attacks={attacks} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── REPORT WRITING ─────────────────────────────────────────────
@@ -8924,7 +8924,7 @@ function ReportModule({token, apiUrl}) {
   return (
     <div style={{padding:24,maxWidth:900,margin:"0 auto"}}>
       <div style={{marginBottom:20}}>
-        <h2 style={{color:"#e2e8f0",margin:0,fontSize:22,fontWeight:800}}>📄 Report Writing</h2>
+        <h2 style={{color:"#e2e8f0",margin:0,fontSize:22,fontWeight:800}}>Report Writing</h2>
         <p style={{color:"#64748b",fontSize:13,marginTop:6}}>Build your penetration test report, add findings, and export a professional PDF.</p>
       </div>
 
@@ -8972,7 +8972,7 @@ function ReportModule({token, apiUrl}) {
                 style={{background:"#0a1628",border:`1px solid ${sev[f.severity]}`,borderRadius:6,padding:"7px 10px",color:sev[f.severity],fontSize:12,fontWeight:700,outline:"none"}}>
                 {SEVS.map(s=><option key={s} value={s}>{s}</option>)}
               </select>
-              <button onClick={()=>delF(i)} style={{background:"#7f1d1d",border:"none",borderRadius:6,padding:"7px 12px",color:"#fca5a5",fontSize:12,cursor:"pointer"}}>✕</button>
+              <button onClick={()=>delF(i)} style={{background:"#7f1d1d",border:"none",borderRadius:6,padding:"7px 12px",color:"#fca5a5",fontSize:12,cursor:"pointer"}}></button>
             </div>
             <textarea value={f.desc} onChange={e=>updF(i,"desc",e.target.value)} rows={2} placeholder="Description — what was found, how to reproduce..."
               style={{width:"100%",background:"#0a1628",border:"1px solid #1e293b",borderRadius:6,padding:"7px 10px",color:"#cbd5e1",fontSize:12,outline:"none",resize:"vertical",marginBottom:6,boxSizing:"border-box"}}/>
@@ -8983,7 +8983,7 @@ function ReportModule({token, apiUrl}) {
       </div>
 
       <button onClick={exportPDF} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-        📄 Report
+        Report
       </button>
     </div>
   );
@@ -9025,11 +9025,11 @@ function ToolManagerModule({token}) {
       });
       const d = await res.json();
       setStatus(d.status || {});
-    } catch(e) { add("❌ Cannot reach backend"); }
+    } catch(e) { add("Cannot reach backend"); }
   };
 
   const runInstall = async (mode) => {
-    setRunning(true); setLog([`🚀 Starting: ${mode}...`]);
+    setRunning(true); setLog([`Starting: ${mode}...`]);
     try {
       const res = await fetch(`${apiUrl}/api/tools/install`, {
         method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${token || getAuthToken()}`},
@@ -9037,8 +9037,8 @@ function ToolManagerModule({token}) {
       });
       const d = await res.json();
       (d.log||[]).forEach(l=>add(l));
-      add(d.error ? `❌ ${d.error}` : `✅ Done — ${d.installed||0} tools processed`);
-    } catch(e) { add(`❌ ${e.message}`); }
+      add(d.error ? `${d.error}` : `Done — ${d.installed||0} tools processed`);
+    } catch(e) { add(`${e.message}`); }
     setRunning(false);
   };
 
@@ -9050,21 +9050,21 @@ function ToolManagerModule({token}) {
     <div style={{padding:24,maxWidth:1000,margin:"0 auto"}}>
       <div style={{marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div>
-          <h2 style={{color:"#e2e8f0",margin:0,fontSize:22,fontWeight:800}}>🛠️ Tool Manager & Updater</h2>
+          <h2 style={{color:"#e2e8f0",margin:0,fontSize:22,fontWeight:800}}>Tool Manager & Updater</h2>
           <p style={{color:"#64748b",fontSize:13,marginTop:4}}>Update Kali, install/upgrade all pentesting tools including GitHub projects</p>
         </div>
         <button onClick={checkStatus} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 16px",color:"#94a3b8",fontSize:12,cursor:"pointer"}}>
-          🔄 Check Status
+          Check Status
         </button>
       </div>
 
       {/* Action Buttons */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:20}}>
         {[
-          {label:"Update Kali Linux",   icon:"🐉", mode:"update",   color:"#1d4ed8", desc:"apt update + upgrade"},
-          {label:"Install All Tools",   icon:"📦", mode:"all",      color:"#15803d", desc:"All categories below"},
-          {label:"GitHub Tools Only",   icon:"🐙", mode:"github",   color:"#7c3aed", desc:"Clone & build from GitHub"},
-          {label:"Update Existing",     icon:"⬆️", mode:"upgrade",  color:"#b45309", desc:"Upgrade installed tools"},
+          {label:"Update Kali Linux",   icon:"", mode:"update",   color:"#1d4ed8", desc:"apt update + upgrade"},
+          {label:"Install All Tools",   icon:"", mode:"all",      color:"#15803d", desc:"All categories below"},
+          {label:"GitHub Tools Only",   icon:"", mode:"github",   color:"#7c3aed", desc:"Clone & build from GitHub"},
+          {label:"Update Existing",     icon:"", mode:"upgrade",  color:"#b45309", desc:"Upgrade installed tools"},
         ].map(b=>(
           <button key={b.mode} onClick={()=>runInstall(b.mode)} disabled={running}
             style={{background:b.color+"22",border:`1px solid ${b.color}66`,borderRadius:10,padding:"14px 10px",
@@ -9101,7 +9101,7 @@ function ToolManagerModule({token}) {
                 <span key={t} style={{background:status[t]==="ok"?"#14532d":status[t]==="missing"?"#450a0a":"#1e293b",
                   color:status[t]==="ok"?"#86efac":status[t]==="missing"?"#fca5a5":"#94a3b8",
                   padding:"2px 7px",borderRadius:4,fontSize:10,fontFamily:"monospace"}}>
-                  {status[t]==="ok"?"✓ ":status[t]==="missing"?"✗ ":""}{t}
+                  {status[t]==="ok"?"":status[t]==="missing"?"":""}{t}
                 </span>
               ))}
             </div>
@@ -9114,11 +9114,11 @@ function ToolManagerModule({token}) {
         <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
             <span style={{color:"#60a5fa",fontWeight:700,fontSize:12}}>INSTALL LOG</span>
-            <button onClick={()=>setLog([])} style={{background:"none",border:"none",color:"#475569",fontSize:11,cursor:"pointer"}}>✕ Clear</button>
+            <button onClick={()=>setLog([])} style={{background:"none",border:"none",color:"#475569",fontSize:11,cursor:"pointer"}}>Clear</button>
           </div>
           <div style={{maxHeight:300,overflowY:"auto",fontFamily:"monospace",fontSize:11}}>
             {log.map((l,i)=>(
-              <div key={i} style={{color:l.startsWith("❌")?"#ef4444":l.startsWith("✅")?"#22c55e":l.startsWith("🔄")?"#60a5fa":"#94a3b8",marginBottom:2,lineHeight:1.5}}>{l}</div>
+              <div key={i} style={{color:l.startsWith("")?"#ef4444":l.startsWith("")?"#22c55e":l.startsWith("")?"#60a5fa":"#94a3b8",marginBottom:2,lineHeight:1.5}}>{l}</div>
             ))}
             {running && <div style={{color:"#60a5fa",animation:"pulse 1s infinite"}}>▌ Running...</div>}
           </div>
@@ -9142,10 +9142,10 @@ function Dashboard(props) {
   },[token]);
 
   const cards = [
-    {label:"Total Scans",    val:stats?.total||0,         icon:"📊", color:"#3b82f6"},
-    {label:"Tools Available",val:health?Object.keys(health.free_tools||{}).length:0, icon:"🛠", color:"#22c55e"},
-    {label:"Modules",        val:20,                       icon:"🧩", color:"#a855f7"},
-    {label:"Platform Version",val:"v3.1",                  icon:"🚀", color:"#f59e0b"},
+    {label:"Total Scans",    val:stats?.total||0,         icon:"", color:"#3b82f6"},
+    {label:"Tools Available",val:health?Object.keys(health.free_tools||{}).length:0, icon:"", color:"#22c55e"},
+    {label:"Modules",        val:20,                       icon:"", color:"#a855f7"},
+    {label:"Platform Version",val:"v3.1",                  icon:"", color:"#f59e0b"},
   ];
 
   const recentScans = stats?.scans?.slice(-5).reverse() || [];
@@ -9156,7 +9156,7 @@ function Dashboard(props) {
     <div className="fade">
       {/* Welcome */}
       <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:10,padding:"20px 24px",marginBottom:20,display:"flex",alignItems:"center",gap:16}}>
-        <div style={{fontSize:40}}>🛡️</div>
+        <div style={{fontSize:40}}></div>
         <div>
           <h1 style={{fontSize:20,fontWeight:700,color:"#f1f5f9",margin:"0 0 2px"}}>Welcome to VulnusLab v3.1</h1>
           <p style={{fontSize:12,color:"#64748b",margin:0}}>Production Penetration Testing Suite — {new Date().toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</p>
@@ -9185,7 +9185,7 @@ function Dashboard(props) {
         {/* Recent Scans */}
         <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
           <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:13,fontWeight:600,color:"#f1f5f9"}}>📋 Recent Scans</span>
+            <span style={{fontSize:13,fontWeight:600,color:"#f1f5f9"}}>Recent Scans</span>
             <span style={{fontSize:10,color:"#475569"}}>{stats?.total||0} total</span>
           </div>
           {recentScans.length>0 ? recentScans.map((s,i)=>(
@@ -9200,7 +9200,7 @@ function Dashboard(props) {
         {/* Tools Status */}
         <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
           <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:13,fontWeight:600,color:"#f1f5f9"}}>🛠 Tools Status</span>
+            <span style={{fontSize:13,fontWeight:600,color:"#f1f5f9"}}>Tools Status</span>
             <span style={{fontSize:10,color:"#22c55e",fontWeight:600}}>{available}/{freeTools.length} available</span>
           </div>
           <div style={{maxHeight:200,overflowY:"auto"}}>
@@ -9217,13 +9217,13 @@ function Dashboard(props) {
 
       {/* Quick Launch */}
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:16}}>
-        <div style={{fontSize:13,fontWeight:600,color:"#f1f5f9",marginBottom:12}}>⚡ Quick Launch</div>
+        <div style={{fontSize:13,fontWeight:600,color:"#f1f5f9",marginBottom:12}}>Quick Launch</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
           {[
-            {label:"Web App Pentest",  icon:"🌐", mod:"webapp",  color:"#3b82f6"},
-            {label:"Recon & OSINT",    icon:"🔍", mod:"recon",   color:"#22c55e"},
-            {label:"Vuln Scanning",    icon:"🛡️", mod:"vuln",    color:"#f59e0b"},
-            {label:"Password Attacks", icon:"🔑", mod:"password",color:"#a855f7"},
+            {label:"Web App Pentest",  icon:"", mod:"webapp",  color:"#3b82f6"},
+            {label:"Recon & OSINT",    icon:"", mod:"recon",   color:"#22c55e"},
+            {label:"Vuln Scanning",    icon:"", mod:"vuln",    color:"#f59e0b"},
+            {label:"Password Attacks", icon:"", mod:"password",color:"#a855f7"},
           ].map((q,i)=>(
             <button key={i} onClick={()=>props.setActive(q.mod)}
               style={{background:"#020617",border:`1px solid ${q.color}30`,borderRadius:6,padding:"12px 8px",cursor:"pointer",textAlign:"center",transition:"all .2s"}}
@@ -11573,7 +11573,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }).filter(t => t._f && t._f.status && t._f.status !== "not_run");
 
     if (_mtCompleted.length > 0) {
-      const _asc = v => String(v == null ? "" : v).replace(/[\u{1F000}-\u{1FFFF}]/gu, "").replace(/[✓✔]/g, "v ").replace(/[✘✖]/g, "X ").replace(/[⚠⚑]/g, "[!] ").replace(/[—–]/g, "-").replace(/→/g, "->").replace(/←/g, "<-").replace(/·/g, "-");
+      const _asc = v => String(v == null ? "" : v).replace(/[\u{1F000}-\u{1FFFF}]/gu, "").replace(/[]/g, "v ").replace(/[]/g, "X ").replace(/[]/g, "[!] ").replace(/[—–]/g, "-").replace(/→/g, "->").replace(/←/g, "<-").replace(/·/g, "-");
       chk(30); y = sHead("Manual Pentest Evidence (Analyst-Attested)", y); y += 3;
       txt(_mtCompleted.length + " manual technique(s) executed by analyst, complementing the automated scan above.", margin, y, 8, GRAY); y += 5;
       txt("All evidence below is self-reported by the analyst running each test locally.", margin, y, 7.5, GRAY); y += 9;
@@ -11834,181 +11834,181 @@ const SECTION_OF = {
 
 const RECON_PHASES = [
   // ── §1 ─────────────
-  {name:"ASN", tool:"asn", endpoint:"/api/recon/asn", icon:"🌐"},
-  {name:"Cert San Aggregator", tool:"cert_san_aggregator", endpoint:"/api/recon/cert_san_aggregator", icon:"🌐"},
-  {name:"Common Crawl", tool:"common_crawl", endpoint:"/api/recon/common_crawl", icon:"🌐"},
-  {name:"Crt Search", tool:"crt_search", endpoint:"/api/recon/crt_search", icon:"🌐"},
-  {name:"Domain Age", tool:"domain_age", endpoint:"/api/recon/domain_age", icon:"🌐"},
-  {name:"Favicon Hash", tool:"favicon_hash", endpoint:"/api/recon/favicon_hash", icon:"🌐"},
-  {name:"IP Geo", tool:"ip_geo", endpoint:"/api/recon/ip_geo", icon:"🌐"},
-  {name:"Passive DNS", tool:"passive_dns", endpoint:"/api/recon/passive_dns", icon:"🌐"},
-  {name:"RDAP", tool:"rdap", endpoint:"/api/recon/rdap", icon:"🌐"},
-  {name:"Reverse IP", tool:"reverse_ip", endpoint:"/api/recon/reverse_ip", icon:"🌐"},
-  {name:"Reverse NS", tool:"reverse_ns", endpoint:"/api/recon/reverse_ns", icon:"🌐"},
-  {name:"Wayback Timeline", tool:"wayback_timeline", endpoint:"/api/recon/wayback_timeline", icon:"🌐"},
-  {name:"Whois", tool:"whois", endpoint:"/api/recon/whois", icon:"🌐"},
-  {name:"Whois History", tool:"whois_history", endpoint:"/api/recon/whois_history", icon:"🌐"},
+  {name:"ASN", tool:"asn", endpoint:"/api/recon/asn", icon:""},
+  {name:"Cert San Aggregator", tool:"cert_san_aggregator", endpoint:"/api/recon/cert_san_aggregator", icon:""},
+  {name:"Common Crawl", tool:"common_crawl", endpoint:"/api/recon/common_crawl", icon:""},
+  {name:"Crt Search", tool:"crt_search", endpoint:"/api/recon/crt_search", icon:""},
+  {name:"Domain Age", tool:"domain_age", endpoint:"/api/recon/domain_age", icon:""},
+  {name:"Favicon Hash", tool:"favicon_hash", endpoint:"/api/recon/favicon_hash", icon:""},
+  {name:"IP Geo", tool:"ip_geo", endpoint:"/api/recon/ip_geo", icon:""},
+  {name:"Passive DNS", tool:"passive_dns", endpoint:"/api/recon/passive_dns", icon:""},
+  {name:"RDAP", tool:"rdap", endpoint:"/api/recon/rdap", icon:""},
+  {name:"Reverse IP", tool:"reverse_ip", endpoint:"/api/recon/reverse_ip", icon:""},
+  {name:"Reverse NS", tool:"reverse_ns", endpoint:"/api/recon/reverse_ns", icon:""},
+  {name:"Wayback Timeline", tool:"wayback_timeline", endpoint:"/api/recon/wayback_timeline", icon:""},
+  {name:"Whois", tool:"whois", endpoint:"/api/recon/whois", icon:""},
+  {name:"Whois History", tool:"whois_history", endpoint:"/api/recon/whois_history", icon:""},
   // ── §2 ─────────────
-  {name:"Anycast Detect", tool:"anycast_detect", endpoint:"/api/recon/anycast_detect", icon:"🔎"},
-  {name:"Caa Records", tool:"caa_records", endpoint:"/api/recon/caa_records", icon:"🔎"},
-  {name:"Cache Snooping", tool:"cache_snooping", endpoint:"/api/recon/cache_snooping", icon:"🔎"},
-  {name:"DNS 0x20", tool:"dns_0x20", endpoint:"/api/recon/dns_0x20", icon:"🔎"},
-  {name:"DNS Rebinding", tool:"dns_rebinding", endpoint:"/api/recon/dns_rebinding", icon:"🔎"},
-  {name:"DNS Records", tool:"dns_records", endpoint:"/api/recon/dns_records", icon:"🔎"},
-  {name:"Dnssec", tool:"dnssec", endpoint:"/api/recon/dnssec", icon:"🔎"},
-  {name:"Doh Dot", tool:"doh_dot", endpoint:"/api/recon/doh_dot", icon:"🔎"},
-  {name:"Email Security", tool:"email_security", endpoint:"/api/recon/email_security", icon:"🔎"},
-  {name:"Lb Detection", tool:"lb_detection", endpoint:"/api/recon/lb_detection", icon:"🔎"},
-  {name:"Mx Enum", tool:"mx_enum", endpoint:"/api/recon/mx_enum", icon:"🔎"},
-  {name:"Nsec Walking", tool:"nsec_walking", endpoint:"/api/recon/nsec_walking", icon:"🔎"},
-  {name:"Reverse DNS", tool:"reverse_dns", endpoint:"/api/recon/reverse_dns", icon:"🔎"},
-  {name:"Subdomain Takeover", tool:"subdomain_takeover", endpoint:"/api/recon/subdomain_takeover", icon:"🔎"},
-  {name:"Wildcard Detection", tool:"wildcard_detection", endpoint:"/api/recon/wildcard_detection", icon:"🔎"},
-  {name:"Zone Transfer", tool:"zone_transfer", endpoint:"/api/recon/zone_transfer", icon:"🔎"},
+  {name:"Anycast Detect", tool:"anycast_detect", endpoint:"/api/recon/anycast_detect", icon:""},
+  {name:"Caa Records", tool:"caa_records", endpoint:"/api/recon/caa_records", icon:""},
+  {name:"Cache Snooping", tool:"cache_snooping", endpoint:"/api/recon/cache_snooping", icon:""},
+  {name:"DNS 0x20", tool:"dns_0x20", endpoint:"/api/recon/dns_0x20", icon:""},
+  {name:"DNS Rebinding", tool:"dns_rebinding", endpoint:"/api/recon/dns_rebinding", icon:""},
+  {name:"DNS Records", tool:"dns_records", endpoint:"/api/recon/dns_records", icon:""},
+  {name:"Dnssec", tool:"dnssec", endpoint:"/api/recon/dnssec", icon:""},
+  {name:"Doh Dot", tool:"doh_dot", endpoint:"/api/recon/doh_dot", icon:""},
+  {name:"Email Security", tool:"email_security", endpoint:"/api/recon/email_security", icon:""},
+  {name:"Lb Detection", tool:"lb_detection", endpoint:"/api/recon/lb_detection", icon:""},
+  {name:"Mx Enum", tool:"mx_enum", endpoint:"/api/recon/mx_enum", icon:""},
+  {name:"Nsec Walking", tool:"nsec_walking", endpoint:"/api/recon/nsec_walking", icon:""},
+  {name:"Reverse DNS", tool:"reverse_dns", endpoint:"/api/recon/reverse_dns", icon:""},
+  {name:"Subdomain Takeover", tool:"subdomain_takeover", endpoint:"/api/recon/subdomain_takeover", icon:""},
+  {name:"Wildcard Detection", tool:"wildcard_detection", endpoint:"/api/recon/wildcard_detection", icon:""},
+  {name:"Zone Transfer", tool:"zone_transfer", endpoint:"/api/recon/zone_transfer", icon:""},
   // ── §3 ─────────────
-  {name:"AI Wordlist Subdomain", tool:"ai_wordlist_subdomain", endpoint:"/api/recon/ai_wordlist_subdomain", icon:"🌍"},
-  {name:"Amass Passive", tool:"amass_passive", endpoint:"/api/recon/amass_passive", icon:"🌍"},
-  {name:"Github Subdomains", tool:"github_subdomains", endpoint:"/api/recon/github_subdomains", icon:"🌍"},
-  {name:"Passive Aggregation", tool:"passive_aggregation", endpoint:"/api/recon/passive_aggregation", icon:"🌍"},
-  {name:"Permutation Gen", tool:"permutation_gen", endpoint:"/api/recon/permutation_gen", icon:"🌍"},
-  {name:"Search Engine Scrape", tool:"search_engine_scrape", endpoint:"/api/recon/search_engine_scrape", icon:"🌍"},
-  {name:"Securitytrails Subdomains", tool:"securitytrails_subdomains", endpoint:"/api/recon/securitytrails_subdomains", icon:"🌍"},
-  {name:"Shuffled Bruteforce", tool:"shuffled_bruteforce", endpoint:"/api/recon/shuffled_bruteforce", icon:"🌍"},
-  {name:"Subdomain Bruteforce", tool:"subdomain_bruteforce", endpoint:"/api/recon/subdomain_bruteforce", icon:"🌍"},
-  {name:"Virustotal Subdomains", tool:"virustotal_subdomains", endpoint:"/api/recon/virustotal_subdomains", icon:"🌍"},
-  {name:"Wayback Subdomain Extract", tool:"wayback_subdomain_extract", endpoint:"/api/recon/wayback_subdomain_extract", icon:"🌍"},
+  {name:"AI Wordlist Subdomain", tool:"ai_wordlist_subdomain", endpoint:"/api/recon/ai_wordlist_subdomain", icon:""},
+  {name:"Amass Passive", tool:"amass_passive", endpoint:"/api/recon/amass_passive", icon:""},
+  {name:"Github Subdomains", tool:"github_subdomains", endpoint:"/api/recon/github_subdomains", icon:""},
+  {name:"Passive Aggregation", tool:"passive_aggregation", endpoint:"/api/recon/passive_aggregation", icon:""},
+  {name:"Permutation Gen", tool:"permutation_gen", endpoint:"/api/recon/permutation_gen", icon:""},
+  {name:"Search Engine Scrape", tool:"search_engine_scrape", endpoint:"/api/recon/search_engine_scrape", icon:""},
+  {name:"Securitytrails Subdomains", tool:"securitytrails_subdomains", endpoint:"/api/recon/securitytrails_subdomains", icon:""},
+  {name:"Shuffled Bruteforce", tool:"shuffled_bruteforce", endpoint:"/api/recon/shuffled_bruteforce", icon:""},
+  {name:"Subdomain Bruteforce", tool:"subdomain_bruteforce", endpoint:"/api/recon/subdomain_bruteforce", icon:""},
+  {name:"Virustotal Subdomains", tool:"virustotal_subdomains", endpoint:"/api/recon/virustotal_subdomains", icon:""},
+  {name:"Wayback Subdomain Extract", tool:"wayback_subdomain_extract", endpoint:"/api/recon/wayback_subdomain_extract", icon:""},
   // ── §4 ─────────────
-  {name:"Discord Channels", tool:"discord_channels", endpoint:"/api/recon/discord_channels", icon:"🔬"},
-  {name:"Facebook Instagram", tool:"facebook_instagram", endpoint:"/api/recon/facebook_instagram", icon:"🔬"},
-  {name:"Github Org Recon", tool:"github_org_recon", endpoint:"/api/recon/github_org_recon", icon:"🔬"},
-  {name:"Job Postings", tool:"job_postings", endpoint:"/api/recon/job_postings", icon:"🔬"},
-  {name:"Linkedin Employees", tool:"linkedin_employees", endpoint:"/api/recon/linkedin_employees", icon:"🔬"},
-  {name:"OSINT Industries", tool:"osint_industries", endpoint:"/api/recon/osint_industries", icon:"🔬"},
-  {name:"Pastebin Search", tool:"pastebin_search", endpoint:"/api/recon/pastebin_search", icon:"🔬"},
-  {name:"Reddit Search", tool:"reddit_search", endpoint:"/api/recon/reddit_search", icon:"🔬"},
-  {name:"Sec Edgar", tool:"sec_edgar", endpoint:"/api/recon/sec_edgar", icon:"🔬"},
-  {name:"Sherlock Username", tool:"sherlock_username", endpoint:"/api/recon/sherlock_username", icon:"🔬"},
-  {name:"Telegram Channels", tool:"telegram_channels", endpoint:"/api/recon/telegram_channels", icon:"🔬"},
-  {name:"Tiktok Search", tool:"tiktok_search", endpoint:"/api/recon/tiktok_search", icon:"🔬"},
-  {name:"Trademark Search", tool:"trademark_search", endpoint:"/api/recon/trademark_search", icon:"🔬"},
-  {name:"Twitter Mining", tool:"twitter_mining", endpoint:"/api/recon/twitter_mining", icon:"🔬"},
-  {name:"Uspto Patent", tool:"uspto_patent", endpoint:"/api/recon/uspto_patent", icon:"🔬"},
-  {name:"Youtube Channel", tool:"youtube_channel", endpoint:"/api/recon/youtube_channel", icon:"🔬"},
-    {name:"Username Permutation Gen", tool:"username_permutation_gen", endpoint:"/api/recon/username_permutation_gen", icon:"🔬"},
+  {name:"Discord Channels", tool:"discord_channels", endpoint:"/api/recon/discord_channels", icon:""},
+  {name:"Facebook Instagram", tool:"facebook_instagram", endpoint:"/api/recon/facebook_instagram", icon:""},
+  {name:"Github Org Recon", tool:"github_org_recon", endpoint:"/api/recon/github_org_recon", icon:""},
+  {name:"Job Postings", tool:"job_postings", endpoint:"/api/recon/job_postings", icon:""},
+  {name:"Linkedin Employees", tool:"linkedin_employees", endpoint:"/api/recon/linkedin_employees", icon:""},
+  {name:"OSINT Industries", tool:"osint_industries", endpoint:"/api/recon/osint_industries", icon:""},
+  {name:"Pastebin Search", tool:"pastebin_search", endpoint:"/api/recon/pastebin_search", icon:""},
+  {name:"Reddit Search", tool:"reddit_search", endpoint:"/api/recon/reddit_search", icon:""},
+  {name:"Sec Edgar", tool:"sec_edgar", endpoint:"/api/recon/sec_edgar", icon:""},
+  {name:"Sherlock Username", tool:"sherlock_username", endpoint:"/api/recon/sherlock_username", icon:""},
+  {name:"Telegram Channels", tool:"telegram_channels", endpoint:"/api/recon/telegram_channels", icon:""},
+  {name:"Tiktok Search", tool:"tiktok_search", endpoint:"/api/recon/tiktok_search", icon:""},
+  {name:"Trademark Search", tool:"trademark_search", endpoint:"/api/recon/trademark_search", icon:""},
+  {name:"Twitter Mining", tool:"twitter_mining", endpoint:"/api/recon/twitter_mining", icon:""},
+  {name:"Uspto Patent", tool:"uspto_patent", endpoint:"/api/recon/uspto_patent", icon:""},
+  {name:"Youtube Channel", tool:"youtube_channel", endpoint:"/api/recon/youtube_channel", icon:""},
+    {name:"Username Permutation Gen", tool:"username_permutation_gen", endpoint:"/api/recon/username_permutation_gen", icon:""},
 // ── §5 ─────────────
-  {name:"Cors Misconfig", tool:"cors_misconfig", endpoint:"/api/recon/cors_misconfig", icon:"📁"},
-  {name:"Crawl Endpoints", tool:"crawl_endpoints", endpoint:"/api/recon/crawl_endpoints", icon:"📁"},
-  {name:"Graphql Intro Check", tool:"graphql_intro_check", endpoint:"/api/recon/graphql_intro_check", icon:"📁"},
-  {name:"Hsts Audit", tool:"hsts_audit", endpoint:"/api/recon/hsts_audit", icon:"📁"},
-  {name:"HTTP Banner", tool:"http_banner", endpoint:"/api/recon/http_banner", icon:"📁"},
-  {name:"HTTP Method Enum", tool:"http_method_enum", endpoint:"/api/recon/http_method_enum", icon:"📁"},
-  {name:"Js Endpoint Extract", tool:"js_endpoint_extract", endpoint:"/api/recon/js_endpoint_extract", icon:"📁"},
-  {name:"Origin IP Bypass", tool:"origin_ip_bypass", endpoint:"/api/recon/origin_ip_bypass", icon:"📁"},
-  {name:"Param Discovery", tool:"param_discovery", endpoint:"/api/recon/param_discovery", icon:"📁"},
-  {name:"Robots Sitemap", tool:"robots_sitemap", endpoint:"/api/recon/robots_sitemap", icon:"📁"},
-  {name:"Security Headers", tool:"security_headers", endpoint:"/api/recon/security_headers", icon:"📁"},
-  {name:"Security Txt", tool:"security_txt", endpoint:"/api/recon/security_txt", icon:"📁"},
-  {name:"Sourcemap Check", tool:"sourcemap_check", endpoint:"/api/recon/sourcemap_check", icon:"📁"},
-  {name:"SSL Labs Grade", tool:"ssl_labs_grade", endpoint:"/api/recon/ssl_labs_grade", icon:"📁"},
-  {name:"SSL TLS Audit", tool:"ssl_tls_audit", endpoint:"/api/recon/ssl_tls_audit", icon:"📁"},
-  {name:"Tech Stack Detect", tool:"tech_stack_detect", endpoint:"/api/recon/tech_stack_detect", icon:"📁"},
-  {name:"WAF CDN Detect", tool:"waf_cdn_detect", endpoint:"/api/recon/waf_cdn_detect", icon:"📁"},
-    {name:"WordPress Plugin Brute", tool:"wp_plugin_brute", endpoint:"/api/recon/wp_plugin_brute", icon:"📁"},
-  {name:"JWT Secret Brute", tool:"jwt_secret_brute", endpoint:"/api/recon/jwt_secret_brute", icon:"📁"},
-  {name:"API Endpoint Brute", tool:"api_endpoint_brute", endpoint:"/api/recon/api_endpoint_brute", icon:"📁"},
-  {name:"GraphQL Path Brute", tool:"graphql_path_brute", endpoint:"/api/recon/graphql_path_brute", icon:"📁"},
-  {name:"Webhook Endpoint Brute", tool:"webhook_endpoint_brute", endpoint:"/api/recon/webhook_endpoint_brute", icon:"📁"},
+  {name:"Cors Misconfig", tool:"cors_misconfig", endpoint:"/api/recon/cors_misconfig", icon:""},
+  {name:"Crawl Endpoints", tool:"crawl_endpoints", endpoint:"/api/recon/crawl_endpoints", icon:""},
+  {name:"Graphql Intro Check", tool:"graphql_intro_check", endpoint:"/api/recon/graphql_intro_check", icon:""},
+  {name:"Hsts Audit", tool:"hsts_audit", endpoint:"/api/recon/hsts_audit", icon:""},
+  {name:"HTTP Banner", tool:"http_banner", endpoint:"/api/recon/http_banner", icon:""},
+  {name:"HTTP Method Enum", tool:"http_method_enum", endpoint:"/api/recon/http_method_enum", icon:""},
+  {name:"Js Endpoint Extract", tool:"js_endpoint_extract", endpoint:"/api/recon/js_endpoint_extract", icon:""},
+  {name:"Origin IP Bypass", tool:"origin_ip_bypass", endpoint:"/api/recon/origin_ip_bypass", icon:""},
+  {name:"Param Discovery", tool:"param_discovery", endpoint:"/api/recon/param_discovery", icon:""},
+  {name:"Robots Sitemap", tool:"robots_sitemap", endpoint:"/api/recon/robots_sitemap", icon:""},
+  {name:"Security Headers", tool:"security_headers", endpoint:"/api/recon/security_headers", icon:""},
+  {name:"Security Txt", tool:"security_txt", endpoint:"/api/recon/security_txt", icon:""},
+  {name:"Sourcemap Check", tool:"sourcemap_check", endpoint:"/api/recon/sourcemap_check", icon:""},
+  {name:"SSL Labs Grade", tool:"ssl_labs_grade", endpoint:"/api/recon/ssl_labs_grade", icon:""},
+  {name:"SSL TLS Audit", tool:"ssl_tls_audit", endpoint:"/api/recon/ssl_tls_audit", icon:""},
+  {name:"Tech Stack Detect", tool:"tech_stack_detect", endpoint:"/api/recon/tech_stack_detect", icon:""},
+  {name:"WAF CDN Detect", tool:"waf_cdn_detect", endpoint:"/api/recon/waf_cdn_detect", icon:""},
+    {name:"WordPress Plugin Brute", tool:"wp_plugin_brute", endpoint:"/api/recon/wp_plugin_brute", icon:""},
+  {name:"JWT Secret Brute", tool:"jwt_secret_brute", endpoint:"/api/recon/jwt_secret_brute", icon:""},
+  {name:"API Endpoint Brute", tool:"api_endpoint_brute", endpoint:"/api/recon/api_endpoint_brute", icon:""},
+  {name:"GraphQL Path Brute", tool:"graphql_path_brute", endpoint:"/api/recon/graphql_path_brute", icon:""},
+  {name:"Webhook Endpoint Brute", tool:"webhook_endpoint_brute", endpoint:"/api/recon/webhook_endpoint_brute", icon:""},
 // ── §6 ─────────────
-  {name:"Azure App Services", tool:"azure_app_services", endpoint:"/api/recon/azure_app_services", icon:"☁️"},
-  {name:"Azure Blob Enum", tool:"azure_blob_enum", endpoint:"/api/recon/azure_blob_enum", icon:"☁️"},
-  {name:"Bucket Perm Audit", tool:"bucket_perm_audit", endpoint:"/api/recon/bucket_perm_audit", icon:"☁️"},
-  {name:"Cloud Function Url Enum", tool:"cloud_function_url_enum", endpoint:"/api/recon/cloud_function_url_enum", icon:"☁️"},
-  {name:"Cloudfront Disco", tool:"cloudfront_disco", endpoint:"/api/recon/cloudfront_disco", icon:"☁️"},
-  {name:"Docker Registry Exposed", tool:"docker_registry_exposed", endpoint:"/api/recon/docker_registry_exposed", icon:"☁️"},
-  {name:"Gcp App Engine", tool:"gcp_app_engine", endpoint:"/api/recon/gcp_app_engine", icon:"☁️"},
-  {name:"GCS Bucket Enum", tool:"gcs_bucket_enum", endpoint:"/api/recon/gcs_bucket_enum", icon:"☁️"},
-  {name:"Gha Runner Disco", tool:"gha_runner_disco", endpoint:"/api/recon/gha_runner_disco", icon:"☁️"},
-  {name:"Helm Etcd Exposed", tool:"helm_etcd_exposed", endpoint:"/api/recon/helm_etcd_exposed", icon:"☁️"},
-  {name:"Heroku Enum", tool:"heroku_enum", endpoint:"/api/recon/heroku_enum", icon:"☁️"},
-  {name:"K8s API Exposure", tool:"k8s_api_exposure", endpoint:"/api/recon/k8s_api_exposure", icon:"☁️"},
-  {name:"S3 Bucket Enum", tool:"s3_bucket_enum", endpoint:"/api/recon/s3_bucket_enum", icon:"☁️"},
-  {name:"Vercel Netlify", tool:"vercel_netlify", endpoint:"/api/recon/vercel_netlify", icon:"☁️"},
-    {name:"Cloud Function Brute", tool:"cloud_function_brute", endpoint:"/api/recon/cloud_function_brute", icon:"☁️"},
+  {name:"Azure App Services", tool:"azure_app_services", endpoint:"/api/recon/azure_app_services", icon:""},
+  {name:"Azure Blob Enum", tool:"azure_blob_enum", endpoint:"/api/recon/azure_blob_enum", icon:""},
+  {name:"Bucket Perm Audit", tool:"bucket_perm_audit", endpoint:"/api/recon/bucket_perm_audit", icon:""},
+  {name:"Cloud Function Url Enum", tool:"cloud_function_url_enum", endpoint:"/api/recon/cloud_function_url_enum", icon:""},
+  {name:"Cloudfront Disco", tool:"cloudfront_disco", endpoint:"/api/recon/cloudfront_disco", icon:""},
+  {name:"Docker Registry Exposed", tool:"docker_registry_exposed", endpoint:"/api/recon/docker_registry_exposed", icon:""},
+  {name:"Gcp App Engine", tool:"gcp_app_engine", endpoint:"/api/recon/gcp_app_engine", icon:""},
+  {name:"GCS Bucket Enum", tool:"gcs_bucket_enum", endpoint:"/api/recon/gcs_bucket_enum", icon:""},
+  {name:"Gha Runner Disco", tool:"gha_runner_disco", endpoint:"/api/recon/gha_runner_disco", icon:""},
+  {name:"Helm Etcd Exposed", tool:"helm_etcd_exposed", endpoint:"/api/recon/helm_etcd_exposed", icon:""},
+  {name:"Heroku Enum", tool:"heroku_enum", endpoint:"/api/recon/heroku_enum", icon:""},
+  {name:"K8s API Exposure", tool:"k8s_api_exposure", endpoint:"/api/recon/k8s_api_exposure", icon:""},
+  {name:"S3 Bucket Enum", tool:"s3_bucket_enum", endpoint:"/api/recon/s3_bucket_enum", icon:""},
+  {name:"Vercel Netlify", tool:"vercel_netlify", endpoint:"/api/recon/vercel_netlify", icon:""},
+    {name:"Cloud Function Brute", tool:"cloud_function_brute", endpoint:"/api/recon/cloud_function_brute", icon:""},
 // ── §7 ─────────────
-  {name:"Breach Aggregator", tool:"breach_aggregator", endpoint:"/api/recon/breach_aggregator", icon:"📧"},
-  {name:"Crosslinked Emails", tool:"crosslinked_emails", endpoint:"/api/recon/crosslinked_emails", icon:"📧"},
-  {name:"Email Harvester", tool:"email_harvester", endpoint:"/api/recon/email_harvester", icon:"📧"},
-  {name:"Email SMTP Validate", tool:"email_smtp_validate", endpoint:"/api/recon/email_smtp_validate", icon:"📧"},
-  {name:"Email To Phone Pivot", tool:"email_to_phone_pivot", endpoint:"/api/recon/email_to_phone_pivot", icon:"📧"},
-  {name:"Ghunt Google Audit", tool:"ghunt_google_audit", endpoint:"/api/recon/ghunt_google_audit", icon:"📧"},
-  {name:"Hibp Breach Check", tool:"hibp_breach_check", endpoint:"/api/recon/hibp_breach_check", icon:"📧"},
-  {name:"Holehe Email Audit", tool:"holehe_email_audit", endpoint:"/api/recon/holehe_email_audit", icon:"📧"},
-  {name:"Hunter Io Email Pattern", tool:"hunter_io_email_pattern", endpoint:"/api/recon/hunter_io_email_pattern", icon:"📧"},
-  {name:"Intelligence X Search", tool:"intelligence_x_search", endpoint:"/api/recon/intelligence_x_search", icon:"📧"},
-  {name:"Leakcheck Search", tool:"leakcheck_search", endpoint:"/api/recon/leakcheck_search", icon:"📧"},
-  {name:"Phoneinfoga Lookup", tool:"phoneinfoga_lookup", endpoint:"/api/recon/phoneinfoga_lookup", icon:"📧"},
-  {name:"Pimeyes Face Search", tool:"pimeyes_face_search", endpoint:"/api/recon/pimeyes_face_search", icon:"📧"},
-    {name:"Email Pattern Generator", tool:"email_pattern_generator", endpoint:"/api/recon/email_pattern_generator", icon:"📧"},
+  {name:"Breach Aggregator", tool:"breach_aggregator", endpoint:"/api/recon/breach_aggregator", icon:""},
+  {name:"Crosslinked Emails", tool:"crosslinked_emails", endpoint:"/api/recon/crosslinked_emails", icon:""},
+  {name:"Email Harvester", tool:"email_harvester", endpoint:"/api/recon/email_harvester", icon:""},
+  {name:"Email SMTP Validate", tool:"email_smtp_validate", endpoint:"/api/recon/email_smtp_validate", icon:""},
+  {name:"Email To Phone Pivot", tool:"email_to_phone_pivot", endpoint:"/api/recon/email_to_phone_pivot", icon:""},
+  {name:"Ghunt Google Audit", tool:"ghunt_google_audit", endpoint:"/api/recon/ghunt_google_audit", icon:""},
+  {name:"Hibp Breach Check", tool:"hibp_breach_check", endpoint:"/api/recon/hibp_breach_check", icon:""},
+  {name:"Holehe Email Audit", tool:"holehe_email_audit", endpoint:"/api/recon/holehe_email_audit", icon:""},
+  {name:"Hunter Io Email Pattern", tool:"hunter_io_email_pattern", endpoint:"/api/recon/hunter_io_email_pattern", icon:""},
+  {name:"Intelligence X Search", tool:"intelligence_x_search", endpoint:"/api/recon/intelligence_x_search", icon:""},
+  {name:"Leakcheck Search", tool:"leakcheck_search", endpoint:"/api/recon/leakcheck_search", icon:""},
+  {name:"Phoneinfoga Lookup", tool:"phoneinfoga_lookup", endpoint:"/api/recon/phoneinfoga_lookup", icon:""},
+  {name:"Pimeyes Face Search", tool:"pimeyes_face_search", endpoint:"/api/recon/pimeyes_face_search", icon:""},
+    {name:"Email Pattern Generator", tool:"email_pattern_generator", endpoint:"/api/recon/email_pattern_generator", icon:""},
 // ── §8 ─────────────
-  {name:"Abuseipdb", tool:"abuseipdb", endpoint:"/api/recon/abuseipdb", icon:"🛡️"},
-  {name:"Alienvault Otx", tool:"alienvault_otx", endpoint:"/api/recon/alienvault_otx", icon:"🛡️"},
-  {name:"Censys Search", tool:"censys_search", endpoint:"/api/recon/censys_search", icon:"🛡️"},
-  {name:"Fofa Search", tool:"fofa_search", endpoint:"/api/recon/fofa_search", icon:"🛡️"},
-  {name:"Greynoise Check", tool:"greynoise_check", endpoint:"/api/recon/greynoise_check", icon:"🛡️"},
-  {name:"Misp Feed", tool:"misp_feed", endpoint:"/api/recon/misp_feed", icon:"🛡️"},
-  {name:"Quake360 Search", tool:"quake360_search", endpoint:"/api/recon/quake360_search", icon:"🛡️"},
-  {name:"Shodan Keyed", tool:"shodan_keyed", endpoint:"/api/recon/shodan_keyed", icon:"🛡️"},
-  {name:"Threatfox Check", tool:"threatfox_check", endpoint:"/api/recon/threatfox_check", icon:"🛡️"},
-  {name:"Urlhaus Check", tool:"urlhaus_check", endpoint:"/api/recon/urlhaus_check", icon:"🛡️"},
-  {name:"Virustotal Full", tool:"virustotal_full", endpoint:"/api/recon/virustotal_full", icon:"🛡️"},
-  {name:"Zoomeye Search", tool:"zoomeye_search", endpoint:"/api/recon/zoomeye_search", icon:"🛡️"},
+  {name:"Abuseipdb", tool:"abuseipdb", endpoint:"/api/recon/abuseipdb", icon:""},
+  {name:"Alienvault Otx", tool:"alienvault_otx", endpoint:"/api/recon/alienvault_otx", icon:""},
+  {name:"Censys Search", tool:"censys_search", endpoint:"/api/recon/censys_search", icon:""},
+  {name:"Fofa Search", tool:"fofa_search", endpoint:"/api/recon/fofa_search", icon:""},
+  {name:"Greynoise Check", tool:"greynoise_check", endpoint:"/api/recon/greynoise_check", icon:""},
+  {name:"Misp Feed", tool:"misp_feed", endpoint:"/api/recon/misp_feed", icon:""},
+  {name:"Quake360 Search", tool:"quake360_search", endpoint:"/api/recon/quake360_search", icon:""},
+  {name:"Shodan Keyed", tool:"shodan_keyed", endpoint:"/api/recon/shodan_keyed", icon:""},
+  {name:"Threatfox Check", tool:"threatfox_check", endpoint:"/api/recon/threatfox_check", icon:""},
+  {name:"Urlhaus Check", tool:"urlhaus_check", endpoint:"/api/recon/urlhaus_check", icon:""},
+  {name:"Virustotal Full", tool:"virustotal_full", endpoint:"/api/recon/virustotal_full", icon:""},
+  {name:"Zoomeye Search", tool:"zoomeye_search", endpoint:"/api/recon/zoomeye_search", icon:""},
   // ── §9 ─────────────
-  {name:"Banner Grab", tool:"banner_grab", endpoint:"/api/recon/banner_grab", icon:"🔌"},
-  {name:"Ipmi Ilo Discovery", tool:"ipmi_ilo_discovery", endpoint:"/api/recon/ipmi_ilo_discovery", icon:"🔌"},
-  {name:"Ipv6 Alive Enum", tool:"ipv6_alive_enum", endpoint:"/api/recon/ipv6_alive_enum", icon:"🔌"},
-  {name:"Ldap Anon Bind", tool:"ldap_anon_bind", endpoint:"/api/recon/ldap_anon_bind", icon:"🔌"},
-  {name:"Nse Vuln Scan", tool:"nse_vuln_scan", endpoint:"/api/recon/nse_vuln_scan", icon:"🔌"},
-  {name:"Os Fingerprint", tool:"os_fingerprint", endpoint:"/api/recon/os_fingerprint", icon:"🔌"},
-  {name:"Rpc Endpoint Enum", tool:"rpc_endpoint_enum", endpoint:"/api/recon/rpc_endpoint_enum", icon:"🔌"},
-  {name:"Service Version Detect", tool:"service_version_detect", endpoint:"/api/recon/service_version_detect", icon:"🔌"},
-  {name:"Smb Netbios Enum", tool:"smb_netbios_enum", endpoint:"/api/recon/smb_netbios_enum", icon:"🔌"},
-  {name:"Snmp Enum", tool:"snmp_enum", endpoint:"/api/recon/snmp_enum", icon:"🔌"},
-  {name:"Tcp Port Scan", tool:"tcp_port_scan", endpoint:"/api/recon/tcp_port_scan", icon:"🔌"},
-  {name:"Udp Port Scan", tool:"udp_port_scan", endpoint:"/api/recon/udp_port_scan", icon:"🔌"},
-  {name:"Voip Sip Enum", tool:"voip_sip_enum", endpoint:"/api/recon/voip_sip_enum", icon:"🔌"},
+  {name:"Banner Grab", tool:"banner_grab", endpoint:"/api/recon/banner_grab", icon:""},
+  {name:"Ipmi Ilo Discovery", tool:"ipmi_ilo_discovery", endpoint:"/api/recon/ipmi_ilo_discovery", icon:""},
+  {name:"Ipv6 Alive Enum", tool:"ipv6_alive_enum", endpoint:"/api/recon/ipv6_alive_enum", icon:""},
+  {name:"Ldap Anon Bind", tool:"ldap_anon_bind", endpoint:"/api/recon/ldap_anon_bind", icon:""},
+  {name:"Nse Vuln Scan", tool:"nse_vuln_scan", endpoint:"/api/recon/nse_vuln_scan", icon:""},
+  {name:"Os Fingerprint", tool:"os_fingerprint", endpoint:"/api/recon/os_fingerprint", icon:""},
+  {name:"Rpc Endpoint Enum", tool:"rpc_endpoint_enum", endpoint:"/api/recon/rpc_endpoint_enum", icon:""},
+  {name:"Service Version Detect", tool:"service_version_detect", endpoint:"/api/recon/service_version_detect", icon:""},
+  {name:"Smb Netbios Enum", tool:"smb_netbios_enum", endpoint:"/api/recon/smb_netbios_enum", icon:""},
+  {name:"Snmp Enum", tool:"snmp_enum", endpoint:"/api/recon/snmp_enum", icon:""},
+  {name:"Tcp Port Scan", tool:"tcp_port_scan", endpoint:"/api/recon/tcp_port_scan", icon:""},
+  {name:"Udp Port Scan", tool:"udp_port_scan", endpoint:"/api/recon/udp_port_scan", icon:""},
+  {name:"Voip Sip Enum", tool:"voip_sip_enum", endpoint:"/api/recon/voip_sip_enum", icon:""},
   // ── §10 ─────────────
-  {name:"Cargo Go Typosquat", tool:"cargo_go_typosquat", endpoint:"/api/recon/cargo_go_typosquat", icon:"📂"},
-  {name:"Dependency Confusion", tool:"dependency_confusion", endpoint:"/api/recon/dependency_confusion", icon:"📂"},
-  {name:"Docker Hub Search", tool:"docker_hub_search", endpoint:"/api/recon/docker_hub_search", icon:"📂"},
-  {name:"Gha Secret Leak Logs", tool:"gha_secret_leak_logs", endpoint:"/api/recon/gha_secret_leak_logs", icon:"📂"},
-  {name:"Github Code Search", tool:"github_code_search", endpoint:"/api/recon/github_code_search", icon:"📂"},
-  {name:"Github Oauth Abuse Map", tool:"github_oauth_abuse_map", endpoint:"/api/recon/github_oauth_abuse_map", icon:"📂"},
-  {name:"Gitlab Bitbucket Scan", tool:"gitlab_bitbucket_scan", endpoint:"/api/recon/gitlab_bitbucket_scan", icon:"📂"},
-  {name:"Npm Package Audit", tool:"npm_package_audit", endpoint:"/api/recon/npm_package_audit", icon:"📂"},
-  {name:"Pypi Package Audit", tool:"pypi_package_audit", endpoint:"/api/recon/pypi_package_audit", icon:"📂"},
-    {name:"Secret Pattern Scanner", tool:"secret_pattern_scanner", endpoint:"/api/recon/secret_pattern_scanner", icon:"📂"},
+  {name:"Cargo Go Typosquat", tool:"cargo_go_typosquat", endpoint:"/api/recon/cargo_go_typosquat", icon:""},
+  {name:"Dependency Confusion", tool:"dependency_confusion", endpoint:"/api/recon/dependency_confusion", icon:""},
+  {name:"Docker Hub Search", tool:"docker_hub_search", endpoint:"/api/recon/docker_hub_search", icon:""},
+  {name:"Gha Secret Leak Logs", tool:"gha_secret_leak_logs", endpoint:"/api/recon/gha_secret_leak_logs", icon:""},
+  {name:"Github Code Search", tool:"github_code_search", endpoint:"/api/recon/github_code_search", icon:""},
+  {name:"Github Oauth Abuse Map", tool:"github_oauth_abuse_map", endpoint:"/api/recon/github_oauth_abuse_map", icon:""},
+  {name:"Gitlab Bitbucket Scan", tool:"gitlab_bitbucket_scan", endpoint:"/api/recon/gitlab_bitbucket_scan", icon:""},
+  {name:"Npm Package Audit", tool:"npm_package_audit", endpoint:"/api/recon/npm_package_audit", icon:""},
+  {name:"Pypi Package Audit", tool:"pypi_package_audit", endpoint:"/api/recon/pypi_package_audit", icon:""},
+    {name:"Secret Pattern Scanner", tool:"secret_pattern_scanner", endpoint:"/api/recon/secret_pattern_scanner", icon:""},
 // ── §11 ─────────────
-  {name:"Dehashed Search", tool:"dehashed_search", endpoint:"/api/recon/dehashed_search", icon:"🕳️"},
-  {name:"Hibp Paste Search", tool:"hibp_paste_search", endpoint:"/api/recon/hibp_paste_search", icon:"🕳️"},
-  {name:"Intelx Paste Leak", tool:"intelx_paste_leak", endpoint:"/api/recon/intelx_paste_leak", icon:"🕳️"},
-  {name:"Leakix Feed", tool:"leakix_feed", endpoint:"/api/recon/leakix_feed", icon:"🕳️"},
-  {name:"Ransomware Leak Sites", tool:"ransomware_leak_sites", endpoint:"/api/recon/ransomware_leak_sites", icon:"🕳️"},
-  {name:"Stealer Log Search", tool:"stealer_log_search", endpoint:"/api/recon/stealer_log_search", icon:"🕳️"},
+  {name:"Dehashed Search", tool:"dehashed_search", endpoint:"/api/recon/dehashed_search", icon:""},
+  {name:"Hibp Paste Search", tool:"hibp_paste_search", endpoint:"/api/recon/hibp_paste_search", icon:""},
+  {name:"Intelx Paste Leak", tool:"intelx_paste_leak", endpoint:"/api/recon/intelx_paste_leak", icon:""},
+  {name:"Leakix Feed", tool:"leakix_feed", endpoint:"/api/recon/leakix_feed", icon:""},
+  {name:"Ransomware Leak Sites", tool:"ransomware_leak_sites", endpoint:"/api/recon/ransomware_leak_sites", icon:""},
+  {name:"Stealer Log Search", tool:"stealer_log_search", endpoint:"/api/recon/stealer_log_search", icon:""},
   // ── §12 ─────────────
-  {name:"Apple Store Search", tool:"apple_store_search", endpoint:"/api/recon/apple_store_search", icon:"📱"},
-  {name:"Drone Adsb Ais Passive", tool:"drone_adsb_ais_passive", endpoint:"/api/recon/drone_adsb_ais_passive", icon:"📱"},
-  {name:"Firebase Open Db Check", tool:"firebase_open_db_check", endpoint:"/api/recon/firebase_open_db_check", icon:"📱"},
-  {name:"Google Play Search", tool:"google_play_search", endpoint:"/api/recon/google_play_search", icon:"📱"},
-  {name:"Iot Device Fingerprint", tool:"iot_device_fingerprint", endpoint:"/api/recon/iot_device_fingerprint", icon:"📱"},
-  {name:"Matter Thread Disco", tool:"matter_thread_disco", endpoint:"/api/recon/matter_thread_disco", icon:"📱"},
-  {name:"Mobile Backend Shodan", tool:"mobile_backend_shodan", endpoint:"/api/recon/mobile_backend_shodan", icon:"📱"},
-  {name:"Upnp Ssdp Disco", tool:"upnp_ssdp_disco", endpoint:"/api/recon/upnp_ssdp_disco", icon:"📱"},
+  {name:"Apple Store Search", tool:"apple_store_search", endpoint:"/api/recon/apple_store_search", icon:""},
+  {name:"Drone Adsb Ais Passive", tool:"drone_adsb_ais_passive", endpoint:"/api/recon/drone_adsb_ais_passive", icon:""},
+  {name:"Firebase Open Db Check", tool:"firebase_open_db_check", endpoint:"/api/recon/firebase_open_db_check", icon:""},
+  {name:"Google Play Search", tool:"google_play_search", endpoint:"/api/recon/google_play_search", icon:""},
+  {name:"Iot Device Fingerprint", tool:"iot_device_fingerprint", endpoint:"/api/recon/iot_device_fingerprint", icon:""},
+  {name:"Matter Thread Disco", tool:"matter_thread_disco", endpoint:"/api/recon/matter_thread_disco", icon:""},
+  {name:"Mobile Backend Shodan", tool:"mobile_backend_shodan", endpoint:"/api/recon/mobile_backend_shodan", icon:""},
+  {name:"Upnp Ssdp Disco", tool:"upnp_ssdp_disco", endpoint:"/api/recon/upnp_ssdp_disco", icon:""},
   // ── §13 ─────────────
-  {name:"AI Endpoint Guesser", tool:"ai_endpoint_guesser", endpoint:"/api/recon/ai_endpoint_guesser", icon:"🤖"},
-  {name:"AI Phishing Pretext Gen", tool:"ai_phishing_pretext_gen", endpoint:"/api/recon/ai_phishing_pretext_gen", icon:"🤖"},
-  {name:"Llm Param Inference", tool:"llm_param_inference", endpoint:"/api/recon/llm_param_inference", icon:"🤖"},
-  {name:"Llm Wordlist Curator", tool:"llm_wordlist_curator", endpoint:"/api/recon/llm_wordlist_curator", icon:"🤖"},
-  {name:"Source Code Rag Llm", tool:"source_code_rag_llm", endpoint:"/api/recon/source_code_rag_llm", icon:"🤖"},
+  {name:"AI Endpoint Guesser", tool:"ai_endpoint_guesser", endpoint:"/api/recon/ai_endpoint_guesser", icon:""},
+  {name:"AI Phishing Pretext Gen", tool:"ai_phishing_pretext_gen", endpoint:"/api/recon/ai_phishing_pretext_gen", icon:""},
+  {name:"Llm Param Inference", tool:"llm_param_inference", endpoint:"/api/recon/llm_param_inference", icon:""},
+  {name:"Llm Wordlist Curator", tool:"llm_wordlist_curator", endpoint:"/api/recon/llm_wordlist_curator", icon:""},
+  {name:"Source Code Rag Llm", tool:"source_code_rag_llm", endpoint:"/api/recon/source_code_rag_llm", icon:""},
 ];
 
 
@@ -12070,7 +12070,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
     if (active.length < RECON_PHASES.length) {
       const skipped = RECON_PHASES.filter((_,i)=>!selectedPhases.has(i)).map(p=>p.name);
       setLines([`[*] Starting recon on: ${target} (${active.length}/${RECON_PHASES.length} phases selected)`,
-                `⚠ Skipping ${skipped.length} phase(s): ${skipped.join(", ")} — re-check tiles to include them`]);
+                `Skipping ${skipped.length} phase(s): ${skipped.join(", ")} — re-check tiles to include them`]);
     } else {
       setLines([`[*] Starting recon on: ${target} (${active.length} phases, all enabled)`]);
     }
@@ -12191,7 +12191,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
               const elapsed = ((Date.now() - _scanStartTime)/1000).toFixed(1);
               const ph = RECON_PHASES.find(p=>p.tool===evt.tool);
               const phName = ph ? ph.name : evt.tool;
-              const status = data._failed ? "✗" : (data._skipped || data.skipped_reason) ? "○" : "✓";
+              const status = data._failed ? "" : (data._skipped || data.skipped_reason) ? "○" : "";
               add(`  ${status} [${_completedCount}/${RECON_PHASES.length}] ${phName} (${evt.duration_sec}s, +${elapsed}s)`);
             }
             else if (evt.event === "scan_complete") {
@@ -12206,7 +12206,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         if (!stopRef.current && !_finalSummary) {
           const missing = RECON_PHASES.filter(ph => !(ph.tool in results));
           if (missing.length > 0) {
-            add(`⚠ stream ended without scan_complete — ${missing.length} tool(s) didn't report (likely Cloudflare idle timeout or proxy interrupt)`);
+            add(`stream ended without scan_complete — ${missing.length} tool(s) didn't report (likely Cloudflare idle timeout or proxy interrupt)`);
             missing.forEach(ph => {
               const idx = _toolToIdx[ph.tool];
               results[ph.tool] = {ok:false, _failed:true,
@@ -12220,7 +12220,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         }
         if (!stopRef.current && _finalSummary) {
           const sum = _finalSummary.summary || {};
-          add(`✓ v2 complete in ${_finalSummary.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
+          add(`v2 complete in ${_finalSummary.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
           if (sum.by_severity) {
             const sev = sum.by_severity;
             add(`  Severity: ${sev.CRITICAL||0} CRIT · ${sev.HIGH||0} HIGH · ${sev.MEDIUM||0} MED · ${sev.LOW||0} LOW`);
@@ -12232,7 +12232,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         }
       } catch(e) {
         let msg = e?.message || String(e);
-        add(`✗ v2 stream failed: ${msg}`);
+        add(`v2 stream failed: ${msg}`);
         _streamError = msg;
       }
       setCurPhase(-1); setRunning(false); _notifyRunning(false); setFinished(true);
@@ -12269,7 +12269,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         if (sessionBearer) body.auth_bearer = sessionBearer;
         if (ph.tool==="shodan") body.api_key = localStorage.getItem("shodanApiKey")||"";
         if (ph.tool==="shodan" && !body.api_key) {
-          add("⚠ Shodan: no API key — set it in Settings");
+          add("Shodan: no API key — set it in Settings");
           // Save explicit skip so the PDF coverage shows "no API key" not just missing
           results[ph.tool] = {ok:false, _skipped:true, skipped_reason:"No Shodan API key configured — set in Settings"};
           setAll(Object.assign({},results));
@@ -12284,31 +12284,31 @@ function ReconModule({token, onRunningChange, activeSections}) {
         if (data && data.ok === false && !data._skipped) {
           const realReason = data.skipped_reason || data.error || data.detail || "Backend returned ok:false with no reason";
           results[ph.tool] = {...data, _failed: true, error: realReason};
-          add("✗ "+ph.name+" failed: "+realReason);
+          add(""+ph.name+" failed: "+realReason);
           setAll(Object.assign({},results));
           setFailed(p=>[...p,i]); setDone(p=>[...p,i]);
           continue;
         }
         results[ph.tool] = data;
-        if      (ph.tool==="whois"      && data.registrar)   add("✓ Registrar: "+data.registrar);
-        else if (ph.tool==="dns"        && data.records)     add("✓ DNS: "+Object.values(data.records).flat().length+" record(s) found");
-        else if (ph.tool==="dnsrecon"   && data.records)     add("✓ DNSRecon: "+data.records.length+" record(s) discovered");
-        else if (ph.tool==="subdomains" && data.subdomains)  add("✓ Subdomains: "+data.subdomains.length+" found");
-        else if (ph.tool==="crtsh"      && data.subdomains)  add("✓ crt.sh: "+data.subdomains.length+" cert entries found");
-        else if (ph.tool==="amass"      && data.subdomains)  add("✓ Amass: "+data.subdomains.length+" subdomains found");
-        else if (ph.tool==="shodan"     && data.ports)       add("✓ Shodan: "+data.ports.length+" port(s), OS: "+(data.os||"unknown"));
-        else if (ph.tool==="harvester"  && data.emails)      add("✓ Harvester: "+(data.emails||[]).length+" emails, "+(data.hosts||[]).length+" hosts");
-        else if (ph.tool==="masscan"    && data.ports)       add("✓ Masscan: "+data.ports.length+" open port(s)");
-        else if (ph.tool==="nmap"       && data.ports)       add("✓ Nmap: "+data.ports.length+" port(s) found");
-        else if (ph.tool==="services"   && data.ports)       add("✓ Services: "+data.ports.length+" service(s) detected");
-        else if (ph.tool==="os"         && data.os)          add("✓ OS: "+data.os);
-        else if (ph.tool==="banner"     && data.banners)     add("✓ Banners: "+Object.keys(data.banners||{}).length+" captured");
-        else if (ph.tool==="gobuster"   && data.found)       add("✓ Gobuster: "+data.found.length+" path(s) discovered"+(data.engine==="python-fuzz"?" (pure-Python engine)":""));
-        else if (ph.tool==="cve_match"  && data.summary)     add("✓ CVE Match: "+data.summary.total_cves+" CVE(s) — "+data.summary.critical_cves+" critical, "+data.summary.high_cves+" high");
-        else if (ph.tool==="subdomain_takeover")              add("✓ Subdomain Takeover: "+(data.total_vulnerable||0)+" vulnerable on "+(data.checked||0)+" checked");
-        else if (ph.tool==="waf_cdn")                         add("✓ WAF/CDN: "+((data.detected||[]).length)+" detected — "+((data.detected||[]).map(x=>x.vendor).slice(0,3).join(", ")||"none"));
-        else if (ph.tool==="ssl_deep")                        add("✓ SSL/TLS Deep: "+(data.total_vulnerabilities||0)+" issue(s) — "+(data.current_protocol||"no TLS"));
-        else add("✓ "+ph.name+" complete");
+        if      (ph.tool==="whois"      && data.registrar)   add("Registrar: "+data.registrar);
+        else if (ph.tool==="dns"        && data.records)     add("DNS: "+Object.values(data.records).flat().length+" record(s) found");
+        else if (ph.tool==="dnsrecon"   && data.records)     add("DNSRecon: "+data.records.length+" record(s) discovered");
+        else if (ph.tool==="subdomains" && data.subdomains)  add("Subdomains: "+data.subdomains.length+" found");
+        else if (ph.tool==="crtsh"      && data.subdomains)  add("crt.sh: "+data.subdomains.length+" cert entries found");
+        else if (ph.tool==="amass"      && data.subdomains)  add("Amass: "+data.subdomains.length+" subdomains found");
+        else if (ph.tool==="shodan"     && data.ports)       add("Shodan: "+data.ports.length+" port(s), OS: "+(data.os||"unknown"));
+        else if (ph.tool==="harvester"  && data.emails)      add("Harvester: "+(data.emails||[]).length+" emails, "+(data.hosts||[]).length+" hosts");
+        else if (ph.tool==="masscan"    && data.ports)       add("Masscan: "+data.ports.length+" open port(s)");
+        else if (ph.tool==="nmap"       && data.ports)       add("Nmap: "+data.ports.length+" port(s) found");
+        else if (ph.tool==="services"   && data.ports)       add("Services: "+data.ports.length+" service(s) detected");
+        else if (ph.tool==="os"         && data.os)          add("OS: "+data.os);
+        else if (ph.tool==="banner"     && data.banners)     add("Banners: "+Object.keys(data.banners||{}).length+" captured");
+        else if (ph.tool==="gobuster"   && data.found)       add("Gobuster: "+data.found.length+" path(s) discovered"+(data.engine==="python-fuzz"?" (pure-Python engine)":""));
+        else if (ph.tool==="cve_match"  && data.summary)     add("CVE Match: "+data.summary.total_cves+" CVE(s) — "+data.summary.critical_cves+" critical, "+data.summary.high_cves+" high");
+        else if (ph.tool==="subdomain_takeover")              add("Subdomain Takeover: "+(data.total_vulnerable||0)+" vulnerable on "+(data.checked||0)+" checked");
+        else if (ph.tool==="waf_cdn")                         add("WAF/CDN: "+((data.detected||[]).length)+" detected — "+((data.detected||[]).map(x=>x.vendor).slice(0,3).join(", ")||"none"));
+        else if (ph.tool==="ssl_deep")                        add("SSL/TLS Deep: "+(data.total_vulnerabilities||0)+" issue(s) — "+(data.current_protocol||"no TLS"));
+        else add(""+ph.name+" complete");
         setDone(p=>[...p,i]); setAll(Object.assign({},results));
       } catch(e) {
         // Build a HUMAN-READABLE error message instead of falling back to "unknown error".
@@ -12323,7 +12323,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                    : msg.includes("timed out") ? " (target took too long — WAF/CDN may be slowing requests)"
                    : msg.includes("403") || msg.includes("429") ? " (target blocked scanner — WAF detected)"
                    : "";
-        add("✗ "+ph.name+" failed: "+msg+hint);
+        add(""+ph.name+" failed: "+msg+hint);
         results[ph.tool] = {ok:false, _failed:true, error:msg};
         setAll(Object.assign({},results));
         setFailed(p=>[...p,i]); setDone(p=>[...p,i]);
@@ -12333,7 +12333,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
       const okCount     = Object.values(results).filter(x=>x && !x._failed && !x._skipped).length;
       const failedCount = Object.values(results).filter(x=>x && x._failed).length;
       const skipCount   = Object.values(results).filter(x=>x && x._skipped).length;
-      add(`✓ Recon complete — ${okCount} ok, ${failedCount} failed, ${skipCount} skipped (${active.length} attempted)`);
+      add(`Recon complete — ${okCount} ok, ${failedCount} failed, ${skipCount} skipped (${active.length} attempted)`);
     }
     setCurPhase(-1); setRunning(false); _notifyRunning(false); setFinished(true);
   };
@@ -12363,7 +12363,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {findings.length > 0 && (
           <div style={S.section}>
             <div style={{fontSize:13,fontWeight:700,color:"#fca5a5",marginBottom:10}}>
-              🛡️ Findings — {findings.length} risk{findings.length>1?"s":""} (
+              Findings — {findings.length} risk{findings.length>1?"s":""} (
               {findings.filter(f=>f.severity==="CRITICAL").length} critical,{" "}
               {findings.filter(f=>f.severity==="HIGH").length} high,{" "}
               {findings.filter(f=>f.severity==="MEDIUM").length} medium,{" "}
@@ -12403,7 +12403,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* WHOIS */}
         {r.whois && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🌐 WHOIS</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>WHOIS</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               {[["Domain",r.whois.domain],["Registrar",r.whois.registrar],["Created",r.whois.created],["Expires",r.whois.expires],["Updated",r.whois.updated],["Name Servers",(r.whois.name_servers||[]).join(", ")],["Registrant",r.whois.registrant],["Country",r.whois.country]].filter(([,v])=>v).map(([k,v],i)=>(
                 <div key={i} style={S.card}>
@@ -12418,7 +12418,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* DNS Records */}
         {r.dns && r.dns.records && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🔎 DNS Records</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>DNS Records</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>TYPE</th><th style={S.th}>RECORD</th></tr></thead>
               <tbody>
@@ -12438,7 +12438,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* DNS Recon */}
         {r.dnsrecon && r.dnsrecon.records && r.dnsrecon.records.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🕵️ DNS Recon</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>DNS Recon</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>TYPE</th><th style={S.th}>NAME</th><th style={S.th}>VALUE</th></tr></thead>
               <tbody>
@@ -12457,7 +12457,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Subdomains */}
         {r.subdomains && r.subdomains.subdomains && r.subdomains.subdomains.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🌍 Subdomains ({r.subdomains.subdomains.length})</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Subdomains ({r.subdomains.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.subdomains.subdomains.slice(0,60).map((s,i)=>(
                 <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#38bdf8",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
@@ -12469,7 +12469,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* TheHarvester */}
         {r.harvester && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🔬 OSINT Harvester</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>OSINT Harvester</div>
             {(r.harvester.emails||[]).length>0 && (
               <>
                 <div style={{fontSize:11,color:"#94a3b8",fontWeight:700,marginBottom:6}}>EMAILS FOUND</div>
@@ -12495,7 +12495,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Ports — masscan + nmap combined */}
         {(r.masscan||r.nmap) && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🔌 Open Ports</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Open Ports</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>PORT</th><th style={S.th}>PROTO</th><th style={S.th}>STATE</th><th style={S.th}>SOURCE</th></tr></thead>
               <tbody>
@@ -12516,7 +12516,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Services */}
         {r.services && r.services.ports && r.services.ports.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>⚙️ Services & Versions</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Services & Versions</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>PORT</th><th style={S.th}>SERVICE</th><th style={S.th}>VERSION</th></tr></thead>
               <tbody>
@@ -12535,7 +12535,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* OS */}
         {r.os && (r.os.os||r.os.matches) && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>💻 OS Fingerprinting</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>OS Fingerprinting</div>
             {r.os.os && <div style={{...S.val,fontSize:15,marginBottom:8}}>{r.os.os}</div>}
             {r.os.accuracy && <div style={{...S.label}}>Confidence: {r.os.accuracy}%</div>}
             {(r.os.matches||[]).slice(0,5).map((m,i)=>(
@@ -12550,7 +12550,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Banners */}
         {r.banner && r.banner.banners && Object.keys(r.banner.banners).length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🏷️ Service Banners</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Service Banners</div>
             {Object.entries(r.banner.banners).map(([port,banner],i)=>(
               <div key={i} style={{marginBottom:8}}>
                 <div style={{...S.badge("#8b5cf6"),display:"inline-block",marginBottom:4}}>Port {port}</div>
@@ -12563,7 +12563,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* crt.sh */}
         {r.crtsh && r.crtsh.subdomains && r.crtsh.subdomains.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>📜 Certificate Transparency — crt.sh ({r.crtsh.subdomains.length})</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Certificate Transparency — crt.sh ({r.crtsh.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.crtsh.subdomains.slice(0,60).map((s,i)=>(
                 <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#a78bfa",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
@@ -12575,7 +12575,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Amass */}
         {r.amass && r.amass.subdomains && r.amass.subdomains.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>🕸️ Amass — Deep Subdomain Recon ({r.amass.subdomains.length})</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Amass — Deep Subdomain Recon ({r.amass.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.amass.subdomains.slice(0,60).map((s,i)=>(
                 <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#34d399",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
@@ -12587,7 +12587,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Shodan */}
         {r.shodan && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>👁️ Shodan Intelligence</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Shodan Intelligence</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
               {[["IP",r.shodan.ip],["Organization",r.shodan.org],["ISP",r.shodan.isp],["Country",r.shodan.country],["City",r.shodan.city],["OS",r.shodan.os]].filter(([,v])=>v).map(([k,v],i)=>(
                 <div key={i} style={S.card}><div style={S.label}>{k}</div><div style={S.val}>{String(v)}</div></div>
@@ -12620,7 +12620,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* CVE Matches (NVD) */}
         {r.cve_match && r.cve_match.summary && (r.cve_match.summary.total_cves||0)>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#ef4444",marginBottom:10}}>🚨 CVE Matches — {r.cve_match.summary.total_cves} found ({r.cve_match.summary.critical_cves} critical, {r.cve_match.summary.high_cves} high, {r.cve_match.summary.medium_cves||0} medium)</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#ef4444",marginBottom:10}}>CVE Matches — {r.cve_match.summary.total_cves} found ({r.cve_match.summary.critical_cves} critical, {r.cve_match.summary.high_cves} high, {r.cve_match.summary.medium_cves||0} medium)</div>
             {(r.cve_match.services_detected||[]).length>0 && (
               <div style={{fontSize:11,color:"#94a3b8",marginBottom:10}}>
                 Services: {(r.cve_match.services_detected||[]).map(s=>`${s.vendor}/${s.product} ${s.version}`).join(", ")}
@@ -12658,7 +12658,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
       {/* Header */}
       <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:8,padding:20,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-          <span style={{fontSize:20}}>🔍</span>
+          <span style={{fontSize:20}}></span>
           <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9"}}>Information Gathering & Recon</h2>
           <Badge label={RECON_PHASES.length+" PHASES"} color="blue"/>
           <Badge label="PASSIVE + ACTIVE" color="green"/>
@@ -12689,10 +12689,10 @@ function ReconModule({token, onRunningChange, activeSections}) {
         }} targets={[
           // Pruned to verified-working targets only. DVWA/WebGoat/Mutillidae/bWAPP
           // removed — their auto-login was unreliable on Recon tests.
-          {icon:"📡",label:"Scanme (nmap)",       value:"scanme.nmap.org",                desc:"nmap test server — safe public baseline",                lab:null},
-          {icon:"💀",label:"Metasploitable",      value:"lab_metasploitable",             desc:"🟢 Live Docker — old services + many CVEs",              lab:null},
-          {icon:"🧃",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"🟢 Node/Express + /rest/* API + JS bundle. admin@juice-sh.op/admin123", lab:"juiceshop"},
-          {icon:"🌐",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",     desc:"Acunetix public PHP demo — Internet target",             lab:null},
+          {icon:"",label:"Scanme (nmap)",       value:"scanme.nmap.org",                desc:"nmap test server — safe public baseline",                lab:null},
+          {icon:"",label:"Metasploitable",      value:"lab_metasploitable",             desc:"Live Docker — old services + many CVEs",              lab:null},
+          {icon:"",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"Node/Express + /rest/* API + JS bundle. admin@juice-sh.op/admin123", lab:"juiceshop"},
+          {icon:"",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",     desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
         <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
@@ -12700,12 +12700,12 @@ function ReconModule({token, onRunningChange, activeSections}) {
             style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
-              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated recon (optional)</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Authenticated recon (optional)</span>
               <span style={{fontSize:10,color:"#64748b"}}>— lets crawl/gobuster/jsendpoints/params see behind-login URLs</span>
             </div>
-            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
-            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
-            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ credentials ready</span>}
+            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>session captured</span>}
+            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>login failed</span>}
+            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
           </div>
           {authOpen && (
             <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
@@ -12714,7 +12714,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
               </div>
               <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
                 <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>
-                  🔐 Auto-login (recommended)
+                  Auto-login (recommended)
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                   <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
@@ -12764,13 +12764,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
                     }}
                     disabled={rAutoLoginBusy}
                     style={{background:rAutoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
-                    {rAutoLoginBusy?"Logging in...":"🔐 Auto-login & capture cookie"}
+                    {rAutoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
                   </button>
                   {rAutoLoginStatus && rAutoLoginStatus.startsWith("ok") && (
-                    <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>✓ Logged in — cookie captured</span>
+                    <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>Logged in — cookie captured</span>
                   )}
                   {rAutoLoginStatus && !rAutoLoginStatus.startsWith("ok") && (
-                    <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>✗ {rAutoLoginStatus}</span>
+                    <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>{rAutoLoginStatus}</span>
                   )}
                 </div>
               </div>
@@ -12792,7 +12792,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
               {(authCookie||authBearer) && (
                 <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAuthStatus(null);setRAutoLoginStatus(null);}}
                   style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>
-                  ✕ Clear auth credentials
+                  Clear auth credentials
                 </button>
               )}
               <div style={{fontSize:10,color:"#64748b",marginTop:2}}>
@@ -12896,7 +12896,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
                 ) : (
                   <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
-                    {isDone?(isFailed?"✗":"✓"):"○"}
+                    {isDone?(isFailed?"":""):"○"}
                   </span>
                 )}
                 <span style={{flex:1,fontSize:13,fontWeight:500,color:"#f1f5f9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
@@ -12917,7 +12917,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                       <div style={{color:"#fca5a5",fontFamily:"ui-monospace,SFMono-Regular,monospace",fontSize:11}}>{String(_failReason).substring(0,300)}</div>
                     </div>
                   ) : itemsCount === 0 ? (
-                    <div style={{color:"#86efac"}}>✓ {ph.name} completed. No data discovered for this target.</div>
+                    <div style={{color:"#86efac"}}>{ph.name} completed. No data discovered for this target.</div>
                   ) : (
                     <div>
                       <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:8,fontWeight:600}}>{itemsCount} ITEM{itemsCount===1?"":"S"} DISCOVERED</div>
@@ -12937,12 +12937,12 @@ function ReconModule({token, onRunningChange, activeSections}) {
       {/* Tabs */}
       <div style={{background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
         <div style={{display:"flex",borderBottom:"1px solid #1e293b",alignItems:"center"}}>
-          {[["phases","📡 Live Log"],["results","📊 Results"]].map(([t,l])=>(
+          {[["phases","Live Log"],["results","Results"]].map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)} style={S.tabBtn(tab===t)}>{l}</button>
           ))}
           {finished && (
             <button onClick={dlReconPDF} style={{marginLeft:"auto",marginRight:12,background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              📄 Report
+              Report
             </button>
           )}
         </div>
@@ -12952,7 +12952,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
           {tab==="phases" && (
             <div ref={logRef} style={{background:"#020617",borderRadius:6,padding:12,height:320,overflowY:"auto",fontFamily:"JetBrains Mono,monospace",fontSize:11}}>
               {lines.map((l,i)=>{
-                const c = l.startsWith("✗")?"#f87171":l.startsWith("✓")?"#4ade80":l.startsWith("[!")?"#fbbf24":"#94a3b8";
+                const c = l.startsWith("")?"#f87171":l.startsWith("")?"#4ade80":l.startsWith("[!")?"#fbbf24":"#94a3b8";
                 return <div key={i} style={{color:c,marginBottom:2,lineHeight:1.5}}>{l}</div>;
               })}
               {running && <div style={{color:"#60a5fa",animation:"pulse 1s infinite"}}>▌</div>}
@@ -12986,14 +12986,14 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
     try {
       const data = await api("/api/scan/zap","POST",{target,scan_type:scanType,options:{scan_type:scanType}},token);
       setResult(data);
-      add(`[✓] ZAP scan complete — ${data.total} alert(s) found`);
+      add(`[] ZAP scan complete — ${data.total} alert(s) found`);
       if(data.findings?.length>0){
         const h=data.findings.filter(f=>f.severity==="HIGH"||f.severity==="CRITICAL").length;
         const m=data.findings.filter(f=>f.severity==="MEDIUM").length;
         add(`[!] High/Critical: ${h}  Medium: ${m}`);
-      } else { add("[✓] No vulnerabilities detected"); }
+      } else { add("[] No vulnerabilities detected"); }
     } catch(e) {
-      add(`[✗] Error: ${e.message}`);
+      add(`[] Error: ${e.message}`);
       if(e.message.toLowerCase().includes("not installed")||e.message.includes("404"))
         add("[!] Install ZAP first: sudo apt install zaproxy -y");
     }
@@ -13007,7 +13007,7 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
       {/* Header */}
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-          <span style={{fontSize:22}}>🔬</span>
+          <span style={{fontSize:22}}></span>
           <div>
             <h2 style={{fontSize:15,fontWeight:700,color:"#f1f5f9",margin:0}}>OWASP ZAP Scanner</h2>
             <p style={{fontSize:11,color:"#64748b",margin:0}}>Industry-standard automated web vulnerability scanner</p>
@@ -13018,10 +13018,10 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
         {/* Info cards */}
         <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
           {[
-            {icon:"🕷️",label:"Spider",desc:"Crawls all pages"},
-            {icon:"⚡",label:"Active Scan",desc:"Tests all parameters"},
-            {icon:"📋",label:"OWASP Mapped",desc:"Top 10 coverage"},
-            {icon:"🎯",label:"CVE/CWE",desc:"Tagged findings"},
+            {icon:"",label:"Spider",desc:"Crawls all pages"},
+            {icon:"",label:"Active Scan",desc:"Tests all parameters"},
+            {icon:"",label:"OWASP Mapped",desc:"Top 10 coverage"},
+            {icon:"",label:"CVE/CWE",desc:"Tagged findings"},
           ].map((c,i)=>(
             <div key={i} style={{background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:6,padding:"8px 12px",flex:1,minWidth:100}}>
               <div style={{fontSize:16,marginBottom:2}}>{c.icon}</div>
@@ -13033,12 +13033,12 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
 
         {/* Controls */}
         <TestTargets onSelect={setTarget} targets={[
-          {icon:"🔴",label:"DVWA",          value:"http://lab_dvwa",                    desc:"🟢 Live Docker — SQLi, XSS, CSRF, File Upload, LFI. Login: admin/password"},
-          {icon:"🐐",label:"WebGoat",        value:"http://lab_webgoat:8080/WebGoat",       desc:"🟢 Live Docker — OWASP WebGoat guided lessons"},
-          {icon:"🧃",label:"Juice Shop",     value:"http://lab_juiceshop:3000",               desc:"🟢 Live Docker — 100+ challenges. Login: admin@juice-sh.op/admin123"},
-          {icon:"🧩",label:"Mutillidae",     value:"http://lab_mutillidae",                  desc:"🟢 Live Docker — SQLi, XXE, CSRF. Login: admin/adminpass"},
-          {icon:"🐛",label:"bWAPP",          value:"http://lab_bwapp/bWAPP/login.php",      desc:"🟢 Live Docker — 100+ bugs. Login: bee/bug"},
-          {icon:"🌐",label:"Acunetix TestPHP",value:"http://testphp.vulnweb.com",           desc:"Public test site — safe to scan"},
+          {icon:"",label:"DVWA",          value:"http://lab_dvwa",                    desc:"Live Docker — SQLi, XSS, CSRF, File Upload, LFI. Login: admin/password"},
+          {icon:"",label:"WebGoat",        value:"http://lab_webgoat:8080/WebGoat",       desc:"Live Docker — OWASP WebGoat guided lessons"},
+          {icon:"",label:"Juice Shop",     value:"http://lab_juiceshop:3000",               desc:"Live Docker — 100+ challenges. Login: admin@juice-sh.op/admin123"},
+          {icon:"",label:"Mutillidae",     value:"http://lab_mutillidae",                  desc:"Live Docker — SQLi, XXE, CSRF. Login: admin/adminpass"},
+          {icon:"",label:"bWAPP",          value:"http://lab_bwapp/bWAPP/login.php",      desc:"Live Docker — 100+ bugs. Login: bee/bug"},
+          {icon:"",label:"Acunetix TestPHP",value:"http://testphp.vulnweb.com",           desc:"Public test site — safe to scan"},
         ]}/>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
@@ -13077,7 +13077,7 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
                 </div>
               ):null;
             })}
-            {(result.findings||[]).length===0 && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:6,padding:"6px 14px",color:"#4ade80",fontSize:12,fontWeight:600}}>✓ No vulnerabilities found</div>}
+            {(result.findings||[]).length===0 && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:6,padding:"6px 14px",color:"#4ade80",fontSize:12,fontWeight:600}}>No vulnerabilities found</div>}
           </div>
 
           {/* Findings table */}
@@ -13110,7 +13110,7 @@ function ZAPModule({token}) { // kept as stub to avoid reference errors — not 
       {/* Install notice if ZAP not installed */}
       {!scanning && !result && (
         <div style={{background:"#1c0a00",border:"1px solid #7c2d12",borderRadius:8,padding:16,marginTop:8}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#fb923c",marginBottom:6}}>⚠ Install Required</div>
+          <div style={{fontSize:12,fontWeight:700,color:"#fb923c",marginBottom:6}}>Install Required</div>
           <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>If ZAP is not yet installed on your Kali VM, run:</div>
           <code style={{display:"block",background:"#020617",padding:"8px 12px",borderRadius:4,fontSize:12,color:"#4ade80",fontFamily:"monospace"}}>sudo apt install zaproxy -y</code>
         </div>
@@ -14087,16 +14087,16 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   const SEV={CRITICAL:[220,38,38],HIGH:[234,88,12],MEDIUM:[202,138,4],LOW:[22,163,74],INFO:[100,116,139],POSITIVE:[15,118,82]};
   let y=0, _secN=0;
   // jsPDF's default helvetica can't render Unicode emojis or arrows — they
-  // come out as garbage byte sequences (e.g. "Ø=ßà" for 🟠, "->" -> "!'", etc).
+  // come out as garbage byte sequences (e.g. "Ø=ßà" for , "->" -> "!'", etc).
   // Strip emojis + map common Unicode punctuation to ASCII before passing
   // any string to doc.text(). Applied via the txt() wrapper so every caller
   // is automatically safe.
   const _ascii = s => String(s == null ? "" : s)
       .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")             // emoji blocks
-      .replace(/✅/g, "[OK] ")                         // ✅
-      .replace(/[✓✔]/g, "v ")                    // ✓ ✔
-      .replace(/[⚠⚑]/g, "[!] ")                  // ⚠ ⚑
-      .replace(/[✘✖]/g, "X ")                    // ✘ ✖
+      .replace(//g, "[OK] ")                         //
+      .replace(/[]/g, "v ")                    //
+      .replace(/[]/g, "[!] ")                  //
+      .replace(/[]/g, "X ")                    //
       .replace(/[—–]/g, "-")                     // em/en dash
       .replace(/→/g, "->")                       // U+2192 RIGHTWARDS ARROW (unicode-escaped so future sed can't break this regex)
       .replace(/←/g, "<-")                            // ←
@@ -14194,7 +14194,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
     fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE);
     txt(row[0],margin+3,y+5,8,DARK,true);txt(row[1],margin+78,y+5,7.5,GRAY);
     const ok=sevCount.HIGH===0&&sevCount.CRITICAL===0;
-    txt(ok?"✓ Aligned":"⚠ Findings",margin+133,y+5,7.5,ok?GREEN:ORANGE,true);y+=7;
+    txt(ok?"Aligned":"Findings",margin+133,y+5,7.5,ok?GREEN:ORANGE,true);y+=7;
   });y+=4;
 
   // ── SECTION 8: REMEDIATION DIFF (placeholder, no prev scan) ────
@@ -14231,7 +14231,7 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
     fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
     txt(t[0],margin+3,y+5.5,8,DARK,true);txt(t[1],margin+22,y+5.5,8,DARK);
     txt(`${ran}/${t[2].length}`,margin+78,y+5.5,8,DARK);
-    txt(ok?"✓ Complete":"⚠ Partial",margin+133,y+5.5,7.5,ok?GREEN:ORANGE,true);y+=8;
+    txt(ok?"Complete":"Partial",margin+133,y+5.5,7.5,ok?GREEN:ORANGE,true);y+=8;
   });y+=4;
 
   // ── SECTION 12: PER-TOOL SECTIONS ──────────────────────────────
@@ -14386,26 +14386,26 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
 // 16 tools across 5 tiers. Routes all under /api/vuln/<tool> (isolated namespace).
 const VULN_PHASES = [
   // Tier 1 — CVE & template scanners
-  {name:"Nuclei Scanner",            tool:"nuclei",             endpoint:"/api/vuln/nuclei",             icon:"⚡"},
-  {name:"WPScan",                    tool:"wpscan",             endpoint:"/api/vuln/wpscan",             icon:"📝"},
-  {name:"Nikto Web Scanner",         tool:"nikto",              endpoint:"/api/vuln/nikto",              icon:"🔍"},
+  {name:"Nuclei Scanner",            tool:"nuclei",             endpoint:"/api/vuln/nuclei",             icon:""},
+  {name:"WPScan",                    tool:"wpscan",             endpoint:"/api/vuln/wpscan",             icon:""},
+  {name:"Nikto Web Scanner",         tool:"nikto",              endpoint:"/api/vuln/nikto",              icon:""},
   // Tier 2 — Discovery & service detection
-  {name:"Port Scan",                 tool:"portscan",           endpoint:"/api/vuln/portscan",           icon:"🛰️"},
-  {name:"Service Detection",         tool:"service_detect",     endpoint:"/api/vuln/service_detect",     icon:"📡"},
-  {name:"OS Fingerprint",            tool:"os_fingerprint",     endpoint:"/api/vuln/os_fingerprint",     icon:"🖥️"},
-  {name:"Shodan InternetDB",         tool:"internetdb",         endpoint:"/api/vuln/internetdb",         icon:"🌐"},
+  {name:"Port Scan",                 tool:"portscan",           endpoint:"/api/vuln/portscan",           icon:""},
+  {name:"Service Detection",         tool:"service_detect",     endpoint:"/api/vuln/service_detect",     icon:""},
+  {name:"OS Fingerprint",            tool:"os_fingerprint",     endpoint:"/api/vuln/os_fingerprint",     icon:""},
+  {name:"Shodan InternetDB",         tool:"internetdb",         endpoint:"/api/vuln/internetdb",         icon:""},
   // Tier 3 — Crypto / TLS
-  {name:"SSL/TLS Deep Audit",        tool:"ssl_deep",           endpoint:"/api/vuln/ssl_deep",           icon:"🔒"},
+  {name:"SSL/TLS Deep Audit",        tool:"ssl_deep",           endpoint:"/api/vuln/ssl_deep",           icon:""},
   // Tier 4 — Credentials
-  {name:"Default Credentials",       tool:"default_creds",      endpoint:"/api/vuln/default_creds",      icon:"🔑"},
+  {name:"Default Credentials",       tool:"default_creds",      endpoint:"/api/vuln/default_creds",      icon:""},
   // Tier 5 — Service enumeration + CVE lookup
-  {name:"SNMP Enumeration",          tool:"snmp_enum",          endpoint:"/api/vuln/snmp_enum",          icon:"📊"},
-  {name:"SMB Enumeration",           tool:"smb_enum",           endpoint:"/api/vuln/smb_enum",           icon:"💾"},
-  {name:"FTP Enumeration",           tool:"ftp_enum",           endpoint:"/api/vuln/ftp_enum",           icon:"📁"},
-  {name:"SMTP Enumeration",          tool:"smtp_enum",          endpoint:"/api/vuln/smtp_enum",          icon:"📧"},
-  {name:"NFS Exposure",              tool:"nfs_check",          endpoint:"/api/vuln/nfs_check",          icon:"🗂️"},
-  {name:"Database Exposure",         tool:"db_exposure_check",  endpoint:"/api/vuln/db_exposure_check",  icon:"🗄️"},
-  {name:"CVE Matching (NVD)",        tool:"cve_match",          endpoint:"/api/vuln/cve_match",          icon:"📚"},
+  {name:"SNMP Enumeration",          tool:"snmp_enum",          endpoint:"/api/vuln/snmp_enum",          icon:""},
+  {name:"SMB Enumeration",           tool:"smb_enum",           endpoint:"/api/vuln/smb_enum",           icon:""},
+  {name:"FTP Enumeration",           tool:"ftp_enum",           endpoint:"/api/vuln/ftp_enum",           icon:""},
+  {name:"SMTP Enumeration",          tool:"smtp_enum",          endpoint:"/api/vuln/smtp_enum",          icon:""},
+  {name:"NFS Exposure",              tool:"nfs_check",          endpoint:"/api/vuln/nfs_check",          icon:""},
+  {name:"Database Exposure",         tool:"db_exposure_check",  endpoint:"/api/vuln/db_exposure_check",  icon:""},
+  {name:"CVE Matching (NVD)",        tool:"cve_match",          endpoint:"/api/vuln/cve_match",          icon:""},
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -14416,21 +14416,21 @@ const VULN_PHASES = [
 // endpoints/osint_orchestrator.py::OSINT_TOOLS_BY_TIER.
 const OSINT_PHASES = [
   // Tier 1 — Passive Domain Surface
-  {name:"GeoIP Lookup",          tool:"geoip",            endpoint:"/api/osint/geoip",            icon:"🌍"},
-  {name:"DNS Twist",             tool:"dnstwist",         endpoint:"/api/osint/dnstwist",         icon:"🔁"},
-  {name:"Wayback History",       tool:"wayback_history",  endpoint:"/api/osint/wayback_history",  icon:"📜"},
+  {name:"GeoIP Lookup",          tool:"geoip",            endpoint:"/api/osint/geoip",            icon:""},
+  {name:"DNS Twist",             tool:"dnstwist",         endpoint:"/api/osint/dnstwist",         icon:""},
+  {name:"Wayback History",       tool:"wayback_history",  endpoint:"/api/osint/wayback_history",  icon:""},
   // Tier 2 — People & Identity
-  {name:"Harvester Emails",      tool:"harvester_emails", endpoint:"/api/osint/harvester_emails", icon:"✉️"},
-  {name:"CT Log Emails",         tool:"crtsh_emails",     endpoint:"/api/osint/crtsh_emails",     icon:"📜"},
-  {name:"Social Handles",        tool:"social_handles",   endpoint:"/api/osint/social_handles",   icon:"👤"},
+  {name:"Harvester Emails",      tool:"harvester_emails", endpoint:"/api/osint/harvester_emails", icon:""},
+  {name:"CT Log Emails",         tool:"crtsh_emails",     endpoint:"/api/osint/crtsh_emails",     icon:""},
+  {name:"Social Handles",        tool:"social_handles",   endpoint:"/api/osint/social_handles",   icon:""},
   // Tier 3 — Leaks & Code
-  {name:"GitHub Recon",          tool:"github_recon",     endpoint:"/api/osint/github_recon",     icon:"🐙"},
-  {name:"Pastebin Search",       tool:"pastebin_search",  endpoint:"/api/osint/pastebin_search",  icon:"📋"},
-  {name:"Breach Check (HIBP)",   tool:"breach_check",     endpoint:"/api/osint/breach_check",     icon:"🚨"},
+  {name:"GitHub Recon",          tool:"github_recon",     endpoint:"/api/osint/github_recon",     icon:""},
+  {name:"Pastebin Search",       tool:"pastebin_search",  endpoint:"/api/osint/pastebin_search",  icon:""},
+  {name:"Breach Check (HIBP)",   tool:"breach_check",     endpoint:"/api/osint/breach_check",     icon:""},
   // Tier 4 — Metadata & Dorking
-  {name:"Document Metadata",     tool:"document_metadata",endpoint:"/api/osint/document_metadata",icon:"📄"},
-  {name:"Search Dorks",          tool:"search_dorks",     endpoint:"/api/osint/search_dorks",     icon:"🔎"},
-  {name:"Gravatar Check",        tool:"gravatar_check",   endpoint:"/api/osint/gravatar_check",   icon:"🖼️"},
+  {name:"Document Metadata",     tool:"document_metadata",endpoint:"/api/osint/document_metadata",icon:""},
+  {name:"Search Dorks",          tool:"search_dorks",     endpoint:"/api/osint/search_dorks",     icon:""},
+  {name:"Gravatar Check",        tool:"gravatar_check",   endpoint:"/api/osint/gravatar_check",   icon:""},
 ];
 
 const OSINT_SECTION_HEADERS = {
@@ -14444,18 +14444,18 @@ const OSINT_SECTION_HEADERS = {
 //  MOBILE MODULE — VL-FOUNDRY forge (2026-05-24)
 // ═══════════════════════════════════════════════════════════════
 const MOBILE_PHASES = [
-  {name:"Google Play App Enumeration",              tool:"google_play_app_enumeration",              endpoint:"/api/mobile/google_play_app_enumeration",              icon:"📱"},
-  {name:"Apple App Store Enumeration",              tool:"apple_app_store_enumeration",              endpoint:"/api/mobile/apple_app_store_enumeration",              icon:"🍎"},
-  {name:"App Version Staleness Check",              tool:"app_version_staleness_check",              endpoint:"/api/mobile/app_version_staleness_check",              icon:"⏳"},
-  {name:"APK Hardcoded Secrets Scan",               tool:"apk_hardcoded_secrets_scan",               endpoint:"/api/mobile/apk_hardcoded_secrets_scan",               icon:"🔑"},
-  {name:"GitHub Mobile Secret Leak Scan",           tool:"github_mobile_secret_leak_scan",           endpoint:"/api/mobile/github_mobile_secret_leak_scan",           icon:"🐙"},
-  {name:"Firebase Open Database Check",             tool:"firebase_open_database_check",             endpoint:"/api/mobile/firebase_open_database_check",             icon:"🔥"},
-  {name:"CT Logs — Mobile API Discovery",           tool:"certificate_transparency_mobile_api_discovery", endpoint:"/api/mobile/certificate_transparency_mobile_api_discovery", icon:"📜"},
-  {name:"SSL Labs — Mobile API TLS Grade",          tool:"ssl_labs_mobile_api_tls_grade",            endpoint:"/api/mobile/ssl_labs_mobile_api_tls_grade",            icon:"🔒"},
-  {name:"Wayback — Mobile API Endpoints",           tool:"wayback_machine_mobile_api_endpoint_harvest", endpoint:"/api/mobile/wayback_machine_mobile_api_endpoint_harvest", icon:"📜"},
-  {name:"VirusTotal APK Reputation",                tool:"virustotal_apk_reputation_check",          endpoint:"/api/mobile/virustotal_apk_reputation_check",          icon:"🛡️"},
-  {name:"Third-Party SDK CVE Check",                tool:"third_party_sdk_cve_check",                endpoint:"/api/mobile/third_party_sdk_cve_check",                icon:"📚"},
-  {name:"Shodan Mobile Backend Exposure",           tool:"shodan_mobile_backend_exposure_check",     endpoint:"/api/mobile/shodan_mobile_backend_exposure_check",     icon:"🌐"},
+  {name:"Google Play App Enumeration",              tool:"google_play_app_enumeration",              endpoint:"/api/mobile/google_play_app_enumeration",              icon:""},
+  {name:"Apple App Store Enumeration",              tool:"apple_app_store_enumeration",              endpoint:"/api/mobile/apple_app_store_enumeration",              icon:""},
+  {name:"App Version Staleness Check",              tool:"app_version_staleness_check",              endpoint:"/api/mobile/app_version_staleness_check",              icon:""},
+  {name:"APK Hardcoded Secrets Scan",               tool:"apk_hardcoded_secrets_scan",               endpoint:"/api/mobile/apk_hardcoded_secrets_scan",               icon:""},
+  {name:"GitHub Mobile Secret Leak Scan",           tool:"github_mobile_secret_leak_scan",           endpoint:"/api/mobile/github_mobile_secret_leak_scan",           icon:""},
+  {name:"Firebase Open Database Check",             tool:"firebase_open_database_check",             endpoint:"/api/mobile/firebase_open_database_check",             icon:""},
+  {name:"CT Logs — Mobile API Discovery",           tool:"certificate_transparency_mobile_api_discovery", endpoint:"/api/mobile/certificate_transparency_mobile_api_discovery", icon:""},
+  {name:"SSL Labs — Mobile API TLS Grade",          tool:"ssl_labs_mobile_api_tls_grade",            endpoint:"/api/mobile/ssl_labs_mobile_api_tls_grade",            icon:""},
+  {name:"Wayback — Mobile API Endpoints",           tool:"wayback_machine_mobile_api_endpoint_harvest", endpoint:"/api/mobile/wayback_machine_mobile_api_endpoint_harvest", icon:""},
+  {name:"VirusTotal APK Reputation",                tool:"virustotal_apk_reputation_check",          endpoint:"/api/mobile/virustotal_apk_reputation_check",          icon:""},
+  {name:"Third-Party SDK CVE Check",                tool:"third_party_sdk_cve_check",                endpoint:"/api/mobile/third_party_sdk_cve_check",                icon:""},
+  {name:"Shodan Mobile Backend Exposure",           tool:"shodan_mobile_backend_exposure_check",     endpoint:"/api/mobile/shodan_mobile_backend_exposure_check",     icon:""},
 ];
 
 const MOBILE_SECTION_HEADERS = {
@@ -14489,21 +14489,21 @@ function generateMobileReport(opts) { return generateOsintReport(opts); }
 // binary -> unified PDF report. Each scanner takes file path (not URL).
 const MOBILE_STATIC_PHASES = [
   // Tier 1 — Manifest & Configuration
-  {name:"Android Manifest Audit",          tool:"android_manifest_audit",        endpoint:"/api/mobile_static/android_manifest_audit",        icon:"📄"},
-  {name:"iOS Plist Audit",                 tool:"ios_plist_audit",               endpoint:"/api/mobile_static/ios_plist_audit",               icon:"🍎"},
-  {name:"Network Security Config Audit",   tool:"network_security_config_audit", endpoint:"/api/mobile_static/network_security_config_audit", icon:"🔒"},
+  {name:"Android Manifest Audit",          tool:"android_manifest_audit",        endpoint:"/api/mobile_static/android_manifest_audit",        icon:""},
+  {name:"iOS Plist Audit",                 tool:"ios_plist_audit",               endpoint:"/api/mobile_static/ios_plist_audit",               icon:""},
+  {name:"Network Security Config Audit",   tool:"network_security_config_audit", endpoint:"/api/mobile_static/network_security_config_audit", icon:""},
   // Tier 2 — Secrets & Crypto
-  {name:"Secret Extraction Audit",         tool:"secret_extraction_audit",       endpoint:"/api/mobile_static/secret_extraction_audit",       icon:"🔑"},
-  {name:"Weak Crypto Audit",               tool:"weak_crypto_audit",             endpoint:"/api/mobile_static/weak_crypto_audit",             icon:"🔓"},
-  {name:"Hardcoded URL/IP Audit",          tool:"hardcoded_url_and_ip_audit",    endpoint:"/api/mobile_static/hardcoded_url_and_ip_audit",    icon:"🌐"},
+  {name:"Secret Extraction Audit",         tool:"secret_extraction_audit",       endpoint:"/api/mobile_static/secret_extraction_audit",       icon:""},
+  {name:"Weak Crypto Audit",               tool:"weak_crypto_audit",             endpoint:"/api/mobile_static/weak_crypto_audit",             icon:""},
+  {name:"Hardcoded URL/IP Audit",          tool:"hardcoded_url_and_ip_audit",    endpoint:"/api/mobile_static/hardcoded_url_and_ip_audit",    icon:""},
   // Tier 3 — Native Binary Hardening
-  {name:"Native Lib Hardening",            tool:"native_lib_hardening",          endpoint:"/api/mobile_static/native_lib_hardening",          icon:"🛡️"},
-  {name:"PE Hardening Audit",              tool:"pe_hardening_audit",            endpoint:"/api/mobile_static/pe_hardening_audit",            icon:"💠"},
-  {name:"ELF Symbol Audit",                tool:"elf_symbol_audit",              endpoint:"/api/mobile_static/elf_symbol_audit",              icon:"🐧"},
+  {name:"Native Lib Hardening",            tool:"native_lib_hardening",          endpoint:"/api/mobile_static/native_lib_hardening",          icon:""},
+  {name:"PE Hardening Audit",              tool:"pe_hardening_audit",            endpoint:"/api/mobile_static/pe_hardening_audit",            icon:""},
+  {name:"ELF Symbol Audit",                tool:"elf_symbol_audit",              endpoint:"/api/mobile_static/elf_symbol_audit",              icon:""},
   // Tier 4 — Behavioral & Aggregate
-  {name:"Bytecode Malware Signatures",     tool:"bytecode_malware_signatures",   endpoint:"/api/mobile_static/bytecode_malware_signatures",   icon:"🦠"},
-  {name:"Third-Party SDK Audit",           tool:"third_party_sdk_audit",         endpoint:"/api/mobile_static/third_party_sdk_audit",         icon:"📦"},
-  {name:"MobSF Aggregate Scan",            tool:"mobsf_aggregate_scan",          endpoint:"/api/mobile_static/mobsf_aggregate_scan",          icon:"🤖"},
+  {name:"Bytecode Malware Signatures",     tool:"bytecode_malware_signatures",   endpoint:"/api/mobile_static/bytecode_malware_signatures",   icon:""},
+  {name:"Third-Party SDK Audit",           tool:"third_party_sdk_audit",         endpoint:"/api/mobile_static/third_party_sdk_audit",         icon:""},
+  {name:"MobSF Aggregate Scan",            tool:"mobsf_aggregate_scan",          endpoint:"/api/mobile_static/mobsf_aggregate_scan",          icon:""},
 ];
 
 const MOBILE_STATIC_SECTION_HEADERS = {
@@ -14600,19 +14600,19 @@ function generateMobileStaticReport(opts) {
 // ═══════════════════════════════════════════════════════════════
 const MOBILE_STORAGE_PHASES = [
   // Tier 1 — DB & Prefs
-  {name:"SharedPreferences Audit",       tool:"sharedprefs_audit",        endpoint:"/api/mobile_storage/sharedprefs_audit",        icon:"📋"},
-  {name:"SQLite Usage Audit",            tool:"sqlite_usage_audit",       endpoint:"/api/mobile_storage/sqlite_usage_audit",       icon:"🗃️"},
-  {name:"SQLCipher Presence Check",      tool:"sqlcipher_presence_check", endpoint:"/api/mobile_storage/sqlcipher_presence_check", icon:"🔐"},
-  {name:"iOS Plist Storage Audit",       tool:"ios_plist_storage_audit",  endpoint:"/api/mobile_storage/ios_plist_storage_audit",  icon:"🍎"},
+  {name:"SharedPreferences Audit",       tool:"sharedprefs_audit",        endpoint:"/api/mobile_storage/sharedprefs_audit",        icon:""},
+  {name:"SQLite Usage Audit",            tool:"sqlite_usage_audit",       endpoint:"/api/mobile_storage/sqlite_usage_audit",       icon:""},
+  {name:"SQLCipher Presence Check",      tool:"sqlcipher_presence_check", endpoint:"/api/mobile_storage/sqlcipher_presence_check", icon:""},
+  {name:"iOS Plist Storage Audit",       tool:"ios_plist_storage_audit",  endpoint:"/api/mobile_storage/ios_plist_storage_audit",  icon:""},
   // Tier 2 — Cache & Logs
-  {name:"FLAG_SECURE Audit",             tool:"flag_secure_audit",        endpoint:"/api/mobile_storage/flag_secure_audit",        icon:"📷"},
-  {name:"WebView Cache Audit",           tool:"webview_cache_audit",      endpoint:"/api/mobile_storage/webview_cache_audit",      icon:"🌐"},
-  {name:"Image Cache Paths Audit",       tool:"image_cache_paths_audit",  endpoint:"/api/mobile_storage/image_cache_paths_audit",  icon:"🖼️"},
-  {name:"Logcat Leak Audit",             tool:"logcat_leak_audit",        endpoint:"/api/mobile_storage/logcat_leak_audit",        icon:"📜"},
+  {name:"FLAG_SECURE Audit",             tool:"flag_secure_audit",        endpoint:"/api/mobile_storage/flag_secure_audit",        icon:""},
+  {name:"WebView Cache Audit",           tool:"webview_cache_audit",      endpoint:"/api/mobile_storage/webview_cache_audit",      icon:""},
+  {name:"Image Cache Paths Audit",       tool:"image_cache_paths_audit",  endpoint:"/api/mobile_storage/image_cache_paths_audit",  icon:""},
+  {name:"Logcat Leak Audit",             tool:"logcat_leak_audit",        endpoint:"/api/mobile_storage/logcat_leak_audit",        icon:""},
   // Tier 3 — Perms & Backup
-  {name:"Clipboard API Audit",           tool:"clipboard_api_audit",      endpoint:"/api/mobile_storage/clipboard_api_audit",      icon:"📎"},
-  {name:"External Storage Audit",        tool:"external_storage_audit",   endpoint:"/api/mobile_storage/external_storage_audit",   icon:"💾"},
-  {name:"Backup Extraction Audit",       tool:"backup_extraction_audit",  endpoint:"/api/mobile_storage/backup_extraction_audit",  icon:"💿"},
+  {name:"Clipboard API Audit",           tool:"clipboard_api_audit",      endpoint:"/api/mobile_storage/clipboard_api_audit",      icon:""},
+  {name:"External Storage Audit",        tool:"external_storage_audit",   endpoint:"/api/mobile_storage/external_storage_audit",   icon:""},
+  {name:"Backup Extraction Audit",       tool:"backup_extraction_audit",  endpoint:"/api/mobile_storage/backup_extraction_audit",  icon:""},
 ];
 
 const MOBILE_STORAGE_SECTION_HEADERS = {
@@ -14784,13 +14784,13 @@ function generateMobileStorageReport(opts) {
 // ═══════════════════════════════════════════════════════════════
 const MOBILE_RUNTIME_PHASES = [
   // Tier 1 — Anti-Tamper Detection
-  {name:"Root Detection Audit",       tool:"root_detection_audit",      endpoint:"/api/mobile_runtime/root_detection_audit",      icon:"🔓"},
-  {name:"Anti-Debug Audit",           tool:"anti_debug_audit",          endpoint:"/api/mobile_runtime/anti_debug_audit",          icon:"🐛"},
-  {name:"Anti-Frida Audit",           tool:"anti_frida_audit",          endpoint:"/api/mobile_runtime/anti_frida_audit",          icon:"🪝"},
+  {name:"Root Detection Audit",       tool:"root_detection_audit",      endpoint:"/api/mobile_runtime/root_detection_audit",      icon:""},
+  {name:"Anti-Debug Audit",           tool:"anti_debug_audit",          endpoint:"/api/mobile_runtime/anti_debug_audit",          icon:""},
+  {name:"Anti-Frida Audit",           tool:"anti_frida_audit",          endpoint:"/api/mobile_runtime/anti_frida_audit",          icon:""},
   // Tier 2 — Attestation & Environment
-  {name:"Anti-Emulator Audit",        tool:"anti_emulator_audit",       endpoint:"/api/mobile_runtime/anti_emulator_audit",       icon:"📱"},
-  {name:"Play Integrity Audit",       tool:"play_integrity_audit",      endpoint:"/api/mobile_runtime/play_integrity_audit",      icon:"🛡️"},
-  {name:"iOS Jailbreak Detection",    tool:"ios_jailbreak_detection_audit", endpoint:"/api/mobile_runtime/ios_jailbreak_detection_audit", icon:"🍎"},
+  {name:"Anti-Emulator Audit",        tool:"anti_emulator_audit",       endpoint:"/api/mobile_runtime/anti_emulator_audit",       icon:""},
+  {name:"Play Integrity Audit",       tool:"play_integrity_audit",      endpoint:"/api/mobile_runtime/play_integrity_audit",      icon:""},
+  {name:"iOS Jailbreak Detection",    tool:"ios_jailbreak_detection_audit", endpoint:"/api/mobile_runtime/ios_jailbreak_detection_audit", icon:""},
 ];
 
 const MANUAL_TESTS_MOBILE_RUNTIME = [
@@ -15039,14 +15039,14 @@ function generateMobileRuntimeReport(opts) {
 // ═══════════════════════════════════════════════════════════════
 const MOBILE_CRYPTO_PHASES = [
   // Tier 1 — Algorithm strength
-  {name:"Weak Algorithm Audit",        tool:"weak_algo_audit",              endpoint:"/api/mobile_crypto/weak_algo_audit",              icon:"🧪"},
-  {name:"AES/ECB Mode Audit",          tool:"aes_ecb_mode_audit",           endpoint:"/api/mobile_crypto/aes_ecb_mode_audit",           icon:"🟦"},
-  {name:"Insecure PRNG Audit",         tool:"insecure_prng_audit",          endpoint:"/api/mobile_crypto/insecure_prng_audit",          icon:"🎲"},
-  {name:"Custom Crypto Audit",         tool:"custom_crypto_audit",          endpoint:"/api/mobile_crypto/custom_crypto_audit",          icon:"🛠️"},
+  {name:"Weak Algorithm Audit",        tool:"weak_algo_audit",              endpoint:"/api/mobile_crypto/weak_algo_audit",              icon:""},
+  {name:"AES/ECB Mode Audit",          tool:"aes_ecb_mode_audit",           endpoint:"/api/mobile_crypto/aes_ecb_mode_audit",           icon:""},
+  {name:"Insecure PRNG Audit",         tool:"insecure_prng_audit",          endpoint:"/api/mobile_crypto/insecure_prng_audit",          icon:""},
+  {name:"Custom Crypto Audit",         tool:"custom_crypto_audit",          endpoint:"/api/mobile_crypto/custom_crypto_audit",          icon:""},
   // Tier 2 — Keys & TLS
-  {name:"Hardcoded Keys Audit",        tool:"hardcoded_keys_audit",         endpoint:"/api/mobile_crypto/hardcoded_keys_audit",         icon:"🔑"},
-  {name:"TLS Version Audit",           tool:"tls_version_audit",            endpoint:"/api/mobile_crypto/tls_version_audit",            icon:"🔒"},
-  {name:"Cert Validation Bypass",      tool:"cert_validation_bypass_audit", endpoint:"/api/mobile_crypto/cert_validation_bypass_audit", icon:"⚠️"},
+  {name:"Hardcoded Keys Audit",        tool:"hardcoded_keys_audit",         endpoint:"/api/mobile_crypto/hardcoded_keys_audit",         icon:""},
+  {name:"TLS Version Audit",           tool:"tls_version_audit",            endpoint:"/api/mobile_crypto/tls_version_audit",            icon:""},
+  {name:"Cert Validation Bypass",      tool:"cert_validation_bypass_audit", endpoint:"/api/mobile_crypto/cert_validation_bypass_audit", icon:""},
 ];
 
 const MANUAL_TESTS_MOBILE_CRYPTO = [
@@ -15162,16 +15162,16 @@ function generateMobileCryptoReport(opts) {
 // ═══════════════════════════════════════════════════════════════
 const MOBILE_NETWORK_PHASES = [
   // Tier 1 — Transport
-  {name:"SSL Pinning Detection",   tool:"ssl_pinning_detection", endpoint:"/api/mobile_network/ssl_pinning_detection", icon:"📌"},
-  {name:"Proxy Bypass Audit",      tool:"proxy_bypass_audit",    endpoint:"/api/mobile_network/proxy_bypass_audit",    icon:"🚧"},
-  {name:"HTTP Method Audit",       tool:"http_method_audit",     endpoint:"/api/mobile_network/http_method_audit",     icon:"🔣"},
+  {name:"SSL Pinning Detection",   tool:"ssl_pinning_detection", endpoint:"/api/mobile_network/ssl_pinning_detection", icon:""},
+  {name:"Proxy Bypass Audit",      tool:"proxy_bypass_audit",    endpoint:"/api/mobile_network/proxy_bypass_audit",    icon:""},
+  {name:"HTTP Method Audit",       tool:"http_method_audit",     endpoint:"/api/mobile_network/http_method_audit",     icon:""},
   // Tier 2 — Endpoint discovery
-  {name:"Endpoint Classifier",     tool:"endpoint_classifier",   endpoint:"/api/mobile_network/endpoint_classifier",   icon:"🗂️"},
-  {name:"WebSocket / gRPC Audit",  tool:"websocket_grpc_audit",  endpoint:"/api/mobile_network/websocket_grpc_audit",  icon:"🔌"},
-  {name:"Network Lib Inventory",   tool:"network_lib_inventory", endpoint:"/api/mobile_network/network_lib_inventory", icon:"📚"},
+  {name:"Endpoint Classifier",     tool:"endpoint_classifier",   endpoint:"/api/mobile_network/endpoint_classifier",   icon:""},
+  {name:"WebSocket / gRPC Audit",  tool:"websocket_grpc_audit",  endpoint:"/api/mobile_network/websocket_grpc_audit",  icon:""},
+  {name:"Network Lib Inventory",   tool:"network_lib_inventory", endpoint:"/api/mobile_network/network_lib_inventory", icon:""},
   // Tier 3 — Wireless
-  {name:"BLE Attack Surface",      tool:"ble_attack_surface",    endpoint:"/api/mobile_network/ble_attack_surface",    icon:"📶"},
-  {name:"NFC Attack Surface",      tool:"nfc_attack_surface",    endpoint:"/api/mobile_network/nfc_attack_surface",    icon:"📲"},
+  {name:"BLE Attack Surface",      tool:"ble_attack_surface",    endpoint:"/api/mobile_network/ble_attack_surface",    icon:""},
+  {name:"NFC Attack Surface",      tool:"nfc_attack_surface",    endpoint:"/api/mobile_network/nfc_attack_surface",    icon:""},
 ];
 
 const MANUAL_TESTS_MOBILE_NETWORK = [
@@ -15435,13 +15435,13 @@ function generateMobileNetworkReport(opts) {
 //  BUFFER OVERFLOW MODULE
 // ═══════════════════════════════════════════════════════════════
 const BOF_PHASES = [
-  {id:1, name:"Fuzzing",        icon:"🔨", color:"#3b82f6", desc:"Send increasing payloads to find the crash point"},
-  {id:2, name:"EIP Offset",     icon:"📍", color:"#8b5cf6", desc:"Use cyclic pattern to find exact bytes to EIP"},
-  {id:3, name:"EIP Control",    icon:"🎯", color:"#06b6d4", desc:"Confirm you control EIP with BBBB (0x42424242)"},
-  {id:4, name:"Bad Characters", icon:"🚫", color:"#f59e0b", desc:"Find bytes rejected by the application"},
-  {id:5, name:"JMP ESP",        icon:"🔀", color:"#10b981", desc:"Locate JMP ESP gadget in unprotected module"},
-  {id:6, name:"Shellcode",      icon:"💣", color:"#ef4444", desc:"Generate reverse shell payload with msfvenom"},
-  {id:7, name:"Final Exploit",  icon:"🐚", color:"#22c55e", desc:"Assemble and deliver the complete exploit"},
+  {id:1, name:"Fuzzing",        icon:"", color:"#3b82f6", desc:"Send increasing payloads to find the crash point"},
+  {id:2, name:"EIP Offset",     icon:"", color:"#8b5cf6", desc:"Use cyclic pattern to find exact bytes to EIP"},
+  {id:3, name:"EIP Control",    icon:"", color:"#06b6d4", desc:"Confirm you control EIP with BBBB (0x42424242)"},
+  {id:4, name:"Bad Characters", icon:"", color:"#f59e0b", desc:"Find bytes rejected by the application"},
+  {id:5, name:"JMP ESP",        icon:"", color:"#10b981", desc:"Locate JMP ESP gadget in unprotected module"},
+  {id:6, name:"Shellcode",      icon:"", color:"#ef4444", desc:"Generate reverse shell payload with msfvenom"},
+  {id:7, name:"Final Exploit",  icon:"", color:"#22c55e", desc:"Assemble and deliver the complete exploit"},
 ];
 
 
@@ -15727,7 +15727,7 @@ function generateExploitReport({results, date, pdfConfig}) {
      computedFrom (entry) => string — derived display value
 */
 function ShellPanel({
-  title, subtitle, icon = "💥", color = "#dc2626",
+  title, subtitle, icon = "", color = "#dc2626",
   catalogFetchUrl, catalogKey = "items",
   configFields = [], phases = [],
   runEndpoint, buildRunBody,
@@ -15892,7 +15892,7 @@ function ShellPanel({
     appendLog(`▶ Module:   ${selected.id}`, "#fbbf24");
     if (selected.cve) appendLog(`▶ CVE:      ${selected.cve}  ·  CVSS ${selected.cvss ?? "?"}  ·  ${selected.category ?? ""}`, "#fbbf24");
     appendLog("", "#94a3b8");
-    appendLog(phases.length ? "⏱ Phase 1: Pre-flight (DNS + port reachability) ..." : "⏱ Sending request ...", "#60a5fa");
+    appendLog(phases.length ? "Phase 1: Pre-flight (DNS + port reachability) ..." : "Sending request ...", "#60a5fa");
 
     setRunning(p => ({...p, [selected.id]: true}));
     setResults(p => ({...p, [selected.id]: null}));
@@ -15909,23 +15909,23 @@ function ShellPanel({
       setResults(p => ({...p, [selected.id]: r}));
 
       if (r.ok === false && r.error && /resolve|not accepting/i.test(r.error)) {
-        appendLog("❌ Phase 1: " + r.error, "#f87171");
+        appendLog("Phase 1: " + r.error, "#f87171");
       } else if (r.ok === false) {
-        appendLog("❌ " + (r.error || "Failed"), "#f87171");
+        appendLog("" + (r.error || "Failed"), "#f87171");
       } else if (phases.length) {
-        appendLog("✅ Phase 1: target reachable", "#4ade80");
-        appendLog("⏱ Phase 2: Sending exploit trigger ...", "#60a5fa");
-        appendLog("✅ Phase 2: trigger accepted by target", "#4ade80");
-        appendLog(`⏱ Phase 3: Verifying ${isInteractive ? "shell session" : "data extraction"} ...`, "#60a5fa");
-        appendLog("✅ Phase 3: " + (r.evidence || "compromise verified"), "#4ade80");
+        appendLog("Phase 1: target reachable", "#4ade80");
+        appendLog("Phase 2: Sending exploit trigger ...", "#60a5fa");
+        appendLog("Phase 2: trigger accepted by target", "#4ade80");
+        appendLog(`Phase 3: Verifying ${isInteractive ? "shell session" : "data extraction"} ...`, "#60a5fa");
+        appendLog("Phase 3: " + (r.evidence || "compromise verified"), "#4ade80");
         if (r.shell_id) {
-          appendLog(`⏱ Phase 4: Opening ${isInteractive ? "interactive shell" : "data view"} ...`, "#60a5fa");
-          appendLog(`✅ Phase 4: session sid=${r.shell_id} ready`, "#4ade80");
+          appendLog(`Phase 4: Opening ${isInteractive ? "interactive shell" : "data view"} ...`, "#60a5fa");
+          appendLog(`Phase 4: session sid=${r.shell_id} ready`, "#4ade80");
         }
         appendLog("", "#94a3b8");
-        appendLog("🎉 AUTO-RUN COMPLETE — see Results / Shell tab", "#22c55e");
+        appendLog("AUTO-RUN COMPLETE — see Results / Shell tab", "#22c55e");
       } else {
-        appendLog("✅ Complete", "#4ade80");
+        appendLog("Complete", "#4ade80");
       }
 
       if (r.ok && r.shell_id && shellEndpoints) {
@@ -15940,12 +15940,12 @@ function ShellPanel({
     } catch (err) {
       // AbortError is the user clicking Stop — distinct from a real failure.
       if (err && (err.name === "AbortError" || /aborted/i.test(String(err)))) {
-        appendLog("⏹ Stopped by user. Backend may still finish — refresh to check.", "#fbbf24");
+        appendLog("Stopped by user. Backend may still finish — refresh to check.", "#fbbf24");
         setResults(p => ({...p, [selected.id]: {ok: false, error: "Stopped by user",
           suggested_action: "The backend may still complete in the background. " +
                              "Refresh the page in ~30s to see if a session opened."}}));
       } else {
-        appendLog("❌ Network error: " + String(err), "#f87171");
+        appendLog("Network error: " + String(err), "#f87171");
         setResults(p => ({...p, [selected.id]: {ok: false, error: String(err)}}));
       }
     }
@@ -16082,7 +16082,7 @@ function ShellPanel({
               background: "linear-gradient(135deg, #ea580c, #c2410c)",
               color: "#fff", border: "none", borderRadius: 6, cursor: "pointer",
               boxShadow: "0 4px 12px rgba(234,88,12,0.3)"}}>
-            📄 Report
+            Report
           </button>
         )}
       </div>
@@ -16095,7 +16095,7 @@ function ShellPanel({
         <div>
           <div style={panelStyle}>
             <div style={panelHead}>
-              <span>🎯</span> <span>Target Configuration</span>
+              <span></span> <span>Target Configuration</span>
             </div>
 
             {catalogFetchUrl && (
@@ -16123,7 +16123,7 @@ function ShellPanel({
           {phases.length > 0 && (
             <div style={panelStyle}>
               <div style={{...panelHead, marginBottom: 6}}>
-                <span>🔥</span> <span>Phases (auto-run in sequence)</span>
+                <span></span> <span>Phases (auto-run in sequence)</span>
               </div>
               <div style={{fontSize: 10, color: "#64748b", marginBottom: 10, lineHeight: 1.5}}>
                 Clicking AUTO-RUN fires all phases below in order.
@@ -16154,7 +16154,7 @@ function ShellPanel({
                 background: "linear-gradient(135deg, #f59e0b, #b45309)",
                 color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
                 boxShadow: "0 6px 20px rgba(245,158,11,0.45)"}}>
-              ⏹ STOP
+              STOP
             </button>
           ) : (
             <button onClick={runSelected} disabled={!selected}
@@ -16162,7 +16162,7 @@ function ShellPanel({
                 background: `linear-gradient(135deg, ${color}, #991b1b)`,
                 color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
                 boxShadow: `0 6px 20px ${color}55`}}>
-              🚀 AUTO-RUN (All Phases)
+              AUTO-RUN (All Phases)
             </button>
           )}
         </div>
@@ -16217,7 +16217,7 @@ function ShellPanel({
                 ) : (
                   <>
                     <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 14}}>
-                      <span style={{fontSize: 18}}>{r.ok ? "✅" : "❌"}</span>
+                      <span style={{fontSize: 18}}>{r.ok ? "" : ""}</span>
                       <span style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.5,
                         color: r.ok ? "#4ade80" : "#f87171"}}>
                         {r.ok ? "EVIDENCE OF COMPROMISE" : "FAILURE REASON"}
@@ -16238,7 +16238,7 @@ function ShellPanel({
                         background: "rgba(251,191,36,0.10)",
                         border: "1px solid rgba(251,191,36,0.35)",
                         fontSize: 12, color: "#fde68a", lineHeight: 1.6}}>
-                        <span style={{color: "#fbbf24", fontWeight: 800, marginRight: 6}}>💡 What to try:</span>
+                        <span style={{color: "#fbbf24", fontWeight: 800, marginRight: 6}}>What to try:</span>
                         {r.suggested_action}
                       </div>
                     )}
@@ -16248,7 +16248,7 @@ function ShellPanel({
                         background: "rgba(59,130,246,0.10)",
                         border: "1px solid rgba(59,130,246,0.35)",
                         fontSize: 11, color: "#bfdbfe", lineHeight: 1.5}}>
-                        <span style={{color: "#60a5fa", fontWeight: 800, marginRight: 6}}>♻ Auto-recovery:</span>
+                        <span style={{color: "#60a5fa", fontWeight: 800, marginRight: 6}}>Auto-recovery:</span>
                         We detected a stuck lab container and restarted it automatically before retrying.
                       </div>
                     )}
@@ -16312,7 +16312,7 @@ function ShellPanel({
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   flexWrap: "wrap", gap: 8}}>
                   <div style={{display: "flex", alignItems: "center", gap: 10}}>
-                    <span style={{fontSize: 14}}>{isInteractive ? "🐚" : "📊"}</span>
+                    <span style={{fontSize: 14}}>{isInteractive ? "" : ""}</span>
                     <span style={{fontSize: 12, fontWeight: 800, letterSpacing: 1.2,
                       color: isInteractive ? "#86efac" : "#93c5fd"}}>
                       {activeShell ? (isInteractive ? "LIVE SHELL" : "EXTRACTED DATA") : "SHELL — Waiting for connection…"}
@@ -16332,11 +16332,11 @@ function ShellPanel({
                       <button onClick={copyOutput}
                         style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
                           background: "#1e293b", color: "#cbd5e1",
-                          border: "1px solid #334155", borderRadius: 4, cursor: "pointer"}}>📋 COPY</button>
+                          border: "1px solid #334155", borderRadius: 4, cursor: "pointer"}}>COPY</button>
                       <button onClick={closeShell}
                         style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
                           background: "#7f1d1d", color: "#fff", border: "none",
-                          borderRadius: 4, cursor: "pointer"}}>✕ CLOSE</button>
+                          borderRadius: 4, cursor: "pointer"}}>CLOSE</button>
                     </div>
                   )}
                 </div>
@@ -16387,7 +16387,7 @@ function ShellPanel({
                     </>
                   ) : (
                     <span style={{fontSize: 11, color: "#94a3b8", fontStyle: "italic"}}>
-                      {activeShell ? "📊 One-shot data dump — no interactive shell" : "⏱ waiting for shell…"}
+                      {activeShell ? "One-shot data dump — no interactive shell" : "waiting for shell…"}
                     </span>
                   )}
                 </div>
@@ -16399,10 +16399,10 @@ function ShellPanel({
           <div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
             <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
               background: "rgba(34,197,94,0.12)", color: "#4ade80", borderRadius: 5,
-              border: "1px solid rgba(34,197,94,0.3)"}}>✓ {successCount} success</span>
+              border: "1px solid rgba(34,197,94,0.3)"}}>{successCount} success</span>
             <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
               background: "rgba(220,38,38,0.12)", color: "#f87171", borderRadius: 5,
-              border: "1px solid rgba(220,38,38,0.3)"}}>✗ {failedCount} failed</span>
+              border: "1px solid rgba(220,38,38,0.3)"}}>{failedCount} failed</span>
             <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
               background: "rgba(100,116,139,0.12)", color: "#94a3b8", borderRadius: 5,
               border: "1px solid rgba(100,116,139,0.3)"}}>○ {notRunCount} not run</span>
@@ -16429,7 +16429,7 @@ function ExploitationModule_legacy({token, apiUrl}) {
       <ShellPanel
         title="Exploitation Techniques"
         subtitle="direct-socket exploits · vsftpd · DVWA cmdi · DVWA SQLi · Juice Shop · bWAPP · zero false positives"
-        icon="💥"
+        icon=""
         color="#dc2626"
 
         catalogFetchUrl="/api/exploit/catalog"
@@ -16743,18 +16743,18 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
         } catch(e){}
       },2000);
     } catch(e) {
-      setOutput("⚠ Backend not running\nStart uvicorn on Kali:\ncd ~/Cyber-project && uvicorn main:app --host 0.0.0.0 --port 8000 --reload");
+      setOutput("Backend not running\nStart uvicorn on Kali:\ncd ~/Cyber-project && uvicorn main:app --host 0.0.0.0 --port 8000 --reload");
       setLoading(false);
     }
   };
 
   const sendCmd = async (cmd) => {
     if(!cmd.trim()) return;
-    if(!sid){ setOutput(p=>p+"\n⚠ No session — backend not running"); return; }
+    if(!sid){ setOutput(p=>p+"\nNo session — backend not running"); return; }
     setHistory(p=>[cmd,...p.filter(x=>x!==cmd)].slice(0,20));
     setHIdx(-1); setInput("");
     try { await post("/api/terminal/input",{session_id:sid,input:cmd}); }
-    catch(e){ setOutput(p=>p+"\n⚠ Send failed: "+e.message); }
+    catch(e){ setOutput(p=>p+"\nSend failed: "+e.message); }
   };
 
   useEffect(()=>{
@@ -16770,7 +16770,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#0a0f1e",borderBottom:`1px solid ${C}33`,borderRadius:"10px 10px 0 0",flexShrink:0}}>
         <div style={{width:8,height:8,borderRadius:"50%",background:sid?"#22c55e":"#ef4444"}}/>
         <span style={{color:C,fontSize:11,fontWeight:700,fontFamily:"monospace",flex:1}}>{title}</span>
-        {onClose && <button onClick={onClose} style={{background:"none",border:"none",color:"#475569",cursor:"pointer",fontSize:13,padding:"0 4px"}}>✕</button>}
+        {onClose && <button onClick={onClose} style={{background:"none",border:"none",color:"#475569",cursor:"pointer",fontSize:13,padding:"0 4px"}}></button>}
       </div>
 
       {/* Preset commands */}
@@ -16785,7 +16785,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
               </button>
               <button onClick={()=>navigator.clipboard.writeText(cmd.cmd)}
                 style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"3px 6px",color:"#64748b",fontSize:10,cursor:"pointer"}}
-                title="Copy">📋</button>
+                title="Copy"></button>
             </div>
           ))}
         </div>
@@ -16873,7 +16873,7 @@ function BufferOverflowModule_legacy({token}) {
   const reset = () => {
     stopRef.current = true;
     setRunning(false); setWaitEip(false); setPhase(1);
-    setLog(["🔄 Reset — ready"]); setDone(new Set());
+    setLog(["Reset — ready"]); setDone(new Set());
     setCrashAt(""); setOffset(""); setJmpEsp(""); setShellcode(""); setPattern("");
     if(eipResolve.current){ eipResolve.current(""); eipResolve.current=null; }
     if(jmpResolve.current){ jmpResolve.current(""); jmpResolve.current=null; }
@@ -16882,11 +16882,11 @@ function BufferOverflowModule_legacy({token}) {
 
   const sendPattern = async () => {
     if(!pattern) return;
-    add("📤 Sending pattern...");
+    add("Sending pattern...");
     try {
       const r = await call("/api/bof/send_pattern", {...base(), pattern});
-      add(r.sent ? "✅ Pattern sent — GEF shows $eip on crash" : `⚠ ${r.message}`);
-    } catch(e){ add(`❌ ${e.message}`); }
+      add(r.sent ? "Pattern sent — GEF shows $eip on crash" : `${r.message}`);
+    } catch(e){ add(`${e.message}`); }
   };
 
   const run = async () => {
@@ -16895,26 +16895,26 @@ function BufferOverflowModule_legacy({token}) {
     setRunning(true); setLog([]); setDone(new Set());
     try {
       // Phase 1 — Fuzz
-      setPhase(1); add("⏳ Phase 1: Fuzzing...");
+      setPhase(1); add("Phase 1: Fuzzing...");
       const r1 = await call("/api/bof/fuzz", {...base(), fuzz_step:100});
       if(r1.error) throw new Error(r1.error);
       setCrashAt(String(r1.crash_at)); mark(1);
-      add(`✅ Phase 1: Crashed at ${r1.crash_at} bytes`);
+      add(`Phase 1: Crashed at ${r1.crash_at} bytes`);
       if(stopRef.current) throw new Error("Stopped");
 
       // Phase 2 — EIP Offset
       setPhase(2);
       const patSize = (r1.crash_at||500)+200;
-      add("⏳ Phase 2: Generating cyclic pattern...");
+      add("Phase 2: Generating cyclic pattern...");
       const r2 = await call("/api/bof/offset", {...base(), pattern_size:patSize});
       if(r2.pattern) setPattern(r2.pattern);
-      add(`✅ Pattern ready (${patSize} bytes)`);
+      add(`Pattern ready (${patSize} bytes)`);
       add("");
-      add("📋 GEF STEPS:");
+      add("GEF STEPS:");
       add("  1. Open terminal -> gdb /tmp/vulnserver");
       add("  2. (gdb) handle SIGPIPE noprint nostop pass");
       add("  3. (gdb) run");
-      add("  4. Click  📤 Send Pattern  button below");
+      add("  4. Click  Send Pattern  button below");
       add("  5. GEF auto-shows: $eip : 0xXXXXXXXX");
       add("  6. Paste that value in the box below");
       add("");
@@ -16922,33 +16922,33 @@ function BufferOverflowModule_legacy({token}) {
       const eipVal = await new Promise(res=>{ eipResolve.current=res; });
       setWaitEip(false);
       if(!eipVal||stopRef.current) throw new Error("Stopped");
-      add(`⏳ Calculating offset for EIP = ${eipVal}...`);
+      add(`Calculating offset for EIP = ${eipVal}...`);
       const r2b = await call("/api/bof/offset", {...base(), pattern_size:patSize, eip_value:eipVal});
       if(r2b.error) throw new Error(r2b.error);
       setOffset(String(r2b.offset)); mark(2);
-      add(`✅ Phase 2: Offset = ${r2b.offset} bytes`);
+      add(`Phase 2: Offset = ${r2b.offset} bytes`);
       if(stopRef.current) throw new Error("Stopped");
 
       // Phase 3 — EIP Control
-      setPhase(3); add("⏳ Phase 3: Confirming EIP control...");
+      setPhase(3); add("Phase 3: Confirming EIP control...");
       const r3 = await call("/api/bof/eip_control", {...base(), offset:parseInt(r2b.offset)});
-      mark(3); add(`✅ Phase 3: ${r3.message||"EIP = 42424242 confirmed"}`);
+      mark(3); add(`Phase 3: ${r3.message||"EIP = 42424242 confirmed"}`);
       if(stopRef.current) throw new Error("Stopped");
 
       // Phase 4 — Bad Chars
-      setPhase(4); add("⏳ Phase 4: Finding bad characters...");
+      setPhase(4); add("Phase 4: Finding bad characters...");
       const r4 = await call("/api/bof/badchars", {...base(), offset:parseInt(r2b.offset)});
       setBadChars(r4.bad_chars||"\\x00"); mark(4);
-      add(`✅ Phase 4: Bad chars = ${r4.bad_chars||"\\x00 only"}`);
+      add(`Phase 4: Bad chars = ${r4.bad_chars||"\\x00 only"}`);
       if(stopRef.current) throw new Error("Stopped");
 
       // Phase 5 — JMP ESP
-      setPhase(5); add("⏳ Phase 5: Finding JMP ESP...");
+      setPhase(5); add("Phase 5: Finding JMP ESP...");
       const r5 = await call("/api/bof/jmpesp", {...base(), offset:parseInt(r2b.offset), binary_path:binaryPath});
       let _jmpEsp = r5.address||"";
-      if(_jmpEsp){ setJmpEsp(_jmpEsp); mark(5); add(`✅ Phase 5: JMP ESP = ${_jmpEsp}`); }
+      if(_jmpEsp){ setJmpEsp(_jmpEsp); mark(5); add(`Phase 5: JMP ESP = ${_jmpEsp}`); }
       else {
-        add("⚠ Phase 5: JMP ESP not auto-found — enter manually");
+        add("Phase 5: JMP ESP not auto-found — enter manually");
         add("  In pwndbg terminal type:");
         add("  rop --grep \"jmp esp\"");
         add("  Copy the address (e.g. 0xf7e34d85) and paste below ↓");
@@ -16957,51 +16957,51 @@ function BufferOverflowModule_legacy({token}) {
         setWaitJmp(false);
         if(!_jmpEsp||stopRef.current) throw new Error("Stopped");
         setJmpEsp(_jmpEsp); mark(5);
-        add(`✅ Phase 5: JMP ESP = ${_jmpEsp} (manual)`);
+        add(`Phase 5: JMP ESP = ${_jmpEsp} (manual)`);
       }
       if(stopRef.current) throw new Error("Stopped");
 
       // Phase 6 — Shellcode
-      setPhase(6); add("⏳ Phase 6: Generating shellcode...");
+      setPhase(6); add("Phase 6: Generating shellcode...");
       const r6 = await call("/api/bof/shellcode", {...base(), offset:parseInt(r2b.offset), jmp_esp:_jmpEsp});
       if(r6.error) throw new Error(r6.error);
       setShellcode(r6.shellcode_bytes||""); mark(6);
-      add(`✅ Phase 6: Shellcode ready`);
+      add(`Phase 6: Shellcode ready`);
       if(stopRef.current) throw new Error("Stopped");
 
       // Phase 7 — Exploit
-      setPhase(7); add("⏳ Phase 7: Sending exploit...");
+      setPhase(7); add("Phase 7: Sending exploit...");
       add(`  Start listener: nc -lvnp ${lport}`);
       const r7 = await call("/api/bof/exploit", {...base(), offset:parseInt(r2b.offset), jmp_esp:_jmpEsp, shellcode:r6.shellcode_bytes});
       if(r7.error) throw new Error(r7.error);
-      mark(7); add(`✅ Phase 7: ${r7.message||"Exploit sent!"}`);
-      add("🎯 Check your netcat listener for shell!");
+      mark(7); add(`Phase 7: ${r7.message||"Exploit sent!"}`);
+      add("Check your netcat listener for shell!");
 
     } catch(e){
-      add(stopRef.current ? "⏹ Stopped" : `❌ ${e.message}`);
+      add(stopRef.current ? "Stopped" : `${e.message}`);
     }
     stopRef.current = false; setRunning(false);
   };
 
   const PHASES = [
-    {n:1,icon:"🔥",label:"Fuzzing",      desc:"Find crash point"},
-    {n:2,icon:"📍",label:"EIP Offset",   desc:"Cyclic pattern -> offset"},
-    {n:3,icon:"🎯",label:"EIP Control",  desc:"Confirm BBBB = 0x42424242"},
-    {n:4,icon:"🚫",label:"Bad Chars",    desc:"Bytes that break shellcode"},
-    {n:5,icon:"🔀",label:"JMP ESP",      desc:"Find return address"},
-    {n:6,icon:"💀",label:"Shellcode",    desc:"msfvenom payload"},
-    {n:7,icon:"🎉",label:"Exploit",      desc:"Send final exploit"},
+    {n:1,icon:"",label:"Fuzzing",      desc:"Find crash point"},
+    {n:2,icon:"",label:"EIP Offset",   desc:"Cyclic pattern -> offset"},
+    {n:3,icon:"",label:"EIP Control",  desc:"Confirm BBBB = 0x42424242"},
+    {n:4,icon:"",label:"Bad Chars",    desc:"Bytes that break shellcode"},
+    {n:5,icon:"",label:"JMP ESP",      desc:"Find return address"},
+    {n:6,icon:"",label:"Shellcode",    desc:"msfvenom payload"},
+    {n:7,icon:"",label:"Exploit",      desc:"Send final exploit"},
   ];
 
   const G = "#22c55e";
 
   const DEFAULT_TERMINALS = [
-    {id:"setup",   title:"⚙ Setup",    color:"#f59e0b", presetCmds:[
+    {id:"setup",   title:"Setup",    color:"#f59e0b", presetCmds:[
       {label:"Disable ASLR",   cmd:"echo 0 | sudo tee /proc/sys/kernel/randomize_va_space"},
       {label:"Check vulnserver",cmd:"ls -la /tmp/vulnserver && echo 'Binary OK'"},
       {label:"Kill vulnserver", cmd:"pkill -f vulnserver; echo 'Killed'"},
     ]},
-    {id:"gdb",     title:"🐛 GDB/pwndbg", color:"#22c55e", presetCmds:[
+    {id:"gdb",     title:"GDB/pwndbg", color:"#22c55e", presetCmds:[
       {label:"Start GDB",       cmd:"gdb /tmp/vulnserver", pre:"quit"},
       {label:"Ignore SIGPIPE",  cmd:"handle SIGPIPE noprint nostop pass"},
       {label:"Run",             cmd:"run"},
@@ -17010,7 +17010,7 @@ function BufferOverflowModule_legacy({token}) {
       {label:"Quit GDB",        cmd:"quit"},
       {label:"Continue",        cmd:"continue"},
     ]},
-    {id:"listener",title:"🎧 Listener",  color:"#a78bfa", presetCmds:[
+    {id:"listener",title:"Listener",  color:"#a78bfa", presetCmds:[
       {label:"nc -lvnp 4444",   cmd:"nc -lvnp 4444"},
       {label:"nc -lvnp 9001",   cmd:"nc -lvnp 9001"},
       {label:"Show connections", cmd:"ss -tnp | grep 4444"},
@@ -17035,7 +17035,7 @@ function BufferOverflowModule_legacy({token}) {
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
       {/* Sidebar */}
       <div style={{width:210,background:"#0a0f1e",borderRight:"1px solid #1e293b",padding:14,flexShrink:0,overflowY:"auto"}}>
-        <div style={{color:G,fontWeight:800,fontSize:13,marginBottom:14}}>💣 Buffer Overflow</div>
+        <div style={{color:G,fontWeight:800,fontSize:13,marginBottom:14}}>Buffer Overflow</div>
         {PHASES.map(p=>(
           <div key={p.n} onClick={()=>setPhase(p.n)} style={{padding:"9px 10px",borderRadius:7,marginBottom:5,cursor:"pointer",
             background:phase===p.n?"#052e1622":"transparent",border:`1px solid ${phase===p.n?G:"#1e293b"}`}}>
@@ -17043,7 +17043,7 @@ function BufferOverflowModule_legacy({token}) {
               <span>{p.icon}</span>
               <div>
                 <div style={{fontSize:11,fontWeight:700,color:done.has(p.n)?G:phase===p.n?"#e2e8f0":"#64748b"}}>
-                  {done.has(p.n)?"✅ ":""}{p.n}. {p.label}
+                  {done.has(p.n)?"":""}{p.n}. {p.label}
                 </div>
                 <div style={{fontSize:9,color:"#475569"}}>{p.desc}</div>
               </div>
@@ -17077,17 +17077,17 @@ function BufferOverflowModule_legacy({token}) {
             ))}
           </div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={reset} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"7px 14px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Reset</button>
+            <button onClick={reset} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"7px 14px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>Reset</button>
             {running
-              ? <button onClick={()=>stopRef.current=true} style={{background:"#450a0a",border:"1px solid #ef4444",borderRadius:6,padding:"7px 16px",color:"#fca5a5",fontSize:11,fontWeight:800,cursor:"pointer"}}>⏹ Stop</button>
-              : <button onClick={run} style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:6,padding:"7px 20px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",boxShadow:"0 0 12px #16a34a55"}}>⚡ Auto-Exploit</button>
+              ? <button onClick={()=>stopRef.current=true} style={{background:"#450a0a",border:"1px solid #ef4444",borderRadius:6,padding:"7px 16px",color:"#fca5a5",fontSize:11,fontWeight:800,cursor:"pointer"}}>Stop</button>
+              : <button onClick={run} style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:6,padding:"7px 20px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",boxShadow:"0 0 12px #16a34a55"}}>Auto-Exploit</button>
             }
           </div>
         </div>
 
         {/* GEF banner */}
         <div style={{margin:"10px 16px 0",background:"#0a1f0a",border:"1px solid #166534",borderRadius:7,padding:"8px 12px",fontSize:11,color:"#86efac",flexShrink:0}}>
-          <b style={{color:"#4ade80"}}>🐛 GEF Ready</b>{"  "}
+          <b style={{color:"#4ade80"}}>GEF Ready</b>{"  "}
           <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>gdb /tmp/vulnserver</code>{" -> "}
           <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>handle SIGPIPE noprint nostop pass</code>{" -> "}
           <code style={{background:"#052e16",padding:"1px 6px",borderRadius:3}}>run</code>
@@ -17098,15 +17098,15 @@ function BufferOverflowModule_legacy({token}) {
         <div ref={logRef} style={{flex:1,overflowY:"auto",padding:"12px 16px",fontFamily:"monospace",fontSize:12}}>
           {log.length===0 && (
             <div style={{textAlign:"center",paddingTop:50,color:"#334155"}}>
-              <div style={{fontSize:48,marginBottom:12}}>💣</div>
+              <div style={{fontSize:48,marginBottom:12}}></div>
               <div style={{fontSize:15,fontWeight:700,color:"#475569"}}>Buffer Overflow — GEF Edition</div>
-              <div style={{fontSize:12,marginTop:8}}>Set target IP -> click ⚡ Auto-Exploit</div>
+              <div style={{fontSize:12,marginTop:8}}>Set target IP -> click Auto-Exploit</div>
             </div>
           )}
           {log.map((l,i)=>(
             <div key={i} style={{marginBottom:3,lineHeight:1.6,
-              color:l.startsWith("✅")?"#22c55e":l.startsWith("❌")?"#ef4444":l.startsWith("⏹")?"#f59e0b":
-                    l.startsWith("📋")||l.startsWith("  ")?"#60a5fa":l.startsWith("🎯")?"#a78bfa":"#94a3b8"}}>
+              color:l.startsWith("")?"#22c55e":l.startsWith("")?"#ef4444":l.startsWith("")?"#f59e0b":
+                    l.startsWith("")||l.startsWith("  ")?"#60a5fa":l.startsWith("")?"#a78bfa":"#94a3b8"}}>
               {l}
             </div>
           ))}
@@ -17115,7 +17115,7 @@ function BufferOverflowModule_legacy({token}) {
           {/* JMP ESP Manual Input Box */}
           {waitJmp && (
             <div style={{marginTop:12,padding:16,background:"#1a0a00",border:"2px solid #f59e0b",borderRadius:10}}>
-              <div style={{color:"#fbbf24",fontWeight:800,fontSize:13,marginBottom:8}}>🔀 Phase 5: Enter JMP ESP manually</div>
+              <div style={{color:"#fbbf24",fontWeight:800,fontSize:13,marginBottom:8}}>Phase 5: Enter JMP ESP manually</div>
               <div style={{fontSize:11,color:"#fde68a",marginBottom:12,lineHeight:1.9}}>
                 In your GDB/pwndbg terminal type:<br/>
                 <code style={{background:"#1a0a00",border:"1px solid #78350f",padding:"3px 10px",borderRadius:4,color:"#fbbf24",display:"inline-block",margin:"4px 0"}}>rop --grep "jmp esp"</code><br/>
@@ -17138,16 +17138,16 @@ function BufferOverflowModule_legacy({token}) {
           {/* EIP Wait Box */}
           {waitEip && (
             <div style={{marginTop:12,padding:16,background:"#0a1f0a",border:"2px solid #22c55e",borderRadius:10}}>
-              <div style={{color:"#4ade80",fontWeight:800,fontSize:13,marginBottom:8}}>🐛 GEF showing crash output</div>
+              <div style={{color:"#4ade80",fontWeight:800,fontSize:13,marginBottom:8}}>GEF showing crash output</div>
               <div style={{fontSize:11,color:"#86efac",marginBottom:12,lineHeight:1.9}}>
                 In your GDB terminal GEF shows:<br/>
                 <code style={{background:"#052e16",padding:"3px 10px",borderRadius:4,color:"#4ade80",display:"inline-block",margin:"4px 0"}}>$eip : 0x61413761  ("a7Aa")</code><br/>
-                Copy those 8 hex digits -> paste below. Also click 📤 to send the pattern if not done.
+                Copy those 8 hex digits -> paste below. Also click to send the pattern if not done.
               </div>
               <div style={{marginBottom:10}}>
                 <button onClick={sendPattern} disabled={!pattern}
                   style={{background:"#1e3a8a",border:"1px solid #3b82f6",borderRadius:6,padding:"7px 16px",color:"#93c5fd",fontSize:11,fontWeight:700,cursor:pattern?"pointer":"not-allowed"}}>
-                  📤 Send Pattern to Vulnserver
+                  Send Pattern to Vulnserver
                 </button>
                 <span style={{color:"#475569",fontSize:10,marginLeft:8}}>Click after GDB shows "Listening on port 9999"</span>
               </div>
@@ -17172,7 +17172,7 @@ function BufferOverflowModule_legacy({token}) {
     <div style={{borderTop:"2px solid #1e293b",background:"#050b18",flexShrink:0}}>
       {/* Terminal bar header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 14px",borderBottom:"1px solid #1e293b"}}>
-        <span style={{color:"#60a5fa",fontWeight:700,fontSize:12}}>⬛ TERMINALS</span>
+        <span style={{color:"#60a5fa",fontWeight:700,fontSize:12}}>TERMINALS</span>
         <span style={{color:"#334155",fontSize:11}}>{terminals.length} open</span>
         <div style={{flex:1}}/>
         <button onClick={addTerminal}
@@ -17279,7 +17279,7 @@ function VulnModule(props) {
           sessionBearer = lr.auth_bearer || "";
           setAuthCookie(sessionCookie); setAuthBearer(sessionBearer);
           setAuthStatus("ok");
-          add(`[✓] Logged in as ${loginUser} — session captured (${(lr.cookie_names||[]).join(", ")||"bearer"})`);
+          add(`[] Logged in as ${loginUser} — session captured (${(lr.cookie_names||[]).join(", ")||"bearer"})`);
         } else {
           setAuthStatus("fail");
           add(`[!] Login could not be verified — ${lr?.hint || "continuing unauthenticated"}`);
@@ -17373,7 +17373,7 @@ function VulnModule(props) {
               const elapsed = ((Date.now() - _scanStartedAt)/1000).toFixed(1);
               const ph = VULN_PHASES.find(p => p.tool === evt.tool);
               const phName = ph ? ph.name : evt.tool;
-              const status = data._failed ? "✗" : (data._skipped || data.skipped_reason) ? "○" : "✓";
+              const status = data._failed ? "" : (data._skipped || data.skipped_reason) ? "○" : "";
               add(`  ${status} [${_completedCount}/${VULN_PHASES.length}] ${phName} (${evt.duration_sec}s, +${elapsed}s)`);
             }
             else if (evt.event === "scan_complete") {
@@ -17386,7 +17386,7 @@ function VulnModule(props) {
         if (!stopRef.current && !_finalSummary) {
           const missing = VULN_PHASES.filter(ph => !(ph.tool in results));
           if (missing.length > 0) {
-            add(`⚠ stream ended without scan_complete — ${missing.length} scanner(s) didn't report`);
+            add(`stream ended without scan_complete — ${missing.length} scanner(s) didn't report`);
             missing.forEach(ph => {
               const idx = _toolToIdx[ph.tool];
               results[ph.tool] = {ok:false, _failed:true,
@@ -17399,7 +17399,7 @@ function VulnModule(props) {
         }
         if (!stopRef.current && _finalSummary) {
           const sum = _finalSummary.summary || {};
-          add(`✓ v2 complete in ${_finalSummary.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
+          add(`v2 complete in ${_finalSummary.duration_sec}s — ${sum.ok||0} ok, ${sum.failed||0} failed, ${sum.skipped||0} skipped, ${sum.total_findings||0} finding(s)`);
           if (sum.by_severity) {
             const sev = sum.by_severity;
             add(`  Severity: ${sev.CRITICAL||0} CRIT · ${sev.HIGH||0} HIGH · ${sev.MEDIUM||0} MED · ${sev.LOW||0} LOW`);
@@ -17407,7 +17407,7 @@ function VulnModule(props) {
         }
       } catch(e) {
         const msg = (e && e.message) ? e.message : String(e);
-        add(`✗ v2 stream failed: ${msg}`);
+        add(`v2 stream failed: ${msg}`);
       }
       setCurrent(-1); setRunning(false); _notifyRunning(false); setFinished(true);
       return;
@@ -17453,13 +17453,13 @@ function VulnModule(props) {
           const realReason = data.skipped_reason || data.error || data.detail || "scanner returned ok:false with no reason";
           results[ph.tool] = {...data, _failed: true, error: realReason};
           setAllResults({...results});
-          add(`[✗] ${ph.name}: ${realReason}`);
+          add(`[] ${ph.name}: ${realReason}`);
         } else {
           results[ph.tool] = data;
           setAllResults({...results});
           const findings=(data.findings||[]).filter(f=>f.severity!=="INFO");
           const hi=findings.filter(f=>["CRITICAL","HIGH"].includes(f.severity)).length;
-          add(`[✓] ${ph.name}: ${findings.length} finding(s)${hi>0?" — "+hi+" HIGH/CRITICAL":""}`);
+          add(`[] ${ph.name}: ${findings.length} finding(s)${hi>0?" — "+hi+" HIGH/CRITICAL":""}`);
         }
       } catch(e){
         let msg = e?.message || e?.toString() || "";
@@ -17470,7 +17470,7 @@ function VulnModule(props) {
         else if (msg.includes("403") || msg.includes("429")) msg += " (target blocked scanner — WAF detected)";
         results[ph.tool] = {ok:false, _failed:true, error:msg};
         setAllResults({...results});
-        add(`[✗] ${ph.name}: ${msg}`);
+        add(`[] ${ph.name}: ${msg}`);
       }
       setDone(p=>[...p,i]);
     }
@@ -17482,7 +17482,7 @@ function VulnModule(props) {
     stopRef.current = false; setStopped(false);
     add(wasStopped
       ? `[!] Scan stopped — partial results: ${okCount} ok, ${failedCount} failed`
-      : `[✓] Vulnerability scan complete — ${okCount} ok, ${failedCount} failed (${VULN_PHASES.length} attempted)`);
+      : `[] Vulnerability scan complete — ${okCount} ok, ${failedCount} failed (${VULN_PHASES.length} attempted)`);
   };
 
   const stopScan = () => {
@@ -17499,7 +17499,7 @@ function VulnModule(props) {
     const findings = (r.findings||[]).filter(f=>f.severity!=="INFO");
     if(findings.length===0) return (
       <div style={{padding:20,textAlign:"center"}}>
-        <div style={{fontSize:28,marginBottom:8}}>✅</div>
+        <div style={{fontSize:28,marginBottom:8}}></div>
         <div style={{color:"#4ade80",fontSize:13,fontWeight:600}}>No significant findings</div>
         <div style={{color:"#475569",fontSize:11,marginTop:4}}>Scan completed — target appears clean for this check</div>
       </div>
@@ -17529,7 +17529,7 @@ function VulnModule(props) {
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
           <div>
-            <h2 style={{fontSize:15,fontWeight:700,color:"#f1f5f9",margin:0}}>🛡️ Vulnerability Scanning</h2>
+            <h2 style={{fontSize:15,fontWeight:700,color:"#f1f5f9",margin:0}}>Vulnerability Scanning</h2>
             <p style={{fontSize:11,color:"#475569",margin:"4px 0 0"}}>Full automated vulnerability assessment — {VULN_PHASES.length} scanners</p>
           </div>
           <span style={{background:"#1e3a8a",color:"#93c5fd",fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:4}}>{VULN_PHASES.length} SCANS</span>
@@ -17547,31 +17547,31 @@ function VulnModule(props) {
           const creds = lab && LAB_CREDS[lab];
           if (creds) { setLoginUrl(creds.url); setLoginUser(creds.user); setLoginPass(creds.pass); setAuthOpen(true); }
         }} /*VULN-TT-V2*/ targets={[
-          {icon:"🏠",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)", lab:"dvwa"},
-          {icon:"🐐",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)", lab:"webgoat"},
-          {icon:"🧃",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)", lab:"juiceshop"},
-          {icon:"🐙",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)", lab:"mutillidae"},
-          {icon:"🌐",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)", lab:null},
+          {icon:"",label:"DVWA",             value:"http://lab_dvwa/dvwa",           desc:"Damn Vulnerable Web App — SQLi, XSS, CSRF, File Upload (Docker)", lab:"dvwa"},
+          {icon:"",label:"WebGoat",          value:"http://lab_webgoat:8080/WebGoat",   desc:"OWASP WebGoat — Java/Tomcat guided lessons (Docker)", lab:"webgoat"},
+          {icon:"",label:"Juice Shop",       value:"http://lab_juiceshop:3000",           desc:"OWASP Juice Shop — 100+ challenges (Docker)", lab:"juiceshop"},
+          {icon:"",label:"Mutillidae II",    value:"http://lab_mutillidae",             desc:"Mutillidae — SQLi, XXE, CSRF, Clickjacking (Docker)", lab:"mutillidae"},
+          {icon:"",label:"Acunetix TestPHP", value:"http://testphp.vulnweb.com",        desc:"Public intentionally vulnerable PHP site (Internet)", lab:null},
         ]}/>
         {/* ── Authenticated-scan panel (collapsible) ──
             When filled, the scanner logs in BEFORE the scan phases and
             attaches the captured session to every scanner request.
             Without this, ~70% of real vulns (IDOR, priv-esc, mass
             assignment, stored XSS in profiles, etc.) stay invisible. */}
-        
 
-        
+
+
 
         {/* VULN-AUTH-PANEL-V5 */}
         <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
           <div onClick={()=>setAuthOpen(o=>!o)} style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
-              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>🔐 Authenticated scan (optional)</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Authenticated scan (optional)</span>
               <span style={{fontSize:10,color:"#64748b"}}>— finds IDOR, priv-esc, mass-assignment, stored XSS</span>
             </div>
-            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✓ session captured</span>}
-            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>✗ login failed</span>}
+            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>session captured</span>}
+            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>login failed</span>}
           </div>
           {authOpen && (
             <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
@@ -17579,7 +17579,7 @@ function VulnModule(props) {
                 <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
               </div>
               <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
-                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>🔐 Auto-login (recommended)</div>
+                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>Auto-login (recommended)</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                   <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-vuln-u" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
@@ -17600,7 +17600,7 @@ function VulnModule(props) {
                     } catch(e){ setAuthStatus("fail"); }
                   }}
                   style={{background:"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:"#0f172a",fontSize:11,fontWeight:700,cursor:"pointer",alignSelf:"flex-start"}}>
-                  🔐 Auto-login & capture cookie
+                  Auto-login & capture cookie
                 </button>
               </div>
               <div style={{fontSize:10,color:"#475569",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
@@ -17636,7 +17636,7 @@ function VulnModule(props) {
           {finished&&(
             <button onClick={()=>setShowPDFModal(true)} /*VULN-AUTH-PDF-FLAG-V1*/
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              📄 Report
+              Report
             </button>
           )}
         </div>
@@ -17686,7 +17686,7 @@ function VulnModule(props) {
                 <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
               ) : (
                 <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
-                  {isDone?(isFailed?"✗":hi>0?"!":"✓"):"○"}
+                  {isDone?(isFailed?"":hi>0?"!":""):"○"}
                 </span>
               )}
               <span style={{fontSize:13,fontWeight:500,color:"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
@@ -17708,7 +17708,7 @@ function VulnModule(props) {
                     <div style={{color:"#fca5a5",fontFamily:"ui-monospace,SFMono-Regular,monospace",fontSize:11}}>{_vFailDetail}</div>
                   </div>
                 ) : itemsCount === 0 ? (
-                  <div style={{color:"#86efac"}}>✓ Scanner ran successfully. No vulnerabilities detected in {ph.name}.</div>
+                  <div style={{color:"#86efac"}}>Scanner ran successfully. No vulnerabilities detected in {ph.name}.</div>
                 ) : (
                   <div>
                     <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:8,fontWeight:600}}>{itemsCount} FINDING{itemsCount===1?"":"S"}</div>
@@ -17811,12 +17811,12 @@ function PasswordModule(props) {
       const data = await api("/api/scan/hydra","POST",{target,scan_type:"full",options:{service,userlist,passlist}},token);
       setResult(data);
       if(data.cracked && data.cracked.length>0){
-        add(`[✓] CRACKED! Found ${data.cracked.length} credential(s)!`);
-        data.cracked.forEach(c=>add(`[✓] Login: ${c.username} | Password: ${c.password}`));
+        add(`[] CRACKED! Found ${data.cracked.length} credential(s)!`);
+        data.cracked.forEach(c=>add(`[] Login: ${c.username} | Password: ${c.password}`));
       } else {
         add("[*] No credentials cracked with provided wordlists");
       }
-    } catch(e){ add(`[✗] Error: ${e.message}`); }
+    } catch(e){ add(`[] Error: ${e.message}`); }
     setRunning(false);
   };
 
@@ -17830,14 +17830,14 @@ function PasswordModule(props) {
 
 
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:16}}>
-        <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>🔑 Password Attacks — Hydra</h2>
+        <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>Password Attacks — Hydra</h2>
         <p style={{fontSize:12,color:"#64748b",marginBottom:10}}>Brute force login credentials — authorized use only</p>
         <TestTargets onSelect={setTarget} targets={[
-          {icon:"🏠",label:"Kali VM SSH",               value:"192.168.56.102",            desc:"SSH on your local Kali VM (service: SSH)"},
-          {icon:"🌐",label:"DVWA HTTP Form",             value:"192.168.56.102",            desc:"Use service: http-post-form for DVWA login"},
-          {icon:"🐧",label:"Metasploitable2 SSH",        value:"192.168.56.101",            desc:"Classic vulnerable VM — default creds: msfadmin"},
-          {icon:"🔴",label:"Metasploitable2 FTP",        value:"192.168.56.101",            desc:"FTP with anonymous login enabled"},
-          {icon:"🛢️",label:"Metasploitable2 MySQL",     value:"192.168.56.101",            desc:"MySQL with weak root password"},
+          {icon:"",label:"Kali VM SSH",               value:"192.168.56.102",            desc:"SSH on your local Kali VM (service: SSH)"},
+          {icon:"",label:"DVWA HTTP Form",             value:"192.168.56.102",            desc:"Use service: http-post-form for DVWA login"},
+          {icon:"",label:"Metasploitable2 SSH",        value:"192.168.56.101",            desc:"Classic vulnerable VM — default creds: msfadmin"},
+          {icon:"",label:"Metasploitable2 FTP",        value:"192.168.56.101",            desc:"FTP with anonymous login enabled"},
+          {icon:"",label:"Metasploitable2 MySQL",     value:"192.168.56.101",            desc:"MySQL with weak root password"},
         ]}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
@@ -17865,7 +17865,7 @@ function PasswordModule(props) {
           </div>
         </div>
         <div style={{background:"#1c1000",border:"1px solid #78350f",borderRadius:6,padding:"8px 12px",marginBottom:12,fontSize:11,color:"#d97706"}}>
-          ⚠ WARNING: Only use on systems you own or have written permission to test. Unauthorized use is illegal.
+          WARNING: Only use on systems you own or have written permission to test. Unauthorized use is illegal.
         </div>
         <button onClick={run} disabled={running||!target.trim()}
           style={{background:running?"#1e293b":"linear-gradient(135deg,#7c3aed,#a855f7)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#475569":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
@@ -17881,7 +17881,7 @@ function PasswordModule(props) {
             <span style={{fontSize:13,fontWeight:600,color:"#ef4444"}}>Credentials Cracked!</span>
             <button onClick={dlPDF}
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              📄 Report
+              Report
             </button>
           </div>
           {result.cracked.map((c,i)=>(
@@ -17910,12 +17910,12 @@ function NetworkAttacksModule_legacy({token}) {
   const [results,   setResults]   = useState({});
 
   const attacks = [
-    {id:"scan",      label:"Network Scan",     icon:"🔭", ep:"/api/network/scan",     desc:"Nmap scan for open ports and risky services"},
-    {id:"arp",       label:"ARP Scan / Spoof", icon:"📡", ep:"/api/network/arp",      desc:"Discover live hosts and generate arpspoof commands"},
-    {id:"mitm",      label:"MITM Setup",       icon:"🕵️", ep:"/api/network/mitm",     desc:"Check IP forwarding, ettercap, mitmproxy availability"},
-    {id:"sniff",     label:"Packet Sniffer",   icon:"🦈", ep:"/api/network/sniff",    desc:"Capture packets with tcpdump, detect cleartext creds"},
-    {id:"flood",     label:"DoS Flood",        icon:"💥", ep:"/api/network/flood",    desc:"Generate SYN/UDP/ICMP flood commands (hping3)"},
-    {id:"dns_spoof", label:"DNS Spoofing",     icon:"🌀", ep:"/api/network/dns_spoof",desc:"DNS spoofing via dnschef/responder"},
+    {id:"scan",      label:"Network Scan",     icon:"", ep:"/api/network/scan",     desc:"Nmap scan for open ports and risky services"},
+    {id:"arp",       label:"ARP Scan / Spoof", icon:"", ep:"/api/network/arp",      desc:"Discover live hosts and generate arpspoof commands"},
+    {id:"mitm",      label:"MITM Setup",       icon:"", ep:"/api/network/mitm",     desc:"Check IP forwarding, ettercap, mitmproxy availability"},
+    {id:"sniff",     label:"Packet Sniffer",   icon:"", ep:"/api/network/sniff",    desc:"Capture packets with tcpdump, detect cleartext creds"},
+    {id:"flood",     label:"DoS Flood",        icon:"", ep:"/api/network/flood",    desc:"Generate SYN/UDP/ICMP flood commands (hping3)"},
+    {id:"dns_spoof", label:"DNS Spoofing",     icon:"", ep:"/api/network/dns_spoof",desc:"DNS spoofing via dnschef/responder"},
   ];
 
   const run = async (atk) => {
@@ -18038,11 +18038,11 @@ function SystemExploitModule_legacy({token}) {
   const [results,setResults]= useState({});
 
   const attacks = [
-    {id:"privesc_linux", label:"Linux PrivEsc",    icon:"🐧", ep:"/api/exploit/privesc_linux", desc:"LinPEAS: SUID, sudo, cron, kernel exploits"},
-    {id:"privesc_win",   label:"Windows PrivEsc",  icon:"🪟", ep:"/api/exploit/privesc_win",   desc:"WinPEAS: unquoted paths, AlwaysInstallElevated, tokens"},
-    {id:"suid",          label:"SUID Exploits",    icon:"🔑", ep:"/api/exploit/suid",           desc:"Find SUID binaries with GTFOBins exploit commands"},
-    {id:"formatstring",  label:"Format String",    icon:"📝", ep:"/api/exploit/formatstring",   desc:"Detect format string vulnerabilities in web params"},
-    {id:"dllhijack",     label:"DLL Hijacking",    icon:"💻", ep:"/api/exploit/dllhijack",      desc:"Find DLL hijacking opportunities on Windows targets"},
+    {id:"privesc_linux", label:"Linux PrivEsc",    icon:"", ep:"/api/exploit/privesc_linux", desc:"LinPEAS: SUID, sudo, cron, kernel exploits"},
+    {id:"privesc_win",   label:"Windows PrivEsc",  icon:"", ep:"/api/exploit/privesc_win",   desc:"WinPEAS: unquoted paths, AlwaysInstallElevated, tokens"},
+    {id:"suid",          label:"SUID Exploits",    icon:"", ep:"/api/exploit/suid",           desc:"Find SUID binaries with GTFOBins exploit commands"},
+    {id:"formatstring",  label:"Format String",    icon:"", ep:"/api/exploit/formatstring",   desc:"Detect format string vulnerabilities in web params"},
+    {id:"dllhijack",     label:"DLL Hijacking",    icon:"", ep:"/api/exploit/dllhijack",      desc:"Find DLL hijacking opportunities on Windows targets"},
   ];
 
   const run = async(atk)=>{
@@ -18155,11 +18155,11 @@ function CloudAttacksModule({token}) {
   const [results,setResults] = useState({});
 
   const attacks = [
-    {id:"s3",           label:"S3 Bucket Scanner",   icon:"🪣", ep:"/api/cloud/s3",           desc:"Test S3 bucket for public access and file listing"},
-    {id:"iam",          label:"IAM Privilege Check",  icon:"🔐", ep:"/api/cloud/iam",          desc:"Enumerate IAM permissions and exposed credentials"},
-    {id:"docker",       label:"Container Escape",     icon:"🐳", ep:"/api/cloud/docker",       desc:"Detect privileged containers and Docker socket exposure"},
-    {id:"k8s",          label:"Kubernetes Attack",    icon:"☸️", ep:"/api/cloud/k8s",          desc:"Check K8s API access, RBAC misconfigs, pod escape"},
-    {id:"apiabusecheck",label:"API Abuse Check",      icon:"⚙️", ep:"/api/cloud/apiabusecheck",desc:"Rate limit testing, exposed API docs, token leakage"},
+    {id:"s3",           label:"S3 Bucket Scanner",   icon:"", ep:"/api/cloud/s3",           desc:"Test S3 bucket for public access and file listing"},
+    {id:"iam",          label:"IAM Privilege Check",  icon:"", ep:"/api/cloud/iam",          desc:"Enumerate IAM permissions and exposed credentials"},
+    {id:"docker",       label:"Container Escape",     icon:"", ep:"/api/cloud/docker",       desc:"Detect privileged containers and Docker socket exposure"},
+    {id:"k8s",          label:"Kubernetes Attack",    icon:"", ep:"/api/cloud/k8s",          desc:"Check K8s API access, RBAC misconfigs, pod escape"},
+    {id:"apiabusecheck",label:"API Abuse Check",      icon:"", ep:"/api/cloud/apiabusecheck",desc:"Rate limit testing, exposed API docs, token leakage"},
   ];
 
   const run = async(atk)=>{
@@ -18270,9 +18270,9 @@ function AuthAttacksModule_legacy({token}) {
   const [results,  setResults]  = useState({});
 
   const attacks = [
-    {id:"mfabypass", label:"MFA Bypass",      icon:"🔐", ep:"/api/auth/mfabypass", desc:"Test for MFA bypass, direct access, header injection"},
+    {id:"mfabypass", label:"MFA Bypass",      icon:"", ep:"/api/auth/mfabypass", desc:"Test for MFA bypass, direct access, header injection"},
     {id:"pth",       label:"Pass-the-Hash",   icon:"#️⃣", ep:"/api/auth/pth",       desc:"Authenticate using NTLM hash (crackmapexec + impacket)"},
-    {id:"ptt",       label:"Pass-the-Ticket", icon:"🎫", ep:"/api/auth/ptt",       desc:"Detect Kerberos attack surface, AS-REP roasting"},
+    {id:"ptt",       label:"Pass-the-Ticket", icon:"", ep:"/api/auth/ptt",       desc:"Detect Kerberos attack surface, AS-REP roasting"},
     {id:"keylog",    label:"Keylog Detection",icon:"⌨️", ep:"/api/auth/keylog",    desc:"Detect open ports exploitable for keylogging"},
   ];
 
@@ -18428,7 +18428,7 @@ function ModuleWithTabs({moduleKey, moduleLabel, autoCount, manualTests, autoPan
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  Manual technique catalogue per module (extracted from playbook 👤 entries)
+//  Manual technique catalogue per module (extracted from playbook entries)
 //  3 cards × 26 modules = 78 distinct analyst tests
 // ═══════════════════════════════════════════════════════════════
 const MANUAL_TESTS_AUTO = {
@@ -18445,7 +18445,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Generate shellcode with msfvenom; identify bad chars by inserting full \\x00-\\xff range; remove chars that truncate shellcode in target."},
     {id:"bof_rop", ref:"§4 #4", title:"Manual ROP chain construction", difficulty:"hard",
      what_to_look_for:"Use ropper/ROPgadget to find ret2libc gadgets; build ROP chain bypassing DEP+ASLR; verify in pwntools harness."},
-    {id:"bof_modern_bypass", ref:"§8 #3", title:"Manual ⭐ CET/PAuth bypass research", difficulty:"hard",
+    {id:"bof_modern_bypass", ref:"§8 #3", title:"Manual CET/PAuth bypass research", difficulty:"hard",
      what_to_look_for:"Test Intel CET shadow stack bypass via signed branches; ARM Pointer Authentication (PAC) bypass via stripping/forging. Document mitigation efficacy."},
   ],
   password: [
@@ -18453,7 +18453,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Build target-specific wordlist via CeWL + cupp; choose protocol (SSH/HTTP-form/SMB); set throttle to avoid lockout."},
     {id:"pwd_hash_crack", ref:"§2 #16", title:"Manual hashcat crack workflow", difficulty:"hard",
      what_to_look_for:"Identify hash type (hashid); pick attack mode (mask/dict/rule); benchmark vs cloud GPU cost; document recovery time."},
-    {id:"pwd_passkey", ref:"§8 #6", title:"Manual ⭐ Passkey downgrade test", difficulty:"medium",
+    {id:"pwd_passkey", ref:"§8 #6", title:"Manual Passkey downgrade test", difficulty:"medium",
      what_to_look_for:"Force WebAuthn flow to fallback to password+TOTP; document conditions enabling downgrade; test cross-device sync security."},
   ],
   client_side: [
@@ -18461,7 +18461,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Craft VBA macro with AMSI bypass + sandbox detection (recent files, user count, sleep evasion). Test against MDE."},
     {id:"cs_browser_zeroday", ref:"§5 #1", title:"Manual Chrome 0-day exploitation", difficulty:"hard",
      what_to_look_for:"Research recently disclosed Chrome V8 CVEs; build heap-grooming + RCE chain; test in sandboxed environment."},
-    {id:"cs_modern_ext", ref:"§7 #10", title:"Manual ⭐ ManifestV3 ext abuse", difficulty:"medium",
+    {id:"cs_modern_ext", ref:"§7 #10", title:"Manual ManifestV3 ext abuse", difficulty:"medium",
      what_to_look_for:"Build malicious Chrome extension with declarativeNetRequest abuse + offscreen API; test installation via update vector."},
   ],
   system_exploit: [
@@ -18469,7 +18469,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Identify kernel version + distro; check Dirty Pipe / Dirty COW / PwnKit applicability; compile + run + verify root."},
     {id:"sys_win_priv", ref:"§2 #14", title:"Manual Windows token impersonation", difficulty:"medium",
      what_to_look_for:"Check for SeImpersonate privilege via whoami /priv; use JuicyPotato/RoguePotato to impersonate SYSTEM token."},
-    {id:"sys_container_escape", ref:"§8 #8", title:"Manual ⭐ Container escape via Leaky Vessels", difficulty:"hard",
+    {id:"sys_container_escape", ref:"§8 #8", title:"Manual Container escape via Leaky Vessels", difficulty:"hard",
      what_to_look_for:"Test CVE-2024-21626 runc escape; mount host filesystem via WORKDIR manipulation; document escape primitive."},
   ],
   metasploit: [
@@ -18477,7 +18477,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"From recon output, pick exploit module by CVE + target version match; set RHOST/RPORT/LHOST/LPORT; tune options before run."},
     {id:"msf_payload", ref:"§3 #10", title:"Manual payload-encoder pairing", difficulty:"medium",
      what_to_look_for:"Match payload (meterpreter/reverse_https) to AV posture; layer encoders (shikata x5 + xor); test bypass against Defender."},
-    {id:"msf_modern_evasion", ref:"§8 #6", title:"Manual ⭐ msfvenom + Sliver chain", difficulty:"hard",
+    {id:"msf_modern_evasion", ref:"§8 #6", title:"Manual msfvenom + Sliver chain", difficulty:"hard",
      what_to_look_for:"Generate msfvenom shellcode → wrap in Donut → load via Sliver agent. Document AV/EDR bypass effectiveness."},
   ],
   privesc: [
@@ -18485,7 +18485,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Run LinPEAS; cross-check sudo -l + SUID binaries against GTFOBins; identify writable services/cron; choose escalation vector."},
     {id:"pe_windows_review", ref:"§2 #18", title:"Manual Windows privesc review", difficulty:"medium",
      what_to_look_for:"Run WinPEAS + Seatbelt; check AlwaysInstallElevated + unquoted services + writable scheduled tasks; identify path to SYSTEM."},
-    {id:"pe_cloud_chain", ref:"§7 #6", title:"Manual ⭐ Cloud privesc chain", difficulty:"hard",
+    {id:"pe_cloud_chain", ref:"§7 #6", title:"Manual Cloud privesc chain", difficulty:"hard",
      what_to_look_for:"From pod/host, hit IMDS for IAM credentials; map IAM privilege graph (cloudfox); identify cross-account/cross-service escalation."},
   ],
   post_exploit: [
@@ -18493,7 +18493,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Dump LSASS (mimikatz/NanoDump) → extract NTLM hashes + Kerberos tickets → pass-the-hash → DCSync."},
     {id:"pe_loot", ref:"§3 #11", title:"Manual loot triage", difficulty:"medium",
      what_to_look_for:"trufflehog + gitleaks on local FS; identify cloud creds (.aws, .kube, .docker); document findings + IOCs."},
-    {id:"pe_cloud_lateral", ref:"§7 #9", title:"Manual ⭐ Cross-cloud OIDC chain", difficulty:"hard",
+    {id:"pe_cloud_lateral", ref:"§7 #9", title:"Manual Cross-cloud OIDC chain", difficulty:"hard",
      what_to_look_for:"From compromised GHA OIDC token → AWS role → assume cross-account → reach prod data plane. Document trust path."},
   ],
   pivot: [
@@ -18501,7 +18501,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Build proxychains.conf chaining 3+ SOCKS proxies (SSH+chisel+ligolo); test bandwidth + reliability for internal scanning."},
     {id:"piv_tunnel_chain", ref:"§3 #10", title:"Manual creative tunnel chain", difficulty:"hard",
      what_to_look_for:"Combine reverse SSH + chisel HTTP/2 fallback + Ligolo TUN; bypass strict egress filters; document throughput."},
-    {id:"piv_cloud", ref:"§6 #9", title:"Manual ⭐ Cross-cloud pivot", difficulty:"hard",
+    {id:"piv_cloud", ref:"§6 #9", title:"Manual Cross-cloud pivot", difficulty:"hard",
      what_to_look_for:"From AWS EKS pod → IRSA → AWS Lambda → GCP Workload Identity via OIDC federation. Document pivot path."},
   ],
   tunnel: [
@@ -18509,7 +18509,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Stack tunnels: client → cloudflared → ngrok → corporate egress proxy → internal target. Verify each layer's encryption."},
     {id:"tun_covert", ref:"§3 #8", title:"Manual covert channel design", difficulty:"hard",
      what_to_look_for:"Design custom protocol over allowed traffic (DNS TXT / ICMP payload / image stego); measure detection probability."},
-    {id:"tun_vpn_pivot", ref:"§5 #10", title:"Manual ⭐ VPN-pivot chain", difficulty:"hard",
+    {id:"tun_vpn_pivot", ref:"§5 #10", title:"Manual VPN-pivot chain", difficulty:"hard",
      what_to_look_for:"Compromise WireGuard config → join target VPN as authorized peer → access internal subnet. Document key exfil."},
   ],
   network: [
@@ -18517,7 +18517,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"On physical LAN: ARP spoof + DHCP starvation + VLAN hop with yersinia; document network impact + detection."},
     {id:"net_mitm", ref:"§3 #12", title:"Manual MITM with ettercap", difficulty:"medium",
      what_to_look_for:"Position between target + gateway via ARP spoof; run ettercap with SSLstrip + DNS spoof; capture credentials."},
-    {id:"net_ipv6", ref:"§7 #8", title:"Manual ⭐ IPv6 RA spoof (mitm6)", difficulty:"hard",
+    {id:"net_ipv6", ref:"§7 #8", title:"Manual IPv6 RA spoof (mitm6)", difficulty:"hard",
      what_to_look_for:"Run mitm6 on IPv4-only network to force IPv6 priority; relay credentials to LDAP via ntlmrelayx; document AD takeover."},
   ],
   auth_attacks: [
@@ -18525,13 +18525,13 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Trigger 30+ MFA push notifications in 5min; document user response time + accept rate; verify Conditional Access policies."},
     {id:"aa_saml", ref:"§4 #44", title:"Manual SAML chain", difficulty:"hard",
      what_to_look_for:"Test SAML XSW signature wrapping with SAMLRaider; modify NameID + roles; verify IdP trust boundary."},
-    {id:"aa_passkey_phish", ref:"§7 #10", title:"Manual ⭐ Passkey phishing", difficulty:"hard",
+    {id:"aa_passkey_phish", ref:"§7 #10", title:"Manual Passkey phishing", difficulty:"hard",
      what_to_look_for:"Build AiTM proxy that captures WebAuthn ceremony; test if relying party allows authenticator downgrade after capture."},
   ],
   wireless: [
     {id:"wl_wpa2_capture", ref:"§2 #14", title:"Manual WPA2 capture + crack", difficulty:"medium",
      what_to_look_for:"airodump-ng to capture 4-way handshake; aircrack-ng with rockyou.txt; benchmark vs hashcat GPU rate."},
-    {id:"wl_wpa3_downgrade", ref:"§3 #8", title:"Manual ⭐ WPA3 transition downgrade", difficulty:"hard",
+    {id:"wl_wpa3_downgrade", ref:"§3 #8", title:"Manual WPA3 transition downgrade", difficulty:"hard",
      what_to_look_for:"Force client downgrade to WPA2 via deauth; capture handshake; test cryptographic group downgrade in SAE."},
     {id:"wl_evil_twin", ref:"§5 #10", title:"Manual evil twin + captive portal", difficulty:"medium",
      what_to_look_for:"Clone target SSID with hostapd; deploy captive portal harvesting AD credentials; verify client autoconnect behavior."},
@@ -18541,7 +18541,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"From low-priv user → run SharpHound; in BloodHound: find shortest path to Domain Admin; document each hop."},
     {id:"ad_kerberoast", ref:"§3 #10", title:"Manual Kerberoast → crack", difficulty:"medium",
      what_to_look_for:"GetUserSPNs.py → extract TGS; hashcat -m 13100 with rockyou + best64.rule; document weak SPN accounts."},
-    {id:"ad_modern_cve", ref:"§11 #10", title:"Manual ⭐ BadSuccessor / dMSA chain", difficulty:"hard",
+    {id:"ad_modern_cve", ref:"§11 #10", title:"Manual BadSuccessor / dMSA chain", difficulty:"hard",
      what_to_look_for:"Test dMSA service account takeover via password derivation; verify Kerberos ticket forgery against affected DC."},
   ],
   av_evasion: [
@@ -18549,7 +18549,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Patch amsi.dll!AmsiScanBuffer in-process; verify with Get-AMSIStatus; run blocked payload."},
     {id:"av_etw_bypass", ref:"§3 #24", title:"Manual kernel ETW bypass", difficulty:"hard",
      what_to_look_for:"Patch ntdll!NtTraceEvent via direct syscall; verify Sysmon stops receiving events; document recovery."},
-    {id:"av_byovd", ref:"§7 #11", title:"Manual ⭐ BYOVD chain", difficulty:"hard",
+    {id:"av_byovd", ref:"§7 #11", title:"Manual BYOVD chain", difficulty:"hard",
      what_to_look_for:"Identify Microsoft-vulnerable-driver-list gap; load driver via KDMapper; terminate EDR process from kernel."},
   ],
   cloud: [
@@ -18557,7 +18557,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Use cloudfox aws all-checks → map IAM principal → cross-service privilege paths; identify shadow admin roles."},
     {id:"cl_serverless", ref:"§6 #9", title:"Manual serverless chain", difficulty:"hard",
      what_to_look_for:"Exploit Lambda env-var leak → assume IAM role → invoke privileged Lambda → escalate to data plane access."},
-    {id:"cl_oidc_pivot", ref:"§11 #5", title:"Manual ⭐ Cross-cloud OIDC pivot", difficulty:"hard",
+    {id:"cl_oidc_pivot", ref:"§11 #5", title:"Manual Cross-cloud OIDC pivot", difficulty:"hard",
      what_to_look_for:"From compromised GHA workflow → AWS OIDC trust → assume admin role; document subject claim wildcard abuse."},
   ],
   apisec: [
@@ -18565,7 +18565,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Intercept 50 API calls with Burp; identify object IDs in URLs/bodies; swap IDs across user contexts; document horizontal/vertical access."},
     {id:"api_graphql", ref:"§6 #11", title:"Manual GraphQL chain", difficulty:"hard",
      what_to_look_for:"Use introspection → map sensitive queries; build nested query DoS; test field-level authz with role swap."},
-    {id:"api_modern_proto", ref:"§8 #11", title:"Manual ⭐ modern protocol review", difficulty:"hard",
+    {id:"api_modern_proto", ref:"§8 #11", title:"Manual modern protocol review", difficulty:"hard",
      what_to_look_for:"Verify WS Origin validation + gRPC mTLS enforcement + WebTransport auth. Document any cross-origin gaps."},
   ],
   ai_llm: [
@@ -18573,7 +18573,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Build indirect PI via doc/web/email integration; test exfiltration via output rendering; document tool-call abuse."},
     {id:"ai_jailbreak", ref:"§3 #9", title:"Manual jailbreak chain", difficulty:"medium",
      what_to_look_for:"Multi-turn evolution: roleplay + hypothetical + token smuggling; document refusal-rate vs published baselines."},
-    {id:"ai_agent_abuse", ref:"§7 #9", title:"Manual ⭐ Agent tool-use abuse", difficulty:"hard",
+    {id:"ai_agent_abuse", ref:"§7 #9", title:"Manual Agent tool-use abuse", difficulty:"hard",
      what_to_look_for:"Test indirect PI → tool execution; force agent to read sensitive file; verify human-in-loop bypass."},
   ],
   container_k8s: [
@@ -18581,7 +18581,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Audit pod specs for privileged + hostPath + hostNetwork + CAP_SYS_ADMIN; test escape from priv container."},
     {id:"ck_rbac", ref:"§5 #13", title:"Manual RBAC review", difficulty:"medium",
      what_to_look_for:"Use rbac-tool / kube-hunter; identify cluster-admin overuse + pod exec/create gaps; document escalation paths."},
-    {id:"ck_ebpf", ref:"§10 #8", title:"Manual ⭐ eBPF runtime detection", difficulty:"hard",
+    {id:"ck_ebpf", ref:"§10 #8", title:"Manual eBPF runtime detection", difficulty:"hard",
      what_to_look_for:"Verify Falco/Tetragon catches escape primitives (mount namespace abuse, capability drops). Test detection coverage."},
   ],
   supply_chain: [
@@ -18589,7 +18589,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Cross-reference SBOM components against KEV + GHSA + OSV; identify high-risk transitive deps; build patch priority."},
     {id:"sc_dep_confusion", ref:"§3 #10", title:"Manual dep confusion review", difficulty:"hard",
      what_to_look_for:"Identify internal pkg names; check public registry collisions; test if build picks public over private."},
-    {id:"sc_oss_health", ref:"§8 #9-10", title:"Manual ⭐ OSS project health audit", difficulty:"medium",
+    {id:"sc_oss_health", ref:"§8 #9-10", title:"Manual OSS project health audit", difficulty:"medium",
      what_to_look_for:"Use OpenSSF Scorecards on top deps; flag bus-factor=1 + unmaintained + missing SECURITY.md; prioritize replacements."},
   ],
   phishing: [
@@ -18597,7 +18597,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"From target OSINT: craft personalized scenario (vendor invoice / IT password reset); A/B test 2 variants on small batch."},
     {id:"ph_aitm", ref:"§3 #9", title:"Manual EvilGinx2 phishlet", difficulty:"hard",
      what_to_look_for:"Build custom phishlet for target IdP (M365/Okta); deploy via fronting; capture session token + MFA bypass."},
-    {id:"ph_deepfake", ref:"§6 #9", title:"Manual ⭐ deepfake refinement", difficulty:"hard",
+    {id:"ph_deepfake", ref:"§6 #9", title:"Manual deepfake refinement", difficulty:"hard",
      what_to_look_for:"AI voice clone with ElevenLabs (CEO sample); use in vishing pretext; document detection signals."},
   ],
   red_team: [
@@ -18605,7 +18605,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Pick threat actor (APT29/FIN7); map their TTPs to your environment; build emulation plan with explicit hop sequence."},
     {id:"rt_c2_chain", ref:"§4 #14", title:"Manual creative C2 chain", difficulty:"hard",
      what_to_look_for:"Multi-stage: Donut shellcode → Sliver implant → Cobalt Strike beacon; test EDR detection at each stage."},
-    {id:"rt_ttp_emul", ref:"§8 #11", title:"Manual ⭐ threat-intel-driven emulation", difficulty:"hard",
+    {id:"rt_ttp_emul", ref:"§8 #11", title:"Manual threat-intel-driven emulation", difficulty:"hard",
      what_to_look_for:"From recent CISA AA advisory: extract IOCs + TTPs; emulate full kill chain; verify SOC detection at each step."},
   ],
   hybrid_identity: [
@@ -18613,15 +18613,15 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Test MSOL service account password recovery via DCSync; verify hybrid PHS + PTA agent abuse pathways."},
     {id:"hi_ca_bypass", ref:"§3 #7", title:"Manual Conditional Access bypass", difficulty:"hard",
      what_to_look_for:"Identify legacy protocol exemptions (IMAP/POP3); test device compliance bypass; document risky-sign-in evasion."},
-    {id:"hi_token_chain", ref:"§4 #8", title:"Manual ⭐ Token theft chain", difficulty:"hard",
+    {id:"hi_token_chain", ref:"§4 #8", title:"Manual Token theft chain", difficulty:"hard",
      what_to_look_for:"Steal refresh token via AiTM; replay to assume identity; test cross-tenant token validity with B2B trust."},
   ],
   sspm: [
     {id:"sp_m365_review", ref:"§1 #16", title:"Manual M365 posture review", difficulty:"medium",
      what_to_look_for:"Audit Secure Score recommendations; check Exchange forwarding rules + Sharing external + inbox rules; quantify exposure."},
-    {id:"sp_oauth_apps", ref:"§7 #7", title:"Manual ⭐ OAuth app review", difficulty:"medium",
+    {id:"sp_oauth_apps", ref:"§7 #7", title:"Manual OAuth app review", difficulty:"medium",
      what_to_look_for:"Inventory all OAuth grants across M365/GWS/Salesforce; flag high-risk scopes (read all mail, modify users); revoke unused."},
-    {id:"sp_dlp_chain", ref:"§8 #8", title:"Manual ⭐ Cross-SaaS DLP chain", difficulty:"hard",
+    {id:"sp_dlp_chain", ref:"§8 #8", title:"Manual Cross-SaaS DLP chain", difficulty:"hard",
      what_to_look_for:"Trace sensitive doc lifecycle: M365 → Slack → external share; verify DLP policy enforcement at each transition."},
   ],
   iot_ot: [
@@ -18629,7 +18629,7 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"Use plcscan + GRASSMARLIN passively; NEVER active-probe production OT. Map Purdue model levels + DMZ trust boundaries."},
     {id:"ot_modbus", ref:"§2 #9-10", title:"Manual Modbus review", difficulty:"hard",
      what_to_look_for:"Read holding registers passively; identify writable coils + control points; document IEC 62443 compliance gap."},
-    {id:"ot_methodology", ref:"§8 #6", title:"Manual ⭐ OT pentest planning", difficulty:"medium",
+    {id:"ot_methodology", ref:"§8 #6", title:"Manual OT pentest planning", difficulty:"medium",
      what_to_look_for:"Document safety-first procedure: lockout/tagout, off-hours testing, rollback plan, plant manager sign-off. NO live exploitation."},
   ],
   firmware: [
@@ -18637,13 +18637,58 @@ const MANUAL_TESTS_AUTO = {
      what_to_look_for:"SPI flash dump via chip-off / OTA capture / vendor download. Verify hash + cross-check vendor signature."},
     {id:"fw_static", ref:"§4 #4", title:"Manual binary RE", difficulty:"hard",
      what_to_look_for:"Load in Ghidra/IDA; identify hardcoded creds + crypto keys + backdoor functions; map attack surface."},
-    {id:"fw_modern", ref:"§8 #6", title:"Manual ⭐ UEFI/BMC review", difficulty:"hard",
+    {id:"fw_modern", ref:"§8 #6", title:"Manual UEFI/BMC review", difficulty:"hard",
      what_to_look_for:"Dump UEFI firmware via SPI; check for unsigned modules + lock bits; audit BMC IPMI default creds + Web UI exposure."},
   ],
 };
 
+// Per-module input schema — different modules need different target types.
+// Each entry: { ph: placeholder text, hint: short helper, needsUpload?: bool,
+//               targetType?: tells the user what kind of value to enter }
+const MODULE_INPUT_SCHEMAS = {
+  recon:           { ph: "example.com or 192.168.1.1", hint: "Domain, URL, or IP" },
+  vuln:            { ph: "https://example.com or 192.168.1.1", hint: "Domain, URL, or IP" },
+  webapp:          { ph: "https://example.com", hint: "Target URL (https://...)" },
+  osint:           { ph: "example.com / user@example.com / @username / 8.8.8.8", hint: "Domain, email, username, or IP — varies by scanner (see playbook §)" },
+  exploit:         { ph: "192.168.1.1:80 or CVE-2024-XXXX", hint: "Target host:port or CVE id" },
+  bof:             { ph: "binary.exe or http://vulnservice:9999", hint: "Binary or vulnerable-service URL" },
+  client_side:     { ph: "https://victim.example.com", hint: "Victim browser URL" },
+  system_exploit:  { ph: "192.168.1.1 or hostname", hint: "Target host" },
+  metasploit:      { ph: "192.168.1.1 or CVE-XXXX-XXXX", hint: "Target or CVE id" },
+  privesc:         { ph: "compromised-host.local", hint: "Host (post-compromise context)" },
+  post_exploit:    { ph: "compromised-host", hint: "Compromised host" },
+  pivot:           { ph: "192.168.1.50 (pivot host)", hint: "Pivot-point host IP" },
+  tunnel:          { ph: "192.168.1.50 (tunnel host)", hint: "Host to tunnel through" },
+  network:         { ph: "192.168.1.0/24 or 192.168.1.1", hint: "Host, CIDR, or hostname" },
+  auth_attacks:    { ph: "https://example.com/login", hint: "Login URL" },
+  password:        { ph: "192.168.1.1:22 or example.com", hint: "Target service (host:port for SSH/RDP)" },
+  wireless:        { ph: "BSSID  /  SSID  /  channel", hint: "Wireless target (BSSID or SSID)" },
+  ad:              { ph: "corp.local or dc01.corp.local", hint: "AD domain or DC hostname" },
+  av_evasion:      { ph: "/path/to/payload.exe", hint: "Payload binary path or hash" },
+  cloud:           { ph: "example.com or AWS-account-id", hint: "Domain, IP, or cloud account ID" },
+  apisec:          { ph: "https://api.example.com", hint: "API base URL" },
+  ai_llm:          { ph: "https://api.openai.com or model endpoint", hint: "LLM API endpoint" },
+  container_k8s:   { ph: "registry.example.com or k8s-api.example.com:6443", hint: "Container registry / K8s API server" },
+  supply_chain:    { ph: "package-name or github.com/org/repo", hint: "NPM/PyPI/Go package or repo URL" },
+  hybrid_identity: { ph: "yourtenant.onmicrosoft.com", hint: "Entra ID tenant or domain" },
+  sspm:            { ph: "https://yourorg.salesforce.com", hint: "SaaS instance URL (Salesforce/Slack/Box/M365)" },
+  iot_ot:          { ph: "192.168.1.50:502 (Modbus default port)", hint: "IoT/OT device IP:port" },
+  firmware:        { ph: "/path/to/firmware.bin or http://fw-host/img.bin", hint: "Firmware binary path or URL" },
+  phishing:        { ph: "example.com", hint: "Target domain for phishing-surface audit" },
+  red_team:        { ph: "example.com or corp.local", hint: "Engagement scope (domain / network)" },
+  mobile_static:   { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Upload APK/IPA via POST /api/mobile_static/upload first, then paste returned apk_path", needsUpload: true },
+  mobile_storage:  { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
+  mobile_runtime:  { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
+  mobile_crypto:   { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
+  mobile_network:  { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
+};
+
 function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
+  const schema = MODULE_INPUT_SCHEMAS[moduleKey] || { ph: "Target", hint: "Target value" };
   const [target,    setTarget]    = useState("");
+  const [authBearer,setAuthBearer]= useState("");   // optional: API key / JWT for some modules
+  const [authCookie,setAuthCookie]= useState("");   // optional: session cookie (webapp / auth_attacks)
+  const [showAuth,  setShowAuth]  = useState(false);
   const [tiers,     setTiers]     = useState([]);
   const [running,   setRunning]   = useState(false);
   const [results,   setResults]   = useState({});
@@ -18806,10 +18851,19 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     setResults(initial);
 
     try {
-      const r = await fetch(`${apiUrl}/api/${moduleKey}/run_all`, {
+      // Build run_all body. Include optional auth_bearer / auth_cookie when set
+      // so scanners that accept these (paid-API OSINT, webapp-auth scanners, etc.)
+      // can use them. Webapp paths require /scan/ middle, others don't.
+      const runBody = {target, concurrency: 16};
+      if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
+      if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
+      const runPath = (moduleKey === "webapp")
+        ? `${apiUrl}/api/webapp/scan/run_all`
+        : `${apiUrl}/api/${moduleKey}/run_all`;
+      const r = await fetch(runPath, {
         method: "POST",
         headers: {"Content-Type":"application/json", "Authorization":`Bearer ${token}`},
-        body: JSON.stringify({target, concurrency: 16}),
+        body: JSON.stringify(runBody),
       });
       const reader = r.body.getReader();
       const dec = new TextDecoder();
@@ -18894,7 +18948,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     const asc = v => String(v == null ? "" : v)
       .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
       .replace(/[→]/g, "->").replace(/[←]/g, "<-")
-      .replace(/[✓✔]/g, "v ").replace(/[✘✖]/g, "X ")
+      .replace(/[]/g, "v ").replace(/[]/g, "X ")
       .replace(/[—–]/g, "-").replace(/[·]/g, "-")
       .replace(/[ ]/g, " ");
     const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
@@ -19313,9 +19367,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </span>
       </div>
 
-      <div style={{display:"flex", gap:8, marginBottom:16}}>
+      <div style={{display:"flex", gap:8, marginBottom:6}}>
         <input
-          type="text" placeholder="Target (host / URL / IP)" value={target}
+          type="text" placeholder={schema.ph} value={target}
           onChange={e => setTarget(e.target.value)}
           disabled={running}
           style={{flex:1, background:"#0f172a", border:"1px solid #334155",
@@ -19341,9 +19395,57 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   border:"none", borderRadius:6, padding:"10px 14px",
                   color:"#fff", fontWeight:600, fontSize:13,
                   cursor: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "not-allowed" : "pointer"}}>
-          📄 PDF
+          PDF
         </button>
       </div>
+
+      {/* Per-module hint + optional auth toggle */}
+      <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:14,
+                    flexWrap:"wrap"}}>
+        <span style={{fontSize:11, color:"#64748b"}}>
+          <span style={{color: schema.needsUpload ? "#f59e0b" : "#94a3b8"}}>
+            {schema.needsUpload ? "📦 " : "💡 "}
+          </span>
+          {schema.hint}
+        </span>
+        <button onClick={() => setShowAuth(!showAuth)}
+          style={{background:"transparent", border:"1px solid #334155",
+                  borderRadius:4, padding:"3px 10px", color:"#94a3b8",
+                  fontSize:10, cursor:"pointer", fontWeight:600,
+                  textTransform:"uppercase", letterSpacing:1}}>
+          {showAuth ? "▾" : "▸"} Auth headers {authBearer || authCookie ? "(✓ set)" : "(optional)"}
+        </button>
+      </div>
+      {showAuth && (
+        <div style={{display:"flex", gap:8, marginBottom:14, flexWrap:"wrap"}}>
+          <div style={{flex:1, minWidth:280}}>
+            <label style={{fontSize:10, color:"#64748b", fontWeight:600,
+                            textTransform:"uppercase", letterSpacing:1.2,
+                            display:"block", marginBottom:3}}>
+              Authorization: Bearer
+            </label>
+            <input type="text" placeholder="JWT / API key (paid OSINT, webapp auth, LLM, etc.)"
+              value={authBearer} onChange={e => setAuthBearer(e.target.value)}
+              disabled={running}
+              style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
+                      borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+                      fontSize:11, fontFamily:"monospace", outline:"none"}}/>
+          </div>
+          <div style={{flex:1, minWidth:280}}>
+            <label style={{fontSize:10, color:"#64748b", fontWeight:600,
+                            textTransform:"uppercase", letterSpacing:1.2,
+                            display:"block", marginBottom:3}}>
+              Cookie (session)
+            </label>
+            <input type="text" placeholder="session=abc123; csrf=xyz789  (webapp/auth_attacks)"
+              value={authCookie} onChange={e => setAuthCookie(e.target.value)}
+              disabled={running}
+              style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
+                      borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+                      fontSize:11, fontFamily:"monospace", outline:"none"}}/>
+          </div>
+        </div>
+      )}
 
       {/* Recent Scans dropdown */}
       {history.length > 0 && (
@@ -19353,7 +19455,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                     borderRadius:6, padding:"6px 12px", color:"#cbd5e1",
                     fontSize:11, cursor:"pointer", display:"flex",
                     alignItems:"center", gap:8}}>
-            <span>🕒</span>
+            <span></span>
             <span>Recent scans ({history.length})</span>
             <span style={{color:"#64748b"}}>{showHistory ? "▼" : "▶"}</span>
           </button>
@@ -19424,7 +19526,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         <div style={{display:"flex", alignItems:"center", gap:14, padding:"10px 14px",
                       marginBottom:12, background:"#0f172a", border:"1px solid #334155",
                       borderRadius:6}}>
-          <span style={{fontSize:20}}>📊</span>
+          <span style={{fontSize:20}}></span>
           <div style={{flex:1, fontSize:11, color:"#cbd5e1"}}>
             <div style={{marginBottom:2}}>
               <strong>Delta</strong> vs scan from {new Date(delta.prevDate).toLocaleDateString()}:
@@ -19432,7 +19534,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             <div style={{display:"flex", gap:14, fontSize:11}}>
               {delta.fixed > 0 && (
                 <span style={{color:"#22c55e", fontWeight:600}}>
-                  ✓ {delta.fixed} FIXED
+                  {delta.fixed} FIXED
                 </span>
               )}
               {delta.newFindings > 0 && (
@@ -19572,7 +19674,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                         const dm = tileDelta(tool);
                         if (!dm) return null;
                         const dmCol = dm === "FIXED" ? "#22c55e" : dm === "WORSE" ? "#f97316" : "#ef4444";
-                        const dmSym = dm === "FIXED" ? "✓" : dm === "WORSE" ? "↗" : "▲";
+                        const dmSym = dm === "FIXED" ? "" : dm === "WORSE" ? "↗" : "▲";
                         return (
                           <span style={{padding:"2px 7px", borderRadius:3, fontSize:9,
                                         fontWeight:700, color:dmCol,
@@ -19626,12 +19728,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                               <div style={{color:"#94a3b8", fontSize:11, marginBottom:6,
                                             fontFamily:"monospace", background:"#0f172a",
                                             padding:"6px 10px", borderRadius:3, wordBreak:"break-word"}}>
-                                🔍 {f.evidence_marker}
+                                {f.evidence_marker}
                               </div>
                             )}
                             {f.remediation && (
                               <div style={{color:"#86efac", fontSize:11, lineHeight:1.5}}>
-                                💡 {f.remediation}
+                                {f.remediation}
                               </div>
                             )}
                           </div>
@@ -19733,7 +19835,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   </div>
                   <div style={{color:"#94a3b8", fontSize:11, marginBottom:10, lineHeight:1.5,
                                 background:"#020617", padding:"6px 8px", borderRadius:3}}>
-                    🔍 {test.what_to_look_for}
+                    {test.what_to_look_for}
                   </div>
                   {state.status === "FAIL" && (
                     <div style={{display:"flex", gap:8, marginBottom:8}}>
@@ -19778,42 +19880,42 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 function _autoMod(props, args) {
   return <ModuleAutoPanel {...props} {...args}/>;
 }
-function AILLMModule(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",            emoji:"🤖", color:"#8b5cf6", playbook:"23_ai_llm.md"}); }
-function ContainerK8sModule(p)   { return _autoMod(p, {moduleKey:"container_k8s",   moduleLabel:"Container / Kubernetes",       emoji:"🐳", color:"#06b6d4", playbook:"24_container_k8s.md"}); }
-function SupplyChainModuleV2(p)  { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",        emoji:"🔗", color:"#10b981", playbook:"25_supply_chain.md"}); }
-function HybridIdentityModule(p) { return _autoMod(p, {moduleKey:"hybrid_identity", moduleLabel:"Hybrid Identity (Entra ID)",   emoji:"🪪", color:"#3b82f6", playbook:"28_hybrid_identity.md"}); }
-function SSPMModule(p)           { return _autoMod(p, {moduleKey:"sspm",            moduleLabel:"SaaS Security Posture (SSPM)", emoji:"📊", color:"#f59e0b", playbook:"29_sspm.md"}); }
-function IoTOTModule(p)          { return _autoMod(p, {moduleKey:"iot_ot",          moduleLabel:"IoT / OT / ICS Security",      emoji:"🏭", color:"#ef4444", playbook:"30_iot_ot.md"}); }
-function FirmwareModule(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware / Embedded",          emoji:"💿", color:"#ec4899", playbook:"31_firmware.md"}); }
+function AILLMModule(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",            emoji:"", color:"#8b5cf6", playbook:"23_ai_llm.md"}); }
+function ContainerK8sModule(p)   { return _autoMod(p, {moduleKey:"container_k8s",   moduleLabel:"Container / Kubernetes",       emoji:"", color:"#06b6d4", playbook:"24_container_k8s.md"}); }
+function SupplyChainModuleV2(p)  { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",        emoji:"", color:"#10b981", playbook:"25_supply_chain.md"}); }
+function HybridIdentityModule(p) { return _autoMod(p, {moduleKey:"hybrid_identity", moduleLabel:"Hybrid Identity (Entra ID)",   emoji:"", color:"#3b82f6", playbook:"28_hybrid_identity.md"}); }
+function SSPMModule(p)           { return _autoMod(p, {moduleKey:"sspm",            moduleLabel:"SaaS Security Posture (SSPM)", emoji:"", color:"#f59e0b", playbook:"29_sspm.md"}); }
+function IoTOTModule(p)          { return _autoMod(p, {moduleKey:"iot_ot",          moduleLabel:"IoT / OT / ICS Security",      emoji:"", color:"#ef4444", playbook:"30_iot_ot.md"}); }
+function FirmwareModule(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware / Embedded",          emoji:"", color:"#ec4899", playbook:"31_firmware.md"}); }
 
 // ── Legacy module overrides (JS hoisting: latest function declaration wins) ──
 // These 17 names are defined elsewhere with stub UIs wired to old short-form
 // endpoint paths. These wrappers below override them so all 26 modules render
 // via ModuleAutoPanel against the playbook-aligned tier-based backend.
-function PhishingModule(p)         { return _autoMod(p, {moduleKey:"phishing",        moduleLabel:"Phishing & Social Engineering",   emoji:"🎣", color:"#ec4899", playbook:"26_phishing.md"}); }
-function RedTeamModule(p)          { return _autoMod(p, {moduleKey:"red_team",        moduleLabel:"Adversary Emulation / Red Team",  emoji:"🎭", color:"#dc2626", playbook:"27_red_team.md"}); }
-function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"🔗", color:"#06b6d4", playbook:"15_tunnel.md"}); }
-function PivotModule(p)            { return _autoMod(p, {moduleKey:"pivot",           moduleLabel:"Pivoting & Lateral Movement",     emoji:"🔄", color:"#0ea5e9", playbook:"14_pivot.md"}); }
-function OsintModuleV2(p)          { return _autoMod(p, {moduleKey:"osint",           moduleLabel:"Advanced OSINT & Threat Intel",   emoji:"🌍", color:"#8b5cf6", playbook:"08_osint.md"}); }
-function MobileStaticModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_static",   moduleLabel:"App Binary Analysis (Static)",    emoji:"📱", color:"#a855f7", playbook:"32_mobile_static.md"}); }
-function MobileStorageModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_storage",  moduleLabel:"Storage (Data-at-Rest)",          emoji:"🗄️", color:"#10b981", playbook:"33_mobile_storage.md"}); }
-function MobileRuntimeModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_runtime",  moduleLabel:"Runtime / Anti-Tamper",           emoji:"🪝", color:"#f97316", playbook:"34_mobile_runtime.md"}); }
-function MobileCryptoModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_crypto",   moduleLabel:"Crypto (Algorithms & TLS)",       emoji:"🔐", color:"#06b6d4", playbook:"35_mobile_crypto.md"}); }
-function MobileNetworkModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_network",  moduleLabel:"Network / Traffic",               emoji:"📡", color:"#3b82f6", playbook:"36_mobile_network.md"}); }
-function AVEvasionModule(p)        { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"Antivirus / EDR Evasion",         emoji:"🥷", color:"#7c3aed", playbook:"20_av_evasion.md"}); }
-function PostExploitModule(p)      { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post Exploitation",               emoji:"🕵️", color:"#9333ea", playbook:"13_post_exploit.md"}); }
-function AuthAttacksModule(p)      { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",          emoji:"🛂", color:"#f59e0b", playbook:"17_auth_attacks.md"}); }
-function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"💥", color:"#ef4444", playbook:"06_exploit.md"}); }
-function BufferOverflowModule(p)   { return _autoMod(p, {moduleKey:"bof",             moduleLabel:"Buffer Overflow",                  emoji:"💾", color:"#f97316", playbook:"07_bof.md"}); }
-function ClientSideModule(p)       { return _autoMod(p, {moduleKey:"client_side",     moduleLabel:"Client-Side Attacks",              emoji:"🎯", color:"#f43f5e", playbook:"09_client_side.md"}); }
-function SystemExploitModule(p)    { return _autoMod(p, {moduleKey:"system_exploit",  moduleLabel:"System Exploitation",              emoji:"⚙️", color:"#ef4444", playbook:"10_system_exploit.md"}); }
-function PrivescModule(p)          { return _autoMod(p, {moduleKey:"privesc",         moduleLabel:"Privilege Escalation",             emoji:"⬆️", color:"#a855f7", playbook:"12_privesc.md"}); }
-function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"🌐", color:"#3b82f6", playbook:"16_network.md"}); }
-function WirelessModule(p)         { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Network Attacks",         emoji:"📶", color:"#06b6d4", playbook:"18_wireless.md"}); }
-function ActiveDirectoryModule(p)  { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",         emoji:"🏢", color:"#3b82f6", playbook:"19_ad.md"}); }
-function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"☁️", color:"#0ea5e9", playbook:"21_cloud.md"}); }
-function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"🔌", color:"#10b981", playbook:"22_apisec.md"}); }
-function MetasploitAutoModule(p)   { return _autoMod(p, {moduleKey:"metasploit",      moduleLabel:"Metasploit Framework",             emoji:"🧰", color:"#a855f7", playbook:"11_metasploit.md"}); }
+function PhishingModule(p)         { return _autoMod(p, {moduleKey:"phishing",        moduleLabel:"Phishing & Social Engineering",   emoji:"", color:"#ec4899", playbook:"26_phishing.md"}); }
+function RedTeamModule(p)          { return _autoMod(p, {moduleKey:"red_team",        moduleLabel:"Adversary Emulation / Red Team",  emoji:"", color:"#dc2626", playbook:"27_red_team.md"}); }
+function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"", color:"#06b6d4", playbook:"15_tunnel.md"}); }
+function PivotModule(p)            { return _autoMod(p, {moduleKey:"pivot",           moduleLabel:"Pivoting & Lateral Movement",     emoji:"", color:"#0ea5e9", playbook:"14_pivot.md"}); }
+function OsintModuleV2(p)          { return _autoMod(p, {moduleKey:"osint",           moduleLabel:"Advanced OSINT & Threat Intel",   emoji:"", color:"#8b5cf6", playbook:"08_osint.md"}); }
+function MobileStaticModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_static",   moduleLabel:"App Binary Analysis (Static)",    emoji:"", color:"#a855f7", playbook:"32_mobile_static.md"}); }
+function MobileStorageModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_storage",  moduleLabel:"Storage (Data-at-Rest)",          emoji:"", color:"#10b981", playbook:"33_mobile_storage.md"}); }
+function MobileRuntimeModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_runtime",  moduleLabel:"Runtime / Anti-Tamper",           emoji:"", color:"#f97316", playbook:"34_mobile_runtime.md"}); }
+function MobileCryptoModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_crypto",   moduleLabel:"Crypto (Algorithms & TLS)",       emoji:"", color:"#06b6d4", playbook:"35_mobile_crypto.md"}); }
+function MobileNetworkModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_network",  moduleLabel:"Network / Traffic",               emoji:"", color:"#3b82f6", playbook:"36_mobile_network.md"}); }
+function AVEvasionModule(p)        { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"Antivirus / EDR Evasion",         emoji:"", color:"#7c3aed", playbook:"20_av_evasion.md"}); }
+function PostExploitModule(p)      { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post Exploitation",               emoji:"", color:"#9333ea", playbook:"13_post_exploit.md"}); }
+function AuthAttacksModule(p)      { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",          emoji:"", color:"#f59e0b", playbook:"17_auth_attacks.md"}); }
+function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ef4444", playbook:"06_exploit.md"}); }
+function BufferOverflowModule(p)   { return _autoMod(p, {moduleKey:"bof",             moduleLabel:"Buffer Overflow",                  emoji:"", color:"#f97316", playbook:"07_bof.md"}); }
+function ClientSideModule(p)       { return _autoMod(p, {moduleKey:"client_side",     moduleLabel:"Client-Side Attacks",              emoji:"", color:"#f43f5e", playbook:"09_client_side.md"}); }
+function SystemExploitModule(p)    { return _autoMod(p, {moduleKey:"system_exploit",  moduleLabel:"System Exploitation",              emoji:"", color:"#ef4444", playbook:"10_system_exploit.md"}); }
+function PrivescModule(p)          { return _autoMod(p, {moduleKey:"privesc",         moduleLabel:"Privilege Escalation",             emoji:"", color:"#a855f7", playbook:"12_privesc.md"}); }
+function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b82f6", playbook:"16_network.md"}); }
+function WirelessModule(p)         { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Network Attacks",         emoji:"", color:"#06b6d4", playbook:"18_wireless.md"}); }
+function ActiveDirectoryModule(p)  { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",         emoji:"", color:"#3b82f6", playbook:"19_ad.md"}); }
+function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
+function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"", color:"#10b981", playbook:"22_apisec.md"}); }
+function MetasploitAutoModule(p)   { return _autoMod(p, {moduleKey:"metasploit",      moduleLabel:"Metasploit Framework",             emoji:"", color:"#a855f7", playbook:"11_metasploit.md"}); }
 
 // ═══════════════════════════════════════════════════════════════
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
@@ -19822,7 +19924,7 @@ function MetasploitAutoModule(p)   { return _autoMod(p, {moduleKey:"metasploit",
 function PhishingModule_legacy({token, apiUrl}) {
   return (
     <div style={{padding:24,color:"#f1f5f9"}}>
-      <h1 style={{fontSize:24,marginBottom:8}}>🎣 Phishing &amp; Social Engineering</h1>
+      <h1 style={{fontSize:24,marginBottom:8}}>Phishing &amp; Social Engineering</h1>
       <p style={{color:"#94a3b8",marginBottom:16}}>Module backend live — 70 endpoints across 7 sections (Email / Site Cloning / AiTM / Smishing-Vishing-Quishing / OAuth Consent / Deepfake / Campaign Mgmt). Per <code>module_playbooks/26_phishing.md</code>.</p>
       <p style={{color:"#64748b",fontSize:13}}>Full UI panel (technique tiles, run-all stream, manual cards) lands in the next session. Backend endpoints: <code>POST /api/phishing/&lt;tool&gt;</code> &middot; orchestrator <code>POST /api/phishing/run_all</code>.</p>
     </div>
@@ -19836,7 +19938,7 @@ function PhishingModule_legacy({token, apiUrl}) {
 function RedTeamModule_legacy({token, apiUrl}) {
   return (
     <div style={{padding:24,color:"#f1f5f9"}}>
-      <h1 style={{fontSize:24,marginBottom:8}}>🎭 Adversary Emulation / Red Team</h1>
+      <h1 style={{fontSize:24,marginBottom:8}}>Adversary Emulation / Red Team</h1>
       <p style={{color:"#94a3b8",marginBottom:16}}>Module backend live — 88 endpoints across 8 sections (Emulation Plans / Atomic RT / Caldera / C2 Frameworks / Initial Access Sim / Detection Eng / Purple Team / Threat Actor TTP). Per <code>module_playbooks/27_red_team.md</code>.</p>
       <p style={{color:"#64748b",fontSize:13}}>Full UI panel lands in the next session. Backend endpoints: <code>POST /api/red_team/&lt;tool&gt;</code> &middot; orchestrator <code>POST /api/red_team/run_all</code>.</p>
     </div>
@@ -19877,10 +19979,10 @@ function MetasploitModule(props) {
 
 
       <div style={{background:"linear-gradient(135deg,#1c0a0a,#0f172a)",border:"1px solid #7f1d1d",borderRadius:8,padding:20,marginBottom:16}}>
-        <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>🧰 Metasploit Framework</h2>
+        <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>Metasploit Framework</h2>
         <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>Search and reference common MSF modules</p>
         <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:6,padding:"10px 12px",marginBottom:12,fontSize:11,color:"#d97706"}}>
-          ⚠ To run Metasploit: Open Kali terminal -> type <span style={{fontFamily:"monospace",color:"#f87171"}}>msfconsole</span> -> use modules listed below
+          To run Metasploit: Open Kali terminal -> type <span style={{fontFamily:"monospace",color:"#f87171"}}>msfconsole</span> -> use modules listed below
         </div>
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search modules (e.g. smb, ssh, http)..."
@@ -19934,7 +20036,7 @@ function SettingsModule() {
   return (
     <div className="fade" style={{maxWidth:680,margin:"0 auto",padding:24}}>
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:28,marginBottom:16}}>
-        <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>⚙ Settings & Configuration</h2>
+        <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>Settings & Configuration</h2>
         <p style={{fontSize:12,color:"#64748b",marginBottom:24}}>Configure your VulnusLab backend connection.</p>
 
         <div style={{marginBottom:20}}>
@@ -19950,7 +20052,7 @@ function SettingsModule() {
             />
             <button onClick={save}
               style={{background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              {saved ? "Saved ✓" : "Save & Reload"}
+              {saved ? "Saved " : "Save & Reload"}
             </button>
           </div>
           <div style={{fontSize:11,color:"#475569",marginTop:6}}>
@@ -19981,7 +20083,7 @@ function SettingsModule() {
         </div>
 
         <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:8,padding:14}}>
-          <div style={{fontSize:11,color:"#d97706",fontWeight:700,marginBottom:6}}>⚠ Important</div>
+          <div style={{fontSize:11,color:"#d97706",fontWeight:700,marginBottom:6}}>Important</div>
           <ul style={{fontSize:11,color:"#64748b",lineHeight:2,paddingLeft:16}}>
             <li>Only scan systems you own or have written permission to test.</li>
             <li>The backend must be running on your Kali machine: <code style={{color:"#60a5fa"}}>uvicorn main:app --host 0.0.0.0 --port 8000</code></li>
@@ -20057,7 +20159,7 @@ function AdminPanel({ token }) {
     <div className="fade" style={{padding:24,fontFamily:"Inter,sans-serif"}}>
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
-        <span style={{fontSize:28}}>👑</span>
+        <span style={{fontSize:28}}></span>
         <div>
           <h2 style={{fontSize:20,fontWeight:800,color:"#f1f5f9",margin:0}}>Admin Panel</h2>
           <p style={{fontSize:12,color:"#64748b",margin:0}}>Manage users, subscriptions and access</p>
@@ -20221,7 +20323,7 @@ function UserBackupsModule({token}) {
   return (
     <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
       <div style={{maxWidth:1200, margin:"0 auto"}}>
-        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>📦 My Backups</h1>
+        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>My Backups</h1>
         <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
           Your data is private and auto-snapshotted. Take manual snapshots before risky changes; restore or delete any of them.
         </p>
@@ -20335,7 +20437,7 @@ function AdminVaultModule({token}) {
   return (
     <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
-        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>🔐 VAULT — Master Archive</h1>
+        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>VAULT — Master Archive</h1>
         <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
           Encrypted nightly archive of every user's snapshots + tool last-known-good + users.db. Auto-runs at 02:30 UTC. AES-128 + HMAC via Fernet.
         </p>
@@ -20358,7 +20460,7 @@ function AdminVaultModule({token}) {
         <div style={{display:"flex",gap:12,marginBottom:20}}>
           <button onClick={forceSync} disabled={loading}
             style={{padding:"10px 18px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
-            {loading ? "Syncing..." : "🔄 Sync VAULT Now"}
+            {loading ? "Syncing..." : "Sync VAULT Now"}
           </button>
           <button onClick={refresh}
             style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
@@ -20396,7 +20498,7 @@ function AdminVaultModule({token}) {
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.users?.length ?? 0}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.tools?.length ?? 0}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"center",color:d.manifest?.db?"#22c55e":"#94a3b8"}}>
-                      {d.manifest?.db ? "✓" : "—"}
+                      {d.manifest?.db ? "" : "—"}
                     </td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:d.manifest?.errors?.length ? "#dc2626" : "#94a3b8"}}>
                       {d.manifest?.errors?.length ?? 0}
@@ -20487,7 +20589,7 @@ function BackupOperationsModule({token}) {
   return (
     <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
-        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>💾 BACKUP Operations</h1>
+        <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>BACKUP Operations</h1>
         <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
           On-demand backup of users.db + .env + data + tools + src + Docker/nginx config.
           Click <b>Take Backup Now</b> to snapshot the present state.
@@ -20526,11 +20628,11 @@ function BackupOperationsModule({token}) {
             }}
             disabled={creating}
             style={{padding:"10px 18px",background:creating?"#1e293b":"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
-            {creating ? "Processing..." : "🔄 Reset to Present (wipe all + take new)"}
+            {creating ? "Processing..." : "Reset to Present (wipe all + take new)"}
           </button>
           <button onClick={takeBackup} disabled={creating}
             style={{padding:"10px 18px",background:creating?"#1e293b":"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:creating?"wait":"pointer",fontSize:14}}>
-            📦 Take Backup Now
+            Take Backup Now
           </button>
           <button onClick={refresh}
             style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
@@ -20539,7 +20641,7 @@ function BackupOperationsModule({token}) {
           {data?.count > 0 && (
             <button onClick={wipeAll}
               style={{padding:"10px 18px",background:"#7f1d1d",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,marginLeft:"auto"}}>
-              🗑 Wipe All
+              Wipe All
             </button>
           )}
         </div>
@@ -20579,7 +20681,7 @@ function BackupOperationsModule({token}) {
                 {data.files.map(f => (
                   <tr key={f.name} style={{borderTop:"1px solid #1e293b"}}>
                     <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"#e2e8f0"}}>
-                      {f.is_archive && <span style={{marginRight:6}}>📦</span>}
+                      {f.is_archive && <span style={{marginRight:6}}></span>}
                       {f.name}
                     </td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{f.size_human}</td>
@@ -20588,16 +20690,16 @@ function BackupOperationsModule({token}) {
                       {f.name.endsWith(".tar.gz") && (
                         <button onClick={()=>inspectOne(f.name)}
                           style={{padding:"5px 12px",background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
-                          🔍 Inspect
+                          Inspect
                         </button>
                       )}
                       <button onClick={()=>downloadOne(f.name)}
                         style={{padding:"5px 12px",background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
-                        ⬇ Download
+                        Download
                       </button>
                       <button onClick={()=>deleteOne(f.name)}
                         style={{padding:"5px 12px",background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer"}}>
-                        🗑 Delete
+                        Delete
                       </button>
                     </td>
                   </tr>
@@ -20608,13 +20710,13 @@ function BackupOperationsModule({token}) {
         </div>
 
         <div style={{marginTop:20,color:"#475569",fontSize:11,fontStyle:"italic",lineHeight:1.6}}>
-          💡 <b>Each backup includes (end-to-end):</b><br/>
+          <b>Each backup includes (end-to-end):</b><br/>
           <span style={{color:"#94a3b8"}}>Backend</span>: main.py · tools/ (150 scanners) · endpoints/ · profiles/ · requirements.txt<br/>
           <span style={{color:"#94a3b8"}}>Frontend</span>: src/ · public/ · package.json · package-lock.json<br/>
           <span style={{color:"#94a3b8"}}>Data + secrets</span>: users.db · .env · data/ (scan history, consent log)<br/>
           <span style={{color:"#94a3b8"}}>Infrastructure</span>: docker-compose.yml · Dockerfile · Dockerfile.frontend · nginx.conf · .gitignore<br/>
           <span style={{color:"#94a3b8"}}>Excluded</span>: __pycache__ · node_modules · .git · build/ · *.bak (auto-regenerated on restore)<br/>
-          <span style={{color:"#10b981"}}>✓ Single bundle restores a fully working VPS</span>
+          <span style={{color:"#10b981"}}>Single bundle restores a fully working VPS</span>
         </div>
       </div>
 
@@ -20623,8 +20725,8 @@ function BackupOperationsModule({token}) {
         <div onClick={()=>setInspectData(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:720,maxHeight:"85vh",overflowY:"auto",padding:24}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{color:"#e2e8f0",fontWeight:700,fontSize:16}}>🔍 Inspecting: <span style={{fontFamily:"JetBrains Mono,monospace",color:"#a78bfa"}}>{inspectData.file}</span></div>
-              <button onClick={()=>setInspectData(null)} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}>✕</button>
+              <div style={{color:"#e2e8f0",fontWeight:700,fontSize:16}}>Inspecting: <span style={{fontFamily:"JetBrains Mono,monospace",color:"#a78bfa"}}>{inspectData.file}</span></div>
+              <button onClick={()=>setInspectData(null)} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}></button>
             </div>
             <div style={{color:"#94a3b8",fontSize:12,marginBottom:14}}>
               {inspectData.total_entries} total entries · grouped by top-level path
@@ -20845,7 +20947,7 @@ export default function App() {
         </div>
         <div style={{display: active==="vuln"     ? "block" : "none"}}>
           <ModuleWithTabs moduleKey="vuln" moduleLabel="Vulnerability Scanning" autoCount={196} manualTests={MANUAL_TESTS_VULN} color="#ef4444"
-            autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="🛡️" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
+            autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="password" ? "block" : "none"}}>
           <PasswordModule token={token} apiUrl={API}/>
@@ -21064,7 +21166,7 @@ export default function App() {
                       style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
                       <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
-                      {locked   && <span style={{fontSize:10}}>🔒</span>}
+                      {locked   && <span style={{fontSize:10}}></span>}
                       {m.comingSoon && !locked && <span style={{fontSize:8,color:"#8b5cf6",fontWeight:700,background:"rgba(139,92,246,0.15)",padding:"1px 5px",borderRadius:3,letterSpacing:0.5}}>SOON</span>}
                       {isTrial  && !locked && !m.comingSoon && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
                       {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
@@ -21082,10 +21184,10 @@ export default function App() {
             <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>System</span>
           </div>
           {[
-            {id:"health",  icon:"💊", label:"System Health"},
-            {id:"history", icon:"📋", label:"Scan History"},
-            {id:"settings",icon:"⚙",  label:"Settings"},
-            ...(isSuperAdmin ? [{id:"adminpanel", icon:"👑", label:"Admin Panel"}] : []),
+            {id:"health",  icon:"", label:"System Health"},
+            {id:"history", icon:"", label:"Scan History"},
+            {id:"settings",icon:"",  label:"Settings"},
+            ...(isSuperAdmin ? [{id:"adminpanel", icon:"", label:"Admin Panel"}] : []),
           ].map(m => (
             <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
               style={{width:"calc(100% - 16px)",background:active===m.id?(m.id==="adminpanel"?"#3b0764":"#1e293b"):"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
@@ -21102,7 +21204,7 @@ export default function App() {
             onClick={()=>setUpgModal(false)}>
             <div style={{background:"#0f172a",border:"1px solid #3b82f6",borderRadius:12,padding:32,maxWidth:380,width:"90%",textAlign:"center"}}
               onClick={e=>e.stopPropagation()}>
-              <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+              <div style={{fontSize:36,marginBottom:12}}></div>
               <div style={{fontSize:18,fontWeight:700,color:"#f1f5f9",marginBottom:8}}>Pro Feature</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:24,lineHeight:1.6}}>
                 This module is available on the <strong style={{color:"#3b82f6"}}>Pro plan</strong>.<br/>
@@ -21133,7 +21235,7 @@ export default function App() {
         {/* Grace period banner — trial expired but 3 grace days */}
         {billingInfo && billingInfo.access === "grace" && (
           <div style={{background:"#1c0a00",borderBottom:"1px solid #78350f",padding:"10px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
-            <span style={{fontSize:18}}>⚠️</span>
+            <span style={{fontSize:18}}></span>
             <div style={{flex:1}}>
               <span style={{fontSize:13,fontWeight:700,color:"#fb923c"}}>
                 Your trial has ended. You have {billingInfo.grace_days_remaining} grace day{billingInfo.grace_days_remaining!==1?"s":""} of full access remaining — subscribe now to keep scanning.
@@ -21148,7 +21250,7 @@ export default function App() {
         {/* Expired banner — trial + grace exhausted, locked out */}
         {billingInfo && billingInfo.access === "expired" && (
           <div style={{background:"#1c0000",borderBottom:"2px solid #7f1d1d",padding:"14px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
-            <span style={{fontSize:20}}>🚫</span>
+            <span style={{fontSize:20}}></span>
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:800,color:"#fca5a5"}}>Trial expired</div>
               <div style={{fontSize:12,color:"#fecaca",marginTop:2}}>Subscribe to VulnusLab Pro to continue running scans. Your past scans are still accessible.</div>
@@ -21164,7 +21266,7 @@ export default function App() {
           <div style={{background: trialInfo.scans_remaining===0 ? "#1c0000" : (billingInfo.trial_days_remaining<=2 ? "#1c0a00" : "#0c1a0c"),
             borderBottom:`1px solid ${trialInfo.scans_remaining===0?"#7f1d1d":(billingInfo.trial_days_remaining<=2?"#78350f":"#166534")}`,
             padding:"8px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
-            <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"🚫":(billingInfo.trial_days_remaining<=2?"⚠️":"🎯")}</span>
+            <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"":(billingInfo.trial_days_remaining<=2?"":"")}</span>
             <div style={{flex:1}}>
               <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":(billingInfo.trial_days_remaining<=2?"#fb923c":"#4ade80")}}>
                 {trialInfo.scans_remaining===0
@@ -21200,7 +21302,7 @@ export default function App() {
         <div style={{padding:"18px 24px 10px",borderBottom:"1px solid #1e293b",background:"#0a0f1e",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <span style={{fontSize:24}}>{topic?topic.icon:"⚙️"}</span>
+              <span style={{fontSize:24}}>{topic?topic.icon:""}</span>
               <div>
                 <h1 style={{fontSize:17,fontWeight:700,color:"#f1f5f9",marginBottom:2}}>{topic?topic.label:active}</h1>
                 <p style={{fontSize:11,color:"#475569"}}>Real Kali Linux tools | Module {topic?topic.num:"--"}</p>
