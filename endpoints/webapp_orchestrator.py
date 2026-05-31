@@ -173,6 +173,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("permissions_policy_audit",    "/api/webapp/scan/permissions_policy_audit"),
         ("robots_disallow_disclosure",  "/api/webapp/scan/robots_disallow_disclosure"),
     ],
+    # ── VL-FORGE round 5: +8 deep-protocol + identity + telemetry ──
+    "tier18_deep_protocol_identity": [
+        ("crlf_header_injection_deep",      "/api/webapp/scan/crlf_header_injection_deep"),
+        ("http3_quic_negotiation",          "/api/webapp/scan/http3_quic_negotiation"),
+        ("jsonp_callback_abuse",            "/api/webapp/scan/jsonp_callback_abuse"),
+        ("oauth_scope_creep",               "/api/webapp/scan/oauth_scope_creep"),
+        ("forwarded_header_trust",          "/api/webapp/scan/forwarded_header_trust"),
+        ("graphql_persisted_query_bypass",  "/api/webapp/scan/graphql_persisted_query_bypass"),
+        ("webmail_imap_smtp_ssrf",          "/api/webapp/scan/webmail_imap_smtp_ssrf"),
+        ("csp_report_uri_audit",            "/api/webapp/scan/csp_report_uri_audit"),
+    ],
 }
 
 
