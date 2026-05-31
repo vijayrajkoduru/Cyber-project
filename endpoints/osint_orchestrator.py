@@ -135,6 +135,20 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("mapillary_location",     "/api/osint/mapillary_location"),
         ("urlscan_io_search",      "/api/osint/urlscan_io_search"),
     ],
+    # ── VL-FORGE round 4: +8 paid-API integrations (advisory + real-probe) ──
+    "tier19_paid_api_breach_intel": [
+        ("dehashed_search",            "/api/osint/dehashed_search"),
+        ("intelx_search",              "/api/osint/intelx_search"),
+        ("snusbase_search",            "/api/osint/snusbase_search"),
+    ],
+    "tier20_paid_api_intel_discovery": [
+        ("hunter_io_domain",           "/api/osint/hunter_io_domain"),
+        ("phoneinfoga_lookup",         "/api/osint/phoneinfoga_lookup"),
+        ("securitytrails_passive_dns", "/api/osint/securitytrails_passive_dns"),
+        ("fofa_search",                "/api/osint/fofa_search"),
+        ("zoomeye_search",             "/api/osint/zoomeye_search"),
+        ("domaintools_historical",     "/api/osint/domaintools_historical"),
+    ],
 }
 
 

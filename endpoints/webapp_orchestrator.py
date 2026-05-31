@@ -217,6 +217,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("svg_xss_upload",                "/api/webapp/scan/svg_xss_upload"),
         ("ssrf_url_schema_smuggle",       "/api/webapp/scan/ssrf_url_schema_smuggle"),
     ],
+    # ── VL-FORGE round 9: +8 server/framework/auth scanners ──
+    "tier22_server_framework_auth": [
+        ("apache_ssi_includes",            "/api/webapp/scan/apache_ssi_includes"),
+        ("tomcat_ajp_exposure",            "/api/webapp/scan/tomcat_ajp_exposure"),
+        ("spring_spel_injection",          "/api/webapp/scan/spring_spel_injection"),
+        ("graphql_field_suggestions_leak", "/api/webapp/scan/graphql_field_suggestions_leak"),
+        ("sql_truncation_attack",          "/api/webapp/scan/sql_truncation_attack"),
+        ("mass_assignment_patch",          "/api/webapp/scan/mass_assignment_patch"),
+        ("oauth_front_channel_logout",     "/api/webapp/scan/oauth_front_channel_logout"),
+        ("apache_modrewrite_confusion",    "/api/webapp/scan/apache_modrewrite_confusion"),
+    ],
 }
 
 

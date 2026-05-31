@@ -1,4 +1,4 @@
-"""LeakIX exposed-asset search — playbook §4 #63 ⭐ / §5 #68.
+"""LeakIX exposed-asset search — playbook §4 #63 / §5 #68.
 
 LeakIX scans the internet for exposed assets (open databases, leaked
 credentials, exposed admin panels). The free /search endpoint works

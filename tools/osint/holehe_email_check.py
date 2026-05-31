@@ -1,4 +1,4 @@
-"""Holehe-style email account-existence enum — playbook §1 #7 ⭐.
+"""Holehe-style email account-existence enum — playbook §1 #7 .
 
 Email-as-username check across 30 services that leak account existence
 via forgot-password / signup-collision endpoints. Each service has its

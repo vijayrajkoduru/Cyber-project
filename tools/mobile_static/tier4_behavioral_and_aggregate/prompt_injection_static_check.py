@@ -1,4 +1,4 @@
-"""prompt_injection_static_check — code patterns where user input feeds LLM call. ⭐ 2025+
+"""prompt_injection_static_check — code patterns where user input feeds LLM call. 2025+
 
 OWASP LLM Top 10 #1: prompt injection. If your app concatenates user
 text into a system/user prompt without sanitization, attacker can hijack

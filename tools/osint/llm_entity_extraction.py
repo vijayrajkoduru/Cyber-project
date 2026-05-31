@@ -1,4 +1,4 @@
-"""LLM-driven entity extraction from any text — playbook §8 #99 ⭐.
+"""LLM-driven entity extraction from any text — playbook §8 #99 .
 
 Takes a text blob as `target` (or fetches it from a URL prefixed with
 http://). Sends to an LLM (OpenAI-compatible) to extract: people, orgs,

@@ -1,4 +1,4 @@
-"""LLM-driven disinformation/coordinated-inauthentic-behavior detect — playbook §8 #102 ⭐.
+"""LLM-driven disinformation/coordinated-inauthentic-behavior detect — playbook §8 #102 .
 
 Analyzes a text blob (or fetched URL) for disinformation markers: emotional
 manipulation, unverifiable claims, source-laundering patterns, bot-style

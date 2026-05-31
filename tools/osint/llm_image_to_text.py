@@ -1,4 +1,4 @@
-"""LLM vision image-to-text OSINT — playbook §8 #103 ⭐ + §6 #85.
+"""LLM vision image-to-text OSINT — playbook §8 #103 + §6 #85.
 
 Sends an image URL to a vision-capable LLM (GPT-4o / Claude-Sonnet) and
 extracts: visible text (OCR), objects, locations (signs/license plates/
