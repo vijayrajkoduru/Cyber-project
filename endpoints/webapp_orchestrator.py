@@ -184,6 +184,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("webmail_imap_smtp_ssrf",          "/api/webapp/scan/webmail_imap_smtp_ssrf"),
         ("csp_report_uri_audit",            "/api/webapp/scan/csp_report_uri_audit"),
     ],
+    # ── VL-FORGE round 6: +8 SAML/OAuth/HTTP-method/DoS scanners ──
+    "tier19_method_saml_oauth_dos": [
+        ("saml_response_time_bomb",    "/api/webapp/scan/saml_response_time_bomb"),
+        ("oauth_client_id_confusion",  "/api/webapp/scan/oauth_client_id_confusion"),
+        ("options_method_tampering",   "/api/webapp/scan/options_method_tampering"),
+        ("head_method_side_channel",   "/api/webapp/scan/head_method_side_channel"),
+        ("gzip_bomb_upload",           "/api/webapp/scan/gzip_bomb_upload"),
+        ("trace_method_enabled",       "/api/webapp/scan/trace_method_enabled"),
+        ("cors_preflight_cache_abuse", "/api/webapp/scan/cors_preflight_cache_abuse"),
+        ("x_original_url_bypass",      "/api/webapp/scan/x_original_url_bypass"),
+    ],
 }
 
 
