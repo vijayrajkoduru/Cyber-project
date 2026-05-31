@@ -162,6 +162,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("path_normalization_bypass",      "/api/webapp/scan/path_normalization_bypass"),
         ("open_redirect_oauth_extension",  "/api/webapp/scan/open_redirect_oauth_extension"),
     ],
+    # ── VL-FORGE round 4: +8 OWASP-API + supply-chain + header hygiene ──
+    "tier17_owasp_api_supply_chain": [
+        ("graphql_alias_injection",     "/api/webapp/scan/graphql_alias_injection"),
+        ("ai_api_key_leak_in_html",     "/api/webapp/scan/ai_api_key_leak_in_html"),
+        ("csrf_token_quality",          "/api/webapp/scan/csrf_token_quality"),
+        ("broken_function_level_auth",  "/api/webapp/scan/broken_function_level_auth"),
+        ("sri_audit",                   "/api/webapp/scan/sri_audit"),
+        ("server_timing_leak",          "/api/webapp/scan/server_timing_leak"),
+        ("permissions_policy_audit",    "/api/webapp/scan/permissions_policy_audit"),
+        ("robots_disallow_disclosure",  "/api/webapp/scan/robots_disallow_disclosure"),
+    ],
 }
 
 
