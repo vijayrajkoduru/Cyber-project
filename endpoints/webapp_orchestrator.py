@@ -305,9 +305,11 @@ async def webapp_run_all(req: "WebAppRunAllRequest",
       {"event":"scan_complete", "duration_sec":..., "summary":{...}, "timing":{...}}
     """
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    # VL-TURBO — default concurrency 8→12. 34 webapp tools / 12 ≈ 3 waves
-    # instead of 5; httpx connection pool already allows up to 36 keepalives.
-    concurrency = max(1, min(req.concurrency or 12, 16))
+    # VL-TURBO 2.0 — default concurrency 12→24 (cap 16→32). Webapp grew from
+    # 34 tools to ~160+ across 20+ tiers; at 12 in-flight a full scan needed
+    # ~13 waves. At 24 in-flight that drops to ~7 waves, roughly halving
+    # wall-clock time. httpx pool bumped to keepalive=2*concurrency anyway.
+    concurrency = max(1, min(req.concurrency or 24, 32))
 
     generator = run_module_streaming(
         target=req.target,
@@ -337,9 +339,11 @@ async def webapp_run_all_buffered(req: "WebAppRunAllRequest",
     """Non-streaming version — buffers all 34 results then returns one big JSON.
     Use only when streaming isn't suitable (CLI tools, server-to-server)."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
-    # VL-TURBO — default concurrency 8→12. 34 webapp tools / 12 ≈ 3 waves
-    # instead of 5; httpx connection pool already allows up to 36 keepalives.
-    concurrency = max(1, min(req.concurrency or 12, 16))
+    # VL-TURBO 2.0 — default concurrency 12→24 (cap 16→32). Webapp grew from
+    # 34 tools to ~160+ across 20+ tiers; at 12 in-flight a full scan needed
+    # ~13 waves. At 24 in-flight that drops to ~7 waves, roughly halving
+    # wall-clock time. httpx pool bumped to keepalive=2*concurrency anyway.
+    concurrency = max(1, min(req.concurrency or 24, 32))
     return await run_module_parallel(
         target=req.target,
         tools=tools,

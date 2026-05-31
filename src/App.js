@@ -3111,22 +3111,6 @@ function WebAppModule(props) {
           }
         }
 
-        // INCOMPLETE-STREAM-V1 — recover if connection died before scan_complete
-        if (!stopRef.current && !_finalSummary) {
-          const missing = PHASES.filter(ph => !(ph.tool in results));
-          if (missing.length > 0) {
-            add("stream ended without scan_complete — " + missing.length + " scanner(s) didn't report");
-            missing.forEach(ph => {
-              const idx = _toolToIdx[ph.tool];
-              results[ph.tool] = {ok:false, _failed:true,
-                                   error:"stream interrupted before this scanner completed",
-                                   findings:[], tool:ph.tool};
-              setFailed(p => [...p, idx]);
-              setDone(p => [...p, idx]);
-            });
-            setAll(Object.assign({}, results));
-          }
-        }
         if (!stopRef.current && _finalSummary) {
           const sum = _finalSummary.summary || {};
           add("v2 complete in " + _finalSummary.duration_sec + "s — " + (sum.ok||0) + " ok, " + (sum.failed||0) + " failed, " + (sum.skipped||0) + " skipped, " + (sum.total_findings||0) + " finding(s)");
@@ -3142,6 +3126,26 @@ function WebAppModule(props) {
       } catch(e) {
         const msg = (e && e.message) ? e.message : String(e);
         add("v2 stream failed: " + msg);
+      } finally {
+        // INCOMPLETE-STREAM-V2 — ALWAYS run recovery, whether the stream
+        // ended normally, errored mid-flight, or finalSummary arrived with
+        // some tools missing. Previously this only ran when no finalSummary
+        // AND no exception fired, leaving tiles stuck in QUEUED state.
+        if (!stopRef.current) {
+          const missing = PHASES.filter(ph => !(ph.tool in results));
+          if (missing.length > 0) {
+            add("[!] " + missing.length + " scanner(s) didn't report — marked as failed");
+            missing.forEach(ph => {
+              const idx = _toolToIdx[ph.tool];
+              results[ph.tool] = {ok:false, _failed:true,
+                                   error:"stream ended before this scanner completed",
+                                   findings:[], tool:ph.tool};
+              setFailed(p => [...p, idx]);
+              setDone(p => [...p, idx]);
+            });
+            setAll(Object.assign({}, results));
+          }
+        }
       }
       setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
       return;
