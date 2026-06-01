@@ -1079,6 +1079,149 @@ def _probe_syft_sbom(target, req):
                        f"Syft SBOM ({len(artifacts)} packages)")
 
 
+def _probe_trivy_image_secrets(target, req):
+    """Real Trivy secret-detection scan on an OCI image.
+    Different scanner mode than _probe_trivy_image (which finds CVEs);
+    this looks for hardcoded API keys, tokens, private keys baked into
+    the image layers. Skips honestly when target isn't an image ref."""
+    if not _looks_like_image_ref(target):
+        return _not_applicable_for_image_scanner(target, "image_secrets_scan", "Trivy secret scan")
+
+    if shutil.which("trivy") is None:
+        return _build_resp("image_secrets_scan", target, [wrap_finding(
+            "[NOT IMPLEMENTED] trivy binary not installed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend with Dockerfile that installs Trivy.",
+            evidence_marker="trivy not found in PATH")], 0, "Trivy not installed")
+
+    exit_code, stdout, stderr = _run_tool([
+        "trivy", "image",
+        "--format", "json",
+        "--scanners", "secret",
+        "--quiet",
+        "--timeout", "3m",
+        "--skip-db-update",
+        target,
+    ], timeout_s=240)
+
+    if exit_code == 124:
+        return _build_resp("image_secrets_scan", target, [wrap_finding(
+            "[PROBE ERROR] Trivy secret scan timeout",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Try a smaller image.",
+            evidence_marker="Wall-clock exceeded")], 0, "Trivy secret timeout")
+
+    if exit_code not in (0, 1) or not stdout.strip():
+        return _build_resp("image_secrets_scan", target, [wrap_finding(
+            f"[PROBE ERROR] Trivy secret scan exit {exit_code}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify image is pullable.",
+            evidence_marker=f"stderr: {stderr[-300:]}")], 0,
+            f"Trivy exit {exit_code}")
+
+    try:
+        data = json.loads(stdout)
+    except Exception as e:
+        return _build_resp("image_secrets_scan", target, [wrap_finding(
+            f"[PROBE ERROR] Trivy JSON parse: {str(e)[:120]}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Trivy output unexpected.",
+            evidence_marker=f"First 300 chars: {stdout[:300]}")], 0, "parse error")
+
+    findings = []
+    for r in data.get("Results", []) or []:
+        for s in r.get("Secrets", []) or []:
+            sev = s.get("Severity", "MEDIUM").upper()
+            cvss = {"CRITICAL": "9.0", "HIGH": "7.5",
+                    "MEDIUM": "5.5", "LOW": "3.0"}.get(sev, "5.5")
+            cat = s.get("Category", "secret")
+            title_short = s.get("Title", cat)
+            match = s.get("Match", "")[:120]
+            path = r.get("Target", "")
+            findings.append(wrap_finding(
+                f"Hardcoded {cat} in image: {title_short}",
+                sev, cvss=cvss, cwe="CWE-798",
+                remediation=(f"Remove {cat} from image. Use runtime "
+                              "secret-injection (Vault CSI, AWS Secrets "
+                              "Manager, K8s Secrets) instead of baking "
+                              "into image layers."),
+                evidence_marker=f"Trivy secret: {path}: {match}"))
+
+    if not findings:
+        findings.append(wrap_finding(
+            f"Trivy secret scan: 0 hardcoded secrets in {target[:80]}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue clean-build posture.",
+            evidence_marker="Trivy --scanners secret: 0 hits"))
+    return _build_resp("image_secrets_scan", target, findings,
+                       max(len(findings), 1),
+                       f"Trivy hardcoded-secret scan ({len(findings)})")
+
+
+def _probe_ingress_authz_open(target, req):
+    """Detect ingress controllers that expose admin / metrics / health
+    endpoints without auth. Probes common paths attackers use as a
+    starting point (cluster reconnaissance + potential RCE)."""
+    host = _host(target)
+    findings = []
+    exposed = []
+
+    # Common ingress / admin paths leaked publicly
+    paths_to_test = [
+        ("/actuator/env", "Spring Boot Actuator env (CRITICAL leak)"),
+        ("/actuator/heapdump", "Spring Boot heapdump"),
+        ("/actuator/health", "Spring Boot health"),
+        ("/.env", "dotenv config file"),
+        ("/admin", "Admin interface"),
+        ("/manager", "Tomcat manager"),
+        ("/console", "Web console"),
+        ("/api/v1/health", "Generic health endpoint"),
+        ("/metrics", "Prometheus metrics endpoint"),
+        ("/healthz", "K8s-style health endpoint"),
+        ("/readyz", "K8s-style readiness endpoint"),
+        ("/swagger-ui", "Swagger UI"),
+        ("/v3/api-docs", "OpenAPI spec"),
+        ("/graphql", "GraphQL endpoint"),
+    ]
+
+    high_value = ("/actuator/env", "/actuator/heapdump", "/.env",
+                   "/admin", "/manager", "/console")
+
+    for scheme in ("https", "http"):
+        for path, label in paths_to_test:
+            url = f"{scheme}://{host}{path}"
+            c, _, b = _http_get_insecure(url, timeout=3)
+            if c == 200 and len(b) > 20 and "<html" not in b[:200].lower():
+                exposed.append((path, label, scheme))
+            elif c == 200 and path in ("/admin", "/manager", "/swagger-ui"):
+                exposed.append((path, label, scheme))
+        if exposed:
+            break
+
+    if exposed:
+        critical_hits = [e for e in exposed if e[0] in high_value]
+        sev = "CRITICAL" if critical_hits else "HIGH" if len(exposed) > 3 else "MEDIUM"
+        cvss = "9.0" if sev == "CRITICAL" else "7.5" if sev == "HIGH" else "5.5"
+        summary = "; ".join(f"{e[2]}://{host}{e[0]} ({e[1]})" for e in exposed[:5])
+        findings.append(wrap_finding(
+            f"Ingress: {len(exposed)} sensitive path(s) reachable without auth",
+            sev, cvss=cvss, cwe="CWE-306",
+            remediation=("Restrict admin / actuator / metrics / health paths "
+                          "to internal IPs or require auth. Add ingress-level "
+                          "deny rules. Spring Boot: management.endpoints.web."
+                          "exposure.include=health (only)."),
+            evidence_marker=f"Exposed: {summary}"))
+    else:
+        findings.append(wrap_finding(
+            "No unauthenticated admin/actuator/metrics paths detected on ingress",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue locked-down ingress posture.",
+            evidence_marker=f"Probed {len(paths_to_test)*2} path/scheme combinations"))
+    return _build_resp("ingress_authz_open", target, findings,
+                       len(paths_to_test) * 2,
+                       "Ingress unauth admin/actuator/metrics probe")
+
+
 PROBES = {
     # original 7 real probes
     "docker_daemon_exposed":          _probe_docker_daemon_exposed,
@@ -1107,6 +1250,9 @@ PROBES = {
     "grype_image":                    _probe_grype_image,
     "image_signing_cosign":           _probe_cosign_verify,
     "image_provenance_slsa":          _probe_syft_sbom,
+    "image_secrets_scan":             _probe_trivy_image_secrets,
+    "ingress_authz_open":             _probe_ingress_authz_open,
+    "service_mesh_authz_open":        _probe_ingress_authz_open,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
