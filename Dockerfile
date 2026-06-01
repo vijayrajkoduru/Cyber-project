@@ -230,11 +230,28 @@ RUN ( git clone --depth 1 https://github.com/sullo/nikto.git /opt/nikto \
 
 RUN pip install --no-cache-dir sslyze
 
-# ── Network — masscan, hping3, amass ────────────────────────────────────
+# ── Network — masscan, hping3 (apt) + amass (GitHub release) ────────────
+# amass is NOT in Debian Bookworm main (Go binary, ships via GitHub release).
 RUN apt-get update -q -o Acquire::Retries=3 \
  && apt-get install -y -q --no-install-recommends \
-        masscan hping3 amass \
+        masscan hping3 \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ARG AMASS_VERSION=4.2.0
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_Linux_amd64.zip" \
+        -O amass.zip \
+   && [ -s amass.zip ] \
+   && apt-get update && apt-get install -y --no-install-recommends unzip \
+   && unzip -q amass.zip \
+   && cp amass_Linux_amd64/amass /usr/local/bin/ \
+   && chmod +x /usr/local/bin/amass \
+   && rm -rf amass.zip amass_Linux_amd64 \
+   && apt-get purge -y unzip && apt-get autoremove -y \
+   && rm -rf /var/lib/apt/lists/* \
+   && /usr/local/bin/amass -version 2>&1 | head -1 ) \
+ || echo "WARNING: amass install failed (non-fatal)"
 
 # ── Subdomain / port scan — subfinder, naabu ────────────────────────────
 ARG SUBFINDER_VERSION=2.6.6
