@@ -18516,9 +18516,6 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:8}}>
         <span style={{fontSize:28}}>{emoji}</span>
         <h1 style={{fontSize:22, fontWeight:700}}>{moduleLabel}</h1>
-        <span style={{color:"#64748b", fontSize:12, marginLeft:8}}>
-          {totalTools} techniques · {tiers.length} sections · <code>module_playbooks/{playbook}</code>
-        </span>
       </div>
 
       <TestTargets targets={MODULE_TEST_TARGETS[moduleKey] || []}
