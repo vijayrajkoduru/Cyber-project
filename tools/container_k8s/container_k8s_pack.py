@@ -28,6 +28,20 @@ from tools.container_k8s._dockerfile_probes import (
     _probe_dockerfile_expose_audit,
     _probe_hadolint_dockerfile,
 )
+from tools.container_k8s._pod_spec_probes import (
+    _probe_container_privileged,
+    _probe_container_capadd_dangerous,
+    _probe_container_host_pid,
+    _probe_container_host_network,
+    _probe_container_host_ipc,
+    _probe_container_hostpath_dangerous,
+    _probe_container_docker_sock_mount,
+    _probe_container_runas_root,
+    _probe_container_no_readonly_rootfs,
+    _probe_container_allow_priv_escalation,
+    _probe_container_seccomp_unset,
+    _probe_container_apparmor_unset,
+)
 
 
 # Recognise an image reference vs a hostname/IP/URL.
@@ -1612,6 +1626,19 @@ PROBES = {
     "dockerfile_copy_chown_audit":    _probe_dockerfile_copy_chown_audit,
     "dockerfile_expose_audit":        _probe_dockerfile_expose_audit,
     "hadolint_dockerfile":            _probe_hadolint_dockerfile,
+    # Pod-spec static-analysis probes (require pod_spec_yaml input)
+    "container_privileged":           _probe_container_privileged,
+    "container_capadd_dangerous":     _probe_container_capadd_dangerous,
+    "container_host_pid":             _probe_container_host_pid,
+    "container_host_network":         _probe_container_host_network,
+    "container_host_ipc":             _probe_container_host_ipc,
+    "container_hostpath_dangerous":   _probe_container_hostpath_dangerous,
+    "container_docker_sock_mount":    _probe_container_docker_sock_mount,
+    "container_runas_root":           _probe_container_runas_root,
+    "container_no_readonly_rootfs":   _probe_container_no_readonly_rootfs,
+    "container_allow_priv_escalation": _probe_container_allow_priv_escalation,
+    "container_seccomp_unset":        _probe_container_seccomp_unset,
+    "container_apparmor_unset":       _probe_container_apparmor_unset,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
