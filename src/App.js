@@ -18617,8 +18617,15 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 
   const totalTools = tiers.reduce((s, t) => s + (t.count || 0), 0);
 
+  // Run All gate: unlock when target is set OR any advanced input is set.
+  // (Image-ref / dockerfile / pod-spec / repo-url probes don't need a network
+  // target — the advanced input IS the target. We still send `target` in the
+  // body so cluster/registry-context probes can use it; default to "n/a"
+  // when only advanced inputs are provided so backend ScanRequest passes.)
+  const hasAnyAdvInput = advancedFields.some(k => (advInputs[k] || "").trim().length > 0);
+  const canRun = (target.trim().length > 0 || hasAnyAdvInput) && !running;
   const runAll = async () => {
-    if (!target.trim() || running) return;
+    if (!canRun) return;
     setRunning(true);
     setResults({});
     setProgress({done:0, total: totalTools});
@@ -18633,7 +18640,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       // Build run_all body. Include optional auth_bearer / auth_cookie when set
       // so scanners that accept these (paid-API OSINT, webapp-auth scanners, etc.)
       // can use them. Webapp paths require /scan/ middle, others don't.
-      const runBody = {target, concurrency: 16};
+      const runBody = {target: target.trim() || "n/a", concurrency: 16};
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
       // Advanced per-module inputs (image_ref / dockerfile_text / pod_spec_yaml
@@ -18781,11 +18788,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   borderRadius:6, padding:"10px 12px", color:"#f1f5f9",
                   fontSize:13, outline:"none"}}/>
         <button
-          onClick={runAll} disabled={!target.trim() || running}
+          onClick={runAll} disabled={!canRun}
+          title={!canRun ? (running ? "Scan in progress" : "Enter a target OR fill at least one advanced input") : ""}
           style={{background: running ? "#475569" : (color || "#3b82f6"),
                   border:"none", borderRadius:6, padding:"10px 18px",
                   color:"#fff", fontWeight:600, fontSize:13,
-                  cursor: running || !target.trim() ? "not-allowed" : "pointer"}}>
+                  cursor: !canRun ? "not-allowed" : "pointer"}}>
           {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
         </button>
         <button
