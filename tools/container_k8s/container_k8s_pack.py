@@ -73,6 +73,36 @@ from tools.container_k8s._kubeconfig_extra_probes import (
     _probe_rbac_aggregate_role_audit,
     _probe_envoy_filter_audit,
 )
+from tools.container_k8s._repo_secret_probes import (
+    _probe_secrets_helm_values_leak,
+    _probe_secrets_kustomize_leak,
+    _probe_kyverno_no_policies,
+    _probe_opa_gatekeeper_no_constraints,
+)
+
+
+# Advisory-by-design wrappers for paid / external-service image scanners
+def _abd_snyk(t, r): return _advisory_by_design_response(
+    "snyk_container", t, "Snyk container vulnerability scan",
+    reason=("Snyk is a paid commercial service requiring a subscription + "
+             "API token. VulnusLab does not bundle paid integrations. "
+             "Trivy + Grype probes (already real) cover the same CVE surface "
+             "for free."),
+    cwe="N/A")
+
+def _abd_anchore(t, r): return _advisory_by_design_response(
+    "anchore_image", t, "Anchore Engine deep image analysis",
+    reason=("Anchore Engine runs as a stateful sidecar service (Postgres "
+             "backend + policy engine). Not bundled in the SaaS scanner; "
+             "Trivy probe (already real) covers the same image-CVE surface."),
+    cwe="N/A")
+
+def _abd_clair(t, r): return _advisory_by_design_response(
+    "clair_image", t, "Clair static image analysis",
+    reason=("Clair is a stateful sidecar service requiring Postgres + "
+             "deployment of clairctl. Trivy + Grype probes already deployed "
+             "cover the same image-CVE surface for free."),
+    cwe="N/A")
 
 
 # Advisory-by-design wrappers - these techniques cannot be SaaS-probed.
@@ -1761,6 +1791,16 @@ PROBES = {
     "rbac_clusterrolebinding_audit":  _probe_rbac_clusterrolebinding_audit,
     "rbac_aggregate_role_audit":      _probe_rbac_aggregate_role_audit,
     "envoy_filter_audit":             _probe_envoy_filter_audit,
+    # Repo-scan probes (require repo_url input)
+    "secrets_helm_values_leak":       _probe_secrets_helm_values_leak,
+    "secrets_kustomize_leak":         _probe_secrets_kustomize_leak,
+    # Policy-engine detection (kubeconfig)
+    "opa_kyverno_no_policies":        _probe_kyverno_no_policies,
+    "opa_gatekeeper_no_constraints":  _probe_opa_gatekeeper_no_constraints,
+    # Paid / external-service image scanners (advisory-by-design)
+    "snyk_container":                 _abd_snyk,
+    "anchore_image":                  _abd_anchore,
+    "clair_image":                    _abd_clair,
     # Advisory-by-design (cannot be SaaS-probed - intentionally informational)
     "falco_runtime_audit":            _abd_falco,
     "tetragon_runtime_audit":         _abd_tetragon,
