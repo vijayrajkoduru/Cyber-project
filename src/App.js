@@ -2395,7 +2395,7 @@ function generatePDF(reportData) {
         try {
           doc.setGState(new doc.GState({opacity: 0.10}));
         } catch(_){}
-        doc.setFont("Arial","bold"); doc.setFontSize(32); doc.setTextColor(220,38,38);
+        doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
         const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
         doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
         doc.restoreGraphicsState();
@@ -11264,7 +11264,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       const _wmStr = String(_wm);
       doc.saveGraphicsState();
       try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-      doc.setFont("Arial","bold"); doc.setFontSize(32); doc.setTextColor(220,38,38);
+      doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
       const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
       doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
       doc.restoreGraphicsState();
@@ -13618,7 +13618,7 @@ function generateUniversalVLReport(opts) {
       const _wmStrU = String(_wmU);
       doc.saveGraphicsState();
       try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-      doc.setFont("Arial","bold"); doc.setFontSize(32); doc.setTextColor(220,38,38);
+      doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
       const _wmWU = doc.getStringUnitWidth(_wmStrU) * 72 / doc.internal.scaleFactor;
       doc.text(_wmStrU, pageW/2 - _wmWU/2, pageH/2, {angle:30});
       doc.restoreGraphicsState();
@@ -15013,7 +15013,7 @@ function generateExploitReport({results, date, pdfConfig}) {
         const _wmStr = String(_wmE);
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-        doc.setFont("Arial","bold"); doc.setFontSize(32); doc.setTextColor(220,38,38);
+        doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
         const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
         doc.text(_wmStr, pageW/2 - _wmW/2, pageH/2, {angle:30});
         doc.restoreGraphicsState();
@@ -15953,7 +15953,7 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
         const _wmStr = String(_wmB);
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-        doc.setFont("Arial","bold"); doc.setFontSize(32); doc.setTextColor(220,38,38);
+        doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
         const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
         doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
         doc.restoreGraphicsState();
