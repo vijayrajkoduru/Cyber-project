@@ -215,6 +215,21 @@ def _run_tool(cmd, timeout_s=60, env=None):
         return 1, "", f"{type(e).__name__}: {str(e)[:200]}"
 
 
+def _resolve_image_ref(target, req):
+    """Image probes accept the image from EITHER the basic target field OR
+    the advanced `image_ref` input. Advanced input wins when both are set
+    (more specific). Returns the effective image-ref string or "" if neither
+    is a valid image reference."""
+    adv = ""
+    if req is not None:
+        adv = (getattr(req, "image_ref", None) or "").strip()
+    if adv and _looks_like_image_ref(adv):
+        return adv
+    if target and _looks_like_image_ref(target):
+        return target
+    return ""
+
+
 def _not_applicable_for_image_scanner(target, slug, tool_name):
     """Return a NOT_APPLICABLE finding when the target isn't an image ref."""
     return _build_resp(slug, target, [wrap_finding(
@@ -1033,8 +1048,10 @@ def _probe_trivy_image(target, req):
     """Real Trivy image scan. Pulls + scans the image, parses JSON, emits
     findings per CVE. Limits to HIGH/CRITICAL by default to keep PDFs
     readable. Skips honestly when target is not an image reference."""
-    if not _looks_like_image_ref(target):
+    img = _resolve_image_ref(target, req)
+    if not img:
         return _not_applicable_for_image_scanner(target, "trivy_image", "Trivy")
+    target = img  # remainder of function uses `target` as the image ref
 
     if shutil.which("trivy") is None:
         return _build_resp("trivy_image", target, [wrap_finding(
@@ -1123,8 +1140,10 @@ def _probe_grype_image(target, req):
     """Real Grype image scan (alternative CVE DB to Trivy).
     Useful for cross-verification: vulns found by both = confirmed;
     found by only one = suspected. Skips honestly when not an image ref."""
-    if not _looks_like_image_ref(target):
+    img = _resolve_image_ref(target, req)
+    if not img:
         return _not_applicable_for_image_scanner(target, "grype_image", "Grype")
+    target = img
 
     if shutil.which("grype") is None:
         return _build_resp("grype_image", target, [wrap_finding(
@@ -1205,8 +1224,10 @@ def _probe_cosign_verify(target, req):
     """Real Cosign signature verification.
     Checks if image is signed by a known/trusted key. Unsigned images
     are a supply-chain risk. Skips honestly when not an image ref."""
-    if not _looks_like_image_ref(target):
+    img = _resolve_image_ref(target, req)
+    if not img:
         return _not_applicable_for_image_scanner(target, "image_signing_cosign", "Cosign")
+    target = img
 
     if shutil.which("cosign") is None:
         return _build_resp("image_signing_cosign", target, [wrap_finding(
@@ -1250,8 +1271,10 @@ def _probe_syft_sbom(target, req):
     """Real Syft SBOM generation - lists packages + versions per layer.
     Doesn't emit vulnerabilities but informational POSITIVE finding with
     package count + ecosystem breakdown. Use case: SBOM compliance."""
-    if not _looks_like_image_ref(target):
+    img = _resolve_image_ref(target, req)
+    if not img:
         return _not_applicable_for_image_scanner(target, "image_provenance_slsa", "Syft")
+    target = img
 
     if shutil.which("syft") is None:
         return _build_resp("image_provenance_slsa", target, [wrap_finding(
@@ -1302,8 +1325,10 @@ def _probe_trivy_image_secrets(target, req):
     Different scanner mode than _probe_trivy_image (which finds CVEs);
     this looks for hardcoded API keys, tokens, private keys baked into
     the image layers. Skips honestly when target isn't an image ref."""
-    if not _looks_like_image_ref(target):
+    img = _resolve_image_ref(target, req)
+    if not img:
         return _not_applicable_for_image_scanner(target, "image_secrets_scan", "Trivy secret scan")
+    target = img
 
     if shutil.which("trivy") is None:
         return _build_resp("image_secrets_scan", target, [wrap_finding(
@@ -1525,8 +1550,10 @@ def _probe_image_distroless(target, req):
     drastically reducing attack surface for container escapes and
     post-exploitation. Uses Syft package inventory to detect shell and
     package-manager presence."""
-    if not _looks_like_image_ref(target):
+    img = _resolve_image_ref(target, req)
+    if not img:
         return _not_applicable_for_image_scanner(target, "image_distroless_base", "Distroless detector")
+    target = img
 
     if shutil.which("syft") is None:
         return _build_resp("image_distroless_base", target, [wrap_finding(
