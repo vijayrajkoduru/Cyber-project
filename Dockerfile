@@ -330,6 +330,30 @@ RUN ( cd /tmp \
    && /usr/local/bin/trufflehog --version 2>&1 | head -1 ) \
  || echo "WARNING: trufflehog install failed (non-fatal)"
 
+# ── kubectl + kube-bench (K8s cluster scanning - takes kubeconfig input) ─
+# kubectl: official Google bucket pinned binary (small ~50 MB)
+ARG KUBECTL_VERSION=v1.30.1
+RUN ( curl -fL --retry 3 --retry-delay 5 \
+        "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+        -o /usr/local/bin/kubectl \
+   && chmod +x /usr/local/bin/kubectl \
+   && /usr/local/bin/kubectl version --client --output=json | head -3 ) \
+ || echo "WARNING: kubectl install failed (non-fatal)"
+
+# kube-bench: CIS K8s benchmark scanner (~25 MB)
+ARG KUBEBENCH_VERSION=0.7.3
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/aquasecurity/kube-bench/releases/download/v${KUBEBENCH_VERSION}/kube-bench_${KUBEBENCH_VERSION}_linux_amd64.tar.gz" \
+        -O kube-bench.tgz \
+   && [ -s kube-bench.tgz ] \
+   && tar -xzf kube-bench.tgz \
+   && mv kube-bench /usr/local/bin/ \
+   && chmod +x /usr/local/bin/kube-bench \
+   && rm -rf kube-bench.tgz cfg \
+   && /usr/local/bin/kube-bench version | head -1 ) \
+ || echo "WARNING: kube-bench install failed (non-fatal)"
+
 # ── Password / Auth — john, hydra ────────────────────────────────────────
 # hashcat dropped: 149 MB download + 766 MB on disk (pulls clang-15, libllvm15,
 # OpenCL, libmariadb, libmongoc, x264/x265 codecs). We aren't doing GPU

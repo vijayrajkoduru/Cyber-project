@@ -42,6 +42,20 @@ from tools.container_k8s._pod_spec_probes import (
     _probe_container_seccomp_unset,
     _probe_container_apparmor_unset,
 )
+from tools.container_k8s._kubeconfig_probes import (
+    _probe_k8s_anonymous_auth_kubectl,
+    _probe_k8s_audit_logs_off,
+    _probe_k8s_admission_no_plugin,
+    _probe_k8s_psp_psa_disabled,
+    _probe_k8s_network_policy_absent,
+    _probe_rbac_cluster_admin_overuse,
+    _probe_rbac_secret_get_anywhere,
+    _probe_rbac_pod_exec_create_overuse,
+    _probe_rbac_node_proxy_overuse,
+    _probe_rbac_impersonate_users,
+    _probe_secrets_in_env_var,
+    _probe_kube_bench_node,
+)
 
 
 # Recognise an image reference vs a hostname/IP/URL.
@@ -1639,6 +1653,21 @@ PROBES = {
     "container_allow_priv_escalation": _probe_container_allow_priv_escalation,
     "container_seccomp_unset":        _probe_container_seccomp_unset,
     "container_apparmor_unset":       _probe_container_apparmor_unset,
+    # K8s cluster probes via kubectl (require kubeconfig input)
+    "k8s_audit_logs_off":             _probe_k8s_audit_logs_off,
+    "k8s_admission_no_plugin":        _probe_k8s_admission_no_plugin,
+    "k8s_psp_psa_disabled":           _probe_k8s_psp_psa_disabled,
+    "k8s_network_policy_absent":      _probe_k8s_network_policy_absent,
+    "network_policy_default_deny":    _probe_k8s_network_policy_absent,
+    "network_policy_egress_audit":    _probe_k8s_network_policy_absent,
+    "rbac_cluster_admin_overuse":     _probe_rbac_cluster_admin_overuse,
+    "rbac_secret_get_anywhere":       _probe_rbac_secret_get_anywhere,
+    "rbac_pod_exec_create_overuse":   _probe_rbac_pod_exec_create_overuse,
+    "rbac_node_proxy_overuse":        _probe_rbac_node_proxy_overuse,
+    "rbac_impersonate_users":         _probe_rbac_impersonate_users,
+    "secrets_in_env_var":             _probe_secrets_in_env_var,
+    "secrets_in_configmap":           _probe_secrets_in_env_var,  # similar pattern
+    "kube_bench_node":                _probe_kube_bench_node,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
