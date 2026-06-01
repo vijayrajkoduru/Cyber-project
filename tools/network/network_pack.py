@@ -7,12 +7,31 @@ upgraded from advisory to LIVE PROBES. Other tiers correctly remain
 advisory (LAN/MITM/sniffing require local network access, DoS/fuzzing
 are ethical-not-probe, IPv6 needs IPv6 routing).
 """
+import json
+import re
+import shutil
 import socket
 import asyncio
+import subprocess
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
 from tools._pack_common import make_advisory_router, _adv_response
 from tools._shared import wrap_finding
+
+
+def _run_bin(cmd, timeout_s=60):
+    """Uniform subprocess wrapper. Returns (exit_code, stdout, stderr)."""
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=timeout_s, check=False)
+        return proc.returncode, proc.stdout or "", proc.stderr or ""
+    except subprocess.TimeoutExpired as e:
+        return 124, e.stdout or "", e.stderr or "timeout"
+    except FileNotFoundError:
+        return 127, "", f"{cmd[0]} not found"
+    except Exception as e:
+        return 1, "", f"{type(e).__name__}: {str(e)[:200]}"
 
 
 def _host(target: str) -> str:
@@ -220,45 +239,140 @@ def _probe_nmap_aggressive(target, req):
             "raw_data": {**syn.get("raw_data",{}), "version": ver.get("raw_data",{}), "udp": udp.get("raw_data",{})}}
 
 def _probe_masscan_full_range(target, req):
-    """Masscan-equivalent — wider port range. Scan top 200 ports for SaaS-safety."""
+    """Real masscan binary if installed - falls back to Python socket scan.
+    Masscan is 100x faster than Python socket scanning for wide ranges."""
     host = _host(target); ip = _resolve(host)
     if not ip:
         return _adv_response("masscan_full_range", target, "DNS resolution failed",
                               "INFO", "0.0", evidence=host)
-    # Top 200 by IANA/nmap-services frequency (truncated for SaaS-safety)
-    top200 = (TOP_TCP_PORTS +
-              [37,49,79,81,82,88,113,119,179,427,548,554,593,
-               646,873,990,1025,1026,1027,1028,1029,1110,1234,1311,1352,
-               1434,1521,1755,1900,2000,2001,2049,2121,2717,3128,3268,3306,
-               3690,3703,3986,4001,4045,4899,5050,5051,5060,5101,5190,5500,
-               5631,5666,5800,5801,5802,5803,5810,5811,5815,5822,5825,5850,
-               5859,5862,5877,5900,5901,5902,5903,5904,5906,5907,5910,5915,
-               5922,5925,5950,5952,5959,5960,5961,5962,5963,5987,5988,5989,
-               5998,5999,6000,6001,6002,6003,6004,6005,6006,6007,6009,6025,
-               6059,6100,6101,6106,6112,6123,6129,6156,6346,6389,6502,6510,
-               6543,6547,6565,6566,6580,6646,6666,6667,6668,6669,6689,6692,
-               6699,6779,6788,6789,6792,6839,6881,6901,6969])
-    top200 = list(set(top200))[:200]
-    results = _scan_ports(ip, top200, timeout=0.6)
-    opens = sorted([p for p, o in results.items() if o])
-    return {"tool":"masscan_full_range","target":target,"scan_time":0,
-            "vulnerable": len(opens) > 10, "severity": "HIGH" if len(opens) > 20 else ("MEDIUM" if len(opens) > 10 else "INFO"),
-            "findings":[wrap_finding(
-                f"Wide port scan — {len(opens)} of {len(top200)} ports open on {host}",
-                "HIGH" if len(opens) > 20 else ("MEDIUM" if len(opens) > 10 else "INFO"),
-                cvss="6.0" if len(opens) > 20 else "3.0",
-                cwe="CWE-200",
-                remediation="Audit exposed services; close any not required.",
-                evidence_marker=f"Open: {', '.join(str(p) for p in opens[:30])}{'...' if len(opens)>30 else ''}")],
-            "tests_performed": len(top200),
-            "tests_summary": f"Wide port scan of {len(top200)} ports",
-            "raw_data": {"ip": ip, "open_ports": opens}}
+
+    # Try real masscan first
+    masscan_path = shutil.which("masscan")
+    opens = []
+    using_real = False
+    if masscan_path:
+        # SaaS-safe rate: 1000 pkt/s scan top 1024 ports.
+        # --wait=0 doesn't wait for late responses; finishes quickly.
+        ec, out, err = _run_bin([
+            masscan_path, ip,
+            "-p", "1-1024,3306,3389,5432,5601,5900,6379,8080,8443,8888,9090,9200,9300,10250,15672,27017",
+            "--rate=1000",
+            "--wait=2",
+            "-oG", "-",  # grepable to stdout
+        ], timeout_s=120)
+        if ec in (0, 1) and out:
+            using_real = True
+            # masscan -oG format: "Host: 1.2.3.4 ()\tPorts: 80/open/tcp//http//"
+            for line in out.splitlines():
+                m = re.findall(r"(\d+)/open/tcp", line)
+                opens.extend(int(p) for p in m)
+            opens = sorted(set(opens))
+
+    if not using_real:
+        # Fallback to Python socket scan (existing behaviour)
+        top200 = list(set(TOP_TCP_PORTS + [
+            37,49,79,81,82,88,113,119,179,427,548,554,593,646,873,990,
+            1025,1026,1027,1028,1029,1110,1234,1311,1352,1434,1521,1755,
+            1900,2000,2001,2049,2121,2717,3128,3268,3306,3690,3703,3986,
+            4001,4045,4899,5050,5051,5060,5101,5190,5500,5631,5666,
+            5800,5801,5802,5803,5810,5811,5815,5822,5825,5850,5859,5862,
+            5877,5900,5901,5902,5903,5904,5906,5907,5910,5915,5922,5925,
+            5950,5952,5959,5960,5961,5962,5963,5987,5988,5989,5998,5999,
+            6000,6001,6002,6003,6004,6005,6006,6007,6009,6025,6059,6100,
+            6101,6106,6112,6123,6129,6156,6346,6389,6502,6510,6543,6547,
+            6565,6566,6580,6646,6666,6667,6668,6669,6689,6692,6699,6779,
+            6788,6789,6792,6839,6881,6901,6969]))[:200]
+        results = _scan_ports(ip, top200, timeout=0.6)
+        opens = sorted([p for p, o in results.items() if o])
+
+    sev = "HIGH" if len(opens) > 20 else ("MEDIUM" if len(opens) > 10 else
+                                            ("LOW" if len(opens) > 3 else "INFO"))
+    cvss = "6.0" if sev == "HIGH" else "5.0" if sev == "MEDIUM" else "3.0" if sev == "LOW" else "0.0"
+    engine = "real masscan binary" if using_real else "Python socket fallback"
+    if opens:
+        finding = wrap_finding(
+            f"{len(opens)} TCP ports open on {host} (engine: {engine})",
+            sev, cvss=cvss, cwe="CWE-200",
+            remediation="Audit each exposed service. Close ports not required for "
+                        "business function. Apply firewall allow-lists at the edge.",
+            evidence_marker=(f"Open ports: {', '.join(str(p) for p in opens[:40])}"
+                              f"{' ... +' + str(len(opens)-40) + ' more' if len(opens)>40 else ''}"))
+    else:
+        finding = wrap_finding(
+            f"Wide port scan: no open ports detected on {host}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue minimal-exposure posture.",
+            evidence_marker=f"Engine: {engine}; 0 of probed ports responded")
+    return {"tool": "masscan_full_range", "target": target, "scan_time": 0,
+            "vulnerable": len(opens) > 10,
+            "severity": sev if opens else "POSITIVE",
+            "findings": [finding],
+            "tests_performed": len(opens) or 1024,
+            "tests_summary": f"masscan ({engine}): {len(opens)} open",
+            "raw_data": {"ip": ip, "open_ports": opens, "engine": engine}}
 
 def _probe_rustscan_top_ports(target, req):
     return _probe_nmap_syn_scan(target, req) | {"tool":"rustscan_top_ports"}
 
 def _probe_naabu_fast_scan(target, req):
-    return _probe_nmap_syn_scan(target, req) | {"tool":"naabu_fast_scan"}
+    """Real naabu (projectdiscovery) for fast top-port discovery.
+    Falls back to nmap-syn-scan probe if naabu binary missing."""
+    host = _host(target); ip = _resolve(host)
+    if not ip:
+        return _adv_response("naabu_fast_scan", target, "DNS resolution failed",
+                              "INFO", "0.0", evidence=host)
+    naabu_path = shutil.which("naabu")
+    if not naabu_path:
+        return _probe_nmap_syn_scan(target, req) | {"tool": "naabu_fast_scan"}
+
+    # naabu -host -top-ports 1000 -silent -json
+    ec, out, err = _run_bin([
+        naabu_path,
+        "-host", ip,
+        "-top-ports", "1000",
+        "-silent",
+        "-json",
+        "-rate", "1000",
+        "-c", "25",
+    ], timeout_s=120)
+
+    opens = []
+    if ec in (0, 1) and out:
+        for line in out.splitlines():
+            line = line.strip()
+            if not line or not line.startswith("{"):
+                continue
+            try:
+                evt = json.loads(line)
+                p = evt.get("port")
+                if isinstance(p, int):
+                    opens.append(p)
+            except Exception:
+                continue
+    opens = sorted(set(opens))
+
+    if not opens:
+        finding = wrap_finding(
+            f"naabu fast scan: no open top-1000 ports on {host}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue minimal-exposure posture.",
+            evidence_marker=f"naabu -top-ports 1000 against {ip}: 0 open")
+        sev = "POSITIVE"
+    else:
+        sev = "HIGH" if len(opens) > 20 else ("MEDIUM" if len(opens) > 10 else "LOW")
+        cvss = "6.0" if sev == "HIGH" else "5.0" if sev == "MEDIUM" else "3.0"
+        finding = wrap_finding(
+            f"naabu: {len(opens)} open ports of top 1000 on {host}",
+            sev, cvss=cvss, cwe="CWE-200",
+            remediation="Close ports not required for business function.",
+            evidence_marker=f"Open: {', '.join(str(p) for p in opens[:40])}")
+    return {"tool": "naabu_fast_scan", "target": target, "scan_time": 0,
+            "vulnerable": len(opens) > 10,
+            "severity": sev,
+            "findings": [finding],
+            "tests_performed": 1000,
+            "tests_summary": f"naabu real binary: {len(opens)} open",
+            "raw_data": {"ip": ip, "open_ports": opens, "engine": "naabu"}}
 
 def _probe_unicornscan(target, req):
     return _probe_nmap_udp_scan(target, req) | {"tool":"unicornscan_advisory"}
@@ -268,11 +382,37 @@ def _probe_zmap(target, req):
     return _probe_nmap_syn_scan(target, req) | {"tool":"zmap_internet_wide"}
 
 def _probe_hping3(target, req):
-    """hping3 equivalent — TCP SYN check on port 80."""
+    """Real hping3 binary for custom packet crafting + TCP SYN reachability.
+    Falls back to Python socket check if hping3 missing or runs as non-root."""
     host = _host(target); ip = _resolve(host)
     if not ip:
         return _adv_response("hping3_custom_packet", target, "DNS resolution failed",
                               "INFO", "0.0", evidence=host)
+
+    hping_path = shutil.which("hping3")
+    if hping_path:
+        # hping3 needs root for SYN crafting. -c 3 = 3 packets; -S = SYN flag;
+        # -p 80 = target port 80. Capture output for parsing.
+        ec, out, err = _run_bin([
+            hping_path, "-S", "-c", "3", "-p", "80", "--fast", ip,
+        ], timeout_s=15)
+        # hping3 outputs "len=46 ip=... ttl=... ... flags=SA seq=..." on success
+        sa_count = len(re.findall(r"flags=SA", out + err))
+        if sa_count > 0:
+            return {"tool": "hping3_custom_packet", "target": target, "scan_time": 0,
+                    "vulnerable": False, "severity": "POSITIVE",
+                    "findings": [wrap_finding(
+                        f"hping3: {host} responds to SYN on :80 ({sa_count} SYN+ACK)",
+                        "POSITIVE", cvss="0.0", cwe="N/A",
+                        remediation="Reachability is expected for public services.",
+                        evidence_marker=f"hping3 -S -c 3 -p 80 {ip}: {sa_count} SA responses")],
+                    "tests_performed": 3,
+                    "tests_summary": "hping3 SYN reachability",
+                    "raw_data": {"ip": ip, "engine": "hping3", "sa_count": sa_count}}
+        # No SYN+ACK observed - fall through to socket fallback to differentiate
+        # "hping3 ran but got no response" from "hping3 missing".
+
+    # Fallback Python socket
     reachable = _tcp_open(ip, 80, timeout=2.0) or _tcp_open(ip, 443, timeout=2.0)
     return {"tool":"hping3_custom_packet","target":target,"scan_time":0,
             "vulnerable": False, "severity": "INFO",
