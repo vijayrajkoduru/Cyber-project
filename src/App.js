@@ -9083,30 +9083,6 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   });
   y+=8;
 
-  // ── QR verification placeholder (Gap 6: cover, bottom-right) ──
-  // Industry-standard tamper-evidence anchor. qrcode-generator not in
-  // package.json so we render a stamped placeholder box. Drawn at fixed
-  // coords on page 1 so it always lands at the cover footer regardless of y.
-  {
-    const _qrSide = 25;
-    const _qrX = pageW - margin - _qrSide;
-    const _qrY = pageH - 30 - _qrSide;
-    fillR(_qrX, _qrY, _qrSide, _qrSide, WHITE);
-    doc.setDrawColor(...DARK); doc.setLineWidth(0.4);
-    doc.rect(_qrX, _qrY, _qrSide, _qrSide, "S");
-    const _qm = 3, _cell = (_qrSide - _qm*2) / 9;
-    doc.setFillColor(...DARK);
-    [[0,0],[6,0],[0,6]].forEach(([cx,cy]) => {
-      doc.rect(_qrX + _qm + cx*_cell, _qrY + _qm + cy*_cell, _cell*3, _cell*3, "F");
-      doc.setFillColor(...WHITE);
-      doc.rect(_qrX + _qm + (cx+1)*_cell, _qrY + _qm + (cy+1)*_cell, _cell, _cell, "F");
-      doc.setFillColor(...DARK);
-    });
-    txt("Scan QR with VulnusLab app", _qrX + _qrSide/2, _qrY - 2, 6, GRAY, true, "center");
-    txt(_R_REPORT_ID, _qrX + _qrSide/2, _qrY + _qrSide + 4, 6.5, BLUE, true, "center");
-    txt("Verify report integrity at vulnuslab.com/verify", _qrX + _qrSide/2, _qrY + _qrSide + 8, 5.5, GRAY, false, "center");
-  }
-
   // ─── TRUST STATEMENT (vulntemplate block 3) ───────────────────
   // "Verified by VulnusLab" callout — every finding/data point was
   // independently triggered and re-confirmed by the engine, not blind
@@ -13065,32 +13041,6 @@ function generateUniversalVLReport(opts) {
     y += 7;
   });
   y += 6;
-
-  // ── QR verification placeholder (cover, bottom-right) ──
-  // Industry-standard tamper-evidence anchor. qrcode-generator not in
-  // package.json so we render a stamped placeholder box that the customer
-  // can scan with the VulnusLab app or visit manually.
-  {
-    const _qrSide = 25; // mm
-    const _qrX = pageW - margin - _qrSide;
-    const _qrY = pageH - 30 - _qrSide;
-    fillR(_qrX, _qrY, _qrSide, _qrSide, WHITE);
-    doc.setDrawColor(...DARK); doc.setLineWidth(0.4);
-    doc.rect(_qrX, _qrY, _qrSide, _qrSide, "S");
-    // simulated QR pattern (visual placeholder, not scannable)
-    const _qm = 3, _cell = (_qrSide - _qm*2) / 9;
-    doc.setFillColor(...DARK);
-    // three corner anchors
-    [[0,0],[6,0],[0,6]].forEach(([cx,cy]) => {
-      doc.rect(_qrX + _qm + cx*_cell, _qrY + _qm + cy*_cell, _cell*3, _cell*3, "F");
-      doc.setFillColor(...WHITE);
-      doc.rect(_qrX + _qm + (cx+1)*_cell, _qrY + _qm + (cy+1)*_cell, _cell, _cell, "F");
-      doc.setFillColor(...DARK);
-    });
-    txt("Scan QR with VulnusLab app", _qrX + _qrSide/2, _qrY - 2, 6, GRAY, true, "center");
-    txt(_REPORT_ID, _qrX + _qrSide/2, _qrY + _qrSide + 4, 6.5, BLUE, true, "center");
-    txt("Verify report integrity at vulnuslab.com/verify", _qrX + _qrSide/2, _qrY + _qrSide + 8, 5.5, GRAY, false, "center");
-  }
 
   doc.addPage(); y = 18; drawHeader();
 
