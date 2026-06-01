@@ -616,33 +616,101 @@ def _probe_ingress_tls_audit(target, req):
 
 def _probe_istio_gateway_mtls(target, req):
     """Probe Istio gateway / generic ingress for mTLS posture.
-    If a TLS handshake completes without a client cert being requested,
-    mTLS is OFF for that listener."""
+
+    Zero-FP strategy: mTLS-off only makes sense to flag for things that
+    were SUPPOSED to be Istio gateways. Public CDNs / registries / SaaS
+    endpoints never require client certs at :443 - flagging that is
+    noise. Require Istio fingerprint (header / server banner / Istio-
+    specific port :15443) before flagging mTLS-off as a finding.
+
+    Severity:
+      :15443 reachable (Istio multi-cluster gateway port) + mTLS off ->
+        HIGH (this port has only one purpose: cross-cluster mTLS).
+      :443 with Istio fingerprint + mTLS off -> HIGH (intended for mTLS).
+      :443 without Istio fingerprint -> POSITIVE (no signal of intended
+        mTLS, so absence of client-cert demand is not a finding).
+    """
     host = _host(target)
     findings = []
-    for port in (443, 15443):  # 15443 = Istio multi-cluster gateway
+
+    # Step 1: detect Istio fingerprint via HTTP response headers
+    istio_fingerprinted = False
+    fp_evidence = ""
+    for scheme in ("https", "http"):
+        try:
+            c, hdrs, body = _http_get_insecure(f"{scheme}://{host}/", timeout=4)
+        except Exception:
+            continue
+        if c == 0:
+            continue
+        h_lower = {k.lower(): str(v) for k, v in (hdrs or {}).items()}
+        server = h_lower.get("server", "").lower()
+        x_envoy_keys = [k for k in h_lower if k.startswith("x-envoy")]
+        x_istio_keys = [k for k in h_lower if k.startswith("x-istio")]
+        if ("istio" in server or "envoy" in server or
+                x_envoy_keys or x_istio_keys):
+            istio_fingerprinted = True
+            fp_evidence = (f"{scheme}: Server={server[:60]}; "
+                            f"x-envoy headers={len(x_envoy_keys)}; "
+                            f"x-istio headers={len(x_istio_keys)}")
+            break
+
+    # Step 2: check Istio multi-cluster gateway port :15443
+    multi_cluster_open = _tcp_open(host, 15443)
+
+    # Step 3: TLS handshake on :443 + :15443
+    tls_results = {}
+    for port in (443, 15443):
         if not _tcp_open(host, port):
             continue
         info = _tls_inspect(host, port, timeout=4)
-        if not info.get("ok"):
-            continue
-        # If we got a server cert back without being asked for a client cert,
-        # the server is NOT enforcing mTLS for this listener.
+        if info.get("ok"):
+            tls_results[port] = info
+
+    # Decision logic - only flag when we have a real signal
+    if multi_cluster_open and tls_results.get(15443):
+        # Port 15443 is Istio-specific. Any TLS without mTLS here = HIGH.
+        info = tls_results[15443]
         cert_bytes = info.get("cert_bytes", 0)
         if cert_bytes > 0:
             findings.append(wrap_finding(
-                f"TLS on :{port} completes without client-cert request — mTLS OFF",
+                "Istio multi-cluster gateway :15443 reachable with mTLS DISABLED",
                 "HIGH", cvss="7.5", cwe="CWE-295",
-                remediation="If this is an Istio gateway, set tls.mode=MUTUAL on Gateway "
-                            "resource. Enforce client certs at edge if zero-trust required.",
-                evidence_marker=f"Server cert ({cert_bytes}B) returned; no CertificateRequest sent"))
+                remediation="Set tls.mode=MUTUAL on Istio Gateway resource. "
+                            ":15443 must require client cert for cross-cluster traffic.",
+                evidence_marker=(f"Port :15443 TLS handshake completed without "
+                                  f"CertificateRequest; server cert {cert_bytes}B")))
+
+    if istio_fingerprinted and tls_results.get(443):
+        info = tls_results[443]
+        cert_bytes = info.get("cert_bytes", 0)
+        if cert_bytes > 0:
+            findings.append(wrap_finding(
+                "Istio-fingerprinted gateway on :443 completes TLS without client-cert request",
+                "HIGH", cvss="7.5", cwe="CWE-295",
+                remediation="Set tls.mode=MUTUAL on Gateway resource if zero-trust required. "
+                            "Otherwise document the intentional public-facing posture.",
+                evidence_marker=f"{fp_evidence}; TLS server cert {cert_bytes}B; no CertificateRequest"))
+
     if not findings:
-        findings.append(wrap_finding("No TLS listener on 443/15443, or mTLS already enforced",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue mTLS posture.",
-            evidence_marker="No anonymous-TLS handshake completed"))
-    return _build_resp("istio_gateway_mtls_off", target, findings, 2,
-                       "Istio gateway / ingress mTLS posture probe")
+        if istio_fingerprinted:
+            findings.append(wrap_finding(
+                "Istio fingerprinted, mTLS posture appears appropriate for public listener",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation="Continue current posture.",
+                evidence_marker=fp_evidence))
+        else:
+            findings.append(wrap_finding(
+                "No Istio gateway fingerprint detected - mTLS-off finding does not apply",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation=("Target does not present as an Istio gateway "
+                              "(no Server: istio-envoy header, no x-envoy/x-istio "
+                              "headers, no :15443 reachability). Public TLS "
+                              "endpoints are not expected to require client certs."),
+                evidence_marker=("No Istio fingerprint in response headers; "
+                                  ":15443 closed/filtered")))
+    return _build_resp("istio_gateway_mtls_off", target, findings, 3,
+                       "Istio gateway mTLS posture (fingerprint-gated)")
 
 
 def _probe_consul_audit(target, req):
@@ -1160,66 +1228,145 @@ def _probe_trivy_image_secrets(target, req):
 
 def _probe_ingress_authz_open(target, req):
     """Detect ingress controllers that expose admin / metrics / health
-    endpoints without auth. Probes common paths attackers use as a
-    starting point (cluster reconnaissance + potential RCE)."""
+    endpoints without auth.
+
+    Zero-FP strategy: a path is only flagged as exposed if its response
+    BODY matches a content fingerprint specific to the expected
+    vulnerable artifact - not just HTTP 200. Public CDNs (gcr.io,
+    cloudflare.com, etc) return 200 for arbitrary paths via marketing
+    pages or generic 404 templates; those must not flag.
+
+    Each path entry carries:
+      content_re   - regex that MUST match in response body
+      min_body     - minimum body length for the match to count
+      severity     - severity if a real match
+      cvss         - cvss if a real match
+    """
     host = _host(target)
     findings = []
     exposed = []
 
-    # Common ingress / admin paths leaked publicly
     paths_to_test = [
-        ("/actuator/env", "Spring Boot Actuator env (CRITICAL leak)"),
-        ("/actuator/heapdump", "Spring Boot heapdump"),
-        ("/actuator/health", "Spring Boot health"),
-        ("/.env", "dotenv config file"),
-        ("/admin", "Admin interface"),
-        ("/manager", "Tomcat manager"),
-        ("/console", "Web console"),
-        ("/api/v1/health", "Generic health endpoint"),
-        ("/metrics", "Prometheus metrics endpoint"),
-        ("/healthz", "K8s-style health endpoint"),
-        ("/readyz", "K8s-style readiness endpoint"),
-        ("/swagger-ui", "Swagger UI"),
-        ("/v3/api-docs", "OpenAPI spec"),
-        ("/graphql", "GraphQL endpoint"),
+        # Spring Boot Actuator - leaks env vars, heap, config
+        {"path": "/actuator/env",
+         "label": "Spring Boot Actuator /env (CRITICAL leak)",
+         "content_re": r'"activeProfiles"\s*:|"propertySources"\s*:|"applicationConfig"',
+         "min_body": 80, "severity": "CRITICAL", "cvss": "9.0"},
+        {"path": "/actuator/heapdump",
+         "label": "Spring Boot Actuator /heapdump (memory dump)",
+         "content_re": r"^HPROF",  # HPROF binary header
+         "min_body": 100, "severity": "CRITICAL", "cvss": "9.0"},
+        {"path": "/actuator/configprops",
+         "label": "Spring Boot Actuator /configprops",
+         "content_re": r'"contexts"\s*:|"configurationProperties"',
+         "min_body": 80, "severity": "HIGH", "cvss": "7.5"},
+        {"path": "/actuator/threaddump",
+         "label": "Spring Boot Actuator /threaddump",
+         "content_re": r'"threads"\s*:\[|threadName',
+         "min_body": 80, "severity": "MEDIUM", "cvss": "5.5"},
+        {"path": "/actuator/health",
+         "label": "Spring Boot Actuator /health (info disclosure)",
+         "content_re": r'^\{\s*"status"\s*:\s*"(UP|DOWN|OUT_OF_SERVICE)"',
+         "min_body": 15, "severity": "LOW", "cvss": "3.0"},
+        # dotenv: KEY=value lines
+        {"path": "/.env",
+         "label": "dotenv config file (.env)",
+         "content_re": r"(?im)^[A-Z][A-Z0-9_]+\s*=\s*\S",
+         "min_body": 20, "severity": "CRITICAL", "cvss": "9.0"},
+        # Tomcat manager
+        {"path": "/manager/html",
+         "label": "Tomcat Web Application Manager",
+         "content_re": r"Tomcat Web Application Manager|/manager/text",
+         "min_body": 100, "severity": "CRITICAL", "cvss": "9.0"},
+        {"path": "/manager/status",
+         "label": "Tomcat manager status",
+         "content_re": r"Tomcat Web Application Manager|<title>.*Tomcat",
+         "min_body": 100, "severity": "HIGH", "cvss": "7.5"},
+        # H2 / database console
+        {"path": "/h2-console/",
+         "label": "H2 Database console",
+         "content_re": r"H2 Console|h2console",
+         "min_body": 100, "severity": "CRITICAL", "cvss": "9.0"},
+        # Prometheus exposition format - "# HELP" and "# TYPE" lines
+        {"path": "/metrics",
+         "label": "Prometheus metrics endpoint",
+         "content_re": r"(?m)^# (HELP|TYPE)\s+\w+",
+         "min_body": 50, "severity": "MEDIUM", "cvss": "5.5"},
+        {"path": "/prometheus",
+         "label": "Prometheus metrics endpoint",
+         "content_re": r"(?m)^# (HELP|TYPE)\s+\w+",
+         "min_body": 50, "severity": "MEDIUM", "cvss": "5.5"},
+        # Swagger / OpenAPI
+        {"path": "/swagger-ui/index.html",
+         "label": "Swagger UI",
+         "content_re": r"swagger-ui|<title>Swagger",
+         "min_body": 100, "severity": "MEDIUM", "cvss": "5.5"},
+        {"path": "/v3/api-docs",
+         "label": "OpenAPI 3 spec",
+         "content_re": r'"openapi"\s*:\s*"3\.',
+         "min_body": 30, "severity": "MEDIUM", "cvss": "5.5"},
+        {"path": "/v2/api-docs",
+         "label": "Swagger 2 spec",
+         "content_re": r'"swagger"\s*:\s*"2\.',
+         "min_body": 30, "severity": "MEDIUM", "cvss": "5.5"},
+        # GraphQL introspection
+        {"path": "/graphql",
+         "label": "GraphQL endpoint with introspection",
+         "content_re": r'"data"\s*:\s*\{\s*"__schema"|"types"\s*:\s*\[',
+         "min_body": 50, "severity": "MEDIUM", "cvss": "5.5",
+         "method_post": True},  # GraphQL needs POST
     ]
 
-    high_value = ("/actuator/env", "/actuator/heapdump", "/.env",
-                   "/admin", "/manager", "/console")
-
     for scheme in ("https", "http"):
-        for path, label in paths_to_test:
-            url = f"{scheme}://{host}{path}"
-            c, _, b = _http_get_insecure(url, timeout=3)
-            if c == 200 and len(b) > 20 and "<html" not in b[:200].lower():
-                exposed.append((path, label, scheme))
-            elif c == 200 and path in ("/admin", "/manager", "/swagger-ui"):
-                exposed.append((path, label, scheme))
+        for p in paths_to_test:
+            url = f"{scheme}://{host}{p['path']}"
+            try:
+                c, _, b = _http_get_insecure(url, timeout=3)
+            except Exception:
+                continue
+            if c != 200 or not b or len(b) < p["min_body"]:
+                continue
+            # Real content fingerprint match required - not just HTTP 200.
+            try:
+                if not re.search(p["content_re"], b[:8000], re.IGNORECASE | re.MULTILINE):
+                    continue
+            except re.error:
+                continue
+            exposed.append({
+                "path": p["path"], "label": p["label"], "scheme": scheme,
+                "severity": p["severity"], "cvss": p["cvss"],
+            })
         if exposed:
             break
 
     if exposed:
-        critical_hits = [e for e in exposed if e[0] in high_value]
-        sev = "CRITICAL" if critical_hits else "HIGH" if len(exposed) > 3 else "MEDIUM"
-        cvss = "9.0" if sev == "CRITICAL" else "7.5" if sev == "HIGH" else "5.5"
-        summary = "; ".join(f"{e[2]}://{host}{e[0]} ({e[1]})" for e in exposed[:5])
+        # Highest-severity hit drives the overall finding severity.
+        sev_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+        top = max(exposed, key=lambda e: sev_rank.get(e["severity"], 0))
+        sev = top["severity"]
+        cvss = top["cvss"]
+        summary = "; ".join(
+            f"{e['scheme']}://{host}{e['path']} ({e['label']})" for e in exposed[:5])
         findings.append(wrap_finding(
-            f"Ingress: {len(exposed)} sensitive path(s) reachable without auth",
+            f"Ingress: {len(exposed)} sensitive endpoint(s) confirmed reachable without auth",
             sev, cvss=cvss, cwe="CWE-306",
             remediation=("Restrict admin / actuator / metrics / health paths "
                           "to internal IPs or require auth. Add ingress-level "
                           "deny rules. Spring Boot: management.endpoints.web."
-                          "exposure.include=health (only)."),
-            evidence_marker=f"Exposed: {summary}"))
+                          "exposure.include=health,info (only) + "
+                          "management.endpoint.health.show-details=never."),
+            evidence_marker=f"Confirmed (body fingerprint matched): {summary}"))
     else:
         findings.append(wrap_finding(
-            "No unauthenticated admin/actuator/metrics paths detected on ingress",
+            "No unauthenticated admin/actuator/metrics endpoints detected",
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue locked-down ingress posture.",
-            evidence_marker=f"Probed {len(paths_to_test)*2} path/scheme combinations"))
+            evidence_marker=(f"Probed {len(paths_to_test)*2} path/scheme combos. "
+                              "0 matched a real-content fingerprint - HTTP-200 "
+                              "responses from CDN/marketing pages don't count.")))
     return _build_resp("ingress_authz_open", target, findings,
                        len(paths_to_test) * 2,
-                       "Ingress unauth admin/actuator/metrics probe")
+                       "Ingress unauth admin/actuator/metrics probe (content-fingerprinted)")
 
 
 def _probe_image_distroless(target, req):
