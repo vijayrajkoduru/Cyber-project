@@ -2425,6 +2425,13 @@ function generatePDF(reportData) {
 function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
   const _genPwd = () => Array.from(crypto.getRandomValues(new Uint8Array(9)))
     .map(b=>"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"[b%55]).join("");
+  // Close-on-Escape: bind keydown handler only while the modal is open.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
   const [cfg, setCfg] = useState(() => ({
     companyName:"", customLogo:null, logoName:null,
     reporterName:"", reporterRole:"",
@@ -2461,11 +2468,18 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
     </div>
   );
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
+    // Backdrop catches clicks outside the inner panel and closes the modal.
+    // The inner panel calls stopPropagation so clicks inside (typing in fields,
+    // clicking selects, etc.) do NOT trigger close.
+    <div onClick={onClose}
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e => e.stopPropagation()}
+        style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
           <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>Customize {moduleLabel||"Report"}</div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}></button>
+          <button onClick={onClose}
+            title="Close (Esc)"
+            style={{background:"none",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",color:"#94a3b8",fontSize:14,fontWeight:700,cursor:"pointer",lineHeight:1}}>×</button>
         </div>
         <div style={{color:"#64748b",fontSize:11,marginBottom:14,fontStyle:"italic"}}>
           All fields are optional — fill only what you need. Empty fields use sensible defaults.
