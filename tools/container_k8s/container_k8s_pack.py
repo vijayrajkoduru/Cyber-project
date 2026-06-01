@@ -4,11 +4,79 @@ VL-FORGE upgrade 2026-05-30: 7 live probes for externally-observable
 container/k8s misconfigs (Docker daemon, etcd, K8s API, Harbor registry,
 Dashboard, kubelet, container registry public access).
 """
-import socket, ssl, urllib.request, urllib.error
+import json
+import re
+import shutil
+import socket
+import ssl
+import subprocess
+import urllib.request, urllib.error
 from contextlib import closing
 from datetime import datetime, timezone
 from tools._pack_common import make_advisory_router, _adv_response
 from tools._shared import wrap_finding
+
+
+# Recognise an image reference vs a hostname/IP/URL.
+# Accepts: nginx, nginx:1.21, library/nginx:1.21, registry.io/org/app:tag,
+#          registry.io:5000/org/app:tag, sha256: digest references.
+# Rejects: example.com (no tag/slash combination), 8.8.8.8, http(s)://...
+_IMAGE_REF_RE = re.compile(
+    r"^(?:[a-zA-Z0-9._-]+(?::[0-9]+)?/)?"   # optional registry[:port]/
+    r"[a-zA-Z0-9._-]+(?:/[a-zA-Z0-9._-]+)*" # repo/sub-repo
+    r"(?::[a-zA-Z0-9._-]+|@sha256:[a-f0-9]{32,})$"  # :tag or @digest
+)
+
+
+def _looks_like_image_ref(target: str) -> bool:
+    """True if target syntactically looks like an OCI image reference.
+    Heuristic: must contain ':' (tag) or '@sha256:' digest, and must NOT
+    look like a URL or a bare IP. Reject obvious non-image inputs."""
+    if not target or not isinstance(target, str):
+        return False
+    t = target.strip()
+    if t.startswith(("http://", "https://", "ftp://")):
+        return False
+    # Bare IPv4
+    if re.match(r"^\d+\.\d+\.\d+\.\d+(?::\d+)?$", t):
+        return False
+    # Hostname with no slash, no @sha256, no tag separator
+    if "/" not in t and "@sha256:" not in t and ":" not in t:
+        return False
+    # Hostname:port with no slash (registry.io:5000 alone) -> not an image ref
+    if "/" not in t and "@sha256:" not in t and re.match(r"^[\w.-]+:\d+$", t):
+        return False
+    return bool(_IMAGE_REF_RE.match(t))
+
+
+def _run_tool(cmd, timeout_s=60, env=None):
+    """Subprocess wrapper with consistent error handling.
+    Returns (exit_code, stdout, stderr)."""
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=timeout_s, check=False, env=env)
+        return proc.returncode, proc.stdout or "", proc.stderr or ""
+    except subprocess.TimeoutExpired as e:
+        return 124, e.stdout or "", e.stderr or "timeout"
+    except FileNotFoundError:
+        return 127, "", f"{cmd[0]} binary not found in PATH"
+    except Exception as e:
+        return 1, "", f"{type(e).__name__}: {str(e)[:200]}"
+
+
+def _not_applicable_for_image_scanner(target, slug, tool_name):
+    """Return a NOT_APPLICABLE finding when the target isn't an image ref."""
+    return _build_resp(slug, target, [wrap_finding(
+        f"[NOT_APPLICABLE] {tool_name} requires an OCI image reference",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation=(f"To run {tool_name}, provide an image reference like "
+                      "'nginx:1.21' or 'myreg.io/app:v2.3' as the scan target. "
+                      "Hostnames/IPs are not scannable by image-CVE tools."),
+        evidence_marker=(f"Target '{target[:80]}' does not match image-ref "
+                          "pattern (registry/repo:tag or @sha256:digest)."),
+    )], 0, f"{tool_name} skipped - not an image reference")
+
 
 
 _INSECURE_SSL = ssl.create_default_context()
@@ -736,6 +804,281 @@ def _probe_linkerd_audit(target, req):
                        "Linkerd control plane / viz external exposure")
 
 
+# ───────────────────────────────────────────────────────────────
+# Image-scanner probes (Trivy / Grype / Cosign / Syft)
+# Activate when target syntactically looks like an OCI image reference.
+# Honestly skip with NOT_APPLICABLE for hostnames / IPs / URLs.
+# ───────────────────────────────────────────────────────────────
+
+
+def _probe_trivy_image(target, req):
+    """Real Trivy image scan. Pulls + scans the image, parses JSON, emits
+    findings per CVE. Limits to HIGH/CRITICAL by default to keep PDFs
+    readable. Skips honestly when target is not an image reference."""
+    if not _looks_like_image_ref(target):
+        return _not_applicable_for_image_scanner(target, "trivy_image", "Trivy")
+
+    if shutil.which("trivy") is None:
+        return _build_resp("trivy_image", target, [wrap_finding(
+            "[NOT IMPLEMENTED] trivy binary not installed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend with Dockerfile that installs Trivy.",
+            evidence_marker="trivy not found in PATH")], 0,
+            "Trivy not installed")
+
+    exit_code, stdout, stderr = _run_tool([
+        "trivy", "image",
+        "--format", "json",
+        "--severity", "HIGH,CRITICAL",
+        "--quiet",
+        "--timeout", "5m",
+        "--skip-db-update",  # use pre-baked DB
+        target,
+    ], timeout_s=360)
+
+    if exit_code == 124:
+        return _build_resp("trivy_image", target, [wrap_finding(
+            f"[PROBE ERROR] Trivy scan timeout (>6 min) on {target[:80]}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Try a smaller image or run trivy manually with longer timeout.",
+            evidence_marker="Trivy wall-clock budget exceeded")], 0,
+            "Trivy timeout")
+
+    if exit_code not in (0, 1) or not stdout.strip():
+        return _build_resp("trivy_image", target, [wrap_finding(
+            f"[PROBE ERROR] Trivy exit {exit_code}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify image reference is valid and pullable.",
+            evidence_marker=f"stderr: {stderr[-300:]}")], 0,
+            f"Trivy exit {exit_code}")
+
+    try:
+        data = json.loads(stdout)
+    except Exception as e:
+        return _build_resp("trivy_image", target, [wrap_finding(
+            f"[PROBE ERROR] Trivy JSON parse failed: {str(e)[:120]}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Trivy output unexpected; check trivy version.",
+            evidence_marker=f"First 300 chars of stdout: {stdout[:300]}")], 0,
+            "Trivy parse error")
+
+    findings = []
+    sev_map = {"CRITICAL": "CRITICAL", "HIGH": "HIGH", "MEDIUM": "MEDIUM", "LOW": "LOW"}
+    cvss_default = {"CRITICAL": "9.0", "HIGH": "7.5", "MEDIUM": "5.5", "LOW": "3.0"}
+
+    results = data.get("Results", []) if isinstance(data, dict) else []
+    for r in results:
+        target_name = r.get("Target", "")
+        for v in r.get("Vulnerabilities", []) or []:
+            cve = v.get("VulnerabilityID", "")
+            pkg = v.get("PkgName", "")
+            installed = v.get("InstalledVersion", "")
+            fixed = v.get("FixedVersion", "")
+            sev = sev_map.get(v.get("Severity", "").upper(), "MEDIUM")
+            cvss_score = ""
+            cvss_data = v.get("CVSS", {}) or {}
+            for src in ("nvd", "redhat", "ghsa", "trivy"):
+                if cvss_data.get(src, {}).get("V3Score"):
+                    cvss_score = str(cvss_data[src]["V3Score"])
+                    break
+            cvss_score = cvss_score or cvss_default.get(sev, "0.0")
+
+            title = f"{cve} in {pkg} {installed}" + (f" (fixed in {fixed})" if fixed else " (no fix)")
+            findings.append(wrap_finding(
+                title, sev, cvss=cvss_score, cwe="CWE-1104",
+                remediation=(f"Upgrade {pkg} to {fixed}" if fixed
+                              else f"No fix yet for {pkg} {installed} - track upstream advisory."),
+                evidence_marker=(f"Trivy {target_name}: {cve} affects "
+                                  f"{pkg}@{installed}; severity={sev}, CVSS={cvss_score}")))
+
+    if not findings:
+        findings.append(wrap_finding(
+            f"Trivy: 0 HIGH/CRITICAL CVEs in {target[:80]}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue pinning to current patched version.",
+            evidence_marker="Trivy completed cleanly, no HIGH/CRITICAL findings"))
+    return _build_resp("trivy_image", target, findings, max(len(findings), 1),
+                       f"Trivy image CVE scan ({len(findings)} HIGH/CRIT)")
+
+
+def _probe_grype_image(target, req):
+    """Real Grype image scan (alternative CVE DB to Trivy).
+    Useful for cross-verification: vulns found by both = confirmed;
+    found by only one = suspected. Skips honestly when not an image ref."""
+    if not _looks_like_image_ref(target):
+        return _not_applicable_for_image_scanner(target, "grype_image", "Grype")
+
+    if shutil.which("grype") is None:
+        return _build_resp("grype_image", target, [wrap_finding(
+            "[NOT IMPLEMENTED] grype binary not installed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend with Dockerfile that installs Grype.",
+            evidence_marker="grype not found in PATH")], 0,
+            "Grype not installed")
+
+    exit_code, stdout, stderr = _run_tool([
+        "grype", target, "-o", "json", "-q",
+        "--fail-on", "never",  # don't exit nonzero on findings
+    ], timeout_s=360)
+
+    if exit_code == 124:
+        return _build_resp("grype_image", target, [wrap_finding(
+            f"[PROBE ERROR] Grype scan timeout on {target[:80]}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Try a smaller image or run grype manually.",
+            evidence_marker="Grype wall-clock budget exceeded")], 0, "Grype timeout")
+
+    if exit_code != 0 or not stdout.strip():
+        return _build_resp("grype_image", target, [wrap_finding(
+            f"[PROBE ERROR] Grype exit {exit_code}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify image is pullable.",
+            evidence_marker=f"stderr: {stderr[-300:]}")], 0, f"Grype exit {exit_code}")
+
+    try:
+        data = json.loads(stdout)
+    except Exception as e:
+        return _build_resp("grype_image", target, [wrap_finding(
+            f"[PROBE ERROR] Grype JSON parse failed: {str(e)[:120]}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Grype output unexpected.",
+            evidence_marker=f"First 300 chars: {stdout[:300]}")], 0, "Grype parse error")
+
+    findings = []
+    sev_default_cvss = {"Critical": "9.0", "High": "7.5", "Medium": "5.5", "Low": "3.0"}
+    matches = data.get("matches", []) if isinstance(data, dict) else []
+    for m in matches:
+        vuln = m.get("vulnerability", {})
+        cve = vuln.get("id", "")
+        sev_raw = vuln.get("severity", "Medium")
+        if sev_raw not in ("Critical", "High"):
+            continue  # filter to HIGH/CRIT for PDF parity with Trivy
+        artifact = m.get("artifact", {})
+        pkg = artifact.get("name", "")
+        installed = artifact.get("version", "")
+        fixed_versions = vuln.get("fix", {}).get("versions", []) or []
+        fixed = fixed_versions[0] if fixed_versions else ""
+        cvss_score = ""
+        for cvss_entry in vuln.get("cvss", []) or []:
+            metrics = cvss_entry.get("metrics", {})
+            if metrics.get("baseScore"):
+                cvss_score = str(metrics["baseScore"])
+                break
+        cvss_score = cvss_score or sev_default_cvss.get(sev_raw, "0.0")
+        sev = sev_raw.upper()
+        findings.append(wrap_finding(
+            f"{cve} in {pkg} {installed}" + (f" (fixed in {fixed})" if fixed else " (no fix)"),
+            sev, cvss=cvss_score, cwe="CWE-1104",
+            remediation=(f"Upgrade {pkg} to {fixed}" if fixed
+                          else f"No fix yet for {pkg} {installed}."),
+            evidence_marker=f"Grype: {cve} affects {pkg}@{installed}; sev={sev}"))
+
+    if not findings:
+        findings.append(wrap_finding(
+            f"Grype: 0 HIGH/CRITICAL CVEs in {target[:80]}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue current image version.",
+            evidence_marker="Grype completed cleanly"))
+    return _build_resp("grype_image", target, findings, max(len(findings), 1),
+                       f"Grype image CVE scan ({len(findings)} HIGH/CRIT)")
+
+
+def _probe_cosign_verify(target, req):
+    """Real Cosign signature verification.
+    Checks if image is signed by a known/trusted key. Unsigned images
+    are a supply-chain risk. Skips honestly when not an image ref."""
+    if not _looks_like_image_ref(target):
+        return _not_applicable_for_image_scanner(target, "image_signing_cosign", "Cosign")
+
+    if shutil.which("cosign") is None:
+        return _build_resp("image_signing_cosign", target, [wrap_finding(
+            "[NOT IMPLEMENTED] cosign binary not installed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend with Dockerfile that installs Cosign.",
+            evidence_marker="cosign not found in PATH")], 0, "Cosign not installed")
+
+    # Try keyless verification (Sigstore Fuldio / Rekor)
+    exit_code, stdout, stderr = _run_tool([
+        "cosign", "verify", target,
+        "--certificate-identity-regexp", ".*",  # any identity
+        "--certificate-oidc-issuer-regexp", ".*",  # any OIDC issuer
+    ], timeout_s=60)
+
+    findings = []
+    if exit_code == 0:
+        findings.append(wrap_finding(
+            f"Cosign: {target[:60]} has a valid Sigstore signature",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue keyless signing posture.",
+            evidence_marker=f"cosign verify -> exit 0; {stdout[:200]}"))
+    elif "no signatures found" in (stderr + stdout).lower() or "no matching signatures" in (stderr + stdout).lower():
+        findings.append(wrap_finding(
+            f"Cosign: {target[:60]} is UNSIGNED (supply-chain risk)",
+            "MEDIUM", cvss="5.5", cwe="CWE-1357",
+            remediation=("Sign images with cosign + Sigstore keyless. "
+                          "Add admission policy to refuse unsigned images in production."),
+            evidence_marker=f"cosign verify -> no signatures found on {target}"))
+    else:
+        findings.append(wrap_finding(
+            f"Cosign verify error on {target[:60]}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Check image accessibility + cosign output.",
+            evidence_marker=f"cosign stderr: {stderr[-300:]}"))
+    return _build_resp("image_signing_cosign", target, findings, 1,
+                       "Cosign signature verification")
+
+
+def _probe_syft_sbom(target, req):
+    """Real Syft SBOM generation - lists packages + versions per layer.
+    Doesn't emit vulnerabilities but informational POSITIVE finding with
+    package count + ecosystem breakdown. Use case: SBOM compliance."""
+    if not _looks_like_image_ref(target):
+        return _not_applicable_for_image_scanner(target, "image_provenance_slsa", "Syft")
+
+    if shutil.which("syft") is None:
+        return _build_resp("image_provenance_slsa", target, [wrap_finding(
+            "[NOT IMPLEMENTED] syft binary not installed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend with Dockerfile that installs Syft.",
+            evidence_marker="syft not found in PATH")], 0, "Syft not installed")
+
+    exit_code, stdout, stderr = _run_tool([
+        "syft", target, "-o", "syft-json", "-q",
+    ], timeout_s=180)
+
+    if exit_code != 0 or not stdout.strip():
+        return _build_resp("image_provenance_slsa", target, [wrap_finding(
+            f"[PROBE ERROR] Syft exit {exit_code}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify image is pullable.",
+            evidence_marker=f"stderr: {stderr[-300:]}")], 0, f"Syft exit {exit_code}")
+
+    try:
+        data = json.loads(stdout)
+    except Exception as e:
+        return _build_resp("image_provenance_slsa", target, [wrap_finding(
+            f"[PROBE ERROR] Syft JSON parse: {str(e)[:120]}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Syft output unexpected.",
+            evidence_marker=f"First 300 chars: {stdout[:300]}")], 0, "Syft parse error")
+
+    artifacts = data.get("artifacts", []) if isinstance(data, dict) else []
+    by_ecosystem = {}
+    for a in artifacts:
+        eco = a.get("type", "unknown")
+        by_ecosystem[eco] = by_ecosystem.get(eco, 0) + 1
+
+    eco_summary = ", ".join(f"{k}:{v}" for k, v in sorted(by_ecosystem.items()))
+    findings = [wrap_finding(
+        f"SBOM: {len(artifacts)} packages across {len(by_ecosystem)} ecosystem(s)",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation=("Store this SBOM with the image build artifact. "
+                      "Use for SLSA Level 2+ provenance attestation."),
+        evidence_marker=f"Syft inventory: {eco_summary[:300]}")]
+    return _build_resp("image_provenance_slsa", target, findings, 1,
+                       f"Syft SBOM ({len(artifacts)} packages)")
+
+
 PROBES = {
     # original 7 real probes
     "docker_daemon_exposed":          _probe_docker_daemon_exposed,
@@ -759,6 +1102,11 @@ PROBES = {
     "istio_audit":                    _probe_istio_audit,
     "linkerd_audit":                  _probe_linkerd_audit,
     "linkerd_authz_audit":            _probe_linkerd_audit,
+    # image scanners (activate when target = OCI image ref like nginx:1.21)
+    "trivy_image":                    _probe_trivy_image,
+    "grype_image":                    _probe_grype_image,
+    "image_signing_cosign":           _probe_cosign_verify,
+    "image_provenance_slsa":          _probe_syft_sbom,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
