@@ -18202,6 +18202,32 @@ const MODULE_INPUT_SCHEMAS = {
   mobile_network:  { ph: "/uploads/mobile_static/SCAN_ID_app.apk", hint: "Reuse the APK path from mobile_static upload", needsUpload: true },
 };
 
+// Per-module advanced inputs. Each entry lists the optional inputs that
+// individual scanners in the module accept. Only the inputs listed here are
+// rendered in the "Advanced inputs" panel; modules that have no entry only
+// show the basic target field.
+//   image_ref       - OCI image reference        (Trivy / Grype / Syft / Hadolint / Cosign)
+//   dockerfile_text - raw Dockerfile content     (Dockerfile static probes)
+//   pod_spec_yaml   - K8s pod / deployment YAML  (privileged / capadd / hostPath / mount probes)
+//   kubeconfig      - full kubeconfig YAML       (real kubectl-based cluster probes)
+//   repo_url        - git repository URL         (secret scans, IaC scans, Supply-chain)
+//   api_spec_url    - OpenAPI / Swagger URL      (APISec schemathesis / spec-aware fuzzers)
+const MODULE_ADVANCED_INPUTS = {
+  container_k8s: ["image_ref", "dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"],
+  supply_chain:  ["repo_url"],
+  apisec:        ["api_spec_url"],
+  cloud:         ["repo_url"],   // IaC scans (tfsec / checkov) need repo with .tf files
+};
+
+const ADVANCED_INPUT_DEFS = {
+  image_ref:       {label:"Image reference",     ph:"nginx:1.21 or registry.example.com/team/app:v1.4.2",          type:"text",     hint:"OCI image — pulled by Trivy/Grype/Syft/Cosign"},
+  dockerfile_text: {label:"Dockerfile",          ph:"FROM debian:bookworm\nRUN apt-get update && apt-get install -y curl\nUSER root\n...", type:"textarea", rows:6, hint:"Paste raw Dockerfile — static-analysis probes only (no build)"},
+  pod_spec_yaml:   {label:"Pod / Deployment YAML",ph:"apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\nspec:\n  containers:\n  - name: app\n    image: nginx\n    securityContext:\n      privileged: true", type:"textarea", rows:6, hint:"Paste K8s manifest — privileged / capadd / hostPath / mount audits"},
+  kubeconfig:      {label:"kubeconfig",          ph:"apiVersion: v1\nclusters:\n- cluster:\n    server: https://k8s-api.example.com:6443\n  name: prod\n...", type:"textarea", rows:6, hint:"Ephemeral — written to temp file 0600 then null-overwritten + deleted after every probe"},
+  repo_url:        {label:"Repository URL",      ph:"https://github.com/org/repo.git",                              type:"text",     hint:"Shallow-cloned (depth 1, 30MB cap, auto-shred) for secret/IaC scans"},
+  api_spec_url:    {label:"OpenAPI / Swagger URL",ph:"https://api.example.com/openapi.json",                        type:"text",     hint:"Spec URL for schemathesis / spec-aware API fuzzers"},
+};
+
 // Per-module curated test targets. Every entry is either a publicly-legal
 // vulnerable lab (scanme.nmap.org, testphp.vulnweb.com, juice-shop, etc.) or
 // a syntactic format example. Click on one to populate the target input.
@@ -18377,6 +18403,28 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [authBearer,setAuthBearer]= useState("");   // optional: API key / JWT for some modules
   const [authCookie,setAuthCookie]= useState("");   // optional: session cookie (webapp / auth_attacks)
   const [showAuth,  setShowAuth]  = useState(false);
+  // Advanced inputs (per-module — see MODULE_ADVANCED_INPUTS).
+  // Persist between sessions so a Dockerfile / kubeconfig pasted once
+  // survives reloads of the dashboard. kubeconfig is the sensitive one;
+  // backend still tempfile + null-overwrite + unlink on every probe.
+  const advancedFields = MODULE_ADVANCED_INPUTS[moduleKey] || [];
+  const [advInputs, setAdvInputs] = useState(() => {
+    const init = {image_ref:"", dockerfile_text:"", pod_spec_yaml:"", kubeconfig:"", repo_url:"", api_spec_url:""};
+    try {
+      const raw = localStorage.getItem(`vl_adv_inputs:${moduleKey}`);
+      if (raw) Object.assign(init, JSON.parse(raw));
+    } catch(_){}
+    return init;
+  });
+  const [showAdv,   setShowAdv]   = useState(false);
+  const setAdvField = (k, v) => {
+    setAdvInputs(p => {
+      const next = {...p, [k]: v};
+      try { localStorage.setItem(`vl_adv_inputs:${moduleKey}`, JSON.stringify(next)); } catch(_){}
+      return next;
+    });
+  };
+  const advFilledCount = advancedFields.filter(k => (advInputs[k]||"").trim().length > 0).length;
   const [tiers,     setTiers]     = useState([]);
   const [running,   setRunning]   = useState(false);
   const [results,   setResults]   = useState({});
@@ -18548,6 +18596,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       const runBody = {target, concurrency: 16};
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
+      // Advanced per-module inputs (image_ref / dockerfile_text / pod_spec_yaml
+      // / kubeconfig / repo_url / api_spec_url). Only attach what's set + what
+      // the module declares it accepts — scanners ignore extras.
+      advancedFields.forEach(k => {
+        const v = (advInputs[k] || "").trim();
+        if (v) runBody[k] = v;
+      });
       const runPath = (moduleKey === "webapp")
         ? `${apiUrl}/api/webapp/scan/run_all`
         : `${apiUrl}/api/${moduleKey}/run_all`;
@@ -18723,8 +18778,17 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   borderRadius:4, padding:"3px 10px", color:"#94a3b8",
                   fontSize:10, cursor:"pointer", fontWeight:600,
                   textTransform:"uppercase", letterSpacing:1}}>
-          {showAuth ? "▾" : "▸"} Auth headers {authBearer || authCookie ? "(✓ set)" : "(optional)"}
+          {showAuth ? "▾" : "▸"} Auth headers {authBearer || authCookie ? "(set)" : "(optional)"}
         </button>
+        {advancedFields.length > 0 && (
+          <button onClick={() => setShowAdv(!showAdv)}
+            style={{background:"transparent", border:"1px solid #334155",
+                    borderRadius:4, padding:"3px 10px", color:"#94a3b8",
+                    fontSize:10, cursor:"pointer", fontWeight:600,
+                    textTransform:"uppercase", letterSpacing:1}}>
+            {showAdv ? "▾" : "▸"} Advanced inputs {advFilledCount > 0 ? `(${advFilledCount}/${advancedFields.length} set)` : `(${advancedFields.length} optional)`}
+          </button>
+        )}
       </div>
       {showAuth && (
         <div style={{display:"flex", gap:8, marginBottom:14, flexWrap:"wrap"}}>
@@ -18753,6 +18817,68 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
                       borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
                       fontSize:11, fontFamily:"monospace", outline:"none"}}/>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced per-module inputs — image_ref / dockerfile / pod-spec /
+          kubeconfig / repo_url / api_spec_url. Backends accept these as
+          optional fields on ScanRequest; scanners gracefully NOT_APPLICABLE
+          when the input they need is missing, so users only need to fill
+          the inputs relevant to the techniques they care about. */}
+      {showAdv && advancedFields.length > 0 && (
+        <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
+                      border:"1px solid #1e293b", borderRadius:6}}>
+          <div style={{fontSize:10, color:"#64748b", marginBottom:10,
+                        textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>
+            Optional inputs — leave blank to skip the probes that need them
+            {advancedFields.includes("kubeconfig") && (
+              <span style={{color:"#f59e0b", marginLeft:8, textTransform:"none",
+                              letterSpacing:0, fontSize:10, fontWeight:500}}>
+                · kubeconfig is written to a 0600 tempfile, null-overwritten + deleted after every probe
+              </span>
+            )}
+          </div>
+          <div style={{display:"flex", flexDirection:"column", gap:12}}>
+            {advancedFields.map(k => {
+              const def = ADVANCED_INPUT_DEFS[k];
+              if (!def) return null;
+              const val = advInputs[k] || "";
+              return (
+                <div key={k}>
+                  <label style={{fontSize:10, color:"#94a3b8", fontWeight:600,
+                                  textTransform:"uppercase", letterSpacing:1.2,
+                                  display:"flex", justifyContent:"space-between",
+                                  alignItems:"center", marginBottom:4}}>
+                    <span>{def.label} <span style={{color:"#475569", fontWeight:400, textTransform:"none", letterSpacing:0}}>· {def.hint}</span></span>
+                    {val && (
+                      <button onClick={() => setAdvField(k, "")}
+                        style={{background:"transparent", border:"1px solid #334155",
+                                color:"#64748b", borderRadius:3, padding:"1px 6px",
+                                fontSize:9, cursor:"pointer", letterSpacing:1}}>
+                        CLEAR
+                      </button>
+                    )}
+                  </label>
+                  {def.type === "textarea" ? (
+                    <textarea value={val} onChange={e => setAdvField(k, e.target.value)}
+                      disabled={running} placeholder={def.ph} rows={def.rows || 6}
+                      spellCheck={false}
+                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
+                              borderRadius:5, padding:"8px 10px", color:"#cbd5e1",
+                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              outline:"none", resize:"vertical", lineHeight:1.5}}/>
+                  ) : (
+                    <input type="text" value={val} onChange={e => setAdvField(k, e.target.value)}
+                      disabled={running} placeholder={def.ph}
+                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
+                              borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              outline:"none"}}/>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
