@@ -2396,12 +2396,10 @@ function generatePDF(reportData) {
           doc.setGState(new doc.GState({opacity: 0.10}));
         } catch(_){}
         doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
-        // 1.15x corrects for jsPDF Arial-vs-Helvetica metric underestimation.
-        // *cos(30) accounts for the rotated text's actual horizontal span.
-        const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor * 1.15;
-        const _wmSpanX = _wmW * Math.cos(30 * Math.PI / 180);
-        const _wmSpanY = _wmW * Math.sin(30 * Math.PI / 180);
-        doc.text(_wmStr, 105 - _wmSpanX/2, 148.5 + _wmSpanY/2, {angle:30});
+        // jsPDF's align:"center" with angle: rotates around the text CENTER
+        // (not the left-baseline), so the rotated text lands centered on the
+        // pivot regardless of width-measurement quirks. Reliable.
+        doc.text(_wmStr, 105, 148.5, {angle:30, align:"center"});
         doc.restoreGraphicsState();
       }
       // Blue border on every page
@@ -11283,10 +11281,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       doc.saveGraphicsState();
       try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
       doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
-      const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor * 1.15;
-      const _wmSpanX = _wmW * Math.cos(30 * Math.PI / 180);
-      const _wmSpanY = _wmW * Math.sin(30 * Math.PI / 180);
-      doc.text(_wmStr, 105 - _wmSpanX/2, 148.5 + _wmSpanY/2, {angle:30});
+      doc.text(_wmStr, 105, 148.5, {angle:30, align:"center"});
       doc.restoreGraphicsState();
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
@@ -13639,10 +13634,7 @@ function generateUniversalVLReport(opts) {
       doc.saveGraphicsState();
       try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
       doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
-      const _wmWU = doc.getStringUnitWidth(_wmStrU) * 72 / doc.internal.scaleFactor * 1.15;
-      const _wmSpanXU = _wmWU * Math.cos(30 * Math.PI / 180);
-      const _wmSpanYU = _wmWU * Math.sin(30 * Math.PI / 180);
-      doc.text(_wmStrU, pageW/2 - _wmSpanXU/2, pageH/2 + _wmSpanYU/2, {angle:30});
+      doc.text(_wmStrU, pageW/2, pageH/2, {angle:30, align:"center"});
       doc.restoreGraphicsState();
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0, 0, pageW, pageH, "S");
@@ -15036,10 +15028,7 @@ function generateExploitReport({results, date, pdfConfig}) {
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
         doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
-        const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor * 1.15;
-        const _wmSpanX = _wmW * Math.cos(30 * Math.PI / 180);
-        const _wmSpanY = _wmW * Math.sin(30 * Math.PI / 180);
-        doc.text(_wmStr, pageW/2 - _wmSpanX/2, pageH/2 + _wmSpanY/2, {angle:30});
+        doc.text(_wmStr, pageW/2, pageH/2, {angle:30, align:"center"});
         doc.restoreGraphicsState();
       }
       doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,pageW,pageH,"S");
@@ -15978,10 +15967,7 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
         doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
-        const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor * 1.15;
-        const _wmSpanX = _wmW * Math.cos(30 * Math.PI / 180);
-        const _wmSpanY = _wmW * Math.sin(30 * Math.PI / 180);
-        doc.text(_wmStr, 105 - _wmSpanX/2, 148.5 + _wmSpanY/2, {angle:30});
+        doc.text(_wmStr, 105, 148.5, {angle:30, align:"center"});
         doc.restoreGraphicsState();
       }
       doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
