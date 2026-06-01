@@ -330,10 +330,15 @@ RUN ( cd /tmp \
    && /usr/local/bin/trufflehog --version 2>&1 | head -1 ) \
  || echo "WARNING: trufflehog install failed (non-fatal)"
 
-# ── Password / Auth — hashcat, john, hydra ──────────────────────────────
+# ── Password / Auth — john, hydra ────────────────────────────────────────
+# hashcat dropped: 149 MB download + 766 MB on disk (pulls clang-15, libllvm15,
+# OpenCL, libmariadb, libmongoc, x264/x265 codecs). We aren't doing GPU
+# password cracking inside the API container; defer hashcat to a future
+# sidecar when the Password module is forged. john + hydra are lightweight
+# (CPU-only, no GPU deps) and cover the same APIs for now.
 RUN apt-get update -q -o Acquire::Retries=3 \
  && apt-get install -y -q --no-install-recommends \
-        hashcat john hydra \
+        john hydra \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── Cloud — Prowler (Python), tfsec ─────────────────────────────────────
