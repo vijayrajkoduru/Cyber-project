@@ -163,15 +163,10 @@ RUN pip install --no-cache-dir holehe phoneinfoga sherlock-project
 # ═══════════════════════════════════════════════════════════════════════
 
 # ── Container/K8s tools — Trivy, Grype, Syft, Hadolint, Cosign ─────────
-ARG TRIVY_VERSION=0.50.4
-RUN ( cd /tmp \
-   && wget --tries=3 --waitretry=10 --timeout=120 -q \
-        "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-        -O trivy.tgz \
-   && [ -s trivy.tgz ] \
-   && tar -xzf trivy.tgz -C /usr/local/bin trivy \
-   && rm trivy.tgz \
-   && /usr/local/bin/trivy --version ) \
+ARG TRIVY_VERSION=v0.59.1
+RUN ( curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+        | sh -s -- -b /usr/local/bin "${TRIVY_VERSION}" \
+   && /usr/local/bin/trivy --version 2>&1 | head -3 ) \
  || echo "WARNING: Trivy install failed (non-fatal)"
 
 ARG GRYPE_VERSION=0.79.6
