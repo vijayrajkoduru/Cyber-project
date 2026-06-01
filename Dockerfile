@@ -294,10 +294,21 @@ RUN ( cd /tmp \
    && /usr/local/bin/gitleaks version ) \
  || echo "WARNING: gitleaks install failed (non-fatal)"
 
+# bandit + pip-audit are lightweight, no starlette/pydantic deps. Safe in main env.
 RUN pip install --no-cache-dir \
-        semgrep \
         bandit \
         pip-audit
+
+# semgrep MUST be installed in an isolated venv — it pulls in mcp + a newer
+# starlette that removed Router(on_startup=...), which crashes FastAPI 0.115
+# at boot with: TypeError: Router.__init__() got an unexpected keyword
+# argument 'on_startup'. Isolate it; our code only invokes `semgrep` via
+# subprocess, never imports the Python package.
+RUN python -m venv /opt/semgrep-venv \
+ && /opt/semgrep-venv/bin/pip install --no-cache-dir --upgrade pip \
+ && /opt/semgrep-venv/bin/pip install --no-cache-dir semgrep \
+ && ln -sf /opt/semgrep-venv/bin/semgrep /usr/local/bin/semgrep \
+ && /usr/local/bin/semgrep --version 2>&1 | head -1
 
 # trufflehog (Go binary, separate from the abandoned truffleHog3 PyPI pkg)
 ARG TRUFFLEHOG_VERSION=3.83.7
