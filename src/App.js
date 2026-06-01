@@ -2395,7 +2395,7 @@ function generatePDF(reportData) {
         try {
           doc.setGState(new doc.GState({opacity: 0.10}));
         } catch(_){}
-        doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+        doc.setFont("Arial","bold"); doc.setFontSize(48); doc.setTextColor(220,38,38);
         const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
         doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
         doc.restoreGraphicsState();
@@ -8994,6 +8994,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const txt    = (t,x,yy,sz,c,bold,align) => { doc.setFont("Arial",bold?"bold":"normal"); doc.setFontSize(sz||10); doc.setTextColor(...(c||DARK)); doc.text(String(t),x,yy,{align:align||"left"}); };
   const chk    = n => { if(y+n>278){ doc.addPage(); y=18; drawHeader(); } };
   const sHead  = (title,yy) => { _secN++; fillR(margin,yy,contentW,9,LBLUE); txt(_secN+". "+title,margin+4,yy+6.2,10,BLUE,true); return yy+13; };
+  const sHeadCont = (title,yy) => { fillR(margin,yy,contentW,9,LBLUE); txt(_secN+". "+title,margin+4,yy+6.2,10,BLUE,true); return yy+13; };
   const tHead  = (cols,widths,yy) => { fillR(margin,yy,contentW,8,DARK); let cx=margin+3; cols.forEach((c,i)=>{ txt(c,cx,yy+5.5,8,WHITE,true); cx+=widths[i]; }); return yy+8; };
   const drawHeader = () => { txt("VulnusLab — Recon Report",margin,10,7,GRAY); txt(date,pageW-margin,10,7,BLUE,false,"right"); };
 
@@ -9584,7 +9585,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           y += 4;
           doc.addPage(); y = 18; drawHeader();
           _R_dfPgN++;
-          y = sHead("Detailed Findings (cont.)", y);
+          y = sHeadCont("Detailed Findings (continued)", y);
           y = tHead(["FINDING","SEVERITY","CVSS","CWE"], [108,26,22,30], y);
           txt(`Findings table - page ${_R_dfPgN} of ${_R_dfPages}`, margin, y - 9, 6.5, GRAY, true, "left");
         }
@@ -11205,7 +11206,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           y += 4;
           doc.addPage(); y = 18; drawHeader();
           _R_tlPgN++;
-          y = sHead("Tools & Scanners Used (cont.)", y);
+          y = sHeadCont("Tools & Scanners Used (continued)", y);
           y = tHead(["SCANNER","STATUS","DETAIL"], [80, 28, 72], y);
           txt(`Tools table - page ${_R_tlPgN} of ${_R_toolPages}`, margin, y - 9, 6.5, GRAY, true, "left");
         }
@@ -11340,7 +11341,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       const _wmStr = String(_wm);
       doc.saveGraphicsState();
       try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-      doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+      doc.setFont("Arial","bold"); doc.setFontSize(48); doc.setTextColor(220,38,38);
       const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
       doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
       doc.restoreGraphicsState();
@@ -12882,6 +12883,15 @@ function generateUniversalVLReport(opts) {
     txt(_secN + ". " + title, margin + 4, yy + 6.2, 10, BLUE, true);
     return yy + 13;
   };
+  // Continuation header: same look as sHead but reuses the CURRENT _secN
+  // (does NOT increment) — used for paginated tables that span multiple
+  // pages so we don't end up with "22. Tools / 23. Tools (cont.) / 24.
+  // Tools (cont.)" instead of "22. Tools / 22. Tools (continued)".
+  const sHeadCont = (title, yy) => {
+    fillR(margin, yy, contentW, 9, LBLUE);
+    txt(_secN + ". " + title, margin + 4, yy + 6.2, 10, BLUE, true);
+    return yy + 13;
+  };
   const tHead = (cols, widths, yy) => {
     fillR(margin, yy, contentW, 8, DARK);
     let cx = margin + 3;
@@ -13376,7 +13386,7 @@ function generateUniversalVLReport(opts) {
           y += 4;
           doc.addPage(); y = 18; drawHeader();
           _dfPageNo++;
-          y = sHead("Detailed Findings (cont.)", y);
+          y = sHeadCont("Detailed Findings (continued)", y);
           y = tHead(["FINDING","SEVERITY","CVSS","CWE"], [108,26,22,30], y);
           txt(`Findings table - page ${_dfPageNo} of ${_dfPages}`, margin, y - 9, 6.5, GRAY, true, "left");
         }
@@ -13691,7 +13701,7 @@ function generateUniversalVLReport(opts) {
           y += 4;
           doc.addPage(); y = 18; drawHeader();
           _tlPgN++;
-          y = sHead("Tools & Scanners Used (cont.)", y);
+          y = sHeadCont("Tools & Scanners Used (continued)", y);
           y = tHead(["SCANNER","STATUS","DETAIL"], [80, 28, 72], y);
           txt(`Tools table - page ${_tlPgN} of ${_toolPages}`, margin, y - 9, 6.5, GRAY, true, "left");
         }
@@ -13766,7 +13776,7 @@ function generateUniversalVLReport(opts) {
       const _wmStrU = String(_wmU);
       doc.saveGraphicsState();
       try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-      doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+      doc.setFont("Arial","bold"); doc.setFontSize(48); doc.setTextColor(220,38,38);
       const _wmWU = doc.getStringUnitWidth(_wmStrU) * 72 / doc.internal.scaleFactor;
       doc.text(_wmStrU, pageW/2 - _wmWU/2, pageH/2, {angle:30});
       doc.restoreGraphicsState();
@@ -15161,7 +15171,7 @@ function generateExploitReport({results, date, pdfConfig}) {
         const _wmStr = String(_wmE);
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-        doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+        doc.setFont("Arial","bold"); doc.setFontSize(48); doc.setTextColor(220,38,38);
         const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
         doc.text(_wmStr, pageW/2 - _wmW/2, pageH/2, {angle:30});
         doc.restoreGraphicsState();
@@ -16101,7 +16111,7 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
         const _wmStr = String(_wmB);
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
-        doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+        doc.setFont("Arial","bold"); doc.setFontSize(48); doc.setTextColor(220,38,38);
         const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
         doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
         doc.restoreGraphicsState();
