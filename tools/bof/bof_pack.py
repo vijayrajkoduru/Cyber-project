@@ -56,16 +56,16 @@ TECHNIQUES = [
     ("stack_canary_leak", "Stack canary leak (master-canary).", "HIGH", "7.5"),
     ("safeseh_bypass", "SafeSEH bypass.", "HIGH", "7.5"),
     ("cfg_bypass_legacy_pointers", "CFG bypass via legacy pointers.", "HIGH", "7.5"),
-    ("cet_bypass_research", "Intel CET bypass research ⭐.", "MEDIUM", "5.5"),
+    ("cet_bypass_research", "Intel CET bypass research .", "MEDIUM", "5.5"),
     # §7 Heap & UAF (4)
     ("heap_overflow_classic", "Classic heap overflow.", "HIGH", "8.0"),
     ("uaf_use_after_free", "Use-after-free exploit primitive.", "HIGH", "8.0"),
     ("tcache_poisoning", "tcache poisoning (glibc).", "HIGH", "8.0"),
     ("house_of_force", "House of Force heap exploit.", "HIGH", "8.0"),
-    # §8 Modern Mitigation Bypass (3) ⭐
-    ("pointer_auth_bypass_arm64", "Pointer Authentication (PAC) bypass research ⭐.", "MEDIUM", "5.5"),
-    ("mte_bypass_research", "ARM MTE bypass research ⭐.", "MEDIUM", "5.5"),
-    ("shadow_stack_bypass", "Intel CET shadow-stack bypass research ⭐.", "MEDIUM", "5.5"),
+    # §8 Modern Mitigation Bypass (3)
+    ("pointer_auth_bypass_arm64", "Pointer Authentication (PAC) bypass research .", "MEDIUM", "5.5"),
+    ("mte_bypass_research", "ARM MTE bypass research .", "MEDIUM", "5.5"),
+    ("shadow_stack_bypass", "Intel CET shadow-stack bypass research .", "MEDIUM", "5.5"),
 ]
 
 router = make_advisory_router("bof", TECHNIQUES,

@@ -134,4 +134,4 @@ if __name__ == "__main__":
         print(f"    - {a} <-> {b}: {r}")
     if report.get("violations_total", 0) > 0:
         sys.exit(1)
-    print(f"\n  All names valid, no duplicates. ✓")
+    print(f"\n  All names valid, no duplicates. ")

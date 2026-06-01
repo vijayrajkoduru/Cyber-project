@@ -1,4 +1,4 @@
-"""§23 AI/LLM Security — 87 endpoints per 23_ai_llm.md. All techniques ⭐ 2024+.
+"""§23 AI/LLM Security — 87 endpoints per 23_ai_llm.md. All techniques 2024+.
 10 sections: OWASP LLM Top 10 2025, prompt injection (direct+indirect), jailbreak,
 data extraction, model theft, RAG/vector DB, agent/tool-use, supply chain,
 infrastructure, compliance.

@@ -64,18 +64,18 @@ TECHNIQUES = [
 
     # §4 C2 Frameworks (14)
     ("cobalt_strike_industry",   "Cobalt Strike (commercial, industry std).", "HIGH", "7.5"),
-    ("sliver_c2",                "⭐ Sliver C2 (open-source, fastest growing).", "HIGH", "7.5"),
-    ("havoc_framework",          "⭐ Havoc framework.", "HIGH", "7.5"),
-    ("mythic_modular_python",    "⭐ Mythic (modular Python C2).", "HIGH", "7.5"),
-    ("brute_ratel_c4",           "⭐ Brute Ratel C4 (premium EDR-evading).", "HIGH", "7.5"),
+    ("sliver_c2",                "Sliver C2 (open-source, fastest growing).", "HIGH", "7.5"),
+    ("havoc_framework",          "Havoc framework.", "HIGH", "7.5"),
+    ("mythic_modular_python",    "Mythic (modular Python C2).", "HIGH", "7.5"),
+    ("brute_ratel_c4",           "Brute Ratel C4 (premium EDR-evading).", "HIGH", "7.5"),
     ("empire_starkiller",        "Empire / Starkiller (PowerShell C2).", "HIGH", "7.0"),
     ("metasploit_legacy_c2",     "Metasploit (legacy, still used).", "MEDIUM", "5.5"),
     ("merlin_http2_http3",       "Merlin (Go, HTTP/2 + HTTP/3).", "HIGH", "7.0"),
-    ("manual_c2_channel_design", "⭐ Manual C2 channel design.", "INFO", "0.0"),
-    ("custom_malleable_c2",      "⭐ Custom Malleable C2 profile.", "HIGH", "7.5"),
-    ("manual_domain_fronting",   "⭐ Manual Domain Fronting (CDN abuse).", "HIGH", "7.5"),
-    ("manual_c2_chain",          "⭐ Manual creative C2 chain.", "INFO", "0.0"),
-    ("multistage_donut_sliver",  "⭐ Multi-stage agent (Donut + Sliver).", "HIGH", "7.5"),
+    ("manual_c2_channel_design", "Manual C2 channel design.", "INFO", "0.0"),
+    ("custom_malleable_c2",      "Custom Malleable C2 profile.", "HIGH", "7.5"),
+    ("manual_domain_fronting",   "Manual Domain Fronting (CDN abuse).", "HIGH", "7.5"),
+    ("manual_c2_chain",          "Manual creative C2 chain.", "INFO", "0.0"),
+    ("multistage_donut_sliver",  "Multi-stage agent (Donut + Sliver).", "HIGH", "7.5"),
     ("manual_edr_aware_c2",      "Manual EDR-aware C2 selection.", "INFO", "0.0"),
 
     # §5 Initial Access Simulation (10)
@@ -86,7 +86,7 @@ TECHNIQUES = [
     ("supply_chain_sim",         "Supply-chain compromise sim.", "HIGH", "7.5"),
     ("hw_drop_usb_cable",        "Hardware drop (USB / cable).", "MEDIUM", "5.5"),
     ("drive_by_download",        "Drive-by download.", "HIGH", "7.0"),
-    ("cloud_account_compromise", "⭐ Cloud-account compromise sim.", "HIGH", "7.5"),
+    ("cloud_account_compromise", "Cloud-account compromise sim.", "HIGH", "7.5"),
     ("manual_initial_access",    "Manual creative initial access.", "INFO", "0.0"),
     ("manual_pretext_build_5",   "Manual creative pretext build.", "INFO", "0.0"),
 
@@ -112,19 +112,19 @@ TECHNIQUES = [
     ("manual_lessons_learned",   "Manual lessons-learned.", "INFO", "0.0"),
     ("manual_remediation_roadmap","Manual remediation roadmap.", "INFO", "0.0"),
 
-    # §8 Threat Actor TTP Emulation (12) ⭐
-    ("apt28_fancy_bear",         "⭐ APT28 (Fancy Bear) emulation.", "HIGH", "7.5"),
-    ("apt29_cozy_bear",          "⭐ APT29 (Cozy Bear) emulation.", "HIGH", "7.5"),
-    ("lazarus_group",            "⭐ Lazarus Group emulation.", "HIGH", "7.5"),
-    ("fin7_fin8",                "⭐ FIN7 / FIN8 emulation.", "HIGH", "7.5"),
-    ("conti_lockbit_ransomware", "⭐ Conti / LockBit ransomware emulation.", "HIGH", "8.0"),
-    ("volt_typhoon_china_apt",   "⭐ Volt Typhoon / Chinese APT emulation.", "HIGH", "7.5"),
-    ("cl0p_blackcat",            "⭐ Cl0p / BlackCat emulation.", "HIGH", "8.0"),
-    ("akira_ransomware",         "⭐ Akira ransomware emulation.", "HIGH", "8.0"),
-    ("scattered_spider_unc3944", "⭐ Scattered Spider (UNC3944) emulation.", "HIGH", "8.0"),
-    ("manual_custom_actor_profile","⭐ Manual custom-actor profile build.", "INFO", "0.0"),
-    ("manual_threat_intel_driven","⭐ Manual creative threat-intel-driven emulation.", "INFO", "0.0"),
-    ("manual_tiber_cbest",       "⭐ Manual TIBER-EU / CBEST engagement.", "INFO", "0.0"),
+    # §8 Threat Actor TTP Emulation (12)
+    ("apt28_fancy_bear",         "APT28 (Fancy Bear) emulation.", "HIGH", "7.5"),
+    ("apt29_cozy_bear",          "APT29 (Cozy Bear) emulation.", "HIGH", "7.5"),
+    ("lazarus_group",            "Lazarus Group emulation.", "HIGH", "7.5"),
+    ("fin7_fin8",                "FIN7 / FIN8 emulation.", "HIGH", "7.5"),
+    ("conti_lockbit_ransomware", "Conti / LockBit ransomware emulation.", "HIGH", "8.0"),
+    ("volt_typhoon_china_apt",   "Volt Typhoon / Chinese APT emulation.", "HIGH", "7.5"),
+    ("cl0p_blackcat",            "Cl0p / BlackCat emulation.", "HIGH", "8.0"),
+    ("akira_ransomware",         "Akira ransomware emulation.", "HIGH", "8.0"),
+    ("scattered_spider_unc3944", "Scattered Spider (UNC3944) emulation.", "HIGH", "8.0"),
+    ("manual_custom_actor_profile","Manual custom-actor profile build.", "INFO", "0.0"),
+    ("manual_threat_intel_driven","Manual creative threat-intel-driven emulation.", "INFO", "0.0"),
+    ("manual_tiber_cbest",       "Manual TIBER-EU / CBEST engagement.", "INFO", "0.0"),
 ]
 
 

@@ -204,13 +204,13 @@ TECHNIQUES = [
     ("custom_rule_authoring", "Custom hashcat rule authoring.", "INFO", "0.0"),
     ("mentalist_gui_rule", "Mentalist GUI rule generation.", "INFO", "0.0"),
     ("statsprocessor_markov", "statsprocessor Markov chain wordlist gen.", "INFO", "0.0"),
-    # §6 Cloud Distributed Cracking (7) ⭐
-    ("aws_gpu_p4d_advisory", "⭐ AWS GPU p4d instance cracking advisory.", "MEDIUM", "5.5"),
-    ("azure_nv_a100_advisory", "⭐ Azure NVidia A100 cracking advisory.", "MEDIUM", "5.5"),
-    ("gcp_t4_v100_advisory", "⭐ GCP T4/V100 cracking advisory.", "MEDIUM", "5.5"),
-    ("vast_ai_advisory", "⭐ vast.ai GPU marketplace advisory.", "MEDIUM", "5.5"),
-    ("paperspace_gradient_advisory", "⭐ Paperspace Gradient advisory.", "MEDIUM", "5.5"),
-    ("runpod_advisory", "⭐ RunPod cracking advisory.", "MEDIUM", "5.5"),
+    # §6 Cloud Distributed Cracking (7)
+    ("aws_gpu_p4d_advisory", "AWS GPU p4d instance cracking advisory.", "MEDIUM", "5.5"),
+    ("azure_nv_a100_advisory", "Azure NVidia A100 cracking advisory.", "MEDIUM", "5.5"),
+    ("gcp_t4_v100_advisory", "GCP T4/V100 cracking advisory.", "MEDIUM", "5.5"),
+    ("vast_ai_advisory", "vast.ai GPU marketplace advisory.", "MEDIUM", "5.5"),
+    ("paperspace_gradient_advisory", "Paperspace Gradient advisory.", "MEDIUM", "5.5"),
+    ("runpod_advisory", "RunPod cracking advisory.", "MEDIUM", "5.5"),
     ("manual_cloud_orchestration", "Manual cloud cracking orchestration.", "INFO", "0.0"),
     # §7 OS-specific Password Extraction (11)
     ("windows_sam_dump", "Windows SAM dump.", "CRITICAL", "9.0"),
@@ -224,13 +224,13 @@ TECHNIQUES = [
     ("browser_passwords_dump", "Browser saved passwords dump.", "HIGH", "8.0"),
     ("network_pcap_credential_extract", "Network pcap credential extraction.", "HIGH", "7.5"),
     ("memory_credential_dump", "Memory credential dump (volatility).", "HIGH", "8.0"),
-    # §8 Modern Auth Bypass (Passkey / MFA) (6) ⭐
-    ("aitm_session_steal", "⭐ AiTM session cookie steal.", "CRITICAL", "9.0"),
-    ("webauthn_resident_key_audit", "⭐ WebAuthn resident-key audit.", "MEDIUM", "5.5"),
-    ("passkey_cross_device_sync_audit", "⭐ Passkey cross-device sync audit.", "MEDIUM", "5.5"),
-    ("magic_link_entropy_audit", "⭐ Magic-link entropy audit.", "HIGH", "7.0"),
-    ("oauth_device_code_phishing", "⭐ OAuth device-code phishing.", "HIGH", "7.5"),
-    ("totp_secret_storage_audit", "⭐ TOTP secret storage audit.", "MEDIUM", "5.5"),
+    # §8 Modern Auth Bypass (Passkey / MFA) (6)
+    ("aitm_session_steal", "AiTM session cookie steal.", "CRITICAL", "9.0"),
+    ("webauthn_resident_key_audit", "WebAuthn resident-key audit.", "MEDIUM", "5.5"),
+    ("passkey_cross_device_sync_audit", "Passkey cross-device sync audit.", "MEDIUM", "5.5"),
+    ("magic_link_entropy_audit", "Magic-link entropy audit.", "HIGH", "7.0"),
+    ("oauth_device_code_phishing", "OAuth device-code phishing.", "HIGH", "7.5"),
+    ("totp_secret_storage_audit", "TOTP secret storage audit.", "MEDIUM", "5.5"),
 ]
 
 router = make_advisory_router("password", TECHNIQUES,

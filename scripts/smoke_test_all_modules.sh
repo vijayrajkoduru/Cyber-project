@@ -11,7 +11,7 @@ TOKEN="${VULNUSLAB_TOKEN}"
 TARGET="${1:-localhost}"
 
 if [ -z "$TOKEN" ]; then
-    echo "❌ VULNUSLAB_TOKEN required."
+    echo "VULNUSLAB_TOKEN required."
     echo "Get a JWT via: curl -X POST -H 'Content-Type: application/json' \\"
     echo "  -d '{\"username\":\"ADMIN\",\"password\":\"<pass>\"}' $URL/api/auth/login"
     exit 2
@@ -35,10 +35,10 @@ for mod in $modules; do
         "$URL/api/$mod/run_all/tiers" 2>/dev/null \
         | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_tools',0))" 2>/dev/null)
     if [ -n "$n" ] && [ "$n" -gt 0 ]; then
-        printf "  ✓  %-25s %s tools\n" "$mod" "$n"
+        printf "   %-25s %s tools\n" "$mod" "$n"
         ok=$((ok+1))
     else
-        printf "  ❌ %-25s NO RESPONSE\n" "$mod"
+        printf "  %-25s NO RESPONSE\n" "$mod"
         fail=$((fail+1))
     fi
 done

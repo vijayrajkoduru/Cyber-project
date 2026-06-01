@@ -78,7 +78,7 @@ def main():
     dbms_dist = {}
     for p in payloads:
         dbms_dist[p["dbms"]] = dbms_dist.get(p["dbms"], 0) + 1
-    print(f"\n✓ Wrote {len(payloads)} payloads to {OUT}")
+    print(f"\nWrote {len(payloads)} payloads to {OUT}")
     print(f"  Tokens: {in_tok} in, {out_tok} out")
     print(f"  Cost:   ~${cost:.3f}")
     print(f"  DBMS:   {dbms_dist}")

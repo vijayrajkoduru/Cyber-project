@@ -28,11 +28,11 @@ T = [
     ("wps_pixie_dust", "WPS Pixie Dust attack.", "HIGH", "8.0"),
     ("wps_null_pin", "WPS NULL PIN attack.", "HIGH", "7.5"),
     ("deauth_dos_aireplay", "Deauth DoS (aireplay-ng).", "HIGH", "7.0"),
-    # §3 WPA3 (5) ⭐
-    ("wpa3_dragonblood_advisory", "⭐ WPA3 Dragonblood advisory.", "MEDIUM", "5.5"),
-    ("wpa3_downgrade_attack", "⭐ WPA3 downgrade to WPA2 attack.", "HIGH", "7.5"),
-    ("wpa3_sae_h2e_audit", "⭐ WPA3 SAE H2E audit.", "MEDIUM", "5.5"),
-    ("wpa3_transition_mode_audit", "⭐ WPA3 transition mode audit.", "MEDIUM", "5.5"),
+    # §3 WPA3 (5)
+    ("wpa3_dragonblood_advisory", "WPA3 Dragonblood advisory.", "MEDIUM", "5.5"),
+    ("wpa3_downgrade_attack", "WPA3 downgrade to WPA2 attack.", "HIGH", "7.5"),
+    ("wpa3_sae_h2e_audit", "WPA3 SAE H2E audit.", "MEDIUM", "5.5"),
+    ("wpa3_transition_mode_audit", "WPA3 transition mode audit.", "MEDIUM", "5.5"),
     ("manual_wpa3_chain", "Manual WPA3 chain.", "INFO", "0.0"),
     # §4 Enterprise WiFi WPA2-EAP (7)
     ("eaphammer_rogue_ap", "EAPHammer rogue AP attack.", "HIGH", "8.0"),
@@ -48,7 +48,7 @@ T = [
     ("wifiphisher_advisory", "wifiphisher.", "HIGH", "8.0"),
     ("karma_attack_advisory", "Karma attack (probe response).", "HIGH", "8.0"),
     ("captive_portal_phishing", "Captive portal phishing.", "HIGH", "7.5"),
-    ("evil_twin_with_aitm", "⭐ Evil twin + AiTM.", "CRITICAL", "9.0"),
+    ("evil_twin_with_aitm", "Evil twin + AiTM.", "CRITICAL", "9.0"),
     ("manual_evil_twin_chain", "Manual evil twin chain.", "INFO", "0.0"),
     # §6 Bluetooth / BLE (9)
     ("bluetoothctl_scan", "bluetoothctl scan.", "INFO", "0.0"),
@@ -65,11 +65,11 @@ T = [
     ("mfoc_mifare_classic", "mfoc MIFARE Classic crack.", "HIGH", "7.5"),
     ("nfc_relay_attack", "NFC relay attack.", "HIGH", "7.5"),
     ("rfid_clone_advisory", "RFID clone advisory.", "HIGH", "7.5"),
-    # §8 Cellular / 5G / SDR (4) ⭐
-    ("imsi_catcher_advisory", "⭐ IMSI catcher (stingray) advisory.", "HIGH", "7.5"),
-    ("hackrf_sdr_advisory", "⭐ HackRF SDR advisory.", "MEDIUM", "5.5"),
-    ("yatebts_open5gs_advisory", "⭐ YateBTS / Open5GS advisory.", "MEDIUM", "5.5"),
-    ("ss7_diameter_research", "⭐ SS7/Diameter research advisory.", "MEDIUM", "5.5"),
+    # §8 Cellular / 5G / SDR (4)
+    ("imsi_catcher_advisory", "IMSI catcher (stingray) advisory.", "HIGH", "7.5"),
+    ("hackrf_sdr_advisory", "HackRF SDR advisory.", "MEDIUM", "5.5"),
+    ("yatebts_open5gs_advisory", "YateBTS / Open5GS advisory.", "MEDIUM", "5.5"),
+    ("ss7_diameter_research", "SS7/Diameter research advisory.", "MEDIUM", "5.5"),
 ]
 
 router = make_advisory_router("wireless", T,

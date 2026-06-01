@@ -184,15 +184,15 @@ def print_result(r: dict):
     print(f"  API:    {r['api_base']}")
     print(f"{'=' * 65}")
     for p in r["passes"]:
-        print(f"  ✓ {p}")
+        print(f"  {p}")
     for w in r["warnings"]:
-        print(f"  ⚠ {w}")
+        print(f"  {w}")
     for f in r["failures"]:
-        print(f"  ✗ {f}")
+        print(f"  {f}")
     print(f"{'-' * 65}")
     ok = len(r["failures"]) == 0
     status = "PASS" if ok else "FAIL"
-    icon = "✅" if ok else "❌"
+    icon = "" if ok else ""
     print(f"  {icon} END-TO-END: {status}  ({r['elapsed_s']}s)")
     print(f"{'=' * 65}")
 

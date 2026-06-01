@@ -53,7 +53,7 @@ Wait for scan to complete (~30s).
 
 ### 5. The PDF (90 seconds)
 
-Click **📄 PDF**.
+Click **PDF**.
 
 > "This downloads a 10-section penetration test report. Full disclosure: there's a customer logo placeholder, you'd brand it with yours. But every finding has CVSS, CWE, OWASP mapping, AND remediation steps — let me open it..."
 
@@ -71,7 +71,7 @@ Scroll through:
 
 Click `Recent scans` dropdown (have a previous scan stored from earlier today).
 
-Pretend to load → live scan would show **`✓ 1 FIXED`** banner.
+Pretend to load → live scan would show **`1 FIXED`** banner.
 
 > "That green banner — that's the proof your fix actually worked. Auditors love this. Your team loves this. It's the 'did the patch take?' question answered in 2 seconds."
 
@@ -129,8 +129,8 @@ Thanks for the time today. Quick recap of what we found on {{their_domain}}:
 
 Two ways to keep going:
 
-🔵 Free tier (10 scans/mo): https://app.vulnuslab.com/signup
-🟢 14-day Team trial (5 seats): {{trial_link}}
+Free tier (10 scans/mo): https://app.vulnuslab.com/signup
+14-day Team trial (5 seats): {{trial_link}}
 
 Happy to jump on a 20-min call next week if your security lead wants
 to see the CI integration. Otherwise — go fix that DMARC :)

@@ -5,7 +5,7 @@ Section layout:
   §2 Reverse Tunneling Tools         (12 endpoints — chisel/ligolo/frp fingerprints)
   §3 DNS / ICMP Tunneling            ( 8 endpoints — dnscat2/iodine / DoH)
   §4 HTTP / HTTPS Tunneling          ( 8 endpoints — CONNECT, reGeorg sigs)
-  §5 Modern Tunneling (Wg / QUIC) ⭐ (10 endpoints — WG/Tailscale/Ngrok/Cloudflared)
+  §5 Modern Tunneling (Wg / QUIC) (10 endpoints — WG/Tailscale/Ngrok/Cloudflared)
 """
 import socket
 from contextlib import closing
@@ -233,7 +233,7 @@ def chisel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
 @router.post("/api/tunnel/ligolo_ng_advisory")
 def ligolo_ng_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ligolo_ng_advisory", req.target,
-        "Ligolo-ng ⭐ TUN-based reverse tunnel — faster than chisel, harder to fingerprint.",
+        "Ligolo-ng TUN-based reverse tunnel — faster than chisel, harder to fingerprint.",
         sev="HIGH", cvss="7.0",
         remediation="EDR rule: `ligolo` binary hash; outbound TLS to unexpected ports; tun0 created by non-root.",
         evidence="Modern (2023+) post-exploit tool; flag rapid lateral movement after agent install.")
@@ -242,7 +242,7 @@ def ligolo_ng_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
 @router.post("/api/tunnel/rsockstun_advisory")
 def rsockstun_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("rsockstun_advisory", req.target,
-        "Rsockstun ⭐ — reverse SOCKS over TLS with built-in retry.",
+        "Rsockstun — reverse SOCKS over TLS with built-in retry.",
         sev="HIGH", cvss="7.0",
         remediation="Block outbound TLS to non-allowlisted SNIs; deploy TLS interception on egress proxy.")
 
@@ -283,7 +283,7 @@ def frp_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
         if r and ("frp" in (r.headers.get("server", "") or "").lower() or
                   "frp" in (r.text or "").lower()[:5000]):
             findings.append(wrap_finding(
-                "frp (fast reverse proxy) ⭐ fingerprint detected.",
+                "frp (fast reverse proxy) fingerprint detected.",
                 "HIGH", cvss="7.5", cwe="CWE-693", owasp="A05:2021",
                 remediation="Audit binary; restrict outbound WS/TLS to allow-listed servers.",
                 evidence_marker=f"frp signature on {path}"))
@@ -319,7 +319,7 @@ def neo_regeorg_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
 @router.post("/api/tunnel/pivotnacci_advisory")
 def pivotnacci_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("pivotnacci_advisory", req.target,
-        "Pivotnacci ⭐ — SOCKS server through HTTP webshells (modern).",
+        "Pivotnacci — SOCKS server through HTTP webshells (modern).",
         sev="HIGH", cvss="7.5",
         remediation="Inspect webshell file upload + entropy on body; alert on long-lived HTTP sessions.")
 
@@ -379,7 +379,7 @@ def doh_tunnel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
             ct = r.headers.get("content-type", "")
             if "dns" in ct.lower():
                 findings.append(wrap_finding(
-                    "DNS-over-HTTPS endpoint exposed ⭐ — potential DoH-tunnel covert channel.",
+                    "DNS-over-HTTPS endpoint exposed — potential DoH-tunnel covert channel.",
                     "MEDIUM", cvss="5.0", cwe="CWE-693", owasp="A05:2021",
                     remediation="If unintended, block /dns-query at WAF; if intended, rate-limit and log.",
                     evidence_marker=f"Endpoint {path} returned content-type {ct}"))
@@ -543,7 +543,7 @@ def manual_http_tunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="See Manual Tests panel.")
 
 
-# ═══════════════ §5 — Modern Tunneling (WireGuard / QUIC) ⭐ (10) ═══════════════
+# ═══════════════ §5 — Modern Tunneling (WireGuard / QUIC) (10) ═══════════════
 
 @router.post("/api/tunnel/wireguard_userspace_probe")
 def wireguard_userspace_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
@@ -553,7 +553,7 @@ def wireguard_userspace_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     open51820 = _udp_listen(host, 51820, timeout=2.0)
     if open51820:
         findings.append(wrap_finding(
-            "UDP/51820 (WireGuard default) is reachable ⭐ — likely WireGuard endpoint exposed.",
+            "UDP/51820 (WireGuard default) is reachable — likely WireGuard endpoint exposed.",
             "MEDIUM", cvss="5.0", cwe="CWE-1395", owasp="A05:2021",
             remediation="If intentional, restrict source IPs; if not, close at firewall.",
             evidence_marker="UDP/51820 sent → no ICMP unreachable (likely open or filtered)."))
@@ -575,7 +575,7 @@ def tailscale_lateral_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     tcp41641 = _tcp_open(host, 41641, timeout=2.0)
     if tcp41641 or host.endswith(".ts.net"):
         findings.append(wrap_finding(
-            "Tailscale ⭐ surface detected (port 41641 or .ts.net hostname).",
+            "Tailscale surface detected (port 41641 or .ts.net hostname).",
             "MEDIUM", cvss="5.0", cwe="CWE-1395",
             remediation="Audit Tailscale ACLs; enable lock + key expiry; review user device list.",
             evidence_marker=f"TCP/41641={tcp41641}; host={host}"))
@@ -597,7 +597,7 @@ def zerotier_lateral_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     open9993 = _udp_listen(host, 9993, timeout=2.0)
     if open9993:
         findings.append(wrap_finding(
-            "ZeroTier ⭐ UDP/9993 reachable — mesh-VPN endpoint exposed.",
+            "ZeroTier UDP/9993 reachable — mesh-VPN endpoint exposed.",
             "MEDIUM", cvss="5.0", cwe="CWE-1395",
             remediation="Audit ZeroTier network controllers + members; rotate network ID if compromised.",
             evidence_marker="UDP/9993 likely open."))
@@ -624,7 +624,7 @@ def cloudflared_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
         intel["server"] = srv
         if cf_ray and "cloudflare" in srv.lower():
             findings.append(wrap_finding(
-                "Cloudflare-fronted origin ⭐ — could be Cloudflare Tunnel (cloudflared) backend.",
+                "Cloudflare-fronted origin — could be Cloudflare Tunnel (cloudflared) backend.",
                 "INFO", cvss="0.0", cwe="N/A",
                 remediation="Cloudflare Tunnel is legitimate; ensure tunnel ACLs + WARP routing policies.",
                 evidence_marker=f"CF-Ray: {cf_ray}; Server: {srv}"))
@@ -655,7 +655,7 @@ def ngrok_localtunnel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)
     if is_ngrok or is_localtunnel:
         kind = "Ngrok" if is_ngrok else "localtunnel"
         findings.append(wrap_finding(
-            f"{kind} ⭐ ad-hoc tunnel hostname detected — production traffic should not route through this.",
+            f"{kind} ad-hoc tunnel hostname detected — production traffic should not route through this.",
             "HIGH", cvss="7.0", cwe="CWE-693", owasp="A05:2021",
             remediation="Block *.ngrok.io / *.loca.lt at proxy egress; audit endpoint asset inventory.",
             evidence_marker=f"hostname matches {kind} pattern"))
@@ -673,7 +673,7 @@ def ngrok_localtunnel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)
 @router.post("/api/tunnel/quic_http3_advisory")
 def quic_http3_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("quic_http3_advisory", req.target,
-        "QUIC / HTTP3 tunnel ⭐ — covert channel via UDP/443.",
+        "QUIC / HTTP3 tunnel — covert channel via UDP/443.",
         sev="MEDIUM", cvss="5.0",
         remediation="QUIC-aware NSM (Zeek 5+) for HTTP/3 metadata; SNI inspection at egress.")
 
@@ -681,7 +681,7 @@ def quic_http3_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
 @router.post("/api/tunnel/lightway_advisory")
 def lightway_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("lightway_advisory", req.target,
-        "Lightway VPN ⭐ — ExpressVPN's wolfSSL-based protocol.",
+        "Lightway VPN — ExpressVPN's wolfSSL-based protocol.",
         sev="MEDIUM", cvss="5.0",
         remediation="JA3/JA4 fingerprint outbound TLS; alert on Lightway-specific signatures.")
 

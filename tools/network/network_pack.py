@@ -466,20 +466,20 @@ TECHNIQUES = [
     ("dns_hijack_advisory", "DNS hijack advisory.", "HIGH", "7.5"),
     ("dns_open_resolver_check", "Open resolver check.", "HIGH", "7.0"),
     ("dns_random_subdomain_attack", "Random subdomain attack.", "HIGH", "7.0"),
-    # §7 IPv6 Attacks (7) ⭐
-    ("ipv6_router_advertisement_spoof", "⭐ IPv6 RA spoof (mitm6).", "HIGH", "8.0"),
-    ("ipv6_dhcpv6_spoof", "⭐ DHCPv6 spoof.", "HIGH", "8.0"),
-    ("ipv6_smurf_advisory", "⭐ IPv6 Smurf advisory.", "MEDIUM", "5.0"),
-    ("ipv6_neighbor_discovery_spoof", "⭐ ND spoof.", "HIGH", "7.5"),
-    ("ipv6_packet_fragmentation_evasion", "⭐ IPv6 fragmentation evasion.", "MEDIUM", "5.5"),
-    ("ipv6_slaac_attack", "⭐ SLAAC attack.", "HIGH", "7.5"),
-    ("ipv6_address_enum_thc_alive6", "⭐ IPv6 address enum (THC alive6).", "INFO", "0.0"),
+    # §7 IPv6 Attacks (7)
+    ("ipv6_router_advertisement_spoof", "IPv6 RA spoof (mitm6).", "HIGH", "8.0"),
+    ("ipv6_dhcpv6_spoof", "DHCPv6 spoof.", "HIGH", "8.0"),
+    ("ipv6_smurf_advisory", "IPv6 Smurf advisory.", "MEDIUM", "5.0"),
+    ("ipv6_neighbor_discovery_spoof", "ND spoof.", "HIGH", "7.5"),
+    ("ipv6_packet_fragmentation_evasion", "IPv6 fragmentation evasion.", "MEDIUM", "5.5"),
+    ("ipv6_slaac_attack", "SLAAC attack.", "HIGH", "7.5"),
+    ("ipv6_address_enum_thc_alive6", "IPv6 address enum (THC alive6).", "INFO", "0.0"),
     # §8 Protocol Fuzzing (5)
     ("fuzzing_smb_advisory", "SMB protocol fuzzing.", "MEDIUM", "5.0"),
     ("fuzzing_rdp_advisory", "RDP protocol fuzzing.", "MEDIUM", "5.0"),
     ("fuzzing_dns_advisory", "DNS protocol fuzzing.", "MEDIUM", "5.0"),
     ("fuzzing_http2_advisory", "HTTP/2 protocol fuzzing.", "MEDIUM", "5.0"),
-    ("fuzzing_quic_advisory", "QUIC protocol fuzzing ⭐.", "MEDIUM", "5.0"),
+    ("fuzzing_quic_advisory", "QUIC protocol fuzzing .", "MEDIUM", "5.0"),
 ]
 
 router = make_advisory_router("network", TECHNIQUES,

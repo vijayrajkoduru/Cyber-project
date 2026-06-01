@@ -1,7 +1,7 @@
 
 ---
 
-## ⚡ Quick Commands (typed from anywhere on the VPS)
+## Quick Commands (typed from anywhere on the VPS)
 
 Run `vlhelp` to see the list any time.
 
@@ -38,7 +38,7 @@ Run `vlhelp` to see the list any time.
 
 _Added 2026-05-16:_ `vltoolsync` — explicit tier-1 sync (restart backend → re-snapshot all tools)
 
-SERVER SLOW 
+SERVER SLOW
 
 # 1. See what's eating resources
 docker stats --no-stream
@@ -57,7 +57,7 @@ docker compose restart frontend
 
 ---
 
-# 🔨 VL-FORGE — Tool Building Process
+# VL-FORGE — Tool Building Process
 
 **Named 2026-05-23 after shipping WHOIS + DNS Records + DNS Recon through the pattern.**
 

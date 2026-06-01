@@ -19,9 +19,9 @@ sleep 10
 echo "=== 7. Verify f.detail in bundle ==="
 HITS=$(docker exec cyber_project_frontend sh -c 'grep -o "f\.detail" /usr/share/nginx/html/static/js/main.*.js 2>/dev/null | wc -l' || echo 0)
 if [ "$HITS" -gt 0 ]; then
-    echo "✓ PASS — bundle contains f.detail ($HITS occurrences)"
+    echo "PASS — bundle contains f.detail ($HITS occurrences)"
 else
-    echo "✗ FAIL — bundle has 0 f.detail occurrences"
+    echo "FAIL — bundle has 0 f.detail occurrences"
     exit 1
 fi
 docker exec cyber_project_frontend sh -c 'ls /usr/share/nginx/html/static/js/main.*.js'

@@ -71,7 +71,7 @@ Visit → Read → Impressed → Start Free Trial OR Pay → Get credentials by 
 ---
 
 ### SECTION 2 — Hero
-- **Badge**: "🔒 Trusted by Security Professionals" (small pill at top)
+- **Badge**: "Trusted by Security Professionals" (small pill at top)
 - **Headline**: "The Most Powerful Cybersecurity Dashboard Ever Built"
 - **Sub-headline**: "51 real Kali Linux tools in one cloud dashboard. Scan, exploit, report — no installation needed. Used by pentesters, bug bounty hunters, and enterprise security teams."
 - **CTA Buttons**:
@@ -106,14 +106,14 @@ Visit → Read → Impressed → Start Free Trial OR Pay → Get credentials by 
 ### SECTION 5 — 51 Scanners Showcase
 - Section title: "Everything You Need In One Place"
 - 8 category cards in a grid:
-  1. 🔍 Reconnaissance & Fingerprinting — WAF Detection, Tech Stack, CMS, Port Scan, SSL, DNS, Subdomains
-  2. 📁 Discovery & Fuzzing — Directory Enumeration, Web Fuzzing
-  3. 💉 Injection Attacks — XSS, SQL Injection, NoSQL, Command Injection, XXE, SSTI, Host Header
-  4. 🔐 Authentication & Session — Header Security, Cookie Analysis, Hydra Brute Force, JWT, CSRF, IDOR, OAuth, 2FA Bypass
-  5. 📂 File & Path Attacks — LFI, RFI, File Upload Testing
-  6. 🌐 Network & Protocol — CORS, SSRF, HTTP Smuggling, Verb Tampering, Clickjacking, Open Redirect
-  7. ⚡ Modern Web (OSWE) — Deserialization, Prototype Pollution, GraphQL, Race Condition
-  8. 🖥 Infrastructure (OSCP) — SMB, FTP, SMTP, SNMP
+  1. Reconnaissance & Fingerprinting — WAF Detection, Tech Stack, CMS, Port Scan, SSL, DNS, Subdomains
+  2. Discovery & Fuzzing — Directory Enumeration, Web Fuzzing
+  3. Injection Attacks — XSS, SQL Injection, NoSQL, Command Injection, XXE, SSTI, Host Header
+  4. Authentication & Session — Header Security, Cookie Analysis, Hydra Brute Force, JWT, CSRF, IDOR, OAuth, 2FA Bypass
+  5. File & Path Attacks — LFI, RFI, File Upload Testing
+  6. Network & Protocol — CORS, SSRF, HTTP Smuggling, Verb Tampering, Clickjacking, Open Redirect
+  7. Modern Web (OSWE) — Deserialization, Prototype Pollution, GraphQL, Race Condition
+  8. Infrastructure (OSCP) — SMB, FTP, SMTP, SNMP
 - Each card shows: icon + category name + tool count + 3-4 example tools
 
 ---
@@ -150,11 +150,11 @@ Title: "Why Choose Us Over Alternatives?"
 |---|---|---|---|
 | Cost | $5,000+/audit | $500+/month | Affordable monthly |
 | Setup Time | Days | Hours | **0 — Instant** |
-| 51 Security Tools | ❌ | ❌ | **✅** |
-| Auto PDF Reports | ❌ Extra cost | ❌ Manual | **✅ Automatic** |
-| Available 24/7 | ❌ | Partial | **✅ Always** |
-| Built-in Labs | ❌ | ❌ | **✅ 5 Labs** |
-| No Installation | ❌ | ❌ | **✅ Cloud** |
+| 51 Security Tools | | | **** |
+| Auto PDF Reports | Extra cost | Manual | **Automatic** |
+| Available 24/7 | | Partial | **Always** |
+| Built-in Labs | | | **5 Labs** |
+| No Installation | | | **Cloud** |
 
 Highlight "Our Dashboard" column in blue.
 
@@ -191,7 +191,7 @@ Sub: "Start free. Upgrade when ready."
 - Team management
 - CTA: "Contact Us"
 
-Note below cards: "💳 Secure payment via Razorpay. Credentials delivered by email within 30 minutes."
+Note below cards: "Secure payment via Razorpay. Credentials delivered by email within 30 minutes."
 
 ---
 
@@ -251,7 +251,7 @@ Form fields:
 - Message (optional)
 - Submit button: "Request Access"
 
-Below form: "📧 Or email us directly: vijayrajkoduruai@gmail.com"
+Below form: "Or email us directly: vijayrajkoduruai@gmail.com"
 
 ---
 

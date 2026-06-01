@@ -21,9 +21,9 @@ if ! docker run --rm \
                sourceType: \"module\",
                plugins: [\"jsx\", \"classProperties\", \"optionalChaining\", \"nullishCoalescingOperator\"]
              });
-             console.log(\"✓ syntax OK\");
+             console.log(\"syntax OK\");
            } catch (e) {
-             console.error(\"✗\", e.message);
+             console.error(\"\", e.message);
              if (e.loc) console.error(\"  → line\", e.loc.line, \"col\", e.loc.column);
              process.exit(1);
            }

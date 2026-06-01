@@ -196,13 +196,13 @@ STEP 6 — PRODUCTION GATE (REAL SITES I OWN — this is the SHIP gate)
   Site 5: ONE friend's real production site (signed email auth required)
 
 Each:
-    ☐ <8 min scan duration
-    ☐ 0 CRITICAL/HIGH false positives
-    ☐ 0 ops alerts triggered (verify with site owner)
-    ☐ User-Agent identifies VulnusLab in target logs
-    ☐ Score ≥95/100 on PDF
-    ☐ Kill switch tested
-    ☐ Authorization gate enforced
+    <8 min scan duration
+    0 CRITICAL/HIGH false positives
+    0 ops alerts triggered (verify with site owner)
+    User-Agent identifies VulnusLab in target logs
+    Score ≥95/100 on PDF
+    Kill switch tested
+    Authorization gate enforced
 
 ═══════════════════════════════════════════════════════════════════════
 STEP 7 — SELF-SERVICE PRODUCT INFRASTRUCTURE (built BEFORE launch)

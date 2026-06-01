@@ -6,15 +6,15 @@ A curated list of **legally scannable** vulnerable websites you can use to:
 - Demo the product to potential customers
 - Train your eye on real vulnerability patterns
 
-⚠️ **All targets here are explicitly authorized for security testing.** Scanning anything NOT on this list = legal risk (CFAA / IT Act 2000).
+**All targets here are explicitly authorized for security testing.** Scanning anything NOT on this list = legal risk (CFAA / IT Act 2000).
 
 ---
 
-## 🥇 Top picks (best for demos)
+## Top picks (best for demos)
 
 | URL | Tech Stack | Why it's good |
 |---|---|---|
-| `http://demo.testfire.net` | Java / Apache Tomcat | ✅ **Confirmed works from your VPS.** IBM AppScan demo (Altoro Mutual bank). Clean modern-looking finding output. |
+| `http://demo.testfire.net` | Java / Apache Tomcat | **Confirmed works from your VPS.** IBM AppScan demo (Altoro Mutual bank). Clean modern-looking finding output. |
 | `http://testphp.vulnweb.com` | PHP / MySQL / Apache | Most popular pentest target. Has SQLi, XSS, command injection, LFI, RFI. (Was blocked from your VPS once — retry.) |
 | `http://lab_juiceshop:3000` | Node.js / Angular | **Internal lab** — modern OWASP Top 10. Best for showing OTP, GraphQL, IDOR findings. |
 | `http://lab_dvwa` | PHP / MySQL | **Internal lab** — most vulnerable, every classic web vuln. Default creds: `admin / password` |
@@ -22,7 +22,7 @@ A curated list of **legally scannable** vulnerable websites you can use to:
 
 ---
 
-## 🟢 Public vulnerable targets (Acunetix demo set)
+## Public vulnerable targets (Acunetix demo set)
 
 Different tech stacks — useful for showing your scanner works across languages:
 
@@ -41,7 +41,7 @@ Direct vulnerable paths:
 
 ---
 
-## 🟢 Other public vulnerable demos
+## Other public vulnerable demos
 
 | URL | What it has | Notes |
 |---|---|---|
@@ -53,7 +53,7 @@ Direct vulnerable paths:
 
 ---
 
-## 🟡 SSL / TLS test targets
+## SSL / TLS test targets
 
 For testing your SSL scanner:
 
@@ -72,7 +72,7 @@ For testing your SSL scanner:
 
 ---
 
-## 🟡 CTF-style targets (require registration / interactive)
+## CTF-style targets (require registration / interactive)
 
 | URL | What | Notes |
 |---|---|---|
@@ -83,7 +83,7 @@ For testing your SSL scanner:
 
 ---
 
-## 🟢 Your built-in lab containers (always work, no internet needed)
+## Your built-in lab containers (always work, no internet needed)
 
 These run in your Docker compose stack — guaranteed reachable:
 
@@ -99,14 +99,14 @@ These run in your Docker compose stack — guaranteed reachable:
 
 ---
 
-## ⚠️ Important legal rules
+## Important legal rules
 
-### ✅ You CAN scan:
+### You CAN scan:
 - Any URL listed in this file (all explicitly authorized)
 - Your own websites and infrastructure
 - Sites where you have **written permission** from the owner
 
-### ❌ You CANNOT scan:
+### You CANNOT scan:
 - Random websites you don't own
 - Competitors' sites
 - Banks, government sites, hospitals, schools
@@ -114,15 +114,15 @@ These run in your Docker compose stack — guaranteed reachable:
 - Any "interesting-looking" target you found
 
 **Unauthorized scanning is a criminal offense:**
-- 🇮🇳 India: IT Act 2000 Section 66 — fine + 3 years prison
-- 🇺🇸 USA: CFAA — fines + up to 10 years prison
-- 🇪🇺 EU: GDPR + national cybercrime laws
+- India: IT Act 2000 Section 66 — fine + 3 years prison
+- USA: CFAA — fines + up to 10 years prison
+- EU: GDPR + national cybercrime laws
 
 Even passive scans can be considered hostile reconnaissance.
 
 ---
 
-## 📋 Quick test script
+## Quick test script
 
 To verify all public targets are reachable from your VPS:
 
@@ -143,7 +143,7 @@ Run on VPS — anything that returns 200/301/302 is reachable. TIMEOUT or 000 me
 
 ---
 
-## 🎯 Recommended scan rotation for marketing screenshots
+## Recommended scan rotation for marketing screenshots
 
 Best targets to show variety in your reports:
 
@@ -156,7 +156,7 @@ Take one PDF from each → use as marketing assets / case studies.
 
 ---
 
-## 📝 Need more targets?
+## Need more targets?
 
 Open a feature request or just add to this file. Other places to find vulnerable hosts:
 

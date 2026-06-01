@@ -9,25 +9,25 @@
 |---|:-:|:-:|:-:|:-:|
 | **Price (USD/month)** | $0 | $49 | $249 | Custom |
 | **Scans per month** | 10 | 500 | 5,000 | Unlimited |
-| Recon module (53 scanners) | ✅ | ✅ | ✅ | ✅ |
-| Vuln module (198 scanners) | trial 7d | ✅ | ✅ | ✅ |
-| Webapp module (64 scanners) | trial 7d | ✅ | ✅ | ✅ |
-| OSINT + Mobile suite | — | ✅ | ✅ | ✅ |
-| All 26 advisory-pack modules | — | ✅ | ✅ | ✅ |
-| 144 live probes (Network/Cloud/APISec/...) | — | ✅ | ✅ | ✅ |
-| Manual Pentest Checklist (78 cards) | — | ✅ | ✅ | ✅ |
-| Combined PDF report (10 sections) | watermarked | ✅ | ✅ | ✅ |
-| Compliance mapping (OWASP/CIS/NIST/PCI) | — | ✅ | ✅ | ✅ |
-| Scan history (last 5 per module) | local only | local + cloud | ✅ | ✅ |
-| Scan diff / remediation tracking | — | ✅ | ✅ | ✅ |
-| CLI tool (CI/CD integration) | ✅ | ✅ | ✅ | ✅ |
-| `/api/manifest` integration | ✅ | ✅ | ✅ | ✅ |
+| Recon module (53 scanners) | | | | |
+| Vuln module (198 scanners) | trial 7d | | | |
+| Webapp module (64 scanners) | trial 7d | | | |
+| OSINT + Mobile suite | — | | | |
+| All 26 advisory-pack modules | — | | | |
+| 144 live probes (Network/Cloud/APISec/...) | — | | | |
+| Manual Pentest Checklist (78 cards) | — | | | |
+| Combined PDF report (10 sections) | watermarked | | | |
+| Compliance mapping (OWASP/CIS/NIST/PCI) | — | | | |
+| Scan history (last 5 per module) | local only | local + cloud | | |
+| Scan diff / remediation tracking | — | | | |
+| CLI tool (CI/CD integration) | | | | |
+| `/api/manifest` integration | | | | |
 | Multi-user seats | 1 | 1 | up to 5 | unlimited |
 | API rate limit (req/hour) | 60 | 600 | 3,000 | custom |
 | Email support | community | 48hr SLA | 12hr SLA | 1hr SLA |
-| SOC 2 report / DPA | — | — | ✅ | ✅ |
-| Air-gap / self-hosted deploy | — | — | — | ✅ |
-| Custom playbook authoring | — | — | — | ✅ |
+| SOC 2 report / DPA | — | — | | |
+| Air-gap / self-hosted deploy | — | — | — | |
+| Custom playbook authoring | — | — | — | |
 
 ## Pricing rationale (for sales conversations)
 

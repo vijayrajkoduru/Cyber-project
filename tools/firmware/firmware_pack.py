@@ -47,15 +47,15 @@ T = [
     ("uart_probe_advisory", "UART probe advisory.", "MEDIUM", "5.5"),
     ("jtag_probe_advisory", "JTAG probe advisory.", "MEDIUM", "5.5"),
     ("swd_probe_advisory", "SWD probe advisory.", "MEDIUM", "5.5"),
-    # §7 Side-channel / Fault Injection (2) ⭐
-    ("chipwhisperer_advisory", "⭐ ChipWhisperer side-channel advisory.", "MEDIUM", "5.5"),
-    ("emfi_voltage_glitching", "⭐ Voltage glitching advisory.", "MEDIUM", "5.5"),
-    # §8 Modern Firmware Surfaces (6) ⭐
-    ("uefi_audit", "⭐ UEFI audit.", "HIGH", "7.5"),
-    ("uefi_bootkit_check", "⭐ UEFI bootkit check.", "CRITICAL", "9.0"),
-    ("bmc_ipmi_audit", "⭐ BMC/IPMI audit.", "HIGH", "8.0"),
-    ("tpm_audit", "⭐ TPM 2.0 audit.", "MEDIUM", "5.5"),
-    ("secure_enclave_audit", "⭐ Secure enclave audit.", "MEDIUM", "5.5"),
+    # §7 Side-channel / Fault Injection (2)
+    ("chipwhisperer_advisory", "ChipWhisperer side-channel advisory.", "MEDIUM", "5.5"),
+    ("emfi_voltage_glitching", "Voltage glitching advisory.", "MEDIUM", "5.5"),
+    # §8 Modern Firmware Surfaces (6)
+    ("uefi_audit", "UEFI audit.", "HIGH", "7.5"),
+    ("uefi_bootkit_check", "UEFI bootkit check.", "CRITICAL", "9.0"),
+    ("bmc_ipmi_audit", "BMC/IPMI audit.", "HIGH", "8.0"),
+    ("tpm_audit", "TPM 2.0 audit.", "MEDIUM", "5.5"),
+    ("secure_enclave_audit", "Secure enclave audit.", "MEDIUM", "5.5"),
     ("manual_modern_firmware_review", "Manual modern firmware review.", "INFO", "0.0"),
 ]
 

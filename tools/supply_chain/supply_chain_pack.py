@@ -137,7 +137,7 @@ def _probe_dotenv_leak(target, req):
     findings = []
     if leaked:
         findings.append(wrap_finding(
-            f"🚨 SECRETS LEAK: {len(leaked)} environment/config files exposed",
+            f"SECRETS LEAK: {len(leaked)} environment/config files exposed",
             "CRITICAL", cvss="9.5", cwe="CWE-200",
             remediation="REMOVE .env from webroot IMMEDIATELY. Rotate exposed credentials.",
             evidence_marker=", ".join(f"{l['path']} contains key/secret/token/password" for l in leaked)))
@@ -216,18 +216,18 @@ T = [
     ("manual_cicd_review", "Manual CI/CD review.", "INFO", "0.0"),
     ("manual_cicd_chain", "Manual CI/CD chain.", "INFO", "0.0"),
     # §5 Code Signing / Provenance SLSA (13)
-    ("slsa_l1_provenance", "⭐ SLSA L1 provenance.", "MEDIUM", "5.5"),
-    ("slsa_l2_provenance", "⭐ SLSA L2 provenance.", "MEDIUM", "5.5"),
-    ("slsa_l3_provenance", "⭐ SLSA L3 provenance.", "HIGH", "7.0"),
-    ("slsa_l4_provenance", "⭐ SLSA L4 provenance.", "HIGH", "7.0"),
-    ("cosign_sign_verify", "⭐ Cosign sign+verify.", "MEDIUM", "5.5"),
-    ("sigstore_fulcio_rekor", "⭐ Sigstore Fulcio+Rekor.", "MEDIUM", "5.5"),
-    ("in_toto_attestation", "⭐ in-toto attestation.", "MEDIUM", "5.5"),
-    ("github_attestations_audit", "⭐ GitHub attestations audit.", "MEDIUM", "5.5"),
-    ("npm_provenance_audit", "⭐ npm provenance audit.", "MEDIUM", "5.5"),
-    ("sssa_compliance_audit", "⭐ SSSA compliance audit.", "MEDIUM", "5.5"),
-    ("salsa_verify_pipeline", "⭐ SALSA verify pipeline.", "MEDIUM", "5.5"),
-    ("provenance_full_chain_audit", "⭐ Full chain provenance audit.", "MEDIUM", "5.5"),
+    ("slsa_l1_provenance", "SLSA L1 provenance.", "MEDIUM", "5.5"),
+    ("slsa_l2_provenance", "SLSA L2 provenance.", "MEDIUM", "5.5"),
+    ("slsa_l3_provenance", "SLSA L3 provenance.", "HIGH", "7.0"),
+    ("slsa_l4_provenance", "SLSA L4 provenance.", "HIGH", "7.0"),
+    ("cosign_sign_verify", "Cosign sign+verify.", "MEDIUM", "5.5"),
+    ("sigstore_fulcio_rekor", "Sigstore Fulcio+Rekor.", "MEDIUM", "5.5"),
+    ("in_toto_attestation", "in-toto attestation.", "MEDIUM", "5.5"),
+    ("github_attestations_audit", "GitHub attestations audit.", "MEDIUM", "5.5"),
+    ("npm_provenance_audit", "npm provenance audit.", "MEDIUM", "5.5"),
+    ("sssa_compliance_audit", "SSSA compliance audit.", "MEDIUM", "5.5"),
+    ("salsa_verify_pipeline", "SALSA verify pipeline.", "MEDIUM", "5.5"),
+    ("provenance_full_chain_audit", "Full chain provenance audit.", "MEDIUM", "5.5"),
     ("manual_signing_review", "Manual signing review.", "INFO", "0.0"),
     # §6 Package Registry (11)
     ("registry_npm_2fa_audit", "npm 2FA audit.", "MEDIUM", "5.5"),
