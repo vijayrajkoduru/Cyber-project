@@ -61,6 +61,18 @@ from tools.container_k8s._escape_cve_probes import (
     _probe_escape_leaky_vessels_runc,
     _probe_escape_containerd_2022_23648,
 )
+from tools.container_k8s._kubeconfig_extra_probes import (
+    _probe_secrets_etcd_unencrypted,
+    _probe_vault_csi_audit,
+    _probe_sealed_secrets_audit,
+    _probe_external_secrets_audit,
+    _probe_k8s_tls_min_version,
+    _probe_k8s_cni_plugin_audit,
+    _probe_rbac_pod_serviceaccount_token,
+    _probe_rbac_clusterrolebinding_audit,
+    _probe_rbac_aggregate_role_audit,
+    _probe_envoy_filter_audit,
+)
 
 
 # Advisory-by-design wrappers - these techniques cannot be SaaS-probed.
@@ -1738,6 +1750,17 @@ PROBES = {
     # Container escape CVE detectors (kubeconfig - node runtime version)
     "escape_leaky_vessels_runc_2024": _probe_escape_leaky_vessels_runc,
     "escape_containerd_cve_2022_23648": _probe_escape_containerd_2022_23648,
+    # Extra K8s cluster probes (kubeconfig)
+    "secrets_etcd_unencrypted":       _probe_secrets_etcd_unencrypted,
+    "vault_csi_audit":                _probe_vault_csi_audit,
+    "sealed_secrets_audit":           _probe_sealed_secrets_audit,
+    "external_secrets_audit":         _probe_external_secrets_audit,
+    "k8s_tls_min_version":            _probe_k8s_tls_min_version,
+    "k8s_cni_plugin_audit":           _probe_k8s_cni_plugin_audit,
+    "rbac_pod_serviceaccount_token":  _probe_rbac_pod_serviceaccount_token,
+    "rbac_clusterrolebinding_audit":  _probe_rbac_clusterrolebinding_audit,
+    "rbac_aggregate_role_audit":      _probe_rbac_aggregate_role_audit,
+    "envoy_filter_audit":             _probe_envoy_filter_audit,
     # Advisory-by-design (cannot be SaaS-probed - intentionally informational)
     "falco_runtime_audit":            _abd_falco,
     "tetragon_runtime_audit":         _abd_tetragon,
