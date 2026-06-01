@@ -213,10 +213,20 @@ RUN ( wget --tries=3 --waitretry=10 --timeout=120 -q \
  || echo "WARNING: Cosign install failed (non-fatal)"
 
 # ── Webapp / DAST — sqlmap, nikto, sslyze ───────────────────────────────
+# nikto is NOT in Debian Bookworm main (lives in contrib). Install from
+# the official Sullo repo as a Perl script + symlink to /usr/local/bin
+# so the tools/webapp/nikto.py wrapper's `nikto` invocation works.
 RUN apt-get update -q -o Acquire::Retries=3 \
  && apt-get install -y -q --no-install-recommends \
-        sqlmap nikto \
+        sqlmap \
+        perl libnet-ssleay-perl libio-socket-ssl-perl libwww-perl \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN ( git clone --depth 1 https://github.com/sullo/nikto.git /opt/nikto \
+   && ln -sf /opt/nikto/program/nikto.pl /usr/local/bin/nikto \
+   && chmod +x /opt/nikto/program/nikto.pl \
+   && nikto -Version 2>&1 | head -3 ) \
+ || echo "WARNING: nikto install failed (non-fatal)"
 
 RUN pip install --no-cache-dir sslyze
 
