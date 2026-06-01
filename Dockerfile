@@ -166,7 +166,7 @@ RUN pip install --no-cache-dir holehe phoneinfoga sherlock-project
 # Diagnostic Trivy install — no silent fallback, prints every step so any
 # failure surfaces in the build log. If this fails, the whole build fails
 # and we see the actual reason.
-ARG TRIVY_VERSION=0.59.1
+ARG TRIVY_VERSION=0.70.0
 RUN set -ex \
  && echo "Trivy install: attempting v${TRIVY_VERSION}" \
  && cd /tmp \
