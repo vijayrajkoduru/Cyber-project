@@ -2386,12 +2386,18 @@ function generatePDF(reportData) {
       doc.setPage(i);
       // Diagonal watermark (drawn FIRST so border + text sit on top)
       if(_wm){
+        // jsPDF clips the leftmost glyphs when `align:"center"` is combined
+        // with `angle:` (rotation pivots about the un-aligned text origin).
+        // Pre-compute centered x via getStringUnitWidth so the full string
+        // renders ("INTERNAL USE ONLY" not "TERNAL USE ONLY").
+        const _wmStr = String(_wm);
         doc.saveGraphicsState();
         try {
           doc.setGState(new doc.GState({opacity: 0.10}));
         } catch(_){}
         doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
-        doc.text(_wm, 105, 150, {align:"center", angle:30});
+        const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
+        doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
         doc.restoreGraphicsState();
       }
       // Blue border on every page
@@ -9586,7 +9592,15 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         const sc = sev==="CRITICAL"?[162,28,28]:sev==="HIGH"?[194,65,12]:sev==="MEDIUM"?[202,138,4]:[55,65,81];
         const nm = String(f.name||f.detail||f.title||"Finding");
         const _cm={CRITICAL:9.8,HIGH:7.5,MEDIUM:5.3,LOW:3.1}; const _cn=Number(f.cvss)||0; const cv=(_cn>0?_cn:(_cm[sev]||0)).toFixed(1);
-        const cw = (String(f.cwe||"").trim() || String(f.references||"").split(",")[0].trim() || "-");
+        // Bug 4 fix: dedupe CWE/MITRE tokens so duplicated ids from the
+        // backend ("T1590.005 T1590.005") collapse to a single token.
+        const _cwRaw = String(f.cwe||"").trim() || String(f.references||"").split(",")[0].trim() || String(f.mitre_id||"").trim();
+        const _cwSeen = new Set(); const _cwToks = [];
+        String(_cwRaw).split(/[\s,;|]+/).forEach(t => {
+          const k = t.trim(); if (!k || _cwSeen.has(k)) return;
+          _cwSeen.add(k); _cwToks.push(k);
+        });
+        const cw = _cwToks.length ? _cwToks.join(" ") : "-";
         chk(7); fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
         txt(nm.length>78?nm.substring(0,78)+"...":nm, margin+3, y+4.6, 7.5, DARK);
         rrect(margin+109, y+1.4, 23, 4.8, 1, sc); txt(sev, margin+120.5, y+4.7, 6.5, WHITE, true, "center");
@@ -10912,10 +10926,34 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       .filter(k => typeof k === "string" && !k.startsWith("_") && !_R_bespokeSkip.has(k) && _R_hasMean(r[k]))
       .sort();
     if (_R_extra.length > 0) {
+      // Bug 5 fix: previously rendered a full panel per scanner including
+      // ~60 "POSITIVE - no X found" panels, bloating the PDF 8 -> 17
+      // pages with low-signal content. Split into:
+      //   actionableTools  -> at least one non-POSITIVE finding OR intel
+      //   positiveOnlyTools -> every finding is POSITIVE (no exposure)
+      // When 5+ POSITIVE-only panels exist, render a single summary line
+      // at the top and skip those inline panels. Tools that returned only
+      // intel (no findings) still render — they're informational.
+      const _R_isPosOnly = d => {
+        const fs = Array.isArray(d.findings) ? d.findings : [];
+        if (fs.length === 0) return false;
+        return fs.every(f => String(f.severity||"INFO").toUpperCase() === "POSITIVE");
+      };
+      const _R_positiveOnly = _R_extra.filter(k => _R_isPosOnly(r[k]));
+      const _R_collapsePos = _R_positiveOnly.length >= 5;
+      const _R_renderTools = _R_collapsePos
+        ? _R_extra.filter(k => !_R_positiveOnly.includes(k))
+        : _R_extra;
       chk(20); y = sHead("Per-Scanner Intelligence", y);
-      txt(`${_R_extra.length} additional scanner(s) returned findings or intel.`,
+      txt(`${_R_renderTools.length} scanner(s) detailed below.`,
           margin, y, 7.5, GRAY); y += 5;
-      _R_extra.forEach(toolKey => {
+      if (_R_collapsePos) {
+        chk(7); fillR(margin, y, contentW, 6, [240,253,244]); fillR(margin, y, 3, 6, [15,118,82]);
+        txt(`${_R_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Listed in §Tools & Scanners Used.`,
+            margin + 6, y + 4.2, 7.5, [15,118,82], true);
+        y += 9;
+      }
+      _R_renderTools.forEach(toolKey => {
         const d = r[toolKey];
         const _fs = Array.isArray(d.findings) ? d.findings : [];
         const toolName = toolKey.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -10926,17 +10964,31 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           : toolName + "  -  intel only";
         txt(_hdr, margin + 4, y + 5, 9, WHITE, true);
         y += 9;
+        // Bug 4 fix: dedupe MITRE/CWE codes per row so "T1590.005 T1590.005"
+        // collapses to a single token if backend emits the same id in
+        // multiple fields.
+        const _R_dedupCodes = s => {
+          const seen = new Set(); const out = [];
+          String(s||"").split(/[\s,;|]+/).forEach(t => {
+            const k = t.trim(); if (!k) return;
+            if (seen.has(k)) return; seen.add(k); out.push(k);
+          });
+          return out.join(" ");
+        };
         _fs.slice(0, 8).forEach((f, i) => {
           chk(10);
           const sev = String(f.severity || "INFO").toUpperCase();
           const sc = _R_SEVCOL[sev] || _R_SEVCOL.INFO;
           fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
-          rrect(margin + 2, y + 1.8, 16, 4.5, 1, sc);
-          txt(sev.substring(0,4), margin + 3, y + 5, 6.5, WHITE, true);
-          const det = String(f.detail || f.name || f.title || "").substring(0, 110);
-          txt(det, margin + 21, y + 4.5, 7.5, DARK);
+          // Bug 2 fix: badge widened 16 -> 22 mm so full severity word
+          // ("POSITIVE","MEDIUM","CRITICAL") fits instead of clipping to
+          // "POSI"/"MEDI". Render full severity, no substring(0,4).
+          rrect(margin + 2, y + 1.8, 22, 4.5, 1, sc);
+          txt(sev, margin + 13, y + 5, 6.5, WHITE, true, "center");
+          const det = _R_dedupCodes(String(f.detail || f.name || f.title || "")).substring(0, 110);
+          txt(det, margin + 27, y + 4.5, 7.5, DARK);
           if (f.evidence_marker) {
-            txt("Evidence: " + String(f.evidence_marker).substring(0, 90), margin + 21, y + 7.2, 6.5, GRAY);
+            txt("Evidence: " + String(f.evidence_marker).substring(0, 90), margin + 27, y + 7.2, 6.5, GRAY);
           }
           y += 8;
         });
@@ -10951,10 +11003,27 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           let _lines = [];
           if (typeof _sum === "string" && _sum.trim()) _lines.push(_sum.substring(0, 220));
           else if (_sum && typeof _sum === "object") {
-            Object.keys(_sum).slice(0, 6).forEach(k => _lines.push(k + ": " + String(_sum[k]).substring(0, 80)));
+            Object.keys(_sum).slice(0, 6).forEach(k => {
+              // Bug 3 fix: nested objects were being stringified as
+              // "[object Object]" — JSON.stringify keeps the key:value
+              // structure so analysts see the actual pairs.
+              const _vRaw = _sum[k];
+              const _v = (_vRaw && typeof _vRaw === "object")
+                ? JSON.stringify(_vRaw).substring(0, 80)
+                : String(_vRaw).substring(0, 80);
+              _lines.push(k + ": " + _v);
+            });
           }
           if (_lines.length === 0 && _intel && typeof _intel === "object") {
-            Object.keys(_intel).slice(0, 6).forEach(k => _lines.push(k + ": " + String(_intel[k]).substring(0, 80)));
+            Object.keys(_intel).slice(0, 6).forEach(k => {
+              // Bug 3 fix (intel branch): same nested-object handling so
+              // "Pairs: [object Object]" becomes "Pairs: {"ip1":"host1"...}".
+              const _vRaw = _intel[k];
+              const _v = (_vRaw && typeof _vRaw === "object")
+                ? JSON.stringify(_vRaw).substring(0, 80)
+                : String(_vRaw).substring(0, 80);
+              _lines.push(k + ": " + _v);
+            });
           }
           _lines.slice(0, 6).forEach((ln, i) => {
             chk(5); fillR(margin, y, contentW, 4.5, i%2===0 ? LIGHT : WHITE);
@@ -11263,10 +11332,17 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   for(let i=1;i<=total;i++){
     doc.setPage(i);
     if(_wm){
+      // Bug 1 fix: jsPDF can clip the leading chars when align:"center" is
+      // combined with `angle:` (rotation pivots about the un-aligned text
+      // origin, so the leftmost letters end up off-page). Coerce to String
+      // and pre-compute centered x via getStringUnitWidth so the FULL
+      // "INTERNAL USE ONLY" renders instead of "TERNAL USE ONLY".
+      const _wmStr = String(_wm);
       doc.saveGraphicsState();
       try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
       doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
-      doc.text(_wm, 105, 150, {align:"center", angle:30});
+      const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
+      doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
       doc.restoreGraphicsState();
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
@@ -13310,7 +13386,16 @@ function generateUniversalVLReport(opts) {
         const _cm = {CRITICAL:9.8,HIGH:7.5,MEDIUM:5.3,LOW:3.1};
         const _cn = Number(f.cvss) || 0;
         const cv = (_cn > 0 ? _cn : (_cm[sev]||0)).toFixed(1);
-        const cw = (String(f.cwe||"").trim() || "-");
+        // Bug 4 fix: dedupe codes in the CWE column so backend payloads
+        // that emit the same MITRE/CWE id twice (e.g. "T1590.005
+        // T1590.005") render as a single token.
+        const _cwRaw = String(f.cwe||"").trim() || String(f.mitre_id||"").trim();
+        const _cwSeen = new Set(); const _cwToks = [];
+        String(_cwRaw).split(/[\s,;|]+/).forEach(t => {
+          const k = t.trim(); if (!k || _cwSeen.has(k)) return;
+          _cwSeen.add(k); _cwToks.push(k);
+        });
+        const cw = _cwToks.length ? _cwToks.join(" ") : "-";
         chk(7); fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
         txt(nm.length > 78 ? nm.substring(0,78) + "..." : nm, margin + 3, y + 4.6, 7.5, DARK);
         rrect(margin + 109, y + 1.4, 23, 4.8, 1, sc);
@@ -13337,8 +13422,37 @@ function generateUniversalVLReport(opts) {
   };
   const _toolsForPanels = Object.keys(r).filter(k => _hasMeaningful(r[k]));
   if (_toolsForPanels.length > 0) {
+    // Bug 5 fix: collapse POSITIVE-only scanners into a single summary
+    // line instead of one full panel each (those are "no exposure
+    // detected" panels, low-signal noise). Only render full panels for
+    // scanners with at least one non-POSITIVE finding OR with intel data.
+    const _isPosOnly = d => {
+      const fs = Array.isArray(d.findings) ? d.findings : [];
+      if (fs.length === 0) return false;
+      return fs.every(f => String(f.severity||"INFO").toUpperCase() === "POSITIVE");
+    };
+    const _positiveOnly = _toolsForPanels.filter(k => _isPosOnly(r[k]));
+    const _collapsePos = _positiveOnly.length >= 5;
+    const _renderTools = _collapsePos
+      ? _toolsForPanels.filter(k => !_positiveOnly.includes(k))
+      : _toolsForPanels;
     chk(20); y = sHead("Per-Tool Intelligence", y);
-    _toolsForPanels.forEach(toolKey => {
+    if (_collapsePos) {
+      chk(7); fillR(margin, y, contentW, 6, [240,253,244]); fillR(margin, y, 3, 6, [15,118,82]);
+      txt(`${_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Listed in §Tools & Scanners Used.`,
+          margin + 6, y + 4.2, 7.5, [15,118,82], true);
+      y += 9;
+    }
+    // Bug 4 fix: dedupe MITRE/CWE codes per row before rendering.
+    const _dedupCodes = s => {
+      const seen = new Set(); const out = [];
+      String(s||"").split(/[\s,;|]+/).forEach(t => {
+        const k = t.trim(); if (!k || seen.has(k)) return;
+        seen.add(k); out.push(k);
+      });
+      return out.join(" ");
+    };
+    _renderTools.forEach(toolKey => {
       const d = r[toolKey];
       const _fs = Array.isArray(d.findings) ? d.findings : [];
       const toolName = toolKey.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -13355,12 +13469,15 @@ function generateUniversalVLReport(opts) {
         const sev = String(f.severity||"INFO").toUpperCase();
         const sc = SEVCOL[sev] || SEVCOL.INFO;
         fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
-        rrect(margin + 2, y + 1.8, 16, 4.5, 1, sc);
-        txt(sev.substring(0,4), margin + 3, y + 5, 6.5, WHITE, true);
-        const det = String(f.detail||f.name||f.title||"").substring(0,110);
-        txt(det, margin + 21, y + 4.5, 7.5, DARK);
+        // Bug 2 fix: badge widened 16 -> 22 mm so the full severity word
+        // ("POSITIVE","MEDIUM","CRITICAL") renders instead of clipping to
+        // "POSI"/"MEDI". Center the label inside the wider badge.
+        rrect(margin + 2, y + 1.8, 22, 4.5, 1, sc);
+        txt(sev, margin + 13, y + 5, 6.5, WHITE, true, "center");
+        const det = _dedupCodes(String(f.detail||f.name||f.title||"")).substring(0,110);
+        txt(det, margin + 27, y + 4.5, 7.5, DARK);
         if (f.evidence_marker) {
-          txt("Evidence: " + String(f.evidence_marker).substring(0,90), margin + 21, y + 7.2, 6.5, GRAY);
+          txt("Evidence: " + String(f.evidence_marker).substring(0,90), margin + 27, y + 7.2, 6.5, GRAY);
         }
         y += 8;
       });
@@ -13376,10 +13493,27 @@ function generateUniversalVLReport(opts) {
         let _lines = [];
         if (typeof _sum === "string" && _sum.trim()) _lines.push(_sum.substring(0, 220));
         else if (_sum && typeof _sum === "object") {
-          Object.keys(_sum).slice(0, 6).forEach(k => _lines.push(k + ": " + String(_sum[k]).substring(0, 80)));
+          Object.keys(_sum).slice(0, 6).forEach(k => {
+            // Bug 3 fix: nested objects were rendered as
+            // "[object Object]" — JSON.stringify keeps the key:value
+            // structure so analysts see the actual pairs.
+            const _vRaw = _sum[k];
+            const _v = (_vRaw && typeof _vRaw === "object")
+              ? JSON.stringify(_vRaw).substring(0, 80)
+              : String(_vRaw).substring(0, 80);
+            _lines.push(k + ": " + _v);
+          });
         }
         if (_lines.length === 0 && _intel && typeof _intel === "object") {
-          Object.keys(_intel).slice(0, 6).forEach(k => _lines.push(k + ": " + String(_intel[k]).substring(0, 80)));
+          Object.keys(_intel).slice(0, 6).forEach(k => {
+            // Bug 3 fix (intel branch): same nested-object handling so
+            // "Pairs: [object Object]" becomes "Pairs: {"ip1":"host1"...}".
+            const _vRaw = _intel[k];
+            const _v = (_vRaw && typeof _vRaw === "object")
+              ? JSON.stringify(_vRaw).substring(0, 80)
+              : String(_vRaw).substring(0, 80);
+            _lines.push(k + ": " + _v);
+          });
         }
         _lines.slice(0, 6).forEach((ln, i) => {
           chk(5); fillR(margin, y, contentW, 4.5, i%2===0 ? LIGHT : WHITE);
@@ -13618,10 +13752,25 @@ function generateUniversalVLReport(opts) {
   txt(`Generated by VulnusLab - ${moduleLabel} module.`, pageW/2, y + 18, 6.5, GRAY, false, "center");
   txt("vulnuslab.com - support@vulnuslab.com", pageW/2, y + 27, 7, BLUE, true, "center");
 
-  // ── BORDER + FOOTER ON EVERY PAGE ──
+  // ── BORDER + WATERMARK + FOOTER ON EVERY PAGE ──
+  // Bug 1 parity fix: previously this generator skipped the diagonal
+  // watermark entirely, so PDFConfigModal's watermark selection was
+  // silently ignored for every non-Recon module. Mirror Recon's chrome
+  // and use a width-measured x so the full string (not "TERNAL USE
+  // ONLY") renders even when rotated.
+  const _wmU = pdfConfig.watermark;
   const total = doc.internal.getNumberOfPages();
   for (let i = 1; i <= total; i++) {
     doc.setPage(i);
+    if (_wmU) {
+      const _wmStrU = String(_wmU);
+      doc.saveGraphicsState();
+      try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
+      doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
+      const _wmWU = doc.getStringUnitWidth(_wmStrU) * 72 / doc.internal.scaleFactor;
+      doc.text(_wmStrU, pageW/2 - _wmWU/2, pageH/2, {angle:30});
+      doc.restoreGraphicsState();
+    }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0, 0, pageW, pageH, "S");
     if (i >= 2) {
       const ftrL = `VulnusLab | CONFIDENTIAL - ${String(target||"target").substring(0,40)}`;
@@ -15009,10 +15158,12 @@ function generateExploitReport({results, date, pdfConfig}) {
     for(let i=1;i<=total;i++){
       doc.setPage(i);
       if(_wmE){
+        const _wmStr = String(_wmE);
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
         doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
-        doc.text(_wmE, pageW/2, pageH/2, {align:"center", angle:30});
+        const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
+        doc.text(_wmStr, pageW/2 - _wmW/2, pageH/2, {angle:30});
         doc.restoreGraphicsState();
       }
       doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,pageW,pageH,"S");
@@ -15947,10 +16098,12 @@ function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, off
     for(let i=1;i<=total;i++){
       doc.setPage(i);
       if(_wmB){
+        const _wmStr = String(_wmB);
         doc.saveGraphicsState();
         try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
         doc.setFont("Arial","bold"); doc.setFontSize(72); doc.setTextColor(220,38,38);
-        doc.text(_wmB, 105, 150, {align:"center", angle:30});
+        const _wmW = doc.getStringUnitWidth(_wmStr) * 72 / doc.internal.scaleFactor;
+        doc.text(_wmStr, 105 - _wmW/2, 150, {angle:30});
         doc.restoreGraphicsState();
       }
       doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
