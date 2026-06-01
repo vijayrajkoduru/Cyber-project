@@ -15,6 +15,19 @@ from contextlib import closing
 from datetime import datetime, timezone
 from tools._pack_common import make_advisory_router, _adv_response
 from tools._shared import wrap_finding
+from tools.container_k8s._dockerfile_probes import (
+    _probe_dockerfile_root_user,
+    _probe_dockerfile_no_user,
+    _probe_dockerfile_ssh_in_image,
+    _probe_dockerfile_curl_pipe_bash,
+    _probe_dockerfile_hardcoded_secret,
+    _probe_dockerfile_apt_unpinned,
+    _probe_dockerfile_no_healthcheck,
+    _probe_dockerfile_multistage_audit,
+    _probe_dockerfile_copy_chown_audit,
+    _probe_dockerfile_expose_audit,
+    _probe_hadolint_dockerfile,
+)
 
 
 # Recognise an image reference vs a hostname/IP/URL.
@@ -1587,6 +1600,18 @@ PROBES = {
     "service_mesh_authz_open":        _probe_ingress_authz_open,
     "image_distroless_base":          _probe_image_distroless,
     "kube_hunter":                    _probe_kube_hunter,
+    # Dockerfile static-analysis probes (require dockerfile_text input)
+    "dockerfile_root_user":           _probe_dockerfile_root_user,
+    "dockerfile_no_user":             _probe_dockerfile_no_user,
+    "dockerfile_ssh_in_image":        _probe_dockerfile_ssh_in_image,
+    "dockerfile_curl_pipe_bash":      _probe_dockerfile_curl_pipe_bash,
+    "dockerfile_hardcoded_secret":    _probe_dockerfile_hardcoded_secret,
+    "dockerfile_apt_unpinned":        _probe_dockerfile_apt_unpinned,
+    "dockerfile_no_healthcheck":      _probe_dockerfile_no_healthcheck,
+    "dockerfile_multistage_audit":    _probe_dockerfile_multistage_audit,
+    "dockerfile_copy_chown_audit":    _probe_dockerfile_copy_chown_audit,
+    "dockerfile_expose_audit":        _probe_dockerfile_expose_audit,
+    "hadolint_dockerfile":            _probe_hadolint_dockerfile,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
