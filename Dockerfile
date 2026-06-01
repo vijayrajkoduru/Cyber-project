@@ -163,11 +163,24 @@ RUN pip install --no-cache-dir holehe phoneinfoga sherlock-project
 # ═══════════════════════════════════════════════════════════════════════
 
 # ── Container/K8s tools — Trivy, Grype, Syft, Hadolint, Cosign ─────────
-ARG TRIVY_VERSION=v0.59.1
-RUN ( curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-        | sh -s -- -b /usr/local/bin "${TRIVY_VERSION}" \
-   && /usr/local/bin/trivy --version 2>&1 | head -3 ) \
- || echo "WARNING: Trivy install failed (non-fatal)"
+# Diagnostic Trivy install — no silent fallback, prints every step so any
+# failure surfaces in the build log. If this fails, the whole build fails
+# and we see the actual reason.
+ARG TRIVY_VERSION=0.59.1
+RUN set -ex \
+ && echo "Trivy install: attempting v${TRIVY_VERSION}" \
+ && cd /tmp \
+ && curl -fL --retry 3 --retry-delay 5 -o trivy.tgz \
+        "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+ && ls -lh trivy.tgz \
+ && file trivy.tgz \
+ && tar -tzf trivy.tgz | head -10 \
+ && tar -xzf trivy.tgz -C /tmp/ \
+ && ls -lh /tmp/trivy \
+ && mv /tmp/trivy /usr/local/bin/trivy \
+ && chmod +x /usr/local/bin/trivy \
+ && rm -f trivy.tgz \
+ && /usr/local/bin/trivy --version
 
 ARG GRYPE_VERSION=0.79.6
 RUN ( cd /tmp \
