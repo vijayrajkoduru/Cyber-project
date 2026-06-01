@@ -577,6 +577,165 @@ def _probe_istio_gateway_mtls(target, req):
                        "Istio gateway / ingress mTLS posture probe")
 
 
+def _probe_consul_audit(target, req):
+    """Detect HashiCorp Consul + check for unauth HTTP API exposure.
+    Consul default ports: 8500 (HTTP API), 8501 (HTTPS API), 8600 (DNS).
+    Anonymous /v1/agent/self leaks node info; /v1/agent/services leaks
+    every registered service. Either is a serious data-leak vector."""
+    host = _host(target)
+    findings = []
+    exposed = []
+    detected = False
+
+    for port, scheme in ((8500, "http"), (8501, "https")):
+        if not _tcp_open(host, port):
+            continue
+        for path in ("/v1/agent/self", "/v1/agent/services",
+                      "/v1/status/leader", "/v1/catalog/nodes"):
+            url = f"{scheme}://{host}:{port}{path}"
+            c, _, b = _http_get_insecure(url, timeout=3)
+            if c == 200 and ("Config" in b or "Consul" in b or
+                              "Datacenter" in b or '"Address"' in b):
+                detected = True
+                exposed.append(url)
+                break
+        if detected:
+            break
+
+    if exposed:
+        # /v1/agent/self leaks the most -> CRITICAL; others HIGH
+        sev = "CRITICAL" if "/agent/self" in exposed[0] else "HIGH"
+        cvss = "9.0" if sev == "CRITICAL" else "7.5"
+        findings.append(wrap_finding(
+            f"Consul HTTP API EXPOSED at {exposed[0]} (no auth required)",
+            sev, cvss=cvss, cwe="CWE-306",
+            remediation="Enable Consul ACLs (acl.enabled=true + acl.default_policy=deny). "
+                        "Bind HTTP API to localhost only OR require gossip-encryption + "
+                        "TLS client certs for external access.",
+            evidence_marker=f"Anonymous GET {exposed[0]} -> 200 (Consul fingerprint matched)"))
+    elif detected:
+        findings.append(wrap_finding(
+            "Consul detected on standard ports but API requires auth (good)",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue ACL + TLS-required posture.",
+            evidence_marker="Consul fingerprint, /v1/* requires auth"))
+    else:
+        findings.append(wrap_finding(
+            "No Consul HTTP API exposed on standard ports",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue private Consul access.",
+            evidence_marker="TCP/8500 + 8501 closed/non-Consul"))
+    return _build_resp("consul_audit", target, findings, 8,
+                       "Consul HTTP API exposure probe")
+
+
+def _probe_istio_audit(target, req):
+    """Detect Istio control plane (istiod / pilot) ports leaked externally.
+    Default: 15010 (XDS gRPC), 15012 (XDS mTLS), 15014 (monitoring),
+    15017 (webhook). Externally-reachable istiod = cluster topology leak."""
+    host = _host(target)
+    findings = []
+    exposed_ports = []
+    metrics_leak = None
+
+    # TCP probe for control-plane ports
+    for port, label in [
+        (15010, "XDS plaintext"),
+        (15012, "XDS mTLS"),
+        (15014, "monitoring"),
+        (15017, "webhook"),
+    ]:
+        if _tcp_open(host, port):
+            exposed_ports.append((port, label))
+
+    # HTTP probe :15014/metrics (Prometheus, leaks every cluster node + workload)
+    if any(p == 15014 for p, _ in exposed_ports):
+        c, _, b = _http_get_insecure(f"http://{host}:15014/metrics", timeout=3)
+        if c == 200 and ("pilot_" in b or "istiod_" in b or "citadel_" in b):
+            metrics_leak = f"http://{host}:15014/metrics ({len(b)} bytes)"
+
+    if metrics_leak:
+        findings.append(wrap_finding(
+            f"Istio istiod /metrics EXPOSED on :15014 (leaks cluster topology)",
+            "HIGH", cvss="7.5", cwe="CWE-200",
+            remediation="Bind istiod monitoring (port 15014) to in-cluster only. "
+                        "Restrict via NetworkPolicy or ServiceMesh interface.",
+            evidence_marker=metrics_leak))
+
+    if exposed_ports:
+        labels = ", ".join(f"{p}/{lbl}" for p, lbl in exposed_ports)
+        findings.append(wrap_finding(
+            f"Istio control-plane port(s) reachable externally: {labels}",
+            "HIGH" if any(p in (15010, 15017) for p, _ in exposed_ports) else "MEDIUM",
+            cvss="7.5" if any(p in (15010, 15017) for p, _ in exposed_ports) else "5.5",
+            cwe="CWE-306",
+            remediation="Istiod control-plane ports must be in-cluster only. "
+                        "Block 15010 (plaintext XDS) and 15017 (webhook) at the edge.",
+            evidence_marker=f"TCP open: {labels}"))
+
+    if not findings:
+        findings.append(wrap_finding(
+            "Istio control plane not externally reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue in-cluster-only istiod binding.",
+            evidence_marker="TCP/15010 + 15012 + 15014 + 15017 closed/filtered"))
+    return _build_resp("istio_audit", target, findings, 4,
+                       "Istio control plane (istiod) external exposure")
+
+
+def _probe_linkerd_audit(target, req):
+    """Detect Linkerd control plane exposure.
+    Default: 4191 (proxy admin), 4143 (proxy inbound), 8086 (linkerd-viz tap),
+    8085 (linkerd-viz metrics-api). Externally-reachable Viz API allows
+    cluster-wide traffic inspection."""
+    host = _host(target)
+    findings = []
+    exposed_ports = []
+
+    for port, label in [
+        (4191, "linkerd-proxy admin"),
+        (8086, "linkerd-viz tap-api"),
+        (8085, "linkerd-viz metrics-api"),
+        (9990, "linkerd-viz prometheus"),
+    ]:
+        if _tcp_open(host, port):
+            exposed_ports.append((port, label))
+
+    # HTTP probe /metrics on the tap/metrics API for confirmation
+    tap_confirmed = False
+    if any(p in (8086, 8085) for p, _ in exposed_ports):
+        for port in (8086, 8085):
+            c, _, b = _http_get_insecure(f"http://{host}:{port}/metrics", timeout=3)
+            if c == 200 and ("linkerd" in b.lower() or "tap" in b.lower()):
+                tap_confirmed = True
+                break
+
+    if tap_confirmed:
+        findings.append(wrap_finding(
+            "Linkerd-viz API EXPOSED externally (cluster-wide traffic inspection)",
+            "HIGH", cvss="7.5", cwe="CWE-306",
+            remediation="Linkerd-viz components must NEVER be exposed externally. "
+                        "Use 'linkerd viz dashboard' via kubectl port-forward only. "
+                        "Block 8085/8086/9990 at the edge.",
+            evidence_marker=f"Linkerd fingerprint on /metrics; ports: {[p for p, _ in exposed_ports]}"))
+    elif exposed_ports:
+        labels = ", ".join(f"{p}/{lbl}" for p, lbl in exposed_ports)
+        findings.append(wrap_finding(
+            f"Linkerd port(s) reachable externally: {labels}",
+            "MEDIUM", cvss="5.5", cwe="CWE-306",
+            remediation="Linkerd control / proxy ports should not be externally reachable. "
+                        "Bind to cluster network only.",
+            evidence_marker=f"TCP open: {labels}"))
+    else:
+        findings.append(wrap_finding(
+            "Linkerd control plane not externally reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue in-cluster-only linkerd posture.",
+            evidence_marker="TCP/4191 + 8085 + 8086 + 9990 closed/filtered"))
+    return _build_resp("linkerd_audit", target, findings, 4,
+                       "Linkerd control plane / viz external exposure")
+
+
 PROBES = {
     # original 7 real probes
     "docker_daemon_exposed":          _probe_docker_daemon_exposed,
@@ -596,6 +755,10 @@ PROBES = {
     "envoy_config_audit":             _probe_envoy_proxy,
     "ingress_tls_audit":              _probe_ingress_tls_audit,
     "istio_gateway_mtls_off":         _probe_istio_gateway_mtls,
+    "consul_audit":                   _probe_consul_audit,
+    "istio_audit":                    _probe_istio_audit,
+    "linkerd_audit":                  _probe_linkerd_audit,
+    "linkerd_authz_audit":            _probe_linkerd_audit,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
