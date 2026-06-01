@@ -10981,7 +10981,11 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           const det = _R_dedupCodes(String(f.detail || f.name || f.title || "")).substring(0, 110);
           txt(det, margin + 27, y + 4.5, 7.5, DARK);
           if (f.evidence_marker) {
-            txt("Evidence: " + String(f.evidence_marker).substring(0, 90), margin + 27, y + 7.2, 6.5, GRAY);
+            // Bumped from 90 to 200 chars so scaffold evidence
+            // ("No live scan executed - endpoint is a scaffold pending
+            // implementation. Do not treat as a real finding.") renders
+            // in full instead of getting cut mid-sentence at "...as a r".
+            txt("Evidence: " + String(f.evidence_marker).substring(0, 200), margin + 27, y + 7.2, 6.5, GRAY);
           }
           y += 8;
         });
@@ -12768,6 +12772,21 @@ function generateUniversalVLReport(opts) {
     _sevCount[k] = (_sevCount[k]||0) + 1;
   });
 
+  // Scaffold detection - when most/all findings are honest [NOT IMPLEMENTED]
+  // markers (framework's _scaffold_response in tools/_pack_common.py), the
+  // "VERIFIED BY VULNUSLAB" banner and "Every finding is independently
+  // triggered" methodology language are factually wrong and contradict the
+  // per-tool section. Swap them out conditionally.
+  const _scaffoldCount = _allFindings.filter(f => {
+    const t = String(f.detail || f.name || f.title || "").trim();
+    const e = String(f.evidence_marker || f.evidence || "").toLowerCase();
+    return t.startsWith("[NOT IMPLEMENTED]") || e.includes("scaffold pending implementation");
+  }).length;
+  const _isAllScaffold = _allFindings.length > 0 && _scaffoldCount === _allFindings.length;
+  const _isMostlyScaffold = _allFindings.length > 0 && _scaffoldCount / _allFindings.length >= 0.5;
+  const _scaffoldPct = _allFindings.length > 0 ? Math.round(100 * _scaffoldCount / _allFindings.length) : 0;
+  const _realPct = 100 - _scaffoldPct;
+
   // Risk score (0-100) — same formula as Recon canon
   const _rawSum = _sevCount.CRITICAL*15 + _sevCount.HIGH*8 + _sevCount.MEDIUM*3 + _sevCount.LOW*1;
   const _maxC   = _sevCount.CRITICAL>0?30:_sevCount.HIGH>0?22:_sevCount.MEDIUM>0?12:5;
@@ -12882,14 +12901,35 @@ function generateUniversalVLReport(opts) {
   });
   y += 8;
 
-  // ── TRUST STATEMENT ──
-  fillR(margin, y, contentW, 16, LBLUE);
-  fillR(margin, y, 3, 16, BLUE);
-  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
-  doc.text("VERIFIED BY VULNUSLAB", margin + 8, y + 6);
-  doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
-  doc.text("Every data point in this report was independently triggered and re-confirmed by the VulnusLab engine.", margin + 8, y + 11);
-  doc.text("No template-only matches. Manual review still required for exploitation context.", margin + 8, y + 14);
+  // ── TRUST STATEMENT (3 variants depending on scaffold ratio) ──
+  // All scaffold  -> amber "MODULE DEVELOPMENT STATUS" (honest)
+  // Mostly scaffold -> amber "PARTIAL COVERAGE" (mixed)
+  // Mostly real  -> blue "VERIFIED BY VULNUSLAB" (canonical)
+  if (_isAllScaffold) {
+    fillR(margin, y, contentW, 16, [255,247,237]);
+    fillR(margin, y, 3, 16, [202,138,4]);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(133,79,11);
+    doc.text("MODULE DEVELOPMENT STATUS", margin + 8, y + 6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text(`All ${_allFindings.length} technique(s) in this module are scaffolded - real live probes pending forge.`, margin + 8, y + 11);
+    doc.text("PDF intentionally shows [NOT IMPLEMENTED] markers instead of fabricated findings. Real probes activate per FORGE roadmap.", margin + 8, y + 14);
+  } else if (_isMostlyScaffold) {
+    fillR(margin, y, contentW, 16, [255,247,237]);
+    fillR(margin, y, 3, 16, [202,138,4]);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(133,79,11);
+    doc.text("PARTIAL COVERAGE", margin + 8, y + 6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text(`${_realPct}% real probes; ${_scaffoldPct}% scaffolded ([NOT IMPLEMENTED]) - module forge in progress.`, margin + 8, y + 11);
+    doc.text("Where probes are implemented, every finding is independently triggered. Scaffolded checks pending forge.", margin + 8, y + 14);
+  } else {
+    fillR(margin, y, contentW, 16, LBLUE);
+    fillR(margin, y, 3, 16, BLUE);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
+    doc.text("VERIFIED BY VULNUSLAB", margin + 8, y + 6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text("Every data point in this report was independently triggered and re-confirmed by the VulnusLab engine.", margin + 8, y + 11);
+    doc.text("No template-only matches. Manual review still required for exploitation context.", margin + 8, y + 14);
+  }
   y += 20;
 
   // ── KEY RISK HEADLINE ──
@@ -13600,7 +13640,21 @@ function generateUniversalVLReport(opts) {
   // ── APPENDIX ──
   chk(50); y = sHead("Appendix", y);
   txt("A. Methodology", margin, y + 5, 9, DARK, true); y += 8;
-  methodology.forEach(line => {
+  // Use scaffold-aware methodology when 100% of findings are NOT IMPLEMENTED.
+  // Default methodology language ("Every finding is independently triggered")
+  // would contradict the per-tool section. See feedback_vulntemplate_apply_process.md.
+  const _effectiveMethodology = _isAllScaffold ? [
+    `Assessment uses the ${moduleLabel} playbook${playbookPath ? " (" + playbookPath + ")" : ""}.`,
+    `All ${_allFindings.length} technique(s) in this module are currently scaffolded - real live probes pending forge.`,
+    "PDF intentionally shows [NOT IMPLEMENTED] markers instead of fabricated findings. See FORGE_PLAYBOOK.md for the forge roadmap.",
+    "Where probes are forged, every finding is independently triggered and re-confirmed by the VulnusLab engine.",
+  ] : (_isMostlyScaffold ? [
+    `Assessment uses the ${moduleLabel} playbook${playbookPath ? " (" + playbookPath + ")" : ""}.`,
+    `Module is in forge progress: ${_realPct}% of techniques are real live probes; ${_scaffoldPct}% are scaffolded with honest [NOT IMPLEMENTED] markers.`,
+    "Where probes are implemented, every finding is independently triggered and re-confirmed. Scaffolded checks pending forge per FORGE_PLAYBOOK roadmap.",
+    "Manual review is still required for full exploitation context and business-impact rating.",
+  ] : methodology);
+  _effectiveMethodology.forEach(line => {
     const _w = doc.splitTextToSize(_ascii(line), contentW - 4);
     _w.forEach(ln => { chk(5); txt(ln, margin + 2, y + 3.5, 7.5, GRAY); y += 4; });
   });
