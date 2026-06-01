@@ -33,6 +33,13 @@ class ContainerK8sRunAllRequest(BaseModel):
     concurrency: Optional[int] = 16
     auth_cookie: Optional[str] = None
     auth_bearer: Optional[str] = None
+    # Advanced inputs (forwarded to every scanner via extra_body so individual
+    # probes can use them — scanners that don't need a given input ignore it).
+    image_ref: Optional[str] = None
+    dockerfile_text: Optional[str] = None
+    pod_spec_yaml: Optional[str] = None
+    kubeconfig: Optional[str] = None
+    repo_url: Optional[str] = None
 
 
 def _all_tools():
@@ -46,11 +53,16 @@ def _all_tools():
 async def container_k8s_run_all(req: ContainerK8sRunAllRequest, request: Request,
                                   _=Depends(verify_scan_quota)):
     jwt_token = request.headers.get("authorization", "").replace("Bearer ", "") or None
+    extra = {}
+    for k in ("image_ref", "dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"):
+        v = getattr(req, k, None)
+        if v:
+            extra[k] = v
     return StreamingResponse(
         run_module_streaming(target=req.target, tools=_all_tools(),
             module_name="container_k8s", concurrency=max(1, min(req.concurrency or 16, 32)),
             auth_cookie=req.auth_cookie, auth_bearer=req.auth_bearer,
-            extra_body=None, jwt_token=jwt_token),
+            extra_body=(extra or None), jwt_token=jwt_token),
         media_type="application/x-ndjson",
         headers={"X-Accel-Buffering":"no", "Cache-Control":"no-store, no-transform",
                  "Connection":"keep-alive"})

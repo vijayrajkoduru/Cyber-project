@@ -35,6 +35,7 @@ class CloudRunAllRequest(BaseModel):
     concurrency: Optional[int] = 16
     auth_cookie: Optional[str] = None
     auth_bearer: Optional[str] = None
+    repo_url: Optional[str] = None
 
 
 def _all_tools():
@@ -48,11 +49,12 @@ def _all_tools():
 async def cloud_run_all(req: CloudRunAllRequest, request: Request,
                          _=Depends(verify_scan_quota)):
     jwt_token = request.headers.get("authorization", "").replace("Bearer ", "") or None
+    extra = {"repo_url": req.repo_url} if req.repo_url else None
     return StreamingResponse(
         run_module_streaming(target=req.target, tools=_all_tools(),
             module_name="cloud", concurrency=max(1, min(req.concurrency or 16, 32)),
             auth_cookie=req.auth_cookie, auth_bearer=req.auth_bearer,
-            extra_body=None, jwt_token=jwt_token),
+            extra_body=extra, jwt_token=jwt_token),
         media_type="application/x-ndjson",
         headers={"X-Accel-Buffering":"no", "Cache-Control":"no-store, no-transform",
                  "Connection":"keep-alive"})
