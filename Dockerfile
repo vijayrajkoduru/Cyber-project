@@ -297,8 +297,19 @@ RUN ( cd /tmp \
 RUN pip install --no-cache-dir \
         semgrep \
         bandit \
-        truffleHog3 \
         pip-audit
+
+# trufflehog (Go binary, separate from the abandoned truffleHog3 PyPI pkg)
+ARG TRUFFLEHOG_VERSION=3.83.7
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" \
+        -O trufflehog.tgz \
+   && [ -s trufflehog.tgz ] \
+   && tar -xzf trufflehog.tgz -C /usr/local/bin trufflehog \
+   && rm trufflehog.tgz \
+   && /usr/local/bin/trufflehog --version 2>&1 | head -1 ) \
+ || echo "WARNING: trufflehog install failed (non-fatal)"
 
 # ── Password / Auth — hashcat, john, hydra ──────────────────────────────
 RUN apt-get update -q -o Acquire::Retries=3 \
