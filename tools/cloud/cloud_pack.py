@@ -312,8 +312,110 @@ def _probe_iac_manifest_exposed(target, req):
             "raw_data": {"leaked": leaked}}
 
 
+def _probe_s3_bucket_brute(target, req):
+    """Discover S3 buckets via domain-name permutation brute.
+
+    Customer enters a domain (example.com) and we generate ~30 common
+    bucket name patterns (example, example-backup, example-prod,
+    backup-example, www-example, etc.), probe each, classify:
+      200 + <ListBucketResult> -> CRITICAL (publicly listable + readable)
+      403 with AccessDenied   -> MEDIUM   (bucket exists, private)
+      404 NoSuchBucket        -> not flagged
+
+    Zero-FP design: real Amazon S3 XML responses required to flag.
+    No external dependencies, real HTTP probes.
+    """
+    host = _host(target)
+    # Extract base name from domain (remove TLD + www prefix)
+    base = host
+    if base.startswith("www."):
+        base = base[4:]
+    base = base.split(":")[0]  # drop port if present
+    # First label only (example.com -> example)
+    name_core = base.split(".")[0].lower()
+    name_core = "".join(c for c in name_core if c.isalnum() or c == "-")
+    if not name_core or len(name_core) < 3:
+        return _adv_response("s3_bucket_brute", target,
+            f"Target '{host}' doesn't yield a valid bucket-name root",
+            "INFO", "0.0",
+            evidence=f"derived='{name_core}'; need >= 3 alphanumeric chars")
+
+    # Common 2024 bucket-naming patterns (top by frequency)
+    suffixes = ["", "-backup", "-backups", "-bak", "-prod", "-production",
+                "-staging", "-stage", "-stg", "-dev", "-development", "-test",
+                "-qa", "-uat", "-data", "-logs", "-log", "-public", "-private",
+                "-internal", "-static", "-assets", "-media", "-images", "-img",
+                "-files", "-uploads", "-archive", "-snapshots", "-db", "-cdn"]
+    prefixes = ["", "backup-", "backups-", "logs-", "data-", "uploads-",
+                "media-", "static-", "www-", "cdn-"]
+
+    candidates = set()
+    for p in prefixes:
+        for s in suffixes:
+            cand = f"{p}{name_core}{s}"
+            if 3 <= len(cand) <= 63 and not cand.startswith("-") and not cand.endswith("-"):
+                candidates.add(cand)
+    candidates = sorted(candidates)[:40]  # cap at 40 to bound HTTP volume
+
+    findings = []
+    listable = []
+    private = []
+    for cand in candidates:
+        url = f"https://{cand}.s3.amazonaws.com/"
+        code, body, _ = _http_get(url, timeout=3)
+        if code == 200 and "<ListBucketResult" in body:
+            listable.append(cand)
+        elif code == 403 and ("AccessDenied" in body or "<Code>AccessDenied</Code>" in body):
+            private.append(cand)
+        # 404 NoSuchBucket / 0 timeout -> ignored
+
+    if listable:
+        findings.append(wrap_finding(
+            f"PUBLIC-LISTABLE S3 buckets discovered ({len(listable)}): {', '.join(listable[:5])}",
+            "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
+            remediation=("Make these buckets private immediately. Set Block "
+                          "Public Access at account level (AWS CLI: aws s3api "
+                          "put-public-access-block --bucket NAME --public-access-"
+                          "block-configuration BlockPublicAcls=true,IgnorePublic"
+                          "Acls=true,BlockPublicPolicy=true,RestrictPublicBuckets="
+                          "true). Audit contents before locking down."),
+            evidence_marker=(f"Anonymous LIST succeeded on: "
+                              f"{', '.join('https://' + b + '.s3.amazonaws.com/' for b in listable[:5])}")))
+
+    if private:
+        findings.append(wrap_finding(
+            f"S3 buckets EXIST but require auth ({len(private)} matched): {', '.join(private[:5])}",
+            "MEDIUM", cvss="5.5", cwe="CWE-200",
+            remediation=("Bucket existence is information disclosure. Consider "
+                          "renaming buckets to harder-to-guess names + apply "
+                          "Block Public Access at account level."),
+            evidence_marker=(f"403 AccessDenied (bucket exists) on: "
+                              f"{', '.join(private[:5])}")))
+
+    if not findings:
+        findings.append(wrap_finding(
+            f"S3 bucket-name brute: 0 of {len(candidates)} candidates exist",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue current naming hygiene.",
+            evidence_marker=(f"Probed {len(candidates)} bucket-name "
+                              f"permutations of '{name_core}'; all returned "
+                              "404 NoSuchBucket or timed out.")))
+
+    return {"tool": "s3_bucket_brute", "target": target, "scan_time": 0,
+            "vulnerable": len(listable) > 0,
+            "severity": "CRITICAL" if listable else ("MEDIUM" if private else "POSITIVE"),
+            "findings": findings,
+            "tests_performed": len(candidates),
+            "tests_summary": (f"S3 brute: {len(listable)} listable, "
+                               f"{len(private)} exists-private, "
+                               f"{len(candidates)-len(listable)-len(private)} not-found"),
+            "raw_data": {"derived_name": name_core, "listable": listable,
+                          "private": private, "candidates_count": len(candidates)}}
+
+
 PROBES = {
     "s3_bucket_public_static_site":   _probe_s3_public,
+    "s3_bucket_brute":                _probe_s3_bucket_brute,
     "azure_blob_public_anon":         _probe_azure_blob_public,
     "gcs_bucket_acl_legacy":          _probe_gcs_bucket_public,
     "oidc_provider_thumbprint_audit": _probe_oidc_discovery,
