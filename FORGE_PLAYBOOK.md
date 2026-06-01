@@ -219,7 +219,7 @@ Apply 12-step playbook in this order. Check off as each completes.
 
 | # | Module | Sessions | Status | Cumulative |
 |---|---|---|---|---|
-| ✓ | Recon | 37 (done) | **DONE 154/154** | 37 |
+| 0 | Recon | 37 (done) | **DONE 154/154** | 37 |
 | 1 | Container/K8s (continue from 21/103) | 12 | In progress | 49 |
 | 2 | Webapp (finish from ~12/30) | 8 | Pending | 57 |
 | 3 | Network (finish) | 6 | Pending | 63 |
