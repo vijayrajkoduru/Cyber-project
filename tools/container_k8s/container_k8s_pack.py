@@ -1222,6 +1222,191 @@ def _probe_ingress_authz_open(target, req):
                        "Ingress unauth admin/actuator/metrics probe")
 
 
+def _probe_image_distroless(target, req):
+    """Detect whether the image is distroless / Wolfi / minimal base.
+    Distroless images lack shells, package managers, and shell utilities -
+    drastically reducing attack surface for container escapes and
+    post-exploitation. Uses Syft package inventory to detect shell and
+    package-manager presence."""
+    if not _looks_like_image_ref(target):
+        return _not_applicable_for_image_scanner(target, "image_distroless_base", "Distroless detector")
+
+    if shutil.which("syft") is None:
+        return _build_resp("image_distroless_base", target, [wrap_finding(
+            "[NOT IMPLEMENTED] syft binary not installed (needed for inventory)",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend with Dockerfile that installs Syft.",
+            evidence_marker="syft not found in PATH")], 0, "Syft not installed")
+
+    exit_code, stdout, stderr = _run_tool([
+        "syft", target, "-o", "syft-json", "-q",
+    ], timeout_s=180)
+
+    if exit_code != 0 or not stdout.strip():
+        return _build_resp("image_distroless_base", target, [wrap_finding(
+            f"[PROBE ERROR] Syft exit {exit_code}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify image is pullable.",
+            evidence_marker=f"stderr: {stderr[-300:]}")], 0, "Syft error")
+
+    try:
+        data = json.loads(stdout)
+    except Exception:
+        return _build_resp("image_distroless_base", target, [wrap_finding(
+            "[PROBE ERROR] Syft JSON parse failed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Re-run scan.",
+            evidence_marker="Syft output not valid JSON")], 0, "parse error")
+
+    artifacts = data.get("artifacts", []) if isinstance(data, dict) else []
+    pkg_names = {(a.get("name") or "").lower() for a in artifacts}
+
+    # Signals of NON-distroless: presence of shells, package managers, coreutils
+    shell_indicators = {"bash", "dash", "ash", "zsh", "sh"}
+    pkg_mgr_indicators = {"apt", "dpkg", "rpm", "yum", "dnf", "apk",
+                           "pacman", "zypper", "portage"}
+    coreutils_indicators = {"coreutils", "busybox", "util-linux", "findutils"}
+
+    found_shells = sorted(pkg_names & shell_indicators)
+    found_pkg_mgrs = sorted(pkg_names & pkg_mgr_indicators)
+    found_coreutils = sorted(pkg_names & coreutils_indicators)
+
+    # Distroless heuristic: no shell + no package manager + small artifact count
+    total_pkgs = len(artifacts)
+    is_distroless = (not found_shells and not found_pkg_mgrs and total_pkgs < 50)
+    is_minimal = (not found_pkg_mgrs and total_pkgs < 100)
+
+    findings = []
+    if is_distroless:
+        findings.append(wrap_finding(
+            f"Image appears DISTROLESS / minimal ({total_pkgs} pkgs, no shell, no pkg-mgr)",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue distroless / Wolfi / Chainguard posture - "
+                        "drastically reduces container-escape attack surface.",
+            evidence_marker=(f"Syft inventory: {total_pkgs} packages; no shell "
+                              "binary, no package manager.")))
+    elif is_minimal:
+        findings.append(wrap_finding(
+            f"Image is MINIMAL but not distroless ({total_pkgs} pkgs)",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Consider switching to distroless / Wolfi base for "
+                        "production - removes shells + package managers.",
+            evidence_marker=(f"Syft: {total_pkgs} packages; "
+                              f"shells={found_shells or 'none'}; "
+                              f"pkg-mgrs={found_pkg_mgrs or 'none'}")))
+    else:
+        findings.append(wrap_finding(
+            f"Image is FULL-OS based: {total_pkgs} packages incl. "
+            + (", ".join(found_pkg_mgrs[:3]) if found_pkg_mgrs else "no pkg-mgr"),
+            "MEDIUM", cvss="5.5", cwe="CWE-1357",
+            remediation=("Switch production image to distroless/Wolfi/Chainguard. "
+                          "Full-OS bases include shells, package managers, and "
+                          "utility binaries that expand the attack surface for "
+                          "post-exploitation and container escape."),
+            evidence_marker=(f"Syft: {total_pkgs} pkgs; "
+                              f"shells={','.join(found_shells)}; "
+                              f"pkg-mgrs={','.join(found_pkg_mgrs)}; "
+                              f"coreutils={','.join(found_coreutils)}")))
+
+    return _build_resp("image_distroless_base", target, findings, 1,
+                       f"Distroless detection via Syft ({total_pkgs} pkgs)")
+
+
+def _probe_kube_hunter(target, req):
+    """K8s external attack-surface probe via Nuclei k8s-tagged templates.
+
+    kube-hunter was archived by AquaSec in 2024 (recommended Trivy as
+    replacement). We use Nuclei's k8s template tag instead which covers
+    overlapping ground: anonymous kubelet, dashboard exposure, API server
+    misconfig, etcd unauth, common K8s CVEs.
+
+    Runs against the target's IP / hostname externally."""
+    host = _host(target)
+    # Don't try to "scan" an image ref via Nuclei - return NOT_APPLICABLE
+    if _looks_like_image_ref(target):
+        return _build_resp("kube_hunter", target, [wrap_finding(
+            "[NOT_APPLICABLE] kube-hunter equivalent needs a cluster IP/host, not an image ref",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Provide the K8s API endpoint hostname or IP.",
+            evidence_marker=f"Target '{target[:80]}' is an image reference")], 0,
+            "Not applicable for image ref")
+
+    if shutil.which("nuclei") is None:
+        return _build_resp("kube_hunter", target, [wrap_finding(
+            "[NOT IMPLEMENTED] nuclei binary not installed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend with Dockerfile (nuclei is a dep).",
+            evidence_marker="nuclei not in PATH")], 0, "Nuclei not installed")
+
+    exit_code, stdout, stderr = _run_tool([
+        "nuclei",
+        "-target", host,
+        "-tags", "kubernetes,k8s,kubelet,etcd",
+        "-jsonl",
+        "-silent",
+        "-disable-update-check",
+        "-no-color",
+        "-rate-limit", "30",
+        "-timeout", "8",
+    ], timeout_s=180)
+
+    if exit_code == 124:
+        return _build_resp("kube_hunter", target, [wrap_finding(
+            f"[PROBE ERROR] Nuclei K8s scan timeout (>3 min) on {host}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Slow target or many template matches; retry.",
+            evidence_marker="Wall-clock exceeded")], 0, "Nuclei timeout")
+
+    # Nuclei exits 0 even with no findings; only treat real subprocess errors as failure
+    if exit_code not in (0, 1):
+        return _build_resp("kube_hunter", target, [wrap_finding(
+            f"[PROBE ERROR] Nuclei exit {exit_code}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify target reachability.",
+            evidence_marker=f"stderr: {stderr[-300:]}")], 0, f"Nuclei exit {exit_code}")
+
+    findings = []
+    sev_default_cvss = {"CRITICAL": "9.0", "HIGH": "7.5", "MEDIUM": "5.5",
+                         "LOW": "3.0", "INFO": "0.0"}
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            continue
+        try:
+            evt = json.loads(line)
+        except Exception:
+            continue
+        info = evt.get("info", {}) or {}
+        name = info.get("name") or evt.get("template-id") or "K8s template hit"
+        sev_raw = (info.get("severity") or "info").upper()
+        sev = sev_raw if sev_raw in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO") else "INFO"
+        cvss = ""
+        cvss_metrics = info.get("classification", {}).get("cvss-metrics", "")
+        if "cvss" in info.get("classification", {}):
+            cvss_score = info["classification"].get("cvss-score")
+            if cvss_score:
+                cvss = str(cvss_score)
+        cvss = cvss or sev_default_cvss.get(sev, "0.0")
+        match_url = evt.get("matched-at") or evt.get("host") or host
+
+        findings.append(wrap_finding(
+            f"[Nuclei K8s] {name}",
+            sev, cvss=cvss,
+            cwe=(info.get("classification", {}).get("cwe-id", ["CWE-693"]) or ["CWE-693"])[0]
+                if isinstance(info.get("classification", {}).get("cwe-id"), list) else "CWE-693",
+            remediation=info.get("remediation") or "See Nuclei template + CVE advisory.",
+            evidence_marker=f"Template: {evt.get('template-id','?')}; Match: {match_url}"))
+
+    if not findings:
+        findings.append(wrap_finding(
+            f"Nuclei K8s tag scan: 0 hits on {host}",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue locked-down K8s posture.",
+            evidence_marker=f"nuclei -tags kubernetes,k8s,kubelet,etcd against {host}: clean"))
+    return _build_resp("kube_hunter", target, findings, max(len(findings), 1),
+                       f"Nuclei K8s tag scan ({len(findings)} finding(s))")
+
+
 PROBES = {
     # original 7 real probes
     "docker_daemon_exposed":          _probe_docker_daemon_exposed,
@@ -1253,6 +1438,8 @@ PROBES = {
     "image_secrets_scan":             _probe_trivy_image_secrets,
     "ingress_authz_open":             _probe_ingress_authz_open,
     "service_mesh_authz_open":        _probe_ingress_authz_open,
+    "image_distroless_base":          _probe_image_distroless,
+    "kube_hunter":                    _probe_kube_hunter,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
