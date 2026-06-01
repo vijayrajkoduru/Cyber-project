@@ -10926,7 +10926,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           margin, y, 7.5, GRAY); y += 5;
       if (_R_collapsePos) {
         chk(7); fillR(margin, y, contentW, 6, [240,253,244]); fillR(margin, y, 3, 6, [15,118,82]);
-        txt(`${_R_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Listed in §Tools & Scanners Used.`,
+        txt(`${_R_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Counted in §Scan Coverage.`,
             margin + 6, y + 4.2, 7.5, [15,118,82], true);
         y += 9;
       }
@@ -11162,63 +11162,10 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   // A. Methodology · B. Discovery scope · C. References
   }
 
-  // ─── TOOLS & SCANNERS USED (Gap 4) ──────────────────────────
-  // Auto-derived from r (Object.keys). Two-column table: scanner name +
-  // status badge with elapsed time. Paginated at 60 rows per page since
-  // Recon ships 163+ scanners.
-  {
-    const _R_toolRows = Object.keys(r).filter(k => typeof k === "string" && !k.startsWith("_")).sort();
-    if (_R_toolRows.length > 0) {
-      const _R_TLS_PER_PG = 60;
-      const _R_toolPages = Math.max(1, Math.ceil(_R_toolRows.length / _R_TLS_PER_PG));
-      chk(30); y = sHead("Tools & Scanners Used", y);
-      txt(`${_R_toolRows.length} scanner(s) invoked - status auto-derived from response data.`,
-          margin, y, 7.5, GRAY); y += 5;
-      let _R_tlPgN = 1;
-      y = tHead(["SCANNER","STATUS","DETAIL"], [80, 28, 72], y);
-      txt(`Tools table - page ${_R_tlPgN} of ${_R_toolPages}`, margin, y - 9, 6.5, GRAY, true, "left");
-      _R_toolRows.forEach((toolKey, i) => {
-        if (i > 0 && i % _R_TLS_PER_PG === 0) {
-          y += 4;
-          doc.addPage(); y = 18; drawHeader();
-          _R_tlPgN++;
-          y = sHeadCont("Tools & Scanners Used (continued)", y);
-          y = tHead(["SCANNER","STATUS","DETAIL"], [80, 28, 72], y);
-          txt(`Tools table - page ${_R_tlPgN} of ${_R_toolPages}`, margin, y - 9, 6.5, GRAY, true, "left");
-        }
-        const d = r[toolKey] || {};
-        let _st = "DATA", _stCol = [15,118,82], _stBg = [220,252,231];
-        if (d._failed) { _st = "ERROR"; _stCol = [162,28,28]; _stBg = [254,226,226]; }
-        else if (d._skipped || d.skipped_reason) { _st = "SKIPPED"; _stCol = [120,53,15]; _stBg = [254,243,199]; }
-        else if (!Array.isArray(d.findings) || d.findings.length === 0) {
-          const _hasI = (d.intel && Object.keys(d.intel).length>0)
-                      || (d.summary && (typeof d.summary === "string" ? d.summary.length>0 : Object.keys(d.summary).length>0));
-          if (!_hasI) { _st = "EMPTY"; _stCol = [55,65,81]; _stBg = [241,245,249]; }
-        }
-        const _ver = d.tool_version || (d.intel && d.intel.tool_version);
-        const _disp = toolKey.replace(/_/g, " ") + (_ver ? ` (v${_ver})` : "");
-        let _detail = "";
-        if (d.elapsed != null) _detail = `${Number(d.elapsed).toFixed(2)}s`;
-        else if (d.elapsed_sec != null) _detail = `${Number(d.elapsed_sec).toFixed(2)}s`;
-        else if (d.duration_ms != null) _detail = `${(Number(d.duration_ms)/1000).toFixed(2)}s`;
-        if (Array.isArray(d.findings) && d.findings.length > 0) {
-          _detail = (_detail ? _detail + " - " : "") + `${d.findings.length} finding(s)`;
-        }
-        if (_st === "ERROR" && d.error) _detail = String(d.error).substring(0,60);
-        if (_st === "SKIPPED" && (d.skipped_reason || d.message)) {
-          _detail = String(d.skipped_reason || d.message).substring(0,60);
-        }
-        chk(7); fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
-        txt(String(_disp).substring(0, 48), margin + 3, y + 4.6, 7.5, DARK);
-        rrect(margin + 82, y + 1.5, 24, 5, 1, _stBg);
-        doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(..._stCol);
-        doc.text(_st, margin + 84, y + 5);
-        txt(String(_detail).substring(0, 50), margin + 110, y + 4.6, 7, GRAY);
-        y += 6.5;
-      });
-      y += 6;
-    }
-  }
+  // Tools & Scanners Used section was here. Removed per user request:
+  // the same scanner counts (DATA / EMPTY / SKIPPED / ERROR) already
+  // appear in §Scan Coverage at the top of the report, so the 3-page
+  // enumeration was duplicate detail with no extra signal.
 
   chk(80); y = sHead("Appendix", y);
   doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
@@ -13399,7 +13346,7 @@ function generateUniversalVLReport(opts) {
     chk(20); y = sHead("Per-Tool Intelligence", y);
     if (_collapsePos) {
       chk(7); fillR(margin, y, contentW, 6, [240,253,244]); fillR(margin, y, 3, 6, [15,118,82]);
-      txt(`${_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Listed in §Tools & Scanners Used.`,
+      txt(`${_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Counted in §Scan Coverage.`,
           margin + 6, y + 4.2, 7.5, [15,118,82], true);
       y += 9;
     }
@@ -13630,65 +13577,10 @@ function generateUniversalVLReport(opts) {
   txt("This report is valid for 90 days from generation date. Re-scan to refresh.", margin + 4, y + 19, 7.5, GRAY);
   y += 28;
 
-  // ── TOOLS & SCANNERS USED (Gap 4) ──
-  // Auto-derived from allResults (Object.keys). Two columns: scanner name +
-  // status badge with elapsed time + optional tool_version.
-  // Paginated at 60 rows per page so large modules (Recon 163, Vuln 200+)
-  // don't get truncated.
-  {
-    const _toolRows = Object.keys(r).filter(k => typeof k === "string" && !k.startsWith("_")).sort();
-    if (_toolRows.length > 0) {
-      const _TLS_PER_PG = 60;
-      const _toolPages = Math.max(1, Math.ceil(_toolRows.length / _TLS_PER_PG));
-      chk(30); y = sHead("Tools & Scanners Used", y);
-      txt(`${_toolRows.length} scanner(s) invoked - status auto-derived from response data.`,
-          margin, y, 7.5, GRAY); y += 5;
-      let _tlPgN = 1;
-      y = tHead(["SCANNER","STATUS","DETAIL"], [80, 28, 72], y);
-      txt(`Tools table - page ${_tlPgN} of ${_toolPages}`, margin, y - 9, 6.5, GRAY, true, "left");
-      _toolRows.forEach((toolKey, i) => {
-        if (i > 0 && i % _TLS_PER_PG === 0) {
-          y += 4;
-          doc.addPage(); y = 18; drawHeader();
-          _tlPgN++;
-          y = sHeadCont("Tools & Scanners Used (continued)", y);
-          y = tHead(["SCANNER","STATUS","DETAIL"], [80, 28, 72], y);
-          txt(`Tools table - page ${_tlPgN} of ${_toolPages}`, margin, y - 9, 6.5, GRAY, true, "left");
-        }
-        const d = r[toolKey] || {};
-        let _st = "DATA", _stCol = [15,118,82], _stBg = [220,252,231];
-        if (d._failed) { _st = "ERROR"; _stCol = [162,28,28]; _stBg = [254,226,226]; }
-        else if (d._skipped || d.skipped_reason) { _st = "SKIPPED"; _stCol = [120,53,15]; _stBg = [254,243,199]; }
-        else if (!Array.isArray(d.findings) || d.findings.length === 0) {
-          // intel/summary count as DATA; truly empty = EMPTY
-          const _hasI = (d.intel && Object.keys(d.intel).length>0)
-                      || (d.summary && (typeof d.summary === "string" ? d.summary.length>0 : Object.keys(d.summary).length>0));
-          if (!_hasI) { _st = "EMPTY"; _stCol = [55,65,81]; _stBg = [241,245,249]; }
-        }
-        const _ver = d.tool_version || (d.intel && d.intel.tool_version);
-        const _disp = toolKey.replace(/_/g," ") + (_ver ? ` (v${_ver})` : "");
-        let _detail = "";
-        if (d.elapsed != null) _detail = `${Number(d.elapsed).toFixed(2)}s`;
-        else if (d.elapsed_sec != null) _detail = `${Number(d.elapsed_sec).toFixed(2)}s`;
-        else if (d.duration_ms != null) _detail = `${(Number(d.duration_ms)/1000).toFixed(2)}s`;
-        if (Array.isArray(d.findings) && d.findings.length > 0) {
-          _detail = (_detail ? _detail + " - " : "") + `${d.findings.length} finding(s)`;
-        }
-        if (_st === "ERROR" && d.error) _detail = String(d.error).substring(0,60);
-        if (_st === "SKIPPED" && (d.skipped_reason || d.message)) {
-          _detail = String(d.skipped_reason || d.message).substring(0,60);
-        }
-        chk(7); fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
-        txt(_ascii(_disp).substring(0, 48), margin + 3, y + 4.6, 7.5, DARK);
-        rrect(margin + 82, y + 1.5, 24, 5, 1, _stBg);
-        doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(..._stCol);
-        doc.text(_st, margin + 84, y + 5);
-        txt(_ascii(_detail).substring(0, 50), margin + 110, y + 4.6, 7, GRAY);
-        y += 6.5;
-      });
-      y += 6;
-    }
-  }
+  // Tools & Scanners Used section was here. Removed per user request:
+  // the same scanner counts (DATA / EMPTY / SKIPPED / ERROR) already
+  // appear in §Scan Coverage at the top of the report, so the 3-page
+  // enumeration was duplicate detail with no extra signal.
 
   // ── APPENDIX ──
   chk(50); y = sHead("Appendix", y);
