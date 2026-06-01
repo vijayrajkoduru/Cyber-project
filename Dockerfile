@@ -152,3 +152,157 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir holehe phoneinfoga sherlock-project
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# VL-FORGE Phase 1 — high-leverage scanner binaries
+# (added 2026-06-01; unlocks ~250 real probes across Container, Webapp,
+#  Vuln, Supply Chain, Network, Password, Auth modules)
+# Each block is pinned to a specific version + non-fatal on download
+# failure so a transient GitHub-throttle doesn't block the whole build.
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Container/K8s tools — Trivy, Grype, Syft, Hadolint, Cosign ─────────
+ARG TRIVY_VERSION=0.50.4
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+        -O trivy.tgz \
+   && [ -s trivy.tgz ] \
+   && tar -xzf trivy.tgz -C /usr/local/bin trivy \
+   && rm trivy.tgz \
+   && /usr/local/bin/trivy --version ) \
+ || echo "WARNING: Trivy install failed (non-fatal)"
+
+ARG GRYPE_VERSION=0.79.6
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz" \
+        -O grype.tgz \
+   && [ -s grype.tgz ] \
+   && tar -xzf grype.tgz -C /usr/local/bin grype \
+   && rm grype.tgz \
+   && /usr/local/bin/grype version ) \
+ || echo "WARNING: Grype install failed (non-fatal)"
+
+ARG SYFT_VERSION=1.4.1
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
+        -O syft.tgz \
+   && [ -s syft.tgz ] \
+   && tar -xzf syft.tgz -C /usr/local/bin syft \
+   && rm syft.tgz \
+   && /usr/local/bin/syft version ) \
+ || echo "WARNING: Syft install failed (non-fatal)"
+
+ARG HADOLINT_VERSION=2.12.0
+RUN ( wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
+        -O /usr/local/bin/hadolint \
+   && chmod +x /usr/local/bin/hadolint \
+   && /usr/local/bin/hadolint --version ) \
+ || echo "WARNING: Hadolint install failed (non-fatal)"
+
+ARG COSIGN_VERSION=2.2.4
+RUN ( wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64" \
+        -O /usr/local/bin/cosign \
+   && chmod +x /usr/local/bin/cosign \
+   && /usr/local/bin/cosign version ) \
+ || echo "WARNING: Cosign install failed (non-fatal)"
+
+# ── Webapp / DAST — sqlmap, nikto, sslyze ───────────────────────────────
+RUN apt-get update -q -o Acquire::Retries=3 \
+ && apt-get install -y -q --no-install-recommends \
+        sqlmap nikto \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir sslyze
+
+# ── Network — masscan, hping3, amass ────────────────────────────────────
+RUN apt-get update -q -o Acquire::Retries=3 \
+ && apt-get install -y -q --no-install-recommends \
+        masscan hping3 amass \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── Subdomain / port scan — subfinder, naabu ────────────────────────────
+ARG SUBFINDER_VERSION=2.6.6
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" \
+        -O subfinder.zip \
+   && [ -s subfinder.zip ] \
+   && apt-get update && apt-get install -y --no-install-recommends unzip \
+   && unzip -q subfinder.zip -d /usr/local/bin/ \
+   && rm subfinder.zip \
+   && apt-get purge -y unzip && apt-get autoremove -y \
+   && rm -rf /var/lib/apt/lists/* \
+   && /usr/local/bin/subfinder -version 2>&1 | head -1 ) \
+ || echo "WARNING: subfinder install failed (non-fatal)"
+
+ARG NAABU_VERSION=2.3.0
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/projectdiscovery/naabu/releases/download/v${NAABU_VERSION}/naabu_${NAABU_VERSION}_linux_amd64.zip" \
+        -O naabu.zip \
+   && [ -s naabu.zip ] \
+   && apt-get update && apt-get install -y --no-install-recommends unzip libpcap-dev \
+   && unzip -q naabu.zip -d /usr/local/bin/ \
+   && rm naabu.zip \
+   && apt-get purge -y unzip && apt-get autoremove -y \
+   && rm -rf /var/lib/apt/lists/* \
+   && /usr/local/bin/naabu -version 2>&1 | head -1 ) \
+ || echo "WARNING: naabu install failed (non-fatal)"
+
+# ── Secrets / SAST — gitleaks, trufflehog, semgrep, bandit ──────────────
+ARG GITLEAKS_VERSION=8.18.4
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+        -O gitleaks.tgz \
+   && [ -s gitleaks.tgz ] \
+   && tar -xzf gitleaks.tgz -C /usr/local/bin gitleaks \
+   && rm gitleaks.tgz \
+   && /usr/local/bin/gitleaks version ) \
+ || echo "WARNING: gitleaks install failed (non-fatal)"
+
+RUN pip install --no-cache-dir \
+        semgrep \
+        bandit \
+        truffleHog3 \
+        pip-audit
+
+# ── Password / Auth — hashcat, john, hydra ──────────────────────────────
+RUN apt-get update -q -o Acquire::Retries=3 \
+ && apt-get install -y -q --no-install-recommends \
+        hashcat john hydra \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── Cloud — Prowler (Python), tfsec ─────────────────────────────────────
+RUN pip install --no-cache-dir prowler
+
+ARG TFSEC_VERSION=1.28.10
+RUN ( wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/aquasecurity/tfsec/releases/download/v${TFSEC_VERSION}/tfsec-linux-amd64" \
+        -O /usr/local/bin/tfsec \
+   && chmod +x /usr/local/bin/tfsec \
+   && /usr/local/bin/tfsec --version ) \
+ || echo "WARNING: tfsec install failed (non-fatal)"
+
+# ── APISec — Schemathesis ───────────────────────────────────────────────
+RUN pip install --no-cache-dir schemathesis
+
+# ── Trivy DB pre-warm (downloads ~600MB CVE database) ───────────────────
+# Done last so the image layer caches separately and DB refreshes don't
+# invalidate scanner-binary layers above.
+RUN /usr/local/bin/trivy image --download-db-only 2>/dev/null \
+ || echo "WARNING: Trivy DB pre-warm failed (will download on first scan)"
+
+# ═══════════════════════════════════════════════════════════════════════
+# End VL-FORGE Phase 1 tools. Image size approx: 800MB -> ~2.8GB
+# Tools added: 17 (trivy grype syft hadolint cosign sqlmap nikto sslyze
+#               masscan hping3 amass subfinder naabu gitleaks semgrep
+#               bandit truffleHog3 hashcat john hydra prowler tfsec
+#               schemathesis pip-audit). Total real-tool count: ~30 of 80.
+# ═══════════════════════════════════════════════════════════════════════
