@@ -10981,11 +10981,18 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           const det = _R_dedupCodes(String(f.detail || f.name || f.title || "")).substring(0, 110);
           txt(det, margin + 27, y + 4.5, 7.5, DARK);
           if (f.evidence_marker) {
-            // Bumped from 90 to 200 chars so scaffold evidence
-            // ("No live scan executed - endpoint is a scaffold pending
-            // implementation. Do not treat as a real finding.") renders
-            // in full instead of getting cut mid-sentence at "...as a r".
-            txt("Evidence: " + String(f.evidence_marker).substring(0, 200), margin + 27, y + 7.2, 6.5, GRAY);
+            // 300 chars + word-wrap to 2 lines so even the longest scaffold
+            // message ("No live scan executed - endpoint is a scaffold
+            // pending implementation. Do not treat as a real finding.")
+            // renders in full instead of getting cut mid-sentence.
+            const _evLines = doc.splitTextToSize(
+              "Evidence: " + String(f.evidence_marker).substring(0, 300),
+              contentW - 30);
+            const _shown = _evLines.slice(0, 2);
+            _shown.forEach((ln, _idx) => {
+              txt(ln, margin + 27, y + 7.2 + (_idx * 2.8), 6.5, GRAY);
+            });
+            if (_shown.length === 2) { y += 2.8; }
           }
           y += 8;
         });
@@ -12772,20 +12779,34 @@ function generateUniversalVLReport(opts) {
     _sevCount[k] = (_sevCount[k]||0) + 1;
   });
 
-  // Scaffold detection - when most/all findings are honest [NOT IMPLEMENTED]
-  // markers (framework's _scaffold_response in tools/_pack_common.py), the
-  // "VERIFIED BY VULNUSLAB" banner and "Every finding is independently
-  // triggered" methodology language are factually wrong and contradict the
-  // per-tool section. Swap them out conditionally.
-  const _scaffoldCount = _allFindings.filter(f => {
+  // Scaffold detection (scanner-level, not finding-level).
+  // Customer thinks in "how many of the 103 scanners are real" - so the
+  // denominator must be SCANNER COUNT not FINDING COUNT. A scanner is
+  // "scaffold" only when all its findings are [NOT IMPLEMENTED] markers.
+  // A scanner that returns NOT_APPLICABLE for the wrong input type is
+  // still REAL (it ran a precondition check and skipped honestly).
+  const _isFindingScaffold = (f) => {
     const t = String(f.detail || f.name || f.title || "").trim();
     const e = String(f.evidence_marker || f.evidence || "").toLowerCase();
     return t.startsWith("[NOT IMPLEMENTED]") || e.includes("scaffold pending implementation");
-  }).length;
-  const _isAllScaffold = _allFindings.length > 0 && _scaffoldCount === _allFindings.length;
-  const _isMostlyScaffold = _allFindings.length > 0 && _scaffoldCount / _allFindings.length >= 0.5;
-  const _scaffoldPct = _allFindings.length > 0 ? Math.round(100 * _scaffoldCount / _allFindings.length) : 0;
-  const _realPct = 100 - _scaffoldPct;
+  };
+  const _scannerKeys = Object.keys(r);
+  const _scaffoldScanners = _scannerKeys.filter(k => {
+    const fs = (r[k] && Array.isArray(r[k].findings)) ? r[k].findings : [];
+    if (fs.length === 0) return false;  // empty != scaffold
+    return fs.every(_isFindingScaffold);
+  });
+  const _realScanners = _scannerKeys.filter(k => !_scaffoldScanners.includes(k));
+  const _scaffoldCount = _scaffoldScanners.length;
+  const _realCount = _realScanners.length;
+  const _totalScanners = _scannerKeys.length;
+  const _isAllScaffold = _totalScanners > 0 && _scaffoldCount === _totalScanners;
+  const _isMostlyScaffold = _totalScanners > 0 && _scaffoldCount / _totalScanners >= 0.5;
+  const _scaffoldPct = _totalScanners > 0 ? Math.round(100 * _scaffoldCount / _totalScanners) : 0;
+  const _realPct = _totalScanners > 0 ? Math.round(100 * _realCount / _totalScanners) : 0;
+  // Finding-level scaffold count for the SCAFFOLD column in Findings Distribution.
+  const _scaffoldFindingCount = _allFindings.filter(_isFindingScaffold).length;
+  const _realInfoCount = (_sevCount.INFO || 0) - _scaffoldFindingCount;
 
   // Risk score (0-100) — same formula as Recon canon
   const _rawSum = _sevCount.CRITICAL*15 + _sevCount.HIGH*8 + _sevCount.MEDIUM*3 + _sevCount.LOW*1;
@@ -12954,7 +12975,7 @@ function generateUniversalVLReport(opts) {
   y += 28;
 
   // ── RISK SCORE BAR ──
-  chk(26);
+  chk(32);
   y = sHead("Risk Score", y);
   fillR(margin, y, contentW, 20, LIGHT);
   doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._riskColor);
@@ -12965,6 +12986,12 @@ function generateUniversalVLReport(opts) {
   fillR(margin + 38, y + 17, contentW - 40, 2, [226,232,240]);
   fillR(margin + 38, y + 17, Math.max((_riskScore/100) * (contentW - 40), 2), 2, _riskColor);
   y += 24;
+  // Sub-label explaining the band so a 5/100 MINIMAL doesn't get read
+  // as "slight risk" (it means basically zero risk found).
+  chk(4);
+  txt("Bands: 0-20 MINIMAL  -  20-40 LOW  -  40-60 MODERATE  -  60-80 HIGH  -  80-100 CRITICAL",
+      margin, y, 6.5, GRAY);
+  y += 5;
 
   // ── DELTA vs PRIOR SCAN (Gap 5) ──
   // Reads vl_scans:{moduleKey} array from localStorage and surfaces the
@@ -13031,6 +13058,11 @@ function generateUniversalVLReport(opts) {
     ["Generated By", "VulnusLab Engine v2.0"],
     ["Generation Time", new Date().toISOString().replace('T',' ').substring(0,19) + " UTC"],
     ["Content Hash (SHA-256 prefix)", _contentHash],
+    // Scan summary - human-readable forge progress + real vs scaffold split.
+    ["Scan Summary",
+      `${_realCount} real probe(s) executed of ${_totalScanners} total `
+      + `(${_realPct}% forged). `
+      + `${_scaffoldCount} technique(s) currently scaffolded [NOT IMPLEMENTED].`],
     ["Distribution", "Internal - Security Team + Engineering Leads"],
     ["Retention", "Confidential - 90 days minimum"],
     ["Next Re-test", "After remediation + 90 days OR per Conclusion section"],
@@ -13086,19 +13118,45 @@ function generateUniversalVLReport(opts) {
     });
     y += 6;
 
-    // Findings distribution bars
+    // Findings distribution bars - 6 columns now:
+    // CRITICAL / HIGH / MEDIUM / LOW / INFO (real) / SCAFFOLD (not-yet-forged)
+    // Splitting INFO into real-INFO + scaffold so the customer can see
+    // whether the 80 INFO bar means "80 things checked + nothing wrong"
+    // (good) or "80 things not yet implemented" (forge backlog).
     chk(40); y = sHead("Findings Distribution", y);
-    const _cols = ["CRITICAL","HIGH","MEDIUM","LOW","INFO"];
+    const _cols = [
+      ["CRITICAL", _sevCount.CRITICAL || 0, SEVCOL.CRITICAL],
+      ["HIGH",     _sevCount.HIGH     || 0, SEVCOL.HIGH],
+      ["MEDIUM",   _sevCount.MEDIUM   || 0, SEVCOL.MEDIUM],
+      ["LOW",      _sevCount.LOW      || 0, SEVCOL.LOW],
+      ["INFO",     Math.max(0, _realInfoCount), SEVCOL.INFO],
+      ["SCAFFOLD", _scaffoldFindingCount,    [120, 113, 108]],   // stone-500
+    ];
     let _x = margin;
-    const _bw = (contentW - 4*3) / 5;
-    _cols.forEach(sev => {
-      const col = SEVCOL[sev]; const cnt = _sevCount[sev] || 0;
+    const _bw = (contentW - 5*3) / 6;
+    _cols.forEach(c => {
+      const sev = c[0], cnt = c[1], col = c[2];
       fillR(_x, y, _bw, 24, col);
       txt(String(cnt), _x + _bw/2 - (String(cnt).length*2.5), y + 12, 18, [255,255,255], true);
       txt(sev, _x + _bw/2 - (sev.length*1.3), y + 20, 7, [255,255,255], true);
       _x += _bw + 3;
     });
     y += 30;
+    // Sub-label explaining the SCAFFOLD column so customer doesn't think
+    // it's an alert.
+    if (_scaffoldFindingCount > 0) {
+      chk(5);
+      txt(`SCAFFOLD = ${_scaffoldFindingCount} technique(s) not yet forged. Honest INFO marker, not a finding. See FORGE_PLAYBOOK roadmap.`,
+          margin + 2, y, 6.5, GRAY);
+      y += 4;
+    }
+    if ((_sevCount.INFO || 0) > 0 && _realInfoCount > 0) {
+      chk(5);
+      txt(`INFO = ${_realInfoCount} real probe(s) that ran and returned informational results (no exposure).`,
+          margin + 2, y, 6.5, GRAY);
+      y += 4;
+    }
+    y += 2;
 
     // Top concerns
     if (_top3.length > 0) {
@@ -13385,25 +13443,70 @@ function generateUniversalVLReport(opts) {
   const _toolsForPanels = Object.keys(r).filter(k => _hasMeaningful(r[k]));
   if (_toolsForPanels.length > 0) {
     // Bug 5 fix: collapse POSITIVE-only scanners into a single summary
-    // line instead of one full panel each (those are "no exposure
-    // detected" panels, low-signal noise). Only render full panels for
-    // scanners with at least one non-POSITIVE finding OR with intel data.
+    // line + list. Same treatment for scaffold-only scanners ([NOT
+    // IMPLEMENTED] markers). Both are low-signal repetitive panels.
     const _isPosOnly = d => {
       const fs = Array.isArray(d.findings) ? d.findings : [];
       if (fs.length === 0) return false;
       return fs.every(f => String(f.severity||"INFO").toUpperCase() === "POSITIVE");
     };
+    const _isScaffoldOnly = d => {
+      const fs = Array.isArray(d.findings) ? d.findings : [];
+      if (fs.length === 0) return false;
+      return fs.every(_isFindingScaffold);
+    };
     const _positiveOnly = _toolsForPanels.filter(k => _isPosOnly(r[k]));
+    const _scaffoldOnly = _toolsForPanels.filter(k => _isScaffoldOnly(r[k]));
     const _collapsePos = _positiveOnly.length >= 5;
-    const _renderTools = _collapsePos
-      ? _toolsForPanels.filter(k => !_positiveOnly.includes(k))
-      : _toolsForPanels;
+    const _collapseScaffold = _scaffoldOnly.length >= 5;
+    const _hiddenSet = new Set([
+      ...(_collapsePos ? _positiveOnly : []),
+      ...(_collapseScaffold ? _scaffoldOnly : []),
+    ]);
+    const _renderTools = _toolsForPanels.filter(k => !_hiddenSet.has(k));
+    const _prettyName = (k) => String(k || "").replace(/_/g, " ")
+        .replace(/\b\w/g, c => c.toUpperCase());
     chk(20); y = sHead("Per-Tool Intelligence", y);
     if (_collapsePos) {
+      // Summary line - green
       chk(7); fillR(margin, y, contentW, 6, [240,253,244]); fillR(margin, y, 3, 6, [15,118,82]);
       txt(`${_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Counted in §Scan Coverage.`,
           margin + 6, y + 4.2, 7.5, [15,118,82], true);
       y += 9;
+      // Compact 3-column list of which scanners
+      const _names = _positiveOnly.map(_prettyName).sort();
+      const _cols3 = 3;
+      const _colW = (contentW - 4) / _cols3;
+      for (let _i = 0; _i < _names.length; _i += _cols3) {
+        chk(4);
+        for (let _j = 0; _j < _cols3; _j++) {
+          if (_i + _j >= _names.length) break;
+          txt("- " + _names[_i + _j].substring(0, 32),
+              margin + 2 + (_j * _colW), y + 3, 6.5, GRAY);
+        }
+        y += 3.5;
+      }
+      y += 3;
+    }
+    if (_collapseScaffold) {
+      // Summary line - amber (scaffold awaiting forge)
+      chk(7); fillR(margin, y, contentW, 6, [255,247,237]); fillR(margin, y, 3, 6, [202,138,4]);
+      txt(`${_scaffoldOnly.length} scanners are scaffolded ([NOT IMPLEMENTED]) - awaiting forge implementation per FORGE_PLAYBOOK roadmap.`,
+          margin + 6, y + 4.2, 7.5, [133,79,11], true);
+      y += 9;
+      const _names = _scaffoldOnly.map(_prettyName).sort();
+      const _cols3 = 3;
+      const _colW = (contentW - 4) / _cols3;
+      for (let _i = 0; _i < _names.length; _i += _cols3) {
+        chk(4);
+        for (let _j = 0; _j < _cols3; _j++) {
+          if (_i + _j >= _names.length) break;
+          txt("- " + _names[_i + _j].substring(0, 32),
+              margin + 2 + (_j * _colW), y + 3, 6.5, GRAY);
+        }
+        y += 3.5;
+      }
+      y += 3;
     }
     // Bug 4 fix: dedupe MITRE/CWE codes per row before rendering.
     const _dedupCodes = s => {
