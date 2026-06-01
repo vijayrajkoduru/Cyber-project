@@ -41,12 +41,24 @@ _USER_CTX: contextvars.ContextVar = contextvars.ContextVar("user_ctx", default=N
 
 class ScanRequest(BaseModel):
     """Standard request shape every tool accepts.
-    Tools that need extra fields subclass this in their own file."""
+    Tools that need extra fields subclass this in their own file.
+
+    Extended 2026-06-01: optional customer-input fields for Container/K8s
+    module probes that need more than a hostname. Each field is consumed
+    by specific probes via a precondition gate; if absent the probe
+    honestly returns NOT_APPLICABLE."""
     target: str
     api_key: Optional[str] = None
     auth_cookie: Optional[str] = None       # e.g. "PHPSESSID=abc; token=xyz"
     auth_bearer: Optional[str] = None       # e.g. "eyJhbGci..."
     wordlist: Optional[List[str]] = None    # custom paths for fuzzers
+    # Customer-provided artifacts for input-required scanners:
+    image_ref: Optional[str] = None         # OCI image ref e.g. "nginx:1.21"
+    dockerfile_text: Optional[str] = None   # raw Dockerfile content
+    kubeconfig: Optional[str] = None        # full kubeconfig YAML
+    pod_spec_yaml: Optional[str] = None     # K8s pod / deployment spec YAML
+    repo_url: Optional[str] = None          # git repository URL (Supply Chain)
+    api_spec_url: Optional[str] = None      # OpenAPI / Swagger spec URL (APISec)
 
 
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
