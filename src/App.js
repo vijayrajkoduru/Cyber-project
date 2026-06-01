@@ -18228,6 +18228,46 @@ const ADVANCED_INPUT_DEFS = {
   api_spec_url:    {label:"OpenAPI / Swagger URL",ph:"https://api.example.com/openapi.json",                        type:"text",     hint:"Spec URL for schemathesis / spec-aware API fuzzers"},
 };
 
+// Curated one-click presets per advanced-input field. All entries are legal,
+// publicly available test artifacts (intentionally vulnerable labs / well-known
+// leaky repos / standard demo images). Clicking a chip populates that field.
+const ADVANCED_INPUT_PRESETS = {
+  image_ref: [
+    {label:"DVWA",            value:"vulnerables/web-dvwa:latest",          desc:"Classic OWASP-style lab — 100+ CVEs in old PHP/Debian base"},
+    {label:"Juice Shop",      value:"bkimminich/juice-shop:latest",         desc:"OWASP Juice Shop — Node.js modern target"},
+    {label:"WebGoat",         value:"webgoat/webgoat:latest",               desc:"OWASP WebGoat — Java/Spring lab"},
+    {label:"bWAPP",           value:"raesene/bwapp:latest",                 desc:"bWAPP — buggy web app, 100+ vulns"},
+    {label:"Log4Shell",       value:"vulhub/log4j2:2.14.1",                 desc:"Log4Shell CVE-2021-44228 reproducer image"},
+    {label:"nginx 1.21 (old)",value:"nginx:1.21",                           desc:"Old nginx — many CVEs in TLS/HTTP libs"},
+  ],
+  dockerfile_text: [
+    {label:"Intentionally bad",
+     value:"FROM debian:bookworm\nRUN apt-get update && apt-get install -y curl openssh-server\nRUN curl https://get.docker.com | bash\nENV AWS_SECRET_KEY=AKIAIOSFODNN7EXAMPLEKEY1234567890ABCDEF\nCOPY . /app\nWORKDIR /app\nEXPOSE 22 80\nCMD [\"./run.sh\"]\n",
+     desc:"Fires 9 of 11 Dockerfile probes — root user, curl|bash, secret env, unpinned apt, expose 22"},
+    {label:"Hardened (negative test)",
+     value:"FROM gcr.io/distroless/python3-debian12:nonroot\nUSER nonroot\nCOPY --chown=nonroot:nonroot app.py /app/\nWORKDIR /app\nHEALTHCHECK --interval=30s --timeout=3s CMD [\"python3\", \"-c\", \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\"]\nEXPOSE 8080\nCMD [\"app.py\"]\n",
+     desc:"Distroless + nonroot + healthcheck — should return mostly POSITIVE"},
+  ],
+  pod_spec_yaml: [
+    {label:"Privileged pod (bad)",
+     value:"apiVersion: v1\nkind: Pod\nmetadata:\n  name: bad-pod\nspec:\n  hostNetwork: true\n  hostPID: true\n  containers:\n  - name: app\n    image: nginx:latest\n    securityContext:\n      privileged: true\n      runAsUser: 0\n      allowPrivilegeEscalation: true\n      capabilities:\n        add: [\"SYS_ADMIN\", \"NET_ADMIN\"]\n    volumeMounts:\n    - name: dockersock\n      mountPath: /var/run/docker.sock\n    - name: hostroot\n      mountPath: /host\n  volumes:\n  - name: dockersock\n    hostPath: { path: /var/run/docker.sock }\n  - name: hostroot\n    hostPath: { path: / }\n",
+     desc:"Fires 10+ pod-spec probes: privileged, capadd, hostNet/PID, hostPath, docker.sock"},
+    {label:"Hardened deployment",
+     value:"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: good-app\nspec:\n  replicas: 2\n  selector:\n    matchLabels: { app: good-app }\n  template:\n    metadata:\n      labels: { app: good-app }\n    spec:\n      securityContext:\n        runAsNonRoot: true\n        runAsUser: 10001\n        seccompProfile: { type: RuntimeDefault }\n      containers:\n      - name: app\n        image: gcr.io/distroless/python3:nonroot\n        securityContext:\n          readOnlyRootFilesystem: true\n          allowPrivilegeEscalation: false\n          capabilities: { drop: [\"ALL\"] }\n        resources:\n          limits: { cpu: 500m, memory: 256Mi }\n          requests: { cpu: 100m, memory: 128Mi }\n",
+     desc:"All security context set right — should return mostly POSITIVE"},
+  ],
+  repo_url: [
+    {label:"Plazmaz leaky-repo",  value:"https://github.com/Plazmaz/leaky-repo",        desc:"Curated leaky-repo for secret-scanner testing"},
+    {label:"Kubernetes Goat",     value:"https://github.com/madhuakula/kubernetes-goat",desc:"Intentionally vulnerable K8s — also fires IaC + Helm probes"},
+    {label:"DVPWA",               value:"https://github.com/anxolerd/dvpwa",            desc:"Damn Vulnerable Python Web App — Python secrets"},
+    {label:"OWASP NodeGoat",      value:"https://github.com/OWASP/NodeGoat",            desc:"OWASP NodeGoat — Node.js insecure-by-design"},
+  ],
+  api_spec_url: [
+    {label:"Petstore OpenAPI",    value:"https://petstore3.swagger.io/api/v3/openapi.json", desc:"Swagger Petstore — standard OpenAPI 3 demo spec"},
+    {label:"crAPI spec",          value:"https://crapi.apisec.ai/openapi.json",             desc:"OWASP crAPI vulnerable API spec"},
+  ],
+};
+
 // Per-module curated test targets. Every entry is either a publicly-legal
 // vulnerable lab (scanme.nmap.org, testphp.vulnweb.com, juice-shop, etc.) or
 // a syntactic format example. Click on one to populate the target input.
@@ -18844,6 +18884,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               const def = ADVANCED_INPUT_DEFS[k];
               if (!def) return null;
               const val = advInputs[k] || "";
+              const presets = ADVANCED_INPUT_PRESETS[k] || [];
               return (
                 <div key={k}>
                   <label style={{fontSize:10, color:"#94a3b8", fontWeight:600,
@@ -18860,6 +18901,22 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       </button>
                     )}
                   </label>
+                  {presets.length > 0 && (
+                    <div style={{display:"flex", flexWrap:"wrap", gap:6, marginBottom:6}}>
+                      {presets.map((p, i) => (
+                        <button key={i} onClick={() => setAdvField(k, p.value)}
+                          disabled={running} title={p.desc}
+                          style={{background: val === p.value ? "#1e3a5f" : "#0f172a",
+                                  border: `1px solid ${val === p.value ? "#3b82f6" : "#334155"}`,
+                                  borderRadius:4, padding:"3px 8px",
+                                  color: val === p.value ? "#93c5fd" : "#94a3b8",
+                                  fontSize:10, cursor: running ? "not-allowed" : "pointer",
+                                  fontFamily:"JetBrains Mono, ui-monospace, monospace"}}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {def.type === "textarea" ? (
                     <textarea value={val} onChange={e => setAdvField(k, e.target.value)}
                       disabled={running} placeholder={def.ph} rows={def.rows || 6}
