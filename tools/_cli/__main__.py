@@ -67,7 +67,7 @@ def cmd_list(args):
     print(f"\nVulnusLab API v{data.get('version','?')}  —  {data.get('total_modules',0)} modules, "
           f"{data.get('total_endpoints',0)} total endpoints\n")
     for m in data.get("modules", []):
-        marker = "✓" if m.get("has_run_all") else " "
+        marker = "" if m.get("has_run_all") else " "
         print(f"  {marker}  {m['slug']:20s}  {m['endpoint_count']:>4} endpoints  "
               f"{'module_playbooks/' + (m.get('playbook') or '?')}")
     return 0

@@ -151,7 +151,7 @@ for endpoint, title, sev_extras in [
     ("aspx_regeorg", "ASPX reGeorg webshell tunnel.", {"sev":"HIGH","cvss":"7.5"}),
     ("jsp_regeorg", "JSP reGeorg webshell tunnel.", {"sev":"HIGH","cvss":"7.5"}),
     ("manual_proxy_chain", "Manual creative proxy chain (analyst).", {"sev":"INFO","cvss":"0.0"}),
-    ("http2_socks_proxy", "HTTP/2 over SOCKS proxy ⭐.", {}),
+    ("http2_socks_proxy", "HTTP/2 over SOCKS proxy .", {}),
 ]:
     def _make(ep=endpoint, t=title, e=sev_extras):
         def _h(req: ScanRequest, _=Depends(verify_scan_quota)):
@@ -167,8 +167,8 @@ for endpoint, title, sev_extras in [
 for endpoint, title, sev_extras in [
     ("chisel_pivot_client_server", "Chisel client/server pivot.", {"sev":"HIGH","cvss":"7.5"}),
     ("chisel_reverse_tunnel", "Chisel reverse tunnel pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("ligolo_ng_modern_pivot", "Ligolo-ng ⭐ modern TUN tunnel pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("rsockstun_pivot", "Rsockstun ⭐ reverse SOCKS over TLS.", {"sev":"HIGH","cvss":"7.0"}),
+    ("ligolo_ng_modern_pivot", "Ligolo-ng modern TUN tunnel pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("rsockstun_pivot", "Rsockstun reverse SOCKS over TLS.", {"sev":"HIGH","cvss":"7.0"}),
     ("socat_relay_pivot", "socat relay pivot.", {}),
     ("ncat_relay_pivot", "ncat relay pivot.", {}),
     ("plink_pivot", "plink (Windows PuTTY) port forward pivot.", {}),
@@ -242,7 +242,7 @@ def crackmapexec_netexec_advisory(req: ScanRequest, _=Depends(verify_scan_quota)
 @router.post("/api/pivot/sccm_naa_advisory")
 def sccm_naa_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("sccm_naa_advisory", req.target,
-        "⭐ SCCM lateral via Network Access Account (NAA) credential reuse.",
+        "SCCM lateral via Network Access Account (NAA) credential reuse.",
         sev="HIGH", cvss="8.0", cwe="CWE-321",
         remediation="Remove NAA accounts; use device certificates instead (Microsoft 2024 guidance).")
 
@@ -273,16 +273,16 @@ for endpoint, title, extras in [
     router.add_api_route(f"/api/pivot/{endpoint}", _make(), methods=["POST"])
 
 
-# ─── §6 Modern Cloud Pivot (10) ⭐ ───
+# ─── §6 Modern Cloud Pivot (10) ───
 for endpoint, title, extras in [
-    ("aws_sts_assumerole_chain", "⭐ AWS STS AssumeRole cross-account pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("azure_managed_id_cross_tenant", "⭐ Azure managed identity → cross-tenant pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("gcp_impersonate_sa", "⭐ GCP impersonate service account.", {"sev":"HIGH","cvss":"7.5"}),
-    ("eks_irsa_to_aws_account", "⭐ EKS pod → IRSA → AWS account pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("gke_workload_identity_pivot", "⭐ GKE workload identity → GCP project pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("oidc_trust_cross_cloud", "⭐ OIDC trust → cross-cloud pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("cross_account_s3_sts_pivot", "⭐ Cross-account S3 + STS pivot.", {"sev":"HIGH","cvss":"7.5"}),
-    ("cross_tenant_azure_ad_pivot", "⭐ Cross-tenant Azure AD pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("aws_sts_assumerole_chain", "AWS STS AssumeRole cross-account pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("azure_managed_id_cross_tenant", "Azure managed identity → cross-tenant pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("gcp_impersonate_sa", "GCP impersonate service account.", {"sev":"HIGH","cvss":"7.5"}),
+    ("eks_irsa_to_aws_account", "EKS pod → IRSA → AWS account pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("gke_workload_identity_pivot", "GKE workload identity → GCP project pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("oidc_trust_cross_cloud", "OIDC trust → cross-cloud pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("cross_account_s3_sts_pivot", "Cross-account S3 + STS pivot.", {"sev":"HIGH","cvss":"7.5"}),
+    ("cross_tenant_azure_ad_pivot", "Cross-tenant Azure AD pivot.", {"sev":"HIGH","cvss":"7.5"}),
     ("manual_cloud_chain", "Manual creative cloud chain (analyst).", {"sev":"INFO","cvss":"0.0"}),
     ("manual_hybrid_identity_pivot", "Manual hybrid identity pivot (analyst).", {"sev":"INFO","cvss":"0.0"}),
 ]:

@@ -3,18 +3,21 @@
     "score": 4.3
   },
   "exploit": {
-    "score": 4.3
+    "score": 0.0
   },
   "password": {
     "score": 0.0
   },
   "recon": {
-    "score": 97.4
+    "score": 73.6
   },
   "vuln": {
-    "score": 44.2
+    "score": 41.5
   },
   "webapp": {
-    "score": 61.4
+    "score": 48.1
+  },
+  "osint": {
+    "score": 60.2
   }
 }

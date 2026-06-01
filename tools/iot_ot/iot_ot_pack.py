@@ -251,10 +251,10 @@ T = [
     ("thread_audit", "Thread protocol audit.", "MEDIUM", "5.5"),
     ("matter_audit", "Matter protocol audit.", "MEDIUM", "5.5"),
     ("manual_mesh_iot_review", "Manual mesh IoT review.", "INFO", "0.0"),
-    # §7 Matter/Smart Home (4) ⭐
-    ("matter_commissioning_audit", "⭐ Matter commissioning audit.", "MEDIUM", "5.5"),
-    ("matter_pase_pake_audit", "⭐ Matter PASE/PAKE audit.", "MEDIUM", "5.5"),
-    ("matter_otacert_audit", "⭐ Matter OTA cert audit.", "MEDIUM", "5.5"),
+    # §7 Matter/Smart Home (4)
+    ("matter_commissioning_audit", "Matter commissioning audit.", "MEDIUM", "5.5"),
+    ("matter_pase_pake_audit", "Matter PASE/PAKE audit.", "MEDIUM", "5.5"),
+    ("matter_otacert_audit", "Matter OTA cert audit.", "MEDIUM", "5.5"),
     ("manual_matter_review", "Manual Matter review.", "INFO", "0.0"),
     # §8 OT Pentest Methodology (4)
     ("ot_safety_first_audit", "OT safety-first audit.", "INFO", "0.0"),

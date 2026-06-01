@@ -180,7 +180,7 @@ T = [
     ("token_refresh_steal_audit", "Refresh token steal audit.", "HIGH", "8.0"),
     ("token_pra_audit", "PRA (Persistent Refresh Auth) audit.", "HIGH", "7.5"),
     ("token_clipboard_steal", "Token clipboard steal.", "HIGH", "7.5"),
-    ("token_aitm_steal", "⭐ Token AiTM steal.", "CRITICAL", "9.0"),
+    ("token_aitm_steal", "Token AiTM steal.", "CRITICAL", "9.0"),
     ("token_dump_via_token_finder", "Token dump (TokenFinder).", "HIGH", "7.5"),
     ("token_replay_cross_tenant", "Cross-tenant token replay.", "HIGH", "8.0"),
     ("token_ipchange_audit", "Token IP-change audit.", "MEDIUM", "5.5"),
@@ -216,14 +216,14 @@ T = [
     ("m365_application_admin", "Application Admin audit.", "HIGH", "8.0"),
     ("m365_cloud_app_admin", "Cloud App Admin audit.", "HIGH", "8.0"),
     ("manual_m365_review", "Manual M365 review.", "INFO", "0.0"),
-    # §8 Modern CVE / TTPs (8) ⭐
-    ("entra_cve_token_signing", "⭐ Entra token signing CVE audit.", "HIGH", "8.0"),
-    ("entra_cve_seamless_sso_2024", "⭐ Seamless SSO 2024 CVE.", "HIGH", "7.5"),
-    ("entra_storm_0558_audit", "⭐ Storm-0558 token signing audit.", "HIGH", "8.0"),
-    ("entra_msa_audit", "⭐ MSA consumer key audit.", "HIGH", "7.5"),
-    ("entra_signin_log_anomaly", "⭐ Sign-in log anomaly detection.", "MEDIUM", "5.5"),
-    ("entra_authentication_methods_v2", "⭐ Authentication Methods V2 audit.", "MEDIUM", "5.5"),
-    ("entra_ngc_key_audit", "⭐ NGC key audit.", "MEDIUM", "5.5"),
+    # §8 Modern CVE / TTPs (8)
+    ("entra_cve_token_signing", "Entra token signing CVE audit.", "HIGH", "8.0"),
+    ("entra_cve_seamless_sso_2024", "Seamless SSO 2024 CVE.", "HIGH", "7.5"),
+    ("entra_storm_0558_audit", "Storm-0558 token signing audit.", "HIGH", "8.0"),
+    ("entra_msa_audit", "MSA consumer key audit.", "HIGH", "7.5"),
+    ("entra_signin_log_anomaly", "Sign-in log anomaly detection.", "MEDIUM", "5.5"),
+    ("entra_authentication_methods_v2", "Authentication Methods V2 audit.", "MEDIUM", "5.5"),
+    ("entra_ngc_key_audit", "NGC key audit.", "MEDIUM", "5.5"),
     ("manual_modern_entra_chain", "Manual modern Entra chain.", "INFO", "0.0"),
 ]
 

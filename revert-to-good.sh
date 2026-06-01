@@ -14,31 +14,31 @@ if [ -f .safe-fallback-commit ]; then
   COMMIT=$(cat .safe-fallback-commit)
   git stash push -m "auto-stash-$(date +%s)" 2>/dev/null
   git checkout "$COMMIT" -- . 2>/dev/null
-  echo "✓ source reverted to $COMMIT"
+  echo "source reverted to $COMMIT"
 fi
 
 # Restore users.db
 if [ -f .login_backups/users.db.good ]; then
   cp .login_backups/users.db.good users.db 2>/dev/null
   cp .login_backups/users.db.good data/users.db 2>/dev/null
-  echo "✓ users.db restored"
+  echo "users.db restored"
 fi
 
 # Restore nginx
 if [ -f .login_backups/nginx.conf.good ]; then
   cp .login_backups/nginx.conf.good nginx.conf
-  echo "✓ nginx.conf restored"
+  echo "nginx.conf restored"
 fi
 
 docker compose up -d backend
 sleep 90
 if docker exec vulnuslab_backend curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then
-  echo "✓ Kali backend ONLINE"
+  echo "Kali backend ONLINE"
   docker compose up -d frontend
   sleep 10
-  echo "✓ Dashboard login restored"
+  echo "Dashboard login restored"
   docker compose ps
 else
-  echo "✗ Revert failed"
+  echo "Revert failed"
   docker logs vulnuslab_backend --tail 20
 fi

@@ -8,7 +8,7 @@ When you type a **number** (e.g. `5`) I read the matching playbook and forge the
 
 ---
 
-## ✅ LIVE Modules (audit + upgrade to 100%)
+## LIVE Modules (audit + upgrade to 100%)
 | # | File | Module | Current | Target |
 |---|---|---|---|---|
 | 1 | [01_recon.md](01_recon.md) | Information Gathering | 96% | 100% (184 tech) |
@@ -20,7 +20,7 @@ When you type a **number** (e.g. `5`) I read the matching playbook and forge the
 | 7 | [07_bof.md](07_bof.md) | Buffer Overflow | ~30% | 100% (80 tech) |
 | 8 | [08_password.md](08_password.md) | Password Attacks | ~1% | 100% (95 tech) |
 
-## 🟡 SOON Modules (build from playbook)
+## SOON Modules (build from playbook)
 | # | File | Module | Techniques |
 |---|---|---|---|
 | 9 | [09_client_side.md](09_client_side.md) | Client-Side Attacks | 75 |
@@ -38,18 +38,18 @@ When you type a **number** (e.g. `5`) I read the matching playbook and forge the
 | 21 | [21_cloud.md](21_cloud.md) | Cloud Security Testing | 165 |
 | 22 | [22_apisec.md](22_apisec.md) | API Security Testing | 140 |
 
-## 🔴 MISSING Modules (NEW for 2026)
+## MISSING Modules (NEW for 2026)
 | # | File | Module | Priority | Techniques |
 |---|---|---|---|---|
-| 23 | [23_ai_llm.md](23_ai_llm.md) | AI / LLM Security ⭐ | 🔴 P0 | 130 |
-| 24 | [24_container_k8s.md](24_container_k8s.md) | Container / Kubernetes ⭐ | 🔴 P0 | 142 |
-| 25 | [25_supply_chain.md](25_supply_chain.md) | Supply Chain Security ⭐ | 🔴 P0 | 110 |
-| 26 | [26_phishing.md](26_phishing.md) | Phishing / Social Eng ⭐ | 🟡 P1 | 75 |
-| 27 | [27_red_team.md](27_red_team.md) | Adversary Emulation ⭐ | 🟡 P1 | 90 |
-| 28 | [28_hybrid_identity.md](28_hybrid_identity.md) | Entra ID / Azure AD ⭐ | 🟡 P1 | 95 |
-| 29 | [29_sspm.md](29_sspm.md) | SaaS Security Posture ⭐ | 🟢 P2 | 90 |
-| 30 | [30_iot_ot.md](30_iot_ot.md) | IoT / OT / ICS ⭐ | 🟢 P2 | 90 |
-| 31 | [31_firmware.md](31_firmware.md) | Firmware / Embedded ⭐ | 🟢 P3 | 75 |
+| 23 | [23_ai_llm.md](23_ai_llm.md) | AI / LLM Security | P0 | 130 |
+| 24 | [24_container_k8s.md](24_container_k8s.md) | Container / Kubernetes | P0 | 142 |
+| 25 | [25_supply_chain.md](25_supply_chain.md) | Supply Chain Security | P0 | 110 |
+| 26 | [26_phishing.md](26_phishing.md) | Phishing / Social Eng | P1 | 75 |
+| 27 | [27_red_team.md](27_red_team.md) | Adversary Emulation | P1 | 90 |
+| 28 | [28_hybrid_identity.md](28_hybrid_identity.md) | Entra ID / Azure AD | P1 | 95 |
+| 29 | [29_sspm.md](29_sspm.md) | SaaS Security Posture | P2 | 90 |
+| 30 | [30_iot_ot.md](30_iot_ot.md) | IoT / OT / ICS | P2 | 90 |
+| 31 | [31_firmware.md](31_firmware.md) | Firmware / Embedded | P3 | 75 |
 
 ---
 

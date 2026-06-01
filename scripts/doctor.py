@@ -203,27 +203,27 @@ def render_text(report: dict) -> int:
     if py["status"] == "skip":
         print(f"    -- skipped ({py['reason']})")
     else:
-        print(f"    ✓ installed: {py['installed']}")
+        print(f"    installed: {py['installed']}")
         if py["missing"]:
             for pkg, pin in py["missing"]:
                 pin_s = f"=={pin}" if pin else ""
-                print(f"    ✗ MISSING: {pkg}{pin_s}")
+                print(f"    MISSING: {pkg}{pin_s}")
         if py["outdated"]:
             for pkg, cur, pin in py["outdated"]:
-                print(f"    ⚠ OUTDATED: {pkg} installed={cur} pinned={pin}")
+                print(f"    OUTDATED: {pkg} installed={cur} pinned={pin}")
 
     # CLI tools
     cli = report["cli"]
     print(f"\n  External CLI tools:")
     for t in cli["tools"]:
         if t["status"] == "OK":
-            print(f"    ✓ {t['name']:12s} {t.get('found','?'):>10s}  {t.get('path','')}")
+            print(f"    {t['name']:12s} {t.get('found','?'):>10s}  {t.get('path','')}")
         elif t["status"] == "OUTDATED":
-            print(f"    ⚠ {t['name']:12s} {t.get('found','?'):>10s}  "
+            print(f"    {t['name']:12s} {t.get('found','?'):>10s}  "
                   f"(need >= {t.get('min','?')})")
         elif t["status"] == "MISSING":
             req = "REQUIRED" if t.get("required") else "optional"
-            mark = "✗" if t.get("required") else "·"
+            mark = "" if t.get("required") else "·"
             print(f"    {mark} {t['name']:12s} {'not on PATH':>15s}  ({req})")
         else:
             print(f"    ! {t['name']:12s} {t.get('error', 'probe failed')}")
@@ -234,19 +234,19 @@ def render_text(report: dict) -> int:
     if wl["status"] == "skip":
         print(f"    -- skipped ({wl['reason']})")
     else:
-        print(f"    ✓ fresh: {wl['fresh_count']}")
+        print(f"    fresh: {wl['fresh_count']}")
         for s in wl["stale"]:
-            print(f"    ⚠ STALE: {s['file']}  "
+            print(f"    STALE: {s['file']}  "
                   f"age={s['age_days']}d > {s['max_days']}d")
 
     # Verdict
     print(f"\n{'─' * 65}")
     if report["exit"] == 0:
-        print("  ✅ ALL GREEN")
+        print("  ALL GREEN")
     elif report["exit"] == 2:
-        print("  ⚠️  WARNINGS (outdated/stale — not blocking)")
+        print("   WARNINGS (outdated/stale — not blocking)")
     else:
-        print("  ❌ FAILURES (missing required deps/tools)")
+        print("  FAILURES (missing required deps/tools)")
     print("═" * 65)
     return report["exit"]
 
@@ -286,12 +286,12 @@ def main():
         pkgs = [f"{p}=={v}" if v else p
                 for p, v in report["python"]["missing"]]
         if pip_install(pkgs, upgrade=False):
-            print("  ✓ install OK — re-running check")
+            print("  install OK — re-running check")
             report = build_report(manifest)
     if args.update and report["python"].get("outdated"):
         pkgs = [p for p, _, _ in report["python"]["outdated"]]
         if pip_install(pkgs, upgrade=True):
-            print("  ✓ update OK — re-running check")
+            print("  update OK — re-running check")
             report = build_report(manifest)
 
     if args.json:

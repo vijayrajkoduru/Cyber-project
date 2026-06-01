@@ -307,7 +307,7 @@ def main():
         open(f"/tmp/{kind}_raw.txt", "w").write(raw)
         sys.exit(f"Salvage failed. Saved /tmp/{kind}_raw.txt ({len(raw)} bytes)")
     if salvaged:
-        print(f"  ⚠ truncated, salvaged {len(items)} items")
+        print(f"  truncated, salvaged {len(items)} items")
 
     out = f"/tmp/vl_payloads/{kind}.py"
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -318,7 +318,7 @@ def main():
         f.write(pprint.pformat(items, width=120, sort_dicts=False))
         f.write("\n")
     cost = (in_tok * 3 + out_tok * 15) / 1_000_000
-    print(f"  ✓ wrote {len(items)} items to {out}")
+    print(f"  wrote {len(items)} items to {out}")
     print(f"  tokens: {in_tok} in, {out_tok} out  |  cost: ~${cost:.3f}")
 
 

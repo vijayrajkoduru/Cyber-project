@@ -49,7 +49,7 @@ def main():
     # chmod +x — needed on Unix; harmless on Windows
     target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-    print(f"✓ installed {target.relative_to(ROOT)}")
+    print(f"installed {target.relative_to(ROOT)}")
     print(f"  Test: try committing a change that lowers a module's score.")
     print(f"  Bypass: SKIP_VL_FOUNDRY=1 git commit ...")
 

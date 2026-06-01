@@ -389,15 +389,15 @@ T = [
     ("gcp_audit_logs_off", "GCP audit logs off.", "MEDIUM", "5.5"),
     ("gcp_secret_manager_audit", "Secret Manager audit.", "MEDIUM", "5.5"),
     ("gcp_workload_identity_audit", "Workload Identity audit.", "MEDIUM", "5.5"),
-    # §5 Multi-Cloud CIEM (10) ⭐
-    ("ciem_overpermissive_paths", "⭐ CIEM overpermissive identity paths.", "HIGH", "7.5"),
-    ("ciem_cross_account_trust", "⭐ Cross-account trust audit.", "HIGH", "7.5"),
-    ("ciem_oidc_federation_audit", "⭐ OIDC federation audit.", "HIGH", "7.5"),
-    ("ciem_unused_access_keys", "⭐ Unused access keys.", "MEDIUM", "5.5"),
-    ("ciem_privilege_escalation_paths", "⭐ Privesc paths.", "HIGH", "8.0"),
-    ("ciem_zombie_users", "⭐ Zombie users (no login >90d).", "MEDIUM", "5.5"),
-    ("ciem_excessive_perm_diff", "⭐ Excessive perms vs least-priv baseline.", "MEDIUM", "5.5"),
-    ("ciem_service_account_creep", "⭐ Service account perm creep.", "MEDIUM", "5.5"),
+    # §5 Multi-Cloud CIEM (10)
+    ("ciem_overpermissive_paths", "CIEM overpermissive identity paths.", "HIGH", "7.5"),
+    ("ciem_cross_account_trust", "Cross-account trust audit.", "HIGH", "7.5"),
+    ("ciem_oidc_federation_audit", "OIDC federation audit.", "HIGH", "7.5"),
+    ("ciem_unused_access_keys", "Unused access keys.", "MEDIUM", "5.5"),
+    ("ciem_privilege_escalation_paths", "Privesc paths.", "HIGH", "8.0"),
+    ("ciem_zombie_users", "Zombie users (no login >90d).", "MEDIUM", "5.5"),
+    ("ciem_excessive_perm_diff", "Excessive perms vs least-priv baseline.", "MEDIUM", "5.5"),
+    ("ciem_service_account_creep", "Service account perm creep.", "MEDIUM", "5.5"),
     ("manual_ciem_review", "Manual CIEM review.", "INFO", "0.0"),
     ("manual_iam_lateral_chain", "Manual IAM lateral chain.", "INFO", "0.0"),
     # §6 Serverless (10)
@@ -449,11 +449,11 @@ T = [
     ("kms_grants_audit", "KMS grants audit.", "MEDIUM", "5.5"),
     ("hsm_backed_keys_audit", "HSM-backed keys audit.", "MEDIUM", "5.5"),
     ("manual_secret_review", "Manual secret review.", "INFO", "0.0"),
-    # §11 Cross-Cloud OIDC (6) ⭐
-    ("oidc_provider_thumbprint_audit", "⭐ OIDC provider thumbprint audit.", "HIGH", "7.5"),
-    ("gha_oidc_role_audit", "⭐ GitHub Actions OIDC role audit.", "HIGH", "7.5"),
-    ("cross_cloud_oidc_trust_audit", "⭐ Cross-cloud OIDC trust audit.", "HIGH", "7.5"),
-    ("oidc_subject_claim_wildcard", "⭐ OIDC subject claim wildcard.", "CRITICAL", "9.0"),
+    # §11 Cross-Cloud OIDC (6)
+    ("oidc_provider_thumbprint_audit", "OIDC provider thumbprint audit.", "HIGH", "7.5"),
+    ("gha_oidc_role_audit", "GitHub Actions OIDC role audit.", "HIGH", "7.5"),
+    ("cross_cloud_oidc_trust_audit", "Cross-cloud OIDC trust audit.", "HIGH", "7.5"),
+    ("oidc_subject_claim_wildcard", "OIDC subject claim wildcard.", "CRITICAL", "9.0"),
     ("manual_oidc_audit", "Manual OIDC audit.", "INFO", "0.0"),
     ("manual_cross_cloud_chain", "Manual cross-cloud chain.", "INFO", "0.0"),
     # §12 Cloud Compliance (4)

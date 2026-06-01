@@ -301,7 +301,7 @@ def print_result(r: dict, verbose: bool = False):
     layers = r["layers"]
     for layer_name, data in layers.items():
         pct = data["pct"]
-        mark = "✅" if pct >= 90 else "⚠️ " if pct >= 70 else "❌"
+        mark = "" if pct >= 90 else "" if pct >= 70 else ""
         label = layer_name.replace("_", " ")
         print(f"  {mark} {label:25s} {data['passed']:3d}/{data['of']:<3d} "
               f"{bar(pct)} {pct:5.1f}%")
@@ -313,7 +313,7 @@ def print_result(r: dict, verbose: bool = False):
         print(f"\n  7-check Definition of Done — module-wide pass rate:")
         for name, data in rollup.items():
             pct = data["pct"]
-            mark = "✅" if pct >= 90 else "⚠️ " if pct >= 70 else "❌"
+            mark = "" if pct >= 90 else "" if pct >= 70 else ""
             print(f"  {mark} {name:15s} {data['passed']:3d}/{data['of']:<3d} "
                   f"{bar(pct)} {pct:5.1f}%")
 
@@ -327,12 +327,12 @@ def print_result(r: dict, verbose: bool = False):
             "endpoint_called": "fetch(/api/<module>/run_all) called",
         }
         for k, v in ui.items():
-            mark = "✅" if v else "❌"
+            mark = "" if v else ""
             print(f"  {mark} {labels.get(k, k)}")
 
     print(f"{'─' * 65}")
     status = "READY TO SHIP" if r["ready"] else "NOT READY"
-    icon = "✅" if r["ready"] else "❌"
+    icon = "" if r["ready"] else ""
     print(f"  {icon} SCORE: {r['score']:>5.1f}/100   STATUS: {status}")
     print(f"{'═' * 65}")
 
@@ -340,9 +340,9 @@ def print_result(r: dict, verbose: bool = False):
         print(f"\n  Per-scanner 7-check detail:")
         for name, checks in sorted(r["per_scanner_checks"].items()):
             passed = sum(checks.values())
-            status = "✅" if passed >= 5 else "❌"
+            status = "" if passed >= 5 else ""
             details = " ".join(
-                f"{c}:{'✓' if v else '✗'}" for c, v in checks.items()
+                f"{c}:{'' if v else ''}" for c, v in checks.items()
             )
             print(f"  {status} {name:30s} {passed}/7  ({details})")
 

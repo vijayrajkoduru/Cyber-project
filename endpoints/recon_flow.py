@@ -187,7 +187,7 @@ async def _fire_webhooks(target: str, scan_record: dict):
 
 def _format_webhook(fmt, target, scan_id, findings):
     if fmt == "slack":
-        return {"text": f"🚨 VulnusLab scan: {target}",
+        return {"text": f"VulnusLab scan: {target}",
                 "blocks": [{"type":"section","text":{"type":"mrkdwn",
                     "text":f"*{len(findings)} findings ≥ MEDIUM* on `{target}`\nScan ID: `{scan_id}`"}}]
                 + [{"type":"section","text":{"type":"mrkdwn",

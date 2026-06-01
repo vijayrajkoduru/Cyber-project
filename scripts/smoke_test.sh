@@ -58,7 +58,7 @@ if [ -z "$TOKEN" ]; then
   echo "        complete the smoke test:"
   echo "          export VL_TOKEN='<from browser localStorage.cyberToken>'"
   echo ""
-  echo "  ⚠️  PARTIAL PASS (health + tiers verified, scan not exercised)"
+  echo "   PARTIAL PASS (health + tiers verified, scan not exercised)"
   exit 0
 fi
 
@@ -119,5 +119,5 @@ fi
 echo "OK ($SHAPE_OK)"
 
 echo "───────────────────────────────────────────────────────────────"
-echo "  ✅ ALL GREEN — ${MODULE} module passing smoke test"
+echo "  ALL GREEN — ${MODULE} module passing smoke test"
 echo "═══════════════════════════════════════════════════════════════"

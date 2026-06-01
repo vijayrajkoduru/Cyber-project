@@ -341,7 +341,7 @@ def register(app):
     app.include_router(router)
 ```
 
-### ⚠️ Critical gotchas to avoid (learned the hard way)
+### Critical gotchas to avoid (learned the hard way)
 
 1. **`run_scanner()` parameter names are EXACT** — `host=`, `tool=`, `gather_func=`, `finding_rules=`, `intel_fields=`, `flat_field_keys=`. **No `req=`, no `scanner_name=`, no `gather_fn=`, no `scan_fn=`, no `rules=`.**
 2. **Every scanner file MUST end with** `def register(app): app.include_router(router)` — autoloader skips files without it.

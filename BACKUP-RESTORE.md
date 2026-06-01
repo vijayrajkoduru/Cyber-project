@@ -2,7 +2,7 @@
 
 Your customer database (users, scans, subscriptions, trial timers) lives in the Docker volume `cyber-project_scan_data` on the VPS. This file documents everything about backing it up and restoring it.
 
-**⚠️ Important:** GitHub backs up your CODE only. It does NOT back up your database. Code can be re-deployed; customer data cannot be recreated.
+**Important:** GitHub backs up your CODE only. It does NOT back up your database. Code can be re-deployed; customer data cannot be recreated.
 
 ---
 
@@ -59,7 +59,7 @@ A new file with current timestamp appears.
 
 ## 3. RESTORE — Only Run if Disaster Strikes
 
-⚠️ **DESTRUCTIVE COMMANDS — these overwrite your live database.** Only run when actually needed.
+**DESTRUCTIVE COMMANDS — these overwrite your live database.** Only run when actually needed.
 
 ### Step 1: Find which backup to restore
 

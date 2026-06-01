@@ -96,7 +96,7 @@ def main():
         open(f"/tmp/{kind}_raw.txt", "w").write(raw)
         sys.exit(f"Multi-point salvage failed for {kind}. Saved /tmp/{kind}_raw.txt ({len(raw)} bytes)")
     if salvaged:
-        print(f"  ⚠ truncated — multi-point salvage recovered {len(items)} complete items")
+        print(f"  truncated — multi-point salvage recovered {len(items)} complete items")
 
     out = f"/tmp/vl_payloads/{kind}.py"
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -108,7 +108,7 @@ def main():
         f.write("\n")
 
     cost = (in_tok * 3 + out_tok * 15) / 1_000_000
-    print(f"  ✓ wrote {len(items)} items to {out}")
+    print(f"  wrote {len(items)} items to {out}")
     print(f"  tokens: {in_tok} in, {out_tok} out  |  cost: ~{cost:.3f} USD")
 
 

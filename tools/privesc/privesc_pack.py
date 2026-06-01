@@ -81,11 +81,11 @@ TECHNIQUES = [
     ("kernel_cve_io_uring", "io_uring (CVE-2022-29582).", "HIGH", "7.8"),
     ("kernel_cve_printnightmare", "PrintNightmare (CVE-2021-34527).", "CRITICAL", "8.8"),
     ("kernel_cve_hivenightmare", "HiveNightmare (CVE-2021-36934).", "HIGH", "7.8"),
-    ("kernel_cve_clfs_2024_38193", "Windows CLFS (CVE-2024-38193) ⭐.", "HIGH", "7.8"),
-    # §7 Container / Cloud PrivEsc (7) ⭐
+    ("kernel_cve_clfs_2024_38193", "Windows CLFS (CVE-2024-38193) .", "HIGH", "7.8"),
+    # §7 Container / Cloud PrivEsc (7)
     ("container_escape_docker_sock", "Container escape via docker.sock.", "CRITICAL", "9.5"),
     ("container_escape_capsysadmin", "Container escape via CAP_SYS_ADMIN.", "HIGH", "8.0"),
-    ("container_escape_leaky_vessels", "⭐ Leaky Vessels runc escape (CVE-2024-21626).", "HIGH", "8.6"),
+    ("container_escape_leaky_vessels", "Leaky Vessels runc escape (CVE-2024-21626).", "HIGH", "8.6"),
     ("k8s_pod_to_node_privesc", "K8s pod → node privesc.", "HIGH", "8.0"),
     ("aws_iam_privesc_paths", "AWS IAM privesc paths (CloudFox).", "HIGH", "7.5"),
     ("azure_managed_id_privesc", "Azure managed identity privesc.", "HIGH", "7.5"),

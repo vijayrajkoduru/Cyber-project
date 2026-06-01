@@ -178,7 +178,7 @@ function Hero() {
         <div>
           <div style={{ animation: "fadeUp 0.6s ease both", marginBottom: 20 }}>
             <span style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", color: C.blue, fontSize: 13, fontWeight: 700, padding: "6px 16px", borderRadius: 20, letterSpacing: 0.5 }}>
-              🔒 Professional Penetration Testing Platform
+              Professional Penetration Testing Platform
             </span>
           </div>
 
@@ -200,7 +200,7 @@ function Hero() {
 
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 48, animation: "fadeUp 0.7s ease 0.4s both" }}>
             <a href="#contact" className="btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", padding: "15px 30px", borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 30px rgba(59,130,246,0.5)" }}>
-              🚀 Start Free — 7 Days
+              Start Free — 7 Days
             </a>
             <a href="#demo" className="btn-outline" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", color: C.text, padding: "15px 30px", borderRadius: 12, fontSize: 15, fontWeight: 600, textDecoration: "none", border: `1.5px solid ${C.border}` }}>
               ▶ Watch Demo
@@ -237,16 +237,16 @@ function Hero() {
               <div style={{ padding: 20, fontFamily: "JetBrains Mono,monospace", fontSize: 12.5 }}>
                 <div style={{ color: C.muted, marginBottom: 12 }}>$ scanning http://testphp.vulnweb.com — 51 phases</div>
                 {[
-                  { ok: true,  text: "✓ WAF Detection — SECURE",                  delay: 0 },
-                  { ok: true,  text: "✓ SSL/TLS Analysis — Grade A",               delay: 0.3 },
-                  { ok: true,  text: "✓ Port Scan — 3 ports open (80,443,8080)",   delay: 0.6 },
-                  { ok: false, text: "✗ XSS Testing — VULNERABLE (CRITICAL)",      delay: 0.9 },
-                  { ok: false, text: "✗ SQL Injection — VULNERABLE (CRITICAL)",    delay: 1.2 },
-                  { ok: true,  text: "✓ Header Security — 6 findings (HIGH)",      delay: 1.5 },
-                  { ok: false, text: "✗ CORS Misconfiguration — HIGH",             delay: 1.8 },
-                  { ok: true,  text: "✓ CSRF Protection — SECURE",                 delay: 2.1 },
+                  { ok: true,  text: "WAF Detection — SECURE",                  delay: 0 },
+                  { ok: true,  text: "SSL/TLS Analysis — Grade A",               delay: 0.3 },
+                  { ok: true,  text: "Port Scan — 3 ports open (80,443,8080)",   delay: 0.6 },
+                  { ok: false, text: "XSS Testing — VULNERABLE (CRITICAL)",      delay: 0.9 },
+                  { ok: false, text: "SQL Injection — VULNERABLE (CRITICAL)",    delay: 1.2 },
+                  { ok: true,  text: "Header Security — 6 findings (HIGH)",      delay: 1.5 },
+                  { ok: false, text: "CORS Misconfiguration — HIGH",             delay: 1.8 },
+                  { ok: true,  text: "CSRF Protection — SECURE",                 delay: 2.1 },
                   { info: true,text: "→ Generating PDF report...",                  delay: 2.4 },
-                  { done: true,text: "✓ Scan complete — 4 findings (2 CRITICAL)",  delay: 2.7 },
+                  { done: true,text: "Scan complete — 4 findings (2 CRITICAL)",  delay: 2.7 },
                 ].map((line, i) => (
                   <div key={i} style={{ marginBottom: 7, color: line.done ? C.green : line.ok ? "#4ade80" : line.info ? C.blue : "#f87171", animation: `fadeUp 0.4s ease ${line.delay}s both`, display: "flex", alignItems: "center", gap: 8 }}>
                     {line.done && <span style={{ background: "#052e16", border: "1px solid #166534", color: C.green, fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>DONE</span>}
@@ -268,10 +268,10 @@ function Hero() {
 
             {/* Floating badges */}
             <div style={{ position: "absolute", top: -16, right: -16, background: "#1c0000", border: "1px solid #7f1d1d", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: "#f87171", fontWeight: 700, animation: "float 4s ease-in-out infinite 1s" }}>
-              ⚠ 2 CRITICAL FOUND
+              2 CRITICAL FOUND
             </div>
             <div style={{ position: "absolute", bottom: 60, left: -20, background: "#052e16", border: "1px solid #166534", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: C.green, fontWeight: 700, animation: "float 5s ease-in-out infinite 0.5s" }}>
-              📄 PDF Ready
+              PDF Ready
             </div>
           </div>
         </FadeIn>
@@ -345,25 +345,25 @@ function Demo() {
         setDone(p => [...p, i]);
         setActive(i + 1);
         const col = ph.result === "vuln" ? "#f87171" : ph.result === "warn" ? "#fb923c" : "#4ade80";
-        const sym = ph.result === "vuln" ? "✗" : "✓";
+        const sym = ph.result === "vuln" ? "" : "";
         setTermLines(p => [...p, { text: `${sym} ${ph.name} — ${ph.badge}`, color: col }]);
         if (ph.result === "vuln") setStep(2);
       }, ph.t);
     });
     schedule(() => {
       setActive(-1); setRunning(false); setFinished(true); setStep(3);
-      setTermLines(p => [...p, { text: "✓ Pentest complete — 2 CRITICAL, 1 HIGH, 0 MEDIUM", color: "#22c55e" }]);
-      setTermLines(p => [...p, { text: "📄 PDF Report generated!", color: C.blue }]);
+      setTermLines(p => [...p, { text: "Pentest complete — 2 CRITICAL, 1 HIGH, 0 MEDIUM", color: "#22c55e" }]);
+      setTermLines(p => [...p, { text: "PDF Report generated!", color: C.blue }]);
     }, 7800);
   };
 
   const reset = () => { clearAllTimeouts(); setRunning(false); setDone([]); setActive(-1); setTermLines([]); setFinished(false); setStep(0); };
 
   const demoSteps = [
-    { n: "01", label: "Enter Target URL", icon: "🎯" },
+    { n: "01", label: "Enter Target URL", icon: "" },
     { n: "02", label: "Run All 51 Tools", icon: "▶" },
-    { n: "03", label: "See Vulnerabilities", icon: "⚠" },
-    { n: "04", label: "Download PDF", icon: "📄" },
+    { n: "03", label: "See Vulnerabilities", icon: "" },
+    { n: "04", label: "Download PDF", icon: "" },
   ];
 
   return (
@@ -409,19 +409,19 @@ function Demo() {
               {/* Nav items */}
               <div style={{ padding: "8px 0", flex: 1, overflowY: "auto" }}>
                 {[
-                  { label: "Dashboard", icon: "🏠", active: false },
-                  { label: "Information Gathering", icon: "🔍", active: false },
-                  { label: "Vulnerability Scanning", icon: "🛡️", active: false, badge: "TRIAL" },
-                  { label: "Web App Pentesting", icon: "🌐", active: true, badge: "TRIAL" },
-                  { label: "Advanced OSINT", icon: "🌍", active: false, lock: true },
-                  { label: "Exploitation", icon: "💥", active: false, lock: true },
-                  { label: "Password Attacks", icon: "🔑", active: false, lock: true },
+                  { label: "Dashboard", icon: "", active: false },
+                  { label: "Information Gathering", icon: "", active: false },
+                  { label: "Vulnerability Scanning", icon: "", active: false, badge: "TRIAL" },
+                  { label: "Web App Pentesting", icon: "", active: true, badge: "TRIAL" },
+                  { label: "Advanced OSINT", icon: "", active: false, lock: true },
+                  { label: "Exploitation", icon: "", active: false, lock: true },
+                  { label: "Password Attacks", icon: "", active: false, lock: true },
                 ].map((m, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", margin: "1px 6px", borderRadius: 6, background: m.active ? "#1e3a8a" : "transparent", opacity: m.lock ? 0.45 : 1 }}>
                     <span style={{ fontSize: 14, width: 18, textAlign: "center" }}>{m.icon}</span>
                     <span style={{ fontSize: 11, color: m.active ? "#f1f5f9" : "#94a3b8", fontWeight: m.active ? 600 : 400, flex: 1 }}>{m.label}</span>
                     {m.badge && <span style={{ fontSize: 8, color: "#f59e0b", background: "rgba(245,158,11,0.1)", padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}>{m.badge}</span>}
-                    {m.lock && <span style={{ fontSize: 10 }}>🔒</span>}
+                    {m.lock && <span style={{ fontSize: 10 }}></span>}
                   </div>
                 ))}
               </div>
@@ -442,7 +442,7 @@ function Demo() {
                   <span style={{ fontSize: 11, color: C.blue, fontFamily: "JetBrains Mono,monospace" }}>LIVE SCAN</span>
                 </div>}
                 {finished && <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 11, color: C.green, fontFamily: "JetBrains Mono,monospace" }}>✓ SCAN COMPLETE</span>
+                  <span style={{ fontSize: 11, color: C.green, fontFamily: "JetBrains Mono,monospace" }}>SCAN COMPLETE</span>
                 </div>}
               </div>
 
@@ -456,7 +456,7 @@ function Demo() {
                     </div>
                     <button onClick={running ? null : finished ? reset : startDemo}
                       style={{ background: running ? "#1e293b" : "linear-gradient(135deg,#1d4ed8,#3b82f6)", color: running ? C.muted : "#fff", border: "none", padding: "9px 18px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: running ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
-                      {running ? "⏳ Scanning..." : finished ? "↺ Reset" : "▶ Run Demo"}
+                      {running ? "Scanning..." : finished ? "↺ Reset" : "▶ Run Demo"}
                     </button>
                   </div>
 
@@ -469,7 +469,7 @@ function Demo() {
                       return (
                         <div key={i} style={{ background: "#0f172a", border: `1px solid ${isActive ? C.blue : C.border}`, borderLeft: `3px solid ${leftColor}`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, transition: "all 0.3s" }}>
                           <div style={{ width: 28, height: 28, borderRadius: "50%", background: isDone ? `${ph.color}20` : isActive ? "rgba(59,130,246,0.15)" : "#0a0f1e", border: `2px solid ${isDone ? ph.color : isActive ? C.blue : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 11, fontWeight: 700, color: isDone ? ph.color : isActive ? C.blue : "#334155", fontFamily: "JetBrains Mono,monospace" }}>
-                            {isDone ? (ph.result === "vuln" ? "✗" : "✓") : isActive ? <div style={{ width: 10, height: 10, border: "2px solid #3b82f6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> : String(i+1).padStart(2,"0")}
+                            {isDone ? (ph.result === "vuln" ? "" : "") : isActive ? <div style={{ width: 10, height: 10, border: "2px solid #3b82f6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> : String(i+1).padStart(2,"0")}
                           </div>
                           <span style={{ fontSize: 12, fontWeight: 600, color: isDone ? "#f1f5f9" : isActive ? "#93c5fd" : "#475569", flex: 1 }}>{ph.name}</span>
                           <span style={{ fontSize: 10, color: "#334155", fontFamily: "JetBrains Mono,monospace", background: "#020617", border: `1px solid ${C.border}`, borderRadius: 3, padding: "1px 6px" }}>{ph.tool}</span>
@@ -490,8 +490,8 @@ function Demo() {
                   </div>
                   {finished && (
                     <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ background: "#1c0000", border: "1px solid #7f1d1d", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: "#f87171", fontWeight: 700, textAlign: "center" }}>⚠ 2 CRITICAL FOUND</div>
-                      <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: C.green, fontWeight: 700, textAlign: "center" }}>📄 PDF Ready</div>
+                      <div style={{ background: "#1c0000", border: "1px solid #7f1d1d", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: "#f87171", fontWeight: 700, textAlign: "center" }}>2 CRITICAL FOUND</div>
+                      <div style={{ background: "#052e16", border: "1px solid #166534", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: C.green, fontWeight: 700, textAlign: "center" }}>PDF Ready</div>
                     </div>
                   )}
                 </div>
@@ -514,10 +514,10 @@ function Demo() {
 // ── STATS ────────────────────────────────────────────────────────
 function Stats() {
   const stats = [
-    { n: 51, s: "+", label: "Security Tools", icon: "🛠", color: C.blue },
-    { n: 8, s: "", label: "Attack Categories", icon: "🎯", color: C.purple },
-    { n: 100, s: "%", label: "Cloud Based", icon: "☁️", color: C.cyan },
-    { n: 5, s: "", label: "Built-in Labs", icon: "🧪", color: C.green },
+    { n: 51, s: "+", label: "Security Tools", icon: "", color: C.blue },
+    { n: 8, s: "", label: "Attack Categories", icon: "", color: C.purple },
+    { n: 100, s: "%", label: "Cloud Based", icon: "", color: C.cyan },
+    { n: 5, s: "", label: "Built-in Labs", icon: "", color: C.green },
   ];
   return (
     <section style={{ padding: "80px 24px" }}>
@@ -542,12 +542,12 @@ function Stats() {
 // ── FEATURES ─────────────────────────────────────────────────────
 function Features() {
   const features = [
-    { icon: "⚡", title: "Real Kali Linux Tools", desc: "Not simulated. Every scan runs real penetration testing tools — Nmap, SQLMap, Nikto, Hydra — on our Kali Linux cloud servers. Same tools used in OSCP and OSWE certifications.", color: C.blue, tag: "Real Tools" },
-    { icon: "📄", title: "Auto PDF Reports", desc: "Professional penetration test reports auto-generated after every scan. Includes CVSS scores, CVE references, OWASP mapping, and step-by-step remediation guidance.", color: C.purple, tag: "Reports" },
-    { icon: "🧪", title: "5 Vulnerable Labs", desc: "Practice on DVWA, OWASP WebGoat, Juice Shop, Mutillidae and bWAPP — all running inside our platform. No VM needed. No downloads. Just open and hack.", color: C.green, tag: "Labs" },
-    { icon: "🔒", title: "Private & Secure", desc: "Each user sees only their own scan history. Your targets, findings, and reports are completely private. JWT authentication with 30-day sessions.", color: C.cyan, tag: "Privacy" },
-    { icon: "📊", title: "JSON & CSV Export", desc: "Export all scan results as JSON for integration with your tools, or CSV for Excel analysis. Share findings with your team in any format.", color: C.yellow, tag: "Export" },
-    { icon: "🎯", title: "One Click Full Scan", desc: "Select your target, click Start, and all 51 tools run automatically in sequence. No manual command typing. No tool configuration. Results in minutes.", color: C.orange, tag: "Automation" },
+    { icon: "", title: "Real Kali Linux Tools", desc: "Not simulated. Every scan runs real penetration testing tools — Nmap, SQLMap, Nikto, Hydra — on our Kali Linux cloud servers. Same tools used in OSCP and OSWE certifications.", color: C.blue, tag: "Real Tools" },
+    { icon: "", title: "Auto PDF Reports", desc: "Professional penetration test reports auto-generated after every scan. Includes CVSS scores, CVE references, OWASP mapping, and step-by-step remediation guidance.", color: C.purple, tag: "Reports" },
+    { icon: "", title: "5 Vulnerable Labs", desc: "Practice on DVWA, OWASP WebGoat, Juice Shop, Mutillidae and bWAPP — all running inside our platform. No VM needed. No downloads. Just open and hack.", color: C.green, tag: "Labs" },
+    { icon: "", title: "Private & Secure", desc: "Each user sees only their own scan history. Your targets, findings, and reports are completely private. JWT authentication with 30-day sessions.", color: C.cyan, tag: "Privacy" },
+    { icon: "", title: "JSON & CSV Export", desc: "Export all scan results as JSON for integration with your tools, or CSV for Excel analysis. Share findings with your team in any format.", color: C.yellow, tag: "Export" },
+    { icon: "", title: "One Click Full Scan", desc: "Select your target, click Start, and all 51 tools run automatically in sequence. No manual command typing. No tool configuration. Results in minutes.", color: C.orange, tag: "Automation" },
   ];
   return (
     <section id="features" style={{ padding: "100px 24px", background: C.card }}>
@@ -580,14 +580,14 @@ function Features() {
 // ── 51 SCANNERS ──────────────────────────────────────────────────
 function Scanners() {
   const cats = [
-    { icon: "🔍", title: "Reconnaissance", count: 11, color: C.blue, tools: ["WAF Detection","Tech Stack","CMS Detection","Port Scan","SSL/TLS","DNS Enum","Subdomains","Takeover","Nikto","Sensitive Files","Exploit Search"] },
-    { icon: "📁", title: "Discovery & Fuzzing", count: 2, color: C.cyan, tools: ["Directory Enum","Web Fuzzing (ffuf)"] },
-    { icon: "💉", title: "Injection Attacks", count: 7, color: C.red, tools: ["XSS Testing","SQL Injection","NoSQL","Command Injection","XXE","SSTI","Host Header"] },
-    { icon: "🔐", title: "Auth & Session", count: 9, color: C.purple, tools: ["Header Security","Cookie Analysis","Hydra BruteForce","JWT Attacks","CSRF","IDOR","OAuth","2FA Bypass","Session Fixation"] },
-    { icon: "📂", title: "File & Path", count: 3, color: C.orange, tools: ["LFI / Path Traversal","Remote File Inclusion","File Upload"] },
-    { icon: "🌐", title: "Network & Protocol", count: 10, color: "#0891b2", tools: ["CORS","SSRF","HTTP Smuggling","Verb Tampering","Clickjacking","Open Redirect","Param Pollution","WebSocket","Response Splitting","Data Exfil"] },
-    { icon: "⚡", title: "Modern Web (OSWE)", count: 5, color: C.green, tools: ["Deserialization","Prototype Pollution","GraphQL","Race Condition","PHP Type Juggling"] },
-    { icon: "🖥", title: "Infrastructure (OSCP)", count: 4, color: C.yellow, tools: ["SMB Enum","FTP Enum","SMTP User Enum","SNMP Scanner"] },
+    { icon: "", title: "Reconnaissance", count: 11, color: C.blue, tools: ["WAF Detection","Tech Stack","CMS Detection","Port Scan","SSL/TLS","DNS Enum","Subdomains","Takeover","Nikto","Sensitive Files","Exploit Search"] },
+    { icon: "", title: "Discovery & Fuzzing", count: 2, color: C.cyan, tools: ["Directory Enum","Web Fuzzing (ffuf)"] },
+    { icon: "", title: "Injection Attacks", count: 7, color: C.red, tools: ["XSS Testing","SQL Injection","NoSQL","Command Injection","XXE","SSTI","Host Header"] },
+    { icon: "", title: "Auth & Session", count: 9, color: C.purple, tools: ["Header Security","Cookie Analysis","Hydra BruteForce","JWT Attacks","CSRF","IDOR","OAuth","2FA Bypass","Session Fixation"] },
+    { icon: "", title: "File & Path", count: 3, color: C.orange, tools: ["LFI / Path Traversal","Remote File Inclusion","File Upload"] },
+    { icon: "", title: "Network & Protocol", count: 10, color: "#0891b2", tools: ["CORS","SSRF","HTTP Smuggling","Verb Tampering","Clickjacking","Open Redirect","Param Pollution","WebSocket","Response Splitting","Data Exfil"] },
+    { icon: "", title: "Modern Web (OSWE)", count: 5, color: C.green, tools: ["Deserialization","Prototype Pollution","GraphQL","Race Condition","PHP Type Juggling"] },
+    { icon: "", title: "Infrastructure (OSCP)", count: 4, color: C.yellow, tools: ["SMB Enum","FTP Enum","SMTP User Enum","SNMP Scanner"] },
   ];
   return (
     <section style={{ padding: "100px 24px" }}>
@@ -624,9 +624,9 @@ function Scanners() {
 // ── HOW IT WORKS ─────────────────────────────────────────────────
 function HowItWorks() {
   const steps = [
-    { n: "01", icon: "📋", title: "Request Access", desc: "Fill the form with your name, email, and phone. Choose trial or paid plan. No technical knowledge needed.", color: C.blue },
-    { n: "02", icon: "📧", title: "Get Credentials", desc: "We create your account manually and email your username and strong password within 30 minutes.", color: C.purple },
-    { n: "03", icon: "🚀", title: "Login & Scan", desc: "Open the dashboard, enter any target URL, select tools, click Start. Get full PDF report in minutes.", color: C.green },
+    { n: "01", icon: "", title: "Request Access", desc: "Fill the form with your name, email, and phone. Choose trial or paid plan. No technical knowledge needed.", color: C.blue },
+    { n: "02", icon: "", title: "Get Credentials", desc: "We create your account manually and email your username and strong password within 30 minutes.", color: C.purple },
+    { n: "03", icon: "", title: "Login & Scan", desc: "Open the dashboard, enter any target URL, select tools, click Start. Get full PDF report in minutes.", color: C.green },
   ];
   return (
     <section style={{ padding: "100px 24px", background: C.card }}>
@@ -682,7 +682,7 @@ function Pricing() {
           {plans.map((p, i) => (
             <FadeIn key={i} delay={i * 0.1}>
               <div style={{ background: p.popular ? "linear-gradient(135deg,rgba(29,78,216,0.15),rgba(99,102,241,0.1))" : C.card, border: `2px solid ${p.popular ? C.blue : C.border}`, borderRadius: 20, padding: 36, position: "relative", boxShadow: p.popular ? "0 0 60px rgba(59,130,246,0.15)" : "none" }}>
-                {p.popular && <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#1d4ed8,#6366f1)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 20px", borderRadius: 20, whiteSpace: "nowrap" }}>⭐ Most Popular</div>}
+                {p.popular && <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#1d4ed8,#6366f1)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 20px", borderRadius: 20, whiteSpace: "nowrap" }}>Most Popular</div>}
                 <div style={{ marginBottom: 6 }}>
                   <span style={{ background: `${p.color}15`, color: p.color, fontSize: 12, fontWeight: 700, padding: "3px 12px", borderRadius: 8 }}>{p.name}</span>
                 </div>
@@ -691,11 +691,11 @@ function Pricing() {
                 <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>{p.period}</div>
                 <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 24, marginBottom: 28 }}>
                   {p.features.map((f, fi) => <div key={fi} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-                    <span style={{ color: C.green, fontSize: 14, flexShrink: 0 }}>✓</span>
+                    <span style={{ color: C.green, fontSize: 14, flexShrink: 0 }}></span>
                     <span style={{ fontSize: 14, color: C.muted }}>{f}</span>
                   </div>)}
                   {p.locked.map((f, fi) => <div key={fi} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, opacity: 0.4 }}>
-                    <span style={{ color: C.red, fontSize: 14, flexShrink: 0 }}>✗</span>
+                    <span style={{ color: C.red, fontSize: 14, flexShrink: 0 }}></span>
                     <span style={{ fontSize: 14, color: C.muted, textDecoration: "line-through" }}>{f}</span>
                   </div>)}
                 </div>
@@ -706,7 +706,7 @@ function Pricing() {
         </div>
         <FadeIn>
           <p style={{ textAlign: "center", fontSize: 14, color: C.muted, marginTop: 32 }}>
-            🔒 Secure payment by Lemon Squeezy · No credit card for trial · Cancel anytime
+            Secure payment by Lemon Squeezy · No credit card for trial · Cancel anytime
           </p>
         </FadeIn>
       </div>
@@ -735,7 +735,7 @@ function Testimonials() {
                 <div style={{ position: "absolute", top: 24, right: 24 }}>
                   <span style={{ background: "rgba(245,158,11,0.1)", color: C.yellow, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6 }}>{r.tag}</span>
                 </div>
-                <div style={{ fontSize: 24, color: C.yellow, marginBottom: 16, letterSpacing: 2 }}>{"★".repeat(r.stars)}</div>
+                <div style={{ fontSize: 24, color: C.yellow, marginBottom: 16, letterSpacing: 2 }}>{"".repeat(r.stars)}</div>
                 <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.9, marginBottom: 24, fontStyle: "italic" }}>"{r.text}"</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 40, height: 40, borderRadius: "50%", background: `linear-gradient(135deg,${C.blue},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>{r.name[0]}</div>
@@ -798,15 +798,15 @@ function CTABanner() {
   return (
     <section style={{ padding: "80px 24px", background: "linear-gradient(135deg,rgba(29,78,216,0.2),rgba(99,102,241,0.1))", borderTop: `1px solid rgba(59,130,246,0.2)`, borderBottom: `1px solid rgba(59,130,246,0.2)` }}>
       <FadeIn style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🚀</div>
+        <div style={{ fontSize: 48, marginBottom: 16 }}></div>
         <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 800, marginBottom: 16 }}>Ready To Start Scanning?</h2>
         <p style={{ fontSize: 17, color: C.muted, marginBottom: 36, lineHeight: 1.8 }}>Join security professionals using our platform. 7-day free trial. No credit card. Credentials by email in 30 minutes.</p>
         <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
           <a href="#contact" className="btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", padding: "16px 36px", borderRadius: 12, fontSize: 16, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 30px rgba(59,130,246,0.5)" }}>
-            🔒 Start Free Trial
+            Start Free Trial
           </a>
           <a href={`mailto:${CONTACT_EMAIL}`} className="btn-outline" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", color: C.text, padding: "16px 36px", borderRadius: 12, fontSize: 16, fontWeight: 600, textDecoration: "none", border: `1.5px solid ${C.border}` }}>
-            📧 Email Us
+            Email Us
           </a>
         </div>
       </FadeIn>
@@ -858,7 +858,7 @@ function Contact() {
         {sent ? (
           <FadeIn>
             <div style={{ background: "#052e16", border: "2px solid #166534", borderRadius: 20, padding: 60, textAlign: "center" }}>
-              <div style={{ fontSize: 64, marginBottom: 20 }}>✅</div>
+              <div style={{ fontSize: 64, marginBottom: 20 }}></div>
               <h3 style={{ fontSize: 26, fontWeight: 800, color: "#4ade80", marginBottom: 12 }}>Request Received!</h3>
               <p style={{ color: C.muted, fontSize: 16, lineHeight: 1.8 }}>Thanks {form.name || "there"} — we got your request. We'll reply to <strong style={{ color: C.text }}>{form.email}</strong> within 24 hours from <strong style={{ color: C.text }}>support@vulnuslab.com</strong>.</p>
             </div>
@@ -898,9 +898,9 @@ function Contact() {
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Plan *</label>
                 <select name="plan" style={{ ...inp, cursor: "pointer" }} value={form.plan} onChange={e => set("plan", e.target.value)}>
-                  <option value="trial">🆓 Trial — 7 Days Free (No payment needed)</option>
-                  <option value="pro">⚡ Pro — All 51 Scanners</option>
-                  <option value="enterprise">🏢 Enterprise — Team Access</option>
+                  <option value="trial">Trial — 7 Days Free (No payment needed)</option>
+                  <option value="pro">Pro — All 51 Scanners</option>
+                  <option value="enterprise">Enterprise — Team Access</option>
                 </select>
               </div>
               <div style={{ marginBottom: 24 }}>
@@ -913,7 +913,7 @@ function Contact() {
                 </div>
               )}
               <button type="submit" disabled={submitting} className="btn-primary" style={{ width: "100%", background: submitting ? "#475569" : "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", border: "none", padding: "16px", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: submitting ? "wait" : "pointer", boxShadow: "0 4px 24px rgba(59,130,246,0.4)", fontFamily: "Inter,sans-serif" }}>
-                {submitting ? "Sending..." : "🚀 Request Access Now"}
+                {submitting ? "Sending..." : "Request Access Now"}
               </button>
               <p style={{ textAlign: "center", fontSize: 13, color: C.muted, marginTop: 16 }}>
                 Or email directly: <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: C.blue, textDecoration: "none", fontWeight: 600 }}>{CONTACT_EMAIL}</a>

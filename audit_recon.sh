@@ -65,27 +65,27 @@ for t in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
 done
 
 printf "\n${D}Q1. All %s tools working?${X}\n" "$TOTAL"
-[ $TOTAL_STUB -eq 0 ] && printf "  ${G}✓ all real${X}\n" || printf "  ${R}✗ %s real | %s stubs${X}\n" "$TOTAL_REAL" "$TOTAL_STUB"
+[ $TOTAL_STUB -eq 0 ] && printf "  ${G}all real${X}\n" || printf "  ${R}%s real | %s stubs${X}\n" "$TOTAL_REAL" "$TOTAL_STUB"
 
 printf "${D}Q2. All wired?${X}\n"
-[ ${#MISSING[@]} -eq 0 ] && printf "  ${G}✓ every file has a route${X}\n" || { printf "  ${R}✗ %s missing:${X}\n" "${#MISSING[@]}"; printf "    - %s\n" "${MISSING[@]}" | head -20; }
+[ ${#MISSING[@]} -eq 0 ] && printf "  ${G}every file has a route${X}\n" || { printf "  ${R}%s missing:${X}\n" "${#MISSING[@]}"; printf "    - %s\n" "${MISSING[@]}" | head -20; }
 
 printf "${D}Q3. All finding real vulns?${X}\n"
 printf "  ${Y}!${X} %s scanners use real probes\n" "$TOTAL_REAL"
-[ $TOTAL_STUB -eq 0 ] && printf "  ${G}✓ no scaffold placeholders${X}\n" || printf "  ${R}✗${X} %s scaffolds emit only 'Scaffold: …' placeholder (NOT real findings)\n" "$TOTAL_STUB"
+[ $TOTAL_STUB -eq 0 ] && printf "  ${G}no scaffold placeholders${X}\n" || printf "  ${R}${X} %s scaffolds emit only 'Scaffold: …' placeholder (NOT real findings)\n" "$TOTAL_STUB"
 
 printf "${D}Q4. All appear in PDF?${X}\n"
 printf "  After RECON_PHASES rebuild: all %s phases listed.\n" "$TOTAL"
 printf "  But scaffolds show 'Completed · 1 INFO' — empty content.\n"
 
 printf "${D}Q5. False positives?${X}\n"
-[ $TOTAL_STUB -eq 0 ] && printf "  ${G}✓ none from scaffolds${X}\n" || printf "  ${R}✗ %s scaffold INFOs are false positives${X}\n" "$TOTAL_STUB"
+[ $TOTAL_STUB -eq 0 ] && printf "  ${G}none from scaffolds${X}\n" || printf "  ${R}%s scaffold INFOs are false positives${X}\n" "$TOTAL_STUB"
 
 printf "${D}Q6. All %s scan when 'All sections' selected?${X}\n" "$TOTAL"
 if [ "$DISPATCH" = "$TOTAL" ]; then
-  printf "  ${G}✓ run_all dispatches all %s${X}\n" "$DISPATCH"
+  printf "  ${G}run_all dispatches all %s${X}\n" "$DISPATCH"
 elif [ "$DISPATCH" = "?" ]; then
   printf "  ${Y}! couldn't read orchestrator dispatch count${X}\n"
 else
-  printf "  ${R}✗ run_all dispatches %s of %s${X}\n" "$DISPATCH" "$TOTAL"
+  printf "  ${R}run_all dispatches %s of %s${X}\n" "$DISPATCH" "$TOTAL"
 fi

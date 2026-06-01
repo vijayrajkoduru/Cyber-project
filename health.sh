@@ -4,8 +4,8 @@ set -u
 cd "$(dirname "$0")"
 
 C_GREEN='\033[1;32m'; C_RED='\033[1;31m'; C_YEL='\033[1;33m'; C_DIM='\033[2m'; C_RST='\033[0m'
-ok()   { printf "${C_GREEN}✓${C_RST} %s\n" "$*"; }
-fail() { printf "${C_RED}✗${C_RST} %s\n" "$*"; }
+ok()   { printf "${C_GREEN}${C_RST} %s\n" "$*"; }
+fail() { printf "${C_RED}${C_RST} %s\n" "$*"; }
 warn() { printf "${C_YEL}!${C_RST} %s\n" "$*"; }
 hdr()  { printf "\n${C_DIM}─── %s ───${C_RST}\n" "$*"; }
 

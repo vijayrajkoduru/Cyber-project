@@ -24,7 +24,7 @@ log() {
 fail() {
   log "FAIL gate=$1 module=$MODULE commit=$(git rev-parse --short HEAD 2>/dev/null || echo '?')"
   echo ""
-  echo "  ❌ Deployment aborted at gate $1."
+  echo "  Deployment aborted at gate $1."
   echo "  Rollback:"
   echo "    git reset --hard HEAD~1"
   echo "    git push --force-with-lease origin main"
@@ -83,7 +83,7 @@ if [ -z "${VL_TOKEN:-}" ]; then
   echo "    ./scripts/deploy.sh $MODULE"
   log "PHASE5 smoke_authed SKIPPED no_token"
   echo ""
-  echo "  ⚠️  PARTIAL DEPLOY — gates 1-4 green, gate 5 skipped"
+  echo "   PARTIAL DEPLOY — gates 1-4 green, gate 5 skipped"
   exit 0
 fi
 
@@ -95,7 +95,7 @@ log "PHASE5 smoke_authed ok"
 # ─── Done ─────────────────────────────────────────────────────
 echo ""
 echo "───────────────────────────────────────────────────────────────"
-echo "  ✅ DEPLOY SUCCESSFUL — $MODULE on commit $COMMIT"
+echo "  DEPLOY SUCCESSFUL — $MODULE on commit $COMMIT"
 echo "  Backend live at: $(docker compose port backend 8000 2>/dev/null || echo 'localhost:8000')"
 echo "  Frontend live at: https://app.vulnuslab.com"
 echo "═══════════════════════════════════════════════════════════════"

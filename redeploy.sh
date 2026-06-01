@@ -7,8 +7,8 @@ cd "$(dirname "$0")"
 
 C_BLUE='\033[1;34m'; C_GREEN='\033[1;32m'; C_RED='\033[1;31m'; C_DIM='\033[2m'; C_RST='\033[0m'
 say() { printf "${C_BLUE}[%s]${C_RST} %s\n" "$1" "$2"; }
-ok()  { printf "${C_GREEN}✓${C_RST} %s\n" "$1"; }
-err() { printf "${C_RED}✗${C_RST} %s\n" "$1"; }
+ok()  { printf "${C_GREEN}${C_RST} %s\n" "$1"; }
+err() { printf "${C_RED}${C_RST} %s\n" "$1"; }
 
 build_frontend() {
   say frontend "preflight syntax check..."

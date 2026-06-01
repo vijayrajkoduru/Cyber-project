@@ -34,11 +34,11 @@ echo ""
 echo "── post-flight check (waiting 12s for stabilization) ──"
 sleep 12
 if ./check.sh; then
-  echo "✓ Deploy successful — committing if changes present"
+  echo "Deploy successful — committing if changes present"
   git add -A && git commit -m "deploy: $WHAT ($(date '+%Y-%m-%d %H:%M'))" 2>&1 | tail -1
 else
   echo ""
-  echo "✗ Deploy BROKE the system — rolling back to $HEAD"
+  echo "Deploy BROKE the system — rolling back to $HEAD"
   git reset --hard "$HEAD"
   [ -n "$SNAPSHOT" ] && git stash apply "$SNAPSHOT" 2>/dev/null
   docker compose up -d --build

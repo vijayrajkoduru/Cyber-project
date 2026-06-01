@@ -4,10 +4,60 @@ VL-FORGE upgrade 2026-05-30: 7 live probes for externally-observable
 container/k8s misconfigs (Docker daemon, etcd, K8s API, Harbor registry,
 Dashboard, kubelet, container registry public access).
 """
-import socket, urllib.request, urllib.error
+import socket, ssl, urllib.request, urllib.error
 from contextlib import closing
+from datetime import datetime, timezone
 from tools._pack_common import make_advisory_router, _adv_response
 from tools._shared import wrap_finding
+
+
+_INSECURE_SSL = ssl.create_default_context()
+_INSECURE_SSL.check_hostname = False
+_INSECURE_SSL.verify_mode = ssl.CERT_NONE
+
+
+def _http_get_insecure(url, timeout=4, method="GET", extra_headers=None):
+    """HTTP(S) GET that tolerates self-signed certs (typical for K8s/ingress)."""
+    try:
+        headers = {"User-Agent": "VulnusLab/2.0"}
+        if extra_headers:
+            headers.update(extra_headers)
+        req = urllib.request.Request(url, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=timeout, context=_INSECURE_SSL) as r:
+            body = r.read(8192).decode("utf-8", errors="ignore")
+            return r.status, dict(r.headers), body
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read(8192).decode("utf-8", errors="ignore")
+            return e.code, dict(e.headers or {}), body
+        except Exception:
+            return e.code, {}, ""
+    except Exception:
+        return 0, {}, ""
+
+
+def _tls_inspect(host, port, timeout=4):
+    """Open a real TLS connection and return protocol version, cert info,
+    and whether the server requested a client certificate (mTLS hint)."""
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with socket.create_connection((host, port), timeout=timeout) as raw:
+            with ctx.wrap_socket(raw, server_hostname=host) as s:
+                cert = s.getpeercert(binary_form=False) or {}
+                cert_bin = s.getpeercert(binary_form=True)
+                return {
+                    "ok": True,
+                    "tls_version": s.version(),
+                    "cipher": s.cipher(),
+                    "peer_cert": cert,
+                    "cert_bytes": len(cert_bin) if cert_bin else 0,
+                }
+    except ssl.SSLError as e:
+        return {"ok": False, "ssl_error": str(e)[:200]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
 
 
 def _host(t):
@@ -212,7 +262,323 @@ def _probe_registry_public(target, req):
     return _build_resp("registry_pypi_2fa_audit", target, findings, 1, "Container registry /v2 public probe")
 
 
+# ───────────────────────────────────────────────────────────────
+# Real probes added 2026-06-01: externally-observable checks that
+# work against any hostname/IP target with no extra inputs.
+# ───────────────────────────────────────────────────────────────
+
+
+def _probe_k8s_anonymous_auth(target, req):
+    """Test whether kube-apiserver allows anonymous requests to
+    sensitive endpoints. CIS K8s 1.2.1 control."""
+    host = _host(target)
+    findings = []
+    for port in (6443, 8443):
+        if not _tcp_open(host, port):
+            continue
+        # Anonymous GET /api should be rejected (401/403). 200 = anon allowed.
+        code, _, body = _http_get_insecure(f"https://{host}:{port}/api", timeout=4)
+        if code == 200 and "kind" in body.lower():
+            findings.append(wrap_finding(
+                f"kube-apiserver on {port}/tcp allows ANONYMOUS access to /api",
+                "CRITICAL", cvss="9.0", cwe="CWE-306",
+                remediation="Set --anonymous-auth=false on kube-apiserver. "
+                            "Require client-cert or token auth for all endpoints.",
+                evidence_marker=f"GET https://{host}:{port}/api → 200; body contains 'kind'"))
+        elif code in (401, 403):
+            findings.append(wrap_finding(
+                f"kube-apiserver on {port}/tcp requires auth (good)",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation="Continue auth-required posture.",
+                evidence_marker=f"GET /api → {code}"))
+    if not findings:
+        findings.append(wrap_finding("kube-apiserver not externally reachable on 6443/8443",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue private API server access.",
+            evidence_marker="TCP/6443 + 8443 closed/filtered"))
+    return _build_resp("k8s_anonymous_auth", target, findings, 2,
+                       "kube-apiserver anonymous-auth probe")
+
+
+def _probe_k8s_api_insecure_port(target, req):
+    """Detect kube-apiserver --insecure-port (legacy 8080) exposed."""
+    host = _host(target)
+    findings = []
+    if _tcp_open(host, 8080):
+        code, _, body = _http_get_insecure(f"http://{host}:8080/api", timeout=3)
+        if code == 200 and ("kind" in body.lower() or "apiversion" in body.lower()):
+            findings.append(wrap_finding(
+                "kube-apiserver insecure-port 8080 EXPOSED — bypasses all auth",
+                "CRITICAL", cvss="10.0", cwe="CWE-306",
+                remediation="Set --insecure-port=0 on kube-apiserver immediately. "
+                            "Anyone reaching 8080 has full cluster admin.",
+                evidence_marker=f"GET http://{host}:8080/api → 200 (insecure port active)"))
+        else:
+            findings.append(wrap_finding(
+                f"Port 8080 open but does not respond as kube-apiserver",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Investigate what service is on 8080.",
+                evidence_marker=f"GET :8080/api → {code}"))
+    else:
+        findings.append(wrap_finding("kube-apiserver insecure-port 8080 closed (good)",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue --insecure-port=0.",
+            evidence_marker="TCP/8080 closed"))
+    return _build_resp("k8s_api_server_insecure_port", target, findings, 1,
+                       "kube-apiserver insecure-port (8080) probe")
+
+
+def _probe_registry_anon_push(target, req):
+    """Test whether registry accepts anonymous push (POST upload init)."""
+    host = _host(target)
+    findings = []
+    # Probe the standard /v2/<name>/blobs/uploads/ POST upload endpoint.
+    code, hdrs, body = _http_get_insecure(
+        f"https://{host}/v2/vulnuslab-probe/blobs/uploads/",
+        timeout=4, method="POST")
+    if code in (202, 200):
+        # 202 with Location header = registry accepted anon push initiation.
+        loc = hdrs.get("Location") or hdrs.get("location") or ""
+        findings.append(wrap_finding(
+            f"Registry at {host} accepts ANONYMOUS push (POST /v2/.../blobs/uploads/ → {code})",
+            "CRITICAL", cvss="9.5", cwe="CWE-306",
+            remediation="Disable anonymous push immediately. Require auth + RBAC for all "
+                        "write operations. Anonymous push = supply-chain compromise vector.",
+            evidence_marker=f"POST /v2/vulnuslab-probe/blobs/uploads/ → {code}; Location: {loc[:80]}"))
+    elif code in (401, 403, 404):
+        findings.append(wrap_finding(
+            f"Registry at {host} rejects anonymous push (good)",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue auth-required push posture.",
+            evidence_marker=f"POST → {code}"))
+    else:
+        findings.append(wrap_finding(
+            f"No standard OCI registry detected at {host}:443",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify registry hostname / port.",
+            evidence_marker=f"POST → {code}"))
+    return _build_resp("registry_anon_push", target, findings, 1,
+                       "OCI registry anonymous-push probe")
+
+
+def _probe_nginx_ingress(target, req):
+    """Detect nginx ingress + check for exposed status/metrics endpoints."""
+    host = _host(target)
+    findings = []
+    code, hdrs, _ = _http_get_insecure(f"https://{host}/", timeout=4)
+    if code == 0:
+        code, hdrs, _ = _http_get_insecure(f"http://{host}/", timeout=4)
+    server = (hdrs.get("Server") or hdrs.get("server") or "").lower()
+    is_nginx = "nginx" in server
+    if is_nginx:
+        # Check exposed status endpoints
+        exposed = []
+        for path in ("/nginx-status", "/stub_status", "/metrics", "/nginx_status"):
+            for scheme in ("https", "http"):
+                c, _, b = _http_get_insecure(f"{scheme}://{host}{path}", timeout=3)
+                if c == 200 and ("active connections" in b.lower() or "nginx_" in b.lower()):
+                    exposed.append(f"{scheme}://{host}{path}")
+                    break
+        if exposed:
+            findings.append(wrap_finding(
+                f"nginx ingress detected ({server}) — status endpoint EXPOSED: {exposed[0]}",
+                "HIGH", cvss="7.5", cwe="CWE-200",
+                remediation="Restrict /nginx-status, /stub_status, /metrics to internal "
+                            "monitoring subnet only. Add allow/deny ACL.",
+                evidence_marker=f"Exposed: {', '.join(exposed)}"))
+        else:
+            findings.append(wrap_finding(
+                f"nginx detected ({server}) — no status endpoint exposed (good)",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Continue ACL on monitoring endpoints.",
+                evidence_marker=f"Server: {server}"))
+    else:
+        findings.append(wrap_finding("No nginx ingress signature detected",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Not running nginx, or Server header suppressed.",
+            evidence_marker=f"Server: {server or '(none)'}"))
+    return _build_resp("nginx_ingress_audit", target, findings, 5,
+                       "nginx ingress fingerprint + status-endpoint exposure")
+
+
+def _probe_traefik_ingress(target, req):
+    """Detect Traefik and check for /api or /dashboard publicly exposed."""
+    host = _host(target)
+    findings = []
+    # Traefik default API port is 8080; dashboard usually behind /dashboard/
+    exposed = []
+    for port_path in ("/dashboard/", "/api/rawdata", "/api/version", ":8080/dashboard/"):
+        for scheme in ("https", "http"):
+            url = f"{scheme}://{host}{port_path}" if not port_path.startswith(":") \
+                  else f"{scheme}://{host}{port_path}"
+            c, hdrs, b = _http_get_insecure(url, timeout=3)
+            srv = (hdrs.get("Server") or "").lower()
+            if c == 200 and ("traefik" in b.lower() or "traefik" in srv):
+                exposed.append(url)
+                break
+    if exposed:
+        findings.append(wrap_finding(
+            f"Traefik dashboard / API EXPOSED at {exposed[0]}",
+            "HIGH", cvss="8.0", cwe="CWE-306",
+            remediation="Disable Traefik dashboard (api.dashboard=false) or restrict to "
+                        "internal network with auth middleware.",
+            evidence_marker=f"Exposed: {', '.join(exposed[:3])}"))
+    else:
+        findings.append(wrap_finding("Traefik dashboard/API not publicly reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue private dashboard access.",
+            evidence_marker="All probed Traefik endpoints closed/non-200"))
+    return _build_resp("traefik_audit", target, findings, 4,
+                       "Traefik dashboard / API exposure")
+
+
+def _probe_haproxy_ingress(target, req):
+    """Detect HAProxy and check for /stats publicly exposed."""
+    host = _host(target)
+    findings = []
+    exposed = []
+    for path in ("/stats", "/haproxy?stats", "/admin?stats"):
+        for scheme in ("https", "http"):
+            c, hdrs, b = _http_get_insecure(f"{scheme}://{host}{path}", timeout=3)
+            srv = (hdrs.get("Server") or "").lower()
+            body_l = b.lower()
+            if c == 200 and ("haproxy" in body_l or "haproxy" in srv or
+                              "statistics report" in body_l):
+                exposed.append(f"{scheme}://{host}{path}")
+                break
+    if exposed:
+        findings.append(wrap_finding(
+            f"HAProxy stats page EXPOSED at {exposed[0]}",
+            "HIGH", cvss="7.5", cwe="CWE-200",
+            remediation="Move stats listener to internal interface or add stats auth. "
+                        "Stats page leaks backend topology + traffic patterns.",
+            evidence_marker=f"Exposed: {', '.join(exposed[:3])}"))
+    else:
+        findings.append(wrap_finding("HAProxy stats not publicly reachable",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue internal-only stats listener.",
+            evidence_marker="All HAProxy stats paths closed/non-200"))
+    return _build_resp("haproxy_ingress_audit", target, findings, 3,
+                       "HAProxy stats exposure")
+
+
+def _probe_envoy_proxy(target, req):
+    """Detect Envoy + check for admin /stats /clusters /listeners exposed."""
+    host = _host(target)
+    findings = []
+    exposed = []
+    # Envoy admin interface default port is 9901
+    for url in (f"http://{host}:9901/stats", f"http://{host}:9901/clusters",
+                f"http://{host}:9901/listeners", f"http://{host}:9901/config_dump"):
+        c, _, b = _http_get_insecure(url, timeout=3)
+        if c == 200 and ("envoy" in b.lower() or "cluster_manager" in b.lower()):
+            exposed.append(url)
+    if exposed:
+        sev = "CRITICAL" if "/config_dump" in str(exposed) else "HIGH"
+        cvss = "9.0" if sev == "CRITICAL" else "7.5"
+        findings.append(wrap_finding(
+            f"Envoy admin interface EXPOSED on :9901 — {len(exposed)} endpoint(s)",
+            sev, cvss=cvss, cwe="CWE-306",
+            remediation="Bind Envoy admin to loopback (127.0.0.1:9901) only. "
+                        "/config_dump leaks credentials, TLS certs, full cluster topology.",
+            evidence_marker=f"Exposed: {', '.join(exposed)}"))
+    else:
+        findings.append(wrap_finding("Envoy admin interface not exposed",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue admin-loopback-only binding.",
+            evidence_marker="TCP/9901 admin endpoints closed/filtered"))
+    return _build_resp("envoy_config_audit", target, findings, 4,
+                       "Envoy admin interface (:9901) exposure")
+
+
+def _probe_ingress_tls_audit(target, req):
+    """Real TLS handshake audit: version, cert expiry, weak protocols."""
+    host = _host(target)
+    findings = []
+    for port in (443, 8443):
+        if not _tcp_open(host, port):
+            continue
+        info = _tls_inspect(host, port, timeout=4)
+        if not info.get("ok"):
+            continue
+        tls_ver = info.get("tls_version") or ""
+        cert = info.get("peer_cert") or {}
+        # TLS version check
+        if tls_ver in ("TLSv1", "TLSv1.1", "SSLv3", "SSLv2"):
+            findings.append(wrap_finding(
+                f"TLS {tls_ver} accepted on :{port} — weak / deprecated protocol",
+                "HIGH", cvss="7.5", cwe="CWE-326",
+                remediation="Disable TLSv1.0/1.1. Require TLSv1.2+ (preferably TLSv1.3).",
+                evidence_marker=f"Handshake negotiated {tls_ver} cipher={info.get('cipher')}"))
+        # Cert expiry check
+        not_after = cert.get("notAfter")
+        if not_after:
+            try:
+                exp = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+                exp = exp.replace(tzinfo=timezone.utc)
+                days = (exp - datetime.now(timezone.utc)).days
+                if days < 0:
+                    findings.append(wrap_finding(
+                        f"TLS cert on :{port} EXPIRED {-days} days ago",
+                        "CRITICAL", cvss="9.0", cwe="CWE-298",
+                        remediation="Renew certificate immediately. Browsers/clients reject expired certs.",
+                        evidence_marker=f"notAfter: {not_after} (expired)"))
+                elif days < 7:
+                    findings.append(wrap_finding(
+                        f"TLS cert on :{port} expires in {days} days",
+                        "HIGH", cvss="7.5", cwe="CWE-298",
+                        remediation="Renew certificate now. Automate via cert-manager / Let's Encrypt.",
+                        evidence_marker=f"notAfter: {not_after}"))
+                elif days < 30:
+                    findings.append(wrap_finding(
+                        f"TLS cert on :{port} expires in {days} days",
+                        "MEDIUM", cvss="5.5", cwe="CWE-298",
+                        remediation="Schedule renewal. Set cert-manager renewBefore to 30d.",
+                        evidence_marker=f"notAfter: {not_after}"))
+            except Exception:
+                pass
+    if not findings:
+        findings.append(wrap_finding("TLS configuration appears healthy on 443/8443",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue current TLS hardening + cert rotation cadence.",
+            evidence_marker="TLSv1.2+, cert valid > 30d, no weak protocols accepted"))
+    return _build_resp("ingress_tls_audit", target, findings, 2,
+                       "Ingress TLS protocol + certificate audit")
+
+
+def _probe_istio_gateway_mtls(target, req):
+    """Probe Istio gateway / generic ingress for mTLS posture.
+    If a TLS handshake completes without a client cert being requested,
+    mTLS is OFF for that listener."""
+    host = _host(target)
+    findings = []
+    for port in (443, 15443):  # 15443 = Istio multi-cluster gateway
+        if not _tcp_open(host, port):
+            continue
+        info = _tls_inspect(host, port, timeout=4)
+        if not info.get("ok"):
+            continue
+        # If we got a server cert back without being asked for a client cert,
+        # the server is NOT enforcing mTLS for this listener.
+        cert_bytes = info.get("cert_bytes", 0)
+        if cert_bytes > 0:
+            findings.append(wrap_finding(
+                f"TLS on :{port} completes without client-cert request — mTLS OFF",
+                "HIGH", cvss="7.5", cwe="CWE-295",
+                remediation="If this is an Istio gateway, set tls.mode=MUTUAL on Gateway "
+                            "resource. Enforce client certs at edge if zero-trust required.",
+                evidence_marker=f"Server cert ({cert_bytes}B) returned; no CertificateRequest sent"))
+    if not findings:
+        findings.append(wrap_finding("No TLS listener on 443/15443, or mTLS already enforced",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue mTLS posture.",
+            evidence_marker="No anonymous-TLS handshake completed"))
+    return _build_resp("istio_gateway_mtls_off", target, findings, 2,
+                       "Istio gateway / ingress mTLS posture probe")
+
+
 PROBES = {
+    # original 7 real probes
     "docker_daemon_exposed":          _probe_docker_daemon_exposed,
     "etcd_apiserver_exposure":        _probe_etcd_exposed,
     "kube_bench_master":              _probe_k8s_api,
@@ -220,6 +586,22 @@ PROBES = {
     "registry_npm_2fa_audit":         _probe_harbor_registry,
     "opa_kyverno_no_policies":        _probe_k8s_dashboard,
     "registry_pypi_2fa_audit":        _probe_registry_public,
+    # newly forged real probes (2026-06-01)
+    "k8s_anonymous_auth":             _probe_k8s_anonymous_auth,
+    "k8s_api_server_insecure_port":   _probe_k8s_api_insecure_port,
+    "registry_anon_push":             _probe_registry_anon_push,
+    "nginx_ingress_audit":            _probe_nginx_ingress,
+    "traefik_audit":                  _probe_traefik_ingress,
+    "haproxy_ingress_audit":          _probe_haproxy_ingress,
+    "envoy_config_audit":             _probe_envoy_proxy,
+    "ingress_tls_audit":              _probe_ingress_tls_audit,
+    "istio_gateway_mtls_off":         _probe_istio_gateway_mtls,
+    # additional slugs covered by existing probes (no new code needed)
+    "k8s_kubelet_unauth_token":       _probe_kubelet,
+    "k8s_etcd_no_tls":                _probe_etcd_exposed,
+    "k8s_etcd_unencrypted":           _probe_etcd_exposed,
+    "secrets_etcd_unencrypted":       _probe_etcd_exposed,
+    "registry_public_pull":           _probe_registry_public,
 }
 
 T = [
@@ -313,9 +695,9 @@ T = [
     ("vault_csi_audit", "Vault CSI audit.", "MEDIUM", "5.5"),
     ("sealed_secrets_audit", "SealedSecrets audit.", "MEDIUM", "5.5"),
     ("manual_secrets_review", "Manual secrets review.", "INFO", "0.0"),
-    # §8 Container Escape CVEs (9) ⭐
-    ("escape_leaky_vessels_runc_2024", "⭐ Leaky Vessels runc (CVE-2024-21626).", "HIGH", "8.6"),
-    ("escape_containerd_cve_2022_23648", "⭐ containerd (CVE-2022-23648).", "HIGH", "7.5"),
+    # §8 Container Escape CVEs (9)
+    ("escape_leaky_vessels_runc_2024", "Leaky Vessels runc (CVE-2024-21626).", "HIGH", "8.6"),
+    ("escape_containerd_cve_2022_23648", "containerd (CVE-2022-23648).", "HIGH", "7.5"),
     ("escape_docker_socket_mount", "Docker socket escape.", "CRITICAL", "9.5"),
     ("escape_cap_sys_admin_chain", "CAP_SYS_ADMIN escape chain.", "HIGH", "8.0"),
     ("escape_kernel_keyring", "Kernel keyring escape.", "HIGH", "7.5"),
@@ -332,10 +714,10 @@ T = [
     ("traefik_audit", "Traefik audit.", "MEDIUM", "5.5"),
     ("haproxy_ingress_audit", "HAProxy ingress audit.", "MEDIUM", "5.5"),
     ("manual_mesh_review", "Manual mesh review.", "INFO", "0.0"),
-    # §10 eBPF Runtime Detection (3) ⭐
-    ("falco_runtime_audit", "⭐ Falco runtime audit.", "MEDIUM", "5.5"),
-    ("tetragon_runtime_audit", "⭐ Tetragon (Cilium) runtime audit.", "MEDIUM", "5.5"),
-    ("tracee_runtime_audit", "⭐ Tracee (Aqua) runtime audit.", "MEDIUM", "5.5"),
+    # §10 eBPF Runtime Detection (3)
+    ("falco_runtime_audit", "Falco runtime audit.", "MEDIUM", "5.5"),
+    ("tetragon_runtime_audit", "Tetragon (Cilium) runtime audit.", "MEDIUM", "5.5"),
+    ("tracee_runtime_audit", "Tracee (Aqua) runtime audit.", "MEDIUM", "5.5"),
 ]
 
 router = make_advisory_router("container_k8s", T,

@@ -29,7 +29,7 @@ fail=0
 for f in $staged; do
     case "$f" in
         .env|.env.*|*/.env|*/.env.*)
-            echo "❌ BLOCKED: $f (environment file with possible secrets)"
+            echo "BLOCKED: $f (environment file with possible secrets)"
             fail=1
             ;;
     esac
@@ -39,7 +39,7 @@ done
 for f in $staged; do
     case "$f" in
         *.db|*.sqlite|*.sqlite3|*/users.db)
-            echo "❌ BLOCKED: $f (database file)"
+            echo "BLOCKED: $f (database file)"
             fail=1
             ;;
     esac
@@ -52,11 +52,11 @@ for f in $staged; do
         *.png|*.jpg|*.jpeg|*.gif|*.pdf|*.zip|*.gz|*.tar|*.lock|*.png) continue ;;
     esac
     if grep -E "(AKIA|ASIA)[A-Z0-9]{16}|sk_live_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----" "$f" >/dev/null 2>&1; then
-        echo "❌ BLOCKED: $f (matches secret pattern: AKIA/AWS, sk_live_/Stripe, AIza/Google, or private key)"
+        echo "BLOCKED: $f (matches secret pattern: AKIA/AWS, sk_live_/Stripe, AIza/Google, or private key)"
         fail=1
     fi
     if grep -E "(password|passwd|secret|api_key|api-key)\s*[:=]\s*[\"'][^\"']{8,}[\"']" "$f" 2>/dev/null | grep -vE "(example|test|placeholder|YOUR_|CHANGE_ME|<.*>|\\\$\\{)" >/dev/null; then
-        echo "⚠️  REVIEW: $f (contains password/secret assignment with literal value)"
+        echo " REVIEW: $f (contains password/secret assignment with literal value)"
         echo "    (use environment variable instead, e.g. os.getenv('FOO'))"
     fi
 done
@@ -66,7 +66,7 @@ for f in $staged; do
     [ ! -f "$f" ] && continue
     size=$(wc -c < "$f" 2>/dev/null || echo 0)
     if [ "$size" -gt 5242880 ]; then
-        echo "⚠️  LARGE: $f ($(($size / 1024 / 1024)) MB) — consider git-lfs or external storage"
+        echo " LARGE: $f ($(($size / 1024 / 1024)) MB) — consider git-lfs or external storage"
     fi
 done
 
@@ -78,4 +78,4 @@ if [ $fail -ne 0 ]; then
     exit 1
 fi
 
-echo "✓ pre-commit checks passed ($(echo "$staged" | wc -l) files staged)"
+echo "pre-commit checks passed ($(echo "$staged" | wc -l) files staged)"

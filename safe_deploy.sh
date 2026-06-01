@@ -17,10 +17,10 @@ deploy() {
   docker compose build "$1"
   docker compose up -d "$1"
   if [ "$1" = "backend" ]; then
-    wait_healthy && { printf "${G}✓ deployed${X}\n"; return; } || { printf "${R}✗ reverting${X}\n"; revert "$1"; wait_healthy; return 1; }
+    wait_healthy && { printf "${G}deployed${X}\n"; return; } || { printf "${R}reverting${X}\n"; revert "$1"; wait_healthy; return 1; }
   else
     sleep 10
-    docker ps | grep -q "vulnuslab_$1.*Up" && printf "${G}✓ deployed${X}\n" || { printf "${R}✗ reverting${X}\n"; revert "$1"; }
+    docker ps | grep -q "vulnuslab_$1.*Up" && printf "${G}deployed${X}\n" || { printf "${R}reverting${X}\n"; revert "$1"; }
   fi
 }
 case "$ACTION" in

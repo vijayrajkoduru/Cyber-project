@@ -6,20 +6,20 @@ and registers it. Eliminates ~30 lines of boilerplate per module.
 ═══════════════════════════════════════════════════════════════
 VL FRAMEWORK PASSES — inheritance map for modules using this helper:
 
-  VL-TURBO ✅ inherited via tools/_framework/scanner.py + orchestrator.py:
+  VL-TURBO inherited via tools/_framework/scanner.py + orchestrator.py:
     - 60s wall-clock cap per endpoint (VL_TURBO_SCANNER_TIMEOUT env)
     - Tier-aware semaphore concurrency (VL_TURBO_TIER_CONCURRENCY=12)
     - 24h result cache (VL_TURBO_CACHE_TTL=86400)
     - Per-module run_all uses run_module_streaming() with NDJSON +
       Cloudflare-safe 15s heartbeats + max-concurrency cap of 16.
 
-  VL-PRIME ✅ inherited via endpoints/recon_prime.py:
+  VL-PRIME inherited via endpoints/recon_prime.py:
     - Rate-limiter exempts internal IPs (127.0.0.1, 172.x, 10.x, 192.168.x)
       so /run_all fan-out doesn't 429-storm. All new modules' orchestrators
       pass through this same logic via run_module_streaming.
     - JWT bearer forwarding through fan-out preserves user identity.
 
-  VL-FORGE 🟡 advisory-only by default:
+  VL-FORGE advisory-only by default:
     - Modules built with make_advisory_router ship structured findings
       (severity / CVSS / CWE / OWASP / remediation / evidence) but NOT
       live probes. Real probing requires per-technique implementation
@@ -31,7 +31,7 @@ VL FRAMEWORK PASSES — inheritance map for modules using this helper:
     - Externally-probeable modules to upgrade next: Network, Cloud,
       APISec, AI-LLM (when LLM endpoint provided).
 
-  VL-FLOW 🟢 inherited via src/App.js:ModuleAutoPanel:
+  VL-FLOW inherited via src/App.js:ModuleAutoPanel:
     - Generic React panel loads /api/<module>/run_all/tiers + streams
       /api/<module>/run_all NDJSON + renders Recon-style tile grid.
     - All 26 modules using make_advisory_router get the same UI.
@@ -45,6 +45,9 @@ from tools._shared import ScanRequest, verify_scan_quota, wrap_finding
 def _adv_response(tool: str, target: str, title: str, sev: str, cvss: str,
                    cwe: str = "CWE-1395", remediation: str = "",
                    evidence: str = "") -> dict:
+    """General-purpose response shaper. Used by real probes for error /
+    fallback responses where the caller has chosen an honest severity.
+    Do NOT use for scaffold endpoints — see _scaffold_response."""
     return {
         "tool": tool, "target": target, "scan_time": 0,
         "vulnerable": sev in ("CRITICAL", "HIGH", "MEDIUM"),
@@ -55,6 +58,41 @@ def _adv_response(tool: str, target: str, title: str, sev: str, cvss: str,
             evidence_marker=evidence or "Advisory — see playbook + EDR/NSM detection guidance."
         )],
         "tests_performed": 1, "tests_summary": title[:80], "raw_data": {}
+    }
+
+
+def _scaffold_response(tool: str, target: str, title: str,
+                        planned_sev: str, planned_cvss: str,
+                        cwe: str = "CWE-1395", remediation: str = "") -> dict:
+    """Scaffold endpoint response — technique not yet implemented as a live
+    probe. ALWAYS emits INFO severity with a clear [NOT IMPLEMENTED] marker
+    so reports cannot show fabricated CRITICAL/HIGH findings. The originally
+    planned severity is preserved in raw_data for implementation tracking."""
+    return {
+        "tool": tool, "target": target, "scan_time": 0,
+        "vulnerable": False,
+        "severity": "INFO",
+        "findings": [wrap_finding(
+            f"[NOT IMPLEMENTED] {title}",
+            "INFO", cvss="0.0", cwe=cwe, owasp="N/A",
+            remediation=(
+                f"This check is not yet forged into a live probe — no scan "
+                f"was performed against {target}. Once implemented, expected "
+                f"severity: {planned_sev} (CVSS {planned_cvss}). "
+                f"{remediation or 'See module_playbooks/*.md for technique reference.'}"
+            ).strip(),
+            evidence_marker=(
+                "No live scan executed — endpoint is a scaffold pending "
+                "implementation. Do not treat as a real finding."
+            )
+        )],
+        "tests_performed": 0,
+        "tests_summary": f"[scaffold] {title[:60]}",
+        "raw_data": {
+            "scaffold": True,
+            "planned_severity": planned_sev,
+            "planned_cvss": planned_cvss,
+        },
     }
 
 
@@ -76,9 +114,12 @@ def make_advisory_router(module_name: str, techniques: list,
     probes = probes or {}
 
     def _make_advisory(slug, title, sev, cvss, cwe, remed):
+        # Scaffold endpoint: no live probe wired up. Always returns INFO with
+        # a [NOT IMPLEMENTED] marker — never fake CRITICAL/HIGH.
         def _h(req: ScanRequest, _=Depends(verify_scan_quota)):
-            return _adv_response(slug, req.target, title, sev, cvss, cwe=cwe,
-                                  remediation=remed)
+            return _scaffold_response(slug, req.target, title,
+                                       planned_sev=sev, planned_cvss=cvss,
+                                       cwe=cwe, remediation=remed)
         _h.__name__ = slug
         return _h
 
@@ -87,10 +128,12 @@ def make_advisory_router(module_name: str, techniques: list,
             try:
                 return probe_fn(req.target, req)
             except Exception as e:
+                # Real probe attempted but failed — honest INFO with PROBE ERROR.
                 return _adv_response(slug, req.target,
-                    f"Probe error — fell back to advisory: {str(e)[:80]}",
+                    f"[PROBE ERROR] {str(e)[:120]}",
                     "INFO", "0.0", cwe="N/A",
-                    remediation="Retry or check target reachability.")
+                    remediation="Verify target reachability and retry.",
+                    evidence=f"Live probe raised exception: {str(e)[:200]}")
         _h.__name__ = slug
         return _h
 

@@ -74,12 +74,12 @@ TECHNIQUES = [
     ("meterpreter_route_portfwd", "meterpreter route add + portfwd.", "HIGH", "7.5"),
     ("meterpreter_migrate", "meterpreter migrate.", "MEDIUM", "5.5"),
     ("meterpreter_clear_eventlog", "meterpreter clearev.", "HIGH", "7.0"),
-    # §8 Modern AV/EDR Evasion (5) ⭐
-    ("msfvenom_donut_advisory", "⭐ msfvenom + Donut shellcode loader.", "HIGH", "7.5"),
-    ("msfvenom_sliver_advisory", "⭐ msfvenom → Sliver C2 transition.", "HIGH", "7.5"),
-    ("msfvenom_havoc_advisory", "⭐ msfvenom → Havoc framework.", "HIGH", "7.5"),
-    ("msfvenom_polymorphic_pe", "⭐ msfvenom polymorphic PE generation.", "HIGH", "7.0"),
-    ("msfvenom_with_obfuscator_advisory", "⭐ msfvenom + Invoke-Obfuscation chain.", "HIGH", "7.0"),
+    # §8 Modern AV/EDR Evasion (5)
+    ("msfvenom_donut_advisory", "msfvenom + Donut shellcode loader.", "HIGH", "7.5"),
+    ("msfvenom_sliver_advisory", "msfvenom → Sliver C2 transition.", "HIGH", "7.5"),
+    ("msfvenom_havoc_advisory", "msfvenom → Havoc framework.", "HIGH", "7.5"),
+    ("msfvenom_polymorphic_pe", "msfvenom polymorphic PE generation.", "HIGH", "7.0"),
+    ("msfvenom_with_obfuscator_advisory", "msfvenom + Invoke-Obfuscation chain.", "HIGH", "7.0"),
 ]
 
 router = make_advisory_router("metasploit", TECHNIQUES,
