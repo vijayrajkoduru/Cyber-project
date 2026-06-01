@@ -13,7 +13,8 @@ import subprocess
 import urllib.request, urllib.error
 from contextlib import closing
 from datetime import datetime, timezone
-from tools._pack_common import make_advisory_router, _adv_response
+from tools._pack_common import (make_advisory_router, _adv_response,
+                                   _advisory_by_design_response)
 from tools._shared import wrap_finding
 from tools.container_k8s._dockerfile_probes import (
     _probe_dockerfile_root_user,
@@ -56,6 +57,72 @@ from tools.container_k8s._kubeconfig_probes import (
     _probe_secrets_in_env_var,
     _probe_kube_bench_node,
 )
+from tools.container_k8s._escape_cve_probes import (
+    _probe_escape_leaky_vessels_runc,
+    _probe_escape_containerd_2022_23648,
+)
+
+
+# Advisory-by-design wrappers - these techniques cannot be SaaS-probed.
+def _abd_falco(t, r): return _advisory_by_design_response(
+    "falco_runtime_audit", t, "Falco eBPF runtime detection",
+    reason="Falco runs as a DaemonSet inside the cluster + reads kernel eBPF events; requires on-host deployment, not SaaS-probeable.",
+    cwe="N/A")
+
+def _abd_tetragon(t, r): return _advisory_by_design_response(
+    "tetragon_runtime_audit", t, "Tetragon (Cilium) eBPF runtime detection",
+    reason="Cilium Tetragon requires in-cluster DaemonSet + kernel eBPF programs. Not SaaS-probeable.",
+    cwe="N/A")
+
+def _abd_tracee(t, r): return _advisory_by_design_response(
+    "tracee_runtime_audit", t, "Tracee (Aqua) eBPF runtime detection",
+    reason="Tracee runs eBPF probes from inside cluster nodes. Not SaaS-probeable.",
+    cwe="N/A")
+
+def _abd_manual_image_review(t, r): return _advisory_by_design_response(
+    "manual_image_review", t, "Manual image review",
+    reason="Image-spec review is a human activity. See playbook checklist.",
+    cwe="N/A")
+
+def _abd_manual_rbac_review(t, r): return _advisory_by_design_response(
+    "manual_rbac_review", t, "Manual RBAC review",
+    reason="Holistic RBAC review requires human judgement on business roles.",
+    cwe="N/A")
+
+def _abd_manual_np_review(t, r): return _advisory_by_design_response(
+    "manual_network_policy_review", t, "Manual NetworkPolicy review",
+    reason="Topology-aware NP review requires human judgement on intended traffic flows.",
+    cwe="N/A")
+
+def _abd_manual_secrets_review(t, r): return _advisory_by_design_response(
+    "manual_secrets_review", t, "Manual secrets-management review",
+    reason="Secrets rotation cadence + access-pattern audit requires human review of vault logs.",
+    cwe="N/A")
+
+def _abd_manual_escape(t, r): return _advisory_by_design_response(
+    "manual_escape_research", t, "Container escape research",
+    reason="CVE research + exploit chain validation is a human red-team activity.",
+    cwe="N/A")
+
+def _abd_manual_mesh(t, r): return _advisory_by_design_response(
+    "manual_mesh_review", t, "Service-mesh configuration review",
+    reason="Holistic mesh policy review requires human judgement.",
+    cwe="N/A")
+
+def _abd_escape_cgroup(t, r): return _advisory_by_design_response(
+    "escape_cgroup_release_agent", t, "cgroup release_agent escape",
+    reason="Requires on-host /sys/fs/cgroup write access. Not SaaS-detectable without running container shell.",
+    cwe="CWE-269")
+
+def _abd_escape_kernel_keyring(t, r): return _advisory_by_design_response(
+    "escape_kernel_keyring", t, "Kernel keyring container escape",
+    reason="Requires on-host kernel-keyring probing. Not SaaS-detectable.",
+    cwe="CWE-269")
+
+def _abd_escape_proc_self_exe(t, r): return _advisory_by_design_response(
+    "escape_proc_self_exe", t, "/proc/self/exe container escape (CVE-2019-5736)",
+    reason="Patched in runc 1.0.0-rc6+. CVE-2024-21626 covers similar vectors and is forged via runtime version check.",
+    cwe="CWE-269")
 
 
 # Recognise an image reference vs a hostname/IP/URL.
@@ -1668,6 +1735,22 @@ PROBES = {
     "secrets_in_env_var":             _probe_secrets_in_env_var,
     "secrets_in_configmap":           _probe_secrets_in_env_var,  # similar pattern
     "kube_bench_node":                _probe_kube_bench_node,
+    # Container escape CVE detectors (kubeconfig - node runtime version)
+    "escape_leaky_vessels_runc_2024": _probe_escape_leaky_vessels_runc,
+    "escape_containerd_cve_2022_23648": _probe_escape_containerd_2022_23648,
+    # Advisory-by-design (cannot be SaaS-probed - intentionally informational)
+    "falco_runtime_audit":            _abd_falco,
+    "tetragon_runtime_audit":         _abd_tetragon,
+    "tracee_runtime_audit":           _abd_tracee,
+    "manual_image_review":            _abd_manual_image_review,
+    "manual_rbac_review":             _abd_manual_rbac_review,
+    "manual_network_policy_review":   _abd_manual_np_review,
+    "manual_secrets_review":          _abd_manual_secrets_review,
+    "manual_escape_research":         _abd_manual_escape,
+    "manual_mesh_review":             _abd_manual_mesh,
+    "escape_cgroup_release_agent":    _abd_escape_cgroup,
+    "escape_kernel_keyring":          _abd_escape_kernel_keyring,
+    "escape_proc_self_exe":           _abd_escape_proc_self_exe,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,

@@ -61,6 +61,37 @@ def _adv_response(tool: str, target: str, title: str, sev: str, cvss: str,
     }
 
 
+def _advisory_by_design_response(tool: str, target: str, title: str,
+                                   reason: str = "",
+                                   cwe: str = "CWE-1395") -> dict:
+    """Response for techniques that CANNOT be live-probed from a SaaS
+    scanner by design (require on-host eBPF, physical proximity,
+    engagement-scope authorization, etc.). Always INFO severity with
+    clear ADVISORY-BY-DESIGN marker so customer sees the technique
+    is intentionally informational, not a forge gap."""
+    return {
+        "tool": tool, "target": target, "scan_time": 0,
+        "vulnerable": False, "severity": "INFO",
+        "findings": [wrap_finding(
+            f"[ADVISORY-BY-DESIGN] {title}",
+            "INFO", cvss="0.0", cwe=cwe, owasp="N/A",
+            remediation=(
+                f"This technique cannot be SaaS-probed and is intentionally "
+                f"advisory. {reason or 'Requires on-host deployment, physical access, or engagement-scope authorization.'} "
+                "Use the playbook reference for manual / red-team execution."
+            ),
+            evidence_marker=(
+                "Endpoint is advisory-by-design (NOT a forge gap). No live "
+                "scan possible from external SaaS. See playbook for manual "
+                "procedure."
+            )
+        )],
+        "tests_performed": 0,
+        "tests_summary": f"[advisory-by-design] {title[:60]}",
+        "raw_data": {"advisory_by_design": True},
+    }
+
+
 def _scaffold_response(tool: str, target: str, title: str,
                         planned_sev: str, planned_cvss: str,
                         cwe: str = "CWE-1395", remediation: str = "") -> dict:
