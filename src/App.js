@@ -18917,11 +18917,10 @@ const MODULE_TEST_TARGETS = {
     {label:"api.anthropic.com",    value:"https://api.anthropic.com/v1/messages", desc:"Anthropic Messages API"},
     {label:"local ollama",         value:"http://localhost:11434/api/generate",   desc:"Local Ollama LLM endpoint"},
   ],
-  container_k8s: [
-    {label:"docker hub",           value:"registry-1.docker.io",                  desc:"Docker Hub registry"},
-    {label:"gcr.io",               value:"gcr.io",                                desc:"Google Container Registry"},
-    {label:"local k8s api",        value:"https://kubernetes.default.svc:443",    desc:"Cluster API from inside a pod"},
-  ],
+  // container_k8s — NO test targets. Container scans should be driven by
+  // the `image_ref` advanced input (a real image like nginx:1.21-alpine),
+  // not a registry hostname. The Target field is hidden for this module
+  // entirely; enterprise users would only get confused by registry presets.
   supply_chain: [
     {label:"npm lodash",           value:"lodash",                                desc:"Popular npm package"},
     {label:"pypi requests",        value:"requests",                              desc:"Popular PyPI package"},
@@ -18985,7 +18984,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     } catch(_){}
     return init;
   });
-  const [showAdv,   setShowAdv]   = useState(false);
+  // Container module: auto-open Advanced panel — image_ref / dockerfile /
+  // pod-spec ARE the primary inputs for Container, not the Target field.
+  // The Target field itself is hidden for this module (see render below),
+  // so collapsing Advanced by default would leave the user with no inputs.
+  const _containerMode = (moduleKey === "container_k8s");
+  const [showAdv,   setShowAdv]   = useState(_containerMode);
   const setAdvField = (k, v) => {
     setAdvInputs(p => {
       const next = {...p, [k]: v};
@@ -19152,7 +19156,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   // body so cluster/registry-context probes can use it; default to "n/a"
   // when only advanced inputs are provided so backend ScanRequest passes.)
   const hasAnyAdvInput = advancedFields.some(k => (advInputs[k] || "").trim().length > 0);
-  const canRun = (target.trim().length > 0 || hasAnyAdvInput) && !running;
+  // Container module: Target field is hidden, so canRun is gated on
+  // having at least one advanced input set (image_ref is the primary).
+  const canRun = _containerMode
+    ? (hasAnyAdvInput && !running)
+    : ((target.trim().length > 0 || hasAnyAdvInput) && !running);
   const runAll = async () => {
     if (!canRun) return;
     setRunning(true);
@@ -19169,7 +19177,17 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       // Build run_all body. Include optional auth_bearer / auth_cookie when set
       // so scanners that accept these (paid-API OSINT, webapp-auth scanners, etc.)
       // can use them. Webapp paths require /scan/ middle, others don't.
-      const runBody = {target: target.trim() || "n/a", concurrency: 16};
+      // Container module: derive `target` from the primary advanced input
+      // (image_ref preferred, then repo_url, then a synthetic label) so the
+      // backend ScanRequest passes validation. The Target field is hidden
+      // for Container — image_ref IS the scan subject.
+      let _resolvedTarget = target.trim();
+      if (_containerMode) {
+        _resolvedTarget = (advInputs.image_ref || "").trim()
+          || (advInputs.repo_url || "").trim()
+          || "container-scan";
+      }
+      const runBody = {target: _resolvedTarget || "n/a", concurrency: 16};
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
       // Advanced per-module inputs (image_ref / dockerfile_text / pod_spec_yaml
@@ -19306,19 +19324,39 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         <h1 style={{fontSize:22, fontWeight:700}}>{moduleLabel}</h1>
       </div>
 
-      <TestTargets targets={MODULE_TEST_TARGETS[moduleKey] || []}
-        onSelect={(v) => setTarget(v)}/>
+      {/* Container module: the Target field + TestTargets chips are
+          intentionally suppressed. Container scans are driven by the
+          image_ref / dockerfile_text / pod_spec_yaml advanced inputs,
+          NOT by a network hostname. Enterprise customers were getting
+          confused (mixing DVWA image_ref with prod hostname Target).
+          For Container, the Run button alone sits next to a banner
+          pointing at the Advanced Inputs panel below. */}
+      {!_containerMode && (
+        <TestTargets targets={MODULE_TEST_TARGETS[moduleKey] || []}
+          onSelect={(v) => setTarget(v)}/>
+      )}
       <div style={{display:"flex", gap:8, marginBottom:6}}>
-        <input
-          type="text" placeholder={schema.ph} value={target}
-          onChange={e => setTarget(e.target.value)}
-          disabled={running}
-          style={{flex:1, background:"#0f172a", border:"1px solid #334155",
-                  borderRadius:6, padding:"10px 12px", color:"#f1f5f9",
-                  fontSize:13, outline:"none"}}/>
+        {!_containerMode && (
+          <input
+            type="text" placeholder={schema.ph} value={target}
+            onChange={e => setTarget(e.target.value)}
+            disabled={running}
+            style={{flex:1, background:"#0f172a", border:"1px solid #334155",
+                    borderRadius:6, padding:"10px 12px", color:"#f1f5f9",
+                    fontSize:13, outline:"none"}}/>
+        )}
+        {_containerMode && (
+          <div style={{flex:1, background:"#0c1424", border:"1px dashed #1e3a8a",
+                       borderRadius:6, padding:"10px 14px", color:"#94a3b8",
+                       fontSize:12, display:"flex", alignItems:"center", gap:8}}>
+            <span style={{color:"#60a5fa", fontWeight:700, fontSize:10,
+                          textTransform:"uppercase", letterSpacing:1.2}}>Container scan</span>
+            <span>Provide an <b style={{color:"#cbd5e1"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
+          </div>
+        )}
         <button
           onClick={runAll} disabled={!canRun}
-          title={!canRun ? (running ? "Scan in progress" : "Enter a target OR fill at least one advanced input") : ""}
+          title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
           style={{background: running ? "#475569" : (color || "#3b82f6"),
                   border:"none", borderRadius:6, padding:"10px 18px",
                   color:"#fff", fontWeight:600, fontSize:13,
@@ -19382,34 +19420,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           </button>
         )}
       </div>
-      {/* Mismatch warning — fires when image_ref is set but differs from
-          target. Common cause: user changed target but forgot the advanced
-          input image_ref from a prior scan. The PDF will honestly surface
-          this in Engagement Scope, but the customer should see it BEFORE
-          they hit Run All. */}
-      {(() => {
-        const _img = (advInputs.image_ref || "").trim();
-        const _tgt = (target || "").trim();
-        if (!_img || !_tgt || _img === _tgt) return null;
-        return (
-          <div style={{background:"#451a03", border:"1px solid #b45309",
-                       borderRadius:6, padding:"8px 12px", marginBottom:12,
-                       display:"flex", alignItems:"center", gap:10}}>
-            <span style={{color:"#fbbf24", fontSize:11, fontWeight:700,
-                          textTransform:"uppercase", letterSpacing:1}}>Mismatch</span>
-            <span style={{color:"#fde68a", fontSize:12, flex:1}}>
-              Target is <code style={{background:"#1c1917", padding:"1px 5px", borderRadius:3, color:"#fef3c7"}}>{_tgt}</code> but image_ref advanced input is <code style={{background:"#1c1917", padding:"1px 5px", borderRadius:3, color:"#fef3c7"}}>{_img}</code>. Image scanners will use image_ref.
-            </span>
-            <button onClick={() => setAdvInputs(prev => ({...prev, image_ref: ""}))}
-              style={{background:"#b45309", border:"none", borderRadius:4,
-                      padding:"4px 10px", color:"#fff", fontSize:10,
-                      fontWeight:700, cursor:"pointer", letterSpacing:1,
-                      textTransform:"uppercase"}}>
-              Clear image_ref
-            </button>
-          </div>
-        );
-      })()}
+      {/* MISMATCH banner (target vs image_ref) was removed once the
+          Target field itself was hidden for Container — image_ref is
+          now the sole canonical "what am I scanning" field, so there's
+          nothing to mismatch against. For other modules the Target
+          field is still primary, so cross-input mismatch is not a
+          concept that applies. */}
       {showAuth && (
         <div style={{display:"flex", gap:8, marginBottom:14, flexWrap:"wrap"}}>
           <div style={{flex:1, minWidth:280}}>
