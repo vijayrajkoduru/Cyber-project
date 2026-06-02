@@ -29,6 +29,7 @@ from tools.container_k8s._dockerfile_probes import (
     _probe_dockerfile_expose_audit,
     _probe_dockerfile_base_image_eol,
     _probe_hadolint_dockerfile,
+    _probe_dockerfile_antipatterns,
 )
 from tools.container_k8s._pod_spec_probes import (
     _probe_container_privileged,
@@ -1870,6 +1871,7 @@ PROBES = {
     "dockerfile_expose_audit":        _probe_dockerfile_expose_audit,
     "dockerfile_base_image_eol":      _probe_dockerfile_base_image_eol,
     "hadolint_dockerfile":            _probe_hadolint_dockerfile,
+    "dockerfile_antipatterns":        _probe_dockerfile_antipatterns,
     # Pod-spec static-analysis probes (require pod_spec_yaml input)
     "container_privileged":           _probe_container_privileged,
     "container_capadd_dangerous":     _probe_container_capadd_dangerous,
@@ -1980,6 +1982,7 @@ T = [
     ("dockerfile_copy_chown_audit", "COPY --chown audit.", "INFO", "0.0"),
     ("dockerfile_expose_audit", "EXPOSE port audit.", "INFO", "0.0"),
     ("dockerfile_base_image_eol", "Base-image EOL audit.", "HIGH", "7.5"),
+    ("dockerfile_antipatterns", "Dockerfile antipatterns (curated 31-rule set).", "HIGH", "7.5"),
     # §3 Container Runtime (12)
     ("container_privileged", "Container privileged mode.", "CRITICAL", "9.0"),
     ("container_capadd_dangerous", "Dangerous CAP_ADD.", "HIGH", "8.0"),

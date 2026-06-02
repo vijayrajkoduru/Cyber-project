@@ -699,3 +699,73 @@ def _probe_hadolint_dockerfile(target, req):
     return _build_resp("hadolint_dockerfile", target, findings,
                        max(len(findings), 1),
                        f"hadolint scan ({len(findings)} finding(s))")
+
+
+def _probe_dockerfile_antipatterns(target, req):
+    """Curated antipattern check supplementing hadolint.
+
+    Hadolint covers the DL3000-DL4006 family. This probe runs the 31
+    additional antipatterns curated in
+    tools/_payloads/container_k8s/dockerfile_antipatterns.json — things
+    hadolint doesn't flag: ADD with URL, curl|sh, --no-check-certificate,
+    chmod 777, hardcoded JDBC creds, sudo / telnet / FTP installs,
+    secret-named ARGs, compilers in final stage, etc.
+
+    Each rule carries its own severity + CWE + fix from the JSON, so the
+    wordlist is the source of truth — no severity logic in this probe.
+    """
+    df = _get_dockerfile(req)
+    if df is None:
+        return _ndr("dockerfile_antipatterns", target)
+
+    try:
+        from tools._payloads.container_k8s._loader import (
+            get_dockerfile_antipatterns)
+        rules = get_dockerfile_antipatterns()
+    except Exception:
+        rules = []
+
+    if not rules:
+        return _build_resp("dockerfile_antipatterns", target, [wrap_finding(
+            "[NOT IMPLEMENTED] Antipattern wordlist not loaded",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Verify tools/_payloads/container_k8s/"
+                          "dockerfile_antipatterns.json shipped with the "
+                          "deploy."),
+            evidence_marker="get_dockerfile_antipatterns() returned []")], 0,
+            "Antipattern wordlist missing")
+
+    findings = []
+    cvss_default = {"CRITICAL": "9.5", "HIGH": "7.5",
+                     "MEDIUM": "5.5", "LOW": "3.0", "INFO": "0.0"}
+    for rule in rules:
+        rx = rule.get("compiled")
+        if rx is None:
+            continue
+        m = rx.search(df)
+        if not m:
+            continue
+        sev = (rule.get("severity") or "MEDIUM").upper()
+        if sev not in cvss_default:
+            sev = "MEDIUM"
+        # Identify line for evidence — 1-based.
+        line_no = df.count("\n", 0, m.start()) + 1
+        evidence_excerpt = df[m.start():m.end()][:120]
+        findings.append(wrap_finding(
+            f"{rule.get('name', rule.get('id', 'Dockerfile antipattern'))} "
+            f"(line {line_no})",
+            sev, cvss=cvss_default[sev],
+            cwe=rule.get("cwe") or "CWE-1357",
+            remediation=rule.get("fix") or "See VulnusLab playbook.",
+            evidence_marker=(f"Rule {rule.get('id','?')} matched at line "
+                              f"{line_no}: {evidence_excerpt}")))
+
+    if not findings:
+        findings.append(wrap_finding(
+            f"Dockerfile: 0 antipatterns ({len(rules)} rules probed)",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue current Dockerfile hygiene.",
+            evidence_marker=f"All {len(rules)} curated antipattern rules clean"))
+    return _build_resp("dockerfile_antipatterns", target, findings,
+                       len(rules),
+                       f"Antipattern audit ({len([f for f in findings if f.get('severity') not in ('POSITIVE','INFO')])} hit(s) across {len(rules)} rules)")
