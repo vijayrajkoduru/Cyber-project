@@ -1225,6 +1225,14 @@ def _probe_grype_image(target, req):
     env = {k: v for k, v in os.environ.items()
            if not k.startswith("GRYPE_FAIL")}
     env.setdefault("GRYPE_CHECK_FOR_APP_UPDATE", "false")
+    # The Dockerfile-baked Grype DB can be weeks old by the time the
+    # backend container is deployed. Grype defaults to refusing any DB
+    # older than 5 days. Two-layer fix:
+    #   1) GRYPE_DB_AUTO_UPDATE=true — pull a fresh DB on first scan
+    #   2) GRYPE_DB_MAX_ALLOWED_BUILT_AGE=8760h — tolerate up to 1y
+    #      offline (covers air-gapped + slow CI environments)
+    env["GRYPE_DB_AUTO_UPDATE"] = "true"
+    env["GRYPE_DB_MAX_ALLOWED_BUILT_AGE"] = "8760h"
     _scratch_home = tempfile.mkdtemp(prefix="vl-grype-home-")
     env["HOME"] = _scratch_home
     env["XDG_CONFIG_HOME"] = _scratch_home   # Grype also honours XDG
