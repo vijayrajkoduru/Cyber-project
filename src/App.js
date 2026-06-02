@@ -9349,6 +9349,56 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     txt(_posture, margin+8, y+17, 14, _pCol, true);
     y += 28;
 
+    // ── 3-paragraph narrative ────────────────────────────────
+    // Paragraph 1 — posture synthesis
+    const _totalAct = _sc.CRITICAL + _sc.HIGH + _sc.MEDIUM;
+    let _p1 = `This assessment evaluated the publicly visible attack surface of ${target} across ${RECON_PHASES.length} reconnaissance scanners spanning DNS, certificates, web infrastructure, OSINT, cloud, threat intelligence, mobile and AI-augmented discovery. `;
+    if (_sc.CRITICAL>0) _p1 += `${_sc.CRITICAL} CRITICAL and ${_sc.HIGH} HIGH issue(s) were identified, indicating exposure that requires immediate containment. `;
+    else if (_sc.HIGH>0) _p1 += `${_sc.HIGH} HIGH-severity issue(s) and ${_sc.MEDIUM} MEDIUM finding(s) were identified across ${_R_allFindings.length} total observations. The HIGH item(s) represent the priority remediation target. `;
+    else if (_sc.MEDIUM>0) _p1 += `No CRITICAL or HIGH issues were identified. ${_sc.MEDIUM} MEDIUM finding(s) and ${_sc.LOW} LOW finding(s) describe hardening opportunities rather than exploitable exposures. `;
+    else _p1 += `No actionable exposures were identified at the reconnaissance layer — the surface is well-managed. `;
+
+    // Paragraph 2 — risk-theme synthesis
+    const _allText = (_R_allFindings||[]).map(f => String(f.name||f.detail||f.title||"").toLowerCase()).join(" | ");
+    const _themes = [];
+    if (/dmarc|dkim|spf|mta-sts|smtp/.test(_allText)) _themes.push("email authentication");
+    if (/header|csp|hsts|x-frame|content-type/.test(_allText)) _themes.push("HTTP security headers");
+    if (/source map|.map|exposed|disclos|leak/.test(_allText)) _themes.push("information disclosure");
+    if (/cors|origin/.test(_allText)) _themes.push("cross-origin policy");
+    if (/cache snoop|zone|dns|caa/.test(_allText)) _themes.push("DNS hygiene");
+    if (/cert|tls|ssl/.test(_allText)) _themes.push("TLS/PKI configuration");
+    if (/jwt|token|secret|credential/.test(_allText)) _themes.push("secret exposure");
+    if (/bucket|s3|gcs|azure/.test(_allText)) _themes.push("cloud storage");
+    let _p2 = "";
+    if (_themes.length>0) {
+      _p2 = `The dominant risk themes are ${_themes.slice(0,3).join(", ")}${_themes.length>3?", and "+(_themes.length-3)+" other(s)":""}. These categories typically map to misconfiguration rather than software defects, which means remediation is configuration-side and does not require code changes. `;
+    } else {
+      _p2 = "Findings are spread across multiple low-severity hygiene categories with no dominant risk theme; remediation is incremental rather than thematic. ";
+    }
+    if (_sc.HIGH===0 && _sc.CRITICAL===0) _p2 += "The absence of HIGH/CRITICAL findings suggests core controls (authentication, transport, access control) are in place; the report focuses on perimeter hardening.";
+    else _p2 += "Closing the HIGH-priority finding(s) first will likely move the overall posture rating up by one tier on the next assessment.";
+
+    // Paragraph 3 — recommended sequence
+    let _p3 = "Recommended remediation sequence: ";
+    if (_sc.CRITICAL>0) _p3 += `(1) contain CRITICAL exposures within 24 hours; (2) remediate HIGH within 7 days; (3) batch MEDIUM hardening within 30 days; (4) re-scan to confirm closure. `;
+    else if (_sc.HIGH>0) _p3 += `(1) remediate HIGH finding(s) within 7 days; (2) address MEDIUM items within 30 days; (3) treat LOW items as quarterly hygiene; (4) re-scan after HIGH closure. `;
+    else _p3 += `(1) address MEDIUM hardening items within 30 days; (2) treat LOW items as quarterly hygiene; (3) maintain continuous monitoring for new exposures. `;
+    _p3 += "See section 20 (Strategic Recommendations) for the prioritized queue with SLAs and section 9 (Compliance Mapping) for control-framework impact.";
+
+    // Render paragraphs
+    const _renderP = (text) => {
+      const lines = doc.splitTextToSize(text, contentW - 8);
+      const h = 5 + lines.length * 4.2 + 3;
+      chk(h + 4);
+      fillR(margin, y, contentW, h, [248,250,252]);
+      doc.setFont("Arial","normal");doc.setFontSize(9);doc.setTextColor(...DARK);
+      lines.forEach((ln,i)=>{ doc.text(ln, margin+4, y+5.5+(i*4.2)); });
+      y += h + 3;
+    };
+    _renderP(_p1);
+    _renderP(_p2);
+    _renderP(_p3);
+
     // Engagement scope
     chk(50); y = sHead("Engagement Scope", y);
     y = tHead(["FIELD","VALUE"],[45,135],y);
@@ -9467,6 +9517,77 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
   // ─── COMPLIANCE COVERAGE (canon section 7) — 8 frameworks ───
   }
+
+  // ═══ COVERAGE GAPS — named ERROR + grouped SKIPPED reasons ═══
+  {
+    const _errRows = _coverageRows.filter(p => p.status === "FAILED");
+    const _skRows  = _coverageRows.filter(p => p.status === "SKIPPED");
+    if (_errRows.length > 0 || _skRows.length > 0) {
+      chk(40); y = sHead("Coverage Gaps", y);
+      doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+      doc.text("Scanners that did not return DATA. Errored runs are auditable; skipped runs explain WHY each was skipped (paid API key, environment, target-applicability).", margin+2, y);
+      doc.setFont("Arial","normal"); y += 5;
+
+      // ─── ERROR list (named) ───
+      if (_errRows.length > 0) {
+        chk(12);
+        fillR(margin, y, contentW, 6, [254,226,226]);
+        txt(`ERROR — ${_errRows.length} scanner(s) failed during this scan`, margin+3, y+4.3, 8, [162,28,28], true);
+        y += 7;
+        _errRows.forEach((p, i) => {
+          chk(8);
+          fillR(margin, y, contentW, 6.5, i%2===0?LIGHT:WHITE);
+          fillR(margin, y, 3, 6.5, [162,28,28]);
+          doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+          doc.text(p.name || p.tool || "unnamed", margin+6, y+4.6);
+          doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+          doc.text(String(p.detail||"no detail").substring(0,110), margin+58, y+4.6);
+          y += 6.5;
+        });
+        y += 4;
+      }
+
+      // ─── SKIPPED grouped by reason category ───
+      if (_skRows.length > 0) {
+        const _bucket = {apiKey: [], targetType: [], lanOnly: [], other: []};
+        _skRows.forEach(p => {
+          const d = String(p.detail||"").toLowerCase();
+          if (/api key|api_key|token|set .*_key|set .*_token|auth-key|hunter|abuse\.ch/.test(d)) _bucket.apiKey.push(p);
+          else if (/lan-only|on-network|sdr required|multicast|premises|on customer/.test(d)) _bucket.lanOnly.push(p);
+          else if (/not applicable|n\/a|not relevant|no target|target type|black-box|requires auth/.test(d)) _bucket.targetType.push(p);
+          else _bucket.other.push(p);
+        });
+
+        chk(12);
+        fillR(margin, y, contentW, 6, [254,243,199]);
+        txt(`SKIPPED — ${_skRows.length} scanner(s) deliberately not run`, margin+3, y+4.3, 8, [120,53,15], true);
+        y += 7;
+
+        const _grpBlock = (label, items, descr) => {
+          if (items.length === 0) return;
+          chk(10);
+          fillR(margin, y, contentW, 5, [255,251,235]);
+          fillR(margin, y, 3, 5, [120,53,15]);
+          txt(`${label}  (${items.length})`, margin+6, y+3.5, 7.5, [120,53,15], true);
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
+          doc.text(descr, margin+50, y+3.5);
+          y += 5.5;
+          const names = items.map(p => p.name || p.tool || "?").join(", ");
+          const _ln = doc.splitTextToSize(names, contentW - 6);
+          chk(_ln.length * 3.5 + 2);
+          doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...DARK);
+          _ln.slice(0,4).forEach((line,i)=> doc.text(line, margin+6, y+3+(i*3.5)));
+          y += Math.min(_ln.length,4)*3.5 + 3;
+        };
+        _grpBlock("Paid API key required",  _bucket.apiKey,    "Configure the relevant API key to enable.");
+        _grpBlock("LAN / on-premises only", _bucket.lanOnly,   "Requires local-network deployment or radio hardware.");
+        _grpBlock("Not applicable to target", _bucket.targetType, "Scanner skipped because the target type does not match.");
+        _grpBlock("Other",                  _bucket.other,     "See per-scanner detail below.");
+        y += 3;
+      }
+    }
+  }
+
   chk(80);
   y = sHead("Compliance Mapping", y);
   doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
@@ -12773,6 +12894,93 @@ function generateUniversalVLReport(opts) {
     _allFindings.splice(0, _allFindings.length, ..._dd);
   })();
 
+  // ── CVE source-package dedup ──
+  // Trivy/Grype emit one row PER binary package, so a single source-package
+  // CVE (e.g. apache2 -> apache2, apache2-bin, apache2-data, apache2-utils,
+  // libapache2-mod-php) inflates to 4-7 findings. Roll up by (CVE id, source
+  // package family) and keep ONE row per pair. Original binary names go into
+  // evidence so the auditor can still see the affected package list.
+  // Cluster map is computed here too — fed into Quick Wins section later.
+  const _cveClusters = {};   // srcPkg -> {pkg, cveCount, sevCount{}, sample}
+  (function(){
+    // Map binary package name to canonical source-package family.
+    const _srcOf = (binPkg) => {
+      let p = String(binPkg || "").toLowerCase().trim();
+      if (!p) return "";
+      // libapache2-mod-php7.0 -> php7.0 (php family wins over apache2)
+      if (p.startsWith("libapache2-mod-")) return p.replace(/^libapache2-mod-/,"");
+      // apache2-bin / apache2-data / apache2-utils / apache2-common -> apache2
+      p = p.replace(/-(bin|data|utils|common|cli|server|client|core|base|doc|dev|dbg|perl|extra)(-[0-9.]+)?$/,"");
+      // php7.0-cli / php7.0-mysql / php7.0-gd -> php7.0
+      p = p.replace(/^(php[0-9.]+)-.*/,"$1");
+      // perl-base / perl-modules-5.24 / libperl5.24 -> perl
+      p = p.replace(/^libperl[0-9.]+/,"perl").replace(/^perl-modules-[0-9.]+/,"perl");
+      // mariadb-server-10.1 / mariadb-server-core-10.1 -> mariadb
+      p = p.replace(/^(mariadb|mysql)-.*/,"$1");
+      // libmariadbclient18 -> mariadb
+      p = p.replace(/^libmariadb.*/,"mariadb");
+      // libssl1.0.2 / libssl1.1 / openssl -> openssl
+      if (/^(libssl|openssl)/.test(p)) p = "openssl";
+      // libsystemd0 / libudev1 -> systemd
+      if (/^(libsystemd|libudev)/.test(p)) p = "systemd";
+      // libc6 / libc-bin / multiarch-support -> glibc
+      if (/^(libc6|libc-bin|multiarch-support)/.test(p)) p = "glibc";
+      // libwebp6 / libwebp7 -> libwebp
+      if (/^libwebp/.test(p)) p = "libwebp";
+      // libxml2 / libxml2-utils -> libxml2
+      if (/^libxml2/.test(p)) p = "libxml2";
+      // libexpat1 -> expat
+      if (/^libexpat/.test(p)) p = "expat";
+      // libldap-2.4-2 / libldap-common -> openldap
+      if (/^libldap/.test(p)) p = "openldap";
+      // libgcc1 / libstdc++6 / gcc-6-base -> gcc
+      if (/^(libgcc|libstdc|gcc-)/.test(p)) p = "gcc";
+      return p;
+    };
+    const _ROLLUP_RE = /^(CVE-\d{4}-\d+)\s+in\s+([a-zA-Z0-9._+:~-]+)\s+([\w.+:~-]+)\s*(\([^)]*\))?/;
+    const grouped = new Map();   // key: cveId|srcPkg -> aggregated finding
+    const ungrouped = [];
+    _allFindings.forEach(f => {
+      const nm = String(f.name || f.detail || "");
+      const m = nm.match(_ROLLUP_RE);
+      if (!m) { ungrouped.push(f); return; }
+      const cve = m[1], binPkg = m[2], ver = m[3];
+      const src = _srcOf(binPkg);
+      if (!src) { ungrouped.push(f); return; }
+      const key = cve + "|" + src;
+      if (!grouped.has(key)) {
+        const g = Object.assign({}, f);
+        g._cluster = {src, cve, ver, binaries: new Set([binPkg]), origCount: 1};
+        // Rewrite the visible name so the PDF shows "src" not "binary".
+        const fixHint = (m[4] || "").trim();
+        g.name = `${cve} in ${src} ${ver}${fixHint ? " " + fixHint : ""}`;
+        grouped.set(key, g);
+      } else {
+        const g = grouped.get(key);
+        g._cluster.binaries.add(binPkg);
+        g._cluster.origCount += 1;
+      }
+    });
+    // Materialise + populate evidence with binary list when cluster > 1
+    const rolled = Array.from(grouped.values()).map(g => {
+      const bins = Array.from(g._cluster.binaries);
+      if (bins.length > 1) {
+        const evExtra = ` (rolled up from ${bins.length} binaries: ${bins.slice(0,6).join(", ")}${bins.length > 6 ? ", ..." : ""})`;
+        g.evidence = String(g.evidence || g.evidence_marker || "") + evExtra;
+        g.evidence_marker = g.evidence;
+      }
+      // Track cluster for Quick Wins
+      const c = _cveClusters[g._cluster.src] || {src: g._cluster.src, cveCount: 0, sevCount: {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0}, sampleCve: g._cluster.cve};
+      c.cveCount += 1;
+      const sv = String(g.severity || "INFO").toUpperCase();
+      if (c.sevCount[sv] != null) c.sevCount[sv] += 1;
+      _cveClusters[g._cluster.src] = c;
+      delete g._cluster;
+      return g;
+    });
+    _allFindings.splice(0, _allFindings.length, ...ungrouped, ...rolled);
+  })();
+
   const _sevCount = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,POSITIVE:0,INFO:0};
   _allFindings.forEach(f => {
     const k = String(f.severity||"INFO").toUpperCase();
@@ -13001,12 +13209,20 @@ function generateUniversalVLReport(opts) {
     const _diffFindings = (cur, prior) => {
       const _key = f => String(f && (f.name || f.detail || f.title) || "").toLowerCase().trim()
                        + "|" + String(f && f.cwe || "").toUpperCase().trim();
-      const _curKeys = new Set((cur || []).map(_key).filter(k => k !== "|"));
-      const _priorKeys = new Set((prior || []).map(_key).filter(k => k !== "|"));
+      const _sevOf = f => String(f && f.severity || "INFO").toUpperCase();
+      const _curMap = new Map(); const _priorMap = new Map();
+      (cur || []).forEach(f => { const k = _key(f); if (k !== "|") _curMap.set(k, f); });
+      (prior || []).forEach(f => { const k = _key(f); if (k !== "|") _priorMap.set(k, f); });
       let added = 0, removed = 0, unchanged = 0;
-      _curKeys.forEach(k => { if (_priorKeys.has(k)) unchanged++; else added++; });
-      _priorKeys.forEach(k => { if (!_curKeys.has(k)) removed++; });
-      return {added, removed, unchanged};
+      const sevDelta = {CRITICAL:{a:0,r:0},HIGH:{a:0,r:0},MEDIUM:{a:0,r:0},LOW:{a:0,r:0},INFO:{a:0,r:0}};
+      _curMap.forEach((f, k) => {
+        if (_priorMap.has(k)) unchanged++;
+        else { added++; const s = _sevOf(f); if (sevDelta[s]) sevDelta[s].a++; }
+      });
+      _priorMap.forEach((f, k) => {
+        if (!_curMap.has(k)) { removed++; const s = _sevOf(f); if (sevDelta[s]) sevDelta[s].r++; }
+      });
+      return {added, removed, unchanged, sevDelta};
     };
     let _priorEntry = null;
     try {
@@ -13024,9 +13240,6 @@ function generateUniversalVLReport(opts) {
       }
     } catch(_) {}
 
-    chk(20);
-    fillR(margin, y, contentW, 16, LBLUE);
-    fillR(margin, y, 3, 16, BLUE);
     if (_priorEntry) {
       // Re-extract prior findings using same shape rules
       const _priorFindings = [];
@@ -13037,15 +13250,42 @@ function generateUniversalVLReport(opts) {
       });
       const _d = _diffFindings(_allFindings, _priorFindings);
       const _priorDate = String(_priorEntry.ts || "").replace("T"," ").substring(0,16);
+      // Card grows when delta is non-trivial: show severity breakdown lines.
+      const _hasSevDelta = ["CRITICAL","HIGH","MEDIUM","LOW"].some(s =>
+        _d.sevDelta && _d.sevDelta[s] && (_d.sevDelta[s].a + _d.sevDelta[s].r) > 0);
+      const _hh = _hasSevDelta ? 30 : 20;
+      chk(_hh + 2);
+      fillR(margin, y, contentW, _hh, LBLUE);
+      const _accent = _d.added > _d.removed ? [194,65,12] : _d.removed > 0 ? [15,118,82] : BLUE;
+      fillR(margin, y, 3, _hh, _accent);
       txt("DELTA vs PRIOR SCAN", margin + 8, y + 5.5, 7, BLUE, true);
       txt("Prior scan: " + _priorDate + " UTC", margin + 8, y + 10, 7.5, DARK);
       txt(`+${_d.added} new  -  -${_d.removed} closed  -  =${_d.unchanged} unchanged`,
           margin + 8, y + 13.5, 8, DARK, true);
+      if (_hasSevDelta) {
+        const _parts = ["CRITICAL","HIGH","MEDIUM","LOW"]
+          .filter(s => _d.sevDelta[s].a + _d.sevDelta[s].r > 0)
+          .map(s => `${s}: +${_d.sevDelta[s].a}/-${_d.sevDelta[s].r}`);
+        txt(_parts.join("   "), margin + 8, y + 19, 7, GRAY);
+        txt(_d.added > _d.removed
+              ? "Regression vs prior scan - review the Quick Wins + Detailed Findings."
+              : _d.removed > 0
+                ? "Net improvement vs prior scan."
+                : "No net change in findings.",
+            margin + 8, y + 24, 7, DARK, true);
+      }
+      y += _hh + 2;
     } else {
+      chk(20);
+      fillR(margin, y, contentW, 16, LBLUE);
+      fillR(margin, y, 3, 16, BLUE);
       txt("BASELINE SCAN", margin + 8, y + 5.5, 7, BLUE, true);
-      txt("No prior scan recorded for this target - this report is the baseline.", margin + 8, y + 11, 8, DARK);
+      txt("No prior scan recorded for this target. This report is the baseline.",
+          margin + 8, y + 10, 7.5, DARK);
+      txt("Next scan against the same target will surface a DELTA card here (added / closed / unchanged, broken down by severity).",
+          margin + 8, y + 13.5, 6.5, GRAY);
+      y += 20;
     }
-    y += 20;
   }
 
   // ── DOCUMENT CONTROL ──
@@ -13098,16 +13338,41 @@ function generateUniversalVLReport(opts) {
     txt(_posture, margin + 8, y + 17, 14, _pCol, true);
     y += 28;
 
-    // Engagement scope
+    // Engagement scope — also surface the RESOLVED image reference that
+    // image-CVE scanners (Trivy/Grype/Syft/Cosign) actually pulled. The
+    // basic Target field can be a registry hostname while the per-tool
+    // advanced input (image_ref) is what got pulled — the customer needs
+    // to see what was actually scanned so they don't conflate the two.
+    let _resolvedImage = null;
+    (function(){
+      const _imgRe = /\b([a-z0-9._-]+(?:\.[a-z0-9._-]+)?(?::[0-9]+)?\/[a-z0-9._\/-]+:[a-zA-Z0-9._-]+)\b|\b([a-z0-9._-]+:[a-zA-Z0-9._-]+@sha256:[a-f0-9]{32,})\b/;
+      const _bareRe = /\b([a-z0-9._-]+\/[a-z0-9._-]+:[a-zA-Z0-9._-]+)\b/;
+      const _candidates = ["trivy_image","grype_image","image_signing_cosign","image_provenance_slsa","image_secrets_scan","image_distroless_base"];
+      for (const tk of _candidates) {
+        const d = r[tk]; if (!d) continue;
+        for (const f of (d.findings || [])) {
+          const ev = String(f.evidence || f.evidence_marker || f.detail || f.name || "");
+          let m = ev.match(_imgRe);
+          if (!m) m = ev.match(_bareRe);
+          if (m && (m[1] || m[2])) { _resolvedImage = m[1] || m[2]; break; }
+        }
+        if (_resolvedImage) break;
+      }
+    })();
     chk(50); y = sHead("Engagement Scope", y);
     y = tHead(["FIELD","VALUE"], [45,135], y);
     const _scope = [
-      ["Target", target || "(none)"],
+      ["Target (as supplied)", target || "(none)"],
+    ];
+    if (_resolvedImage && _resolvedImage !== target) {
+      _scope.push(["Image (as resolved)", _resolvedImage]);
+    }
+    _scope.push(
       ["Scan Date", date],
       ["Methodology", `VulnusLab ${moduleLabel} - ${Object.keys(r).length} scanners`],
       ["Frameworks", "PTES - OWASP - NIST SP 800-115 - MITRE ATT&CK"],
       ["Engagement Type", authenticated ? "Authenticated (session captured)" : "Black-box (public surface only)"],
-    ];
+    );
     _scope.forEach((f, i) => {
       chk(7); fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
       txt(f[0], margin + 3, y + 5, 8.5, GRAY, true);
@@ -13309,6 +13574,27 @@ function generateUniversalVLReport(opts) {
       "CWE-918":"OWASP A10 - NIST SI-10 - ISO A.8.28",
       "CWE-352":"OWASP A01 - NIST SI-10 - ISO A.8.28",
       "CWE-22": "OWASP A01 - NIST AC-3 - ISO A.5.15",
+      // CWE-1104 = use of unmaintained third-party component (every CVE
+      // finding from Trivy/Grype carries this). Was previously unmapped
+      // and dominated the "needs manual classification" rows.
+      "CWE-1104":"PCI 6.3.3 - NIST SI-2 - ISO A.8.8 - CIS 7.1",
+      // CWE-1357 = Reliance on Insufficiently Trustworthy Component
+      // (Dockerfile pinning, base-image floating tag, etc.)
+      "CWE-1357":"NIST CM-6 - ISO A.8.9 - PCI 2.2.4",
+      // CWE-269 = Improper Privilege Management (privileged pods, docker.sock)
+      "CWE-269": "PCI 7.2.5 - NIST AC-6 - ISO A.5.15",
+      // CWE-250 = Execution with Unnecessary Privileges
+      "CWE-250": "PCI 7.2.5 - NIST AC-6 - ISO A.5.15",
+      // CWE-668 = Exposure of Resource to Wrong Sphere (hostNetwork, hostPID)
+      "CWE-668": "NIST AC-3 - ISO A.5.15 - OWASP A05",
+      // CWE-732 = Incorrect Permission Assignment (readOnlyRootFS, chown)
+      "CWE-732": "NIST AC-3 - ISO A.5.15 - PCI 7.1",
+      // CWE-798 = Use of Hard-coded Credentials (image-secret findings)
+      "CWE-798": "PCI 6.3.1 - NIST IA-5 - ISO A.8.28",
+      // CWE-324 = Use of Key Past its Expiration Date (cert rotation)
+      "CWE-324": "PCI 4.2.1 - NIST SC-12 - ISO A.8.24",
+      // CWE-494 = Download of Code Without Integrity Check (curl | bash)
+      "CWE-494": "PCI 6.3.3 - NIST SI-7 - ISO A.8.8",
     };
     const _cmpFor = function(nm, cwe) {
       for (var _i = 0; _i < _cmpRules.length; _i++) {
@@ -13370,6 +13656,66 @@ function generateUniversalVLReport(opts) {
       doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
       doc.text("No CRITICAL/HIGH/MEDIUM/LOW finding carried a control-mappable signature.", margin + 6, y + 11);
       y += 18;
+    }
+  }
+
+  // ── QUICK WINS (root-cause clusters) ──
+  // Hand the customer the ONE action that retires the most findings. For
+  // container scans this is almost always "rebuild on a current base image"
+  // and "rotate the docker-socket / privileged pod". Cluster by source
+  // package; only show clusters with >= 5 findings (otherwise it's noise).
+  {
+    const _clusterArr = Object.values(_cveClusters)
+      .filter(c => c && c.cveCount >= 5)
+      .sort((a,b) => b.cveCount - a.cveCount)
+      .slice(0, 8);
+    // Detect EOL base-image finding to anchor the headline win.
+    let _eolBase = null;
+    Object.keys(r).forEach(k => {
+      (r[k] && r[k].findings || []).forEach(f => {
+        const nm = String(f.name || f.detail || "");
+        if (/base[- ]image|EOL|floating tag|debian:|alpine:|ubuntu:/i.test(nm) && /eol|floating|deprecated/i.test(nm)) {
+          _eolBase = _eolBase || nm.substring(0, 100);
+        }
+      });
+    });
+    if (_clusterArr.length > 0 || _eolBase) {
+      chk(40); y = sHead("Quick Wins (Root-Cause Clusters)", y);
+      txt("Single actions that retire the most findings. Address these BEFORE the per-finding queue.",
+          margin + 2, y, 7.5, GRAY);
+      y += 6;
+      // Headline: base-image rebuild
+      const _totalRolled = _clusterArr.reduce((a,c) => a + c.cveCount, 0);
+      if (_eolBase && _totalRolled > 10) {
+        chk(22); fillR(margin, y, contentW, 22, [254,242,242]);
+        fillR(margin, y, 4, 22, [162,28,28]);
+        txt("HEADLINE: Rebuild on a current base image", margin + 8, y + 6, 10, [162,28,28], true);
+        txt(`Detected: ${_eolBase}`.substring(0, 130), margin + 8, y + 11, 7.5, DARK);
+        txt(`Estimated impact: rebuild on debian:12-slim / alpine:3 / distroless eliminates ~${_totalRolled} source-package CVEs across ${_clusterArr.length} component(s).`,
+            margin + 8, y + 16, 7, GRAY);
+        txt("Action: pin the FROM line to a current LTS tag, rebuild, push, re-scan.",
+            margin + 8, y + 20, 7, [55,65,81], true);
+        y += 26;
+      }
+      // Per-cluster mini-cards
+      y = tHead(["SOURCE PACKAGE","CVE COUNT","SEVERITY MIX","SAMPLE CVE"], [55,25,55,51], y);
+      _clusterArr.forEach((c, i) => {
+        chk(7); fillR(margin, y, contentW, 6.5, i % 2 === 0 ? LIGHT : WHITE);
+        txt(c.src, margin + 3, y + 4.6, 8, DARK, true);
+        txt(String(c.cveCount), margin + 60, y + 4.6, 9, [162,28,28], true);
+        const mix = ["CRITICAL","HIGH","MEDIUM","LOW"]
+          .filter(s => c.sevCount[s] > 0)
+          .map(s => `${c.sevCount[s]}${s[0]}`)
+          .join(" / ") || "-";
+        txt(mix, margin + 85, y + 4.6, 7.5, GRAY);
+        txt(c.sampleCve, margin + 140, y + 4.6, 7.5, GRAY);
+        y += 6.5;
+      });
+      y += 4;
+      txt("Each row = ONE source package family. Upgrading the source package " +
+          "to its current Debian/Ubuntu/Alpine version retires every CVE in the row.",
+          margin + 2, y, 6.5, GRAY);
+      y += 8;
     }
   }
 
@@ -13766,7 +14112,38 @@ function generateUniversalVLReport(opts) {
   references.forEach(line => {
     chk(5); txt(line, margin + 2, y + 3.5, 7.5, BLUE); y += 4.5;
   });
-  y += 6;
+  y += 4;
+  // C. SBOM artefact reference (auto-populated when Syft probe produced one)
+  {
+    let _sbomLine = null;
+    Object.keys(r).forEach(k => {
+      if (_sbomLine) return;
+      (r[k] && r[k].findings || []).forEach(f => {
+        if (_sbomLine) return;
+        const ev = String(f.evidence || f.evidence_marker || "");
+        const m = ev.match(/Syft inventory:\s*([a-z]+:\d+)/i)
+              || ev.match(/SBOM:\s*([\w\s,:+-]+)/i);
+        if (m) _sbomLine = m[0];
+      });
+    });
+    txt("C. Software Bill of Materials (SBOM)", margin, y + 5, 9, DARK, true); y += 8;
+    if (_sbomLine) {
+      const _sbomTxt = [
+        `Inventory generated by Syft: ${_sbomLine}.`,
+        "Per-package detail (name, version, license, PURL) is available as a",
+        "CycloneDX 1.5 JSON or SPDX 2.3 JSON artefact attached to this scan.",
+        "Request via:  GET /api/container_k8s/sbom/<scan_id>?fmt=cyclonedx",
+        "              GET /api/container_k8s/sbom/<scan_id>?fmt=spdx",
+        "Use the SBOM for licence compliance, supply-chain analysis, and to",
+        "feed downstream tools (Dependency-Track, GUAC, Chainguard Wolfi).",
+      ];
+      _sbomTxt.forEach(line => { chk(5); txt(line, margin + 2, y + 3.5, 7.5, GRAY); y += 4; });
+    } else {
+      txt("No Syft inventory captured for this target (image not pulled — likely a registry/host scan rather than an image scan).",
+          margin + 2, y + 3.5, 7.5, GRAY); y += 5;
+    }
+    y += 4;
+  }
 
   // End block
   if (y + 30 > 284) { doc.addPage(); y = 18; drawHeader(); }

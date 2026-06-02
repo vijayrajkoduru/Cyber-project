@@ -41,6 +41,8 @@ def _ndr(slug, target, reason=""):
             evidence_marker=reason or "Required input 'repo_url' is empty.")],
         "tests_performed": 0,
         "tests_summary": f"{slug} skipped - missing repo_url",
+        "_skipped": True,
+        "skipped_reason": "repo_url not provided",
         "raw_data": {"missing_input": "repo_url"},
     }
 

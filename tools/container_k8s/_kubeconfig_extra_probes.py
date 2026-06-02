@@ -42,6 +42,8 @@ def _ndr(slug, target, reason=""):
             evidence_marker=reason or "kubeconfig empty")],
         "tests_performed": 0,
         "tests_summary": f"{slug} skipped - missing kubeconfig",
+        "_skipped": True,
+        "skipped_reason": "kubeconfig not provided (image-target scan)",
         "raw_data": {"missing_input": "kubeconfig"},
     }
 
