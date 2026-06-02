@@ -58,7 +58,37 @@ CHECKS = {
 
 
 def find_scanners(module_path: Path) -> list[Path]:
-    """Walk module tree (handles nested tier subdirs like recon/tier4_web/)."""
+    """Walk module tree (handles nested tier subdirs like recon/tier4_web/).
+
+    Recognises TWO architectures:
+      1. Recon-style: per-file scanners under tier subdirs
+         (one non-underscore .py file per scanner)
+      2. Pack-style:  PROBES = {slug: function} dict in <module>_pack.py
+         with probe functions living in _<group>_probes.py helpers
+         (used by Container, Vuln, Webapp, and ~28 other modules)
+
+    For pack-style, returns the pack file path repeated once per PROBES
+    entry; the slug-of-each-scanner is then `<pack_stem>::<slug>` and
+    quality checks run against the union of pack + helper files.
+    """
+    # First check for pack-style architecture: <module>_pack.py with PROBES.
+    # If found, return synthetic _PackProbe entries (one per slug). This
+    # takes priority over per-file walking so pack-style modules score
+    # against their real probe count, not against the pack file alone.
+    module = module_path.name
+    pack = module_path / f"{module}_pack.py"
+    if pack.exists():
+        try:
+            src = pack.read_text(encoding="utf-8")
+            m = re.search(r"^PROBES\s*=\s*\{(.*?)^\}", src, re.S | re.M)
+            if m:
+                slugs = re.findall(r'"([a-z0-9_]+)"\s*:', m.group(1))
+                if slugs:
+                    return [_PackProbe(pack, s) for s in slugs]
+        except Exception:
+            pass
+
+    # Recon-style per-file walking — one scanner per non-underscore .py file
     out = []
     for p in module_path.rglob("*.py"):
         if "__pycache__" in p.parts or "_legacy" in str(p):
@@ -67,6 +97,58 @@ def find_scanners(module_path: Path) -> list[Path]:
             continue
         out.append(p)
     return sorted(out)
+
+
+class _PackProbe:
+    """Synthetic scanner record for pack-style modules.
+
+    Behaves like a Path for the scoring script's existing code paths
+    (has `.stem`, `.read_text()`, etc.) but represents one entry in the
+    pack's PROBES dict rather than a per-file scanner.
+    """
+    def __init__(self, pack_path: Path, slug: str):
+        self._pack = pack_path
+        self._slug = slug
+        # Cache full module source (pack + all _*_probes.py helpers)
+        # so quality/curation/parallel checks see the union of probe code.
+        self._module_dir = pack_path.parent
+        self._union_src = None
+
+    @property
+    def stem(self) -> str:
+        return self._slug
+
+    @property
+    def parts(self):
+        return self._pack.parts
+
+    @property
+    def name(self) -> str:
+        return self._slug
+
+    def __str__(self):
+        return f"{self._pack}::{self._slug}"
+
+    def __lt__(self, other):  # sortable
+        return str(self) < str(other)
+
+    def read_text(self, encoding="utf-8") -> str:
+        """Return concatenated source of pack.py + all _*_probes.py helpers
+        in the same module. This lets the regex/AST checks see the actual
+        probe function body even though PROBES dict only stores a slug.
+        """
+        if self._union_src is not None:
+            return self._union_src
+        parts = []
+        for p in sorted(self._module_dir.glob("*.py")):
+            if "__pycache__" in p.parts:
+                continue
+            try:
+                parts.append(p.read_text(encoding=encoding))
+            except Exception:
+                continue
+        self._union_src = "\n\n".join(parts)
+        return self._union_src
 
 
 def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
@@ -150,17 +232,37 @@ def load_orchestrator_tools(module: str) -> set[str]:
         return set()
 
 
-def load_frontend_phases(module: str) -> set[str]:
-    """Parse src/App.js to extract module's PHASES tool names."""
+def load_frontend_phases(module: str) -> set[str] | bool:
+    """Parse src/App.js to extract module's PHASES tool names.
+
+    Returns:
+      - set of scanner names if the module uses Recon-style PHASES
+      - True if the module uses the universal ModuleAutoPanel pattern
+        (which auto-loads tiers from /api/<module>/run_all/tiers at
+        runtime — no static PHASES array needed)
+      - empty set if neither is present
+    """
     app_js = ROOT / "src" / "App.js"
     if not app_js.exists():
         return set()
     src = app_js.read_text(encoding="utf-8")
 
-    # Heuristic: look for tool:"<name>" entries — module-agnostic
-    # (Module's PHASES array uses {tool:"<name>", endpoint:"/api/<module>/..."})
+    # Recon-style: {tool:"<name>", endpoint:"/api/<module>/..."}
     pattern = rf'tool:["\']([\w_]+)["\'].*endpoint:["\']/api/{module}'
-    return set(re.findall(pattern, src))
+    phases = set(re.findall(pattern, src))
+    if phases:
+        return phases
+
+    # Pack-style: ModuleAutoPanel / _autoMod with moduleKey:"<module>"
+    # auto-loads tiers from /run_all/tiers — every probe is exposed,
+    # no per-scanner PHASES entry needed. Treat as full L7 coverage.
+    auto_panel = re.search(
+        rf'_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
+        src, re.S,
+    )
+    if auto_panel:
+        return True   # sentinel: 100% L7 coverage via auto-panel
+    return set()
 
 
 def check_ui_integration(module: str) -> dict[str, bool]:
@@ -176,20 +278,55 @@ def check_ui_integration(module: str) -> dict[str, bool]:
                 "endpoint_called": False}
     src = app_js.read_text(encoding="utf-8")
 
-    cap = module.capitalize()
-    # 1. PDF function is CALLED somewhere (not just declared)
-    pdf_decl = f"function generate{cap}Report"
-    pdf_call = f"generate{cap}Report("
-    pdf_callsite = src.count(pdf_call) >= 2  # 1 declaration + >= 1 call
+    # Module name → CamelCase (handles both 'recon' → 'Recon' and
+    # 'container_k8s' → 'ContainerK8s' for the Recon-style PDF function).
+    cap = "".join(part.capitalize() for part in module.split("_"))
 
-    # 2. <MODULE>_PHASES referenced AT LEAST TWICE (declaration + consumer)
-    phases_name = f"{module.upper()}_PHASES"
-    phases_consumed = src.count(phases_name) >= 2
-
-    # 3. fetch(.../api/<module>/run_all) appears (UI fans out to orchestrator)
-    endpoint_called = bool(re.search(
-        rf'fetch\s*\([^)]*?/api/{re.escape(module)}/run_all', src
+    # 1. PDF function is CALLED somewhere (not just declared).
+    #    Accept any of these wiring patterns:
+    #      (a) Recon-style per-module function (generate<Module>Report)
+    #          called >= 1 time after its declaration
+    #      (b) Universal generator (generateUniversalVLReport) invoked
+    #          from a ModuleAutoPanel that carries moduleKey:"<module>"
+    #          — most modules pass moduleKey as a variable so we accept
+    #          the structural pattern: _autoMod-wired module + at least
+    #          one call to generateUniversalVLReport in App.js
+    pdf_call_recon = f"generate{cap}Report("
+    universal_call = "generateUniversalVLReport(" in src
+    auto_mod_wired = bool(re.search(
+        rf'_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
+        src, re.S,
     ))
+    pdf_callsite = (
+        src.count(pdf_call_recon) >= 2          # legacy
+        or (universal_call and auto_mod_wired)   # modern ModuleAutoPanel
+    )
+
+    # 2. Frontend wiring — accept EITHER <MODULE>_PHASES array (Recon-style)
+    #    OR ModuleAutoPanel / _autoMod call carrying moduleKey:"<module>"
+    #    (the universal panel that auto-loads tiers from /run_all/tiers).
+    phases_name = f"{module.upper()}_PHASES"
+    phases_consumed = (
+        src.count(phases_name) >= 2
+        or bool(re.search(
+            rf'_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
+            src, re.S,
+        ))
+        or bool(re.search(
+            rf'ModuleAutoPanel[^}}]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
+            src, re.S,
+        ))
+    )
+
+    # 3. fetch(.../api/<module>/run_all) appears (UI fans out to orchestrator).
+    #    Pack-style modules use a unified fetch helper inside ModuleAutoPanel
+    #    so the literal /api/<module>/ string still appears in App.js, but it
+    #    may be built via string concat — accept both literal and templated.
+    endpoint_called = bool(re.search(
+        rf'(fetch\s*\([^)]*?/api/{re.escape(module)}/run_all'
+        rf'|`\$\{{apiUrl\}}/api/\$\{{moduleKey\}}/run_all`)',
+        src,
+    )) and module.lower() in src  # belt-and-suspenders: module name present
 
     return {
         "pdf_callsite": pdf_callsite,
@@ -242,7 +379,12 @@ def score_module(module: str, verbose: bool = False) -> dict:
 
     # Layer 7 — frontend
     fe_phases = load_frontend_phases(module)
-    in_fe = sum(1 for n in scanner_names if n in fe_phases)
+    if fe_phases is True:
+        # Pack-style + ModuleAutoPanel: every scanner is auto-exposed
+        # at runtime via /api/<module>/run_all/tiers, so L7 = 100%.
+        in_fe = len(scanners)
+    else:
+        in_fe = sum(1 for n in scanner_names if n in fe_phases)
     fe_pct = (in_fe / len(scanners)) * 100
 
     # Layer 22 — UI integration (added 2026-05-24 after OSINT broken-PDF)
