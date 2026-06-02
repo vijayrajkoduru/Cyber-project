@@ -297,6 +297,32 @@ def _tls_inspect(host, port, timeout=4):
 def _host(t):
     return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
 
+
+def _target_is_placeholder(target) -> bool:
+    """True if `target` is empty/whitespace or the 'n/a' sentinel the frontend
+    sends when only advanced inputs are filled. Network-target probes should
+    skip honestly in this case instead of probing 'https://n/v2/' garbage."""
+    if not target or not isinstance(target, str):
+        return True
+    t = target.strip().lower()
+    return t in ("", "n/a", "na", "none", "-", "(none)")
+
+
+def _na_for_network_probe(slug: str, target: str, tool_name: str) -> dict:
+    """Standard NOT_APPLICABLE shape for network-target probes when only
+    advanced inputs were supplied (target is the 'n/a' placeholder)."""
+    return _build_resp(slug, target, [wrap_finding(
+        f"[NOT_APPLICABLE] {tool_name} requires a hostname/URL target",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation=(f"To run {tool_name}, paste a target hostname or URL "
+                      "in the Target field. This probe doesn't use the advanced "
+                      "inputs (image / Dockerfile / pod-spec / kubeconfig / repo) "
+                      "since it checks network-reachable services."),
+        evidence_marker="Target is empty or 'n/a' — only advanced inputs were "
+                        "provided. Probe skipped to avoid probing the literal "
+                        "string as a hostname.",
+    )], 0, f"{tool_name} skipped — no network target")
+
 def _tcp_open(host, port, timeout=2.0):
     try:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
@@ -470,6 +496,9 @@ def _probe_k8s_dashboard(target, req):
 
 
 def _probe_registry_public(target, req):
+    if _target_is_placeholder(target):
+        return _na_for_network_probe("registry_pypi_2fa_audit", target,
+                                       "Container registry public-pull probe")
     host = _host(target)
     code, body = _http_get(f"https://{host}/v2/", timeout=3)
     is_anon = code == 200 and '"errors"' not in body[:100]
@@ -564,6 +593,9 @@ def _probe_k8s_api_insecure_port(target, req):
 
 def _probe_registry_anon_push(target, req):
     """Test whether registry accepts anonymous push (POST upload init)."""
+    if _target_is_placeholder(target):
+        return _na_for_network_probe("registry_anon_push", target,
+                                       "Registry anonymous-push probe")
     host = _host(target)
     findings = []
     # Probe the standard /v2/<name>/blobs/uploads/ POST upload endpoint.
@@ -597,6 +629,8 @@ def _probe_registry_anon_push(target, req):
 
 def _probe_nginx_ingress(target, req):
     """Detect nginx ingress + check for exposed status/metrics endpoints."""
+    if _target_is_placeholder(target):
+        return _na_for_network_probe("nginx_ingress", target, "nginx ingress probe")
     host = _host(target)
     findings = []
     code, hdrs, _ = _http_get_insecure(f"https://{host}/", timeout=4)
@@ -1154,9 +1188,11 @@ def _probe_grype_image(target, req):
             evidence_marker="grype not found in PATH")], 0,
             "Grype not installed")
 
+    # Grype's --fail-on accepts severity NAMES only (critical/high/medium/low/
+    # negligible/unknown) — there's no "never". Omitting the flag entirely is
+    # the "never fail on findings" default, which is what we want.
     exit_code, stdout, stderr = _run_tool([
         "grype", target, "-o", "json", "-q",
-        "--fail-on", "never",  # don't exit nonzero on findings
     ], timeout_s=360)
 
     if exit_code == 124:
@@ -1166,12 +1202,15 @@ def _probe_grype_image(target, req):
             remediation="Try a smaller image or run grype manually.",
             evidence_marker="Grype wall-clock budget exceeded")], 0, "Grype timeout")
 
-    if exit_code != 0 or not stdout.strip():
+    # Grype exits 0 on success even with findings (since --fail-on is unset).
+    # Some Grype versions briefly emitted exit 1 with valid JSON when a DB
+    # metadata update was triggered; accept exit 1 as long as stdout has JSON.
+    if exit_code not in (0, 1) or not stdout.strip():
         return _build_resp("grype_image", target, [wrap_finding(
             f"[PROBE ERROR] Grype exit {exit_code}",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Verify image is pullable.",
-            evidence_marker=f"stderr: {stderr[-300:]}")], 0, f"Grype exit {exit_code}")
+            evidence_marker=f"stderr: {stderr[-500:]}")], 0, f"Grype exit {exit_code}")
 
     try:
         data = json.loads(stdout)
@@ -1338,13 +1377,17 @@ def _probe_trivy_image_secrets(target, req):
             remediation="Rebuild backend with Dockerfile that installs Trivy.",
             evidence_marker="trivy not found in PATH")], 0, "Trivy not installed")
 
+    # Secret scanning doesn't need the vuln DB, but Trivy 0.70+ still tries
+    # to download the Java DB metadata when --skip-db-update is set against
+    # a fresh cache and crashes with "scan error: unable to ..." . Drop the
+    # skip flag — pre-baked DB in the container handles it fine.
+    # Also drop --quiet so stderr captures real error text on failure.
     exit_code, stdout, stderr = _run_tool([
         "trivy", "image",
         "--format", "json",
         "--scanners", "secret",
-        "--quiet",
         "--timeout", "3m",
-        "--skip-db-update",
+        "--no-progress",
         target,
     ], timeout_s=240)
 
@@ -1360,7 +1403,7 @@ def _probe_trivy_image_secrets(target, req):
             f"[PROBE ERROR] Trivy secret scan exit {exit_code}",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Verify image is pullable.",
-            evidence_marker=f"stderr: {stderr[-300:]}")], 0,
+            evidence_marker=f"stderr: {stderr[-600:]}")], 0,
             f"Trivy exit {exit_code}")
 
     try:
