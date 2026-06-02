@@ -19,5 +19,23 @@
   },
   "osint": {
     "score": 60.2
+  },
+  "container_k8s": {
+    "score": 86.2
+  },
+  "mobile_static": {
+    "score": 77.0
+  },
+  "mobile_storage": {
+    "score": 87.0
+  },
+  "mobile_runtime": {
+    "score": 87.0
+  },
+  "mobile_crypto": {
+    "score": 87.0
+  },
+  "mobile_network": {
+    "score": 87.0
   }
 }
