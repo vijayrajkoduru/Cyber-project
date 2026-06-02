@@ -27,6 +27,7 @@ from tools.container_k8s._dockerfile_probes import (
     _probe_dockerfile_multistage_audit,
     _probe_dockerfile_copy_chown_audit,
     _probe_dockerfile_expose_audit,
+    _probe_dockerfile_base_image_eol,
     _probe_hadolint_dockerfile,
 )
 from tools.container_k8s._pod_spec_probes import (
@@ -1775,6 +1776,7 @@ PROBES = {
     "dockerfile_multistage_audit":    _probe_dockerfile_multistage_audit,
     "dockerfile_copy_chown_audit":    _probe_dockerfile_copy_chown_audit,
     "dockerfile_expose_audit":        _probe_dockerfile_expose_audit,
+    "dockerfile_base_image_eol":      _probe_dockerfile_base_image_eol,
     "hadolint_dockerfile":            _probe_hadolint_dockerfile,
     # Pod-spec static-analysis probes (require pod_spec_yaml input)
     "container_privileged":           _probe_container_privileged,
@@ -1864,7 +1866,7 @@ T = [
     ("registry_anon_push", "Registry anonymous push.", "CRITICAL", "9.0"),
     ("image_provenance_slsa", "SLSA provenance check.", "MEDIUM", "5.5"),
     ("manual_image_review", "Manual image review.", "INFO", "0.0"),
-    # §2 Dockerfile (10)
+    # §2 Dockerfile (11)
     ("dockerfile_root_user", "Dockerfile USER root.", "MEDIUM", "5.5"),
     ("dockerfile_no_user", "Dockerfile no USER directive.", "MEDIUM", "5.5"),
     ("dockerfile_ssh_in_image", "SSH server in image.", "MEDIUM", "5.5"),
@@ -1875,6 +1877,7 @@ T = [
     ("dockerfile_multistage_audit", "Multi-stage build audit.", "INFO", "0.0"),
     ("dockerfile_copy_chown_audit", "COPY --chown audit.", "INFO", "0.0"),
     ("dockerfile_expose_audit", "EXPOSE port audit.", "INFO", "0.0"),
+    ("dockerfile_base_image_eol", "Base-image EOL audit.", "HIGH", "7.5"),
     # §3 Container Runtime (12)
     ("container_privileged", "Container privileged mode.", "CRITICAL", "9.0"),
     ("container_capadd_dangerous", "Dangerous CAP_ADD.", "HIGH", "8.0"),

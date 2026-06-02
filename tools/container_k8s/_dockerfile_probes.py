@@ -231,62 +231,190 @@ def _probe_dockerfile_curl_pipe_bash(target, req):
         "curl|bash pattern check")
 
 
+_SEV_CVSS = {"CRITICAL": "9.8", "HIGH": "7.5", "MEDIUM": "5.5", "LOW": "3.0", "INFO": "0.0"}
+
+
 def _probe_dockerfile_hardcoded_secret(target, req):
     df = _get_dockerfile(req)
     if df is None:
         return _ndr("dockerfile_hardcoded_secret", target)
 
-    # Patterns from established secret-scanner heuristics
-    secret_patterns = [
-        (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID", "CRITICAL", "9.8"),
-        (r"(?i)aws_secret[_a-z]*\s*[:=]\s*['\"][A-Za-z0-9/+=]{40}['\"]",
-         "AWS Secret Access Key", "CRITICAL", "9.8"),
-        (r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
-         "Private key embedded", "CRITICAL", "10.0"),
-        (r"(?i)(api[_-]?key|apikey|api_token|access_token)\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}['\"]",
-         "Generic API key", "HIGH", "8.0"),
-        (r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{6,}['\"]",
-         "Hardcoded password", "HIGH", "8.0"),
-        (r"ghp_[A-Za-z0-9]{36}", "GitHub PAT", "CRITICAL", "9.0"),
-        (r"sk_live_[A-Za-z0-9]{24,}", "Stripe live secret key", "CRITICAL", "9.5"),
-        (r"xox[baprs]-[A-Za-z0-9-]{10,}", "Slack token", "HIGH", "8.0"),
-        (r"(?i)ENV\s+(JWT_SECRET|SECRET_KEY|DB_PASSWORD|DATABASE_URL)\s*=\s*['\"]?[^'\"]{6,}",
-         "Sensitive ENV in Dockerfile", "HIGH", "7.5"),
-    ]
+    # Curated pattern list (~130 entries: AWS/GCP/Azure/GitHub/GitLab/Slack/Stripe/
+    # PayPal/Square/Twilio/SendGrid/Mailgun/Datadog/NewRelic/Sentry/PagerDuty/
+    # npm/PyPI/Docker Hub/Cloudflare/Heroku/Netlify/Vercel/Render/OpenAI/Anthropic/
+    # HuggingFace/Auth0/Okta/Algolia/Atlassian/Shopify/Notion/Vault/Doppler/
+    # private keys/JWT/DB connection strings/Telegram/Discord). Loaded from
+    # tools/_payloads/container_k8s/secret_patterns.json via the _loader.
+    try:
+        from tools._payloads.container_k8s._loader import get_secret_patterns
+        patterns = get_secret_patterns()
+    except Exception:
+        patterns = []
+
+    if not patterns:
+        # Fallback to the legacy inline patterns so the probe never silently
+        # disables itself if the curated wordlist fails to load.
+        patterns = [
+            {"name": "AWS Access Key ID", "compiled": re.compile(r"AKIA[0-9A-Z]{16}"), "severity": "CRITICAL", "category": "cloud-aws"},
+            {"name": "Private key embedded", "compiled": re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----"), "severity": "CRITICAL", "category": "key-private"},
+            {"name": "GitHub PAT", "compiled": re.compile(r"ghp_[A-Za-z0-9]{36,}"), "severity": "CRITICAL", "category": "vcs-github"},
+        ]
 
     findings = []
+    seen_per_line: set = set()  # dedupe: same line + same pattern name only fires once
     for instr, args, ln in _iter_instructions(df):
-        if instr not in ("RUN", "ENV", "ARG"):
+        if instr not in ("RUN", "ENV", "ARG", "LABEL"):
             continue
-        for pat, name, sev, cvss in secret_patterns:
+        for p in patterns:
             try:
-                m = re.search(pat, args)
-            except re.error:
+                m = p["compiled"].search(args)
+            except (re.error, KeyError):
                 continue
-            if m:
-                snippet = m.group(0)[:60]
-                findings.append(wrap_finding(
-                    f"{name} hardcoded in Dockerfile (line {ln})",
-                    sev, cvss=cvss, cwe="CWE-798", owasp="A07:2021",
-                    remediation=("Move secrets to runtime injection: Kubernetes "
-                                  "Secrets, Vault CSI, AWS Secrets Manager, "
-                                  "Docker --env-file at runtime (NOT ENV in "
-                                  "Dockerfile). Rotate this credential immediately "
-                                  "if the image was pushed."),
-                    evidence_marker=f"Line {ln} {instr} pattern '{name}': {snippet}"))
-                break
+            if not m:
+                continue
+            key = (ln, p["name"])
+            if key in seen_per_line:
+                continue
+            seen_per_line.add(key)
+            sev = p.get("severity", "MEDIUM")
+            snippet = m.group(0)[:60]
+            findings.append(wrap_finding(
+                f"{p['name']} hardcoded in Dockerfile (line {ln})",
+                sev, cvss=_SEV_CVSS.get(sev, "5.0"),
+                cwe="CWE-798", owasp="A07:2021",
+                remediation=(
+                    f"Move {p.get('category', 'this secret')} value out of "
+                    f"the image. Use Kubernetes Secret, HashiCorp Vault, AWS "
+                    f"Secrets Manager, or BuildKit secret mount "
+                    f"(RUN --mount=type=secret). Rotate the value immediately "
+                    f"if the image was pushed to any registry."),
+                evidence_marker=f"Line {ln} {instr} matched '{p['name']}' ({p.get('category', '')}): {snippet}"))
 
     if not findings:
         findings.append(wrap_finding(
             "No hardcoded secrets detected in Dockerfile",
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue runtime-secret-injection posture.",
-            evidence_marker=f"Probed {len(secret_patterns)} secret patterns; 0 matches"))
+            evidence_marker=f"Probed {len(patterns)} curated secret patterns; 0 matches"))
     return _build_resp("dockerfile_hardcoded_secret", target, findings,
-                       len(secret_patterns),
-                       f"{len(findings)} secret pattern(s) matched" if any(
-                           f.get("severity") != "POSITIVE" for f in findings) else
-                       "Hardcoded-secret check (0 hits)")
+                       len(patterns),
+                       f"{len([f for f in findings if f.get('severity') not in ('POSITIVE', 'INFO')])} hardcoded secret(s) detected"
+                       if any(f.get("severity") not in ("POSITIVE", "INFO") for f in findings)
+                       else f"Hardcoded-secret check ({len(patterns)} patterns, 0 hits)")
+
+
+def _probe_dockerfile_base_image_eol(target, req):
+    """Flag FROM directives that reference an end-of-life base image.
+
+    EOL severity is computed at probe time from today's date vs the
+    eol_date in the curated wordlist — so the wordlist doesn't need
+    severity re-curation as dates roll past, only date-stamp refreshes.
+    """
+    df = _get_dockerfile(req)
+    if df is None:
+        return _ndr("dockerfile_base_image_eol", target)
+
+    try:
+        from tools._payloads.container_k8s._loader import get_eol_base_images, classify_eol
+        eol_db = get_eol_base_images()
+    except Exception:
+        eol_db = []
+
+    if not eol_db:
+        return _build_resp("dockerfile_base_image_eol", target, [wrap_finding(
+            "[NOT IMPLEMENTED] EOL base-image wordlist not loaded",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify tools/_payloads/container_k8s/eol_base_images.json shipped with the deploy.",
+            evidence_marker="get_eol_base_images() returned empty list")], 0,
+            "EOL wordlist missing")
+
+    # Build {(image, version): entry} lookup. version_alias also indexed.
+    lookup: dict = {}
+    for entry in eol_db:
+        img = (entry.get("image") or "").lower()
+        ver = str(entry.get("version") or "")
+        if img and ver:
+            lookup[(img, ver)] = entry
+        alias = (entry.get("version_alias") or "").lower()
+        if img and alias:
+            lookup[(img, alias)] = entry
+
+    # FROM <image>[:<tag>] [AS stage]
+    from_re = re.compile(
+        r"^\s*FROM\s+(?:--platform=\S+\s+)?([a-z0-9._/-]+)(?::([a-zA-Z0-9._-]+))?(?:\s+AS\s+\S+)?\s*$",
+        re.IGNORECASE | re.MULTILINE)
+    findings = []
+    seen_images = []
+    floating_tags = {"latest", "stable", "slim", "alpine", "bullseye", "bookworm", "jammy", "focal"}
+    for m in from_re.finditer(df):
+        full_ref = m.group(1)
+        tag = (m.group(2) or "").lower()
+        # Normalize: registry/lib/img -> img (last path component)
+        bare = full_ref.split("/")[-1].lower()
+        seen_images.append(f"{full_ref}:{tag or '(no tag)'}")
+
+        if not tag:
+            findings.append(wrap_finding(
+                f"Base image '{full_ref}' has no version tag (implicit :latest)",
+                "MEDIUM", cvss="5.5", cwe="CWE-1357", owasp="A06:2021",
+                remediation="Pin to a specific tag or digest. 'latest' is mutable and reproducibility-breaking.",
+                evidence_marker=f"FROM {full_ref}"))
+            continue
+
+        if tag in floating_tags:
+            findings.append(wrap_finding(
+                f"Base image '{full_ref}:{tag}' uses a floating tag",
+                "LOW", cvss="3.0", cwe="CWE-1357", owasp="A06:2021",
+                remediation=f"Pin '{tag}' to a specific version (e.g. {full_ref}:1.21 or a sha256 digest).",
+                evidence_marker=f"FROM {full_ref}:{tag} — floating tag"))
+            continue
+
+        # Try exact + major-version fallback (e.g. "20-alpine" → "20")
+        entry = lookup.get((bare, tag))
+        if not entry:
+            # Strip suffix qualifiers: 20-alpine3.18 → 20, 3.18-slim → 3.18
+            major_only = re.match(r"^([0-9]+(?:\.[0-9]+)?)", tag)
+            if major_only:
+                entry = lookup.get((bare, major_only.group(1)))
+
+        if not entry:
+            continue  # not in EOL DB — silently OK (not all images tracked)
+
+        sev, label, delta = classify_eol(entry["eol_date"])
+        if sev == "INFO":
+            continue  # plenty of runway, no finding needed
+
+        title = f"Base image {bare}:{tag} {label} ({entry['eol_date']})"
+        if delta < 0:
+            evidence = f"FROM {full_ref}:{tag} — EOL was {entry['eol_date']} ({-delta} days ago)"
+            remediation = (
+                f"Upgrade to a supported {bare} release. EOL means no further "
+                f"security patches from upstream — every CVE that lands after "
+                f"{entry['eol_date']} is permanently unfixed in this image. "
+                f"{entry.get('notes', '')}")
+        else:
+            evidence = f"FROM {full_ref}:{tag} — EOL on {entry['eol_date']} (in {delta} days)"
+            remediation = (
+                f"Plan upgrade now. {bare} {tag} loses upstream security "
+                f"support on {entry['eol_date']}. Identify the next-major "
+                f"version your stack supports and schedule the migration.")
+
+        findings.append(wrap_finding(
+            title, sev, cvss=_SEV_CVSS.get(sev, "5.0"),
+            cwe="CWE-1104", owasp="A06:2021",
+            remediation=remediation, evidence_marker=evidence))
+
+    if not findings:
+        return _build_resp("dockerfile_base_image_eol", target, [wrap_finding(
+            f"All {len(seen_images)} base image(s) supported",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue tracking upstream EOL dates.",
+            evidence_marker=f"FROM lines: {', '.join(seen_images[:5])}")], len(seen_images),
+            f"EOL check ({len(seen_images)} FROM, 0 issues)")
+
+    return _build_resp("dockerfile_base_image_eol", target, findings,
+                       len(seen_images),
+                       f"{len(findings)} base-image issue(s) across {len(seen_images)} FROM")
 
 
 def _probe_dockerfile_apt_unpinned(target, req):

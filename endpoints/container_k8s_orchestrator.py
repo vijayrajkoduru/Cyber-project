@@ -11,15 +11,15 @@ router = APIRouter()
 
 _RANGES = [
     ("tier1_image_registry", 0, 13),
-    ("tier2_dockerfile",     13, 23),
-    ("tier3_runtime",        23, 35),
-    ("tier4_cis_cluster",    35, 52),
-    ("tier5_rbac_policy",    52, 64),
-    ("tier6_network_mesh",   64, 74),
-    ("tier7_secrets",        74, 83),
-    ("tier8_escape_cves",    83, 92),
-    ("tier9_mesh_ingress",   92, 100),
-    ("tier10_ebpf_runtime",  100, 103),
+    ("tier2_dockerfile",     13, 24),
+    ("tier3_runtime",        24, 36),
+    ("tier4_cis_cluster",    36, 53),
+    ("tier5_rbac_policy",    53, 65),
+    ("tier6_network_mesh",   65, 75),
+    ("tier7_secrets",        75, 84),
+    ("tier8_escape_cves",    84, 93),
+    ("tier9_mesh_ingress",   93, 101),
+    ("tier10_ebpf_runtime",  101, 104),
 ]
 
 CONTAINER_K8S_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
