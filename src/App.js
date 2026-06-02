@@ -19228,7 +19228,50 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             {showAdv ? "▾" : "▸"} Advanced inputs {advFilledCount > 0 ? `(${advFilledCount}/${advancedFields.length} set)` : `(${advancedFields.length} optional)`}
           </button>
         )}
+        {advFilledCount > 0 && !running && (
+          <button
+            onClick={() => {
+              const cleared = {};
+              advancedFields.forEach(k => { cleared[k] = ""; });
+              setAdvInputs(prev => ({...prev, ...cleared}));
+            }}
+            title="Clear all advanced inputs (image_ref, Dockerfile, pod-spec, kubeconfig, repo_url)"
+            style={{background:"transparent", border:"1px solid #7f1d1d",
+                    borderRadius:4, padding:"3px 10px", color:"#fca5a5",
+                    fontSize:10, cursor:"pointer", fontWeight:600,
+                    textTransform:"uppercase", letterSpacing:1}}>
+            Clear ({advFilledCount})
+          </button>
+        )}
       </div>
+      {/* Mismatch warning — fires when image_ref is set but differs from
+          target. Common cause: user changed target but forgot the advanced
+          input image_ref from a prior scan. The PDF will honestly surface
+          this in Engagement Scope, but the customer should see it BEFORE
+          they hit Run All. */}
+      {(() => {
+        const _img = (advInputs.image_ref || "").trim();
+        const _tgt = (target || "").trim();
+        if (!_img || !_tgt || _img === _tgt) return null;
+        return (
+          <div style={{background:"#451a03", border:"1px solid #b45309",
+                       borderRadius:6, padding:"8px 12px", marginBottom:12,
+                       display:"flex", alignItems:"center", gap:10}}>
+            <span style={{color:"#fbbf24", fontSize:11, fontWeight:700,
+                          textTransform:"uppercase", letterSpacing:1}}>Mismatch</span>
+            <span style={{color:"#fde68a", fontSize:12, flex:1}}>
+              Target is <code style={{background:"#1c1917", padding:"1px 5px", borderRadius:3, color:"#fef3c7"}}>{_tgt}</code> but image_ref advanced input is <code style={{background:"#1c1917", padding:"1px 5px", borderRadius:3, color:"#fef3c7"}}>{_img}</code>. Image scanners will use image_ref.
+            </span>
+            <button onClick={() => setAdvInputs(prev => ({...prev, image_ref: ""}))}
+              style={{background:"#b45309", border:"none", borderRadius:4,
+                      padding:"4px 10px", color:"#fff", fontSize:10,
+                      fontWeight:700, cursor:"pointer", letterSpacing:1,
+                      textTransform:"uppercase"}}>
+              Clear image_ref
+            </button>
+          </div>
+        );
+      })()}
       {showAuth && (
         <div style={{display:"flex", gap:8, marginBottom:14, flexWrap:"wrap"}}>
           <div style={{flex:1, minWidth:280}}>
