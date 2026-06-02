@@ -1,18 +1,19 @@
-"""gha_secret_leak_logs v2 — VL-FORGE (key-gated)."""
+"""gha_secret_leak_logs v3 — VL-FORGE (key-gated; no status-as-finding)."""
 import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
 router=APIRouter()
 async def gather(ctx):
-    ctx.state["api_key_configured"]=bool(os.environ.get("GITHUB_TOKEN",""))
+    keyed=bool(os.environ.get("GITHUB_TOKEN",""))
+    ctx.state["api_key_configured"]=keyed
+    if not keyed:
+        ctx.state["skipped_reason"]="gha_secret_leak_logs: set GITHUB_TOKEN to enable GitHub Actions log scanning"
 def _r_unkeyed(s):
     if s.get("api_key_configured"): return None
-    return {"name":"gha_secret_leak_logs requires GITHUB_TOKEN","severity":"INFO","evidence":"Set token"}
-def _r_ready(s):
-    if not s.get("api_key_configured"): return None
-    return {"name":"gha_secret_leak_logs ready","severity":"INFO","cwe":"T1530","evidence":"Loaded"}
-FINDING_RULES=[_r_unkeyed,_r_ready]
+    return {"name":"gha_secret_leak_logs requires GITHUB_TOKEN","severity":"INFO",
+        "evidence":"Set GITHUB_TOKEN to enable GitHub Actions log scan"}
+FINDING_RULES=[_r_unkeyed]
 INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/gha_secret_leak_logs")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):

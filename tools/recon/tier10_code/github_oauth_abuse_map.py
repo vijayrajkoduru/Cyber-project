@@ -1,18 +1,19 @@
-"""github_oauth_abuse_map v2 — VL-FORGE."""
+"""github_oauth_abuse_map v3 — VL-FORGE. Key-gated; no status-as-finding."""
 import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
 router=APIRouter()
 async def gather(ctx):
-    ctx.state["api_key_configured"]=bool(os.environ.get("GITHUB_TOKEN",""))
+    keyed=bool(os.environ.get("GITHUB_TOKEN",""))
+    ctx.state["api_key_configured"]=keyed
+    if not keyed:
+        ctx.state["skipped_reason"]="github_oauth_abuse_map: set GITHUB_TOKEN to enable OAuth-app abuse mapping"
 def _r_unkeyed(s):
     if s.get("api_key_configured"): return None
-    return {"name":"github_oauth_abuse_map requires GITHUB_TOKEN","severity":"INFO","evidence":"Set token"}
-def _r_ready(s):
-    if not s.get("api_key_configured"): return None
-    return {"name":"github_oauth_abuse_map ready","severity":"INFO","evidence":"Loaded"}
-FINDING_RULES=[_r_unkeyed,_r_ready]
+    return {"name":"github_oauth_abuse_map requires GITHUB_TOKEN","severity":"INFO",
+        "evidence":"Set GITHUB_TOKEN to enable OAuth-app abuse mapping"}
+FINDING_RULES=[_r_unkeyed]
 INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/github_oauth_abuse_map")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
