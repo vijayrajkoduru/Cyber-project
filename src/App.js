@@ -13472,10 +13472,21 @@ function generateUniversalVLReport(opts) {
     // basic Target field can be a registry hostname while the per-tool
     // advanced input (image_ref) is what got pulled — the customer needs
     // to see what was actually scanned so they don't conflate the two.
-    let _resolvedImage = null;
-    (function(){
+    // ALWAYS prefer the user-supplied image_ref over scraped evidence.
+    // Syft writes evidence strings like "tmp/stereoscope-1944051502/
+    // oci-registry-image-3902818128/sha256:495a..." which technically
+    // matches an image-ref regex but is a temp staging path, NOT the
+    // image the customer asked us to scan. Reading that into "Image
+    // (as resolved)" makes the PDF look broken.
+    let _resolvedImage = (opts.userImageRef || "").trim() || null;
+    if (!_resolvedImage) (function(){
       const _imgRe = /\b([a-z0-9._-]+(?:\.[a-z0-9._-]+)?(?::[0-9]+)?\/[a-z0-9._\/-]+:[a-zA-Z0-9._-]+)\b|\b([a-z0-9._-]+:[a-zA-Z0-9._-]+@sha256:[a-f0-9]{32,})\b/;
       const _bareRe = /\b([a-z0-9._-]+\/[a-z0-9._-]+:[a-zA-Z0-9._-]+)\b/;
+      // Filter to reject scanner-internal staging paths.
+      const _isTempPath = (s) => /(?:^|\/)tmp\//.test(s)
+        || s.includes("stereoscope-")
+        || s.includes("oci-registry-image-")
+        || /sha256:[a-f0-9]{32,}$/.test(s);   // bare sha256 with no real image name
       const _candidates = ["trivy_image","grype_image","image_signing_cosign","image_provenance_slsa","image_secrets_scan","image_distroless_base"];
       for (const tk of _candidates) {
         const d = r[tk]; if (!d) continue;
@@ -13483,7 +13494,8 @@ function generateUniversalVLReport(opts) {
           const ev = String(f.evidence || f.evidence_marker || f.detail || f.name || "");
           let m = ev.match(_imgRe);
           if (!m) m = ev.match(_bareRe);
-          if (m && (m[1] || m[2])) { _resolvedImage = m[1] || m[2]; break; }
+          const cand = m && (m[1] || m[2]);
+          if (cand && !_isTempPath(cand)) { _resolvedImage = cand; break; }
         }
         if (_resolvedImage) break;
       }
@@ -19289,8 +19301,26 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     // VL-FLOW PDF export delegates to the shared Recon-style template
     // (generateUniversalVLReport). pdfConfig is passed in from PDFConfigModal
     // (company, reporter, watermark, password, theme, etc.).
+    // Container module hides the Target input — `target` field in state
+    // is empty, so derive a meaningful display target from image_ref /
+    // repo_url. Otherwise the PDF reads "Target: (none)" everywhere which
+    // looks broken to an outside auditor.
+    const _displayTarget = (() => {
+      const t = (target || "").trim();
+      if (t) return t;
+      if (_containerMode) {
+        return (advInputs.image_ref || "").trim()
+          || (advInputs.repo_url || "").trim()
+          || "(container artifacts)";
+      }
+      return "(none)";
+    })();
     generateUniversalVLReport({
-      target: target || "(none)",
+      target: _displayTarget,
+      // Pass the user-supplied image_ref directly so the PDF generator
+      // can prefer it over scanner-internal temp paths (Syft's
+      // /tmp/stereoscope-XXX/oci-registry-image-YYY/sha256:...).
+      userImageRef: (advInputs.image_ref || "").trim() || null,
       allResults: results,
       date: (cfg && cfg.date) || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
       authenticated: !!(authBearer || authCookie),
