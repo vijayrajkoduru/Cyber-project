@@ -50,6 +50,8 @@ def _ndr(slug: str, target: str, missing_input_name: str = "dockerfile_text"):
         )],
         "tests_performed": 0,
         "tests_summary": f"{slug} skipped - missing {missing_input_name}",
+        "_skipped": True,
+        "skipped_reason": f"{missing_input_name} not provided",
         "raw_data": {"missing_input": missing_input_name},
     }
 

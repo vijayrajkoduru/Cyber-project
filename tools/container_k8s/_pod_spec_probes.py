@@ -59,6 +59,8 @@ def _ndr(slug: str, target: str, reason: str = ""):
         )],
         "tests_performed": 0,
         "tests_summary": f"{slug} skipped - missing pod_spec_yaml",
+        "_skipped": True,
+        "skipped_reason": "pod_spec_yaml not provided",
         "raw_data": {"missing_input": "pod_spec_yaml"},
     }
 

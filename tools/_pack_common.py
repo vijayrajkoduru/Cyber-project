@@ -88,6 +88,8 @@ def _advisory_by_design_response(tool: str, target: str, title: str,
         )],
         "tests_performed": 0,
         "tests_summary": f"[advisory-by-design] {title[:60]}",
+        "_skipped": True,
+        "skipped_reason": "advisory-by-design (SaaS cannot reach this surface)",
         "raw_data": {"advisory_by_design": True},
     }
 

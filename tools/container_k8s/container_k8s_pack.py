@@ -80,6 +80,15 @@ from tools.container_k8s._repo_secret_probes import (
     _probe_kyverno_no_policies,
     _probe_opa_gatekeeper_no_constraints,
 )
+from tools.container_k8s._scaffold_forge_probes import (
+    _probe_escape_docker_socket_mount,
+    _probe_escape_cap_sys_admin_chain,
+    _probe_escape_user_namespace_audit,
+    _probe_k8s_admission_controller_audit,
+    _probe_k8s_certificate_rotation,
+    _probe_rbac_audit_via_rbac_tool,
+    _probe_service_mesh_mtls_off,
+)
 
 
 # Advisory-by-design wrappers for paid / external-service image scanners
@@ -233,7 +242,7 @@ def _resolve_image_ref(target, req):
 
 def _not_applicable_for_image_scanner(target, slug, tool_name):
     """Return a NOT_APPLICABLE finding when the target isn't an image ref."""
-    return _build_resp(slug, target, [wrap_finding(
+    r = _build_resp(slug, target, [wrap_finding(
         f"[NOT_APPLICABLE] {tool_name} requires an OCI image reference",
         "INFO", cvss="0.0", cwe="N/A",
         remediation=(f"To run {tool_name}, provide an image reference like "
@@ -242,6 +251,9 @@ def _not_applicable_for_image_scanner(target, slug, tool_name):
         evidence_marker=(f"Target '{target[:80]}' does not match image-ref "
                           "pattern (registry/repo:tag or @sha256:digest)."),
     )], 0, f"{tool_name} skipped - not an image reference")
+    r["_skipped"] = True
+    r["skipped_reason"] = f"target is not an image reference"
+    return r
 
 
 
@@ -1189,11 +1201,19 @@ def _probe_grype_image(target, req):
             "Grype not installed")
 
     # Grype's --fail-on accepts severity NAMES only (critical/high/medium/low/
-    # negligible/unknown) — there's no "never". Omitting the flag entirely is
-    # the "never fail on findings" default, which is what we want.
+    # negligible/unknown) — there's no "never". Omitting the flag is the
+    # default. BUT any stale ~/.grype.yaml or GRYPE_FAIL_ON env on the host
+    # will override and inject `fail-on: never`, which Grype rejects at
+    # config-parse time with "bad --fail-on severity value 'never'". Defend
+    # by stripping those env vars and pointing --config at /dev/null.
+    import os
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("GRYPE_FAIL")}
+    env.setdefault("GRYPE_CHECK_FOR_APP_UPDATE", "false")
     exit_code, stdout, stderr = _run_tool([
         "grype", target, "-o", "json", "-q",
-    ], timeout_s=360)
+        "--config", "/dev/null",
+    ], timeout_s=360, env=env)
 
     if exit_code == 124:
         return _build_resp("grype_image", target, [wrap_finding(
@@ -1886,6 +1906,16 @@ PROBES = {
     "escape_cgroup_release_agent":    _abd_escape_cgroup,
     "escape_kernel_keyring":          _abd_escape_kernel_keyring,
     "escape_proc_self_exe":           _abd_escape_proc_self_exe,
+    # Forged scaffolds (2026-06-02) — 7 techniques previously marked
+    # [NOT IMPLEMENTED] now have live probes that honestly SKIP when their
+    # required input (pod_spec_yaml or kubeconfig) is missing.
+    "escape_docker_socket_mount":     _probe_escape_docker_socket_mount,
+    "escape_cap_sys_admin_chain":     _probe_escape_cap_sys_admin_chain,
+    "escape_user_namespace_audit":    _probe_escape_user_namespace_audit,
+    "k8s_admission_controller_audit": _probe_k8s_admission_controller_audit,
+    "k8s_certificate_rotation":       _probe_k8s_certificate_rotation,
+    "rbac_audit_via_rbac_tool":       _probe_rbac_audit_via_rbac_tool,
+    "service_mesh_mtls_off":          _probe_service_mesh_mtls_off,
     # additional slugs covered by existing probes (no new code needed)
     "k8s_kubelet_unauth_token":       _probe_kubelet,
     "k8s_etcd_no_tls":                _probe_etcd_exposed,
