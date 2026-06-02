@@ -13659,34 +13659,11 @@ function generateUniversalVLReport(opts) {
     });
     y += 6;
   }
-  // Per-phase coverage table (top 30 to keep it readable)
-  y = tHead(["SCANNER","STATUS","DETAIL"], [70, 25, 85], y);
-  _coverageRows.slice(0, 30).forEach((p, i) => {
-    const stColor = p.status==="RAN" ? [15,118,82]
-                  : p.status==="EMPTY" ? [55,65,81]
-                  : p.status==="FAILED" ? [162,28,28]
-                  : p.status==="SKIPPED" ? [120,53,15]
-                  : [100,116,139];
-    const stBg = p.status==="RAN" ? [220,252,231]
-               : p.status==="EMPTY" ? [241,245,249]
-               : p.status==="FAILED" ? [254,226,226]
-               : p.status==="SKIPPED" ? [254,243,199]
-               : [226,232,240];
-    chk(7); fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
-    doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
-    doc.text(_ascii(p.name).substring(0,40), margin + 3, y + 4.8);
-    rrect(margin + 73, y + 1.5, 22, 5, 1, stBg);
-    doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...stColor);
-    doc.text(p.status === "RAN" ? "DATA" : p.status === "FAILED" ? "ERROR" : p.status, margin + 74.5, y + 5);
-    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
-    doc.text(_ascii(p.detail||"").substring(0,80), margin + 99, y + 4.8);
-    y += 6.5;
-  });
-  if (_coverageRows.length > 30) {
-    chk(6);
-    txt(`... +${_coverageRows.length - 30} additional scanner(s) not shown`, margin + 4, y + 4, 7, GRAY);
-    y += 6;
-  }
+  // Per-scanner SCANNER/STATUS/DETAIL table removed — the summary line
+  // above (DATA/EMPTY/SKIPPED/ERROR counts + the 100% completion box)
+  // already conveys the coverage picture, and the table was truncated
+  // at 30 of N scanners anyway. Per-tool detail still appears in §12
+  // Per-Tool Intelligence further down with full evidence lines.
   y += 6;
 
   // ── COMPLIANCE MAPPING ──
