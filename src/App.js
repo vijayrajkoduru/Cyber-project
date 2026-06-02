@@ -12835,18 +12835,32 @@ function generateUniversalVLReport(opts) {
       if (!v || typeof v !== "object") return;
       // ModuleAutoPanel shape: {status, severity, data:{findings:[]}, tier}
       if (v.data && Array.isArray(v.data.findings)) {
+        // Backend-honest SKIPPED: the per-tool response may carry
+        // {_skipped:true, skipped_reason:"..."} when the scanner had no
+        // applicable input (e.g. kubeconfig probe on a registry target).
+        // Propagate that into the PDF coverage table so the scanner falls
+        // into the SKIPPED bucket instead of inflating "DATA".
+        const _backendSkipped = !!(v.data._skipped || v.data.skipped_reason);
         r[k] = {
           findings: v.data.findings,
           summary: v.data.summary || null,
           tier: v.tier || null,
           _failed: v.status === "error",
-          _skipped: v.status === "queued",
+          _skipped: v.status === "queued" || _backendSkipped,
+          skipped_reason: v.data.skipped_reason || null,
           error: v.message || null,
         };
         return;
       }
-      // Flat shape: {findings:[], ...}
-      if (Array.isArray(v.findings)) { r[k] = v; return; }
+      // Flat shape: {findings:[], ...} — also honour the backend SKIPPED flag
+      if (Array.isArray(v.findings)) {
+        const _backendSkipped = !!(v._skipped || v.skipped_reason);
+        r[k] = Object.assign({}, v, {
+          _skipped: _backendSkipped || v._skipped,
+          skipped_reason: v.skipped_reason || null,
+        });
+        return;
+      }
       // Empty/null tool — represent as ran-empty
       r[k] = {findings: []};
     });
