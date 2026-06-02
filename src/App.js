@@ -13001,6 +13001,70 @@ function generateUniversalVLReport(opts) {
     _sevCount[k] = (_sevCount[k]||0) + 1;
   });
 
+  // ── INPUT TRACEABILITY (function-scope so every section can cite it) ──
+  // Detect which inputs were actually supplied for this scan by looking at
+  // which scanners ran code vs honestly skipped. Used by:
+  //   - Engagement Scope (lists supplied inputs)
+  //   - Detailed Findings (per-finding source label)
+  //   - Risk Score (scope-aware weighting)
+  // The map below covers the Container/K8s module; other modules just don't
+  // populate categories that aren't relevant to them.
+  const _toolToInputCategory = {
+    // Dockerfile-input probes (Container/K8s)
+    dockerfile_root_user: "dockerfile", dockerfile_no_user: "dockerfile",
+    dockerfile_ssh_in_image: "dockerfile", dockerfile_curl_pipe_bash: "dockerfile",
+    dockerfile_hardcoded_secret: "dockerfile", dockerfile_apt_unpinned: "dockerfile",
+    dockerfile_no_healthcheck: "dockerfile", dockerfile_multistage_audit: "dockerfile",
+    dockerfile_copy_chown_audit: "dockerfile", dockerfile_expose_audit: "dockerfile",
+    dockerfile_base_image_eol: "dockerfile", hadolint_dockerfile: "dockerfile",
+    dockerfile_antipatterns: "dockerfile",
+    // Pod-spec-input probes
+    container_privileged: "pod_spec", container_capadd_dangerous: "pod_spec",
+    container_host_pid: "pod_spec", container_host_network: "pod_spec",
+    container_host_ipc: "pod_spec", container_hostpath_dangerous: "pod_spec",
+    container_docker_sock_mount: "pod_spec", container_runas_root: "pod_spec",
+    container_no_readonly_rootfs: "pod_spec", container_allow_priv_escalation: "pod_spec",
+    container_seccomp_unset: "pod_spec", container_apparmor_unset: "pod_spec",
+    escape_docker_socket_mount: "pod_spec", escape_cap_sys_admin_chain: "pod_spec",
+    escape_user_namespace_audit: "pod_spec",
+    // Image-input probes
+    trivy_image: "image", grype_image: "image", image_signing_cosign: "image",
+    image_provenance_slsa: "image", image_secrets_scan: "image",
+    image_distroless_base: "image",
+    // Kubeconfig-input probes (the SaaS-can't-reach K8s API set)
+    kube_bench_node: "kubeconfig", k8s_audit_logs_off: "kubeconfig",
+    k8s_admission_no_plugin: "kubeconfig", k8s_psp_psa_disabled: "kubeconfig",
+    k8s_network_policy_absent: "kubeconfig", k8s_certificate_rotation: "kubeconfig",
+    k8s_tls_min_version: "kubeconfig", k8s_admission_controller_audit: "kubeconfig",
+    k8s_cni_plugin_audit: "kubeconfig", rbac_cluster_admin_overuse: "kubeconfig",
+    rbac_secret_get_anywhere: "kubeconfig", rbac_pod_exec_create_overuse: "kubeconfig",
+    rbac_node_proxy_overuse: "kubeconfig", rbac_impersonate_users: "kubeconfig",
+    rbac_pod_serviceaccount_token: "kubeconfig", rbac_clusterrolebinding_audit: "kubeconfig",
+    rbac_aggregate_role_audit: "kubeconfig", rbac_audit_via_rbac_tool: "kubeconfig",
+    secrets_in_env_var: "kubeconfig", secrets_in_configmap: "kubeconfig",
+    external_secrets_audit: "kubeconfig", vault_csi_audit: "kubeconfig",
+    sealed_secrets_audit: "kubeconfig", network_policy_default_deny: "kubeconfig",
+    network_policy_egress_audit: "kubeconfig", service_mesh_mtls_off: "kubeconfig",
+    envoy_filter_audit: "kubeconfig", escape_leaky_vessels_runc_2024: "kubeconfig",
+    escape_containerd_cve_2022_23648: "kubeconfig",
+    // Repo-URL-input probes
+    secrets_helm_values_leak: "repo_url", secrets_kustomize_leak: "repo_url",
+    opa_gatekeeper_no_constraints: "repo_url", opa_kyverno_no_policies: "repo_url",
+  };
+  const _inputUsed = {dockerfile: false, pod_spec: false, kubeconfig: false, repo_url: false, image: false, target: !!(target && String(target).trim())};
+  Object.keys(r).forEach(tk => {
+    const d = r[tk];
+    if (!d || d._skipped) return;
+    const fs = d.findings || [];
+    if (fs.length === 0) return;
+    const f0 = fs[0] || {};
+    const evtxt = String((f0.detail||f0.name||f0.evidence_marker||f0.evidence) || "");
+    if (evtxt.startsWith("[NOT_APPLICABLE]") || evtxt.startsWith("[NOT IMPLEMENTED]")) return;
+    const cat = _toolToInputCategory[tk];
+    if (cat) _inputUsed[cat] = true;
+  });
+  const _findingInputSource = (toolKey) => _toolToInputCategory[toolKey] || "";
+
   // Scaffold detection (scanner-level, not finding-level).
   // Customer thinks in "how many of the 103 scanners are real" - so the
   // denominator must be SCANNER COUNT not FINDING COUNT. A scanner is
@@ -13030,12 +13094,31 @@ function generateUniversalVLReport(opts) {
   const _scaffoldFindingCount = _allFindings.filter(_isFindingScaffold).length;
   const _realInfoCount = (_sevCount.INFO || 0) - _scaffoldFindingCount;
 
-  // Risk score (0-100) — same formula as Recon canon
+  // Risk score (0-100) — Recon canon formula PLUS scope-aware scaling.
+  // The raw formula assumes the scan exercised the customer's full attack
+  // surface. When only 1-2 inputs were supplied (e.g. just a pod-spec
+  // sample but no real registry/Dockerfile/cluster), the unscaled 100
+  // overstates the risk to the customer's actual estate. Scope factor
+  // multiplies in [0.4 .. 1.0] based on how much of the input surface
+  // was actually exercised — so a "100 CRITICAL on a registry hostname"
+  // becomes "60 MODERATE for the pod-spec sample you provided".
   const _rawSum = _sevCount.CRITICAL*15 + _sevCount.HIGH*8 + _sevCount.MEDIUM*3 + _sevCount.LOW*1;
   const _maxC   = _sevCount.CRITICAL>0?30:_sevCount.HIGH>0?22:_sevCount.MEDIUM>0?12:5;
-  const _riskScore = Math.round(Math.min(100, Math.max(5, Math.min(70, _rawSum) + _maxC)));
+  const _rawRiskScore = Math.round(Math.min(100, Math.max(5, Math.min(70, _rawSum) + _maxC)));
+  // Scope factor: count inputs provided. Each meaningful surface adds
+  // 0.15 weight up to 1.0. Pure target-only (no advanced inputs) gets
+  // the floor 0.4, which still lets a 100-raw land at 40 (MODERATE) —
+  // honest about the limited surface examined.
+  const _inputsSupplied = ["dockerfile","pod_spec","kubeconfig","repo_url","image"]
+    .filter(k => _inputUsed[k]).length;
+  const _scopeFactor = Math.max(0.4, Math.min(1.0, 0.4 + 0.15 * _inputsSupplied));
+  const _riskScore = Math.round(_rawRiskScore * _scopeFactor);
   const _riskLabel = (_riskScore>=80&&_sevCount.CRITICAL>0)?"CRITICAL RISK":_riskScore>=60?"HIGH RISK":_riskScore>=40?"MODERATE RISK":_riskScore>=20?"LOW RISK":"MINIMAL RISK";
   const _riskColor = (_riskScore>=80&&_sevCount.CRITICAL>0)?[162,28,28]:_riskScore>=60?[194,65,12]:_riskScore>=40?[133,79,11]:_riskScore>=20?[202,138,4]:[15,118,82];
+  // Footnote for the auditor: explain WHY the headline score isn't the raw.
+  const _scopeNote = _scopeFactor < 1.0
+    ? `Scope-adjusted: raw severity score ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} input-coverage factor (${_inputsSupplied}/5 inputs provided)`
+    : null;
 
   // Report ID + Content Hash (deterministic per (module, target, date, findings))
   const _genId = (pre, t, d) => {
@@ -13214,6 +13297,11 @@ function generateUniversalVLReport(opts) {
   txt("Bands: 0-20 MINIMAL  -  20-40 LOW  -  40-60 MODERATE  -  60-80 HIGH  -  80-100 CRITICAL",
       margin, y, 6.5, GRAY);
   y += 5;
+  // Scope-adjustment footnote — only renders when scope_factor < 1.0
+  if (_scopeNote) {
+    chk(4);
+    txt(_scopeNote, margin, y, 6.5, [120,53,15]); y += 5;
+  }
 
   // ── DELTA vs PRIOR SCAN (Gap 5) ──
   // Reads vl_scans:{moduleKey} array from localStorage and surfaces the
@@ -13272,8 +13360,18 @@ function generateUniversalVLReport(opts) {
       fillR(margin, y, contentW, _hh, LBLUE);
       const _accent = _d.added > _d.removed ? [194,65,12] : _d.removed > 0 ? [15,118,82] : BLUE;
       fillR(margin, y, 3, _hh, _accent);
+      // Compute human-readable freshness so auditors see e.g.
+      // "12 minutes ago" instead of misreading the timestamp.
+      let _priorAgo = "";
+      try {
+        const _priorMs = new Date(_priorEntry.ts).getTime();
+        const _ageMin = Math.max(0, Math.round((Date.now() - _priorMs) / 60000));
+        if (_ageMin < 60) _priorAgo = ` (${_ageMin} min ago)`;
+        else if (_ageMin < 1440) _priorAgo = ` (${Math.round(_ageMin/60)} hr ago)`;
+        else _priorAgo = ` (${Math.round(_ageMin/1440)} day(s) ago)`;
+      } catch(_) {}
       txt("DELTA vs PRIOR SCAN", margin + 8, y + 5.5, 7, BLUE, true);
-      txt("Prior scan: " + _priorDate + " UTC", margin + 8, y + 10, 7.5, DARK);
+      txt("Prior scan: " + _priorDate + " UTC" + _priorAgo, margin + 8, y + 10, 7.5, DARK);
       txt(`+${_d.added} new  -  -${_d.removed} closed  -  =${_d.unchanged} unchanged`,
           margin + 8, y + 13.5, 8, DARK, true);
       if (_hasSevDelta) {
@@ -13305,17 +13403,34 @@ function generateUniversalVLReport(opts) {
   // ── DOCUMENT CONTROL ──
   chk(72); y = sHead("Document Control", y);
   y = tHead(["FIELD","VALUE"], [55,125], y);
+  // Auto-bump version from prior-scan count in localStorage. Was hardcoded
+  // "1.0 (Initial)" which contradicted the DELTA card showing +29/-30 vs
+  // a prior scan — external auditors flagged it as a credibility issue.
+  let _priorScanCount = 0;
+  try {
+    if (typeof localStorage !== "undefined") {
+      const _raw = localStorage.getItem("vl_scans:" + moduleKey);
+      if (_raw) {
+        const _arr = JSON.parse(_raw) || [];
+        _priorScanCount = _arr.filter(e => e && e.target === target).length;
+      }
+    }
+  } catch(_) {}
+  const _versionLabel = _priorScanCount === 0 ? "1.0 (Initial)"
+                        : `1.${_priorScanCount} (re-scan)`;
   const _docCtrl = [
     ["Report ID", _REPORT_ID],
     ["Module", moduleLabel + (playbookPath ? "  (module_playbooks/" + playbookPath + ")" : "")],
-    ["Version", "1.0 (Initial)"],
+    ["Version", _versionLabel],
     ["Generated By", "VulnusLab Engine v2.0"],
     ["Generation Time", new Date().toISOString().replace('T',' ').substring(0,19) + " UTC"],
     ["Content Hash (SHA-256 prefix)", _contentHash],
     // Scan summary - human-readable forge progress + real vs scaffold split.
+    // Auditor-facing language: avoid the word "forged" which to external
+    // readers reads as "fabricated". Use "live probes implemented" instead.
     ["Scan Summary",
-      `${_realCount} real probe(s) executed of ${_totalScanners} total `
-      + `(${_realPct}% forged). `
+      `${_realCount} live probe(s) implemented of ${_totalScanners} total `
+      + `(${_realPct}% complete). `
       + `${_scaffoldCount} technique(s) currently scaffolded [NOT IMPLEMENTED].`],
     ["Distribution", "Internal - Security Team + Engineering Leads"],
     ["Retention", "Confidential - 90 days minimum"],
@@ -13375,12 +13490,22 @@ function generateUniversalVLReport(opts) {
     })();
     chk(50); y = sHead("Engagement Scope", y);
     y = tHead(["FIELD","VALUE"], [45,135], y);
+    const _yn = (b) => b ? "provided" : "(empty)";
     const _scope = [
       ["Target (as supplied)", target || "(none)"],
     ];
     if (_resolvedImage && _resolvedImage !== target) {
       _scope.push(["Image (as resolved)", _resolvedImage]);
     }
+    // Auditor-facing input traceability — exposes the FULL input surface
+    // the scan actually exercised. Findings later in the report cite these
+    // inputs by name so the reviewer can trace each finding to its source.
+    _scope.push(
+      ["Dockerfile input", _yn(_inputUsed.dockerfile)],
+      ["Pod / Deployment YAML input", _yn(_inputUsed.pod_spec)],
+      ["Kubeconfig input", _yn(_inputUsed.kubeconfig)],
+      ["Repository URL input", _yn(_inputUsed.repo_url)],
+    );
     _scope.push(
       ["Scan Date", date],
       ["Methodology", `VulnusLab ${moduleLabel} - ${Object.keys(r).length} scanners`],
@@ -13425,7 +13550,7 @@ function generateUniversalVLReport(opts) {
     // it's an alert.
     if (_scaffoldFindingCount > 0) {
       chk(5);
-      txt(`SCAFFOLD = ${_scaffoldFindingCount} technique(s) not yet forged. Honest INFO marker, not a finding. See FORGE_PLAYBOOK roadmap.`,
+      txt(`SCAFFOLD = ${_scaffoldFindingCount} technique(s) not yet implemented as a live probe. Honest INFO marker, not a finding.`,
           margin + 2, y, 6.5, GRAY);
       y += 4;
     }
@@ -13776,8 +13901,21 @@ function generateUniversalVLReport(opts) {
           _cwSeen.add(k); _cwToks.push(k);
         });
         const cw = _cwToks.length ? _cwToks.join(" ") : "-";
+        // Source label: trace each finding back to the input it came from
+        // (Dockerfile / pod-spec / kubeconfig / repo / image / target net).
+        // Without this, an outside auditor sees "privileged container
+        // finding on a registry target" and dismisses the report as
+        // fabricated. With this, the finding is provably attributable.
+        const _srcCat = _findingInputSource(f._tool || "");
+        const _srcLbl = _srcCat === "pod_spec" ? " [pod-spec]"
+                       : _srcCat === "dockerfile" ? " [Dockerfile]"
+                       : _srcCat === "kubeconfig" ? " [kubeconfig]"
+                       : _srcCat === "repo_url" ? " [repo]"
+                       : _srcCat === "image" ? " [image]"
+                       : "";
+        const nmWithSrc = nm + _srcLbl;
         chk(7); fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
-        txt(nm.length > 78 ? nm.substring(0,78) + "..." : nm, margin + 3, y + 4.6, 7.5, DARK);
+        txt(nmWithSrc.length > 78 ? nmWithSrc.substring(0,78) + "..." : nmWithSrc, margin + 3, y + 4.6, 7.5, DARK);
         rrect(margin + 109, y + 1.4, 23, 4.8, 1, sc);
         txt(sev, margin + 120.5, y + 4.7, 6.5, WHITE, true, "center");
         txt(cv, margin + 138, y + 4.6, 11, sc, true);
@@ -14110,7 +14248,7 @@ function generateUniversalVLReport(opts) {
     `Assessment uses the ${moduleLabel} playbook${playbookPath ? " (" + playbookPath + ")" : ""}.`,
     `All ${_allFindings.length} technique(s) in this module are currently scaffolded - real live probes pending forge.`,
     "PDF intentionally shows [NOT IMPLEMENTED] markers instead of fabricated findings. See FORGE_PLAYBOOK.md for the forge roadmap.",
-    "Where probes are forged, every finding is independently triggered and re-confirmed by the VulnusLab engine.",
+    "Where probes are implemented as live code, every finding is independently triggered and re-confirmed by the VulnusLab engine.",
   ] : (_isMostlyScaffold ? [
     `Assessment uses the ${moduleLabel} playbook${playbookPath ? " (" + playbookPath + ")" : ""}.`,
     `Module is in forge progress: ${_realPct}% of techniques are real live probes; ${_scaffoldPct}% are scaffolded with honest [NOT IMPLEMENTED] markers.`,
