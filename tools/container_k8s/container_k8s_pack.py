@@ -1108,30 +1108,44 @@ def _probe_trivy_image(target, req):
             evidence_marker="trivy not found in PATH")], 0,
             "Trivy not installed")
 
-    exit_code, stdout, stderr = _run_tool([
-        "trivy", "image",
-        "--format", "json",
-        "--severity", "HIGH,CRITICAL",
-        "--quiet",
-        "--timeout", "5m",
-        "--skip-db-update",  # use pre-baked DB
-        target,
-    ], timeout_s=360)
+    # First pass: try with --skip-db-update for speed (uses pre-baked DB).
+    # If the DB is stale or the image needs metadata Trivy doesn't have,
+    # exit 1 will trip — second pass drops that flag so Trivy fetches the
+    # diff. Image-pull failures still surface honestly in the second pass.
+    def _run_trivy(skip_db_update: bool):
+        cmd = ["trivy", "image", "--format", "json",
+               "--severity", "HIGH,CRITICAL",
+               "--quiet", "--timeout", "8m"]
+        if skip_db_update:
+            cmd.append("--skip-db-update")
+        cmd.append(target)
+        return _run_tool(cmd, timeout_s=540)
+
+    exit_code, stdout, stderr = _run_trivy(skip_db_update=True)
+    if exit_code not in (0,) or not stdout.strip():
+        # Retry with DB refresh (most common cause of first-pass failure)
+        exit_code, stdout, stderr = _run_trivy(skip_db_update=False)
 
     if exit_code == 124:
         return _build_resp("trivy_image", target, [wrap_finding(
-            f"[PROBE ERROR] Trivy scan timeout (>6 min) on {target[:80]}",
+            f"[PROBE ERROR] Trivy scan timeout (>9 min) on {target[:80]}",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Try a smaller image or run trivy manually with longer timeout.",
             evidence_marker="Trivy wall-clock budget exceeded")], 0,
             "Trivy timeout")
 
     if exit_code not in (0, 1) or not stdout.strip():
+        # Capture the most diagnostic part of stderr (last 600 chars covers
+        # the FATAL line + the underlying cause Trivy chains in plain text).
+        err_excerpt = (stderr or "").strip().replace("\t", " ")[-600:]
         return _build_resp("trivy_image", target, [wrap_finding(
-            f"[PROBE ERROR] Trivy exit {exit_code}",
+            f"[PROBE ERROR] Trivy exit {exit_code} on {target[:60]}",
             "INFO", cvss="0.0", cwe="N/A",
-            remediation="Verify image reference is valid and pullable.",
-            evidence_marker=f"stderr: {stderr[-300:]}")], 0,
+            remediation=("Common causes: (1) image not pullable from this host "
+                          "(check registry auth / network egress), (2) image "
+                          "uses a manifest format Trivy can't parse, (3) Trivy "
+                          "DB corrupted - try `trivy image --reset` on the VPS."),
+            evidence_marker=f"trivy stderr: {err_excerpt}")], 0,
             f"Trivy exit {exit_code}")
 
     try:
@@ -1201,19 +1215,26 @@ def _probe_grype_image(target, req):
             "Grype not installed")
 
     # Grype's --fail-on accepts severity NAMES only (critical/high/medium/low/
-    # negligible/unknown) — there's no "never". Omitting the flag is the
-    # default. BUT any stale ~/.grype.yaml or GRYPE_FAIL_ON env on the host
-    # will override and inject `fail-on: never`, which Grype rejects at
-    # config-parse time with "bad --fail-on severity value 'never'". Defend
-    # by stripping those env vars and pointing --config at /dev/null.
-    import os
+    # negligible/unknown) — there's no "never". A stale ~/.grype.yaml or
+    # GRYPE_FAIL_ON env on the host with "fail-on: never" trips Grype at
+    # config-parse time. Earlier fix tried --config /dev/null but Viper
+    # rejects it with "Unsupported Config Type ''" because /dev/null has
+    # no extension. Final fix: point HOME at a fresh tempdir so Grype
+    # can't read ~/.grype.yaml at all + still strip GRYPE_FAIL_* env.
+    import os, tempfile
     env = {k: v for k, v in os.environ.items()
            if not k.startswith("GRYPE_FAIL")}
     env.setdefault("GRYPE_CHECK_FOR_APP_UPDATE", "false")
-    exit_code, stdout, stderr = _run_tool([
-        "grype", target, "-o", "json", "-q",
-        "--config", "/dev/null",
-    ], timeout_s=360, env=env)
+    _scratch_home = tempfile.mkdtemp(prefix="vl-grype-home-")
+    env["HOME"] = _scratch_home
+    env["XDG_CONFIG_HOME"] = _scratch_home   # Grype also honours XDG
+    try:
+        exit_code, stdout, stderr = _run_tool([
+            "grype", target, "-o", "json", "-q",
+        ], timeout_s=360, env=env)
+    finally:
+        try: shutil.rmtree(_scratch_home, ignore_errors=True)
+        except Exception: pass
 
     if exit_code == 124:
         return _build_resp("grype_image", target, [wrap_finding(
