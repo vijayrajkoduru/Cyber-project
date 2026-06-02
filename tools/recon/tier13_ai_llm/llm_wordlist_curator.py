@@ -32,17 +32,7 @@ async def gather(ctx):
         ctx.source("claude")
 
 
-def _r_generated(s):
-    w = s.get("wordlist") or []
-    if not w:
-        return None
-    ev = ", ".join(w[:25]) + (f" ... (+{len(w) - 25} more)" if len(w) > 25 else "")
-    return {"name": f"AI-curated content-discovery wordlist generated ({len(w)} entries)",
-            "severity": "INFO", "evidence": ev,
-            "remediation": "Feed into directory brute-forcing (gobuster/ffuf) for context-aware discovery."}
-
-
-FINDING_RULES = [_r_generated]
+FINDING_RULES = []
 INTEL_FIELDS = [("LLM configured", "llm_configured"), ("Wordlist size", "wordlist_count")]
 
 

@@ -50,9 +50,9 @@ async def gather(ctx):
 def _r_nrd(s):
     a=s.get("age_days")
     if a is None or a>30: return None
-    return {"name":f"Newly registered domain ({a} days)","severity":"MEDIUM","cwe":"CWE-1325",
-        "evidence":f"Created: {s.get('creation_date')}",
-        "remediation":"NRDs are phishing-prone. Treat with caution."}
+    return {"name":f"Newly registered domain ({a} days) — context indicator","severity":"LOW","cwe":"CWE-1325",
+        "evidence":f"Created: {s.get('creation_date')}. Note: this is a phishing risk INDICATOR for inbound mail/brand monitoring, not a vulnerability of the target itself.",
+        "remediation":"For first-party owners: no action — informational. For third-party observers: treat the domain with caution in mail filters and link previews until aged > 30 days."}
 def _r_young(s):
     a=s.get("age_days")
     if a is None or a<=30 or a>180: return None
