@@ -1,4 +1,7 @@
 {
+  "container_k8s": {
+    "score": 99.2
+  },
   "mobile_crypto": {
     "score": 87.0
   },
@@ -14,53 +17,56 @@
   "mobile_storage": {
     "score": 87.0
   },
-  "container_k8s": {
-    "score": 86.2
-  },
   "osint": {
     "score": 80.2
+  },
+  "ai_llm": {
+    "score": 78.3
+  },
+  "apisec": {
+    "score": 78.3
+  },
+  "auth_attacks": {
+    "score": 78.3
+  },
+  "exploit": {
+    "score": 78.3
+  },
+  "hybrid_identity": {
+    "score": 78.3
+  },
+  "iot_ot": {
+    "score": 78.3
+  },
+  "network": {
+    "score": 78.3
+  },
+  "phishing": {
+    "score": 78.3
+  },
+  "sspm": {
+    "score": 78.3
+  },
+  "supply_chain": {
+    "score": 78.3
+  },
+  "cloud": {
+    "score": 76.1
   },
   "recon": {
     "score": 73.6
   },
   "webapp": {
-    "score": 69.1
+    "score": 69.2
   },
   "vuln": {
     "score": 67.6
   },
-  "network": {
-    "score": 60.9
+  "password": {
+    "score": 56.5
   },
-  "ai_llm": {
-    "score": 47.8
-  },
-  "apisec": {
-    "score": 47.8
-  },
-  "auth_attacks": {
-    "score": 47.8
-  },
-  "exploit": {
-    "score": 47.8
-  },
-  "hybrid_identity": {
-    "score": 47.8
-  },
-  "iot_ot": {
-    "score": 47.8
-  },
-  "phishing": {
-    "score": 47.8
-  },
-  "sspm": {
-    "score": 47.8
-  },
-  "supply_chain": {
-    "score": 47.8
-  },
-  "cloud": {
-    "score": 45.7
+  "pivot": {
+    "score": 43.5
   },
   "tunnel": {
     "score": 43.5
@@ -81,12 +87,6 @@
     "score": 26.1
   },
   "metasploit": {
-    "score": 26.1
-  },
-  "password": {
-    "score": 26.1
-  },
-  "pivot": {
     "score": 26.1
   },
   "post_exploit": {
