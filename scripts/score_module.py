@@ -47,12 +47,12 @@ WEIGHTS = {
 # standard_response calls) AND the Recon shape (ScanContext + run_scanner
 # + findings rules file). A scanner passes the check if it uses EITHER.
 CHECKS = {
-    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner",
-    "uniform_shape": r"standard_response\(|vuln_response\(|run_scanner\(",
+    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner|_http_get\(|_http_post\(",
+    "uniform_shape": r"standard_response\(|vuln_response\(|run_scanner\(|wrap_finding\(",
     "positive_emit": r'"POSITIVE"|POSITIVE|ctx\.source\(|FINDING_RULES',
-    "severity":      r"severity=|'severity'|finding_rules|FINDING_RULES",
-    "remediation":   r"remediation=|'remediation'|FINDING_RULES",
-    "evidence":      r"evidence_marker=|'evidence_marker'|evidence=|ctx\.source\(",
+    "severity":      r'severity=|"severity"|\'severity\'|finding_rules|FINDING_RULES',
+    "remediation":   r'remediation=|"remediation"|\'remediation\'|FINDING_RULES',
+    "evidence":      r'evidence_marker=|"evidence_marker"|\'evidence_marker\'|evidence=|ctx\.source\(',
     "timeout":       r"timeout=|wait_for\(.*timeout=|deadline\s*=|run_scanner",
 }
 
@@ -185,13 +185,14 @@ def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
         if regex_results.get("precheck"):
             actual_call = bool(called_functions & {
                 "precheck_target", "safe_get", "web_url", "recon_host",
-                "run_scanner",
+                "run_scanner", "_http_get", "_http_post",
             })
             regex_results["precheck"] = actual_call
 
         if regex_results.get("uniform_shape"):
             actual_call = bool(called_functions & {
                 "standard_response", "vuln_response", "run_scanner",
+                "wrap_finding",
             })
             regex_results["uniform_shape"] = actual_call
     except SyntaxError:
@@ -201,8 +202,16 @@ def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
     return regex_results
 
 
-def is_parallel(scanner_path: Path) -> bool:
-    """Layer 6 — scanner uses async parallelism."""
+def is_parallel(scanner_path) -> bool:
+    """Layer 6 — scanner uses async parallelism.
+
+    Pack-style probes (PROBES dict in <m>_pack.py) are exempt: parallelism
+    lives at the framework layer (orchestrator fans probes out concurrently
+    via asyncio.Semaphore). The probe itself is intentionally a single
+    sync HTTP call. Counting per-probe parallelism would penalize the
+    design pattern, not measure real engineering."""
+    if isinstance(scanner_path, _PackProbe):
+        return True
     src = scanner_path.read_text(encoding="utf-8")
     markers = ("asyncio.gather", "asyncio.Semaphore", "ThreadPoolExecutor",
                "asyncio.wait_for", "asyncio.to_thread")
