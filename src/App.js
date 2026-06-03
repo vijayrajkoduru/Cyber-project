@@ -142,6 +142,11 @@ const MODULES = [
   { id:"mobile_runtime", icon:"", label:"Runtime / Anti-Tamper",           cat:"mobile",  free:false },
   { id:"mobile_crypto",  icon:"", label:"Crypto (Algorithms & TLS)",       cat:"mobile",  free:false },
   { id:"mobile_network", icon:"", label:"Network / Traffic",               cat:"mobile",  free:false },
+  { id:"mobile_ipc",     icon:"", label:"IPC / Platform",                  cat:"mobile",  free:false },
+  { id:"mobile_webview", icon:"", label:"WebView Security",                cat:"mobile",  free:false },
+  { id:"mobile_privacy", icon:"", label:"Privacy (MASVS-PRIVACY)",         cat:"mobile",  free:false },
+  { id:"mobile_payment", icon:"", label:"Payment / IAP",                   cat:"mobile",  free:false },
+  { id:"mobile_aiml",    icon:"", label:"AI/ML in App",                    cat:"mobile",  free:false },
 
   // ── DATA PROTECTION ──────────────────────────────────────────
   { id:"backups",   icon:"", label:"My Backups",                          cat:"data",    free:true  },
@@ -20310,6 +20315,11 @@ function MobileStorageModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_stora
 function MobileRuntimeModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_runtime",  moduleLabel:"Runtime / Anti-Tamper",           emoji:"", color:"#f97316", playbook:"34_mobile_runtime.md"}); }
 function MobileCryptoModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_crypto",   moduleLabel:"Crypto (Algorithms & TLS)",       emoji:"", color:"#06b6d4", playbook:"35_mobile_crypto.md"}); }
 function MobileNetworkModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_network",  moduleLabel:"Network / Traffic",               emoji:"", color:"#3b82f6", playbook:"36_mobile_network.md"}); }
+function MobileIpcModuleV2(p)      { return _autoMod(p, {moduleKey:"mobile_ipc",      moduleLabel:"IPC / Platform",                  emoji:"", color:"#0891b2", playbook:"05_mobile.md#6"}); }
+function MobileWebviewModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_webview",  moduleLabel:"WebView Security",                emoji:"", color:"#7c3aed", playbook:"05_mobile.md#7"}); }
+function MobilePrivacyModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_privacy",  moduleLabel:"Privacy (MASVS-PRIVACY)",         emoji:"", color:"#db2777", playbook:"05_mobile.md#13"}); }
+function MobilePaymentModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_payment",  moduleLabel:"Payment / IAP",                   emoji:"", color:"#16a34a", playbook:"05_mobile.md#14"}); }
+function MobileAimlModuleV2(p)     { return _autoMod(p, {moduleKey:"mobile_aiml",     moduleLabel:"AI/ML in App",                    emoji:"", color:"#ea580c", playbook:"05_mobile.md#15"}); }
 function AVEvasionModule(p)        { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"Antivirus / EDR Evasion",         emoji:"", color:"#7c3aed", playbook:"20_av_evasion.md"}); }
 function PostExploitModule(p)      { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post Exploitation",               emoji:"", color:"#9333ea", playbook:"13_post_exploit.md"}); }
 function AuthAttacksModule(p)      { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",          emoji:"", color:"#f59e0b", playbook:"17_auth_attacks.md"}); }
@@ -21420,6 +21430,21 @@ export default function App() {
         </div>
         <div style={{display: active==="mobile_network" ? "block" : "none"}}>
           <MobileNetworkModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_ipc" ? "block" : "none"}}>
+          <MobileIpcModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_webview" ? "block" : "none"}}>
+          <MobileWebviewModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_privacy" ? "block" : "none"}}>
+          <MobilePrivacyModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_payment" ? "block" : "none"}}>
+          <MobilePaymentModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="mobile_aiml" ? "block" : "none"}}>
+          <MobileAimlModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
