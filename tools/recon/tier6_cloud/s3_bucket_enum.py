@@ -8,17 +8,28 @@ from tools.recon._cloud_helpers import bucket_candidates
 
 router = APIRouter()
 
+_S3_REGIONS = ("s3.amazonaws.com",
+               "s3-us-west-2.amazonaws.com",
+               "s3-eu-west-1.amazonaws.com")
+
+
 async def gather(ctx: ScanContext):
     h = ctx.host
-    found = []
-    for name in bucket_candidates(h):
-        for region in ("s3.amazonaws.com","s3-us-west-2.amazonaws.com","s3-eu-west-1.amazonaws.com"):
-            url = f"http://{name}.{region}/"
-            c, _, b = await fetch(url, timeout=4)
-            if c in (200, 403) and (b"<Code>NoSuchKey" in b or b"<ListBucketResult" in b or b"<Code>AccessDenied" in b):
-                found.append({"bucket":name,"region":region,"status":c,"listable":c==200 and b"<ListBucketResult" in b})
-                break
-    ctx.state["candidates_tested"] = len(bucket_candidates(h)) * 3
+    names = list(bucket_candidates(h))
+    pairs = [(n, r) for n in names for r in _S3_REGIONS]
+    async def _probe(name, region):
+        url = f"http://{name}.{region}/"
+        c, _, b = await fetch(url, timeout=4)
+        if c in (200, 403) and (b"<Code>NoSuchKey" in b or b"<ListBucketResult" in b or b"<Code>AccessDenied" in b):
+            return {"bucket":name,"region":region,"status":c,"listable":c==200 and b"<ListBucketResult" in b}
+        return None
+    results = await asyncio.gather(*(_probe(n, r) for n, r in pairs))
+    # Keep first hit per bucket (mimic the original break behaviour).
+    seen = set(); found = []
+    for r in results:
+        if r and r["bucket"] not in seen:
+            seen.add(r["bucket"]); found.append(r)
+    ctx.state["candidates_tested"] = len(pairs)
     ctx.state["discovered_buckets"] = found
     ctx.source("S3 bucket name permutation + AWS error fingerprint")
 

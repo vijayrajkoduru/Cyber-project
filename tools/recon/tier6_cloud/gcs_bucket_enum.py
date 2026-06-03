@@ -10,13 +10,15 @@ router = APIRouter()
 
 async def gather(ctx: ScanContext):
     h = ctx.host
-    found = []
-    for name in bucket_candidates(h):
+    names = list(bucket_candidates(h))
+    async def _probe(name):
         url = f"https://storage.googleapis.com/{name}/"
         c, _, b = await fetch(url, timeout=4)
         if c in (200,403) and (b"NoSuchBucket" not in b) and (b"<ListBucketResult" in b or b"AccessDenied" in b):
-            found.append({"bucket":name,"status":c,"listable":c==200 and b"<ListBucketResult" in b})
-    ctx.state["discovered_buckets"] = found
+            return {"bucket":name,"status":c,"listable":c==200 and b"<ListBucketResult" in b}
+        return None
+    results = await asyncio.gather(*(_probe(n) for n in names))
+    ctx.state["discovered_buckets"] = [r for r in results if r]
     ctx.source("GCS bucket name permutation")
 
 RULES = [

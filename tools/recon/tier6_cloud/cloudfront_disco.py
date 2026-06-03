@@ -8,12 +8,40 @@ from tools.recon._web_helpers import fetch, base_url
 
 router = APIRouter()
 
+# Header fingerprints that identify a CloudFront origin or distribution edge.
+# Each tuple is (header_name_substring, evidence_label).
+_CLOUDFRONT_FINGERPRINTS = [
+    ("x-amz-cf-id",      "AWS CloudFront edge request id"),
+    ("x-amz-cf-pop",     "AWS CloudFront PoP code"),
+    ("x-cache",          "Edge cache marker (often CloudFront/Hit/Miss)"),
+    ("via",              "Via header (often 1.1 ...cloudfront.net)"),
+    ("server",           "Server header advertising CloudFront"),
+    ("x-amz-id-2",       "AWS request id (S3 origin via CloudFront)"),
+    ("x-amz-request-id", "AWS request id"),
+    ("cloudfront",       "CloudFront token in any header"),
+]
+
+
 async def gather(ctx: ScanContext):
     base = base_url(ctx.host)
-    c, hdrs, _ = await fetch(base)
-    cf = "cloudfront" in str(hdrs).lower() or "x-amz-cf-id" in {k.lower() for k in hdrs}
-    ctx.state["cloudfront_detected"] = cf
-    ctx.state["evidence_headers"] = {k:v for k,v in hdrs.items() if "amz" in k.lower() or "cloudfront" in k.lower()}
+    # Probe a couple of paths concurrently — CloudFront sometimes only
+    # surfaces its headers on cache-miss responses, so / and a random path
+    # give a more reliable fingerprint than a single hit.
+    async def _probe(path):
+        c, h, _ = await fetch(base.rstrip("/") + path)
+        return (c, h or {})
+    results = await asyncio.gather(_probe("/"), _probe("/__cloudfront_check__"))
+    merged = {}
+    for _c, h in results:
+        for k, v in h.items():
+            merged.setdefault(k, v)
+    hdr_blob = " ".join(f"{k}:{v}" for k, v in merged.items()).lower()
+    hits = [(name, label) for name, label in _CLOUDFRONT_FINGERPRINTS
+            if name in hdr_blob and ("cloudfront" in hdr_blob or "amz" in name)]
+    ctx.state["cloudfront_detected"] = bool(hits)
+    ctx.state["evidence_headers"] = {k: v for k, v in merged.items()
+                                      if "amz" in k.lower() or "cloudfront" in k.lower()}
+    ctx.state["fingerprint_hits"] = [label for _, label in hits]
     ctx.source("CloudFront header fingerprint")
 
 RULES = [

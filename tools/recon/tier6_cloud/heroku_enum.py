@@ -8,14 +8,18 @@ from tools.recon._web_helpers import fetch, base_url
 
 router = APIRouter()
 
+_HEROKU_SUFFIXES = ["", "-prod", "-app", "-api", "-staging", "-dev", "-test",
+                    "-www", "-web", "-portal", "-admin", "-internal"]
+
+
 async def gather(ctx: ScanContext):
     base_name = ctx.host.split(".")[0]
-    candidates = [f"{base_name}.herokuapp.com", f"{base_name}-prod.herokuapp.com", f"{base_name}-app.herokuapp.com"]
-    found = []
-    for hn in candidates:
+    candidates = [f"{base_name}{sfx}.herokuapp.com" for sfx in _HEROKU_SUFFIXES]
+    async def _probe(hn):
         c, _, _ = await fetch(f"https://{hn}/", timeout=4)
-        if c and c != 404: found.append({"hostname":hn,"status":c})
-    ctx.state["discovered"] = found
+        return {"hostname": hn, "status": c} if c and c != 404 else None
+    results = await asyncio.gather(*(_probe(h) for h in candidates))
+    ctx.state["discovered"] = [r for r in results if r]
     ctx.source("Heroku app hostname permutation")
 
 RULES = [

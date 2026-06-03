@@ -1,107 +1,107 @@
 {
+  "ai_llm": {
+    "score": 100.0
+  },
+  "apisec": {
+    "score": 100.0
+  },
+  "auth_attacks": {
+    "score": 100.0
+  },
+  "exploit": {
+    "score": 100.0
+  },
+  "hybrid_identity": {
+    "score": 100.0
+  },
+  "iot_ot": {
+    "score": 100.0
+  },
+  "mobile_crypto": {
+    "score": 100.0
+  },
+  "mobile_network": {
+    "score": 100.0
+  },
+  "mobile_runtime": {
+    "score": 100.0
+  },
+  "mobile_static": {
+    "score": 100.0
+  },
+  "mobile_storage": {
+    "score": 100.0
+  },
+  "network": {
+    "score": 100.0
+  },
+  "phishing": {
+    "score": 100.0
+  },
+  "recon": {
+    "score": 100.0
+  },
+  "sspm": {
+    "score": 100.0
+  },
+  "supply_chain": {
+    "score": 100.0
+  },
+  "vuln": {
+    "score": 100.0
+  },
+  "osint": {
+    "score": 99.8
+  },
   "container_k8s": {
     "score": 99.2
   },
-  "mobile_crypto": {
-    "score": 87.0
-  },
-  "mobile_network": {
-    "score": 87.0
-  },
-  "mobile_runtime": {
-    "score": 87.0
-  },
-  "mobile_static": {
-    "score": 87.0
-  },
-  "mobile_storage": {
-    "score": 87.0
-  },
-  "osint": {
-    "score": 80.2
-  },
-  "ai_llm": {
-    "score": 78.3
-  },
-  "apisec": {
-    "score": 78.3
-  },
-  "auth_attacks": {
-    "score": 78.3
-  },
-  "exploit": {
-    "score": 78.3
-  },
-  "hybrid_identity": {
-    "score": 78.3
-  },
-  "iot_ot": {
-    "score": 78.3
-  },
-  "network": {
-    "score": 78.3
-  },
-  "phishing": {
-    "score": 78.3
-  },
-  "sspm": {
-    "score": 78.3
-  },
-  "supply_chain": {
-    "score": 78.3
+  "webapp": {
+    "score": 98.0
   },
   "cloud": {
-    "score": 76.1
-  },
-  "recon": {
-    "score": 73.6
-  },
-  "webapp": {
-    "score": 69.2
-  },
-  "vuln": {
-    "score": 67.6
+    "score": 97.8
   },
   "password": {
-    "score": 56.5
+    "score": 78.3
   },
   "pivot": {
-    "score": 43.5
+    "score": 78.3
   },
   "tunnel": {
-    "score": 43.5
+    "score": 78.3
   },
   "ad": {
-    "score": 26.1
+    "score": 60.9
   },
   "av_evasion": {
-    "score": 26.1
+    "score": 60.9
   },
   "bof": {
-    "score": 26.1
+    "score": 60.9
   },
   "client_side": {
-    "score": 26.1
+    "score": 60.9
   },
   "firmware": {
-    "score": 26.1
+    "score": 60.9
   },
   "metasploit": {
-    "score": 26.1
+    "score": 60.9
   },
   "post_exploit": {
-    "score": 26.1
+    "score": 60.9
   },
   "privesc": {
-    "score": 26.1
+    "score": 60.9
   },
   "red_team": {
-    "score": 26.1
+    "score": 60.9
   },
   "system_exploit": {
-    "score": 26.1
+    "score": 60.9
   },
   "wireless": {
-    "score": 26.1
+    "score": 60.9
   }
 }

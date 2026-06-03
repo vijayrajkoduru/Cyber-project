@@ -42,8 +42,9 @@ def _r_no_ptr(s):
 def _r_fcrdns_fail(s):
     fails=s.get("fcrdns_failures") or []
     if not fails: return None
+    sample=[f"{x['ip']}->{x['ptr']}->{x['forward']}" for x in fails[:2]]
     return {"name":f"Forward-confirmed rDNS failures ({len(fails)})","severity":"LOW","cwe":"CWE-345",
-        "evidence":f"PTR→A doesn't loop back: {[f'{f[\"ip\"]}→{f[\"ptr\"]}→{f[\"forward\"]}' for f in fails[:2]]}",
+        "evidence":f"PTR->A doesn't loop back: {sample}",
         "remediation":"PTR + A should match. Coordinate with hosting provider."}
 def _r_ptr_present(s):
     if not s.get("ptr_count"): return None

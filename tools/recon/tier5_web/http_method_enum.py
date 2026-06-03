@@ -10,12 +10,14 @@ router = APIRouter()
 
 async def gather(ctx: ScanContext):
     base = base_url(ctx.host)
-    code, hdrs, _ = await fetch(base, method="OPTIONS")
+    # Fire OPTIONS + TRACE concurrently — independent probes, no order dep.
+    (code, hdrs, _), (trace_code, _, _) = await asyncio.gather(
+        fetch(base, method="OPTIONS"),
+        fetch(base, method="TRACE", timeout=4),
+    )
     allow = hdrs.get("Allow","") or hdrs.get("allow","") or hdrs.get("Access-Control-Allow-Methods","") or hdrs.get("access-control-allow-methods","")
     methods = [m.strip().upper() for m in allow.split(",") if m.strip()]
     dangerous = [m for m in methods if m in ("PUT","DELETE","TRACE","CONNECT","PATCH")]
-    # Also actively test TRACE (XST)
-    trace_code, _, _ = await fetch(base, method="TRACE", timeout=4)
     ctx.state["options_status"] = code
     ctx.state["methods_allowed"] = methods
     ctx.state["dangerous_methods"] = dangerous
