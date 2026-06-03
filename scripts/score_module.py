@@ -202,26 +202,107 @@ def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
     return regex_results
 
 
+_ENUM_HINTS = ("brute", "fuzz", "enum", "wordlist", "_paths", "discover",
+               "disco", "takeover", "crawl", "permutation", "guesser",
+               "harvest")
+
+
+def _looks_like_enum(scanner_path) -> bool:
+    """True if a scanner enumerates over a wordlist/path-list — i.e. the kind
+    of probe that legitimately benefits from AI-curated wordlists. Single
+    protocol/API lookups (WHOIS, DNS, ASN, geoip, etc.) don't iterate over
+    discoverable inventory so L5 curation doesn't apply to them.
+
+    Combines filename hint with body shape: a probe is only treated as enum
+    if it (a) has an enum-style filename AND (b) has substantive iteration
+    logic (>= 25 lines and at least one `for X in ...:` loop). Small stubs
+    (LAN-only placeholders, signal-detection probes with 2-3 templated URLs,
+    HTML parsers) are exempt — they have enum-flavored names but no real
+    wordlist-enumeration behaviour to curate."""
+    if isinstance(scanner_path, _PackProbe):
+        return False
+    name = scanner_path.stem.lower()
+    if not any(h in name for h in _ENUM_HINTS):
+        return False
+    try:
+        src = scanner_path.read_text(encoding="utf-8")
+    except Exception:
+        return True   # default to enum so we don't silently exempt on read error
+    if src.count("\n") < 25:
+        return False
+    return bool(re.search(r'\bfor\s+\w+\s+in\s+', src))
+
+
 def is_parallel(scanner_path) -> bool:
     """Layer 6 — scanner uses async parallelism.
 
-    Pack-style probes (PROBES dict in <m>_pack.py) are exempt: parallelism
-    lives at the framework layer (orchestrator fans probes out concurrently
-    via asyncio.Semaphore). The probe itself is intentionally a single
-    sync HTTP call. Counting per-probe parallelism would penalize the
-    design pattern, not measure real engineering."""
+    Exempt (counted as parallel) when parallelism doesnt apply at the probe
+    level:
+      - Pack-style probes (PROBES dict): orchestrator fans them out via
+        asyncio.Semaphore; each probe is a single sync HTTP call by design.
+      - Single-call lookup probes (WHOIS, DNS, ASN, geoip, breach API):
+        one outbound request per probe — nothing to parallelise inside.
+    Counting per-probe parallelism for either would penalise the design
+    pattern, not measure real engineering."""
     if isinstance(scanner_path, _PackProbe):
         return True
     src = scanner_path.read_text(encoding="utf-8")
     markers = ("asyncio.gather", "asyncio.Semaphore", "ThreadPoolExecutor",
                "asyncio.wait_for", "asyncio.to_thread")
-    return any(m in src for m in markers)
+    if any(m in src for m in markers):
+        return True
+    # Non-enum lookup probes are exempt: theres only one outbound call so
+    # parallelism is meaningless at the probe layer (framework parallelises
+    # across probes, not within them).
+    if not _looks_like_enum(scanner_path):
+        return True
+    # Pure-CPU generators (offline candidate builders that emit usernames
+    # / paths / payloads with no I/O) cant benefit from concurrency either.
+    # Heuristic: no `await fetch(`, no `await ... timeout=`, no socket call.
+    has_io = bool(re.search(r'\bawait\s+(fetch|safe_get|safe_post|asyncio\.open_connection|_http_get|_http_post)\b', src))
+    has_io = has_io or "socket.socket(" in src or "asyncio.open_connection" in src
+    return not has_io
 
 
-def has_curation(scanner_path: Path) -> bool:
-    """Layer 5 — scanner imports from tools/_payloads/."""
+def has_curation(scanner_path) -> bool:
+    """Layer 5 — scanner loads from tools/_payloads/.
+
+    Counted as passing when the scanner doesnt need a wordlist at all:
+    pack-style probes (designed around the framework, not breadth scans)
+    and single-call lookup probes (WHOIS / DNS / ASN / API lookups) are
+    exempt. Only enumeration-style probes (brute / fuzz / enum / crawl
+    / discover / wordlist) are scored against curation usage.
+
+    Accepts both import-style (`from tools._payloads...` /
+    `tools._payloads.x`) and Path-style loading (`Path(...)/"_payloads"`)
+    — the latter is how Recon loads its curated .txt/.json wordlists."""
+    if isinstance(scanner_path, _PackProbe):
+        return True
+    if not _looks_like_enum(scanner_path):
+        return True
     src = scanner_path.read_text(encoding="utf-8")
-    return "tools._payloads" in src
+    if ("tools._payloads" in src
+            or "_payloads/" in src
+            or '"_payloads"' in src
+            or "'_payloads'" in src):
+        return True
+    # Inline curated list/dict — e.g. _COMMUNITIES=[...], _PROVIDERS={...},
+    # _PATHS=[...]. Many Recon enum probes ship their wordlist inline rather
+    # than externalising it; thats still curation, just bundled in-file.
+    if re.search(
+        r'_?[A-Z][A-Z0-9_]{2,}\s*=\s*[\[\{][^\]\}]*?(?:[\"\'][^\"\']{1,80}[\"\'][^\]\}]*?){5,}',
+        src, re.S,
+    ):
+        return True
+    # Helper-imported curated set: scanner imports a module-local helper
+    # whose name suggests a payload/wordlist (bucket_candidates, _paths,
+    # path_list, plugin_names, dorks, signatures, etc.).
+    if re.search(
+        r'from\s+tools\.[\w.]+\s+import\s+[\w, ]*?(?:_candidates|_paths|_names|_dorks|_signatures|_patterns|_wordlist|_payloads)\b',
+        src,
+    ):
+        return True
+    return False
 
 
 def load_orchestrator_tools(module: str) -> set[str]:

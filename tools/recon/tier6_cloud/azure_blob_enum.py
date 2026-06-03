@@ -10,13 +10,15 @@ router = APIRouter()
 
 async def gather(ctx: ScanContext):
     h = ctx.host
-    found = []
-    for name in bucket_candidates(h):
+    names = list(bucket_candidates(h))
+    async def _probe(name):
         url = f"https://{name}.blob.core.windows.net/?comp=list"
         c, _, b = await fetch(url, timeout=4)
         if c in (200,400,403) and (b"AccountNotFound" not in b) and (b"BlobNotFound" in b or b"<EnumerationResults" in b or b"AuthenticationFailed" in b):
-            found.append({"account":name,"status":c,"listable":c==200 and b"<EnumerationResults" in b})
-    ctx.state["discovered_accounts"] = found
+            return {"account":name,"status":c,"listable":c==200 and b"<EnumerationResults" in b}
+        return None
+    results = await asyncio.gather(*(_probe(n) for n in names))
+    ctx.state["discovered_accounts"] = [r for r in results if r]
     ctx.source("Azure Blob storage account permutation")
 
 RULES = [

@@ -8,26 +8,48 @@ import urllib.parse
 
 router = APIRouter()
 
+# Curated seed paths to bootstrap the crawler when the landing page has
+# few internal links (SPAs, marketing pages). These are common entry points
+# (admin/api/docs surfaces) — fetched in addition to discovered hrefs.
+_SEED_PATHS = [
+    "/", "/api", "/api/v1", "/api/v2", "/docs", "/openapi.json",
+    "/swagger.json", "/robots.txt", "/sitemap.xml", "/admin", "/login",
+    "/health", "/status", "/version", "/.well-known/security.txt",
+]
+
+
 async def gather(ctx: ScanContext):
     base = base_url(ctx.host)
-    visited = set(); queue = [base]; endpoints = []
     domain = urllib.parse.urlparse(base).netloc
-    while queue and len(visited) < 30:
-        u = queue.pop(0)
-        if u in visited: continue
+    visited = set()
+    endpoints = []
+    # Seed concurrent fetches with curated baseline paths.
+    seed_urls = [urllib.parse.urljoin(base, p) for p in _SEED_PATHS]
+    async def _fetch_one(u):
+        c, _, b = await fetch(u, timeout=6)
+        return (u, c, b)
+    seed_results = await asyncio.gather(*(_fetch_one(u) for u in seed_urls))
+    discovered = []
+    for u, c, body in seed_results:
         visited.add(u)
-        code, _, body = await fetch(u, timeout=6)
-        if code != 200 or not body: continue
-        endpoints.append(u)
-        text = body.decode("utf-8","ignore")
-        for m in re.finditer(r'href=[\"\']([^\"\'#]+)', text):
-            link = m.group(1)
-            full = urllib.parse.urljoin(u, link)
-            if urllib.parse.urlparse(full).netloc == domain and full not in visited and len(queue) < 50:
-                queue.append(full)
+        if c == 200 and body:
+            endpoints.append(u)
+            text = body.decode("utf-8", "ignore")
+            for m in re.finditer(r'href=[\"\']([^\"\'#]+)', text):
+                full = urllib.parse.urljoin(u, m.group(1))
+                if (urllib.parse.urlparse(full).netloc == domain
+                        and full not in visited
+                        and full not in discovered):
+                    discovered.append(full)
+    # Second wave: crawl up to 15 newly-discovered same-origin links.
+    second = discovered[:15]
+    results = await asyncio.gather(*(_fetch_one(u) for u in second))
+    for u, c, _ in results:
+        if c == 200:
+            endpoints.append(u)
     ctx.state["endpoints"] = endpoints[:50]
     ctx.state["count"] = len(endpoints)
-    ctx.source("BFS same-origin crawler (cap 30 URLs)")
+    ctx.source("Curated-seed crawler (2-wave concurrent BFS)")
 
 RULES = [
 
