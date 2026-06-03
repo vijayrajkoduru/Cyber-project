@@ -35,11 +35,16 @@ MOBILE_CRYPTO_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("aes_ecb_mode_audit",              "/api/mobile_crypto/aes_ecb_mode_audit"),
         ("insecure_prng_audit",             "/api/mobile_crypto/insecure_prng_audit"),
         ("custom_crypto_audit",             "/api/mobile_crypto/custom_crypto_audit"),
+        ("iv_nonce_reuse_audit",            "/api/mobile_crypto/iv_nonce_reuse_audit"),
+        ("key_derivation_audit",            "/api/mobile_crypto/key_derivation_audit"),
+        ("password_hash_audit",             "/api/mobile_crypto/password_hash_audit"),
     ],
     "tier2_keys_and_tls": [
         ("hardcoded_keys_audit",            "/api/mobile_crypto/hardcoded_keys_audit"),
         ("tls_version_audit",               "/api/mobile_crypto/tls_version_audit"),
         ("cert_validation_bypass_audit",    "/api/mobile_crypto/cert_validation_bypass_audit"),
+        ("rsa_key_size_audit",              "/api/mobile_crypto/rsa_key_size_audit"),
+        ("kdf_salt_audit",                  "/api/mobile_crypto/kdf_salt_audit"),
     ],
 }
 

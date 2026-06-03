@@ -1,0 +1,69 @@
+"""password_hash_audit - MD5 / SHA1 for password hashing detection.
+MSTG-CRYPTO-4. Catches MessageDigest.getInstance("MD5"/"SHA1") in same
+file as password-related symbols."""
+from __future__ import annotations
+import re
+from pathlib import Path
+from fastapi import APIRouter, Depends
+from tools._shared import ScanRequest, verify_scan_quota
+from tools._framework import ScanContext, run_scanner
+from tools._framework.binary_cache import get_unpacked
+from tools._payloads.password_hash_audit_findings import PASSWORD_HASH_AUDIT_FINDING_RULES
+
+router = APIRouter()
+WEAK_HASH_RE = re.compile(r'MessageDigest\.getInstance\s*\(\s*"(MD5|SHA-?1)"\)|CC_MD5\(|CC_SHA1\(')
+PASSWORD_NEAR_RE = re.compile(r'(?:password|passwd|pwd|user[_-]?password|secret|pin)\W', re.IGNORECASE)
+STRONG_HASH_RE = re.compile(r'SHA-?256|SHA-?384|SHA-?512|BCrypt|Argon2|scrypt|PBKDF2')
+SCAN_MAX_FILES = 3000
+
+
+async def gather(ctx: ScanContext):
+    apk = ctx.host
+    if not Path(apk).is_file():
+        ctx.state["password_hash_audit_total"] = 0; ctx.source("file-not-found"); return
+    try: unpacked = get_unpacked(apk)
+    except Exception as e: ctx.state["password_hash_audit_error"] = str(e); return
+    weak_with_password = []
+    weak_general = []
+    strong_users = 0
+    files_scanned = 0
+    for p in unpacked.rglob("*"):
+        if files_scanned >= SCAN_MAX_FILES: break
+        if not p.is_file() or p.suffix not in (".smali", ".swift", ".m", ".h"): continue
+        try: txt = p.read_text(errors="ignore")
+        except (OSError, UnicodeDecodeError): continue
+        files_scanned += 1
+        if WEAK_HASH_RE.search(txt):
+            if PASSWORD_NEAR_RE.search(txt):
+                if len(weak_with_password) < 20:
+                    weak_with_password.append(p.name)
+            elif len(weak_general) < 20:
+                weak_general.append(p.name)
+        if STRONG_HASH_RE.search(txt):
+            strong_users += 1
+    findings_total = 0
+    if weak_with_password:
+        findings_total += 1
+    elif weak_general:
+        findings_total += 1
+    ctx.state["weak_hash_with_password"] = weak_with_password
+    ctx.state["weak_hash_general"] = weak_general
+    ctx.state["strong_hash_users"] = strong_users
+    ctx.state["files_scanned"] = files_scanned
+    ctx.state["password_hash_audit_total"] = findings_total
+    ctx.source(f"{files_scanned} files")
+
+
+INTEL_FIELDS = [("Weak hash + password keys", "weak_hash_with_password"),
+                ("Weak hash (general)", "weak_hash_general"),
+                ("Strong hash users", "strong_hash_users")]
+
+
+@router.post("/api/mobile_crypto/password_hash_audit")
+async def mobile_crypto_password_hash_audit(req: ScanRequest, _=Depends(verify_scan_quota)):
+    return await run_scanner(host=req.target, tool="password_hash_audit",
+        gather_func=gather, finding_rules=PASSWORD_HASH_AUDIT_FINDING_RULES,
+        intel_fields=INTEL_FIELDS, flat_field_keys=[])
+
+
+def register(app): app.include_router(router)
