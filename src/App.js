@@ -13116,9 +13116,15 @@ function generateUniversalVLReport(opts) {
   const _riskLabel = (_riskScore>=80&&_sevCount.CRITICAL>0)?"CRITICAL RISK":_riskScore>=60?"HIGH RISK":_riskScore>=40?"MODERATE RISK":_riskScore>=20?"LOW RISK":"MINIMAL RISK";
   const _riskColor = (_riskScore>=80&&_sevCount.CRITICAL>0)?[162,28,28]:_riskScore>=60?[194,65,12]:_riskScore>=40?[133,79,11]:_riskScore>=20?[202,138,4]:[15,118,82];
   // Footnote for the auditor: explain WHY the headline score isn't the raw.
+  // Expanded to show the full formula breakdown so external readers can
+  // reproduce the math instead of trusting an opaque single number.
   const _scopeNote = _scopeFactor < 1.0
     ? `Scope-adjusted: raw severity score ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} input-coverage factor (${_inputsSupplied}/5 inputs provided)`
     : null;
+  const _formulaNote = `Formula: raw = min(70, C*15 + H*8 + M*3 + L*1) + worst-severity cap (${_maxC}); `
+    + `then x scope factor [0.4..1.0 from input coverage]. `
+    + `Inputs counted: ${_inputsSupplied}/5 (dockerfile, pod-spec, kubeconfig, repo, image). `
+    + `C=${_sevCount.CRITICAL} H=${_sevCount.HIGH} M=${_sevCount.MEDIUM} L=${_sevCount.LOW} -> raw ${_rawRiskScore} -> ${_riskScore}.`;
 
   // Report ID + Content Hash (deterministic per (module, target, date, findings))
   const _genId = (pre, t, d) => {
@@ -13302,6 +13308,13 @@ function generateUniversalVLReport(opts) {
     chk(4);
     txt(_scopeNote, margin, y, 6.5, [120,53,15]); y += 5;
   }
+  // Always render the formula breakdown so the headline score is reproducible.
+  {
+    const _fLines = doc.splitTextToSize(_ascii(_formulaNote), contentW);
+    chk(4 + 3 * _fLines.length);
+    _fLines.forEach((ln, i) => txt(ln, margin, y + (i * 3.2), 6.3, GRAY));
+    y += 3.2 * _fLines.length + 2;
+  }
 
   // ── DELTA vs PRIOR SCAN (Gap 5) ──
   // Reads vl_scans:{moduleKey} array from localStorage and surfaces the
@@ -13436,12 +13449,17 @@ function generateUniversalVLReport(opts) {
     ["Retention", "Confidential - 90 days minimum"],
     ["Next Re-test", "After remediation + 90 days OR per Conclusion section"],
   ];
+  // Wrap long values (e.g. Scan Summary) instead of letting them overflow.
+  // The value column starts at margin+58, so width budget is contentW - 60.
+  const _docValueW = contentW - 60;
   _docCtrl.forEach((f, i) => {
-    chk(7); fillR(margin, y, contentW, 7, i%2===0 ? LIGHT : WHITE);
+    const _vLines = doc.splitTextToSize(_ascii(f[1]), _docValueW);
+    const _rh = Math.max(7, 3 + 4 * _vLines.length);
+    chk(_rh); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
     txt(f[0], margin + 3, y + 5, 8.5, GRAY, true);
     doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
-    doc.text(_ascii(f[1]), margin + 58, y + 5);
-    y += 7;
+    _vLines.forEach((ln, li) => doc.text(ln, margin + 58, y + 5 + (li * 4)));
+    y += _rh;
   });
   y += 6;
 
@@ -13465,7 +13483,40 @@ function generateUniversalVLReport(opts) {
     fillR(margin, y, 4, 22, _pCol);
     txt("OVERALL SECURITY POSTURE", margin + 8, y + 8, 8, [100,116,139], true);
     txt(_posture, margin + 8, y + 17, 14, _pCol, true);
-    y += 28;
+    y += 26;
+    // 2-3 sentence narrative tailored to the actual finding mix. Pulls in
+    // the top finding name when relevant so the exec summary isn't a stock
+    // template line.
+    {
+      const _topName = _top3.length > 0
+        ? String(_top3[0].detail || _top3[0].name || _top3[0].title || "").substring(0, 90)
+        : "";
+      const _totalReal = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW;
+      let _narr;
+      if (_sevCount.CRITICAL > 0) {
+        _narr = `Scan surfaced ${_sevCount.CRITICAL} CRITICAL exposure(s) requiring 24-hour remediation. `
+              + `Top concern: ${_topName}. Treat as P0 — schedule incident response review.`;
+      } else if (_sevCount.HIGH > 0) {
+        _narr = `Scan surfaced ${_sevCount.HIGH} HIGH-severity issue(s) requiring patching within 7 days. `
+              + (_topName ? `Top concern: ${_topName}. ` : "")
+              + `Address via the Strategic Recommendations queue, then re-scan to confirm closure.`;
+      } else if (_totalReal > 0) {
+        _narr = `Scan completed cleanly with ${_totalReal} finding(s) at LOW/MEDIUM severity. `
+              + (_topName ? `Notable item: ${_topName}. ` : "")
+              + `Surface is well-controlled; address per SLA cadence and continue continuous monitoring.`;
+      } else {
+        _narr = `Scan completed cleanly across ${Object.keys(r).length} scanner(s) with zero CRITICAL/HIGH/MEDIUM/LOW findings. `
+              + `Target's exposed attack surface is well-managed. `
+              + `Maintain continuous monitoring and quarterly re-scan cadence to catch drift.`;
+      }
+      const _narLines = doc.splitTextToSize(_ascii(_narr), contentW - 8);
+      const _nh = 4 + (_narLines.length * 4);
+      chk(_nh + 2);
+      fillR(margin, y, contentW, _nh, [248,250,252]);
+      doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+      _narLines.forEach((ln, i) => doc.text(ln, margin + 4, y + 5 + (i * 4)));
+      y += _nh + 2;
+    }
 
     // Engagement scope — also surface the RESOLVED image reference that
     // image-CVE scanners (Trivy/Grype/Syft/Cosign) actually pulled. The
@@ -13592,21 +13643,49 @@ function generateUniversalVLReport(opts) {
       y += 4;
     }
 
-    // Business impact
+    // Business impact — tailored to the top finding's CWE / name so the
+    // section is finding-relevant instead of a stock template line.
     chk(35); y = sHead("Business Impact", y);
     let _imp = `${moduleLabel} findings characterise the technical exposure surface visible to an attacker. `;
     if (_sevCount.CRITICAL>0) _imp += `${_sevCount.CRITICAL} CRITICAL exposure(s) indicate immediate compromise potential. `;
     if (_sevCount.HIGH>0) _imp += `${_sevCount.HIGH} HIGH issue(s) require remediation within 7 days. `;
-    if (_sevCount.CRITICAL===0 && _sevCount.HIGH===0 && _sevCount.MEDIUM<=2) {
-      _imp += "Surface area is well-managed. Recommend continuous monitoring + quarterly re-scan.";
-    } else {
-      _imp += "Address findings in priority order, then re-scan to confirm closure.";
+    // CWE / name-keyed impact lookup. First matching rule wins. Falls back
+    // to the generic "address in priority order" closing line.
+    const _topFinding = (_top3 && _top3[0]) || _allFindings[0] || null;
+    const _topNm = String(_topFinding && (_topFinding.name||_topFinding.detail||"") || "").toLowerCase();
+    const _topCwe = String(_topFinding && _topFinding.cwe || "").toUpperCase();
+    const _impactLookup = [
+      [/cve-\d{4}-\d+|rapid reset|http\/?2|denial of service|\bdos\b/i,
+        "Unpatched component carrying a known CVE - exploitation can cause service disruption, data corruption, or remote code execution depending on the CVE class. Business impact: revenue loss during outage + reputational damage from public incident disclosure."],
+      [/sql.?injection|xss|cmd.?injection|rce|ssrf|xxe/i,
+        "Injection / code-execution surface exposes customer data + backend systems to attacker control. Business impact: data exfiltration, ransomware staging, regulatory exposure (GDPR/PCI Article 32)."],
+      [/auth|jwt|session|password|credential|hardcoded.+(secret|key)/i,
+        "Authentication / credential exposure enables account takeover and lateral movement. Business impact: privileged access compromise, fraud, customer trust loss."],
+      [/exposed|disclos|leak|bucket|s3|gcs|azure blob/i,
+        "Information disclosure / open storage surface leaks internal data to the public internet. Business impact: regulatory (GDPR/HIPAA) notification triggers, competitive intelligence loss, social-engineering ammunition."],
+      [/tls|ssl|cipher|certificate|hsts/i,
+        "Transport / certificate hardening gap weakens data-in-transit guarantees. Business impact: regulatory non-compliance (PCI 4.2.1), MITM exposure for customers on hostile networks."],
+      [/header|csp|cors|frame-options|clickjacking/i,
+        "Browser security header misconfiguration enables clickjacking, XSS amplification, or cross-origin abuse. Business impact: customer account-takeover via crafted phishing pages."],
+      [/(privileged|hostnetwork|hostpid|docker.sock|capability)/i,
+        "Container / runtime privilege escalation primitive present. Business impact: pod-to-host escape can collapse the entire cluster blast radius - one container compromise = full cluster."],
+    ];
+    let _impTail = null;
+    for (var _ir = 0; _ir < _impactLookup.length; _ir++) {
+      if (_impactLookup[_ir][0].test(_topNm) || _impactLookup[_ir][0].test(_topCwe)) { _impTail = _impactLookup[_ir][1]; break; }
     }
-    fillR(margin, y, contentW, 26, [248,250,252]);
+    if (_impTail) _imp += _impTail + " ";
+    if (_sevCount.CRITICAL===0 && _sevCount.HIGH===0 && _sevCount.MEDIUM<=2) {
+      _imp += "Overall surface area is well-managed - recommend continuous monitoring + quarterly re-scan.";
+    } else {
+      _imp += "Address findings in priority order using the Strategic Recommendations queue, then re-scan to confirm closure.";
+    }
     const _lines = doc.splitTextToSize(_ascii(_imp), contentW - 8);
+    const _ih = 4 + (_lines.length * 4.5);
+    fillR(margin, y, contentW, _ih, [248,250,252]);
     doc.setFont("Arial","normal"); doc.setFontSize(9); doc.setTextColor(...DARK);
-    _lines.slice(0,5).forEach((ln, i) => { doc.text(ln, margin + 4, y + 6 + (i*4.5)); });
-    y += 32;
+    _lines.slice(0,8).forEach((ln, i) => { doc.text(ln, margin + 4, y + 6 + (i*4.5)); });
+    y += _ih + 6;
   }
 
   doc.addPage(); y = 18; drawHeader();
@@ -13689,6 +13768,14 @@ function generateUniversalVLReport(opts) {
       [/version|banner|fingerprint/i,           "NIST CM-6 - ISO A.8.9 - PCI 2.2.4"],
       [/breach|leak|dump/i,                     "NIST CSF ID.RA-3 (risk indicator)"],
       [/bucket|s3|gcs|azure blob/i,             "NIST AC-3 - ISO A.5.15 - PCI 7.1"],
+      // A known CVE in the finding name almost always maps to vuln-mgmt.
+      // Subset: HTTP/2 Rapid Reset, log4j, Spring4Shell, etc.
+      [/CVE-\d{4}-\d+|rapid reset|log4j|spring4shell|shellshock|heartbleed/i,
+                                                "OWASP A06 - NIST SI-2 - CIS 7.1 - PCI 6.3.3"],
+      [/http\/?2|h2c|denial of service|\bdos\b|rate.?limit/i,
+                                                "OWASP A05 - NIST SC-5 - CIS 13.6 - PCI 6.2"],
+      [/outdated|unpatched|end[- ]of[- ]life|eol/i,
+                                                "OWASP A06 - NIST SI-2 - CIS 7.1 - PCI 6.3.3"],
     ];
     const _cmpCwe = {
       "CWE-319":"NIST SC-8 - PCI 4.2.1 - ISO A.8.24",
@@ -13750,7 +13837,10 @@ function generateUniversalVLReport(opts) {
           || (Number(b.f.cvss||0) - Number(a.f.cvss||0));
       });
     if (_cf.length > 0) {
-      y = tHead(["COMPLIANCE","FINDING","SEV","CVSS","CWE"], [52,76,20,16,22], y);
+      // Column widths: COMPLIANCE 62 / FINDING 70 / SEV 20 / CVSS 16 / CWE 18
+      // Compliance string is wrapped (2 lines max) so multi-framework labels
+      // render in full instead of being mid-word "..." truncated.
+      y = tHead(["COMPLIANCE","FINDING","SEV","CVSS","CWE"], [62,70,20,16,18], y);
       var _prevCmp = null;
       _cf.forEach(function(ob, i){
         var f = ob.f; var sev = String(f.severity||"").toUpperCase();
@@ -13763,16 +13853,21 @@ function generateUniversalVLReport(opts) {
         var _cn = Number(f.cvss) || 0;
         var cv = (_cn > 0 ? _cn : (_cm[sev]||0)).toFixed(1);
         var cw = (String(f.cwe||"").trim() || "-");
-        var cmp = ob.cmp.length > 38 ? ob.cmp.substring(0,38) + "..." : ob.cmp;
-        var nm = ob.nm.length > 50 ? ob.nm.substring(0,50) + "..." : ob.nm;
-        chk(7); fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
-        txt(cmp, margin + 3, y + 4.6, 6.8, DARK);
-        txt(nm, margin + 55, y + 4.6, 7, GRAY);
-        rrect(margin + 129, y + 1.4, 18, 4.8, 1, sc);
-        txt(sev, margin + 138, y + 4.7, 6, WHITE, true, "center");
-        txt(cv, margin + 150, y + 4.6, 9, sc, true);
-        txt(cw, margin + 166, y + 4.6, 7.5, DARK, true);
-        y += 6.5;
+        var cmpLines = doc.splitTextToSize(ob.cmp, 58).slice(0, 2);
+        var nmLines  = doc.splitTextToSize(ob.nm, 66).slice(0, 2);
+        var _rh = Math.max(6.5, 2.5 + 3.6 * Math.max(cmpLines.length, nmLines.length));
+        chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
+        cmpLines.forEach(function(ln, li){
+          txt(ln, margin + 3, y + 4.6 + (li * 3.6), 6.8, DARK);
+        });
+        nmLines.forEach(function(ln, li){
+          txt(ln, margin + 67, y + 4.6 + (li * 3.6), 7, GRAY);
+        });
+        rrect(margin + 139, y + 1.4, 18, 4.8, 1, sc);
+        txt(sev, margin + 148, y + 4.7, 6, WHITE, true, "center");
+        txt(cv, margin + 160, y + 4.6, 9, sc, true);
+        txt(cw, margin + 175, y + 4.6, 7.5, DARK, true);
+        y += _rh;
       });
       y += 6;
     } else {
@@ -13859,9 +13954,56 @@ function generateUniversalVLReport(opts) {
       });
     if (_df.length > 0) {
       chk(30); y = sHead("Detailed Findings", y);
-      const _DF_PER_PG = 60;
+      // Per-row helpers: extract CVE id, CVSS vector, EPSS, KEV flag, and
+      // affected Asset:Port from the finding's evidence/name fields.
+      const _cveRe = /(CVE-\d{4}-\d{4,7})/i;
+      const _vectorRe = /(CVSS:?[23]\.[01]\/[A-Z:/]+)/;
+      const _epssRe = /EPSS[:\s]+([0-9.]+%?)/i;
+      const _kevRe = /\bKEV\b|known exploited/i;
+      const _portRe = /(?:port|tcp|udp|:)\s*(\d{1,5})\b/i;
+      const _extract = (f) => {
+        const blob = [f.name, f.detail, f.evidence, f.evidence_marker, f.title]
+          .map(x => String(x || "")).join(" ");
+        const mCve = blob.match(_cveRe);
+        const mVec = blob.match(_vectorRe);
+        const mEpss = blob.match(_epssRe);
+        const isKev = _kevRe.test(blob);
+        const mPort = blob.match(_portRe);
+        return {
+          cve: mCve ? mCve[1].toUpperCase() : "-",
+          vector: mVec ? mVec[1] : "",
+          epss: mEpss ? mEpss[1] : "",
+          kev: isKev,
+          port: mPort ? mPort[1] : "",
+          host: target,
+        };
+      };
+      // Reproduce-hint: 1-line copy-pasteable command tailored to the
+      // finding shape so customers can re-confirm independently.
+      const _reproduce = (f, x) => {
+        const nm = String(f.name||f.detail||"").toLowerCase();
+        const host = x.host || target;
+        if (x.cve !== "-") {
+          if (/http\/?2|rapid reset/.test(nm))
+            return `curl --http2 -k -I https://${host}/  # ALPN must NOT advertise h2 on patched stack`;
+          return `nuclei -id ${x.cve.toLowerCase()} -u https://${host}/`;
+        }
+        if (/tls|ssl|cipher|hsts|certificate/.test(nm))
+          return `nmap --script ssl-enum-ciphers,ssl-cert -p 443 ${host}`;
+        if (/header|csp|cors|hsts/.test(nm))
+          return `curl -sI https://${host}/ | grep -iE 'strict-transport|content-security|x-frame|x-content-type'`;
+        if (/dns|spf|dmarc|dkim/.test(nm))
+          return `dig +short TXT _dmarc.${host} ; dig +short TXT ${host}`;
+        if (/sql|xss|cmd|ssrf|xxe|redirect|csrf/.test(nm))
+          return `# Run the relevant Webapp module probe against https://${host}/ to reproduce`;
+        if (/port|service|open/.test(nm) && x.port)
+          return `nmap -sV -p ${x.port} ${host}`;
+        return `# Re-run /api/${moduleKey}/${String(f._tool||"<scanner>")} against ${host} to reproduce`;
+      };
+      // 2 visual rows per finding (header + reproduce). Allow ~14 findings/page.
+      const _DF_PER_PG = 20;
       const _dfPages = Math.max(1, Math.ceil(_df.length / _DF_PER_PG));
-      y = tHead(["FINDING","SEVERITY","CVSS","CWE"], [108,26,22,30], y);
+      y = tHead(["FINDING","CVE","SEV","CVSS","CWE"], [98,22,20,22,24], y);
       let _dfPageNo = 1;
       txt(`Findings table - page ${_dfPageNo} of ${_dfPages}`, margin, y - 9, 6.5, GRAY, true, "left");
       _df.forEach(function(f, i){
@@ -13871,7 +14013,7 @@ function generateUniversalVLReport(opts) {
           doc.addPage(); y = 18; drawHeader();
           _dfPageNo++;
           y = sHeadCont("Detailed Findings (continued)", y);
-          y = tHead(["FINDING","SEVERITY","CVSS","CWE"], [108,26,22,30], y);
+          y = tHead(["FINDING","CVE","SEV","CVSS","CWE"], [98,22,20,22,24], y);
           txt(`Findings table - page ${_dfPageNo} of ${_dfPages}`, margin, y - 9, 6.5, GRAY, true, "left");
         }
         const sev = String(f.severity||"").toUpperCase();
@@ -13890,11 +14032,6 @@ function generateUniversalVLReport(opts) {
           _cwSeen.add(k); _cwToks.push(k);
         });
         const cw = _cwToks.length ? _cwToks.join(" ") : "-";
-        // Source label: trace each finding back to the input it came from
-        // (Dockerfile / pod-spec / kubeconfig / repo / image / target net).
-        // Without this, an outside auditor sees "privileged container
-        // finding on a registry target" and dismisses the report as
-        // fabricated. With this, the finding is provably attributable.
         const _srcCat = _findingInputSource(f._tool || "");
         const _srcLbl = _srcCat === "pod_spec" ? " [pod-spec]"
                        : _srcCat === "dockerfile" ? " [Dockerfile]"
@@ -13902,14 +14039,38 @@ function generateUniversalVLReport(opts) {
                        : _srcCat === "repo_url" ? " [repo]"
                        : _srcCat === "image" ? " [image]"
                        : "";
+        const x = _extract(f);
         const nmWithSrc = nm + _srcLbl;
-        chk(7); fillR(margin, y, contentW, 6.5, i%2===0 ? LIGHT : WHITE);
-        txt(nmWithSrc.length > 78 ? nmWithSrc.substring(0,78) + "..." : nmWithSrc, margin + 3, y + 4.6, 7.5, DARK);
-        rrect(margin + 109, y + 1.4, 23, 4.8, 1, sc);
-        txt(sev, margin + 120.5, y + 4.7, 6.5, WHITE, true, "center");
-        txt(cv, margin + 138, y + 4.6, 11, sc, true);
-        txt(cw, margin + 159, y + 4.6, 8, DARK, true);
-        y += 6.5;
+        // 2-row layout per finding: top row (FINDING|CVE|SEV|CVSS|CWE),
+        // bottom row (CVSS vector + Asset:Port + EPSS/KEV badges + Reproduce).
+        chk(13); fillR(margin, y, contentW, 12, i%2===0 ? LIGHT : WHITE);
+        // Top row
+        txt(nmWithSrc.length > 70 ? nmWithSrc.substring(0,70) + "..." : nmWithSrc,
+            margin + 3, y + 4.2, 7.5, DARK);
+        txt(x.cve, margin + 102, y + 4.2, 6.8, x.cve !== "-" ? BLUE : GRAY, true);
+        rrect(margin + 124, y + 1.4, 20, 4.6, 1, sc);
+        txt(sev, margin + 134, y + 4.5, 6, WHITE, true, "center");
+        txt(cv, margin + 148, y + 4.2, 10, sc, true);
+        txt(cw, margin + 162, y + 4.2, 7.2, DARK, true);
+        // Bottom row — meta line
+        const _metaParts = [];
+        if (x.vector) _metaParts.push(x.vector.substring(0, 40));
+        if (x.epss) _metaParts.push(`EPSS ${x.epss}`);
+        if (x.kev) _metaParts.push("CISA KEV");
+        if (x.port) _metaParts.push(`Asset: ${x.host}:${x.port}`);
+        else _metaParts.push(`Asset: ${x.host}`);
+        if (f._tool) _metaParts.push(`via ${String(f._tool).replace(/_/g," ")}`);
+        const _meta = _metaParts.join("  -  ");
+        txt(_meta, margin + 3, y + 8, 6.3, GRAY);
+        // Reproduce hint
+        const _repro = _reproduce(f, x);
+        txt("Reproduce: " + _repro, margin + 3, y + 11.2, 6.1, [55,65,81]);
+        // KEV/EPSS badge top-right corner if applicable
+        if (x.kev) {
+          rrect(margin + contentW - 22, y + 1.4, 20, 3.6, 1, [220,38,38]);
+          txt("KEV", margin + contentW - 12, y + 4.0, 5.5, WHITE, true, "center");
+        }
+        y += 12.5;
       });
       y += 6;
     }
@@ -13960,19 +14121,26 @@ function generateUniversalVLReport(opts) {
       txt(`${_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Counted in §Scan Coverage.`,
           margin + 6, y + 4.2, 7.5, [15,118,82], true);
       y += 9;
-      // Compact 3-column list of which scanners
-      const _names = _positiveOnly.map(_prettyName).sort();
-      const _cols3 = 3;
-      const _colW = (contentW - 4) / _cols3;
-      for (let _i = 0; _i < _names.length; _i += _cols3) {
-        chk(4);
-        for (let _j = 0; _j < _cols3; _j++) {
-          if (_i + _j >= _names.length) break;
-          txt("- " + _names[_i + _j].substring(0, 32),
-              margin + 2 + (_j * _colW), y + 3, 6.5, GRAY);
-        }
-        y += 3.5;
-      }
+      // Per-scanner PASS detail: scanner name on the left, what-it-confirmed
+      // pulled from the first POSITIVE finding's detail/evidence.
+      const _posSorted = _positiveOnly.slice().sort();
+      _posSorted.forEach((toolKey, idx) => {
+        chk(5);
+        const d = r[toolKey] || {};
+        const _firstFinding = (d.findings || []).find(f =>
+          String(f.severity || "").toUpperCase() === "POSITIVE") || (d.findings || [])[0] || {};
+        const _proof = _ascii(String(
+          _firstFinding.evidence_marker
+          || _firstFinding.evidence
+          || _firstFinding.detail
+          || _firstFinding.name
+          || "ran clean - no exposure"
+        )).substring(0, 110);
+        fillR(margin, y, contentW, 4.5, idx%2===0 ? LIGHT : WHITE);
+        txt("- " + _prettyName(toolKey), margin + 3, y + 3.2, 6.5, DARK, true);
+        txt("PASS: " + _proof, margin + 62, y + 3.2, 6.3, GRAY);
+        y += 4.5;
+      });
       y += 3;
     }
     if (_collapseScaffold) {
@@ -14079,7 +14247,9 @@ function generateUniversalVLReport(opts) {
   }
 
   // ── RISK RATING MATRIX ──
-  chk(50); y = sHead("Risk Rating Matrix", y);
+  // chk(60) reserves header + table header + 5 rows + bottom padding so the
+  // INFO row never gets orphaned on the next page (Vuln PDF gap #15).
+  chk(60); y = sHead("Risk Rating Matrix", y);
   y = tHead(["SEVERITY","CVSS RANGE","SLA","FINDINGS"], [40,40,55,45], y);
   const _matrix = [
     ["CRITICAL", "9.0 - 10.0", "Patch within 24 hours", _sevCount.CRITICAL, [162,28,28]],
@@ -14280,8 +14450,46 @@ function generateUniversalVLReport(opts) {
       ];
       _sbomTxt.forEach(line => { chk(5); txt(line, margin + 2, y + 3.5, 7.5, GRAY); y += 4; });
     } else {
-      txt("No Syft inventory captured for this target (image not pulled — likely a registry/host scan rather than an image scan).",
+      txt("No Syft inventory captured for this target (image not pulled - likely a registry/host scan rather than an image scan).",
           margin + 2, y + 3.5, 7.5, GRAY); y += 5;
+      // Even without Syft we can surface fingerprints detected by the
+      // CVE/banner/version scanners. Pulls name->version pairs from the
+      // appserver/framework/cms/database/mail-server probes.
+      const _versionRe = /([A-Za-z][\w./-]{2,40})\s+(?:v|version\s+)?([0-9]+(?:\.[0-9]+){1,3}(?:[a-z]?[0-9]*)?)/g;
+      const _detected = new Map();
+      const _detectKeys = ["appserver_cve","framework_cve","cms_fingerprint_cve","http_server_cve",
+        "database_server_cve","mail_server_cve","network_device_cve","tech_stack_detect",
+        "service_version_detect","banner_grab","ssl_tls_audit"];
+      _detectKeys.forEach(k => {
+        const d = r[k]; if (!d) return;
+        (d.findings || []).slice(0, 6).forEach(f => {
+          const blob = String(f.evidence_marker || f.evidence || f.detail || f.name || "");
+          let m;
+          while ((m = _versionRe.exec(blob)) !== null) {
+            const name = m[1].toLowerCase().replace(/[^a-z0-9.+-]/g,"");
+            if (name.length < 3 || _detected.size > 30) break;
+            if (!_detected.has(name)) _detected.set(name, m[2]);
+          }
+        });
+      });
+      if (_detected.size > 0) {
+        y += 2;
+        txt(`Detected components (${_detected.size}) from version-fingerprint scanners:`,
+            margin + 2, y + 3.5, 7.5, DARK, true); y += 5;
+        const _entries = Array.from(_detected.entries()).slice(0, 18);
+        const _cols2 = 2;
+        const _cw = (contentW - 4) / _cols2;
+        for (let _i = 0; _i < _entries.length; _i += _cols2) {
+          chk(4);
+          for (let _j = 0; _j < _cols2; _j++) {
+            const e = _entries[_i + _j]; if (!e) break;
+            txt(`- ${e[0]} ${e[1]}`, margin + 2 + (_j * _cw), y + 3.2, 6.8, GRAY);
+          }
+          y += 4;
+        }
+        txt("Component-version pairs extracted from CVE/banner scanner evidence. Cross-check against vendor advisories.",
+            margin + 2, y + 3.5, 6.3, GRAY); y += 5;
+      }
     }
     y += 4;
   }
