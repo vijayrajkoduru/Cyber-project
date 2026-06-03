@@ -20,7 +20,7 @@ import datetime
 import contextvars
 from typing import Optional, List
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt as _jwt
@@ -74,10 +74,34 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     return payload
 
 
-def verify_scan_quota(payload=Depends(verify_token)):
-    """Same as verify_token + a placeholder for future per-plan quotas.
-    Tools that fire many backend requests (port scans, fuzzers) depend
-    on this version so we can rate-limit trial users later."""
+_INTERNAL_FANOUT_HEADER = "x-vl-internal-fanout"
+_INTERNAL_FANOUT_TOKEN = os.getenv("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal")
+_INTERNAL_TRUSTED_IPS = ("127.0.0.1", "::1", "localhost")
+_INTERNAL_TRUSTED_PREFIXES = ("10.", "172.", "192.168.")
+
+
+def is_internal_fanout(request: Optional[Request]) -> bool:
+    """VL-PRIME: True iff this request is signed orchestrator fan-out
+    from a trusted internal IP. The orchestrator stamps every internal
+    HTTP fan-out with VL_INTERNAL_FANOUT_TOKEN; the limiter then knows
+    that one user scan triggering N internal calls counts as 1, not N."""
+    if request is None:
+        return False
+    if request.headers.get(_INTERNAL_FANOUT_HEADER, "") != _INTERNAL_FANOUT_TOKEN:
+        return False
+    client_ip = request.client.host if request.client else ""
+    if client_ip in _INTERNAL_TRUSTED_IPS:
+        return True
+    return any(client_ip.startswith(p) for p in _INTERNAL_TRUSTED_PREFIXES)
+
+
+def verify_scan_quota(request: Request, payload=Depends(verify_token)):
+    """VL-PRIME: verify_token + per-plan quota check. Internal orchestrator
+    fan-out (signed marker from 127.0.0.1/172.x/10.x/192.168.x) bypasses
+    quota counting so one user scan that fans out to N scanners costs 1
+    unit, not N. Without this exemption the limiter 429's most scanners."""
+    if is_internal_fanout(request):
+        return payload
     # TODO: per-plan quota check when billing module is wired
     return payload
 

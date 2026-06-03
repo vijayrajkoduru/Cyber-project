@@ -170,7 +170,10 @@ async def run_module_parallel(
     # so internal calls MUST carry the user's JWT or they return 401 (which is
     # what caused 41/41 FAILED on the 08:40 juiceshop scan). Forward exactly
     # the same Authorization header the user sent to /api/recon/run_all.
-    internal_headers: dict = {}
+    # VL-PRIME marker — exempts fan-out from per-plan quota counting.
+    internal_headers: dict = {
+        "x-vl-internal-fanout": os.environ.get("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal"),
+    }
     if jwt_token:
         internal_headers["Authorization"] = f"Bearer {jwt_token}"
 
@@ -282,7 +285,10 @@ async def run_module_streaming(
     if auth_bearer: base_body["auth_bearer"] = auth_bearer
     if extra_body:  base_body.update(extra_body)
 
-    internal_headers: dict = {}
+    # VL-PRIME marker — exempts fan-out from per-plan quota counting.
+    internal_headers: dict = {
+        "x-vl-internal-fanout": os.environ.get("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal"),
+    }
     if jwt_token:
         internal_headers["Authorization"] = f"Bearer {jwt_token}"
 

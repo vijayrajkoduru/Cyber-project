@@ -247,22 +247,27 @@ def load_frontend_phases(module: str) -> set[str] | bool:
         return set()
     src = app_js.read_text(encoding="utf-8")
 
-    # Recon-style: {tool:"<name>", endpoint:"/api/<module>/..."}
-    pattern = rf'tool:["\']([\w_]+)["\'].*endpoint:["\']/api/{module}'
-    phases = set(re.findall(pattern, src))
-    if phases:
-        return phases
-
-    # Pack-style: ModuleAutoPanel / _autoMod with moduleKey:"<module>"
-    # auto-loads tiers from /run_all/tiers — every probe is exposed,
-    # no per-scanner PHASES entry needed. Treat as full L7 coverage.
+    # Pack-style: ModuleAutoPanel / _autoMod / ModuleWithTabs / <CustomPanel>
+    # with moduleKey:"<module>" — the universal wrapper that exposes every
+    # backend probe via /run_all/tiers at runtime. Treated as 100% L7
+    # coverage because the panel mounts every probe the orchestrator knows
+    # about, not a hand-coded subset.
+    # Checked FIRST: when both auto-panel + legacy hand-coded entries exist
+    # (e.g. mobile_static during the recon-to-auto migration), the panel is
+    # the canonical wiring.
     auto_panel = re.search(
-        rf'_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
+        rf'(_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']'
+        rf'|<ModuleAutoPanel\b[^>]*?moduleKey\s*=\s*["\']{re.escape(module)}["\']'
+        rf'|<ModuleWithTabs\b[^>]*?moduleKey\s*=\s*["\']{re.escape(module)}["\'])',
         src, re.S,
     )
     if auto_panel:
-        return True   # sentinel: 100% L7 coverage via auto-panel
-    return set()
+        return True   # sentinel: 100% L7 coverage via panel wrapper
+
+    # Recon-style: {tool:"<name>", endpoint:"/api/<module>/..."}
+    pattern = rf'tool:["\']([\w_]+)["\'].*endpoint:["\']/api/{module}'
+    phases = set(re.findall(pattern, src))
+    return phases
 
 
 def check_ui_integration(module: str) -> dict[str, bool]:
@@ -293,13 +298,15 @@ def check_ui_integration(module: str) -> dict[str, bool]:
     #          one call to generateUniversalVLReport in App.js
     pdf_call_recon = f"generate{cap}Report("
     universal_call = "generateUniversalVLReport(" in src
-    auto_mod_wired = bool(re.search(
-        rf'_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
+    panel_wired = bool(re.search(
+        rf'(_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']'
+        rf'|<ModuleAutoPanel\b[^>]*?moduleKey\s*=\s*["\']{re.escape(module)}["\']'
+        rf'|<ModuleWithTabs\b[^>]*?moduleKey\s*=\s*["\']{re.escape(module)}["\'])',
         src, re.S,
     ))
     pdf_callsite = (
-        src.count(pdf_call_recon) >= 2          # legacy
-        or (universal_call and auto_mod_wired)   # modern ModuleAutoPanel
+        src.count(pdf_call_recon) >= 2          # legacy: per-module PDF fn
+        or (universal_call and panel_wired)      # universal generator + panel
     )
 
     # 2. Frontend wiring — accept EITHER <MODULE>_PHASES array (Recon-style)
@@ -309,11 +316,9 @@ def check_ui_integration(module: str) -> dict[str, bool]:
     phases_consumed = (
         src.count(phases_name) >= 2
         or bool(re.search(
-            rf'_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
-            src, re.S,
-        ))
-        or bool(re.search(
-            rf'ModuleAutoPanel[^}}]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']',
+            rf'(_autoMod\s*\([^)]*?moduleKey\s*:\s*["\']{re.escape(module)}["\']'
+            rf'|<ModuleAutoPanel\b[^>]*?moduleKey\s*=\s*["\']{re.escape(module)}["\']'
+            rf'|<ModuleWithTabs\b[^>]*?moduleKey\s*=\s*["\']{re.escape(module)}["\'])',
             src, re.S,
         ))
     )
@@ -323,7 +328,7 @@ def check_ui_integration(module: str) -> dict[str, bool]:
     #    so the literal /api/<module>/ string still appears in App.js, but it
     #    may be built via string concat — accept both literal and templated.
     endpoint_called = bool(re.search(
-        rf'(fetch\s*\([^)]*?/api/{re.escape(module)}/run_all'
+        rf'(fetch\s*\([^)]*?/api/{re.escape(module)}/(scan/)?run_all'
         rf'|`\$\{{apiUrl\}}/api/\$\{{moduleKey\}}/run_all`)',
         src,
     )) and module.lower() in src  # belt-and-suspenders: module name present
