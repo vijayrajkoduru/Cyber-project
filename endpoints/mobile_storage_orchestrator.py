@@ -33,11 +33,12 @@ router = APIRouter()
 # ─── Scanner registry ────────────────────────────────────────────
 MOBILE_STORAGE_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_db_and_prefs": [
-        ("sharedprefs_audit",        "/api/mobile_storage/sharedprefs_audit"),
-        ("sqlite_usage_audit",       "/api/mobile_storage/sqlite_usage_audit"),
-        ("sqlcipher_presence_check", "/api/mobile_storage/sqlcipher_presence_check"),
-        ("ios_plist_storage_audit",  "/api/mobile_storage/ios_plist_storage_audit"),
-        ("realm_coredata_audit",     "/api/mobile_storage/realm_coredata_audit"),
+        ("sharedprefs_audit",            "/api/mobile_storage/sharedprefs_audit"),
+        ("sqlite_usage_audit",           "/api/mobile_storage/sqlite_usage_audit"),
+        ("sqlcipher_presence_check",     "/api/mobile_storage/sqlcipher_presence_check"),
+        ("ios_plist_storage_audit",      "/api/mobile_storage/ios_plist_storage_audit"),
+        ("realm_coredata_audit",         "/api/mobile_storage/realm_coredata_audit"),
+        ("native_resource_secret_audit", "/api/mobile_storage/native_resource_secret_audit"),
     ],
     "tier2_cache_and_logs": [
         ("flag_secure_audit",                "/api/mobile_storage/flag_secure_audit"),
@@ -48,14 +49,17 @@ MOBILE_STORAGE_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("temp_file_leak_audit",             "/api/mobile_storage/temp_file_leak_audit"),
     ],
     "tier3_perms_and_backup": [
-        ("clipboard_api_audit",         "/api/mobile_storage/clipboard_api_audit"),
-        ("external_storage_audit",      "/api/mobile_storage/external_storage_audit"),
-        ("backup_extraction_audit",     "/api/mobile_storage/backup_extraction_audit"),
-        ("keyboard_cache_audit",        "/api/mobile_storage/keyboard_cache_audit"),
-        ("autofill_form_audit",         "/api/mobile_storage/autofill_form_audit"),
-        ("keystore_keychain_audit",     "/api/mobile_storage/keystore_keychain_audit"),
-        ("notification_preview_audit",  "/api/mobile_storage/notification_preview_audit"),
-        ("removable_storage_audit",     "/api/mobile_storage/removable_storage_audit"),
+        ("clipboard_api_audit",                 "/api/mobile_storage/clipboard_api_audit"),
+        ("external_storage_audit",              "/api/mobile_storage/external_storage_audit"),
+        ("backup_extraction_audit",             "/api/mobile_storage/backup_extraction_audit"),
+        ("keyboard_cache_audit",                "/api/mobile_storage/keyboard_cache_audit"),
+        ("autofill_form_audit",                 "/api/mobile_storage/autofill_form_audit"),
+        ("keystore_keychain_audit",             "/api/mobile_storage/keystore_keychain_audit"),
+        ("notification_preview_audit",          "/api/mobile_storage/notification_preview_audit"),
+        ("removable_storage_audit",             "/api/mobile_storage/removable_storage_audit"),
+        ("content_provider_authority_audit",    "/api/mobile_storage/content_provider_authority_audit"),
+        ("universal_clipboard_audit",           "/api/mobile_storage/universal_clipboard_audit"),
+        ("icloud_backup_exclusion_audit",       "/api/mobile_storage/icloud_backup_exclusion_audit"),
     ],
 }
 

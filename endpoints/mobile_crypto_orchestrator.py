@@ -38,6 +38,8 @@ MOBILE_CRYPTO_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("iv_nonce_reuse_audit",            "/api/mobile_crypto/iv_nonce_reuse_audit"),
         ("key_derivation_audit",            "/api/mobile_crypto/key_derivation_audit"),
         ("password_hash_audit",             "/api/mobile_crypto/password_hash_audit"),
+        ("constant_time_compare_audit",     "/api/mobile_crypto/constant_time_compare_audit"),
+        ("aead_correctness_audit",          "/api/mobile_crypto/aead_correctness_audit"),
     ],
     "tier2_keys_and_tls": [
         ("hardcoded_keys_audit",            "/api/mobile_crypto/hardcoded_keys_audit"),
@@ -45,6 +47,8 @@ MOBILE_CRYPTO_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("cert_validation_bypass_audit",    "/api/mobile_crypto/cert_validation_bypass_audit"),
         ("rsa_key_size_audit",              "/api/mobile_crypto/rsa_key_size_audit"),
         ("kdf_salt_audit",                  "/api/mobile_crypto/kdf_salt_audit"),
+        ("ecdh_curve_audit",                "/api/mobile_crypto/ecdh_curve_audit"),
+        ("ios_cryptokit_audit",             "/api/mobile_crypto/ios_cryptokit_audit"),
     ],
 }
 

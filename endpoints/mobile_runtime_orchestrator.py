@@ -25,11 +25,14 @@ router = APIRouter()
 
 MOBILE_RUNTIME_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_anti_tamper": [
-        ("root_detection_audit",     "/api/mobile_runtime/root_detection_audit"),
-        ("anti_debug_audit",         "/api/mobile_runtime/anti_debug_audit"),
-        ("anti_frida_audit",         "/api/mobile_runtime/anti_frida_audit"),
-        ("integrity_check_audit",    "/api/mobile_runtime/integrity_check_audit"),
-        ("hook_detection_audit",     "/api/mobile_runtime/hook_detection_audit"),
+        ("root_detection_audit",         "/api/mobile_runtime/root_detection_audit"),
+        ("anti_debug_audit",             "/api/mobile_runtime/anti_debug_audit"),
+        ("anti_frida_audit",             "/api/mobile_runtime/anti_frida_audit"),
+        ("integrity_check_audit",        "/api/mobile_runtime/integrity_check_audit"),
+        ("hook_detection_audit",         "/api/mobile_runtime/hook_detection_audit"),
+        ("dyld_insert_library_audit",    "/api/mobile_runtime/dyld_insert_library_audit"),
+        ("ndk_stack_canary_audit",       "/api/mobile_runtime/ndk_stack_canary_audit"),
+        ("magisk_zygisk_audit",          "/api/mobile_runtime/magisk_zygisk_audit"),
     ],
     "tier2_attestation": [
         ("anti_emulator_audit",                "/api/mobile_runtime/anti_emulator_audit"),
@@ -38,6 +41,7 @@ MOBILE_RUNTIME_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("dynamic_code_loading_audit",         "/api/mobile_runtime/dynamic_code_loading_audit"),
         ("screen_overlay_protection_audit",    "/api/mobile_runtime/screen_overlay_protection_audit"),
         ("ptrace_block_audit",                 "/api/mobile_runtime/ptrace_block_audit"),
+        ("method_swizzling_audit",             "/api/mobile_runtime/method_swizzling_audit"),
     ],
 }
 

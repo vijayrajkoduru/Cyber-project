@@ -34,12 +34,15 @@ router = APIRouter()
 
 MOBILE_NETWORK_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_transport": [
-        ("ssl_pinning_detection",         "/api/mobile_network/ssl_pinning_detection"),
-        ("proxy_bypass_audit",            "/api/mobile_network/proxy_bypass_audit"),
-        ("http_method_audit",             "/api/mobile_network/http_method_audit"),
-        ("cleartext_traffic_audit",       "/api/mobile_network/cleartext_traffic_audit"),
-        ("hostname_verification_audit",   "/api/mobile_network/hostname_verification_audit"),
-        ("public_key_pinning_audit",      "/api/mobile_network/public_key_pinning_audit"),
+        ("ssl_pinning_detection",            "/api/mobile_network/ssl_pinning_detection"),
+        ("proxy_bypass_audit",               "/api/mobile_network/proxy_bypass_audit"),
+        ("http_method_audit",                "/api/mobile_network/http_method_audit"),
+        ("cleartext_traffic_audit",          "/api/mobile_network/cleartext_traffic_audit"),
+        ("hostname_verification_audit",      "/api/mobile_network/hostname_verification_audit"),
+        ("public_key_pinning_audit",         "/api/mobile_network/public_key_pinning_audit"),
+        ("webview_ssl_error_audit",          "/api/mobile_network/webview_ssl_error_audit"),
+        ("webview_mixed_content_audit",      "/api/mobile_network/webview_mixed_content_audit"),
+        ("mutual_tls_audit",                 "/api/mobile_network/mutual_tls_audit"),
     ],
     "tier2_endpoint_discovery": [
         ("endpoint_classifier",                "/api/mobile_network/endpoint_classifier"),
@@ -47,6 +50,7 @@ MOBILE_NETWORK_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("network_lib_inventory",              "/api/mobile_network/network_lib_inventory"),
         ("certificate_transparency_audit",     "/api/mobile_network/certificate_transparency_audit"),
         ("dns_over_https_audit",               "/api/mobile_network/dns_over_https_audit"),
+        ("websocket_origin_audit",             "/api/mobile_network/websocket_origin_audit"),
     ],
     "tier3_wireless_surface": [
         ("ble_attack_surface",      "/api/mobile_network/ble_attack_surface"),
