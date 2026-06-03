@@ -25,14 +25,19 @@ router = APIRouter()
 
 MOBILE_RUNTIME_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_anti_tamper": [
-        ("root_detection_audit", "/api/mobile_runtime/root_detection_audit"),
-        ("anti_debug_audit",     "/api/mobile_runtime/anti_debug_audit"),
-        ("anti_frida_audit",     "/api/mobile_runtime/anti_frida_audit"),
+        ("root_detection_audit",     "/api/mobile_runtime/root_detection_audit"),
+        ("anti_debug_audit",         "/api/mobile_runtime/anti_debug_audit"),
+        ("anti_frida_audit",         "/api/mobile_runtime/anti_frida_audit"),
+        ("integrity_check_audit",    "/api/mobile_runtime/integrity_check_audit"),
+        ("hook_detection_audit",     "/api/mobile_runtime/hook_detection_audit"),
     ],
     "tier2_attestation": [
-        ("anti_emulator_audit",            "/api/mobile_runtime/anti_emulator_audit"),
-        ("play_integrity_audit",           "/api/mobile_runtime/play_integrity_audit"),
-        ("ios_jailbreak_detection_audit",  "/api/mobile_runtime/ios_jailbreak_detection_audit"),
+        ("anti_emulator_audit",                "/api/mobile_runtime/anti_emulator_audit"),
+        ("play_integrity_audit",               "/api/mobile_runtime/play_integrity_audit"),
+        ("ios_jailbreak_detection_audit",      "/api/mobile_runtime/ios_jailbreak_detection_audit"),
+        ("dynamic_code_loading_audit",         "/api/mobile_runtime/dynamic_code_loading_audit"),
+        ("screen_overlay_protection_audit",    "/api/mobile_runtime/screen_overlay_protection_audit"),
+        ("ptrace_block_audit",                 "/api/mobile_runtime/ptrace_block_audit"),
     ],
 }
 
