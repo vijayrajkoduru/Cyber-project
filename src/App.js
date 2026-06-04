@@ -102,39 +102,19 @@ const MODULES = [
 
   // ── EXPLOITATION ─────────────────────────────────────────────
   { id:"exploit",        icon:"", label:"Exploitation",                    cat:"exploit", free:false, featured:true },
-  { id:"bof",            icon:"", label:"Buffer Overflow",                 cat:"exploit", free:false },
-  { id:"client_side",    icon:"", label:"Client-Side Attacks",             cat:"exploit", free:false },
-  { id:"system_exploit", icon:"", label:"System Exploitation",            cat:"exploit", free:false },
-  { id:"metasploit",     icon:"", label:"Metasploit Framework",            cat:"exploit", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
-  { id:"privesc",        icon:"", label:"Privilege Escalation",            cat:"post",    free:false },
-  { id:"post_exploit",   icon:"", label:"Post Exploitation",               cat:"post",    free:false },
   { id:"pivot",          icon:"", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
 
   // ── NETWORK & INFRA ──────────────────────────────────────────
   { id:"network",        icon:"", label:"Network Attacks",                 cat:"network", free:false },
   { id:"tunnel",         icon:"", label:"Port Redirection & Tunneling",    cat:"network", free:false },
-  { id:"password",       icon:"", label:"Password Attacks",                cat:"network", free:false },
-  { id:"auth_attacks",   icon:"", label:"Authentication Attacks",          cat:"network", free:false },
-  { id:"wireless",       icon:"", label:"Wireless Network Attacks",        cat:"network", free:false },
 
   // ── ADVANCED ─────────────────────────────────────────────────
-  { id:"ad",             icon:"", label:"Active Directory Attacks",        cat:"advanced",free:false },
-  { id:"av_evasion",     icon:"", label:"Antivirus / EDR Evasion",         cat:"advanced",free:false },
   { id:"cloud",          icon:"", label:"Cloud Security Testing",          cat:"advanced",free:false },
   { id:"apisec",         icon:"", label:"API Security Testing",            cat:"advanced",free:false },
-  { id:"ai_llm",         icon:"", label:"AI / LLM Security",               cat:"advanced",free:false },
   { id:"container_k8s",  icon:"", label:"Container / Kubernetes",          cat:"advanced",free:false },
-  { id:"supply_chain",   icon:"", label:"Supply Chain Security",           cat:"advanced",free:false },
-  { id:"hybrid_identity",icon:"", label:"Hybrid Identity (Entra ID)",      cat:"advanced",free:false },
-  { id:"sspm",           icon:"", label:"SaaS Security Posture (SSPM)",    cat:"advanced",free:false },
   { id:"iot_ot",         icon:"", label:"IoT / OT / ICS Security",         cat:"advanced",free:false },
-  { id:"firmware",       icon:"", label:"Firmware / Embedded",             cat:"advanced",free:false },
-
-  // ── ADVERSARY EMULATION ──────────────────────────────────────
-  { id:"phishing",       icon:"", label:"Phishing & Social Engineering",   cat:"advanced",free:false },
-  { id:"red_team",       icon:"", label:"Adversary Emulation / Red Team",  cat:"advanced",free:false },
 
   // ── MOBILE ───────────────────────────────────────────────────
   { id:"mobile_static",  icon:"", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
@@ -16978,125 +16958,6 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
 }
 
 
-// ═══════════════════════════════════════════════════════════════
-//  PASSWORD ATTACKS MODULE
-// ═══════════════════════════════════════════════════════════════
-function PasswordModule(props) {
-  const token = props.token;
-  const [target,setTarget]   = useState("");
-  const [service,setService] = useState("ssh");
-  const [userlist,setUlist]  = useState("/usr/share/wordlists/metasploit/unix_users.txt");
-  const [passlist,setPlist]  = useState("/usr/share/wordlists/rockyou.txt");
-  const [running,setRunning] = useState(false);
-  const [result,setResult]   = useState(null);
-  const [lines,setLines]     = useState(["Ready — configure target and click Start"]);
-  const add = l => setLines(p=>[...p,l]);
-
-  const dlPDF = () => generateModuleReport({
-    moduleName: "Password Attack Results",
-    tool: "hydra",
-    toolLabel: "Hydra — Brute Force",
-    target: target+(service?" ("+service+")":""),
-    findings: [],
-    cracked: result ? result.cracked||[] : [],
-    date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
-    companyName:"VulnusLab", reporterName:"Security Analyst",
-    reporterRole:"Penetration Tester", template:"red",
-  });
-
-  const run = async() => {
-    if(!target.trim()) return;
-    setRunning(true); setResult(null);
-    setLines([`[*] Starting Hydra brute force on ${target} (${service})...`]);
-    add("[!] WARNING: Only use on systems you own or have permission to test");
-    try {
-      const data = await api("/api/scan/hydra","POST",{target,scan_type:"full",options:{service,userlist,passlist}},token);
-      setResult(data);
-      if(data.cracked && data.cracked.length>0){
-        add(`[] CRACKED! Found ${data.cracked.length} credential(s)!`);
-        data.cracked.forEach(c=>add(`[] Login: ${c.username} | Password: ${c.password}`));
-      } else {
-        add("[*] No credentials cracked with provided wordlists");
-      }
-    } catch(e){ add(`[] Error: ${e.message}`); }
-    setRunning(false);
-  };
-
-  const services = ["ssh","ftp","http-get","http-post-form","mysql","rdp","smtp","telnet","vnc","pop3","imap"];
-
-  return (
-    <div className="fade">
-      {/* TOOL-REFRESH-V2 — top-level render, before tools */}
-      <ToolRefreshButton module="password" token={props.token} />
-
-
-
-      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:16}}>
-        <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>Password Attacks — Hydra</h2>
-        <p style={{fontSize:12,color:"#64748b",marginBottom:10}}>Brute force login credentials — authorized use only</p>
-        <TestTargets onSelect={setTarget} targets={[
-          {icon:"",label:"Kali VM SSH",               value:"192.168.56.102",            desc:"SSH on your local Kali VM (service: SSH)"},
-          {icon:"",label:"DVWA HTTP Form",             value:"192.168.56.102",            desc:"Use service: http-post-form for DVWA login"},
-          {icon:"",label:"Metasploitable2 SSH",        value:"192.168.56.101",            desc:"Classic vulnerable VM — default creds: msfadmin"},
-          {icon:"",label:"Metasploitable2 FTP",        value:"192.168.56.101",            desc:"FTP with anonymous login enabled"},
-          {icon:"",label:"Metasploitable2 MySQL",     value:"192.168.56.101",            desc:"MySQL with weak root password"},
-        ]}/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-          <div>
-            <label style={{fontSize:10,color:"#475569",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Target IP/Host</label>
-            <input value={target} onChange={e=>setTarget(e.target.value)}
-              placeholder="192.168.1.1 or target.com"
-              style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 12px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:10,color:"#475569",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Service</label>
-            <select value={service} onChange={e=>setService(e.target.value)}
-              style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 12px",color:"#e2e8f0",fontSize:13,outline:"none"}}>
-              {services.map(s=><option key={s} value={s}>{s.toUpperCase()}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{fontSize:10,color:"#475569",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Username List</label>
-            <input value={userlist} onChange={e=>setUlist(e.target.value)}
-              style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 12px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:10,color:"#475569",fontWeight:600,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Password List</label>
-            <input value={passlist} onChange={e=>setPlist(e.target.value)}
-              style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 12px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-          </div>
-        </div>
-        <div style={{background:"#1c1000",border:"1px solid #78350f",borderRadius:6,padding:"8px 12px",marginBottom:12,fontSize:11,color:"#d97706"}}>
-          WARNING: Only use on systems you own or have written permission to test. Unauthorized use is illegal.
-        </div>
-        <button onClick={run} disabled={running||!target.trim()}
-          style={{background:running?"#1e293b":"linear-gradient(135deg,#7c3aed,#a855f7)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#475569":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
-          {running?"Attacking...":"Start Brute Force"}
-        </button>
-      </div>
-
-      <div style={{marginBottom:16}}><Terminal lines={lines} height={120}/></div>
-
-      {result && result.cracked && result.cracked.length>0 && (
-        <div style={{background:"#0f172a",border:"1px solid #dc2626",borderRadius:8,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",background:"#1c0a0a",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:13,fontWeight:600,color:"#ef4444"}}>Credentials Cracked!</span>
-            <button onClick={dlPDF}
-              style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              Report
-            </button>
-          </div>
-          {result.cracked.map((c,i)=>(
-            <div key={i} style={{padding:"12px 16px",borderBottom:"1px solid #0f172a",display:"flex",gap:16}}>
-              <div><span style={{fontSize:10,color:"#475569"}}>USERNAME</span><div style={{fontSize:13,color:"#ef4444",fontFamily:"monospace",fontWeight:700}}>{c.username}</div></div>
-              <div><span style={{fontSize:10,color:"#475569"}}>PASSWORD</span><div style={{fontSize:13,color:"#ef4444",fontFamily:"monospace",fontWeight:700}}>{c.password}</div></div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════
 //  NETWORK ATTACKS MODULE
@@ -20293,20 +20154,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 function _autoMod(props, args) {
   return <ModuleAutoPanel {...props} {...args}/>;
 }
-function AILLMModule(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",            emoji:"", color:"#8b5cf6", playbook:"23_ai_llm.md"}); }
 function ContainerK8sModule(p)   { return _autoMod(p, {moduleKey:"container_k8s",   moduleLabel:"Container / Kubernetes",       emoji:"", color:"#06b6d4", playbook:"24_container_k8s.md"}); }
-function SupplyChainModuleV2(p)  { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",        emoji:"", color:"#10b981", playbook:"25_supply_chain.md"}); }
-function HybridIdentityModule(p) { return _autoMod(p, {moduleKey:"hybrid_identity", moduleLabel:"Hybrid Identity (Entra ID)",   emoji:"", color:"#3b82f6", playbook:"28_hybrid_identity.md"}); }
-function SSPMModule(p)           { return _autoMod(p, {moduleKey:"sspm",            moduleLabel:"SaaS Security Posture (SSPM)", emoji:"", color:"#f59e0b", playbook:"29_sspm.md"}); }
 function IoTOTModule(p)          { return _autoMod(p, {moduleKey:"iot_ot",          moduleLabel:"IoT / OT / ICS Security",      emoji:"", color:"#ef4444", playbook:"30_iot_ot.md"}); }
-function FirmwareModule(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware / Embedded",          emoji:"", color:"#ec4899", playbook:"31_firmware.md"}); }
 
-// ── Legacy module overrides (JS hoisting: latest function declaration wins) ──
-// These 17 names are defined elsewhere with stub UIs wired to old short-form
-// endpoint paths. These wrappers below override them so all 26 modules render
-// via ModuleAutoPanel against the playbook-aligned tier-based backend.
-function PhishingModule(p)         { return _autoMod(p, {moduleKey:"phishing",        moduleLabel:"Phishing & Social Engineering",   emoji:"", color:"#ec4899", playbook:"26_phishing.md"}); }
-function RedTeamModule(p)          { return _autoMod(p, {moduleKey:"red_team",        moduleLabel:"Adversary Emulation / Red Team",  emoji:"", color:"#dc2626", playbook:"27_red_team.md"}); }
+// ── Per-module ModuleAutoPanel wrappers ──
 function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"", color:"#06b6d4", playbook:"15_tunnel.md"}); }
 function PivotModule(p)            { return _autoMod(p, {moduleKey:"pivot",           moduleLabel:"Pivoting & Lateral Movement",     emoji:"", color:"#0ea5e9", playbook:"14_pivot.md"}); }
 function OsintModuleV2(p)          { return _autoMod(p, {moduleKey:"osint",           moduleLabel:"Advanced OSINT & Threat Intel",   emoji:"", color:"#8b5cf6", playbook:"08_osint.md"}); }
@@ -20320,20 +20171,10 @@ function MobileWebviewModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_webvi
 function MobilePrivacyModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_privacy",  moduleLabel:"Privacy (MASVS-PRIVACY)",         emoji:"", color:"#db2777", playbook:"05_mobile.md#13"}); }
 function MobilePaymentModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_payment",  moduleLabel:"Payment / IAP",                   emoji:"", color:"#16a34a", playbook:"05_mobile.md#14"}); }
 function MobileAimlModuleV2(p)     { return _autoMod(p, {moduleKey:"mobile_aiml",     moduleLabel:"AI/ML in App",                    emoji:"", color:"#ea580c", playbook:"05_mobile.md#15"}); }
-function AVEvasionModule(p)        { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"Antivirus / EDR Evasion",         emoji:"", color:"#7c3aed", playbook:"20_av_evasion.md"}); }
-function PostExploitModule(p)      { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post Exploitation",               emoji:"", color:"#9333ea", playbook:"13_post_exploit.md"}); }
-function AuthAttacksModule(p)      { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",          emoji:"", color:"#f59e0b", playbook:"17_auth_attacks.md"}); }
 function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ef4444", playbook:"06_exploit.md"}); }
-function BufferOverflowModule(p)   { return _autoMod(p, {moduleKey:"bof",             moduleLabel:"Buffer Overflow",                  emoji:"", color:"#f97316", playbook:"07_bof.md"}); }
-function ClientSideModule(p)       { return _autoMod(p, {moduleKey:"client_side",     moduleLabel:"Client-Side Attacks",              emoji:"", color:"#f43f5e", playbook:"09_client_side.md"}); }
-function SystemExploitModule(p)    { return _autoMod(p, {moduleKey:"system_exploit",  moduleLabel:"System Exploitation",              emoji:"", color:"#ef4444", playbook:"10_system_exploit.md"}); }
-function PrivescModule(p)          { return _autoMod(p, {moduleKey:"privesc",         moduleLabel:"Privilege Escalation",             emoji:"", color:"#a855f7", playbook:"12_privesc.md"}); }
 function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b82f6", playbook:"16_network.md"}); }
-function WirelessModule(p)         { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Network Attacks",         emoji:"", color:"#06b6d4", playbook:"18_wireless.md"}); }
-function ActiveDirectoryModule(p)  { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",         emoji:"", color:"#3b82f6", playbook:"19_ad.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
 function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"", color:"#10b981", playbook:"22_apisec.md"}); }
-function MetasploitAutoModule(p)   { return _autoMod(p, {moduleKey:"metasploit",      moduleLabel:"Metasploit Framework",             emoji:"", color:"#a855f7", playbook:"11_metasploit.md"}); }
 
 // ═══════════════════════════════════════════════════════════════
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
@@ -20345,71 +20186,6 @@ function MetasploitAutoModule(p)   { return _autoMod(p, {moduleKey:"metasploit",
 //  Backend live at /api/red_team/* (88 endpoints). UI wiring TBD.
 // ═══════════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════
-//  METASPLOIT MODULE
-// ═══════════════════════════════════════════════════════════════
-function MetasploitModule(props) {
-  const [search,setSearch] = useState("");
-
-  const commonModules = [
-    {name:"exploit/multi/handler",         type:"Exploit",  desc:"Generic payload handler for reverse shells"},
-    {name:"auxiliary/scanner/portscan/tcp", type:"Scanner",  desc:"TCP port scanner"},
-    {name:"auxiliary/scanner/smb/smb_ms17_010",type:"Scanner",desc:"EternalBlue vulnerability check (MS17-010)"},
-    {name:"exploit/windows/smb/ms17_010_eternalblue",type:"Exploit",desc:"EternalBlue SMB exploit"},
-    {name:"auxiliary/scanner/http/http_version",type:"Scanner",desc:"HTTP version scanner"},
-    {name:"post/multi/recon/local_exploit_suggester",type:"Post",desc:"Suggest local privilege escalation exploits"},
-    {name:"auxiliary/scanner/ssh/ssh_login",type:"Scanner",  desc:"SSH brute force login scanner"},
-    {name:"exploit/unix/ftp/vsftpd_234_backdoor",type:"Exploit",desc:"VSFTPD 2.3.4 backdoor exploit"},
-    {name:"auxiliary/scanner/mysql/mysql_login",type:"Scanner",desc:"MySQL brute force login"},
-    {name:"post/linux/gather/enum_system",  type:"Post",     desc:"Enumerate Linux system information"},
-    {name:"auxiliary/scanner/http/dir_scanner",type:"Scanner",desc:"HTTP directory scanner"},
-    {name:"exploit/windows/http/rejetto_hfs_exec",type:"Exploit",desc:"HFS HTTP File Server exploit"},
-  ];
-
-  const filtered = commonModules.filter(m=>
-    !search || m.name.toLowerCase().includes(search.toLowerCase()) || m.desc.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const typeColor = {Exploit:"#dc2626",Scanner:"#3b82f6",Post:"#f59e0b",Auxiliary:"#22c55e"};
-
-  return (
-    <div className="fade">
-      {/* TOOL-REFRESH-V2 — injected by tool_refresh wire script */}
-      <ToolRefreshButton module="metasploit" token={props.token} />
-
-
-      <div style={{background:"linear-gradient(135deg,#1c0a0a,#0f172a)",border:"1px solid #7f1d1d",borderRadius:8,padding:20,marginBottom:16}}>
-        <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9",marginBottom:4}}>Metasploit Framework</h2>
-        <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>Search and reference common MSF modules</p>
-        <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:6,padding:"10px 12px",marginBottom:12,fontSize:11,color:"#d97706"}}>
-          To run Metasploit: Open Kali terminal -> type <span style={{fontFamily:"monospace",color:"#f87171"}}>msfconsole</span> -> use modules listed below
-        </div>
-        <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search modules (e.g. smb, ssh, http)..."
-          style={{width:"100%",background:"#020617",border:"1px solid #7f1d1d",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
-      </div>
-
-      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-        <div style={{padding:"10px 16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between"}}>
-          <span style={{fontSize:12,fontWeight:600,color:"#f1f5f9"}}>Available Modules</span>
-          <span style={{fontSize:10,color:"#475569"}}>{filtered.length} modules</span>
-        </div>
-        {filtered.map((m,i)=>(
-          <div key={i} style={{padding:"12px 16px",borderBottom:"1px solid #0f172a",background:i%2===0?"#020617":"transparent"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-              <span style={{background:(typeColor[m.type]||"#64748b")+"20",color:typeColor[m.type]||"#64748b",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3,flexShrink:0}}>{m.type}</span>
-              <span style={{fontSize:12,color:"#60a5fa",fontFamily:"monospace",fontWeight:600}}>{m.name}</span>
-            </div>
-            <div style={{fontSize:11,color:"#64748b",marginBottom:6}}>{m.desc}</div>
-            <div style={{background:"#020617",borderRadius:4,padding:"6px 10px",fontFamily:"monospace",fontSize:10,color:"#22c55e"}}>
-              msf6 {'>'} use {m.name}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════
 //  SETTINGS MODULE
@@ -21349,26 +21125,8 @@ export default function App() {
           <ModuleWithTabs moduleKey="vuln" moduleLabel="Vulnerability Scanning" autoCount={196} manualTests={MANUAL_TESTS_VULN} color="#ef4444"
             autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
         </div>
-        <div style={{display: active==="password" ? "block" : "none"}}>
-          <PasswordModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="auth_attacks" ? "block" : "none"}}>
-          <AuthAttacksModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="phishing" ? "block" : "none"}}>
-          <PhishingModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="red_team" ? "block" : "none"}}>
-          <RedTeamModule token={token} apiUrl={API}/>
-        </div>
         <div style={{display: active==="network" ? "block" : "none"}}>
           <NetworkAttacksModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="system_exploit" ? "block" : "none"}}>
-          <SystemExploitModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="bof"   ? "block" : "none"}}>
-          <BufferOverflowModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="exploit"  ? "block" : "none"}}>
           <ExploitationModule token={token} apiUrl={API}/>
@@ -21376,23 +21134,8 @@ export default function App() {
         <div style={{display: active==="osint"    ? "block" : "none"}}>
           <OsintModuleV2 token={token} apiUrl={API}/>
         </div>
-        <div style={{display: active==="wireless" ? "block" : "none"}}>
-          <WirelessModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="ad"       ? "block" : "none"}}>
-          <ActiveDirectoryModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="privesc"  ? "block" : "none"}}>
-          <PrivescModule token={token} apiUrl={API}/>
-        </div>
         <div style={{display: active==="tunnel"   ? "block" : "none"}}>
           <TunnelModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="post_exploit" ? "block" : "none"}}>
-          <PostExploitModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="av_evasion"   ? "block" : "none"}}>
-          <AVEvasionModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="se"       ? "block" : "none"}}>
           <SocialEngineeringModule token={token} apiUrl={API}/>
@@ -21405,9 +21148,6 @@ export default function App() {
         </div>
         <div style={{display: active==="persist"  ? "block" : "none"}}>
           <PersistenceModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="client_side"   ? "block" : "none"}}>
-          <ClientSideModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="mobile"   ? "block" : "none"}}>
           <MobileModule token={token} apiUrl={API}/>
@@ -21455,26 +21195,11 @@ export default function App() {
         <div style={{display: active==="cloud"    ? "block" : "none"}}>
           <CloudModule token={token} apiUrl={API}/>
         </div>
-        <div style={{display: active==="ai_llm"   ? "block" : "none"}}>
-          <AILLMModule token={token} apiUrl={API}/>
-        </div>
         <div style={{display: active==="container_k8s" ? "block" : "none"}}>
           <ContainerK8sModule token={token} apiUrl={API}/>
         </div>
-        <div style={{display: active==="supply_chain" ? "block" : "none"}}>
-          <SupplyChainModuleV2 token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="hybrid_identity" ? "block" : "none"}}>
-          <HybridIdentityModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="sspm"     ? "block" : "none"}}>
-          <SSPMModule token={token} apiUrl={API}/>
-        </div>
         <div style={{display: active==="iot_ot"   ? "block" : "none"}}>
           <IoTOTModule token={token} apiUrl={API}/>
-        </div>
-        <div style={{display: active==="firmware" ? "block" : "none"}}>
-          <FirmwareModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="report"   ? "block" : "none"}}>
           <ReportModule token={token} apiUrl={API}/>
@@ -21503,7 +21228,6 @@ export default function App() {
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
-        {active === "metasploit" && <MetasploitAutoModule token={token} apiUrl={API}/>}
         {active === "guide"     && <GuideModule/>}
         {/* ComingSoon fallback: only render if `active` is NOT a real module id
             AND NOT one of the special internal view ids. Built dynamically from
