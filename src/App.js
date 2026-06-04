@@ -13273,27 +13273,43 @@ function generateUniversalVLReport(opts) {
   // When scan probes return INFO findings because they couldn't run (missing
   // library, missing required inputs, wrong target type), the C/H/M/L counts
   // are all zero by accident, and the score formula reports STRONG. That's
-  // misleading - the scan didn't actually test anything. Detect this state
-  // by checking how many INFO findings have evidence indicating non-execution.
+  // misleading - the scan didn't actually test anything.
+  //
+  // Detection logic (broadened after v1 missed Password Attacks PDF case):
+  //   _hasRealFindings: any CRITICAL/HIGH/MEDIUM/LOW exists?
+  //   _hasGenuinePositive: at least one POSITIVE finding (scan ran clean)?
+  //   _insufficientScan: NO real findings AND NO positive proof of clean scan
+  //                      AND >=2 INFO findings (probes returned skip-markers)
+  //
+  // POSITIVE findings are the proof of "scan ran successfully and found
+  // nothing bad". If only INFO findings exist, the probes didn't actually
+  // confirm anything - they just returned status messages about themselves.
   const _SKIP_PATTERNS = [
     /skipped/i, /required.*not.*supplied/i, /not.*provided/i, /missing.*option/i,
     /missing.*input/i, /library.*not.*installed/i, /not.*installed/i,
     /credentials.*required/i, /no.*credentials/i, /not.*reachable/i,
     /timeout/i, /file.*not.*found/i, /no.*target/i, /import.*failed/i,
-    /required.*field.*missing/i, /no.*scannable/i,
+    /required.*field.*missing/i, /no.*scannable/i, /missing\b/i,
+    /could not execute/i, /unable to/i, /no.*input/i, /not provided/i,
   ];
   const _infoFindings = _allFindings.filter(f =>
     String(f.severity || "INFO").toUpperCase() === "INFO");
+  const _positiveFindings = _allFindings.filter(f =>
+    String(f.severity || "INFO").toUpperCase() === "POSITIVE");
   const _skippedInfoCount = _infoFindings.filter(f => {
-    const txt = String(f.evidence || "") + " " + String(f.name || "");
+    const txt = String(f.evidence || "") + " " + String(f.name || "") + " " + String(f.detail || "");
     return _SKIP_PATTERNS.some(re => re.test(txt));
   }).length;
-  const _realInfoMeaningful = _infoFindings.length - _skippedInfoCount;
   const _hasRealFindings = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW > 0;
-  // Insufficient scan = no real findings AND most INFO findings are "scan-didn't-run" markers
+  const _hasGenuinePositive = _positiveFindings.length > 0;
   const _totalFindings = _allFindings.length;
-  const _skipRatio = _totalFindings > 0 ? _skippedInfoCount / _totalFindings : 0;
-  const _insufficientScan = !_hasRealFindings && _skippedInfoCount >= 2 && _skipRatio >= 0.6;
+  // Broadened detection: no real findings + no positive proof + 2+ INFO findings.
+  // This catches the case where ALL probes returned INFO (regardless of whether
+  // we can pattern-match the specific "skipped" phrasing in the evidence).
+  // _skippedInfoCount is used to populate the Required Inputs callout but is no
+  // longer a hard requirement for _insufficientScan to fire.
+  const _insufficientScan = !_hasRealFindings && !_hasGenuinePositive
+                              && _sevCount.INFO >= 2;
 
   // ── KEY RISK HEADLINE ──
   chk(28);
@@ -13330,19 +13346,30 @@ function generateUniversalVLReport(opts) {
   // ── REQUIRED INPUTS CALLOUT (only when insufficient scan) ──
   if (_insufficientScan) {
     chk(40);
-    // Collect the first 8 unique "missing X" evidence snippets
+    // Collect per-scanner info: try to extract "Missing X" from evidence;
+    // if not extractable, fall back to the finding name itself so the user
+    // at least sees WHICH probes need attention.
     const _missingInputs = [];
-    const _seenInputs = new Set();
+    const _seenScanners = new Set();
     _infoFindings.forEach(f => {
-      const txt = String(f.evidence || "");
-      const m = txt.match(/(?:Missing options?|requires options?|requires)[:\s]+([^.]+?)(?:\.|$)/i);
+      const toolKey = f._tool || f.tool || f.scanner || "?";
+      if (_seenScanners.has(toolKey)) return;
+      _seenScanners.add(toolKey);
+      const ev = String(f.evidence || "");
+      const nm = String(f.name || f.detail || "");
+      // Try to extract "Missing options: X" or "requires options: Y"
+      const m = ev.match(/(?:Missing options?|requires options?|requires|needs)[:\s]+([^.]+?)(?:\.|$)/i);
+      let missing;
       if (m && m[1]) {
-        const cleaned = m[1].trim().substring(0, 120);
-        if (!_seenInputs.has(cleaned)) {
-          _seenInputs.add(cleaned);
-          _missingInputs.push({tool: f.tool || f.scanner || "?", missing: cleaned});
-        }
+        missing = m[1].trim().substring(0, 100);
+      } else if (ev) {
+        // Fall back to the evidence string itself (first 100 chars)
+        missing = ev.substring(0, 100);
+      } else {
+        // Last resort: the finding name (skips the leading "Hydra SSH spray ")
+        missing = nm.substring(0, 100);
       }
+      _missingInputs.push({tool: toolKey.replace(/_/g, " "), missing});
     });
     if (_missingInputs.length > 0) {
       y = sHead("Required Inputs (provide on re-scan)", y);
