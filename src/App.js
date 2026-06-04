@@ -18844,7 +18844,7 @@ const ADVANCED_INPUT_PRESETS = {
   ],
   dockerfile_text: [
     {label:"Intentionally bad",
-     value:"FROM debian:bookworm\nRUN apt-get update && apt-get install -y curl openssh-server\nRUN curl https://get.docker.com | bash\nENV AWS_SECRET_KEY=AKIAIOSFODNN7EXAMPLEKEY1234567890ABCDEF\nCOPY . /app\nWORKDIR /app\nEXPOSE 22 80\nCMD [\"./run.sh\"]\n",
+     value:"FROM debian:bookworm\nRUN apt-get update && apt-get install -y curl openssh-server\nRUN curl https://get.docker.com | bash\nENV AWS_SECRET_KEY=<REPLACE-WITH-YOUR-AWS-KEY-PROBE-DEMO>\nCOPY . /app\nWORKDIR /app\nEXPOSE 22 80\nCMD [\"./run.sh\"]\n",
      desc:"Fires 9 of 11 Dockerfile probes — root user, curl|bash, secret env, unpinned apt, expose 22"},
     {label:"Hardened (negative test)",
      value:"FROM gcr.io/distroless/python3-debian12:nonroot\nUSER nonroot\nCOPY --chown=nonroot:nonroot app.py /app/\nWORKDIR /app\nHEALTHCHECK --interval=30s --timeout=3s CMD [\"python3\", \"-c\", \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\"]\nEXPOSE 8080\nCMD [\"app.py\"]\n",
