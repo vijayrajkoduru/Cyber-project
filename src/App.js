@@ -13636,7 +13636,17 @@ function generateUniversalVLReport(opts) {
     if (_sevCount.HIGH>0) _imp += `${_sevCount.HIGH} HIGH issue(s) require remediation within 7 days. `;
     // CWE / name-keyed impact lookup. First matching rule wins. Falls back
     // to the generic "address in priority order" closing line.
-    const _topFinding = (_top3 && _top3[0]) || _allFindings[0] || null;
+    // _top3 holds CRITICAL/HIGH/MEDIUM only. When all real findings are LOW/INFO,
+    // fall back to the highest-severity NON-POSITIVE finding ranked. Avoids
+    // picking a "Api Key In Url Leak PASS" POSITIVE row whose name contains "Leak"
+    // and then matching the disclosure template — wrong impact statement.
+    const _SEV_RANK_IMP = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+    const _rankedReal = _allFindings
+      .filter(f => String(f.severity||"INFO").toUpperCase() !== "POSITIVE")
+      .sort((a,b) =>
+        (_SEV_RANK_IMP[String(a.severity||"INFO").toUpperCase()] ?? 9) -
+        (_SEV_RANK_IMP[String(b.severity||"INFO").toUpperCase()] ?? 9));
+    const _topFinding = (_top3 && _top3[0]) || _rankedReal[0] || _allFindings[0] || null;
     const _topNm = String(_topFinding && (_topFinding.name||_topFinding.detail||"") || "").toLowerCase();
     const _topCwe = String(_topFinding && _topFinding.cwe || "").toUpperCase();
     const _impactLookup = [
