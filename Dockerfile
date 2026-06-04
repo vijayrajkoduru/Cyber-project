@@ -449,19 +449,26 @@ RUN apt-get update -q -o Acquire::Retries=3 \
  && which wpscan && wpscan --version | head -1 \
  || echo "PHASE2_WPSCAN_FAILED"
 
-# ── radare2 from bookworm-backports (not in main repos for Bookworm) ────
-RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
-        > /etc/apt/sources.list.d/backports.list \
- && apt-get update -q -o Acquire::Retries=3 \
- && ( apt-get install -y -q -t bookworm-backports --no-install-recommends radare2 \
-      || apt-get install -y -q --no-install-recommends radare2 ) \
- && which radare2 && radare2 -v | head -1 \
+# ── radare2 from upstream .deb release (Debian dropped from main repos) ──
+# bookworm-backports also lacks it; upstream radareorg ships .deb on every release.
+ARG RADARE2_VERSION=5.9.6
+RUN ( wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/radareorg/radare2/releases/download/${RADARE2_VERSION}/radare2_${RADARE2_VERSION}_amd64.deb" \
+        -O /tmp/radare2.deb \
+   && apt-get update -q \
+   && apt-get install -y --no-install-recommends /tmp/radare2.deb \
+   && rm -f /tmp/radare2.deb \
+   && which radare2 && radare2 -v | head -1 ) \
  || echo "PHASE2_RADARE2_FAILED"
 
-# ── enum4linux-ng (Python rewrite of enum4linux — original not in Debian) ──
-RUN pip install --no-cache-dir enum4linux-ng \
- && which enum4linux-ng \
- && enum4linux-ng --help | head -1 \
+# ── enum4linux-ng (NOT on PyPI — Python script from GitHub) ─────────────
+# Clone shallow + symlink the .py into /usr/local/bin so `which enum4linux-ng` works.
+RUN ( git clone --depth 1 https://github.com/cddmp/enum4linux-ng.git /opt/enum4linux-ng \
+   && pip install --no-cache-dir -r /opt/enum4linux-ng/requirements.txt \
+   && chmod +x /opt/enum4linux-ng/enum4linux-ng.py \
+   && ln -sf /opt/enum4linux-ng/enum4linux-ng.py /usr/local/bin/enum4linux-ng \
+   && /usr/local/bin/enum4linux-ng --help > /dev/null 2>&1 \
+   && echo "enum4linux-ng OK" ) \
  || echo "PHASE2_ENUM4LINUX_FAILED"
 
 # ── Git-cloned tool DBs (LinPEAS / WinPEAS / GTFOBins / LOLBAS / SecLists2) ──
