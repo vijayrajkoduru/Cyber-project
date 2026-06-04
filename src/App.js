@@ -103,6 +103,8 @@ const MODULES = [
   // ── EXPLOITATION ─────────────────────────────────────────────
   { id:"exploit",        icon:"", label:"Exploitation",                    cat:"exploit", free:false, featured:true },
   { id:"ad",             icon:"", label:"Active Directory Attacks",         cat:"exploit", free:false },
+  { id:"password",       icon:"", label:"Password Attacks",                 cat:"exploit", free:false },
+  { id:"ai_llm",         icon:"", label:"AI / LLM Security",                cat:"advanced", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
   { id:"pivot",          icon:"", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
@@ -110,12 +112,15 @@ const MODULES = [
   // ── NETWORK & INFRA ──────────────────────────────────────────
   { id:"network",        icon:"", label:"Network Attacks",                 cat:"network", free:false },
   { id:"tunnel",         icon:"", label:"Port Redirection & Tunneling",    cat:"network", free:false },
+  { id:"wireless",       icon:"", label:"Wireless Attacks",                cat:"network", free:false },
 
   // ── ADVANCED ─────────────────────────────────────────────────
   { id:"cloud",          icon:"", label:"Cloud Security Testing",          cat:"advanced",free:false },
   { id:"apisec",         icon:"", label:"API Security Testing",            cat:"advanced",free:false },
   { id:"container_k8s",  icon:"", label:"Container / Kubernetes",          cat:"advanced",free:false },
   { id:"iot_ot",         icon:"", label:"IoT / OT / ICS Security",         cat:"advanced",free:false },
+  { id:"supply_chain",   icon:"", label:"Supply Chain Security",           cat:"advanced",free:false },
+  { id:"firmware",       icon:"", label:"Firmware Analysis",               cat:"advanced",free:false },
 
   // ── MOBILE ───────────────────────────────────────────────────
   { id:"mobile_static",  icon:"", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
@@ -20184,6 +20189,11 @@ function MobilePrivacyModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_priva
 function MobilePaymentModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_payment",  moduleLabel:"Payment / IAP",                   emoji:"", color:"#16a34a", playbook:"05_mobile.md#14"}); }
 function MobileAimlModuleV2(p)     { return _autoMod(p, {moduleKey:"mobile_aiml",     moduleLabel:"AI/ML in App",                    emoji:"", color:"#ea580c", playbook:"05_mobile.md#15"}); }
 function AdModuleV2(p)             { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",        emoji:"", color:"#dc2626", playbook:"19_ad.md"}); }
+function PasswordModuleV2(p)       { return _autoMod(p, {moduleKey:"password",        moduleLabel:"Password Attacks",                emoji:"", color:"#f97316", playbook:"08_password.md"}); }
+function WirelessModuleV2(p)       { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Attacks",                emoji:"", color:"#22c55e", playbook:"18_wireless.md"}); }
+function SupplyChainModuleV2(p)    { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",            emoji:"", color:"#a855f7", playbook:"25_supply_chain.md"}); }
+function AiLlmModuleV2(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",                emoji:"", color:"#ec4899", playbook:"23_ai_llm.md"}); }
+function FirmwareModuleV2(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware Analysis",                emoji:"", color:"#0891b2", playbook:"31_firmware.md"}); }
 function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ef4444", playbook:"06_exploit.md"}); }
 function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b82f6", playbook:"16_network.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
@@ -21523,6 +21533,21 @@ export default function App() {
         </div>
         <div style={{display: active==="ad" ? "block" : "none"}}>
           <AdModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="password" ? "block" : "none"}}>
+          <PasswordModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="wireless" ? "block" : "none"}}>
+          <WirelessModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="supply_chain" ? "block" : "none"}}>
+          <SupplyChainModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="ai_llm" ? "block" : "none"}}>
+          <AiLlmModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="firmware" ? "block" : "none"}}>
+          <FirmwareModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
