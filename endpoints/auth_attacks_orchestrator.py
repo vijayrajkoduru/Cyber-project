@@ -38,6 +38,7 @@ AUTH_ATTACKS_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     ],
     "tier3_mfa": [
         ("mfa_bypass_test",        "/api/auth_attacks/mfa_bypass_test"),
+        ("okta_password_policy_audit", "/api/auth_attacks/okta_password_policy_audit"),
     ],
 }
 

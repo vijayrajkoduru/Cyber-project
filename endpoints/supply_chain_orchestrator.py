@@ -24,6 +24,7 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("trivy_image_scan",       "/api/supply_chain/trivy_image_scan"),
         ("grype_sbom_scan",        "/api/supply_chain/grype_sbom_scan"),
         ("osv_repo_audit",         "/api/supply_chain/osv_repo_audit"),
+        ("npm_audit_scanner",      "/api/supply_chain/npm_audit_scanner"),
     ],
     "tier2_secrets": [
         ("gitleaks_secrets_scan",  "/api/supply_chain/gitleaks_secrets_scan"),
