@@ -106,6 +106,11 @@ const MODULES = [
   { id:"password",       icon:"", label:"Password Attacks",                 cat:"exploit", free:false },
   { id:"auth_attacks",   icon:"", label:"Authentication Attacks",           cat:"exploit", free:false },
   { id:"red_team",       icon:"", label:"Red Team Simulation",              cat:"exploit", free:false },
+  { id:"system_exploit", icon:"", label:"System Exploitation (CVE Verify)", cat:"exploit", free:false },
+  { id:"metasploit",     icon:"", label:"Metasploit Framework (Lite)",      cat:"exploit", free:false },
+  { id:"bof",            icon:"", label:"Binary Exploitation (BOF)",        cat:"exploit", free:false },
+  { id:"av_evasion",     icon:"", label:"AV / EDR Evasion Tests",           cat:"exploit", free:false },
+  { id:"phishing",       icon:"", label:"Phishing & Email Posture",         cat:"exploit", free:false },
   { id:"ai_llm",         icon:"", label:"AI / LLM Security",                cat:"advanced", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
@@ -126,6 +131,7 @@ const MODULES = [
   { id:"supply_chain",   icon:"", label:"Supply Chain Security",           cat:"advanced",free:false },
   { id:"firmware",       icon:"", label:"Firmware Analysis",               cat:"advanced",free:false },
   { id:"hybrid_identity",icon:"", label:"Hybrid Identity (Entra+AD)",       cat:"advanced",free:false },
+  { id:"sspm",           icon:"", label:"SaaS Security Posture (SSPM)",     cat:"advanced",free:false },
   { id:"client_side",    icon:"", label:"Client-Side / Frontend",          cat:"scan",    free:false },
 
   // ── MOBILE ───────────────────────────────────────────────────
@@ -20206,6 +20212,12 @@ function AuthAttacksModuleV2(p)    { return _autoMod(p, {moduleKey:"auth_attacks
 function HybridIdentityModuleV2(p) { return _autoMod(p, {moduleKey:"hybrid_identity", moduleLabel:"Hybrid Identity (Entra+AD)",       emoji:"", color:"#7c3aed", playbook:"28_hybrid_identity.md"}); }
 function RedTeamModuleV2(p)        { return _autoMod(p, {moduleKey:"red_team",        moduleLabel:"Red Team Simulation",              emoji:"", color:"#b91c1c", playbook:"27_red_team.md"}); }
 function ClientSideModuleV2(p)     { return _autoMod(p, {moduleKey:"client_side",     moduleLabel:"Client-Side / Frontend",           emoji:"", color:"#0ea5e9", playbook:"09_client_side.md"}); }
+function AvEvasionModuleV2(p)      { return _autoMod(p, {moduleKey:"av_evasion",      moduleLabel:"AV / EDR Evasion Tests",           emoji:"", color:"#991b1b", playbook:"20_av_evasion.md"}); }
+function SspmModuleV2(p)           { return _autoMod(p, {moduleKey:"sspm",            moduleLabel:"SaaS Security Posture (SSPM)",     emoji:"", color:"#9333ea", playbook:"29_sspm.md"}); }
+function BofModuleV2(p)            { return _autoMod(p, {moduleKey:"bof",             moduleLabel:"Binary Exploitation (BOF)",        emoji:"", color:"#84cc16", playbook:"07_bof.md"}); }
+function SystemExploitModuleV2(p)  { return _autoMod(p, {moduleKey:"system_exploit",  moduleLabel:"System Exploitation (CVE Verify)", emoji:"", color:"#f43f5e", playbook:"10_system_exploit.md"}); }
+function MetasploitModuleV2(p)     { return _autoMod(p, {moduleKey:"metasploit",      moduleLabel:"Metasploit Framework (Lite)",      emoji:"", color:"#dc2626", playbook:"11_metasploit.md"}); }
+function PhishingModuleV2(p)       { return _autoMod(p, {moduleKey:"phishing",        moduleLabel:"Phishing & Email Posture",         emoji:"", color:"#f59e0b", playbook:"26_phishing.md"}); }
 function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ef4444", playbook:"06_exploit.md"}); }
 function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b82f6", playbook:"16_network.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
@@ -21578,6 +21590,24 @@ export default function App() {
         </div>
         <div style={{display: active==="client_side" ? "block" : "none"}}>
           <ClientSideModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="av_evasion" ? "block" : "none"}}>
+          <AvEvasionModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="sspm" ? "block" : "none"}}>
+          <SspmModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="bof" ? "block" : "none"}}>
+          <BofModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="system_exploit" ? "block" : "none"}}>
+          <SystemExploitModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="metasploit" ? "block" : "none"}}>
+          <MetasploitModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="phishing" ? "block" : "none"}}>
+          <PhishingModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
