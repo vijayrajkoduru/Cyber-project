@@ -392,3 +392,139 @@ RUN /usr/local/bin/trivy image --download-db-only 2>/dev/null \
 #               bandit truffleHog3 hashcat john hydra prowler tfsec
 #               schemathesis pip-audit). Total real-tool count: ~30 of 80.
 # ═══════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════
+# VL-FORGE Phase 2 — Bulk engine top-up for Path B (rebuild 18 modules +
+# expand 7 thin modules). Adds ~50 engines across pip / apt / git.
+#
+# Image size impact: ~2.8GB -> ~5GB (deferred Metasploit + Ghidra remain
+# external because they're 4GB+ each).
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Python engines (single pip layer for cache efficiency) ─────────────
+# Active Directory:    impacket, ldap3, bloodhound, certipy-ad
+# Network / IoT:       scapy, pymodbus, bacpypes, opcua, python-nmap
+# Identity / SSO:      msal, okta-sdk, python-saml, python3-saml
+# Binary / Exploit:    pwntools, capstone, ropgadget, unicorn, keystone
+# Firmware:            ubi_reader, jefferson, python-magic
+# AI / LLM testing:    openai, anthropic, llm-guard, garak
+# Cloud (extra):       (Pacu is a CLI, installed via separate layer)
+# Phishing helpers:    (GoPhish is a Go binary, separate layer)
+# OSINT helpers:       censys, shodan, virustotal-api
+# Reporting / SBOM:    cyclonedx-bom
+RUN pip install --no-cache-dir \
+        impacket \
+        ldap3 \
+        bloodhound \
+        certipy-ad \
+        netexec \
+        kerberoast \
+        scapy \
+        pymodbus \
+        bacpypes \
+        opcua \
+        python-nmap \
+        msal \
+        azure-identity \
+        okta-sdk-python \
+        python3-saml \
+        pwntools \
+        capstone \
+        ropgadget \
+        unicorn \
+        keystone-engine \
+        ubi_reader \
+        jefferson \
+        python-magic \
+        openai \
+        anthropic \
+        llm-guard \
+        garak \
+        censys \
+        shodan \
+        vt-py \
+        cyclonedx-bom \
+ || echo "WARNING: some Phase 2 pip engines failed (continues)"
+
+# ── APT packages (network + wireless + binary + cracking + cloud CLI) ──
+# Wireless (needs --privileged + USB passthrough at runtime to actually work):
+#                       aircrack-ng, bettercap, wifite, reaver, hcxtools
+# Network deepening:    gobuster, ffuf, wpscan, dnsrecon, whatweb
+# Binary / firmware:    binwalk, radare2, gdb, gdb-multiarch, qemu-user-static
+# Identity / Auth:      kerbrute (Go binary - via apt where available),
+#                       enum4linux-ng (already covered by enum4linux apt)
+# Password (already have hydra + john):    medusa, ncrack, patator
+# Bluetooth (BLE iot):  bluez, bluetooth
+# Apt cleanup at end keeps layer slim.
+RUN apt-get update -q -o Acquire::Retries=3 \
+ && apt-get install -y -q --no-install-recommends \
+        gobuster ffuf wpscan dnsrecon whatweb \
+        aircrack-ng bettercap reaver \
+        binwalk radare2 gdb gdb-multiarch qemu-user-static \
+        medusa ncrack patator \
+        enum4linux \
+        bluez \
+        nodejs npm \
+ && apt-get clean && rm -rf /var/lib/apt/lists/* \
+ || echo "WARNING: some Phase 2 apt engines failed (continues)"
+
+# ── Git-cloned tool DBs (LinPEAS / WinPEAS / GTFOBins / LOLBAS / SecLists2) ──
+# These are SCRIPT collections used for privesc + post-exploit lookup.
+# All cloned shallow + at fixed paths so probes can shutil.which / Path-ref them.
+RUN ( git clone --depth 1 https://github.com/carlospolop/PEASS-ng.git /opt/peass-ng \
+        || echo "PEASS-ng clone failed (non-fatal)" ) \
+ && ( git clone --depth 1 https://github.com/GTFOBins/GTFOBins.github.io.git /opt/gtfobins \
+        || echo "GTFOBins clone failed (non-fatal)" ) \
+ && ( git clone --depth 1 https://github.com/LOLBAS-Project/LOLBAS.git /opt/lolbas \
+        || echo "LOLBAS clone failed (non-fatal)" ) \
+ && ( git clone --depth 1 https://github.com/PowerShellMafia/PowerSploit.git /opt/powersploit \
+        || echo "PowerSploit clone failed (non-fatal)" )
+
+# ── ProjectDiscovery binaries (httpx, katana, dnsx) ─────────────────────
+# Used by recon + vuln expansion. All Go binaries, ~30-50 MB each.
+ARG HTTPX_VERSION=1.6.9
+ARG KATANA_VERSION=1.1.0
+ARG DNSX_VERSION=1.2.1
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/projectdiscovery/httpx/releases/download/v${HTTPX_VERSION}/httpx_${HTTPX_VERSION}_linux_amd64.zip" \
+        -O /tmp/httpx.zip \
+   && cd /tmp && apt-get update && apt-get install -y --no-install-recommends unzip \
+   && unzip -o httpx.zip httpx -d /usr/local/bin/ \
+   && rm -f /tmp/httpx.zip \
+   && /usr/local/bin/httpx -version ) \
+ || echo "WARNING: httpx install failed (non-fatal)"
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/projectdiscovery/katana/releases/download/v${KATANA_VERSION}/katana_${KATANA_VERSION}_linux_amd64.zip" \
+        -O /tmp/katana.zip \
+   && cd /tmp && unzip -o katana.zip katana -d /usr/local/bin/ \
+   && rm -f /tmp/katana.zip \
+   && /usr/local/bin/katana -version ) \
+ || echo "WARNING: katana install failed (non-fatal)"
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/projectdiscovery/dnsx/releases/download/v${DNSX_VERSION}/dnsx_${DNSX_VERSION}_linux_amd64.zip" \
+        -O /tmp/dnsx.zip \
+   && cd /tmp && unzip -o dnsx.zip dnsx -d /usr/local/bin/ \
+   && rm -f /tmp/dnsx.zip \
+   && /usr/local/bin/dnsx -version ) \
+ || echo "WARNING: dnsx install failed (non-fatal)"
+
+# ── osv-scanner (supply chain) ──────────────────────────────────────────
+ARG OSV_VERSION=1.8.5
+RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
+        "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64" \
+        -O /usr/local/bin/osv-scanner \
+   && chmod +x /usr/local/bin/osv-scanner \
+   && /usr/local/bin/osv-scanner --version ) \
+ || echo "WARNING: osv-scanner install failed (non-fatal)"
+
+# ═══════════════════════════════════════════════════════════════════════
+# DEFERRED (too heavy or hardware-dependent — install when module needs it)
+#   - Metasploit Framework  (~4 GB - apt install metasploit-framework + postgres)
+#   - Ghidra                (~1.5 GB - Java GUI, Ghidra Server only useful)
+#   - Sliver / Mythic       (red-team C2 — bundle when red_team module rebuilds)
+#   - GoPhish / Evilginx2   (need SMTP infra — bundle when phishing rebuilds)
+#   - BeEF                  (browser exploit framework — needs Ruby runtime)
+#   - Veil / Shellter       (AV evasion — needs Wine; defer)
+#   - hcxdumptool           (needs WiFi hardware — defer to self-host CLI)
+# Total Phase 2 image growth: ~2.2 GB (5 GB image now).
+# ═══════════════════════════════════════════════════════════════════════
