@@ -413,12 +413,13 @@ RUN set +e; \
         pwntools capstone ropgadget unicorn keystone-engine \
         ubi_reader jefferson python-magic \
         openai anthropic llm-guard garak \
-        censys shodan vt-py cyclonedx-bom ; do \
+        censys shodan vt-py cyclonedx-bom \
+        paramiko pywinrm playwright dnspython beautifulsoup4 PyJWT ; do \
         echo "=== pip install $pkg ===" ; \
         pip install --no-cache-dir "$pkg" || echo "PHASE2_PIP_FAILED: $pkg" ; \
     done ; \
     echo "=== CORE pip import sanity check (build fails if these miss) ===" ; \
-    python -c "import impacket, ldap3, scapy.all, pymodbus, openai, anthropic; print('CORE PHASE 2 PIP OK')"
+    python -c "import impacket, ldap3, scapy.all, pymodbus, openai, anthropic, paramiko, winrm, jwt; print('CORE PHASE 2 PIP OK')"
 
 # ── netexec (NetExec / nxc) - not on PyPI, install from GitHub ──
 # Provides the `nxc` binary used by AD module netexec_smb_spray probe.
