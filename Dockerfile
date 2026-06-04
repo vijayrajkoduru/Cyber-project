@@ -440,9 +440,29 @@ RUN set +e ; \
     apt-get clean ; rm -rf /var/lib/apt/lists/* ; \
     echo "=== Phase 2 apt done ==="
 
-# ── wpscan via Ruby gem (not in apt; needs ruby + ruby-dev installed above) ──
-RUN gem install wpscan --no-document \
- || echo "WARNING: wpscan gem install failed"
+# ── wpscan via Ruby gem (not in apt; needs ruby + ruby-dev + libcurl + libxml/xslt) ──
+# Gem install needs native build tools for nokogiri + typhoeus.
+RUN apt-get update -q -o Acquire::Retries=3 \
+ && apt-get install -y -q --no-install-recommends \
+        build-essential libcurl4-openssl-dev libxml2-dev libxslt-dev zlib1g-dev \
+ && gem install wpscan --no-document --conservative \
+ && which wpscan && wpscan --version | head -1 \
+ || echo "PHASE2_WPSCAN_FAILED"
+
+# ── radare2 from bookworm-backports (not in main repos for Bookworm) ────
+RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
+        > /etc/apt/sources.list.d/backports.list \
+ && apt-get update -q -o Acquire::Retries=3 \
+ && ( apt-get install -y -q -t bookworm-backports --no-install-recommends radare2 \
+      || apt-get install -y -q --no-install-recommends radare2 ) \
+ && which radare2 && radare2 -v | head -1 \
+ || echo "PHASE2_RADARE2_FAILED"
+
+# ── enum4linux-ng (Python rewrite of enum4linux — original not in Debian) ──
+RUN pip install --no-cache-dir enum4linux-ng \
+ && which enum4linux-ng \
+ && enum4linux-ng --help | head -1 \
+ || echo "PHASE2_ENUM4LINUX_FAILED"
 
 # ── Git-cloned tool DBs (LinPEAS / WinPEAS / GTFOBins / LOLBAS / SecLists2) ──
 # These are SCRIPT collections used for privesc + post-exploit lookup.
