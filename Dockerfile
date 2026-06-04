@@ -401,72 +401,48 @@ RUN /usr/local/bin/trivy image --download-db-only 2>/dev/null \
 # external because they're 4GB+ each).
 # ═══════════════════════════════════════════════════════════════════════
 
-# ── Python engines (single pip layer for cache efficiency) ─────────────
-# Active Directory:    impacket, ldap3, bloodhound, certipy-ad
-# Network / IoT:       scapy, pymodbus, bacpypes, opcua, python-nmap
-# Identity / SSO:      msal, okta-sdk, python-saml, python3-saml
-# Binary / Exploit:    pwntools, capstone, ropgadget, unicorn, keystone
-# Firmware:            ubi_reader, jefferson, python-magic
-# AI / LLM testing:    openai, anthropic, llm-guard, garak
-# Cloud (extra):       (Pacu is a CLI, installed via separate layer)
-# Phishing helpers:    (GoPhish is a Go binary, separate layer)
-# OSINT helpers:       censys, shodan, virustotal-api
-# Reporting / SBOM:    cyclonedx-bom
-RUN pip install --no-cache-dir \
-        impacket \
-        ldap3 \
-        bloodhound \
-        certipy-ad \
-        netexec \
-        kerberoast \
-        scapy \
-        pymodbus \
-        bacpypes \
-        opcua \
-        python-nmap \
-        msal \
-        azure-identity \
-        okta-sdk-python \
-        python3-saml \
-        pwntools \
-        capstone \
-        ropgadget \
-        unicorn \
-        keystone-engine \
-        ubi_reader \
-        jefferson \
-        python-magic \
-        openai \
-        anthropic \
-        llm-guard \
-        garak \
-        censys \
-        shodan \
-        vt-py \
-        cyclonedx-bom \
- || echo "WARNING: some Phase 2 pip engines failed (continues)"
+# ── Python engines (per-package loop so one bad pkg doesn't kill all) ──
+# IMPORTANT: a single `pip install A B C` with one bad pkg fails the whole
+# layer silently when wrapped in `|| echo WARNING`. Loop isolates failures.
+# CORE list at end must import-OK or the layer fails loudly.
+RUN set +e; \
+    for pkg in \
+        impacket ldap3 bloodhound-python certipy-ad netexec \
+        scapy pymodbus bacpypes3 asyncua python-nmap \
+        msal azure-identity okta python3-saml \
+        pwntools capstone ropgadget unicorn keystone-engine \
+        ubi_reader jefferson python-magic \
+        openai anthropic llm-guard garak \
+        censys shodan vt-py cyclonedx-bom ; do \
+        echo "=== pip install $pkg ===" ; \
+        pip install --no-cache-dir "$pkg" || echo "PHASE2_PIP_FAILED: $pkg" ; \
+    done ; \
+    echo "=== CORE pip import sanity check (build fails if these miss) ===" ; \
+    python -c "import impacket, ldap3, scapy.all, pymodbus, openai, anthropic; print('CORE PHASE 2 PIP OK')"
 
-# ── APT packages (network + wireless + binary + cracking + cloud CLI) ──
-# Wireless (needs --privileged + USB passthrough at runtime to actually work):
-#                       aircrack-ng, bettercap, wifite, reaver, hcxtools
-# Network deepening:    gobuster, ffuf, wpscan, dnsrecon, whatweb
-# Binary / firmware:    binwalk, radare2, gdb, gdb-multiarch, qemu-user-static
-# Identity / Auth:      kerbrute (Go binary - via apt where available),
-#                       enum4linux-ng (already covered by enum4linux apt)
-# Password (already have hydra + john):    medusa, ncrack, patator
-# Bluetooth (BLE iot):  bluez, bluetooth
-# Apt cleanup at end keeps layer slim.
-RUN apt-get update -q -o Acquire::Retries=3 \
- && apt-get install -y -q --no-install-recommends \
-        gobuster ffuf wpscan dnsrecon whatweb \
+# ── APT packages (per-package loop — wpscan is NOT in apt, it's a gem) ──
+# Same trap as pip: `apt-get install A B C` with one missing pkg kills layer.
+# Loop isolates failures + logs them. wpscan installed separately via gem.
+RUN set +e ; \
+    apt-get update -q -o Acquire::Retries=3 ; \
+    for pkg in \
+        gobuster ffuf dnsrecon whatweb \
         aircrack-ng bettercap reaver \
         binwalk radare2 gdb gdb-multiarch qemu-user-static \
         medusa ncrack patator \
         enum4linux \
         bluez \
         nodejs npm \
- && apt-get clean && rm -rf /var/lib/apt/lists/* \
- || echo "WARNING: some Phase 2 apt engines failed (continues)"
+        ruby ruby-dev unzip ; do \
+        echo "=== apt install $pkg ===" ; \
+        apt-get install -y -q --no-install-recommends "$pkg" || echo "PHASE2_APT_FAILED: $pkg" ; \
+    done ; \
+    apt-get clean ; rm -rf /var/lib/apt/lists/* ; \
+    echo "=== Phase 2 apt done ==="
+
+# ── wpscan via Ruby gem (not in apt; needs ruby + ruby-dev installed above) ──
+RUN gem install wpscan --no-document \
+ || echo "WARNING: wpscan gem install failed"
 
 # ── Git-cloned tool DBs (LinPEAS / WinPEAS / GTFOBins / LOLBAS / SecLists2) ──
 # These are SCRIPT collections used for privesc + post-exploit lookup.
@@ -482,31 +458,23 @@ RUN ( git clone --depth 1 https://github.com/carlospolop/PEASS-ng.git /opt/peass
 
 # ── ProjectDiscovery binaries (httpx, katana, dnsx) ─────────────────────
 # Used by recon + vuln expansion. All Go binaries, ~30-50 MB each.
-ARG HTTPX_VERSION=1.6.9
-ARG KATANA_VERSION=1.1.0
-ARG DNSX_VERSION=1.2.1
-RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
-        "https://github.com/projectdiscovery/httpx/releases/download/v${HTTPX_VERSION}/httpx_${HTTPX_VERSION}_linux_amd64.zip" \
-        -O /tmp/httpx.zip \
-   && cd /tmp && apt-get update && apt-get install -y --no-install-recommends unzip \
-   && unzip -o httpx.zip httpx -d /usr/local/bin/ \
-   && rm -f /tmp/httpx.zip \
-   && /usr/local/bin/httpx -version ) \
- || echo "WARNING: httpx install failed (non-fatal)"
-RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
-        "https://github.com/projectdiscovery/katana/releases/download/v${KATANA_VERSION}/katana_${KATANA_VERSION}_linux_amd64.zip" \
-        -O /tmp/katana.zip \
-   && cd /tmp && unzip -o katana.zip katana -d /usr/local/bin/ \
-   && rm -f /tmp/katana.zip \
-   && /usr/local/bin/katana -version ) \
- || echo "WARNING: katana install failed (non-fatal)"
-RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
-        "https://github.com/projectdiscovery/dnsx/releases/download/v${DNSX_VERSION}/dnsx_${DNSX_VERSION}_linux_amd64.zip" \
-        -O /tmp/dnsx.zip \
-   && cd /tmp && unzip -o dnsx.zip dnsx -d /usr/local/bin/ \
-   && rm -f /tmp/dnsx.zip \
-   && /usr/local/bin/dnsx -version ) \
- || echo "WARNING: dnsx install failed (non-fatal)"
+# Use GitHub /releases/latest API so we don't pin versions that 404.
+RUN set +e ; \
+    for repo_tool in "httpx:httpx" "katana:katana" "dnsx:dnsx" ; do \
+        repo="${repo_tool%:*}" ; tool="${repo_tool#*:}" ; \
+        echo "=== installing $tool from projectdiscovery/$repo ===" ; \
+        url=$(curl -sL "https://api.github.com/repos/projectdiscovery/${repo}/releases/latest" \
+              | grep '"browser_download_url".*linux_amd64.zip"' \
+              | head -1 | cut -d'"' -f4) ; \
+        if [ -z "$url" ] ; then echo "PHASE2_BIN_FAILED: $tool (no release URL)" ; continue ; fi ; \
+        wget --tries=3 --waitretry=10 --timeout=60 -q "$url" -O /tmp/${tool}.zip \
+            && unzip -o /tmp/${tool}.zip ${tool} -d /usr/local/bin/ \
+            && chmod +x /usr/local/bin/${tool} \
+            && rm -f /tmp/${tool}.zip \
+            && /usr/local/bin/${tool} -version 2>&1 | head -1 \
+            || echo "PHASE2_BIN_FAILED: $tool" ; \
+    done ; \
+    echo "=== ProjectDiscovery binaries done ==="
 
 # ── osv-scanner (supply chain) ──────────────────────────────────────────
 ARG OSV_VERSION=1.8.5
