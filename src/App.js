@@ -13269,26 +13269,91 @@ function generateUniversalVLReport(opts) {
   }
   y += 20;
 
+  // ── INSUFFICIENT-SCAN DETECTION ──
+  // When scan probes return INFO findings because they couldn't run (missing
+  // library, missing required inputs, wrong target type), the C/H/M/L counts
+  // are all zero by accident, and the score formula reports STRONG. That's
+  // misleading - the scan didn't actually test anything. Detect this state
+  // by checking how many INFO findings have evidence indicating non-execution.
+  const _SKIP_PATTERNS = [
+    /skipped/i, /required.*not.*supplied/i, /not.*provided/i, /missing.*option/i,
+    /missing.*input/i, /library.*not.*installed/i, /not.*installed/i,
+    /credentials.*required/i, /no.*credentials/i, /not.*reachable/i,
+    /timeout/i, /file.*not.*found/i, /no.*target/i, /import.*failed/i,
+    /required.*field.*missing/i, /no.*scannable/i,
+  ];
+  const _infoFindings = _allFindings.filter(f =>
+    String(f.severity || "INFO").toUpperCase() === "INFO");
+  const _skippedInfoCount = _infoFindings.filter(f => {
+    const txt = String(f.evidence || "") + " " + String(f.name || "");
+    return _SKIP_PATTERNS.some(re => re.test(txt));
+  }).length;
+  const _realInfoMeaningful = _infoFindings.length - _skippedInfoCount;
+  const _hasRealFindings = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW > 0;
+  // Insufficient scan = no real findings AND most INFO findings are "scan-didn't-run" markers
+  const _totalFindings = _allFindings.length;
+  const _skipRatio = _totalFindings > 0 ? _skippedInfoCount / _totalFindings : 0;
+  const _insufficientScan = !_hasRealFindings && _skippedInfoCount >= 2 && _skipRatio >= 0.6;
+
   // ── KEY RISK HEADLINE ──
   chk(28);
-  const _hlBg = _riskScore>=60?[254,242,242]:_riskScore>=20?[255,247,237]:[240,253,244];
-  const _hlTag = _riskScore>=60?"FIX THIS WEEK":_riskScore>=20?"REVIEW SOON":"STRONG";
-  const _hlTitle = _sevCount.CRITICAL>0
-    ? `${_sevCount.CRITICAL} CRITICAL ${moduleLabel.toLowerCase()} exposure(s) - patch within 24 hours`
-    : _sevCount.HIGH>0
-    ? `${_sevCount.HIGH} HIGH ${moduleLabel.toLowerCase()} exposure(s) - patch within 7 days`
-    : _sevCount.MEDIUM>0
-    ? `${_sevCount.MEDIUM} MEDIUM exposure(s) - hardening recommended`
-    : `No critical ${moduleLabel.toLowerCase()} exposures detected`;
+  let _hlBg, _hlTag, _hlTitle;
+  if (_insufficientScan) {
+    _hlBg = [255,251,235];  // amber tint
+    _hlTag = "INSUFFICIENT SCAN";
+    _hlTitle = `${_skippedInfoCount} of ${_totalFindings} probes could not execute - posture UNKNOWN`;
+  } else {
+    _hlBg = _riskScore>=60?[254,242,242]:_riskScore>=20?[255,247,237]:[240,253,244];
+    _hlTag = _riskScore>=60?"FIX THIS WEEK":_riskScore>=20?"REVIEW SOON":"STRONG";
+    _hlTitle = _sevCount.CRITICAL>0
+      ? `${_sevCount.CRITICAL} CRITICAL ${moduleLabel.toLowerCase()} exposure(s) - patch within 24 hours`
+      : _sevCount.HIGH>0
+      ? `${_sevCount.HIGH} HIGH ${moduleLabel.toLowerCase()} exposure(s) - patch within 7 days`
+      : _sevCount.MEDIUM>0
+      ? `${_sevCount.MEDIUM} MEDIUM exposure(s) - hardening recommended`
+      : `No critical ${moduleLabel.toLowerCase()} exposures detected`;
+  }
+  const _hlAccentColor = _insufficientScan ? [202,138,4] : _riskColor;
   fillR(margin, y, contentW, 24, _hlBg);
-  fillR(margin, y, 3, 24, _riskColor);
-  doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(..._riskColor);
+  fillR(margin, y, 3, 24, _hlAccentColor);
+  doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(..._hlAccentColor);
   doc.text(_hlTag, margin + 8, y + 6);
   doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
   doc.text(_ascii(_hlTitle), margin + 8, y + 13);
   doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-  doc.text("See Findings + Per-Tool sections for full breakdown.", margin + 8, y + 18);
+  doc.text(_insufficientScan
+    ? "Provide required inputs (see Per-Tool section) and re-scan for actionable results."
+    : "See Findings + Per-Tool sections for full breakdown.",
+    margin + 8, y + 18);
   y += 28;
+
+  // ── REQUIRED INPUTS CALLOUT (only when insufficient scan) ──
+  if (_insufficientScan) {
+    chk(40);
+    // Collect the first 8 unique "missing X" evidence snippets
+    const _missingInputs = [];
+    const _seenInputs = new Set();
+    _infoFindings.forEach(f => {
+      const txt = String(f.evidence || "");
+      const m = txt.match(/(?:Missing options?|requires options?|requires)[:\s]+([^.]+?)(?:\.|$)/i);
+      if (m && m[1]) {
+        const cleaned = m[1].trim().substring(0, 120);
+        if (!_seenInputs.has(cleaned)) {
+          _seenInputs.add(cleaned);
+          _missingInputs.push({tool: f.tool || f.scanner || "?", missing: cleaned});
+        }
+      }
+    });
+    if (_missingInputs.length > 0) {
+      y = sHead("Required Inputs (provide on re-scan)", y);
+      const _ilines = _missingInputs.slice(0,8).map(m =>
+        `  - ${(m.tool||"").substring(0,28).padEnd(28)} needs: ${m.missing}`);
+      fillR(margin, y, contentW, 6 + _ilines.length * 5, [255,251,235]);
+      doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+      _ilines.forEach((ln, i) => { doc.text(_ascii(ln), margin + 4, y + 5 + (i*5)); });
+      y += 8 + _ilines.length * 5;
+    }
+  }
 
   // ── RISK SCORE BAR ──
   chk(32);
@@ -13479,11 +13544,20 @@ function generateUniversalVLReport(opts) {
       .slice(0,3);
 
     chk(70); y = sHead("Executive Summary", y);
-    let _posture = "STRONG", _pCol = [16,185,129];
-    if (_sevCount.CRITICAL>0) { _posture = "CRITICAL ATTENTION"; _pCol = [220,38,38]; }
-    else if (_sevCount.HIGH>2) { _posture = "NEEDS REMEDIATION"; _pCol = [245,158,11]; }
-    else if (_sevCount.HIGH>0) { _posture = "REQUIRES REVIEW"; _pCol = [245,158,11]; }
-    else if (_sevCount.HIGH + _sevCount.MEDIUM > 5) { _posture = "REQUIRES REVIEW"; _pCol = [245,158,11]; }
+    let _posture, _pCol;
+    if (_insufficientScan) {
+      _posture = "INSUFFICIENT SCAN - POSTURE UNKNOWN"; _pCol = [202,138,4];
+    } else if (_sevCount.CRITICAL>0) {
+      _posture = "CRITICAL ATTENTION"; _pCol = [220,38,38];
+    } else if (_sevCount.HIGH>2) {
+      _posture = "NEEDS REMEDIATION"; _pCol = [245,158,11];
+    } else if (_sevCount.HIGH>0) {
+      _posture = "REQUIRES REVIEW"; _pCol = [245,158,11];
+    } else if (_sevCount.HIGH + _sevCount.MEDIUM > 5) {
+      _posture = "REQUIRES REVIEW"; _pCol = [245,158,11];
+    } else {
+      _posture = "STRONG"; _pCol = [16,185,129];
+    }
     fillR(margin, y, contentW, 22, [248,250,252]);
     fillR(margin, y, 4, 22, _pCol);
     txt("OVERALL SECURITY POSTURE", margin + 8, y + 8, 8, [100,116,139], true);
@@ -13498,7 +13572,11 @@ function generateUniversalVLReport(opts) {
         : "";
       const _totalReal = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW;
       let _narr;
-      if (_sevCount.CRITICAL > 0) {
+      if (_insufficientScan) {
+        _narr = `Scan invoked ${Object.keys(r).length} scanner(s) but ${_skippedInfoCount} of ${_totalFindings} probe(s) could not execute due to missing required inputs, libraries, or wrong target type. `
+              + `No CRITICAL/HIGH/MEDIUM/LOW finding was produced because the probes did not effectively test the target. `
+              + `Provide the inputs listed in the "Required Inputs" section and re-scan. Do NOT interpret this report as evidence of secure posture.`;
+      } else if (_sevCount.CRITICAL > 0) {
         _narr = `Scan surfaced ${_sevCount.CRITICAL} CRITICAL exposure(s) requiring 24-hour remediation. `
               + `Top concern: ${_topName}. Treat as P0 — schedule incident response review.`;
       } else if (_sevCount.HIGH > 0) {
@@ -13650,50 +13728,69 @@ function generateUniversalVLReport(opts) {
 
     // Business impact — tailored to the top finding's CWE / name so the
     // section is finding-relevant instead of a stock template line.
+    // CRITICAL: only render finding-specific impact text when a real
+    // CRITICAL/HIGH/MEDIUM finding actually exists. Otherwise we'd inject
+    // hallucinated "Transport gap" / "Injection surface" text into reports
+    // that have ZERO matching findings (PDF audit caught this bug).
     chk(35); y = sHead("Business Impact", y);
-    let _imp = `${moduleLabel} findings characterise the technical exposure surface visible to an attacker. `;
-    if (_sevCount.CRITICAL>0) _imp += `${_sevCount.CRITICAL} CRITICAL exposure(s) indicate immediate compromise potential. `;
-    if (_sevCount.HIGH>0) _imp += `${_sevCount.HIGH} HIGH issue(s) require remediation within 7 days. `;
-    // CWE / name-keyed impact lookup. First matching rule wins. Falls back
-    // to the generic "address in priority order" closing line.
-    // _top3 holds CRITICAL/HIGH/MEDIUM only. When all real findings are LOW/INFO,
-    // fall back to the highest-severity NON-POSITIVE finding ranked. Avoids
-    // picking a "Api Key In Url Leak PASS" POSITIVE row whose name contains "Leak"
-    // and then matching the disclosure template — wrong impact statement.
-    const _SEV_RANK_IMP = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
-    const _rankedReal = _allFindings
-      .filter(f => String(f.severity||"INFO").toUpperCase() !== "POSITIVE")
-      .sort((a,b) =>
-        (_SEV_RANK_IMP[String(a.severity||"INFO").toUpperCase()] ?? 9) -
-        (_SEV_RANK_IMP[String(b.severity||"INFO").toUpperCase()] ?? 9));
-    const _topFinding = (_top3 && _top3[0]) || _rankedReal[0] || _allFindings[0] || null;
-    const _topNm = String(_topFinding && (_topFinding.name||_topFinding.detail||"") || "").toLowerCase();
-    const _topCwe = String(_topFinding && _topFinding.cwe || "").toUpperCase();
-    const _impactLookup = [
-      [/cve-\d{4}-\d+|rapid reset|http\/?2|denial of service|\bdos\b/i,
-        "Unpatched component carrying a known CVE - exploitation can cause service disruption, data corruption, or remote code execution depending on the CVE class. Business impact: revenue loss during outage + reputational damage from public incident disclosure."],
-      [/sql.?injection|xss|cmd.?injection|rce|ssrf|xxe/i,
-        "Injection / code-execution surface exposes customer data + backend systems to attacker control. Business impact: data exfiltration, ransomware staging, regulatory exposure (GDPR/PCI Article 32)."],
-      [/auth|jwt|session|password|credential|hardcoded.+(secret|key)/i,
-        "Authentication / credential exposure enables account takeover and lateral movement. Business impact: privileged access compromise, fraud, customer trust loss."],
-      [/exposed|disclos|leak|bucket|s3|gcs|azure blob/i,
-        "Information disclosure / open storage surface leaks internal data to the public internet. Business impact: regulatory (GDPR/HIPAA) notification triggers, competitive intelligence loss, social-engineering ammunition."],
-      [/tls|ssl|cipher|certificate|hsts/i,
-        "Transport / certificate hardening gap weakens data-in-transit guarantees. Business impact: regulatory non-compliance (PCI 4.2.1), MITM exposure for customers on hostile networks."],
-      [/header|csp|cors|frame-options|clickjacking/i,
-        "Browser security header misconfiguration enables clickjacking, XSS amplification, or cross-origin abuse. Business impact: customer account-takeover via crafted phishing pages."],
-      [/(privileged|hostnetwork|hostpid|docker.sock|capability)/i,
-        "Container / runtime privilege escalation primitive present. Business impact: pod-to-host escape can collapse the entire cluster blast radius - one container compromise = full cluster."],
-    ];
-    let _impTail = null;
-    for (var _ir = 0; _ir < _impactLookup.length; _ir++) {
-      if (_impactLookup[_ir][0].test(_topNm) || _impactLookup[_ir][0].test(_topCwe)) { _impTail = _impactLookup[_ir][1]; break; }
-    }
-    if (_impTail) _imp += _impTail + " ";
-    if (_sevCount.CRITICAL===0 && _sevCount.HIGH===0 && _sevCount.MEDIUM<=2) {
-      _imp += "Overall surface area is well-managed - recommend continuous monitoring + quarterly re-scan.";
+    let _imp;
+    if (_insufficientScan) {
+      _imp = `${moduleLabel} scan was INSUFFICIENT - ${_skippedInfoCount} of ${_totalFindings} probes could not execute (missing inputs, missing libraries, or wrong target type). `
+           + `Business impact: posture cannot be assessed from this scan. `
+           + `Provide the required inputs listed in the "Required Inputs" section at the top of this report, then re-scan. `
+           + `Do NOT use this report as evidence of secure posture - it does not reflect actual testing.`;
+    } else if (!_hasRealFindings) {
+      // No real findings AND not insufficient (genuine clean scan)
+      _imp = `${moduleLabel} scan completed across ${Object.keys(r).length} scanner(s) with zero CRITICAL/HIGH/MEDIUM/LOW findings. `
+           + `Surface area examined is well-managed. Maintain continuous monitoring and quarterly re-scan cadence to catch drift.`;
     } else {
-      _imp += "Address findings in priority order using the Strategic Recommendations queue, then re-scan to confirm closure.";
+      // Real findings exist - safe to render finding-keyed impact text
+      _imp = `${moduleLabel} findings characterise the technical exposure surface visible to an attacker. `;
+      if (_sevCount.CRITICAL>0) _imp += `${_sevCount.CRITICAL} CRITICAL exposure(s) indicate immediate compromise potential. `;
+      if (_sevCount.HIGH>0) _imp += `${_sevCount.HIGH} HIGH issue(s) require remediation within 7 days. `;
+      // CWE / name-keyed impact lookup. First matching rule wins.
+      // _top3 holds CRITICAL/HIGH/MEDIUM only. When all real findings are LOW/INFO,
+      // fall back to the highest-severity NON-POSITIVE finding ranked.
+      const _SEV_RANK_IMP = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+      const _rankedReal = _allFindings
+        .filter(f => {
+          const sev = String(f.severity||"INFO").toUpperCase();
+          return sev !== "POSITIVE" && sev !== "INFO";  // EXCLUDE INFO from impact-template matching
+        })
+        .sort((a,b) =>
+          (_SEV_RANK_IMP[String(a.severity||"INFO").toUpperCase()] ?? 9) -
+          (_SEV_RANK_IMP[String(b.severity||"INFO").toUpperCase()] ?? 9));
+      const _topFinding = (_top3 && _top3[0]) || _rankedReal[0] || null;  // NO fallback to _allFindings[0]
+      const _topNm = String(_topFinding && (_topFinding.name||_topFinding.detail||"") || "").toLowerCase();
+      const _topCwe = String(_topFinding && _topFinding.cwe || "").toUpperCase();
+      const _impactLookup = [
+        [/cve-\d{4}-\d+|rapid reset|http\/?2|denial of service|\bdos\b/i,
+          "Unpatched component carrying a known CVE - exploitation can cause service disruption, data corruption, or remote code execution depending on the CVE class. Business impact: revenue loss during outage + reputational damage from public incident disclosure."],
+        [/sql.?injection|xss|cmd.?injection|rce|ssrf|xxe/i,
+          "Injection / code-execution surface exposes customer data + backend systems to attacker control. Business impact: data exfiltration, ransomware staging, regulatory exposure (GDPR/PCI Article 32)."],
+        [/auth|jwt|session|password|credential|hardcoded.+(secret|key)/i,
+          "Authentication / credential exposure enables account takeover and lateral movement. Business impact: privileged access compromise, fraud, customer trust loss."],
+        [/exposed|disclos|leak|bucket|s3|gcs|azure blob/i,
+          "Information disclosure / open storage surface leaks internal data to the public internet. Business impact: regulatory (GDPR/HIPAA) notification triggers, competitive intelligence loss, social-engineering ammunition."],
+        [/tls|ssl|cipher|certificate|hsts/i,
+          "Transport / certificate hardening gap weakens data-in-transit guarantees. Business impact: regulatory non-compliance (PCI 4.2.1), MITM exposure for customers on hostile networks."],
+        [/header|csp|cors|frame-options|clickjacking/i,
+          "Browser security header misconfiguration enables clickjacking, XSS amplification, or cross-origin abuse. Business impact: customer account-takeover via crafted phishing pages."],
+        [/(privileged|hostnetwork|hostpid|docker.sock|capability)/i,
+          "Container / runtime privilege escalation primitive present. Business impact: pod-to-host escape can collapse the entire cluster blast radius - one container compromise = full cluster."],
+      ];
+      let _impTail = null;
+      if (_topFinding) {
+        for (var _ir = 0; _ir < _impactLookup.length; _ir++) {
+          if (_impactLookup[_ir][0].test(_topNm) || _impactLookup[_ir][0].test(_topCwe)) { _impTail = _impactLookup[_ir][1]; break; }
+        }
+      }
+      if (_impTail) _imp += _impTail + " ";
+      if (_sevCount.CRITICAL===0 && _sevCount.HIGH===0 && _sevCount.MEDIUM<=2) {
+        _imp += "Overall surface area is well-managed - recommend continuous monitoring + quarterly re-scan.";
+      } else {
+        _imp += "Address findings in priority order using the Strategic Recommendations queue, then re-scan to confirm closure.";
+      }
     }
     const _lines = doc.splitTextToSize(_ascii(_imp), contentW - 8);
     const _ih = 4 + (_lines.length * 4.5);
@@ -14297,7 +14394,9 @@ function generateUniversalVLReport(opts) {
       );
 
     // Header guidance card
-    const _hdrTxt = _rankedF.length === 0
+    const _hdrTxt = _insufficientScan
+      ? `SCAN INSUFFICIENT - no recommendations can be generated. Re-scan after providing the inputs listed in the "Required Inputs" section.`
+      : _rankedF.length === 0
       ? `No actionable ${moduleLabel.toLowerCase()} exposures detected. Maintain quarterly re-scan + continuous monitoring.`
       : "PRIORITIZED REMEDIATION QUEUE (grouped by severity, then CVSS)";
     txt(_hdrTxt, margin, y + 5, 8.5, GRAY, true);
