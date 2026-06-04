@@ -102,6 +102,7 @@ const MODULES = [
 
   // ── EXPLOITATION ─────────────────────────────────────────────
   { id:"exploit",        icon:"", label:"Exploitation",                    cat:"exploit", free:false, featured:true },
+  { id:"ad",             icon:"", label:"Active Directory Attacks",         cat:"exploit", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
   { id:"pivot",          icon:"", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
@@ -20182,6 +20183,7 @@ function MobileWebviewModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_webvi
 function MobilePrivacyModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_privacy",  moduleLabel:"Privacy (MASVS-PRIVACY)",         emoji:"", color:"#db2777", playbook:"05_mobile.md#13"}); }
 function MobilePaymentModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_payment",  moduleLabel:"Payment / IAP",                   emoji:"", color:"#16a34a", playbook:"05_mobile.md#14"}); }
 function MobileAimlModuleV2(p)     { return _autoMod(p, {moduleKey:"mobile_aiml",     moduleLabel:"AI/ML in App",                    emoji:"", color:"#ea580c", playbook:"05_mobile.md#15"}); }
+function AdModuleV2(p)             { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",        emoji:"", color:"#dc2626", playbook:"19_ad.md"}); }
 function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ef4444", playbook:"06_exploit.md"}); }
 function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b82f6", playbook:"16_network.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
@@ -21518,6 +21520,9 @@ export default function App() {
         </div>
         <div style={{display: active==="mobile_aiml" ? "block" : "none"}}>
           <MobileAimlModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="ad" ? "block" : "none"}}>
+          <AdModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
