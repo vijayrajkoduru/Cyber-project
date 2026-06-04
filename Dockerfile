@@ -407,7 +407,7 @@ RUN /usr/local/bin/trivy image --download-db-only 2>/dev/null \
 # CORE list at end must import-OK or the layer fails loudly.
 RUN set +e; \
     for pkg in \
-        impacket ldap3 bloodhound-python certipy-ad netexec \
+        impacket ldap3 bloodhound certipy-ad netexec \
         scapy pymodbus bacpypes3 asyncua python-nmap \
         msal azure-identity okta python3-saml \
         pwntools capstone ropgadget unicorn keystone-engine \
