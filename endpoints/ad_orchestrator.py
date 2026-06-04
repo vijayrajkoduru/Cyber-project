@@ -23,6 +23,9 @@ AD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("dc_discovery",           "/api/ad/dc_discovery"),
         ("enum4linux_ng_audit",    "/api/ad/enum4linux_ng_audit"),
     ],
+    "tier2_cred_access": [
+        ("netexec_smb_spray",      "/api/ad/netexec_smb_spray"),
+    ],
     "tier6_adcs": [
         ("certipy_find",           "/api/ad/certipy_find"),
     ],

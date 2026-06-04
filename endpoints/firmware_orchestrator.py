@@ -25,10 +25,12 @@ FIRMWARE_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_extract": [
         ("binwalk_signature_scan",       "/api/firmware/binwalk_signature_scan"),
         ("jefferson_jffs2_extract",      "/api/firmware/jefferson_jffs2_extract"),
+        ("firmware_filetype_audit",      "/api/firmware/firmware_filetype_audit"),
     ],
     "tier2_analysis": [
         ("radare2_strings_audit",        "/api/firmware/radare2_strings_audit"),
         ("binary_entropy_audit",         "/api/firmware/binary_entropy_audit"),
+        ("firmware_emulation_audit",     "/api/firmware/firmware_emulation_audit"),
     ],
     "tier3_secrets": [
         ("hardcoded_credentials_search", "/api/firmware/hardcoded_credentials_search"),
