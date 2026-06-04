@@ -407,7 +407,7 @@ RUN /usr/local/bin/trivy image --download-db-only 2>/dev/null \
 # CORE list at end must import-OK or the layer fails loudly.
 RUN set +e; \
     for pkg in \
-        impacket ldap3 bloodhound certipy-ad netexec \
+        impacket ldap3 bloodhound certipy-ad \
         scapy pymodbus bacpypes3 asyncua python-nmap \
         msal azure-identity okta python3-saml \
         pwntools capstone ropgadget unicorn keystone-engine \
@@ -419,6 +419,12 @@ RUN set +e; \
     done ; \
     echo "=== CORE pip import sanity check (build fails if these miss) ===" ; \
     python -c "import impacket, ldap3, scapy.all, pymodbus, openai, anthropic; print('CORE PHASE 2 PIP OK')"
+
+# ── netexec (NetExec / nxc) - not on PyPI, install from GitHub ──
+# Provides the `nxc` binary used by AD module netexec_smb_spray probe.
+RUN pip install --no-cache-dir git+https://github.com/Pennyw0rth/NetExec.git \
+ && which nxc && nxc --version | head -1 \
+ || echo "PHASE2_NETEXEC_FAILED"
 
 # ── APT packages (per-package loop — wpscan is NOT in apt, it's a gem) ──
 # Same trap as pip: `apt-get install A B C` with one missing pkg kills layer.
