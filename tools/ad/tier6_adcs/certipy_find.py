@@ -20,7 +20,9 @@ import shutil
 import json
 import tempfile
 import os
+from typing import Optional
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._framework import ScanContext, run_scanner
 from tools._payloads.certipy_find_findings import CERTIPY_FIND_FINDING_RULES
@@ -28,6 +30,10 @@ from tools._payloads.certipy_find_findings import CERTIPY_FIND_FINDING_RULES
 router = APIRouter()
 CERTIPY_BIN = shutil.which("certipy") or shutil.which("certipy-ad")
 TIMEOUT = 90
+
+
+class CertipyFindRequest(ScanRequest):
+    options: Optional[dict] = None
 
 
 async def _certipy_authenticated(ctx, target, domain, username, password):
@@ -105,7 +111,7 @@ async def gather(ctx: ScanContext):
         ctx.source("certipy missing")
         return
 
-    opts = ctx.options or {}
+    opts = ctx.state.get("_options") or {}
     domain = opts.get("domain") or ""
     username = opts.get("username") or ""
     password = opts.get("password") or ""
@@ -155,9 +161,13 @@ INTEL_FIELDS = [("Auth mode", "certipy_auth_mode"),
 
 
 @router.post("/api/ad/certipy_find")
-async def ad_certipy_find(req: ScanRequest, _=Depends(verify_scan_quota)):
+async def ad_certipy_find(req: CertipyFindRequest, _=Depends(verify_scan_quota)):
+    options = req.options or {}
+    async def _gather_with_options(ctx: ScanContext):
+        ctx.state["_options"] = options
+        await gather(ctx)
     return await run_scanner(host=req.target, tool="certipy_find",
-        gather_func=gather, finding_rules=CERTIPY_FIND_FINDING_RULES,
+        gather_func=_gather_with_options, finding_rules=CERTIPY_FIND_FINDING_RULES,
         intel_fields=INTEL_FIELDS, flat_field_keys=[])
 
 
