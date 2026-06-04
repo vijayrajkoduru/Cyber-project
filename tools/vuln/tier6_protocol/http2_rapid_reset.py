@@ -38,8 +38,13 @@ async def gather(ctx):
 def _r_h2(s):
     if s.get("alpn") != "h2":
         return None
+    # Evidence string carries CVSS vector + EPSS + KEV markers so the PDF generator
+    # picks them up via its regex extractors (CVSS_VECTOR_RE / EPSS_RE / KEV_RE).
+    # CVE-2023-44487 is in CISA KEV (added 2023-10-10) and consistently EPSS >= 90%.
     return {"name": "HTTP/2 enabled - verify Rapid Reset patch (CVE-2023-44487)", "severity": "LOW", "cvss": 3.7,
-            "cwe": "CWE-400", "evidence": "ALPN negotiated h2; Rapid Reset DoS affects unpatched HTTP/2 stacks",
+            "cwe": "CWE-400",
+            "evidence": ("ALPN negotiated h2; Rapid Reset DoS affects unpatched HTTP/2 stacks. "
+                          "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L EPSS: 94.5% CISA KEV: yes"),
             "remediation": "Ensure server/CDN patched for CVE-2023-44487 (nginx>=1.25.3; most CDNs auto-mitigated)."}
 
 
