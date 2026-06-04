@@ -1,26 +1,29 @@
 {
-  "ai_llm": {
-    "score": 100.0
-  },
   "apisec": {
-    "score": 100.0
-  },
-  "auth_attacks": {
     "score": 100.0
   },
   "exploit": {
     "score": 100.0
   },
-  "hybrid_identity": {
+  "iot_ot": {
     "score": 100.0
   },
-  "iot_ot": {
+  "mobile_aiml": {
     "score": 100.0
   },
   "mobile_crypto": {
     "score": 100.0
   },
+  "mobile_ipc": {
+    "score": 100.0
+  },
   "mobile_network": {
+    "score": 100.0
+  },
+  "mobile_payment": {
+    "score": 100.0
+  },
+  "mobile_privacy": {
     "score": 100.0
   },
   "mobile_runtime": {
@@ -32,19 +35,13 @@
   "mobile_storage": {
     "score": 100.0
   },
+  "mobile_webview": {
+    "score": 100.0
+  },
   "network": {
     "score": 100.0
   },
-  "phishing": {
-    "score": 100.0
-  },
   "recon": {
-    "score": 100.0
-  },
-  "sspm": {
-    "score": 100.0
-  },
-  "supply_chain": {
     "score": 100.0
   },
   "vuln": {
@@ -62,46 +59,10 @@
   "cloud": {
     "score": 97.8
   },
-  "password": {
-    "score": 78.3
-  },
   "pivot": {
     "score": 78.3
   },
   "tunnel": {
     "score": 78.3
-  },
-  "ad": {
-    "score": 60.9
-  },
-  "av_evasion": {
-    "score": 60.9
-  },
-  "bof": {
-    "score": 60.9
-  },
-  "client_side": {
-    "score": 60.9
-  },
-  "firmware": {
-    "score": 60.9
-  },
-  "metasploit": {
-    "score": 60.9
-  },
-  "post_exploit": {
-    "score": 60.9
-  },
-  "privesc": {
-    "score": 60.9
-  },
-  "red_team": {
-    "score": 60.9
-  },
-  "system_exploit": {
-    "score": 60.9
-  },
-  "wireless": {
-    "score": 60.9
   }
 }
