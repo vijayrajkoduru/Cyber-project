@@ -104,10 +104,14 @@ const MODULES = [
   { id:"exploit",        icon:"", label:"Exploitation",                    cat:"exploit", free:false, featured:true },
   { id:"ad",             icon:"", label:"Active Directory Attacks",         cat:"exploit", free:false },
   { id:"password",       icon:"", label:"Password Attacks",                 cat:"exploit", free:false },
+  { id:"auth_attacks",   icon:"", label:"Authentication Attacks",           cat:"exploit", free:false },
+  { id:"red_team",       icon:"", label:"Red Team Simulation",              cat:"exploit", free:false },
   { id:"ai_llm",         icon:"", label:"AI / LLM Security",                cat:"advanced", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
   { id:"pivot",          icon:"", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
+  { id:"privesc",        icon:"", label:"Privilege Escalation",            cat:"post",    free:false },
+  { id:"post_exploit",   icon:"", label:"Post-Exploitation & Persistence", cat:"post",    free:false },
 
   // ── NETWORK & INFRA ──────────────────────────────────────────
   { id:"network",        icon:"", label:"Network Attacks",                 cat:"network", free:false },
@@ -121,6 +125,8 @@ const MODULES = [
   { id:"iot_ot",         icon:"", label:"IoT / OT / ICS Security",         cat:"advanced",free:false },
   { id:"supply_chain",   icon:"", label:"Supply Chain Security",           cat:"advanced",free:false },
   { id:"firmware",       icon:"", label:"Firmware Analysis",               cat:"advanced",free:false },
+  { id:"hybrid_identity",icon:"", label:"Hybrid Identity (Entra+AD)",       cat:"advanced",free:false },
+  { id:"client_side",    icon:"", label:"Client-Side / Frontend",          cat:"scan",    free:false },
 
   // ── MOBILE ───────────────────────────────────────────────────
   { id:"mobile_static",  icon:"", label:"App Binary Analysis (Static)",  cat:"mobile",  free:false },
@@ -20194,6 +20200,12 @@ function WirelessModuleV2(p)       { return _autoMod(p, {moduleKey:"wireless",  
 function SupplyChainModuleV2(p)    { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",            emoji:"", color:"#a855f7", playbook:"25_supply_chain.md"}); }
 function AiLlmModuleV2(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",                emoji:"", color:"#ec4899", playbook:"23_ai_llm.md"}); }
 function FirmwareModuleV2(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware Analysis",                emoji:"", color:"#0891b2", playbook:"31_firmware.md"}); }
+function PrivescModuleV2(p)        { return _autoMod(p, {moduleKey:"privesc",         moduleLabel:"Privilege Escalation",             emoji:"", color:"#eab308", playbook:"12_privesc.md"}); }
+function PostExploitModuleV2(p)    { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post-Exploitation & Persistence",  emoji:"", color:"#d97706", playbook:"13_post_exploit.md"}); }
+function AuthAttacksModuleV2(p)    { return _autoMod(p, {moduleKey:"auth_attacks",    moduleLabel:"Authentication Attacks",           emoji:"", color:"#e11d48", playbook:"17_auth_attacks.md"}); }
+function HybridIdentityModuleV2(p) { return _autoMod(p, {moduleKey:"hybrid_identity", moduleLabel:"Hybrid Identity (Entra+AD)",       emoji:"", color:"#7c3aed", playbook:"28_hybrid_identity.md"}); }
+function RedTeamModuleV2(p)        { return _autoMod(p, {moduleKey:"red_team",        moduleLabel:"Red Team Simulation",              emoji:"", color:"#b91c1c", playbook:"27_red_team.md"}); }
+function ClientSideModuleV2(p)     { return _autoMod(p, {moduleKey:"client_side",     moduleLabel:"Client-Side / Frontend",           emoji:"", color:"#0ea5e9", playbook:"09_client_side.md"}); }
 function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ef4444", playbook:"06_exploit.md"}); }
 function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b82f6", playbook:"16_network.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
@@ -21548,6 +21560,24 @@ export default function App() {
         </div>
         <div style={{display: active==="firmware" ? "block" : "none"}}>
           <FirmwareModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="privesc" ? "block" : "none"}}>
+          <PrivescModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="post_exploit" ? "block" : "none"}}>
+          <PostExploitModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="auth_attacks" ? "block" : "none"}}>
+          <AuthAttacksModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="hybrid_identity" ? "block" : "none"}}>
+          <HybridIdentityModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="red_team" ? "block" : "none"}}>
+          <RedTeamModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="client_side" ? "block" : "none"}}>
+          <ClientSideModuleV2 token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
