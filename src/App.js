@@ -135,6 +135,7 @@ const MODULES = [
 
   // ── TOOLS ────────────────────────────────────────────────────
   { id:"tools",     icon:"", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
+  { id:"apikeys",   icon:"", label:"API Keys & Credentials",            cat:"tools",   free:false, admin:true },
 ];
 
 const CSS = `
@@ -20947,6 +20948,257 @@ function BackupOperationsModule({token}) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+//  API KEYS & CREDENTIALS PANEL
+//  Lists every external API key the platform engines can use.
+//  Direct registration links + FREE/PAID badges + monthly cost.
+// ═══════════════════════════════════════════════════════════════
+function ApiKeysModule({ token }) {
+  const today = new Date().toLocaleDateString("en-IN", {
+    weekday: "long", day: "2-digit", month: "long", year: "numeric"
+  });
+
+  const APIS = [
+    // ─── FREE ─────────────────────────────────────────────────
+    { name: "NVD CVE API", free: true, cost: "$0",
+      desc: "Look up CVE details, CVSS scores, affected products. Used by every vuln scan.",
+      registerUrl: "https://nvd.nist.gov/developers/request-an-api-key",
+      envVar: "NVD_API_KEY", limit: "50 req / 30s (vs 5 without key)",
+      usedBy: ["Recon", "Vuln", "Webapp", "Container/K8s"] },
+    { name: "VirusTotal", free: true, cost: "$0",
+      desc: "Hash / URL / IP reputation lookups. Correlates findings with known-bad indicators.",
+      registerUrl: "https://www.virustotal.com/gui/sign-up",
+      envVar: "VT_API_KEY", limit: "4 req/min, 500/day, 15.5K/month",
+      usedBy: ["Vuln", "OSINT", "Container"] },
+    { name: "Censys", free: true, cost: "$0",
+      desc: "Internet-wide cert + host + asset search. Powers subdomain + exposure recon.",
+      registerUrl: "https://accounts.censys.io/register",
+      envVar: "CENSYS_API_ID + CENSYS_API_SECRET", limit: "250 queries/month (Community)",
+      usedBy: ["Recon", "OSINT"] },
+    { name: "WPScan API", free: true, cost: "$0",
+      desc: "WordPress plugin/theme/core CVE database. Required for real WP scans.",
+      registerUrl: "https://wpscan.com/register",
+      envVar: "WPVULNDB_API_TOKEN", limit: "25 req / day",
+      usedBy: ["Webapp", "Vuln"] },
+    { name: "SecurityTrails", free: true, cost: "$0",
+      desc: "Historical DNS + subdomain enumeration. Boosts amass/subfinder results.",
+      registerUrl: "https://securitytrails.com/app/auth/signup",
+      envVar: "SECURITYTRAILS_API_KEY", limit: "50 queries/month",
+      usedBy: ["Recon"] },
+    { name: "GitHub", free: true, cost: "$0",
+      desc: "Secret scanning + public repo enumeration. Needed for gitleaks at scale.",
+      registerUrl: "https://github.com/settings/tokens/new",
+      envVar: "GITHUB_TOKEN", limit: "5,000 req/hr (authenticated)",
+      usedBy: ["Supply Chain", "OSINT", "Vuln"] },
+    { name: "OSV.dev", free: true, cost: "$0",
+      desc: "Open Source Vulnerability database (Google). Used by osv-scanner.",
+      registerUrl: null,
+      envVar: null, limit: "Unlimited, no registration",
+      usedBy: ["Supply Chain", "Vuln"] },
+
+    // ─── PAID ─────────────────────────────────────────────────
+    { name: "Shodan", free: false, cost: "$69 / year ($6/mo)",
+      desc: "IoT device + exposed-service search. Powers IoT/OT module + recon expansion.",
+      registerUrl: "https://account.shodan.io/register",
+      envVar: "SHODAN_API_KEY", limit: "1M queries/month (Freelancer tier)",
+      usedBy: ["IoT/OT", "Recon", "OSINT"] },
+    { name: "OpenAI", free: false, cost: "~$10-30 / month",
+      desc: "GPT-4o for AI/LLM security testing module. Pay-as-you-go.",
+      registerUrl: "https://platform.openai.com/api-keys",
+      envVar: "OPENAI_API_KEY", limit: "$5 minimum deposit, usage-based",
+      usedBy: ["AI/LLM", "Mobile AI/ML"] },
+    { name: "Anthropic", free: false, cost: "~$10-30 / month",
+      desc: "Claude for AI/LLM security testing module. Pay-as-you-go.",
+      registerUrl: "https://console.anthropic.com/settings/keys",
+      envVar: "ANTHROPIC_API_KEY", limit: "$5 minimum deposit, usage-based",
+      usedBy: ["AI/LLM", "Mobile AI/ML"] },
+  ];
+
+  const freeAPIs = APIS.filter(a => a.free);
+  const paidAPIs = APIS.filter(a => !a.free);
+
+  const styles = {
+    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#e2e8f0" },
+    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1e293b" },
+    title: { fontSize: 28, fontWeight: 800, color: "#f1f5f9", marginBottom: 6 },
+    subtitle: { fontSize: 14, color: "#94a3b8" },
+    dateBadge: { display: "inline-block", marginTop: 8, padding: "4px 12px",
+      background: "#1e293b", borderRadius: 6, fontSize: 12, color: "#64748b",
+      fontFamily: "JetBrains Mono, monospace" },
+    summary: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16,
+      marginBottom: 28 },
+    summaryCard: { background: "#0a0f1e", border: "1px solid #1e293b",
+      borderRadius: 8, padding: 18 },
+    summaryLabel: { fontSize: 11, color: "#64748b", textTransform: "uppercase",
+      letterSpacing: 1.2, marginBottom: 6, fontWeight: 700 },
+    summaryValue: { fontSize: 22, fontWeight: 800, color: "#f1f5f9" },
+    summarySub: { fontSize: 11, color: "#64748b", marginTop: 4 },
+    sectionTitle: { fontSize: 13, fontWeight: 700, color: "#64748b",
+      textTransform: "uppercase", letterSpacing: 1.4, marginBottom: 14,
+      marginTop: 8, paddingLeft: 4 },
+    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
+      gap: 16, marginBottom: 32 },
+    card: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+      padding: 20, display: "flex", flexDirection: "column", gap: 12 },
+    cardHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+    cardName: { fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
+    badgeFree: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
+      background: "rgba(34,197,94,0.15)", color: "#22c55e", letterSpacing: 1,
+      border: "1px solid rgba(34,197,94,0.3)" },
+    badgePaid: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
+      background: "rgba(245,158,11,0.15)", color: "#f59e0b", letterSpacing: 1,
+      border: "1px solid rgba(245,158,11,0.3)" },
+    cost: { fontSize: 13, fontWeight: 600, color: "#cbd5e1" },
+    desc: { fontSize: 13, color: "#94a3b8", lineHeight: 1.55 },
+    metaRow: { display: "flex", flexDirection: "column", gap: 6, paddingTop: 8,
+      borderTop: "1px solid #1e293b" },
+    metaLine: { display: "flex", gap: 8, alignItems: "flex-start", fontSize: 11.5 },
+    metaLabel: { color: "#475569", minWidth: 65, fontWeight: 600 },
+    metaValue: { color: "#cbd5e1", fontFamily: "JetBrains Mono, monospace", flex: 1, wordBreak: "break-all" },
+    usedBy: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 2 },
+    modChip: { padding: "2px 7px", fontSize: 10, background: "#1e293b",
+      borderRadius: 4, color: "#94a3b8" },
+    btnRow: { display: "flex", gap: 10, marginTop: 12 },
+    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b82f6",
+      border: "none", borderRadius: 6, color: "#fff", fontSize: 13,
+      fontWeight: 600, cursor: "pointer", textAlign: "center",
+      textDecoration: "none", display: "inline-block" },
+    btnDisabled: { flex: 1, padding: "10px 14px", background: "#1e293b",
+      border: "none", borderRadius: 6, color: "#475569", fontSize: 13,
+      fontWeight: 600, cursor: "default", textAlign: "center" },
+  };
+
+  const totalMonthlyCostStartup = "~$25-70 / month";
+  const totalMonthlyCostScale = "~$300-600 / month";
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div style={styles.title}>API Keys & Credentials</div>
+        <div style={styles.subtitle}>
+          External API keys used by VulnusLab engines. Register once on the
+          platform side — every customer scan reuses the same keys.
+        </div>
+        <div style={styles.dateBadge}>{today}</div>
+      </div>
+
+      <div style={styles.summary}>
+        <div style={styles.summaryCard}>
+          <div style={styles.summaryLabel}>Free APIs</div>
+          <div style={styles.summaryValue}>{freeAPIs.length}</div>
+          <div style={styles.summarySub}>Start with all 7</div>
+        </div>
+        <div style={styles.summaryCard}>
+          <div style={styles.summaryLabel}>Paid APIs</div>
+          <div style={styles.summaryValue}>{paidAPIs.length}</div>
+          <div style={styles.summarySub}>Defer until first paying customer</div>
+        </div>
+        <div style={styles.summaryCard}>
+          <div style={styles.summaryLabel}>Startup Cost</div>
+          <div style={styles.summaryValue}>{totalMonthlyCostStartup}</div>
+          <div style={styles.summarySub}>Mostly OpenAI/Anthropic usage</div>
+        </div>
+        <div style={styles.summaryCard}>
+          <div style={styles.summaryLabel}>Scale Cost</div>
+          <div style={styles.summaryValue}>{totalMonthlyCostScale}</div>
+          <div style={styles.summarySub}>At 10+ paying customers</div>
+        </div>
+      </div>
+
+      <div style={styles.sectionTitle}>FREE — Register All First ({freeAPIs.length})</div>
+      <div style={styles.grid}>
+        {freeAPIs.map(a => (
+          <div key={a.name} style={styles.card}>
+            <div style={styles.cardHeader}>
+              <div style={styles.cardName}>{a.name}</div>
+              <span style={styles.badgeFree}>FREE</span>
+            </div>
+            <div style={styles.cost}>{a.cost}</div>
+            <div style={styles.desc}>{a.desc}</div>
+            <div style={styles.metaRow}>
+              {a.envVar && (
+                <div style={styles.metaLine}>
+                  <span style={styles.metaLabel}>ENV VAR</span>
+                  <span style={styles.metaValue}>{a.envVar}</span>
+                </div>
+              )}
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>LIMIT</span>
+                <span style={styles.metaValue}>{a.limit}</span>
+              </div>
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>USED BY</span>
+                <div style={styles.usedBy}>
+                  {a.usedBy.map(m => <span key={m} style={styles.modChip}>{m}</span>)}
+                </div>
+              </div>
+            </div>
+            <div style={styles.btnRow}>
+              {a.registerUrl ? (
+                <a href={a.registerUrl} target="_blank" rel="noopener noreferrer"
+                   style={styles.btnPrimary}>
+                  Get API Key &rarr;
+                </a>
+              ) : (
+                <div style={styles.btnDisabled}>No registration needed</div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={styles.sectionTitle}>PAID — Defer Until Revenue ({paidAPIs.length})</div>
+      <div style={styles.grid}>
+        {paidAPIs.map(a => (
+          <div key={a.name} style={styles.card}>
+            <div style={styles.cardHeader}>
+              <div style={styles.cardName}>{a.name}</div>
+              <span style={styles.badgePaid}>PAID</span>
+            </div>
+            <div style={styles.cost}>{a.cost}</div>
+            <div style={styles.desc}>{a.desc}</div>
+            <div style={styles.metaRow}>
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>ENV VAR</span>
+                <span style={styles.metaValue}>{a.envVar}</span>
+              </div>
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>LIMIT</span>
+                <span style={styles.metaValue}>{a.limit}</span>
+              </div>
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>USED BY</span>
+                <div style={styles.usedBy}>
+                  {a.usedBy.map(m => <span key={m} style={styles.modChip}>{m}</span>)}
+                </div>
+              </div>
+            </div>
+            <div style={styles.btnRow}>
+              <a href={a.registerUrl} target="_blank" rel="noopener noreferrer"
+                 style={styles.btnPrimary}>
+                Get API Key &rarr;
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{...styles.summaryCard, marginTop: 12, borderColor: "#3b82f6", background: "rgba(59,130,246,0.05)"}}>
+        <div style={{fontSize: 13, color: "#3b82f6", fontWeight: 700, marginBottom: 8, letterSpacing: 0.5}}>
+          HOW TO ADD A KEY ONCE YOU HAVE IT
+        </div>
+        <div style={{fontSize: 13, color: "#cbd5e1", lineHeight: 1.7}}>
+          On the VPS, edit <code style={{background: "#0a0f1e", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#22c55e"}}>~/Cyber-project/.env</code> and add the
+          line shown in the <strong style={{color:"#f1f5f9"}}>ENV VAR</strong> field above.
+          Then restart the backend: <code style={{background: "#0a0f1e", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#22c55e"}}>docker compose up -d --force-recreate backend</code>.
+          Engines pick up the new key automatically. Customer-supplied creds
+          (AWS, Azure, AD, K8s) go through a separate Credential Vault (coming next).
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [token,setToken]       = useState(() => localStorage.getItem("cyberToken") || null);
   const [role,setRole]         = useState(() => localStorage.getItem("cyberRole") || "");
@@ -21239,11 +21491,12 @@ export default function App() {
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
         {active === "guide"     && <GuideModule/>}
+        {active === "apikeys"   && <ApiKeysModule token={token}/>}
         {/* ComingSoon fallback: only render if `active` is NOT a real module id
             AND NOT one of the special internal view ids. Built dynamically from
             MODULES so new modules can never drift back into "under development". */}
         {!MODULES.map(m=>m.id).concat([
-            "dashboard","health","metasploit","guide","adminpanel","settings","history"
+            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys"
           ]).includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
