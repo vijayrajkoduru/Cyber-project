@@ -20959,63 +20959,76 @@ function ApiKeysModule({ token }) {
   });
 
   const APIS = [
-    // ─── FREE ─────────────────────────────────────────────────
-    { name: "NVD CVE API", free: true, cost: "$0",
+    // ─── TIER 1: TRULY FREE (unlimited, no quota) ─────────────
+    { name: "OSV.dev", tier: "free", cost: "$0",
+      desc: "Open Source Vulnerability database (Google). Used by osv-scanner.",
+      registerUrl: null,
+      envVar: null, limit: "Unlimited, no registration needed",
+      paidUpgrade: null,
+      usedBy: ["Supply Chain", "Vuln"] },
+    { name: "NVD CVE API", tier: "free", cost: "$0",
       desc: "Look up CVE details, CVSS scores, affected products. Used by every vuln scan.",
       registerUrl: "https://nvd.nist.gov/developers/request-an-api-key",
-      envVar: "NVD_API_KEY", limit: "50 req / 30s (vs 5 without key)",
+      envVar: "NVD_API_KEY", limit: "50 req / 30s with key (NIST.gov, no paid tier)",
+      paidUpgrade: null,
       usedBy: ["Recon", "Vuln", "Webapp", "Container/K8s"] },
-    { name: "VirusTotal", free: true, cost: "$0",
+
+    // ─── TIER 2: FREE TIER (capped — will need paid upgrade at scale) ───
+    { name: "VirusTotal", tier: "freetier", cost: "$0",
       desc: "Hash / URL / IP reputation lookups. Correlates findings with known-bad indicators.",
       registerUrl: "https://www.virustotal.com/gui/sign-up",
       envVar: "VT_API_KEY", limit: "4 req/min, 500/day, 15.5K/month",
+      paidUpgrade: "Premium API: $10K+/yr (enterprise pricing)",
       usedBy: ["Vuln", "OSINT", "Container"] },
-    { name: "Censys", free: true, cost: "$0",
+    { name: "Censys", tier: "freetier", cost: "$0",
       desc: "Internet-wide cert + host + asset search. Powers subdomain + exposure recon.",
       registerUrl: "https://accounts.censys.io/register",
-      envVar: "CENSYS_API_ID + CENSYS_API_SECRET", limit: "250 queries/month (Community)",
+      envVar: "CENSYS_API_ID + CENSYS_API_SECRET", limit: "250 queries / month (Community)",
+      paidUpgrade: "Starter $99/mo (10K queries) -> Pro $999/mo",
       usedBy: ["Recon", "OSINT"] },
-    { name: "WPScan API", free: true, cost: "$0",
+    { name: "WPScan API", tier: "freetier", cost: "$0",
       desc: "WordPress plugin/theme/core CVE database. Required for real WP scans.",
       registerUrl: "https://wpscan.com/register",
       envVar: "WPVULNDB_API_TOKEN", limit: "25 req / day",
+      paidUpgrade: "Starter €100/yr (250/day) -> Pro €440/yr (3K/day)",
       usedBy: ["Webapp", "Vuln"] },
-    { name: "SecurityTrails", free: true, cost: "$0",
+    { name: "SecurityTrails", tier: "freetier", cost: "$0",
       desc: "Historical DNS + subdomain enumeration. Boosts amass/subfinder results.",
       registerUrl: "https://securitytrails.com/app/auth/signup",
-      envVar: "SECURITYTRAILS_API_KEY", limit: "50 queries/month",
+      envVar: "SECURITYTRAILS_API_KEY", limit: "50 queries / month",
+      paidUpgrade: "Pro $50/mo (1K queries) -> Business $499/mo (50K)",
       usedBy: ["Recon"] },
-    { name: "GitHub", free: true, cost: "$0",
+    { name: "GitHub", tier: "freetier", cost: "$0",
       desc: "Secret scanning + public repo enumeration. Needed for gitleaks at scale.",
       registerUrl: "https://github.com/settings/tokens/new",
-      envVar: "GITHUB_TOKEN", limit: "5,000 req/hr (authenticated)",
+      envVar: "GITHUB_TOKEN", limit: "5,000 req / hr (authenticated)",
+      paidUpgrade: "GitHub Enterprise — same per-token limit, more seats",
       usedBy: ["Supply Chain", "OSINT", "Vuln"] },
-    { name: "OSV.dev", free: true, cost: "$0",
-      desc: "Open Source Vulnerability database (Google). Used by osv-scanner.",
-      registerUrl: null,
-      envVar: null, limit: "Unlimited, no registration",
-      usedBy: ["Supply Chain", "Vuln"] },
 
-    // ─── PAID ─────────────────────────────────────────────────
-    { name: "Shodan", free: false, cost: "$69 / year ($6/mo)",
-      desc: "IoT device + exposed-service search. Powers IoT/OT module + recon expansion.",
+    // ─── TIER 3: PAID (no useful free tier — pay from day one) ─
+    { name: "Shodan", tier: "paid", cost: "$69 / year ($6/mo)",
+      desc: "IoT device + exposed-service search. Powers IoT/OT module + recon expansion. Free tier = 100 queries TOTAL (one-time, not monthly).",
       registerUrl: "https://account.shodan.io/register",
-      envVar: "SHODAN_API_KEY", limit: "1M queries/month (Freelancer tier)",
+      envVar: "SHODAN_API_KEY", limit: "Freelancer: 1M queries/month",
+      paidUpgrade: "Small Business $359/yr -> Corporate $1099/yr",
       usedBy: ["IoT/OT", "Recon", "OSINT"] },
-    { name: "OpenAI", free: false, cost: "~$10-30 / month",
-      desc: "GPT-4o for AI/LLM security testing module. Pay-as-you-go.",
+    { name: "OpenAI", tier: "paid", cost: "~$10-30 / month",
+      desc: "GPT-4o for AI/LLM security testing module. Pay-as-you-go. No free tier.",
       registerUrl: "https://platform.openai.com/api-keys",
-      envVar: "OPENAI_API_KEY", limit: "$5 minimum deposit, usage-based",
+      envVar: "OPENAI_API_KEY", limit: "$5 min deposit, usage-based ($0.15/1M tokens for GPT-4o-mini)",
+      paidUpgrade: "Tier 1 -> Tier 5 (auto-promoted by total spend)",
       usedBy: ["AI/LLM", "Mobile AI/ML"] },
-    { name: "Anthropic", free: false, cost: "~$10-30 / month",
-      desc: "Claude for AI/LLM security testing module. Pay-as-you-go.",
+    { name: "Anthropic", tier: "paid", cost: "~$10-30 / month",
+      desc: "Claude for AI/LLM security testing module. Pay-as-you-go. No free tier.",
       registerUrl: "https://console.anthropic.com/settings/keys",
-      envVar: "ANTHROPIC_API_KEY", limit: "$5 minimum deposit, usage-based",
+      envVar: "ANTHROPIC_API_KEY", limit: "$5 min deposit, usage-based (Haiku $1/$5 per 1M tokens)",
+      paidUpgrade: "Enterprise bulk discounts available at scale",
       usedBy: ["AI/LLM", "Mobile AI/ML"] },
   ];
 
-  const freeAPIs = APIS.filter(a => a.free);
-  const paidAPIs = APIS.filter(a => !a.free);
+  const freeAPIs     = APIS.filter(a => a.tier === "free");
+  const freeTierAPIs = APIS.filter(a => a.tier === "freetier");
+  const paidAPIs     = APIS.filter(a => a.tier === "paid");
 
   const styles = {
     page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#e2e8f0" },
@@ -21045,9 +21058,12 @@ function ApiKeysModule({ token }) {
     badgeFree: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
       background: "rgba(34,197,94,0.15)", color: "#22c55e", letterSpacing: 1,
       border: "1px solid rgba(34,197,94,0.3)" },
-    badgePaid: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
+    badgeFreeTier: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
       background: "rgba(245,158,11,0.15)", color: "#f59e0b", letterSpacing: 1,
       border: "1px solid rgba(245,158,11,0.3)" },
+    badgePaid: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
+      background: "rgba(239,68,68,0.15)", color: "#ef4444", letterSpacing: 1,
+      border: "1px solid rgba(239,68,68,0.3)" },
     cost: { fontSize: 13, fontWeight: 600, color: "#cbd5e1" },
     desc: { fontSize: 13, color: "#94a3b8", lineHeight: 1.55 },
     metaRow: { display: "flex", flexDirection: "column", gap: 6, paddingTop: 8,
@@ -21083,29 +21099,36 @@ function ApiKeysModule({ token }) {
       </div>
 
       <div style={styles.summary}>
-        <div style={styles.summaryCard}>
-          <div style={styles.summaryLabel}>Free APIs</div>
-          <div style={styles.summaryValue}>{freeAPIs.length}</div>
-          <div style={styles.summarySub}>Start with all 7</div>
+        <div style={{...styles.summaryCard, borderColor:"rgba(34,197,94,0.3)"}}>
+          <div style={styles.summaryLabel}>Truly FREE</div>
+          <div style={{...styles.summaryValue, color:"#22c55e"}}>{freeAPIs.length}</div>
+          <div style={styles.summarySub}>No quota, unlimited usage</div>
+        </div>
+        <div style={{...styles.summaryCard, borderColor:"rgba(245,158,11,0.3)"}}>
+          <div style={styles.summaryLabel}>FREE TIER (capped)</div>
+          <div style={{...styles.summaryValue, color:"#f59e0b"}}>{freeTierAPIs.length}</div>
+          <div style={styles.summarySub}>Will hit limits at scale</div>
+        </div>
+        <div style={{...styles.summaryCard, borderColor:"rgba(239,68,68,0.3)"}}>
+          <div style={styles.summaryLabel}>PAID</div>
+          <div style={{...styles.summaryValue, color:"#ef4444"}}>{paidAPIs.length}</div>
+          <div style={styles.summarySub}>Defer until revenue</div>
         </div>
         <div style={styles.summaryCard}>
-          <div style={styles.summaryLabel}>Paid APIs</div>
-          <div style={styles.summaryValue}>{paidAPIs.length}</div>
-          <div style={styles.summarySub}>Defer until first paying customer</div>
-        </div>
-        <div style={styles.summaryCard}>
-          <div style={styles.summaryLabel}>Startup Cost</div>
+          <div style={styles.summaryLabel}>Startup cost</div>
           <div style={styles.summaryValue}>{totalMonthlyCostStartup}</div>
-          <div style={styles.summarySub}>Mostly OpenAI/Anthropic usage</div>
-        </div>
-        <div style={styles.summaryCard}>
-          <div style={styles.summaryLabel}>Scale Cost</div>
-          <div style={styles.summaryValue}>{totalMonthlyCostScale}</div>
-          <div style={styles.summarySub}>At 10+ paying customers</div>
+          <div style={styles.summarySub}>Mostly LLM usage; scale = {totalMonthlyCostScale}</div>
         </div>
       </div>
 
-      <div style={styles.sectionTitle}>FREE — Register All First ({freeAPIs.length})</div>
+      <div style={{padding:"12px 16px", background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.25)", borderRadius:8, marginBottom:24, fontSize:13, color:"#fbbf24", lineHeight:1.6}}>
+        <strong style={{color:"#f59e0b"}}>NOTE:</strong> Only OSV.dev + NVD are truly unlimited. The
+        "FREE TIER" providers (VirusTotal, Censys, WPScan, SecurityTrails, GitHub) give you a free quota
+        that runs out quickly at production scale — they'll need paid upgrades once you have 10+ customers
+        scanning concurrently. Each card below shows the exact paid upgrade path.
+      </div>
+
+      <div style={styles.sectionTitle}>TRULY FREE — Unlimited, register first ({freeAPIs.length})</div>
       <div style={styles.grid}>
         {freeAPIs.map(a => (
           <div key={a.name} style={styles.card}>
@@ -21147,7 +21170,49 @@ function ApiKeysModule({ token }) {
         ))}
       </div>
 
-      <div style={styles.sectionTitle}>PAID — Defer Until Revenue ({paidAPIs.length})</div>
+      <div style={styles.sectionTitle}>FREE TIER (CAPPED) — Will need upgrade at scale ({freeTierAPIs.length})</div>
+      <div style={styles.grid}>
+        {freeTierAPIs.map(a => (
+          <div key={a.name} style={styles.card}>
+            <div style={styles.cardHeader}>
+              <div style={styles.cardName}>{a.name}</div>
+              <span style={styles.badgeFreeTier}>FREE TIER</span>
+            </div>
+            <div style={styles.cost}>{a.cost}</div>
+            <div style={styles.desc}>{a.desc}</div>
+            <div style={styles.metaRow}>
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>ENV VAR</span>
+                <span style={styles.metaValue}>{a.envVar}</span>
+              </div>
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>FREE LIMIT</span>
+                <span style={styles.metaValue}>{a.limit}</span>
+              </div>
+              {a.paidUpgrade && (
+                <div style={styles.metaLine}>
+                  <span style={styles.metaLabel}>UPGRADE</span>
+                  <span style={{...styles.metaValue, color:"#f59e0b"}}>{a.paidUpgrade}</span>
+                </div>
+              )}
+              <div style={styles.metaLine}>
+                <span style={styles.metaLabel}>USED BY</span>
+                <div style={styles.usedBy}>
+                  {a.usedBy.map(m => <span key={m} style={styles.modChip}>{m}</span>)}
+                </div>
+              </div>
+            </div>
+            <div style={styles.btnRow}>
+              <a href={a.registerUrl} target="_blank" rel="noopener noreferrer"
+                 style={styles.btnPrimary}>
+                Get API Key &rarr;
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={styles.sectionTitle}>PAID — No useful free tier ({paidAPIs.length})</div>
       <div style={styles.grid}>
         {paidAPIs.map(a => (
           <div key={a.name} style={styles.card}>
@@ -21163,9 +21228,15 @@ function ApiKeysModule({ token }) {
                 <span style={styles.metaValue}>{a.envVar}</span>
               </div>
               <div style={styles.metaLine}>
-                <span style={styles.metaLabel}>LIMIT</span>
+                <span style={styles.metaLabel}>PRICING</span>
                 <span style={styles.metaValue}>{a.limit}</span>
               </div>
+              {a.paidUpgrade && (
+                <div style={styles.metaLine}>
+                  <span style={styles.metaLabel}>SCALE</span>
+                  <span style={{...styles.metaValue, color:"#ef4444"}}>{a.paidUpgrade}</span>
+                </div>
+              )}
               <div style={styles.metaLine}>
                 <span style={styles.metaLabel}>USED BY</span>
                 <div style={styles.usedBy}>
