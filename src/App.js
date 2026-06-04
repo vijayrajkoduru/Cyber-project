@@ -154,6 +154,7 @@ const MODULES = [
   // ── TOOLS ────────────────────────────────────────────────────
   { id:"tools",     icon:"", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
   { id:"apikeys",   icon:"", label:"API Keys & Credentials",            cat:"tools",   free:false, admin:true },
+  { id:"credvault", icon:"", label:"Customer Credential Vault",         cat:"tools",   free:false, admin:true },
 ];
 
 const CSS = `
@@ -21306,6 +21307,303 @@ function ApiKeysModule({ token }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  CUSTOMER CREDENTIAL VAULT PANEL
+//  Encrypted per-tenant storage for customer-supplied creds used by
+//  AD/Cloud/SSPM/K8s/AuthAttacks/etc. modules. AES-256-GCM at rest.
+// ═══════════════════════════════════════════════════════════════
+function CredentialVaultModule({ token }) {
+  const [creds, setCreds]         = useState([]);
+  const [types, setTypes]         = useState({});
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [showAdd, setShowAdd]     = useState(false);
+  const [editing, setEditing]     = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setError(null);
+    Promise.all([
+      api("/api/credentials", "GET", null, token),
+      api("/api/credentials/types", "GET", null, token),
+    ]).then(([credResp, typesResp]) => {
+      if (!alive) return;
+      setCreds(credResp.credentials || []);
+      setTypes(typesResp.types || {});
+      setLoading(false);
+    }).catch(e => {
+      if (!alive) return;
+      setError(e?.message || String(e));
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [token, refreshTick]);
+
+  const refresh = () => setRefreshTick(t => t + 1);
+
+  const doDelete = async (id) => {
+    try {
+      await api(`/api/credentials/${id}`, "DELETE", null, token);
+      setConfirmDelete(null);
+      refresh();
+    } catch (e) {
+      alert("Delete failed: " + (e?.message || String(e)));
+    }
+  };
+
+  const styles = {
+    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#e2e8f0" },
+    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1e293b" },
+    title: { fontSize: 28, fontWeight: 800, color: "#f1f5f9", marginBottom: 6 },
+    subtitle: { fontSize: 14, color: "#94a3b8", lineHeight: 1.6 },
+    addBtn: { padding: "10px 18px", background: "#3b82f6", border: "none",
+      borderRadius: 6, color: "#fff", fontSize: 14, fontWeight: 600,
+      cursor: "pointer", marginTop: 12 },
+    grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+      gap: 16, marginTop: 20 },
+    card: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+      padding: 18, display: "flex", flexDirection: "column", gap: 10 },
+    cardName: { fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
+    cardType: { display: "inline-block", padding: "3px 10px", borderRadius: 4,
+      background: "rgba(59,130,246,0.15)", color: "#60a5fa", fontSize: 11,
+      fontWeight: 700, letterSpacing: 0.5 },
+    cardMasked: { fontSize: 12, fontFamily: "JetBrains Mono, monospace",
+      color: "#94a3b8", background: "#020617", padding: "8px 10px", borderRadius: 4 },
+    cardMeta: { fontSize: 11, color: "#64748b", display: "flex", gap: 16 },
+    cardActions: { display: "flex", gap: 8, marginTop: 6 },
+    btnEdit: { flex: 1, padding: "8px 12px", background: "transparent",
+      border: "1px solid #334155", borderRadius: 5, color: "#94a3b8",
+      fontSize: 12, fontWeight: 600, cursor: "pointer" },
+    btnDelete: { flex: 1, padding: "8px 12px", background: "transparent",
+      border: "1px solid #7f1d1d", borderRadius: 5, color: "#f87171",
+      fontSize: 12, fontWeight: 600, cursor: "pointer" },
+    empty: { padding: 60, textAlign: "center", color: "#64748b" },
+    modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+    modal: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+      padding: 28, maxWidth: 600, width: "92%", maxHeight: "90vh", overflowY: "auto" },
+    modalTitle: { fontSize: 20, fontWeight: 800, color: "#f1f5f9", marginBottom: 8 },
+    formLabel: { fontSize: 12, color: "#94a3b8", fontWeight: 600, marginTop: 14,
+      marginBottom: 4, display: "block" },
+    formInput: { width: "100%", padding: "9px 12px", background: "#020617",
+      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0",
+      fontSize: 13, fontFamily: "inherit" },
+    formTextarea: { width: "100%", padding: "9px 12px", background: "#020617",
+      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0",
+      fontSize: 12, fontFamily: "JetBrains Mono, monospace", minHeight: 100, resize: "vertical" },
+    formSelect: { width: "100%", padding: "9px 12px", background: "#020617",
+      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0", fontSize: 13 },
+    modalBtnRow: { display: "flex", gap: 10, marginTop: 22 },
+    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b82f6",
+      border: "none", borderRadius: 6, color: "#fff", fontSize: 13,
+      fontWeight: 600, cursor: "pointer" },
+    btnSecondary: { flex: 1, padding: "10px 14px", background: "transparent",
+      border: "1px solid #334155", borderRadius: 6, color: "#94a3b8",
+      fontSize: 13, fontWeight: 600, cursor: "pointer" },
+    errorBox: { background: "rgba(220,38,38,0.1)", border: "1px solid #7f1d1d",
+      borderRadius: 5, padding: "10px 14px", color: "#fca5a5", fontSize: 13,
+      marginBottom: 12 },
+  };
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div style={styles.title}>Customer Credential Vault</div>
+        <div style={styles.subtitle}>
+          Encrypted storage (AES-256-GCM) for customer-supplied credentials used by
+          the AD / Cloud / SSPM / K8s / Auth Attacks / Hybrid Identity modules.
+          Each customer's creds are encrypted with a per-tenant HKDF-derived subkey;
+          decrypted plaintext never leaves the backend process and is logged on
+          every use. Customer can paste creds once, scans reuse them.
+        </div>
+        <button style={styles.addBtn} onClick={() => { setEditing(null); setShowAdd(true); }}>
+          + Add Credential Set
+        </button>
+      </div>
+
+      {error && <div style={styles.errorBox}>Error: {error}</div>}
+
+      {loading ? (
+        <div style={styles.empty}>Loading...</div>
+      ) : creds.length === 0 ? (
+        <div style={styles.empty}>
+          <div style={{fontSize: 16, marginBottom: 8}}>No credential sets yet</div>
+          <div style={{fontSize: 13, opacity: 0.7}}>
+            Click "+ Add Credential Set" to add AWS keys, AD domain user, K8s kubeconfig, etc.
+          </div>
+        </div>
+      ) : (
+        <div style={styles.grid}>
+          {creds.map(c => (
+            <div key={c.id} style={styles.card}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10}}>
+                <div style={styles.cardName}>{c.name}</div>
+                <span style={styles.cardType}>{(types[c.cred_type]?.label || c.cred_type).toUpperCase()}</span>
+              </div>
+              <div style={styles.cardMasked}>{c.masked_hint || "(no secret)"}</div>
+              <div style={styles.cardMeta}>
+                <div>Used {c.use_count || 0} times</div>
+                {c.last_used_at && <div>Last: {new Date(c.last_used_at).toLocaleDateString()}</div>}
+              </div>
+              <div style={styles.cardActions}>
+                <button style={styles.btnEdit}
+                  onClick={() => { setEditing(c); setShowAdd(true); }}>
+                  Edit
+                </button>
+                <button style={styles.btnDelete}
+                  onClick={() => setConfirmDelete(c)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showAdd && (
+        <CredentialFormModal
+          types={types}
+          token={token}
+          editing={editing}
+          styles={styles}
+          onClose={() => { setShowAdd(false); setEditing(null); }}
+          onSaved={() => { setShowAdd(false); setEditing(null); refresh(); }}
+        />
+      )}
+
+      {confirmDelete && (
+        <div style={styles.modalOverlay} onClick={() => setConfirmDelete(null)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalTitle}>Delete credential set?</div>
+            <div style={{color:"#94a3b8", fontSize:13, marginTop:8}}>
+              <strong style={{color:"#f1f5f9"}}>{confirmDelete.name}</strong> will be permanently
+              deleted. All scans using this credential will fail until re-added. This cannot be undone.
+            </div>
+            <div style={styles.modalBtnRow}>
+              <button style={styles.btnSecondary} onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button style={{...styles.btnPrimary, background:"#dc2626"}}
+                onClick={() => doDelete(confirmDelete.id)}>
+                Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CredentialFormModal({ types, token, editing, styles, onClose, onSaved }) {
+  const [name, setName] = useState(editing?.name || "");
+  const [credType, setCredType] = useState(editing?.cred_type || "");
+  const [fields, setFields] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (credType && types[credType]) {
+      const defaults = {};
+      types[credType].fields.forEach(f => {
+        if (f.default) defaults[f.name] = f.default;
+      });
+      setFields(prev => ({ ...defaults, ...prev }));
+    }
+  }, [credType, types]);
+
+  const handleSave = async () => {
+    if (!name || !credType) { setError("Name and type required"); return; }
+    const schema = types[credType];
+    if (!schema) { setError("Invalid credential type"); return; }
+    for (const f of schema.fields) {
+      if (f.required && !fields[f.name]) { setError(`${f.label} required`); return; }
+    }
+    setSaving(true); setError(null);
+    try {
+      if (editing) {
+        await api(`/api/credentials/${editing.id}`, "PUT", { name, fields }, token);
+      } else {
+        await api("/api/credentials", "POST", { name, cred_type: credType, fields }, token);
+      }
+      onSaved();
+    } catch (e) {
+      setError(e?.message || String(e));
+      setSaving(false);
+    }
+  };
+
+  const schema = types[credType];
+
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+        <div style={styles.modalTitle}>
+          {editing ? `Edit "${editing.name}"` : "Add Credential Set"}
+        </div>
+        {error && <div style={styles.errorBox}>{error}</div>}
+
+        <label style={styles.formLabel}>Name (your label for this credential)</label>
+        <input type="text" style={styles.formInput} value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="e.g. AWS Production, Internal AD"/>
+
+        <label style={styles.formLabel}>Credential type</label>
+        {editing ? (
+          <input type="text" style={{...styles.formInput, opacity:0.6, cursor:"not-allowed"}}
+            value={types[credType]?.label || credType} disabled/>
+        ) : (
+          <select style={styles.formSelect} value={credType}
+            onChange={e => { setCredType(e.target.value); setFields({}); }}>
+            <option value="">— Choose type —</option>
+            {Object.entries(types).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+        )}
+
+        {schema && schema.fields.map(f => (
+          <div key={f.name}>
+            <label style={styles.formLabel}>
+              {f.label}
+              {f.required && <span style={{color:"#f87171"}}> *</span>}
+              {f.secret && <span style={{color:"#94a3b8", fontSize:10, marginLeft:6}}>[encrypted]</span>}
+            </label>
+            {f.multiline ? (
+              <textarea style={styles.formTextarea} value={fields[f.name] || ""}
+                onChange={e => setFields({...fields, [f.name]: e.target.value})}
+                placeholder={f.default || ""}/>
+            ) : (
+              <input type={f.secret ? "password" : "text"} style={styles.formInput}
+                value={fields[f.name] || ""}
+                onChange={e => setFields({...fields, [f.name]: e.target.value})}
+                placeholder={f.default || ""}/>
+            )}
+          </div>
+        ))}
+
+        {schema && schema.modules && (
+          <div style={{...styles.cardMeta, marginTop: 16, fontSize: 11, color:"#64748b"}}>
+            Used by: {schema.modules.join(", ")}
+          </div>
+        )}
+
+        <div style={styles.modalBtnRow}>
+          <button style={styles.btnSecondary} onClick={onClose}>Cancel</button>
+          <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : (editing ? "Save changes" : "Add credential")}
+          </button>
+        </div>
+
+        <div style={{fontSize:11, color:"#64748b", marginTop:14, lineHeight:1.5}}>
+          Secrets are encrypted with AES-256-GCM using a per-tenant key. Plaintext
+          is never logged. Every decrypt is recorded in the usage audit log.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [token,setToken]       = useState(() => localStorage.getItem("cyberToken") || null);
   const [role,setRole]         = useState(() => localStorage.getItem("cyberRole") || "");
@@ -21653,11 +21951,12 @@ export default function App() {
         {active === "health"    && <SystemHealth/>}
         {active === "guide"     && <GuideModule/>}
         {active === "apikeys"   && <ApiKeysModule token={token}/>}
+        {active === "credvault" && <CredentialVaultModule token={token}/>}
         {/* ComingSoon fallback: only render if `active` is NOT a real module id
             AND NOT one of the special internal view ids. Built dynamically from
             MODULES so new modules can never drift back into "under development". */}
         {!MODULES.map(m=>m.id).concat([
-            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys"
+            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys","credvault"
           ]).includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
