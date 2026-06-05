@@ -51,6 +51,12 @@ PASSWORD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("git_secrets_scan",         "/api/password/git_secrets_scan"),
         ("exposed_env_scan",         "/api/password/exposed_env_scan"),
     ],
+    "tier5_web": [
+        ("jwt_forge_audit",          "/api/password/jwt_forge_audit"),
+        ("session_predict_audit",    "/api/password/session_predict_audit"),
+        ("oauth_token_audit",        "/api/password/oauth_token_audit"),
+        ("saml_signature_audit",     "/api/password/saml_signature_audit"),
+    ],
 }
 
 
