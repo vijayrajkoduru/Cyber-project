@@ -47,8 +47,8 @@ WEIGHTS = {
 # standard_response calls) AND the Recon shape (ScanContext + run_scanner
 # + findings rules file). A scanner passes the check if it uses EITHER.
 CHECKS = {
-    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner|_http_get\(|_http_post\(",
-    "uniform_shape": r"standard_response\(|vuln_response\(|run_scanner\(|wrap_finding\(",
+    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner|_http_get\(|_http_post\(|MethodologyScanner|run_as_endpoint\(|pre_flight\(",
+    "uniform_shape": r"standard_response\(|vuln_response\(|run_scanner\(|wrap_finding\(|run_as_endpoint\(|MethodologyScanner",
     "positive_emit": r'"POSITIVE"|POSITIVE|ctx\.source\(|FINDING_RULES',
     "severity":      r'severity=|"severity"|\'severity\'|finding_rules|FINDING_RULES',
     "remediation":   r'remediation=|"remediation"|\'remediation\'|FINDING_RULES',
@@ -183,17 +183,27 @@ def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
         # Behavioral overrides — if regex said YES but AST says no actual call,
         # the check FAILS. We're catching scanners that imported but didn't call.
         if regex_results.get("precheck"):
+            # Standard probes call run_scanner / _http_get etc. directly.
+            # VL-METHOD probes call run_as_endpoint() OR override pre_flight()
+            # OR define a class that inherits MethodologyScanner.
             actual_call = bool(called_functions & {
                 "precheck_target", "safe_get", "web_url", "recon_host",
                 "run_scanner", "_http_get", "_http_post",
+                "run_as_endpoint", "pre_flight", "port_open", "banner_grab",
             })
+            # Methodology base-class detection: subclass of MethodologyScanner
+            if not actual_call and re.search(r"class\s+\w+\(MethodologyScanner\)", src):
+                actual_call = True
             regex_results["precheck"] = actual_call
 
         if regex_results.get("uniform_shape"):
             actual_call = bool(called_functions & {
                 "standard_response", "vuln_response", "run_scanner",
-                "wrap_finding",
+                "wrap_finding", "run_as_endpoint",
             })
+            # Same methodology-class fallback
+            if not actual_call and re.search(r"class\s+\w+\(MethodologyScanner\)", src):
+                actual_call = True
             regex_results["uniform_shape"] = actual_call
     except SyntaxError:
         # If it doesn't even parse, fail everything (broken scanner)
