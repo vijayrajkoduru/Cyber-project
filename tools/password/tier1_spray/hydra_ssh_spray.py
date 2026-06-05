@@ -156,10 +156,12 @@ class HydraSshSpray(MethodologyScanner):
         target = ctx.host
         opts = ctx.state.get("_options") or {}
         port_arg = int(opts.get("port") or 22)
-        # Normalize host: strip URL scheme + :port suffix if present.
-        # User-supplied target may be "scanme.nmap.org:22" or "https://x/" etc.
-        clean_host, parsed_port = helpers.split_host_port(target, default_port=port_arg)
-        port = parsed_port if parsed_port else port_arg
+        # Use protocol-aware port resolution so cross-scanner target
+        # suffixes (e.g. example.com:22 passed to ALL scanners by orchestrator)
+        # don't make us scan a non-SSH port. Valid SSH ports: 22 + common
+        # alternates.
+        clean_host, port = helpers.resolve_port(
+            target, opts, primary_port=22, valid_ports=(2222, 222, 2200))
         ctx.state["target_host"] = clean_host
         ctx.state["target_port"] = port
         if not clean_host:

@@ -98,12 +98,69 @@ async def password_run_all(req: PasswordRunAllRequest, request: Request,
     tools, extra, jwt = _resolve(req, request)
     # Hard-clamp concurrency to 2 (password module rule per memory).
     concurrency = max(1, min(req.concurrency or 2, 2))
-    gen = run_module_streaming(
+    upstream_gen = run_module_streaming(
         target=req.target, tools=tools, module_name="password",
         concurrency=concurrency, extra_body=extra, jwt_token=jwt,
     )
+
+    # Wrap the upstream NDJSON stream so we can collect per-scanner
+    # results as they fly past, then emit a final chain_summary record
+    # at the end of the stream. The frontend's PDF generator reads
+    # chain_summary out of allResultsRaw to render the Attack Chain
+    # section (Phase E). Without this wrapper, only the /run_all_buffered
+    # endpoint emitted chain_summary, leaving dashboard PDFs blank.
+    import json as _json
+
+    async def _wrap_with_chain():
+        collected_results: list[dict] = []
+        async for chunk in upstream_gen:
+            # Pass chunks through unchanged
+            yield chunk
+            # Best-effort parse to collect per-scanner results
+            try:
+                txt = chunk.decode("utf-8") if isinstance(chunk, (bytes, bytearray)) else str(chunk)
+                for line in txt.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    obj = _json.loads(line)
+                    if isinstance(obj, dict) and obj.get("tool") and "findings" in obj:
+                        collected_results.append(obj)
+            except Exception:
+                pass
+
+        # End of stream — emit chain_summary as a final NDJSON line
+        chain_record: dict = {
+            "type": "chain_summary",
+            "chained_scans": 0,
+            "chained_scanners": [],
+            "registered_chain_scanners": chain_registry.known(),
+        }
+        if (req.options or {}).get("enable_chaining", True) and collected_results:
+            try:
+                executor = ChainExecutor(chain_registry)
+                chained = await executor.expand_all(
+                    primary_results=collected_results,
+                    target=req.target,
+                    jwt=jwt,
+                )
+                if chained:
+                    chain_record["chained_scans"] = len(chained)
+                    chain_record["chained_scanners"] = sorted({
+                        r.get("tool") for r in chained if r.get("tool")
+                    })
+                    # Emit each chained result as its own NDJSON record
+                    # BEFORE the summary, so frontend treats it like any
+                    # other scanner result
+                    for r in chained:
+                        yield (_json.dumps(r) + "\n").encode("utf-8")
+            except Exception as e:
+                chain_record["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+
+        yield (_json.dumps(chain_record) + "\n").encode("utf-8")
+
     return StreamingResponse(
-        gen,
+        _wrap_with_chain(),
         media_type="application/x-ndjson",
         headers={
             "X-Accel-Buffering": "no",

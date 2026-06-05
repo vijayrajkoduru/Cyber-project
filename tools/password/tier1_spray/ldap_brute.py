@@ -200,10 +200,11 @@ class LdapBrute(MethodologyScanner):
     async def pre_flight(self, ctx: ScanContext) -> bool:
         target = ctx.host
         opts = ctx.state.get("_options") or {}
-        port_arg = int(opts.get("port") or 389)
         use_ldaps = bool(opts.get("use_ldaps"))
-        clean_host, parsed_port = helpers.split_host_port(target, default_port=port_arg)
-        port = parsed_port if parsed_port else port_arg
+        primary = 636 if use_ldaps else 389
+        clean_host, port = helpers.resolve_port(
+            target, opts, primary_port=primary,
+            valid_ports=(389, 636, 3268, 3269))  # LDAP / LDAPS / GC / GC-SSL
         ctx.state["target_host"] = clean_host
         ctx.state["target_port"] = port
         ctx.state["use_ldaps"] = use_ldaps

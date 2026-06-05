@@ -332,9 +332,8 @@ class MedusaSmbSpray(MethodologyScanner):
     async def pre_flight(self, ctx: ScanContext) -> bool:
         target = ctx.host
         opts = ctx.state.get("_options") or {}
-        port_arg = int(opts.get("port") or 445)
-        clean_host, parsed_port = helpers.split_host_port(target, default_port=port_arg)
-        primary = parsed_port if parsed_port else port_arg
+        clean_host, primary = helpers.resolve_port(
+            target, opts, primary_port=445, valid_ports=(139, 445))
         ctx.state["target_host"] = clean_host
         if not clean_host:
             ctx.state["target_port"] = primary

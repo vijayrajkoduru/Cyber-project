@@ -101,6 +101,42 @@ class _Helpers:
         return (t, default_port)
 
     @staticmethod
+    def resolve_port(target: str, options: dict, primary_port: int,
+                     valid_ports: tuple = ()) -> tuple[str, int]:
+        """Resolve which port THIS scanner should probe.
+
+        Priority:
+          1. options.port (user-explicit override) wins absolutely.
+          2. target's :port suffix wins only if it matches primary_port
+             or one of the scanner's known alternate ports.
+          3. Else fall back to primary_port (the protocol default).
+
+        This prevents the multi-scanner orchestrator gap where
+        target=example.com:22 made Ncrack scan port 22 (instead of 3389),
+        Medusa scan port 22 (instead of 445), MySQL scan port 22, etc.
+        Each scanner ignores the cross-protocol :port suffix and uses
+        its own default unless the user is explicit.
+
+        Returns (clean_host, port).
+        """
+        opts = options or {}
+        clean_host, parsed_port = _Helpers.split_host_port(
+            target, default_port=primary_port)
+        # User-explicit port wins
+        explicit = opts.get("port")
+        if explicit:
+            try:
+                return (clean_host, int(explicit))
+            except (TypeError, ValueError):
+                pass
+        # Target's :port suffix wins only when it matches a port this
+        # scanner actually serves. Prevents Ncrack-on-22 etc.
+        known_ports = {int(primary_port)} | {int(p) for p in valid_ports}
+        if parsed_port and int(parsed_port) in known_ports:
+            return (clean_host, int(parsed_port))
+        return (clean_host, int(primary_port))
+
+    @staticmethod
     async def port_open(host: str, port: int, timeout: float = 3.0) -> bool:
         """TCP connect-test. Returns True if port accepts the SYN.
         Auto-strips :port suffix from host if present (host='acme:22', port=22
