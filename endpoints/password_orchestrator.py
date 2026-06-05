@@ -33,9 +33,17 @@ PASSWORD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("ncrack_rdp_spray",         "/api/password/ncrack_rdp_spray"),
         ("medusa_smb_spray",         "/api/password/medusa_smb_spray"),
         ("patator_http_form_brute",  "/api/password/patator_http_form_brute"),
+        ("ftp_brute",                "/api/password/ftp_brute"),
+        ("mysql_brute",              "/api/password/mysql_brute"),
+        ("postgres_brute",           "/api/password/postgres_brute"),
+        ("ldap_brute",               "/api/password/ldap_brute"),
     ],
     "tier2_crack": [
         ("john_hash_audit",          "/api/password/john_hash_audit"),
+    ],
+    "tier4_discovery": [
+        ("git_secrets_scan",         "/api/password/git_secrets_scan"),
+        ("exposed_env_scan",         "/api/password/exposed_env_scan"),
     ],
 }
 
