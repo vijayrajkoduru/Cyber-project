@@ -98,14 +98,31 @@ def rule_input_missing(s):
     }
 
 
+def _fp_responded(s) -> bool:
+    """True if SMB negotiation actually got bytes back from a real service.
+    Stateful firewalls can accept TCP/445 without SMB running -> dialect /
+    server_os / server_name all blank. In that case the POSITIVE rule
+    would be lying: we never spoke real SMB, we just timed out 5 times."""
+    fp = s.get("fingerprint") or {}
+    if fp.get("error"):
+        return False
+    return bool(fp.get("dialect") or fp.get("server_os")
+                or fp.get("server_name") or fp.get("server_domain"))
+
+
 def rule_positive_quick(s):
-    """Quick-probe ran, NO hits, NO real findings - GOOD signal."""
+    """Quick-probe ran, NO hits, NO real findings - GOOD signal.
+    Guard: only fire POSITIVE if SMB negotiation actually parsed a real
+    server response. See rule_inconclusive for the 'port reachable but
+    no SMB service' branch."""
     if s.get("methodology_total", 0) > 0:
         return None
     if s.get("port_reachable") is not True:
         return None
     if s.get("quick_probe_attempts", 0) == 0:
         return None
+    if not _fp_responded(s):
+        return None  # filtered/no-service -> rule_inconclusive
     return {
         "name": "SMB rejects all 5 known-bad default credentials",
         "severity": "POSITIVE",
@@ -119,6 +136,39 @@ def rule_positive_quick(s):
                         "Require SMB signing for all clients."),
         "cwe": "CWE-521",
         "owasp": "A07:2021",
+    }
+
+
+def rule_inconclusive(s):
+    """Port accepts TCP SYN but SMB negotiation got no real server data -
+    typical of stateful firewalls that 'accept-and-RST' filtered ports,
+    or an SMB service that crashed. Emit INFO so PDF doesn't falsely
+    claim "SMB rejects defaults" when we never actually spoke SMB."""
+    if s.get("methodology_total", 0) > 0:
+        return None
+    if s.get("port_reachable") is not True:
+        return None
+    if s.get("quick_probe_attempts", 0) == 0:
+        return None
+    if _fp_responded(s):
+        return None  # service responded -> rule_positive_quick handles it
+    fp_err = (s.get("fingerprint") or {}).get("error") or "no SMB dialect parsed"
+    return {
+        "name": "SMB port reachable but service did not negotiate - credential security UNVERIFIED",
+        "severity": "INFO",
+        "evidence": (f"TCP/445 accepted the connection but SMB negotiation failed "
+                     f"({fp_err}) and {s.get('quick_probe_attempts', 5)} impacket "
+                     "default-credential attempts all errored/timed-out. This is "
+                     "typical of stateful firewalls that 'accept-and-RST' filtered "
+                     "ports, or an SMB service that is hung. We cannot claim "
+                     "credentials are strong - we never reached the auth layer."),
+        "remediation": ("If this host is supposed to expose SMB, verify smbd / "
+                        "Server service is running and the firewall isn't "
+                        "intercepting the connection. Re-run scan from an "
+                        "internal vantage point. If SMB is intentionally filtered "
+                        "at the perimeter, that is excellent hardening - SMB "
+                        "should NEVER be exposed to the public internet."),
+        "cwe": "CWE-1006",
     }
 
 
@@ -301,6 +351,7 @@ MEDUSA_SMB_SPRAY_FINDING_RULES = [
     rule_unreachable,
     rule_input_missing,
     rule_positive_quick,
+    rule_inconclusive,
     rule_lockout_hit,
     rule_signing_not_required,
     rule_confirmed_admin,

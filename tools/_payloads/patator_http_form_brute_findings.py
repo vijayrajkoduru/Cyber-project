@@ -168,8 +168,20 @@ def rule_rate_limit_detected(s):
     }
 
 
+def _http_responded(s) -> bool:
+    """True if the form-fingerprint actually parsed an HTTP response.
+    If both server and framework are blank AND no form_action was parsed,
+    the GET to form_url likely got no usable response (filtered/captive
+    portal) - we never proved the login endpoint is real."""
+    fp = s.get("fingerprint") or {}
+    return bool(fp.get("server") or fp.get("framework")
+                or fp.get("form_action") or fp.get("status_code"))
+
+
 def rule_positive_no_defaults(s):
-    """Quick-probe ran, no hits, no real findings - GOOD signal."""
+    """Quick-probe ran, no hits, no real findings - GOOD signal.
+    Guard: only fire POSITIVE if the HTTP fingerprint actually parsed a
+    server response. See rule_inconclusive for the no-response branch."""
     if s.get("methodology_total", 0) > 0:
         return None
     if s.get("quick_probe_attempts", 0) == 0:
@@ -180,6 +192,8 @@ def rule_positive_no_defaults(s):
     fp = s.get("fingerprint") or {}
     if fp.get("captcha_detected") or fp.get("rate_limit_headers"):
         return None
+    if not _http_responded(s):
+        return None  # no real HTTP response -> rule_inconclusive
     return {
         "name": "Login form rejects all 5 admin default credentials",
         "severity": "POSITIVE",
@@ -194,6 +208,42 @@ def rule_positive_no_defaults(s):
                         "for any admin-grade account."),
         "cwe": "CWE-521",
         "owasp": "A07:2021",
+    }
+
+
+def rule_inconclusive(s):
+    """form_url returned 200 OK enough for pre_flight to pass, but the
+    HTML had no recognizable framework / server / form action - probably
+    a captive portal, a CDN error page, or a single-page-app that
+    requires JS to render the form. Emit INFO so we don't falsely claim
+    "form rejects defaults" when we never identified a real login form."""
+    if s.get("methodology_total", 0) > 0:
+        return None
+    if s.get("quick_probe_attempts", 0) == 0:
+        return None
+    if s.get("skipped_reason"):
+        return None
+    fp = s.get("fingerprint") or {}
+    if fp.get("captcha_detected") or fp.get("rate_limit_headers"):
+        return None
+    if _http_responded(s):
+        return None
+    return {
+        "name": "Login form responded but no recognizable framework / form action - credential security UNVERIFIED",
+        "severity": "INFO",
+        "evidence": (f"{s.get('form_url', 'form_url')} returned a response but the "
+                     "HTML had no recognizable server header, framework signature, "
+                     "or form action. This is typical of captive portals, CDN "
+                     "error pages, or SPA login pages that render after JavaScript "
+                     "execution. We cannot claim credentials are strong - we never "
+                     "confirmed we were posting to a real login endpoint."),
+        "remediation": ("Verify options.form_url points to the actual POST endpoint "
+                        "(the URL the browser submits to), not the page that "
+                        "renders the form. Open DevTools -> Network -> attempt a "
+                        "login -> copy the POST request URL. For SPA / JS-rendered "
+                        "forms, you may need to use the API endpoint the JS calls "
+                        "(often /api/auth/login or /graphql)."),
+        "cwe": "CWE-1006",
     }
 
 
@@ -308,6 +358,7 @@ PATATOR_HTTP_FORM_BRUTE_FINDING_RULES = [
     rule_captcha_detected,
     rule_rate_limit_detected,
     rule_positive_no_defaults,
+    rule_inconclusive,
     rule_confirmed_admin,
     rule_confirmed_user,
     rule_confirmed_guest,

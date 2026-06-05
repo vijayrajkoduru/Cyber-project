@@ -56,14 +56,26 @@ def rule_input_missing(s):
     }
 
 
+def _ssh_responded(s) -> bool:
+    """True if SSH banner-grab actually got bytes back from a real sshd.
+    SSH servers send the SSH-2.0-XXX banner immediately on TCP connect, so
+    an empty banner means filtered-accept firewall or non-SSH service."""
+    fp = s.get("fingerprint") or {}
+    return bool(fp.get("raw") or fp.get("version") or fp.get("service") == "ssh")
+
+
 def rule_positive_quick(s):
-    # Quick-probe ran, no hits, no real findings - GOOD signal
+    # Quick-probe ran, no hits, no real findings - GOOD signal.
+    # Guard: only fire POSITIVE if SSH banner-grab actually saw a real
+    # sshd. See rule_inconclusive for filtered-accept / no-banner case.
     if s.get("methodology_total", 0) > 0:
         return None
     if s.get("port_reachable") is not True:
         return None
     if s.get("quick_probe_attempts", 0) == 0:
         return None
+    if not _ssh_responded(s):
+        return None  # no banner -> rule_inconclusive
     return {
         "name": "SSH rejects all 5 known-bad default credentials",
         "severity": "POSITIVE",
@@ -73,6 +85,36 @@ def rule_positive_quick(s):
         "remediation": "Continue blocking default credentials. Consider key-only auth (PasswordAuthentication no in sshd_config) for production hosts.",
         "cwe": "CWE-521",
         "owasp": "A07:2021",
+    }
+
+
+def rule_inconclusive(s):
+    """Port accepts TCP SYN but no SSH banner emerged - filtered-accept
+    firewall or non-SSH service on port 22. Emit INFO so PDF doesn't
+    falsely claim "SSH rejects defaults" when we never spoke SSH."""
+    if s.get("methodology_total", 0) > 0:
+        return None
+    if s.get("port_reachable") is not True:
+        return None
+    if s.get("quick_probe_attempts", 0) == 0:
+        return None
+    if _ssh_responded(s):
+        return None
+    return {
+        "name": "SSH port reachable but no banner returned - credential security UNVERIFIED",
+        "severity": "INFO",
+        "evidence": (f"TCP/22 accepted the connection but no SSH-2.0 banner was "
+                     f"received and {s.get('quick_probe_attempts', 5)} paramiko "
+                     "default-credential attempts errored/timed-out. This is "
+                     "typical of stateful firewalls that 'accept-and-RST' filtered "
+                     "ports or a non-SSH service squatting on port 22. We cannot "
+                     "claim credentials are strong - we never reached sshd."),
+        "remediation": ("If this host is supposed to expose SSH, verify sshd is "
+                        "running and the firewall isn't intercepting the "
+                        "connection. Re-run scan from an internal vantage. "
+                        "If SSH is intentionally filtered at the perimeter, "
+                        "that is good hardening."),
+        "cwe": "CWE-1006",
     }
 
 
@@ -195,6 +237,7 @@ HYDRA_SSH_SPRAY_FINDING_RULES = [
     rule_unreachable,
     rule_input_missing,
     rule_positive_quick,
+    rule_inconclusive,
     rule_confirmed_root,
     rule_confirmed_sudo,
     rule_confirmed_user,
