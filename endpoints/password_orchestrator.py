@@ -126,10 +126,15 @@ async def password_run_all_buffered(req: PasswordRunAllRequest, request: Request
     # ── Chain expansion ───────────────────────────────────────────
     # For each primary result that emitted chain_next via VL-METHOD
     # Stage 7, spawn the suggested downstream scanners with inherited
-    # credentials. Registry is empty during the Phase A rollout so this
-    # currently just surfaces "scanner not yet implemented" INFO findings,
-    # keeping the chain visible in the PDF.
+    # credentials. ALWAYS attach chain_summary so callers can introspect
+    # the registry even when no chains executed (Test 5 health check).
     if (req.options or {}).get("enable_chaining", True):
+        if isinstance(response, dict):
+            response.setdefault("chain_summary", {
+                "chained_scans": 0,
+                "chained_scanners": [],
+                "registered_chain_scanners": chain_registry.known(),
+            })
         try:
             results_list = []
             if isinstance(response, dict):
@@ -143,7 +148,6 @@ async def password_run_all_buffered(req: PasswordRunAllRequest, request: Request
                 )
                 if chained:
                     response["results"] = results_list + chained
-                    response.setdefault("chain_summary", {})
                     response["chain_summary"] = {
                         "chained_scans": len(chained),
                         "chained_scanners": sorted({
