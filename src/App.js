@@ -13311,13 +13311,30 @@ function generateUniversalVLReport(opts) {
   const _insufficientScan = !_hasRealFindings && !_hasGenuinePositive
                               && _sevCount.INFO >= 2;
 
+  // ── PARTIAL SCAN DETECTION ──
+  // When SOME probes ran fully (emitted POSITIVE proof) but OTHERS returned
+  // INFO "couldn't run" findings, the scan was partially effective.
+  // STRONG misleads the reader into thinking everything was tested.
+  // PARTIAL SCAN = at least 1 POSITIVE + >=2 INFO + no real findings.
+  const _partialScan = !_hasRealFindings && _hasGenuinePositive
+                         && _sevCount.INFO >= 2;
+  const _testedCount = _positiveFindings.length;
+  const _untestedCount = _sevCount.INFO;
+  const _totalScannerCount = Object.keys(r).length;
+
   // ── KEY RISK HEADLINE ──
   chk(28);
-  let _hlBg, _hlTag, _hlTitle;
+  let _hlBg, _hlTag, _hlTitle, _hlSubtitle;
   if (_insufficientScan) {
-    _hlBg = [255,251,235];  // amber tint
+    _hlBg = [255,251,235];  // deep amber
     _hlTag = "INSUFFICIENT SCAN";
     _hlTitle = `${_skippedInfoCount} of ${_totalFindings} probes could not execute - posture UNKNOWN`;
+    _hlSubtitle = "Provide required inputs (see Per-Tool section) and re-scan for actionable results.";
+  } else if (_partialScan) {
+    _hlBg = [254,249,229];  // light amber (between STRONG green and INSUFFICIENT)
+    _hlTag = "PARTIAL SCAN";
+    _hlTitle = `${_testedCount} of ${_totalScannerCount} scanners confirmed clean; ${_untestedCount} require inputs`;
+    _hlSubtitle = "Partial coverage - confirmed scanners passed, but most probes need inputs to assess full posture.";
   } else {
     _hlBg = _riskScore>=60?[254,242,242]:_riskScore>=20?[255,247,237]:[240,253,244];
     _hlTag = _riskScore>=60?"FIX THIS WEEK":_riskScore>=20?"REVIEW SOON":"STRONG";
@@ -13328,8 +13345,11 @@ function generateUniversalVLReport(opts) {
       : _sevCount.MEDIUM>0
       ? `${_sevCount.MEDIUM} MEDIUM exposure(s) - hardening recommended`
       : `No critical ${moduleLabel.toLowerCase()} exposures detected`;
+    _hlSubtitle = "See Findings + Per-Tool sections for full breakdown.";
   }
-  const _hlAccentColor = _insufficientScan ? [202,138,4] : _riskColor;
+  const _hlAccentColor = _insufficientScan ? [202,138,4]
+                         : _partialScan ? [234,179,8]  // amber/yellow
+                         : _riskColor;
   fillR(margin, y, contentW, 24, _hlBg);
   fillR(margin, y, 3, 24, _hlAccentColor);
   doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(..._hlAccentColor);
@@ -13337,14 +13357,11 @@ function generateUniversalVLReport(opts) {
   doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
   doc.text(_ascii(_hlTitle), margin + 8, y + 13);
   doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
-  doc.text(_insufficientScan
-    ? "Provide required inputs (see Per-Tool section) and re-scan for actionable results."
-    : "See Findings + Per-Tool sections for full breakdown.",
-    margin + 8, y + 18);
+  doc.text(_hlSubtitle, margin + 8, y + 18);
   y += 28;
 
-  // ── REQUIRED INPUTS CALLOUT (only when insufficient scan) ──
-  if (_insufficientScan) {
+  // ── REQUIRED INPUTS CALLOUT (insufficient OR partial scan) ──
+  if (_insufficientScan || _partialScan) {
     chk(40);
     // Collect per-scanner info: try to extract "Missing X" from evidence;
     // if not extractable, fall back to the finding name itself so the user
@@ -13383,16 +13400,27 @@ function generateUniversalVLReport(opts) {
   }
 
   // ── RISK SCORE BAR ──
+  // When the scan is insufficient or partial, override the score display
+  // so the customer doesn't read "MINIMAL RISK 2" as evidence of security.
   chk(32);
   y = sHead("Risk Score", y);
   fillR(margin, y, contentW, 20, LIGHT);
-  doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._riskColor);
-  doc.text(String(_riskScore), margin + 8, y + 15);
-  txt(_riskLabel, margin + 38, y + 8, 11, _riskColor, true);
+  const _displayScore = _insufficientScan ? "?" : (_partialScan ? `${_riskScore}?` : String(_riskScore));
+  const _displayLabel = _insufficientScan ? "UNKNOWN (scan insufficient)"
+                        : _partialScan ? `${_riskLabel} (partial coverage)`
+                        : _riskLabel;
+  const _displayColor = _insufficientScan ? [202,138,4]
+                        : _partialScan ? [234,179,8]
+                        : _riskColor;
+  doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._displayColor);
+  doc.text(_displayScore, margin + 8, y + 15);
+  txt(_displayLabel, margin + 38, y + 8, 11, _displayColor, true);
   const _totalCount = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW + _sevCount.INFO;
   txt(`Report ID: ${_REPORT_ID}  -  ${_totalCount} findings across ${Object.keys(r).length} scanners`, margin + 38, y + 14, 7.5, GRAY);
   fillR(margin + 38, y + 17, contentW - 40, 2, [226,232,240]);
-  fillR(margin + 38, y + 17, Math.max((_riskScore/100) * (contentW - 40), 2), 2, _riskColor);
+  if (!_insufficientScan) {
+    fillR(margin + 38, y + 17, Math.max((_riskScore/100) * (contentW - 40), 2), 2, _displayColor);
+  }
   y += 24;
   // Sub-label explaining the band so a 5/100 MINIMAL doesn't get read
   // as "slight risk" (it means basically zero risk found).
@@ -13574,6 +13602,8 @@ function generateUniversalVLReport(opts) {
     let _posture, _pCol;
     if (_insufficientScan) {
       _posture = "INSUFFICIENT SCAN - POSTURE UNKNOWN"; _pCol = [202,138,4];
+    } else if (_partialScan) {
+      _posture = "PARTIAL SCAN - LIMITED COVERAGE"; _pCol = [234,179,8];
     } else if (_sevCount.CRITICAL>0) {
       _posture = "CRITICAL ATTENTION"; _pCol = [220,38,38];
     } else if (_sevCount.HIGH>2) {
@@ -13603,6 +13633,11 @@ function generateUniversalVLReport(opts) {
         _narr = `Scan invoked ${Object.keys(r).length} scanner(s) but ${_skippedInfoCount} of ${_totalFindings} probe(s) could not execute due to missing required inputs, libraries, or wrong target type. `
               + `No CRITICAL/HIGH/MEDIUM/LOW finding was produced because the probes did not effectively test the target. `
               + `Provide the inputs listed in the "Required Inputs" section and re-scan. Do NOT interpret this report as evidence of secure posture.`;
+      } else if (_partialScan) {
+        _narr = `Scan ran ${_totalScannerCount} scanner(s); ${_testedCount} confirmed clean (POSITIVE proof) but ${_untestedCount} could not execute due to missing inputs. `
+              + `The CONFIRMED CLEAN portion is genuine - those scanners actively tested and rejected attack vectors. `
+              + `The REMAINING scanners listed in the "Required Inputs" section need additional inputs to assess full posture. `
+              + `Treat this report as partial: the tested surface is secure, but most of the attack surface was not tested.`;
       } else if (_sevCount.CRITICAL > 0) {
         _narr = `Scan surfaced ${_sevCount.CRITICAL} CRITICAL exposure(s) requiring 24-hour remediation. `
               + `Top concern: ${_topName}. Treat as P0 — schedule incident response review.`;
@@ -13766,6 +13801,10 @@ function generateUniversalVLReport(opts) {
            + `Business impact: posture cannot be assessed from this scan. `
            + `Provide the required inputs listed in the "Required Inputs" section at the top of this report, then re-scan. `
            + `Do NOT use this report as evidence of secure posture - it does not reflect actual testing.`;
+    } else if (_partialScan) {
+      _imp = `${moduleLabel} scan had PARTIAL COVERAGE - ${_testedCount} of ${_totalScannerCount} scanners produced verified POSITIVE proof (confirmed clean), but ${_untestedCount} scanner(s) returned INFO because required inputs were not supplied. `
+           + `Business impact: the tested attack surface is confirmed secure for the probes that ran, but the broader posture remains unmeasured. `
+           + `Provide inputs for the remaining scanners (see "Required Inputs" section) to assess full posture before relying on this report for compliance evidence.`;
     } else if (!_hasRealFindings) {
       // No real findings AND not insufficient (genuine clean scan)
       _imp = `${moduleLabel} scan completed across ${Object.keys(r).length} scanner(s) with zero CRITICAL/HIGH/MEDIUM/LOW findings. `
@@ -14423,6 +14462,8 @@ function generateUniversalVLReport(opts) {
     // Header guidance card
     const _hdrTxt = _insufficientScan
       ? `SCAN INSUFFICIENT - no recommendations can be generated. Re-scan after providing the inputs listed in the "Required Inputs" section.`
+      : _partialScan
+      ? `SCAN PARTIAL (${_testedCount}/${_totalScannerCount} confirmed clean) - to complete the assessment, provide inputs for the ${_untestedCount} remaining scanner(s) listed in "Required Inputs".`
       : _rankedF.length === 0
       ? `No actionable ${moduleLabel.toLowerCase()} exposures detected. Maintain quarterly re-scan + continuous monitoring.`
       : "PRIORITIZED REMEDIATION QUEUE (grouped by severity, then CVSS)";
@@ -14525,11 +14566,16 @@ function generateUniversalVLReport(opts) {
   // ── CONCLUSION ──
   chk(30); y = sHead("Conclusion & Re-test Cadence", y);
   fillR(margin, y, contentW, 22, [248,250,252]);
-  const _cad = _sevCount.CRITICAL > 0 ? "7 days (post-remediation)" :
+  const _cad = _insufficientScan ? "ASAP (re-scan after providing inputs)" :
+               _partialScan      ? "ASAP (re-scan with full inputs for remaining scanners)" :
+               _sevCount.CRITICAL > 0 ? "7 days (post-remediation)" :
                _sevCount.HIGH > 0 ? "14 days (post-remediation)" :
                _sevCount.MEDIUM > 0 ? "30 days" : "90 days (drift monitoring)";
+  const _conclPosture = _insufficientScan ? "INSUFFICIENT SCAN - posture cannot be assessed"
+                        : _partialScan ? `PARTIAL SCAN - ${_testedCount} of ${_totalScannerCount} scanners confirmed clean; ${_untestedCount} need inputs`
+                        : `${_riskLabel}`;
   txt(`Recommended re-test cadence: ${_cad}`, margin + 4, y + 8, 9, DARK, true);
-  txt(`Overall posture: ${_riskLabel}. Total findings: ${_totalCount} across ${Object.keys(r).length} scanners.`, margin + 4, y + 14, 8, GRAY);
+  txt(`Overall posture: ${_conclPosture}. Total findings: ${_totalCount} across ${Object.keys(r).length} scanners.`, margin + 4, y + 14, 8, GRAY);
   txt("This report is valid for 90 days from generation date. Re-scan to refresh.", margin + 4, y + 19, 7.5, GRAY);
   y += 28;
 
