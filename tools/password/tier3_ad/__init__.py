@@ -1,0 +1,1 @@
+"""Active Directory credential-access scanners (MITRE TA0006). Tier 3 = AD-specific techniques (Kerberoasting, AS-REP Roasting, DCSync, BloodHound). These scanners REQUIRE authenticated AD context to operate."""
