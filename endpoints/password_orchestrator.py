@@ -41,6 +41,12 @@ PASSWORD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier2_crack": [
         ("john_hash_audit",          "/api/password/john_hash_audit"),
     ],
+    "tier3_ad": [
+        ("kerberoast_audit",         "/api/password/kerberoast_audit"),
+        ("asreproast_audit",         "/api/password/asreproast_audit"),
+        ("dcsync_audit",             "/api/password/dcsync_audit"),
+        ("bloodhound_audit",         "/api/password/bloodhound_audit"),
+    ],
     "tier4_discovery": [
         ("git_secrets_scan",         "/api/password/git_secrets_scan"),
         ("exposed_env_scan",         "/api/password/exposed_env_scan"),
