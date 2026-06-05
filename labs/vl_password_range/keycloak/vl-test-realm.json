@@ -1,0 +1,127 @@
+{
+  "id": "vl-test-realm",
+  "realm": "vl-test-realm",
+  "displayName": "VulnusLab Test Realm",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "permanentLockout": false,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "passwordPolicy": "",
+  "defaultSignatureAlgorithm": "RS256",
+  "revokeRefreshToken": false,
+  "refreshTokenMaxReuse": 0,
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Tester",
+      "email": "alice@vlrange.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password1!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["default-roles-vl-test-realm"]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Tester",
+      "email": "bob@vlrange.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password2!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["default-roles-vl-test-realm"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "vl-test-client",
+      "name": "VulnusLab Test Client",
+      "description": "Public client deliberately misconfigured for OAuth attack testing. Implicit flow ENABLED, PKCE NOT enforced.",
+      "enabled": true,
+      "publicClient": true,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://lab_pwd_oauth:8080",
+      "baseUrl": "/realms/vl-test-realm/account/",
+      "redirectUris": [
+        "http://lab_pwd_oauth:8080/realms/vl-test-realm/account/*",
+        "http://lab_pwd_oauth:8080/auth/realms/vl-test-realm/account/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": ["+"],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "",
+        "require.pushed.authorization.requests": "false",
+        "post.logout.redirect.uris": "+",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.session.required": "true",
+        "use.refresh.tokens": "true",
+        "client_credentials.use_refresh_token": "false",
+        "id.token.as.detached.signature": "false",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "require.proof.key.for.code.exchange": "false"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    }
+  ],
+  "browserSecurityHeaders": {
+    "contentSecurityPolicyReportOnly": "",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+  "smtpServer": {},
+  "internationalizationEnabled": false,
+  "supportedLocales": [],
+  "eventsEnabled": false,
+  "eventsListeners": ["jboss-logging"],
+  "enabledEventTypes": [],
+  "adminEventsEnabled": false,
+  "adminEventsDetailsEnabled": false
+}
