@@ -252,11 +252,49 @@ def _detect_with_hashid(hash_str: str) -> Optional[str]:
     return None
 
 
+# Built-in top-50 fallback wordlist when SecLists / rockyou aren't on
+# disk. Hard-coded so the scanner always has SOMETHING to crack against.
+# Sourced from the public top-100 cracked-passwords distribution.
+_BUILTIN_TOP_FALLBACK = (
+    "password\n123456\n123456789\nqwerty\n12345678\nabc123\n1234567\n111111\n"
+    "letmein\nadmin\nwelcome\nmonkey\n1234567890\ndragon\nsunshine\nprincess\n"
+    "qwerty123\n654321\niloveyou\n000000\nadmin123\npassword1\nbaseball\n"
+    "football\nsoccer\nsuperman\nbatman\ntrustno1\nshadow\nmaster\n"
+    "michael\njennifer\nthomas\njordan\nhunter\nmichelle\ncharlie\n"
+    "andrew\nmatthew\nabc1234\npassword123\nhello\nfreedom\nwhatever\n"
+    "ninja\nazerty\nadminadmin\nrootroot\ntoor\nchangeme\n"
+)
+_BUILTIN_WORDLIST_PATH: Optional[str] = None
+
+
+def _materialize_builtin() -> str:
+    """Write the built-in fallback wordlist to a tempfile (once per process)
+    and return its path."""
+    global _BUILTIN_WORDLIST_PATH
+    if _BUILTIN_WORDLIST_PATH and os.path.isfile(_BUILTIN_WORDLIST_PATH):
+        return _BUILTIN_WORDLIST_PATH
+    fd, path = tempfile.mkstemp(prefix="vl_john_builtin_", suffix=".txt")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(_BUILTIN_TOP_FALLBACK)
+    except Exception:
+        try: os.close(fd)
+        except Exception: pass
+        return ""
+    _BUILTIN_WORDLIST_PATH = path
+    return path
+
+
 def _resolve_wordlist(candidates: list[str]) -> Optional[str]:
+    """Find first existing wordlist from candidates. If none exist, fall
+    back to a built-in top-50 list materialized in /tmp so the scanner
+    always has SOMETHING to crack against (gap 3 from PDF audit -
+    SecLists wasn't at the expected path in some Docker builds)."""
     for p in candidates:
         if os.path.isfile(p) and os.access(p, os.R_OK):
             return p
-    return None
+    # Fallback: built-in top-50 list
+    return _materialize_builtin() or None
 
 
 def _redact(pwd: str, show_plaintext: bool = False) -> str:
