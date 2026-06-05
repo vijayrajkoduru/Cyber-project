@@ -13303,13 +13303,29 @@ function generateUniversalVLReport(opts) {
   const _hasRealFindings = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW > 0;
   const _hasGenuinePositive = _positiveFindings.length > 0;
   const _totalFindings = _allFindings.length;
-  // Broadened detection: no real findings + no positive proof + 2+ INFO findings.
-  // This catches the case where ALL probes returned INFO (regardless of whether
-  // we can pattern-match the specific "skipped" phrasing in the evidence).
-  // _skippedInfoCount is used to populate the Required Inputs callout but is no
-  // longer a hard requirement for _insufficientScan to fire.
-  const _insufficientScan = !_hasRealFindings && !_hasGenuinePositive
-                              && _sevCount.INFO >= 2;
+  // Count scanners that SKIPPED at framework level (status='skipped' or
+  // _skipped flag or skipped_reason populated). This is the case where
+  // VL-METHOD pre_flight stage returned False - scanner never produced ANY
+  // findings (not even INFO). We need to detect this separately because
+  // _sevCount.INFO will be 0 in this state.
+  const _frameworkSkippedCount = Object.keys(r).filter(toolKey => {
+    const d = r[toolKey];
+    if (!d) return false;
+    return d._skipped === true || d.skipped_reason || d.status === "skipped";
+  }).length;
+  const _totalScanners = Object.keys(r).length;
+  // Broadened detection: insufficient scan = no real findings + no positive
+  // proof AND either:
+  //   (a) >=2 INFO findings that look "skipped" (existing case), OR
+  //   (b) >=2 scanners SKIPPED at framework level (new case - all-skipped
+  //       methodology scanners produce 0 findings, missed by case (a)), OR
+  //   (c) total findings = 0 AND total scanners >= 2 (nuclear case - scanners
+  //       ran but produced literally nothing - effectively "no test happened")
+  const _insufficientScan = !_hasRealFindings && !_hasGenuinePositive && (
+    _sevCount.INFO >= 2
+    || _frameworkSkippedCount >= 2
+    || (_totalFindings === 0 && _totalScanners >= 2)
+  );
 
   // ── PARTIAL SCAN DETECTION ──
   // When SOME probes ran fully (emitted POSITIVE proof) but OTHERS returned
@@ -13328,8 +13344,18 @@ function generateUniversalVLReport(opts) {
   if (_insufficientScan) {
     _hlBg = [255,251,235];  // deep amber
     _hlTag = "INSUFFICIENT SCAN";
-    _hlTitle = `${_skippedInfoCount} of ${_totalFindings} probes could not execute - posture UNKNOWN`;
-    _hlSubtitle = "Provide required inputs (see Per-Tool section) and re-scan for actionable results.";
+    // Build accurate title: prefer framework-skipped count if it's the dominant signal
+    if (_frameworkSkippedCount >= 2 && _sevCount.INFO === 0) {
+      // Pure "all SKIPPED at framework level" case - scanners didn't produce anything
+      _hlTitle = `${_frameworkSkippedCount} of ${_totalScanners} scanners skipped (pre-flight failed) - target may be wrong type`;
+      _hlSubtitle = "All scanners' pre-flight checks failed. Verify target type matches module (e.g. SSH target for password, URL for web).";
+    } else if (_totalFindings === 0) {
+      _hlTitle = `0 of ${_totalScanners} scanners produced findings - posture UNKNOWN`;
+      _hlSubtitle = "Scanners completed without producing findings. Likely target mismatch or all probes skipped.";
+    } else {
+      _hlTitle = `${_skippedInfoCount} of ${_totalFindings} probes could not execute - posture UNKNOWN`;
+      _hlSubtitle = "Provide required inputs (see Per-Tool section) and re-scan for actionable results.";
+    }
   } else if (_partialScan) {
     _hlBg = [254,249,229];  // light amber (between STRONG green and INSUFFICIENT)
     _hlTag = "PARTIAL SCAN";
