@@ -220,7 +220,7 @@ else
 {
   "target": "lab_pwd_ssh",
   "options": {
-    "port": 22,
+    "port": 2222,
     "userlist": "admin",
     "passlist": "admin",
     "always_deep": true

@@ -110,7 +110,7 @@ docker compose up -d lab_pwd_ssh lab_pwd_smb lab_pwd_web
 
 | Target          | Hostname        | Port | Default creds   | Used by scanner          |
 |-----------------|-----------------|------|-----------------|--------------------------|
-| OpenSSH server  | `lab_pwd_ssh`   | 22   | `admin / admin` | Hydra SSH spray          |
+| OpenSSH server  | `lab_pwd_ssh`   | 2222 | `admin / admin` | Hydra SSH spray          |
 | Samba SMB share | `lab_pwd_smb`   | 445  | `admin / admin` | Medusa SMB spray         |
 | Flask login     | `lab_pwd_web`   | 5000 | `admin / admin` | Patator HTTP form        |
 | Hash files      | bind-mounted    | n/a  | (md5/bcrypt/NTLM of `password`) | John hash audit |
