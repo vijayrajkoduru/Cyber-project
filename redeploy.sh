@@ -51,6 +51,29 @@ verify() {
   echo "    public URL: $p_hash"
   [ "$c_hash" = "$p_hash" ] && ok "frontend in sync" || err "frontend OUT OF SYNC — check nginx + cache"
 
+  # ── Content-marker check (cache-bust catch) ──────────────────
+  # Hash-match alone can fool you when the index.html points at a
+  # main.HASH.js bundle that was rebuilt but somehow lost a feature
+  # mid-merge. Grep for expected strings inside the served bundle so
+  # we catch silent regressions loud.
+  echo ""
+  echo "  Bundle content markers (PDF v4 + UI options form):"
+  local markers=("INSUFFICIENT SCAN" "PARTIAL SCAN" "BASELINE SCAN")
+  local marker_fail=0
+  for m in "${markers[@]}"; do
+    local hits
+    hits=$(docker exec vulnuslab_frontend sh -c "grep -lF '$m' /usr/share/nginx/html/static/js/*.js 2>/dev/null | wc -l")
+    if [ "$hits" -gt 0 ]; then
+      ok "  marker '$m' present"
+    else
+      err "  marker '$m' MISSING — bundle is stale, rebuild without cache"
+      marker_fail=1
+    fi
+  done
+  if [ "$marker_fail" -gt 0 ]; then
+    echo -e "${C_DIM}    Fix: docker compose build --no-cache frontend && docker compose up -d frontend${C_RST}"
+  fi
+
   echo ""
   echo "  Backend:"
   if curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then ok "health OK"; else err "health FAILED"; fi

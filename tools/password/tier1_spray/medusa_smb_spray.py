@@ -144,13 +144,16 @@ def _write_tempfile(prefix: str, lines: list[str]) -> str:
     return path
 
 
-def _redact(pwd: str) -> str:
-    """Customer-safe redaction: length + last 3 chars only."""
+def _redact(pwd: str, show_plaintext: bool = False) -> str:
+    """Customer-safe redaction: length + last 3 chars only.
+    show_plaintext=True returns plaintext (customer scanning own infra)."""
     if pwd is None:
         return "len=0"
     pwd = pwd.strip()
     if not pwd:
         return "len=0 (empty)"
+    if show_plaintext:
+        return pwd
     if len(pwd) <= 3:
         return f"len={len(pwd)} ***"
     return f"len={len(pwd)} ***{pwd[-3:]}"
@@ -395,11 +398,12 @@ class MedusaSmbSpray(MethodologyScanner):
             except Exception:
                 continue
             if ok:
+                _show = bool((ctx.state.get("_options") or {}).get("show_plaintext"))
                 hits.append({
                     "id": f"quick_{i}",
                     "kind": "default_credential",
                     "user": user,
-                    "password_marker": _redact(pwd),
+                    "password_marker": _redact(pwd, show_plaintext=_show),
                     "domain": domain,
                     "discovery_method": "quick_probe_known_defaults",
                     # Stash raw pwd for verify/privcheck; stripped before response
@@ -482,6 +486,7 @@ class MedusaSmbSpray(MethodologyScanner):
             findings: list[dict] = []
             fp = ctx.state.get("fingerprint") or {}
             domain = (fp.get("server_domain") or ".").strip() or "."
+            _show = bool(opts.get("show_plaintext"))
             for i, line in enumerate(stdout.splitlines()):
                 m = _RE_SUCCESS.search(line)
                 if not m:
@@ -491,7 +496,7 @@ class MedusaSmbSpray(MethodologyScanner):
                     "id": f"deep_{i}",
                     "kind": "spray_credential",
                     "user": m.group("user"),
-                    "password_marker": _redact(raw_pwd),
+                    "password_marker": _redact(raw_pwd, show_plaintext=_show),
                     "domain": domain,
                     "discovery_method": "medusa_smbnt_spray",
                     # Stash raw for verify (sync re-login); stripped pre-response

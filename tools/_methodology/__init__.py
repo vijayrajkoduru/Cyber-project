@@ -20,4 +20,16 @@ Reference scanner: tools/password/tier1_spray/hydra_ssh_spray.py
 """
 
 from tools._methodology.base import MethodologyScanner, helpers
-__all__ = ["MethodologyScanner", "helpers"]
+from tools._methodology.chaining import (
+    ChainExecutor,
+    ChainRegistry,
+    chain_registry,
+)
+
+__all__ = [
+    "MethodologyScanner",
+    "helpers",
+    "ChainExecutor",
+    "ChainRegistry",
+    "chain_registry",
+]
