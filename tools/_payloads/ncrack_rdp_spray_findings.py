@@ -107,7 +107,12 @@ def rule_input_missing(s):
 
 
 def rule_positive_quick(s):
-    # Quick-probe ran, no hits, no real findings - GOOD signal
+    # Quick-probe ran, no hits, no real findings - GOOD signal.
+    # Guard: only fire POSITIVE if fingerprint actually got bytes back
+    # from the service. A stateful firewall can accept the TCP SYN
+    # without RDP actually running -> port_reachable=True but no service
+    # response -> we never really tested 5 defaults, ncrack just timed
+    # out 5 times. See rule_inconclusive for that branch.
     if s.get("methodology_total", 0) > 0:
         return None
     if s.get("port_reachable") is not True:
@@ -115,6 +120,8 @@ def rule_positive_quick(s):
     if s.get("quick_probe_attempts", 0) == 0:
         return None
     fp = s.get("fingerprint") or {}
+    if not fp.get("raw_response_hex"):
+        return None  # service did not respond -> handled by rule_inconclusive
     return {
         "name": "RDP rejects all 5 known-bad default credentials",
         "severity": "POSITIVE",
@@ -129,6 +136,41 @@ def rule_positive_quick(s):
                         "Microsoft Authenticator for all RDP sessions."),
         "cwe": "CWE-521",
         "owasp": "A07:2021",
+    }
+
+
+def rule_inconclusive(s):
+    # Port accepts TCP SYN but the RDP X.224 fingerprint probe got no
+    # response - this is "filtered as open" firewall behavior, not a
+    # real RDP server. Emit INFO so the PDF doesn't show a misleading
+    # POSITIVE saying "service rejects defaults" when we never actually
+    # spoke to a service.
+    if s.get("methodology_total", 0) > 0:
+        return None
+    if s.get("port_reachable") is not True:
+        return None
+    if s.get("quick_probe_attempts", 0) == 0:
+        return None
+    fp = s.get("fingerprint") or {}
+    if fp.get("raw_response_hex"):
+        return None  # service responded -> rule_positive_quick handles it
+    return {
+        "name": "RDP port reachable but service did not respond - credential security UNVERIFIED",
+        "severity": "INFO",
+        "evidence": (f"TCP/3389 accepted the connection but the RDP X.224 "
+                     f"negotiation got no response and {s.get('quick_probe_attempts', 5)} "
+                     "ncrack default-credential attempts all timed out. This is "
+                     "typical of stateful firewalls that 'accept-and-RST' filtered "
+                     "ports, or an RDP service that crashed/hung. We cannot claim "
+                     "credentials are strong - we never reached the auth layer."),
+        "remediation": ("If this host is supposed to expose RDP, verify Terminal "
+                        "Services is running and the firewall isn't intercepting "
+                        "the connection. Re-run the scan once the service responds "
+                        "to a real X.224 PDU. If RDP is intentionally filtered at "
+                        "the perimeter, that is good hardening and no further "
+                        "action is needed - the scanner cannot test what it cannot "
+                        "reach."),
+        "cwe": "CWE-1006",
     }
 
 
@@ -272,6 +314,7 @@ NCRACK_RDP_SPRAY_FINDING_RULES = [
     rule_nla_disabled,
     rule_input_missing,
     rule_positive_quick,
+    rule_inconclusive,
     rule_confirmed_admin,
     rule_confirmed_user,
     rule_confirmed_guest,
