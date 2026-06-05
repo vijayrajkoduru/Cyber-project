@@ -150,21 +150,26 @@ class HydraSshSpray(MethodologyScanner):
     async def pre_flight(self, ctx: ScanContext) -> bool:
         target = ctx.host
         opts = ctx.state.get("_options") or {}
-        port = int(opts.get("port") or 22)
+        port_arg = int(opts.get("port") or 22)
+        # Normalize host: strip URL scheme + :port suffix if present.
+        # User-supplied target may be "scanme.nmap.org:22" or "https://x/" etc.
+        clean_host, parsed_port = helpers.split_host_port(target, default_port=port_arg)
+        port = parsed_port if parsed_port else port_arg
+        ctx.state["target_host"] = clean_host
         ctx.state["target_port"] = port
-        if not target:
+        if not clean_host:
             ctx.state["skipped_reason"] = "no target supplied"
             return False
-        reachable = await helpers.port_open(target, port, timeout=3.0)
+        reachable = await helpers.port_open(clean_host, port, timeout=3.0)
         ctx.state["port_reachable"] = reachable
         if not reachable:
-            ctx.state["skipped_reason"] = f"SSH/{port} on {target} not reachable (port closed or filtered)"
+            ctx.state["skipped_reason"] = f"SSH/{port} on {clean_host} not reachable (port closed or filtered)"
             return False
         return True
 
     # ── STAGE 2: FINGERPRINT ─────────────────────────────────────
     async def fingerprint(self, ctx: ScanContext):
-        target = ctx.host
+        target = ctx.state.get("target_host") or ctx.host
         port = int(ctx.state.get("target_port") or 22)
         banner = await helpers.ssh_banner_grab(target, port)
         ctx.state["fingerprint"] = banner
@@ -181,7 +186,7 @@ class HydraSshSpray(MethodologyScanner):
 
     # ── STAGE 3: QUICK PROBE (5 known defaults) ──────────────────
     async def quick_probe(self, ctx: ScanContext) -> list[dict]:
-        target = ctx.host
+        target = ctx.state.get("target_host") or ctx.host
         port = int(ctx.state.get("target_port") or 22)
         hits = await helpers.try_default_creds(
             target, port, "ssh",
@@ -285,7 +290,7 @@ class HydraSshSpray(MethodologyScanner):
             finding["verification_method"] = "paramiko_missing_cannot_verify"
             return finding
 
-        target = ctx.host
+        target = ctx.state.get("target_host") or ctx.host
         port = int(ctx.state.get("target_port") or 22)
         user = finding["user"]
         opts = ctx.state.get("_options") or {}

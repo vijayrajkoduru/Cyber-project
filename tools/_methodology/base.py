@@ -60,10 +60,55 @@ class _Helpers:
     """Reusable async helpers for VL-METHOD scanners."""
 
     @staticmethod
+    def split_host_port(target: str, default_port: int = 0) -> tuple[str, int]:
+        """Split 'host:port' / 'host' / 'http://host:port/path' into (host, port).
+        Returns (host, default_port) if no port found.
+
+        Handles:
+          'scanme.nmap.org:22'           -> ('scanme.nmap.org', 22)
+          'scanme.nmap.org'              -> ('scanme.nmap.org', default_port)
+          'https://acme.com:8443/login'  -> ('acme.com', 8443)
+          'http://acme.com/'             -> ('acme.com', 80)
+          '[::1]:22'                      -> ('::1', 22)
+          '192.168.1.1:5985'             -> ('192.168.1.1', 5985)
+        """
+        if not target:
+            return ("", default_port)
+        t = target.strip()
+        # Strip URL scheme + path
+        if "://" in t:
+            scheme, rest = t.split("://", 1)
+            t = rest.split("/", 1)[0]
+            scheme_default = {"http": 80, "https": 443, "ws": 80, "wss": 443,
+                              "ftp": 21, "ssh": 22}.get(scheme.lower(), default_port)
+            default_port = scheme_default
+        # Strip trailing path/query if any remained
+        t = t.split("/", 1)[0].split("?", 1)[0]
+        # IPv6 bracket form [::1]:22
+        if t.startswith("["):
+            end = t.find("]")
+            if end > 0:
+                host = t[1:end]
+                if t[end+1:end+2] == ":":
+                    try: return (host, int(t[end+2:]))
+                    except ValueError: return (host, default_port)
+                return (host, default_port)
+        # IPv4 / hostname with :port
+        if ":" in t:
+            host, _, port_str = t.rpartition(":")
+            try: return (host, int(port_str))
+            except ValueError: pass
+        return (t, default_port)
+
+    @staticmethod
     async def port_open(host: str, port: int, timeout: float = 3.0) -> bool:
-        """TCP connect-test. Returns True if port accepts the SYN."""
+        """TCP connect-test. Returns True if port accepts the SYN.
+        Auto-strips :port suffix from host if present (host='acme:22', port=22
+        works the same as host='acme', port=22)."""
+        # If host contains a port suffix, prefer that over the explicit port arg
+        clean_host, parsed_port = _Helpers.split_host_port(host, default_port=port)
         try:
-            fut = asyncio.open_connection(host, port)
+            fut = asyncio.open_connection(clean_host, parsed_port or port)
             reader, writer = await asyncio.wait_for(fut, timeout=timeout)
             writer.close()
             try: await writer.wait_closed()
@@ -76,9 +121,11 @@ class _Helpers:
     async def banner_grab(host: str, port: int, timeout: float = 4.0,
                            bytes_to_read: int = 256) -> str:
         """Grab the first N bytes from a TCP service. Useful for SSH/SMTP/FTP
-        banner detection (service+version fingerprint)."""
+        banner detection (service+version fingerprint).
+        Auto-strips :port suffix from host (same as port_open)."""
+        clean_host, parsed_port = _Helpers.split_host_port(host, default_port=port)
         try:
-            fut = asyncio.open_connection(host, port)
+            fut = asyncio.open_connection(clean_host, parsed_port or port)
             reader, writer = await asyncio.wait_for(fut, timeout=timeout)
             try:
                 data = await asyncio.wait_for(reader.read(bytes_to_read), timeout=timeout)
