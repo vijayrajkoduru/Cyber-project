@@ -13313,7 +13313,7 @@ function generateUniversalVLReport(opts) {
     if (!d) return false;
     return d._skipped === true || d.skipped_reason || d.status === "skipped";
   }).length;
-  const _totalScanners = Object.keys(r).length;
+  // _totalScanners already declared at line ~13093 (same Object.keys(r).length)
   // Broadened detection: insufficient scan = no real findings + no positive
   // proof AND either:
   //   (a) >=2 INFO findings that look "skipped" (existing case), OR
