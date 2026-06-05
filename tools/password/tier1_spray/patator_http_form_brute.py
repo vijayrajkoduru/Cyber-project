@@ -151,10 +151,13 @@ def _write_tempfile(prefix: str, lines: list[str]) -> str:
     return path
 
 
-def _redact(pwd: str) -> str:
-    """Customer-safe redaction: length + last 3 chars only."""
+def _redact(pwd: str, show_plaintext: bool = False) -> str:
+    """Customer-safe redaction: length + last 3 chars only.
+    show_plaintext=True returns plaintext (customer scanning own infra)."""
     if not pwd: return "len=0"
     pwd = pwd.strip()
+    if show_plaintext:
+        return pwd
     if len(pwd) <= 3: return f"len={len(pwd)} ***"
     return f"len={len(pwd)} ***{pwd[-3:]}"
 
@@ -389,11 +392,12 @@ class PatatorHttpFormBrute(MethodologyScanner):
                 ok, signal = _detect_success(resp, fail_string, baseline_len)
                 if not ok:
                     continue
+                _show = bool((ctx.state.get("_options") or {}).get("show_plaintext"))
                 findings.append({
                     "id": f"quick_{i}",
                     "kind": "default_credential",
                     "user": u,
-                    "password_marker": _redact(p),
+                    "password_marker": _redact(p, show_plaintext=_show),
                     "_pwd_private": p,  # stripped before findings reach response
                     "status_code": resp.status_code,
                     "success_signal": signal,
@@ -497,6 +501,7 @@ class PatatorHttpFormBrute(MethodologyScanner):
             ctx.state["patator_hits_done"] = hits_done
 
             findings: list[dict] = []
+            _show = bool(opts.get("show_plaintext"))
             for i, line in enumerate(full.splitlines()):
                 m = _RE_HIT.search(line)
                 if not m:
@@ -509,7 +514,7 @@ class PatatorHttpFormBrute(MethodologyScanner):
                     "id": f"deep_{i}",
                     "kind": "spray_credential",
                     "user": user,
-                    "password_marker": _redact(pwd),
+                    "password_marker": _redact(pwd, show_plaintext=_show),
                     "_pwd_private": pwd,
                     "status_code": int(m.group("code")),
                     "discovery_method": "patator_http_fuzz",

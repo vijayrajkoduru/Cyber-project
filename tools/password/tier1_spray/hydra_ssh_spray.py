@@ -130,10 +130,15 @@ def _write_tempfile(prefix: str, lines: list[str]) -> str:
     return path
 
 
-def _redact(pwd: str) -> str:
-    """Customer-safe redaction: length + last 3 chars only."""
+def _redact(pwd: str, show_plaintext: bool = False) -> str:
+    """Customer-safe redaction: length + last 3 chars only.
+    When show_plaintext=True (customer scanning own infra), returns the
+    actual plaintext password instead of the marker. Default behavior
+    (False) keeps the marker so multi-tenant reports never leak creds."""
     if not pwd: return "len=0"
     pwd = pwd.strip()
+    if show_plaintext:
+        return pwd
     if len(pwd) <= 3: return f"len={len(pwd)} ***"
     return f"len={len(pwd)} ***{pwd[-3:]}"
 
@@ -188,10 +193,13 @@ class HydraSshSpray(MethodologyScanner):
     async def quick_probe(self, ctx: ScanContext) -> list[dict]:
         target = ctx.state.get("target_host") or ctx.host
         port = int(ctx.state.get("target_port") or 22)
+        opts = ctx.state.get("_options") or {}
+        show = bool(opts.get("show_plaintext"))
         hits = await helpers.try_default_creds(
             target, port, "ssh",
             pairs=QUICK_PROBE_DEFAULTS,
-            per_attempt_timeout=4.0)
+            per_attempt_timeout=4.0,
+            show_plaintext=show)
         ctx.state["quick_probe_attempts"] = len(QUICK_PROBE_DEFAULTS)
         ctx.state["quick_probe_hits"] = len(hits)
         # Convert helper hits into preliminary findings
@@ -200,7 +208,7 @@ class HydraSshSpray(MethodologyScanner):
                 "id": f"quick_{i}",
                 "kind": "default_credential",
                 "user": h["user"],
-                "password_marker": h.get("pwd_marker", ""),
+                "password_marker": h.get("pwd_plain") if show else h.get("pwd_marker", ""),
                 "id_output_raw": h.get("id_output", ""),
                 "discovery_method": "quick_probe_known_defaults",
             }
@@ -249,6 +257,7 @@ class HydraSshSpray(MethodologyScanner):
             ctx.state["hydra_attempts"] = len(users) * len(passwords)
             ctx.state["hydra_users_tried"] = len(users)
             ctx.state["hydra_passwords_tried"] = len(passwords)
+            show = bool((ctx.state.get("_options") or {}).get("show_plaintext"))
             findings = []
             for i, line in enumerate(stdout.splitlines()):
                 m = _RE_SUCCESS.search(line)
@@ -257,7 +266,7 @@ class HydraSshSpray(MethodologyScanner):
                     "id": f"deep_{i}",
                     "kind": "spray_credential",
                     "user": m.group("user"),
-                    "password_marker": _redact(m.group("pwd")),
+                    "password_marker": _redact(m.group("pwd"), show_plaintext=show),
                     "discovery_method": "hydra_spray",
                     "id_output_raw": "",  # populated in verify
                 })
@@ -319,7 +328,7 @@ class HydraSshSpray(MethodologyScanner):
                 if id_output:
                     verified = True
                     finding["id_output_raw"] = id_output[:200]
-                    finding["password_marker"] = _redact(pwd)
+                    finding["password_marker"] = _redact(pwd, show_plaintext=bool(opts.get("show_plaintext")))
                     break
             except Exception:
                 continue

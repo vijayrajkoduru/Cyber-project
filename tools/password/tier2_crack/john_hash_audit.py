@@ -259,11 +259,16 @@ def _resolve_wordlist(candidates: list[str]) -> Optional[str]:
     return None
 
 
-def _redact(pwd: str) -> str:
-    """Customer-safe cleartext marker: length + last 2 chars only."""
+def _redact(pwd: str, show_plaintext: bool = False) -> str:
+    """Customer-safe cleartext marker: length + last 2 chars only.
+    show_plaintext=True returns plaintext (customer owns the hashes -
+    they already know the plaintext or want it back for audit). Default
+    False keeps the marker so the PDF can be circulated safely."""
     if not pwd:
         return "len=0"
     pwd = pwd.strip()
+    if show_plaintext:
+        return pwd
     if len(pwd) <= 2:
         return f"len={len(pwd)} ***"
     return f"len={len(pwd)} ***{pwd[-2:]}"
@@ -550,6 +555,7 @@ class JohnHashAudit(MethodologyScanner):
                     entry = by_uname.get(lhs)
                     if not entry:
                         continue
+                    _show = bool((ctx.state.get("_options") or {}).get("show_plaintext"))
                     finding = {
                         "id": f"{session_label}_{entry['idx']}",
                         "kind": "cracked_hash",
@@ -558,7 +564,7 @@ class JohnHashAudit(MethodologyScanner):
                         "hash_marker": entry["hash"][:12] + "...",
                         "username": entry["username"] or "",
                         "raw_line_hint": entry["raw_line"][:80],
-                        "plaintext_marker": _redact(pwd),
+                        "plaintext_marker": _redact(pwd, show_plaintext=_show),
                         "_plaintext_internal": pwd,  # stripped before response
                         "discovery_method": discovery_method,
                     }

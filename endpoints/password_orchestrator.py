@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from tools._shared import verify_scan_quota
 from tools._framework.orchestrator import run_module_parallel, run_module_streaming
+from tools._methodology import ChainExecutor, chain_registry
 
 router = APIRouter()
 
@@ -97,10 +98,46 @@ async def password_run_all_buffered(req: PasswordRunAllRequest, request: Request
                                      _=Depends(verify_scan_quota)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 2, 2))
-    return await run_module_parallel(
+    response = await run_module_parallel(
         target=req.target, tools=tools, module_name="password",
         concurrency=concurrency, extra_body=extra, jwt_token=jwt,
     )
+
+    # ── Chain expansion ───────────────────────────────────────────
+    # For each primary result that emitted chain_next via VL-METHOD
+    # Stage 7, spawn the suggested downstream scanners with inherited
+    # credentials. Registry is empty during the Phase A rollout so this
+    # currently just surfaces "scanner not yet implemented" INFO findings,
+    # keeping the chain visible in the PDF.
+    if (req.options or {}).get("enable_chaining", True):
+        try:
+            results_list = []
+            if isinstance(response, dict):
+                results_list = list(response.get("results") or [])
+            if results_list:
+                executor = ChainExecutor(chain_registry)
+                chained = await executor.expand_all(
+                    primary_results=results_list,
+                    target=req.target,
+                    jwt=jwt,
+                )
+                if chained:
+                    response["results"] = results_list + chained
+                    response.setdefault("chain_summary", {})
+                    response["chain_summary"] = {
+                        "chained_scans": len(chained),
+                        "chained_scanners": sorted({
+                            r.get("tool") for r in chained if r.get("tool")
+                        }),
+                        "registered_chain_scanners": chain_registry.known(),
+                    }
+        except Exception as e:
+            # Don't fail the whole response if chaining errors
+            response.setdefault("chain_summary", {})["error"] = (
+                f"{type(e).__name__}: {str(e)[:200]}"
+            )
+
+    return response
 
 
 @router.get("/api/password/run_all/tiers")

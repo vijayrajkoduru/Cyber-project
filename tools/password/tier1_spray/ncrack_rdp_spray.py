@@ -162,13 +162,17 @@ def _write_tempfile(prefix: str, lines: list[str]) -> str:
     return path
 
 
-def _redact(pwd: str) -> str:
-    """Customer-safe redaction: length + last 3 chars only."""
+def _redact(pwd: str, show_plaintext: bool = False) -> str:
+    """Customer-safe redaction: length + last 3 chars only.
+    When show_plaintext=True, returns the plaintext password (customer
+    scanning own infra). Default False keeps the redacted marker."""
     if pwd is None:
         return "len=0"
     pwd = pwd.strip()
     if not pwd:
         return "len=0"
+    if show_plaintext:
+        return pwd
     if len(pwd) <= 3:
         return f"len={len(pwd)} ***"
     return f"len={len(pwd)} ***{pwd[-3:]}"
@@ -396,6 +400,7 @@ class NcrackRdpSpray(MethodologyScanner):
             ctx.state["ncrack_missing"] = True
             return []
 
+        show = bool((ctx.state.get("_options") or {}).get("show_plaintext"))
         findings: list[dict] = []
         loop = asyncio.get_event_loop()
         budget_start = loop.time()
@@ -411,7 +416,7 @@ class NcrackRdpSpray(MethodologyScanner):
                     "id": f"quick_{i}",
                     "kind": "default_credential",
                     "user": user,
-                    "password_marker": _redact(pwd),
+                    "password_marker": _redact(pwd, show_plaintext=show),
                     "discovery_method": "quick_probe_known_defaults",
                     "host": host,
                     "port": port,
@@ -479,13 +484,14 @@ class NcrackRdpSpray(MethodologyScanner):
             ctx.state["ncrack_attempts"] = len(users) * len(passwords)
             ctx.state["ncrack_users_tried"] = len(users)
             ctx.state["ncrack_passwords_tried"] = len(passwords)
+            show = bool((ctx.state.get("_options") or {}).get("show_plaintext"))
             findings: list[dict] = []
             for i, (h, u, p, prt) in enumerate(_parse_ncrack_success(stdout)):
                 findings.append({
                     "id": f"deep_{i}",
                     "kind": "spray_credential",
                     "user": u,
-                    "password_marker": _redact(p),
+                    "password_marker": _redact(p, show_plaintext=show),
                     "discovery_method": "ncrack_deep_spray",
                     "host": h or host,
                     "port": prt or port,

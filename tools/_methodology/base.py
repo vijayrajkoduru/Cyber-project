@@ -159,13 +159,19 @@ class _Helpers:
     @staticmethod
     async def try_default_creds(host: str, port: int, protocol: str,
                                  pairs: list[tuple[str, str]],
-                                 per_attempt_timeout: float = 5.0) -> list[dict]:
+                                 per_attempt_timeout: float = 5.0,
+                                 show_plaintext: bool = False) -> list[dict]:
         """Try a small list of (user, pwd) pairs as a quick-probe.
         Returns list of CONFIRMED login dicts. Uses raw protocol logic for
         SSH; falls back to per-protocol library for others.
 
         SAFETY: hard-limited to 10 pairs per call so an accidental loop
         can never lock out accounts. Caller should pass <=5 typical defaults.
+
+        show_plaintext: if True, include actual password under 'pwd_plain'
+            in each result. Caller is responsible for deciding when to
+            expose it (customer scanning own infra = OK; multi-tenant
+            shared report = NEVER). Default False = redacted only.
         """
         if not pairs or len(pairs) > 10:
             return []
@@ -194,12 +200,15 @@ class _Helpers:
                         id_output = stdout.read().decode("utf-8", errors="ignore").strip()
                     except Exception:
                         id_output = ""
-                    results.append({
+                    hit = {
                         "user": user,
                         "pwd_marker": f"len={len(pwd)} ***{pwd[-2:] if len(pwd) >= 2 else ''}",
                         "id_output": id_output[:200],
                         "method": "paramiko_direct",
-                    })
+                    }
+                    if show_plaintext:
+                        hit["pwd_plain"] = pwd
+                    results.append(hit)
                     try: client.close()
                     except Exception: pass
                 except paramiko.AuthenticationException:
