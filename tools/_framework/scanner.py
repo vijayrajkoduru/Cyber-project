@@ -142,11 +142,23 @@ async def run_scanner(
     # surface a clean diagnostic (e.g. "target rate-limited the scanner") and
     # have the tile render as SKIPPED (yellow) instead of FAILED (red). Used
     # by gobuster after the GRACEFUL-FAIL-V1 early-bailout.
+    #
+    # CTX-SKIPPED-REASON-V2 (2026-06-05) — still run finding_rules even when
+    # skipped, so methodology scanners' rule_unreachable / rule_input_missing
+    # can emit diagnostic INFO findings. Without this, the PDF says "5/5
+    # SKIPPED" but shows zero INFO findings, which then doesn't trigger the
+    # INSUFFICIENT-SCAN headline detector and the report falsely reads STRONG.
     _ctx_skip = ctx.state.get("skipped_reason")
     if _ctx_skip:
+        # Let rules fire so unreachable/input-missing INFOs reach the PDF
+        try:
+            skip_findings = run_rules(ctx.state, finding_rules) or []
+        except Exception:
+            skip_findings = []
         return standard_response(
-            tool=tool, target=host, findings=[],
-            tests_performed=1, vulnerable=False,
+            tool=tool, target=host, findings=skip_findings,
+            tests_performed=max(1, len(finding_rules)),
+            vulnerable=False,
             skipped_reason=str(_ctx_skip),
         )
 
