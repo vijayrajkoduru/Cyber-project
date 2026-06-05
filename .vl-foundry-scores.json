@@ -64,5 +64,11 @@
   },
   "tunnel": {
     "score": 78.3
+  },
+  "password": {
+    "score": 100.0
+  },
+  "bof": {
+    "score": 100.0
   }
 }
