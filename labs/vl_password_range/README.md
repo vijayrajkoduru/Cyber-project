@@ -9,7 +9,7 @@ methodology end-to-end without false-positives or false-negatives.
 
 | Target           | Hostname        | Port | Default creds   | Used by      |
 |------------------|-----------------|------|-----------------|--------------|
-| OpenSSH server   | `lab_pwd_ssh`   | 22   | `admin / admin` | Hydra        |
+| OpenSSH server   | `lab_pwd_ssh`   | 2222 | `admin / admin` | Hydra        |
 | Samba SMB share  | `lab_pwd_smb`   | 445  | `admin / admin` | Medusa       |
 | Flask login form | `lab_pwd_web`   | 5000 | `admin / admin` | Patator      |
 | Hash files       | bind-mounted    | n/a  | (see below)     | John         |
@@ -31,7 +31,7 @@ Wait ~15 seconds, then verify:
 
 ```bash
 docker compose exec backend bash -c '
-  echo "SSH banner:";   nc -w 3 lab_pwd_ssh 22 < /dev/null
+  echo "SSH banner:";   nc -w 3 lab_pwd_ssh 2222 < /dev/null
   echo "SMB negotiate:"; nmap -p 445 --script smb-os-discovery lab_pwd_smb | head -20
   echo "HTTP login:";   curl -s -o /dev/null -w "%{http_code}\n" http://lab_pwd_web:5000/login
 '
@@ -48,14 +48,14 @@ In the Password Attacks tile, set **Target** + **Options** as below:
 ```
 Target:    lab_pwd_ssh
 Options:
-  port:         22
+  port:         2222
   userlist:     admin\nroot\nubuntu
   passlist:     admin\npassword\n123456
   always_deep:  true
 ```
 
 Expected 7-stage trace:
-- `pre_flight`     port 22 reachable (~12ms)
+- `pre_flight`     port 2222 reachable (~12ms)
 - `fingerprint`    `SSH-2.0-OpenSSH_X.Y` captured
 - `quick_probe`    HIT on admin/admin (~3-5s)
 - `deep_scan`      hydra re-confirms admin/admin (~10-20s)
