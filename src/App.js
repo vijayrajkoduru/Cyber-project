@@ -19462,6 +19462,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [running,   setRunning]   = useState(false);
   const [results,   setResults]   = useState({});
   const [progress,  setProgress]  = useState({done:0, total:0});
+  // Phase E: chain_summary from /api/password/run_all_buffered or the
+  // streaming wrapper's final NDJSON record. Populates the Attack Chain
+  // section in the PDF generator. Stays null until a chain_summary
+  // record arrives (password module only for now).
+  const [chainSummary, setChainSummary] = useState(null);
   const [sevFilter, setSevFilter] = useState(null);
   const [expanded,  setExpanded]  = useState(null);
   const [searchTerm,setSearchTerm]= useState("");
@@ -19727,6 +19732,16 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               done++;
               setResults(p => ({...p, [ev.tool]: {status:"error", tier: (initial[ev.tool]||{}).tier, message: ev.message}}));
               setProgress({done, total: totalTools});
+            } else if (kind === "chain_summary") {
+              // Phase E: backend's streaming chain expansion emits this
+              // as a final NDJSON record. Stash it so the PDF generator
+              // can render the Attack Chain section.
+              setChainSummary({
+                chained_scans: ev.chained_scans || 0,
+                chained_scanners: ev.chained_scanners || [],
+                registered_chain_scanners: ev.registered_chain_scanners || [],
+                error: ev.error || null,
+              });
             }
             // scan_started / heartbeat / scan_complete: no UI update needed,
             // just keeps the stream alive past Cloudflare's 100s TTFB ceiling.
@@ -19787,6 +19802,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       // /tmp/stereoscope-XXX/oci-registry-image-YYY/sha256:...).
       userImageRef: (advInputs.image_ref || "").trim() || null,
       allResults: results,
+      // Phase E: chain_summary from the streaming NDJSON wrapper. Drives
+      // the Attack Chain section between Per-Tool and Risk Rating Matrix.
+      chainSummary: chainSummary,
       date: (cfg && cfg.date) || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
       authenticated: !!(authBearer || authCookie),
       pdfConfig: cfg || {},
