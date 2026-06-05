@@ -135,8 +135,104 @@ services:
   #   - vulnuslab
   #   restart: unless-stopped
 
+  # ── Phase C / D / E Password Attacks Labs (OPT-IN) ───────────────────
+  # These three lab targets exercise the Active Directory (Phase C) and
+  # OAuth/SAML (Phase D) Password Attacks scanners. They are commented
+  # out by default because together they pull ~2.5 GB of images and
+  # lab_pwd_ad needs ~90s to provision its Samba AD domain.
+  #
+  # To enable all three:
+  #   1. Uncomment the three service blocks below.
+  #   2. Run on the VPS:
+  #        docker compose up -d lab_pwd_ad lab_pwd_oauth lab_pwd_saml
+  #   3. For lab_pwd_ad, seed the test users once the DC is up:
+  #        docker compose exec lab_pwd_ad bash /bootstrap.sh
+  #
+  # See labs/vl_password_range/PHASE_CDE_LABS.md for per-scanner
+  # invocation walkthroughs and expected chain_handoff cascades.
+  # ─────────────────────────────────────────────────────────────────────
+
+  # lab_pwd_ad — Samba Active Directory Domain Controller
+  # Targets: kerberoast_audit, asreproast_audit, dcsync_audit,
+  #          bloodhound_audit, ldap_brute (against AD)
+  # Image ~1.5GB, boot ~90s. Hostname dc01.vlrange.local is resolvable
+  # inside the vulnuslab bridge.
+  # lab_pwd_ad:
+  #   image: nowsci/samba-domain:latest
+  #   container_name: lab_pwd_ad
+  #   hostname: dc01.vlrange.local
+  #   environment:
+  #   - DOMAIN=VLRANGE
+  #   - DOMAIN_DC=dc=vlrange,dc=local
+  #   - DOMAIN_EMAIL=vlrange.local
+  #   - DOMAINPASS=VLrange_Admin_2026!
+  #   - DNSFORWARDER=1.1.1.1
+  #   - HOSTIP=
+  #   - INSECURELDAP=true
+  #   - NOCOMPLEXITY=true
+  #   networks:
+  #   - vulnuslab
+  #   extra_hosts:
+  #   - "dc01.vlrange.local:127.0.0.1"
+  #   volumes:
+  #   - lab_pwd_ad_data:/var/lib/samba
+  #   - lab_pwd_ad_conf:/etc/samba/external
+  #   - ./labs/vl_password_range/ad_bootstrap.sh:/bootstrap.sh:ro
+  #   cap_add:
+  #   - SYS_ADMIN
+  #   restart: unless-stopped
+  #   # Seeded users (run /bootstrap.sh once after first boot):
+  #   #   Administrator / VLrange_Admin_2026!   (Domain Admin)
+  #   #   svc_mssql     / Password123           (kerberoastable - MSSQLSvc SPN)
+  #   #   svc_http      / Spring2024            (kerberoastable - HTTP SPN)
+  #   #   jbloggs       / NoPreAuth!            (AS-REP roastable)
+  #   #   regularuser   / regularuser           (standard domain user)
+
+  # lab_pwd_oauth — Keycloak OAuth/OIDC IdP
+  # Targets: oauth_token_audit
+  # Image ~600MB. Realm vl-test-realm is auto-imported on first boot.
+  # lab_pwd_oauth:
+  #   image: quay.io/keycloak/keycloak:24.0.5
+  #   container_name: lab_pwd_oauth
+  #   command: ["start-dev", "--import-realm"]
+  #   environment:
+  #   - KEYCLOAK_ADMIN=admin
+  #   - KEYCLOAK_ADMIN_PASSWORD=admin_VLrange_2026
+  #   - KC_HTTP_ENABLED=true
+  #   - KC_HOSTNAME_STRICT=false
+  #   - KC_HOSTNAME_STRICT_HTTPS=false
+  #   networks:
+  #   - vulnuslab
+  #   volumes:
+  #   - ./labs/vl_password_range/keycloak:/opt/keycloak/data/import:ro
+  #   restart: unless-stopped
+  #   # Test users (in vl-test-realm):
+  #   #   alice / Password1!
+  #   #   bob   / Password2!
+  #   # Client: vl-test-client (public, implicit flow ON, PKCE NOT enforced)
+
+  # lab_pwd_saml — SimpleSAMLphp IdP + SP for SAML attack testing
+  # Targets: saml_signature_audit
+  # Image ~400MB. Provides both IdP and SP endpoints on port 8080.
+  # lab_pwd_saml:
+  #   image: kristophjunge/test-saml-idp:latest
+  #   container_name: lab_pwd_saml
+  #   environment:
+  #   - SIMPLESAMLPHP_SP_ENTITY_ID=lab-saml-sp
+  #   - SIMPLESAMLPHP_SP_ASSERTION_CONSUMER_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-acs.php/default-sp
+  #   - SIMPLESAMLPHP_SP_SINGLE_LOGOUT_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-logout.php/default-sp
+  #   - SIMPLESAMLPHP_IDP_ENTITY_ID=http://lab_pwd_saml:8080/simplesaml/saml2/idp/metadata.php
+  #   networks:
+  #   - vulnuslab
+  #   restart: unless-stopped
+  #   # Test users (image defaults):
+  #   #   user1 / user1pass
+  #   #   user2 / user2pass
+
 volumes:
   scan_data: null
+  lab_pwd_ad_data: null
+  lab_pwd_ad_conf: null
 networks:
   vulnuslab:
     driver: bridge

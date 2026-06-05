@@ -124,6 +124,32 @@ Full per-scanner invocation guide: [labs/vl_password_range/README.md](labs/vl_pa
 
 ---
 
+## Phase C/D/E Lab Containers (opt-in)
+
+Heavy-image labs that exercise the Active Directory (Phase C) and
+OAuth/SAML (Phase D) Password Attacks scanners. **Commented out in
+`docker-compose.yml` by default** — uncomment and:
+
+```bash
+docker compose up -d lab_pwd_ad lab_pwd_oauth lab_pwd_saml
+# lab_pwd_ad: seed users once (~90s after first boot)
+docker compose exec lab_pwd_ad bash /bootstrap.sh
+```
+
+| Container       | Hostname (internal)   | Port | Credentials                                                | Scanner(s) targeted                                                                |
+|-----------------|-----------------------|-----:|------------------------------------------------------------|------------------------------------------------------------------------------------|
+| `lab_pwd_ad`    | `dc01.vlrange.local`  |  389 | `Administrator / VLrange_Admin_2026!` (Domain Admin)        | `ldap_brute` (seed) → chains to `kerberoast_audit`, `asreproast_audit`, `dcsync_audit`, `bloodhound_audit` |
+| `lab_pwd_ad`    | `dc01.vlrange.local`  |  88  | `svc_mssql / Password123` (kerberoastable, MSSQLSvc SPN)    | `kerberoast_audit`                                                                  |
+| `lab_pwd_ad`    | `dc01.vlrange.local`  |  88  | `svc_http / Spring2024` (kerberoastable, HTTP SPN)          | `kerberoast_audit`                                                                  |
+| `lab_pwd_ad`    | `dc01.vlrange.local`  |  88  | `jbloggs / NoPreAuth!` (DONT_REQUIRE_PREAUTH)               | `asreproast_audit`                                                                  |
+| `lab_pwd_oauth` | `lab_pwd_oauth`       | 8080 | Admin `admin / admin_VLrange_2026`; users `alice/Password1!`, `bob/Password2!` | `oauth_token_audit` (realm `vl-test-realm`, client `vl-test-client`) |
+| `lab_pwd_saml`  | `lab_pwd_saml`        | 8080 | `user1 / user1pass`, `user2 / user2pass`                    | `saml_signature_audit` (capture a valid SAMLResponse first)                         |
+
+Full walkthrough with expected chain_handoff cascades:
+[labs/vl_password_range/PHASE_CDE_LABS.md](labs/vl_password_range/PHASE_CDE_LABS.md)
+
+---
+
 ## Important legal rules
 
 ### You CAN scan:

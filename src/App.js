@@ -14450,6 +14450,93 @@ function generateUniversalVLReport(opts) {
     y += 4;
   }
 
+  // ── ATTACK CHAIN (Phase A chaining engine output) ──
+  // Renders cross-scanner chain handoffs from VL-METHOD scanners. Only
+  // appears when the orchestrator response carries a chain_summary
+  // (currently only password module's run_all_buffered). The chain shows
+  // which downstream scanners were invoked because an upstream finding
+  // emitted chain_next, with inherited credentials propagating through.
+  // E.g. ldap_brute confirms Domain Admin -> kerberoast_audit (3 TGS) ->
+  // john_hash_audit (1 password cracked).
+  //
+  // The chain_summary comes from the orchestrator-level response, NOT
+  // per-scanner findings. We look in three places:
+  //   1. opts.chainSummary - explicit opt passed by caller
+  //   2. allResultsRaw._chain_summary - some callers stash it here
+  //   3. allResultsRaw.chain_summary - top-level passthrough
+  const _chainSummary = opts.chainSummary
+                       || (allResultsRaw && (allResultsRaw._chain_summary
+                                              || allResultsRaw.chain_summary))
+                       || null;
+  const _chainScans = _chainSummary && _chainSummary.chained_scanners || [];
+  const _chainRegistered = _chainSummary && _chainSummary.registered_chain_scanners || [];
+  if (_chainSummary && (_chainScans.length > 0 || _chainRegistered.length > 0)) {
+    // Local helper - _prettyName is declared inside Per-Tool block scope,
+    // not visible here. Re-define for the chain section.
+    const _chainPretty = (k) => String(k || "").replace(/_/g, " ")
+        .replace(/\b\w/g, c => c.toUpperCase());
+    chk(40); y = sHead("Attack Chain", y);
+    // Brief header explaining what this is
+    chk(10); fillR(margin, y, contentW, 9, [240,249,255]); fillR(margin, y, 3, 9, [37,99,235]);
+    txt("Cross-scanner chain handoff (VL-METHOD Stage 7)",
+        margin + 6, y + 3.5, 8, [37,99,235], true);
+    txt("Upstream scanner findings auto-triggered downstream scanners with inherited credentials",
+        margin + 6, y + 7, 7, GRAY);
+    y += 13;
+
+    // Registered scanners count
+    if (_chainRegistered.length > 0) {
+      chk(6); txt(`Chain registry: ${_chainRegistered.length} scanner(s) registered`,
+          margin, y + 4, 8, DARK, true);
+      y += 7;
+      const _regWrap = doc.splitTextToSize(
+        _ascii(_chainRegistered.join(", ")), contentW - 4);
+      _regWrap.slice(0, 3).forEach((ln, i) => {
+        chk(4.5); fillR(margin, y, contentW, 4, i%2===0 ? LIGHT : WHITE);
+        txt(ln, margin + 3, y + 2.8, 6.5, GRAY);
+        y += 4;
+      });
+      y += 3;
+    }
+
+    // Chained scans executed in THIS run
+    if (_chainScans.length > 0) {
+      chk(8); txt(`Chain executions this scan: ${_chainSummary.chained_scans || _chainScans.length}`,
+          margin, y + 4, 8, DARK, true);
+      y += 7;
+
+      // Tree-style listing of chained scanners
+      _chainScans.forEach((scannerName, idx) => {
+        chk(5.5); fillR(margin, y, contentW, 5, idx%2===0 ? LIGHT : WHITE);
+        // Tree marker: └─ or ├─
+        const _marker = (idx === _chainScans.length - 1) ? "└─" : "├─";
+        txt(`${_marker} ${_chainPretty(scannerName)}`,
+            margin + 4, y + 3.5, 7, DARK, true);
+        // If the chained result is in r{} keyed by scanner name, surface
+        // its finding count + chain_id
+        const _chainedResult = r[scannerName];
+        if (_chainedResult) {
+          const _findings = _chainedResult.findings || [];
+          const _ci = _chainedResult.chain_id || _chainSummary.chain_id || "—";
+          txt(`${_findings.length} finding(s) · chain_id=${_ci}`,
+              margin + 80, y + 3.5, 6.5, GRAY);
+        }
+        y += 5;
+      });
+      y += 3;
+    }
+
+    // Error if chain expansion failed
+    if (_chainSummary.error) {
+      chk(7); fillR(margin, y, contentW, 6, [254,242,242]); fillR(margin, y, 3, 6, [162,28,28]);
+      txt(`Chain expansion error: ${_chainSummary.error}`,
+          margin + 6, y + 4, 7, [162,28,28]);
+      y += 9;
+    }
+
+    y += 4;
+  }
+
   // ── RISK RATING MATRIX ──
   // chk(60) reserves header + table header + 5 rows + bottom padding so the
   // INFO row never gets orphaned on the next page (Vuln PDF gap #15).
