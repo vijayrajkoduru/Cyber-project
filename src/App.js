@@ -13416,12 +13416,24 @@ function generateUniversalVLReport(opts) {
     });
     if (_missingInputs.length > 0) {
       y = sHead("Required Inputs (provide on re-scan)", y);
-      const _ilines = _missingInputs.slice(0,8).map(m =>
+      // Show ALL missing inputs (was capped at 8 - hid 12 of 20 from
+      // example.com scan). Cap at 25 just to prevent runaway PDFs.
+      const _maxShow = Math.min(_missingInputs.length, 25);
+      const _ilines = _missingInputs.slice(0, _maxShow).map(m =>
         `  - ${(m.tool||"").substring(0,28).padEnd(28)} needs: ${m.missing}`);
-      fillR(margin, y, contentW, 6 + _ilines.length * 5, [255,251,235]);
+      const _hiddenCount = _missingInputs.length - _maxShow;
+      const _blockHeight = 6 + _ilines.length * 5 + (_hiddenCount > 0 ? 5 : 0);
+      // Page-break if block won't fit
+      chk(_blockHeight + 4);
+      fillR(margin, y, contentW, _blockHeight, [255,251,235]);
       doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
       _ilines.forEach((ln, i) => { doc.text(_ascii(ln), margin + 4, y + 5 + (i*5)); });
-      y += 8 + _ilines.length * 5;
+      if (_hiddenCount > 0) {
+        doc.setTextColor(...GRAY);
+        doc.text(`  ... and ${_hiddenCount} more (see Per-Tool section below)`,
+                 margin + 4, y + 5 + _ilines.length * 5);
+      }
+      y += 8 + _ilines.length * 5 + (_hiddenCount > 0 ? 5 : 0);
     }
   }
 

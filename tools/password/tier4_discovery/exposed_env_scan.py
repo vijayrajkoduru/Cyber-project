@@ -159,7 +159,11 @@ def _redact(secret: str, show_plaintext: bool = False) -> str:
 
 
 def _normalize_url(target: str) -> str:
-    """Return scheme://host[:port] (no trailing slash, no path)."""
+    """Return scheme://host[:port] (no trailing slash, no path).
+
+    Drop port suffix when it's a non-HTTP port (e.g. example.com:22 became
+    https://example.com:22 which is nonsense for a web probe). Keep the
+    port only when it's one of the known web/api ports."""
     if not target:
         return ""
     t = target.strip()
@@ -170,6 +174,17 @@ def _normalize_url(target: str) -> str:
     netloc = p.netloc or p.path.split("/", 1)[0]
     if not netloc:
         return ""
+    # Strip non-web port suffixes so we don't probe https://host:22/
+    WEB_PORTS = {80, 443, 8080, 8443, 8000, 8001, 8888, 3000, 5000, 9000, 9090}
+    if ":" in netloc:
+        host, _, port_str = netloc.rpartition(":")
+        try:
+            port_int = int(port_str)
+            if port_int not in WEB_PORTS:
+                # Drop the suffix - let the scheme default (80/443) handle it
+                netloc = host
+        except (ValueError, TypeError):
+            pass
     return f"{scheme}://{netloc}"
 
 

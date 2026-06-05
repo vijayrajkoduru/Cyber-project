@@ -155,9 +155,8 @@ class FtpBrute(MethodologyScanner):
     async def pre_flight(self, ctx: ScanContext) -> bool:
         target = ctx.host
         opts = ctx.state.get("_options") or {}
-        port_arg = int(opts.get("port") or 21)
-        clean_host, parsed_port = helpers.split_host_port(target, default_port=port_arg)
-        port = parsed_port if parsed_port else port_arg
+        clean_host, port = helpers.resolve_port(
+            target, opts, primary_port=21, valid_ports=(2121, 2200, 990))
         ctx.state["target_host"] = clean_host
         ctx.state["target_port"] = port
         if not clean_host:
