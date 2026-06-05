@@ -19039,6 +19039,53 @@ const MODULE_ADVANCED_INPUTS = {
   cloud:         ["repo_url"],   // IaC scans (tfsec / checkov) need repo with .tf files
 };
 
+// MODULE_OPTIONS_INPUTS — fields that go into the {options: {}} dict of the
+// scan request (vs top-level like image_ref / kubeconfig above). Per VL-METHOD
+// pattern, scanners read from req.options for per-scan parameters like
+// userlist/passlist/hashes/form_url. Each field rendered as an input in the
+// advanced section; values collected into a single options{} blob on submit.
+const MODULE_OPTIONS_INPUTS = {
+  password: [
+    "userlist", "passlist",        // hydra/ncrack/medusa/patator spray
+    "hashes", "hash_format",       // john offline crack
+    "form_url", "user_field", "pass_field", "fail_string",  // patator http
+    "always_deep", "show_plaintext",  // global behaviour flags
+  ],
+};
+
+const OPTIONS_INPUT_DEFS = {
+  userlist:      {label:"Userlist", ph:"root\nadmin\nubuntu\npi\ntest\nalice\nbob", type:"textarea", rows:5, hint:"One username per line. Used by Hydra/Ncrack/Medusa/Patator (deep_scan). Max 10."},
+  passlist:      {label:"Passlist", ph:"password\nadmin\n123456\nrockyou\nSummer2025!\nWelcome1", type:"textarea", rows:5, hint:"One password per line. Used by Hydra/Ncrack/Medusa/Patator (deep_scan). Max 25.", secret:true},
+  hashes:        {label:"Hashes (for John Hash Audit)", ph:"# Examples (one per line):\ntest:5f4dcc3b5aa765d61d8327deb882cf99\nroot:$6$xyz$abc...\nadmin:$2y$10$saltsalt$...", type:"textarea", rows:6, hint:"Paste hashes — /etc/shadow line, pwdump, or raw hash:plaintext_id. Hash type auto-detected. Max 100 hashes."},
+  hash_format:   {label:"Hash format override (optional)", ph:"sha512crypt | bcrypt | nthash | raw-md5 | ...", type:"text", hint:"Leave blank for auto-detect via hashid. Specify only if auto-detect fails."},
+  form_url:      {label:"Form URL (for Patator HTTP Form Brute)", ph:"https://app.example.com/login", type:"text", hint:"Full URL of the login form. Pre-flight tests reachability + GET-parses form."},
+  user_field:    {label:"Username field name", ph:"username | email | login | user", type:"text", hint:"HTML <input name=\"...\"> for username. Default: 'username'."},
+  pass_field:    {label:"Password field name", ph:"password | passwd | pwd", type:"text", hint:"HTML <input name=\"...\"> for password. Default: 'password'."},
+  fail_string:   {label:"Failure string", ph:"Invalid credentials | Login failed | error", type:"text", hint:"Text in response body when login FAILS. Used to detect successful logins (their absence = success)."},
+  always_deep:   {label:"Always run deep_scan", type:"checkbox", hint:"Force deep_scan even if quick_probe found nothing. Default: gated (only runs if quick_probe hits)."},
+  show_plaintext:{label:"Show passwords in plaintext", type:"checkbox", default:true, hint:"Display actual cracked passwords in PDF (default ON — customer scans own infra). Disable when sharing with external auditor."},
+};
+
+// Curated wordlist presets for Password module — one-click to load common
+// wordlists into userlist/passlist textareas without making customer paste.
+const OPTIONS_INPUT_PRESETS = {
+  userlist: [
+    {label:"Linux top 10",  value:"root\nadmin\nubuntu\npi\ntest\noracle\nguest\nuser\noperator\nbackup", desc:"Top-10 common Linux accounts"},
+    {label:"Windows top 10",value:"Administrator\nadmin\nuser\nguest\nbackup\ntest\nsupport\nservice\nsa\nsql", desc:"Top-10 common Windows accounts"},
+    {label:"Web app top 5", value:"admin\nroot\nuser\ntest\nadministrator", desc:"Top-5 web app accounts"},
+  ],
+  passlist: [
+    {label:"Rockyou top 25", value:"password\n123456\n12345678\nqwerty\n12345\n123456789\nletmein\n1234567\nfootball\niloveyou\nadmin\nwelcome\nmonkey\nlogin\nabc123\nstarwars\n123123\ndragon\npassw0rd\nmaster\nhello\nfreedom\nwhatever\nqazwsx\ntrustno1", desc:"Top-25 from 2009 RockYou breach (still effective)"},
+    {label:"Default creds",  value:"admin\nroot\npassword\nchangeme\ndefault\nguest\ntest\n12345\n1234\nadmin123", desc:"Top-10 default vendor passwords"},
+    {label:"Corp 2025",      value:"Password1\nWelcome1\nSummer2025!\nWinter2024!\nSpring2025\nCompany2025\nP@ssw0rd\nQwerty123!\nLetmein123\nChange123!", desc:"Common corporate password patterns (seasonal + complexity rules)"},
+  ],
+  hashes: [
+    {label:"MD5 'password'",       value:"test:5f4dcc3b5aa765d61d8327deb882cf99", desc:"MD5 of literal 'password' — cracks instantly via top-100 wordlist"},
+    {label:"SHA1 'admin'",         value:"admin:d033e22ae348aeb5660fc2140aec35850c4da997", desc:"SHA1 of 'admin' — cracks instantly"},
+    {label:"Shadow line (test)",   value:"test:$1$saltsalt$YhgvbWXJfvT7zKzKkPK1u/:1000:1000:test:/home/test:/bin/bash", desc:"MD5crypt /etc/shadow format example"},
+  ],
+};
+
 const ADVANCED_INPUT_DEFS = {
   image_ref:       {label:"Image reference",     ph:"nginx:1.21 or registry.example.com/team/app:v1.4.2",          type:"text",     hint:"OCI image — pulled by Trivy/Grype/Syft/Cosign"},
   dockerfile_text: {label:"Dockerfile",          ph:"FROM debian:bookworm\nRUN apt-get update && apt-get install -y curl\nUSER root\n...", type:"textarea", rows:6, hint:"Paste raw Dockerfile — static-analysis probes only (no build)"},
@@ -19275,6 +19322,29 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     } catch(_){}
     return init;
   });
+  // VL-METHOD options — fields that go INSIDE options{} dict of scan request
+  // (vs top-level like advInputs above). Per-module per MODULE_OPTIONS_INPUTS.
+  const optionsFields = MODULE_OPTIONS_INPUTS[moduleKey] || [];
+  const [optInputs, setOptInputs] = useState(() => {
+    const init = {};
+    optionsFields.forEach(k => {
+      const def = OPTIONS_INPUT_DEFS[k];
+      if (def && def.type === "checkbox") init[k] = def.default === true;
+      else init[k] = "";
+    });
+    try {
+      const raw = localStorage.getItem(`vl_opt_inputs:${moduleKey}`);
+      if (raw) Object.assign(init, JSON.parse(raw));
+    } catch(_){}
+    return init;
+  });
+  const setOptField = (k, v) => {
+    setOptInputs(p => {
+      const next = {...p, [k]: v};
+      try { localStorage.setItem(`vl_opt_inputs:${moduleKey}`, JSON.stringify(next)); } catch(_){}
+      return next;
+    });
+  };
   // Container module: auto-open Advanced panel — image_ref / dockerfile /
   // pod-spec ARE the primary inputs for Container, not the Target field.
   // The Target field itself is hidden for this module (see render below),
@@ -19488,6 +19558,23 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         const v = (advInputs[k] || "").trim();
         if (v) runBody[k] = v;
       });
+      // VL-METHOD options{} dict (Password module: userlist / passlist / hashes /
+      // form_url / etc.). Attached as nested options{} so scanners read via
+      // ctx.state.get('_options'). Empty string = not set; checkboxes always
+      // passed as bool so always_deep / show_plaintext are explicit.
+      if (optionsFields.length > 0) {
+        const opts = {};
+        optionsFields.forEach(k => {
+          const def = OPTIONS_INPUT_DEFS[k] || {};
+          const v = optInputs[k];
+          if (def.type === "checkbox") {
+            opts[k] = !!v;
+          } else if (typeof v === "string" && v.trim().length > 0) {
+            opts[k] = v.trim();
+          }
+        });
+        if (Object.keys(opts).length > 0) runBody.options = opts;
+      }
       const runPath = (moduleKey === "webapp")
         ? `${apiUrl}/api/webapp/scan/run_all`
         : `${apiUrl}/api/${moduleKey}/run_all`;
@@ -19832,6 +19919,104 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                               outline:"none", resize:"vertical", lineHeight:1.5}}/>
                   ) : (
                     <input type="text" value={val} onChange={e => setAdvField(k, e.target.value)}
+                      disabled={running} placeholder={def.ph}
+                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
+                              borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              outline:"none"}}/>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* VL-METHOD options panel — Password module only (for now).
+          Renders userlist/passlist/hashes/form_url/etc. as input fields
+          that get passed under the options{} dict of the scan request.
+          Each scanner in the module reads only the fields it needs;
+          irrelevant fields are ignored by scanners that don't use them. */}
+      {optionsFields.length > 0 && (
+        <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
+                      border:"1px solid #1e3a5f", borderRadius:6}}>
+          <div style={{fontSize:10, color:"#60a5fa", marginBottom:10,
+                        textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>
+            VL-METHOD inputs — what each scanner tries against the target
+            <span style={{color:"#64748b", marginLeft:8, textTransform:"none",
+                            letterSpacing:0, fontSize:10, fontWeight:500}}>
+              · paste wordlists / hashes / form details — scanner picks what it needs
+            </span>
+          </div>
+          <div style={{display:"flex", flexDirection:"column", gap:12}}>
+            {optionsFields.map(k => {
+              const def = OPTIONS_INPUT_DEFS[k];
+              if (!def) return null;
+              const val = optInputs[k];
+              const presets = OPTIONS_INPUT_PRESETS[k] || [];
+
+              // Checkbox rendering (always_deep / show_plaintext)
+              if (def.type === "checkbox") {
+                return (
+                  <div key={k} style={{display:"flex", alignItems:"center", gap:8}}>
+                    <input type="checkbox" checked={!!val}
+                      onChange={e => setOptField(k, e.target.checked)}
+                      disabled={running}
+                      style={{width:14, height:14, cursor:"pointer", accentColor:"#3b82f6"}}/>
+                    <label style={{fontSize:11.5, color:"#cbd5e1", fontWeight:500, cursor:"pointer"}}
+                      onClick={() => !running && setOptField(k, !val)}>
+                      {def.label}
+                    </label>
+                    {def.hint && (
+                      <span style={{fontSize:10, color:"#64748b", marginLeft:4}}>
+                        — {def.hint}
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+
+              // Text / textarea rendering
+              return (
+                <div key={k}>
+                  <label style={{fontSize:10, color:"#94a3b8", fontWeight:600,
+                                  textTransform:"uppercase", letterSpacing:1.2,
+                                  display:"block", marginBottom:3}}>
+                    {def.label}
+                    {def.secret && (
+                      <span style={{color:"#f59e0b", marginLeft:6, fontWeight:500,
+                                      textTransform:"none", letterSpacing:0, fontSize:9}}>
+                        [sensitive]
+                      </span>
+                    )}
+                  </label>
+                  {def.hint && (
+                    <div style={{fontSize:10, color:"#64748b", marginBottom:4}}>{def.hint}</div>
+                  )}
+                  {presets.length > 0 && (
+                    <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:6}}>
+                      {presets.map((p, i) => (
+                        <button key={i} type="button" onClick={() => setOptField(k, p.value)}
+                          disabled={running}
+                          title={p.desc}
+                          style={{background:"#1e293b", border:"1px solid #334155",
+                                  borderRadius:4, padding:"3px 8px", color:"#94a3b8",
+                                  fontSize:10, cursor:"pointer", fontWeight:500}}>
+                          + {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {def.type === "textarea" ? (
+                    <textarea value={val || ""} onChange={e => setOptField(k, e.target.value)}
+                      disabled={running} placeholder={def.ph} rows={def.rows || 5}
+                      spellCheck={false}
+                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
+                              borderRadius:5, padding:"8px 10px", color:"#cbd5e1",
+                              fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
+                              outline:"none", resize:"vertical", lineHeight:1.5}}/>
+                  ) : (
+                    <input type="text" value={val || ""} onChange={e => setOptField(k, e.target.value)}
                       disabled={running} placeholder={def.ph}
                       style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
                               borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
