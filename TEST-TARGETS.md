@@ -99,6 +99,31 @@ These run in your Docker compose stack — guaranteed reachable:
 
 ---
 
+## VL-METHOD Password Range (full 7-stage coverage)
+
+Deterministic targets that exercise all 7 VL-METHOD stages of every
+Password Attacks scanner. Spin up on VPS:
+
+```bash
+docker compose up -d lab_pwd_ssh lab_pwd_smb lab_pwd_web
+```
+
+| Target          | Hostname        | Port | Default creds   | Used by scanner          |
+|-----------------|-----------------|------|-----------------|--------------------------|
+| OpenSSH server  | `lab_pwd_ssh`   | 22   | `admin / admin` | Hydra SSH spray          |
+| Samba SMB share | `lab_pwd_smb`   | 445  | `admin / admin` | Medusa SMB spray         |
+| Flask login     | `lab_pwd_web`   | 5000 | `admin / admin` | Patator HTTP form        |
+| Hash files      | bind-mounted    | n/a  | (md5/bcrypt/NTLM of `password`) | John hash audit |
+| xrdp (opt-in)   | `lab_pwd_rdp`   | 3389 | `admin / admin` | Ncrack RDP spray         |
+
+All targets use `admin/admin` because it's in every scanner's quick_probe
+default list — so stage 3 HITS, which gates deep_scan + verify +
+privilege_check + chain_handoff to actually execute.
+
+Full per-scanner invocation guide: [labs/vl_password_range/README.md](labs/vl_password_range/README.md)
+
+---
+
 ## Important legal rules
 
 ### You CAN scan:

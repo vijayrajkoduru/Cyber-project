@@ -82,6 +82,59 @@ services:
     container_name: lab_metasploitable
     networks:
     - vulnuslab
+
+  # ── VL-METHOD Password Range ─────────────────────────────────────────
+  # Three deterministic targets that exercise all 7 stages of every
+  # Password Attacks scanner. All use admin/admin so quick_probe HITS
+  # (which gates deep_scan + verify + privilege + chain_handoff).
+  # See labs/vl_password_range/README.md for per-scanner invocations.
+  # ─────────────────────────────────────────────────────────────────────
+  lab_pwd_ssh:
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: lab_pwd_ssh
+    environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=Etc/UTC
+    - PASSWORD_ACCESS=true
+    - USER_NAME=admin
+    - USER_PASSWORD=admin
+    - SUDO_ACCESS=true
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  lab_pwd_smb:
+    image: dperson/samba:latest
+    container_name: lab_pwd_smb
+    command: >-
+      -u "admin;admin"
+      -s "public;/share;yes;no;yes;all"
+      -p
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  lab_pwd_web:
+    build:
+      context: ./labs/vl_password_range/webform
+      dockerfile: Dockerfile
+    container_name: lab_pwd_web
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  # Optional RDP target — uncomment to enable Ncrack full-stage testing.
+  # Image is ~600MB so it's off by default. Default creds: admin/admin.
+  # lab_pwd_rdp:
+  #   image: danielguerra/ubuntu-xrdp:latest
+  #   container_name: lab_pwd_rdp
+  #   environment:
+  #   - TZ=Etc/UTC
+  #   networks:
+  #   - vulnuslab
+  #   restart: unless-stopped
+
 volumes:
   scan_data: null
 networks:
