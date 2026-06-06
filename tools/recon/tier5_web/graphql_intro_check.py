@@ -3,14 +3,24 @@ import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
+from tools.recon._web_helpers import set_auth_from_req, current_auth
 router = APIRouter()
 PATHS = ["/graphql","/api/graphql","/v1/graphql","/graphql/v1","/query","/gql","/graphiql","/playground"]
 INTRO = {"query": "{__schema{queryType{name}}}"}
 DEEP_INTRO = {"query": "{__schema{queryType{name fields{name}} mutationType{name fields{name}} subscriptionType{name fields{name}} types{name}}}"}
+
+def _authed_headers():
+    h = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+    a = current_auth()
+    if a["auth_cookie"]:
+        h["Cookie"] = a["auth_cookie"]
+    if a["auth_bearer"]:
+        h["Authorization"] = f"Bearer {a['auth_bearer']}"
+    return h
+
 def _probe(url):
     try:
-        r = requests.post(url, json=INTRO, timeout=8,
-                          headers={"Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+        r = requests.post(url, json=INTRO, timeout=8, headers=_authed_headers())
     except Exception:
         return None
     if r.status_code >= 400:
@@ -27,8 +37,7 @@ def _probe(url):
     return None
 def _deep_probe(url):
     try:
-        r = requests.post(url, json=DEEP_INTRO, timeout=10,
-                          headers={"Content-Type":"application/json","User-Agent":"Mozilla/5.0"})
+        r = requests.post(url, json=DEEP_INTRO, timeout=10, headers=_authed_headers())
         j = r.json()
         sch = (j.get("data") or {}).get("__schema") or {}
     except Exception:
@@ -133,6 +142,7 @@ INTEL_FIELDS = [("GraphQL endpoints","graphql_endpoints"),
                 ("Endpoints found","endpoint_count")]
 @router.post("/api/recon/graphql_intro_check")
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
+    set_auth_from_req(req)
     return await run_scanner(host=recon_host(req.target), tool="graphql_intro_check",
         gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS,
         flat_field_keys=["graphql_endpoints","introspection_enabled","endpoint_count"])

@@ -3,7 +3,7 @@ import asyncio, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._web_helpers import fetch, base_url
+from tools.recon._web_helpers import fetch, base_url, set_auth_from_req
 
 
 router = APIRouter()
@@ -40,6 +40,7 @@ RULES = [
 
 @router.post("/api/recon/http_method_enum")
 async def recon_http_method_enum(req: ScanRequest, _=Depends(verify_scan_quota)):
+    set_auth_from_req(req)
     host = recon_host(req.target)
     return await run_scanner(host=host, tool="http_method_enum",
                               gather_func=gather, finding_rules=RULES,
