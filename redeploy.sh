@@ -2,15 +2,64 @@
 # VulnusLab — single command after any edit.
 # Usage:  ./redeploy.sh [frontend|backend|nginx|all|verify]
 #         ./redeploy.sh                    # smart auto-detect (uses git diff)
+#
+# SAFETY NET (2026-06-06):
+#   Every deploy auto-snapshots state BEFORE touching anything. If the
+#   backend fails its health check after rebuild, we AUTO-ROLLBACK to the
+#   last known-good docker image. You won't end up stuck with a dead site.
+#
+#   Override the safety net:  VL_SAFETY_OFF=1 ./redeploy.sh
+#   Manual restore anytime:   ./rollback.sh
 set -e
 cd "$(dirname "$0")"
 
-C_BLUE='\033[1;34m'; C_GREEN='\033[1;32m'; C_RED='\033[1;31m'; C_DIM='\033[2m'; C_RST='\033[0m'
+C_BLUE='\033[1;34m'; C_GREEN='\033[1;32m'; C_RED='\033[1;31m'; C_YELLOW='\033[1;33m'; C_DIM='\033[2m'; C_RST='\033[0m'
 say() { printf "${C_BLUE}[%s]${C_RST} %s\n" "$1" "$2"; }
 ok()  { printf "${C_GREEN}${C_RST} %s\n" "$1"; }
 err() { printf "${C_RED}${C_RST} %s\n" "$1"; }
+warn(){ printf "${C_YELLOW}!${C_RST} %s\n" "$1"; }
+
+# ─── Pre-deploy safety snapshot ───────────────────────────────────
+# Locks in the current state as the rollback target. Runs ONCE per
+# redeploy invocation, before any rebuild. Skips on `verify` (no-op).
+SAFETY_DONE=0
+safety_snapshot_once() {
+  [ "$SAFETY_DONE" = "1" ] && return 0
+  [ "${VL_SAFETY_OFF:-0}" = "1" ] && { warn "safety net disabled by VL_SAFETY_OFF=1"; SAFETY_DONE=1; return 0; }
+  if [ -x scripts/safety_snapshot.sh ]; then
+    say safety "snapshotting current state as restore point..."
+    scripts/safety_snapshot.sh || warn "snapshot failed (deploy continues, but rollback may not work)"
+  fi
+  SAFETY_DONE=1
+}
+
+# ─── Auto-rollback on failed health ───────────────────────────────
+# Called when backend doesn't become healthy after rebuild. Restores
+# the previous :stable docker image + restarts containers. No git reset
+# because the user might want to inspect the failing code.
+auto_rollback_backend() {
+  [ "${VL_SAFETY_OFF:-0}" = "1" ] && { err "safety net OFF — leaving backend in failed state"; return 1; }
+  warn "AUTO-ROLLBACK: backend unhealthy, restoring previous :stable image..."
+  if ! docker image inspect vulnuslab_backend:stable >/dev/null 2>&1; then
+    err "no vulnuslab_backend:stable image exists — first deploy or snapshot missing. Run: docker compose up -d (manual recovery)"
+    return 1
+  fi
+  docker tag vulnuslab_backend:stable vulnuslab_backend:latest
+  docker compose up -d backend >/dev/null 2>&1
+  for i in $(seq 1 30); do
+    if curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then
+      ok "ROLLED BACK: backend healthy again on previous image"
+      warn "Your new code is still on disk — check logs to fix, then re-run ./redeploy.sh"
+      return 0
+    fi
+    sleep 2
+  done
+  err "AUTO-ROLLBACK FAILED: even previous image not healthy. Manual intervention required."
+  return 1
+}
 
 build_frontend() {
+  safety_snapshot_once
   say frontend "preflight syntax check..."
   ./preflight.sh || return 1
   say frontend "building React bundle (~30s)..."
@@ -22,6 +71,7 @@ build_frontend() {
 }
 
 build_backend() {
+  safety_snapshot_once
   say backend "rebuilding Python image (~60s)..."
   docker compose build backend
   docker compose up -d backend
@@ -31,6 +81,7 @@ build_backend() {
     sleep 2
   done
   err "backend did not become healthy in 60s — check: docker logs vulnuslab_backend --tail 50"
+  auto_rollback_backend || true
   return 1
 }
 
