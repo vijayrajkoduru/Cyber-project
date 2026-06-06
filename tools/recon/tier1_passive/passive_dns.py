@@ -41,7 +41,54 @@ def _r_clean(s):
     if (s.get("historical_ip_count") or 0)>0: return None
     return {"name":"No passive DNS history","severity":"POSITIVE",
         "evidence":"OTX + ThreatCrowd both empty"}
-FINDING_RULES=[_r_historical,_r_clean]
+def _r_chain_handoff(s):
+    chain_next=[]
+    reasons=[]
+    hist_ips=s.get("historical_ips") or []
+    hist_ip_count=s.get("historical_ip_count") or 0
+    hist_subs=s.get("historical_subdomains") or []
+    hist_sub_count=s.get("historical_subdomain_count") or len(hist_subs)
+    current_ip=s.get("current_ip") or ""
+    hist_cnames=s.get("historical_cnames") or []
+    hist_mx_changes=s.get("historical_mx_changes") or 0
+    hist_ns_changes=s.get("historical_ns_changes") or 0
+    first_seen_recent=s.get("first_seen_recent") or 0
+    if hist_sub_count>0:
+        for n in ("subdomain_bruteforce","subdomain_takeover","tcp_port_scan"):
+            if n not in chain_next: chain_next.append(n)
+        reasons.append(f"{hist_sub_count} historical subdomain(s)")
+    if hist_ip_count>0 and current_ip and current_ip not in hist_ips:
+        for n in ("tcp_port_scan","cloudfront_disco"):
+            if n not in chain_next: chain_next.append(n)
+        reasons.append(f"{hist_ip_count} historical IP(s) differ from current {current_ip}")
+    if first_seen_recent>0:
+        if "subdomain_takeover" not in chain_next: chain_next.append("subdomain_takeover")
+        reasons.append(f"{first_seen_recent} record(s) first-seen <30d")
+    cloud_markers=("s3","amazonaws","herokuapp","github.io","githubusercontent","azurewebsites","cloudfront","netlify","vercel","pages.dev")
+    cloud_cnames=[c for c in hist_cnames if any(m in str(c).lower() for m in cloud_markers)]
+    if cloud_cnames:
+        if "subdomain_takeover" not in chain_next: chain_next.append("subdomain_takeover")
+        reasons.append(f"{len(cloud_cnames)} cloud CNAME(s)")
+    if hist_mx_changes>0:
+        if "phishing_email_posture" not in chain_next: chain_next.append("phishing_email_posture")
+        reasons.append(f"{hist_mx_changes} historical MX change(s)")
+    if hist_ns_changes>0:
+        for n in ("zone_transfer","dnssec"):
+            if n not in chain_next: chain_next.append(n)
+        reasons.append(f"{hist_ns_changes} historical NS change(s)")
+    if not chain_next: return None
+    return {
+        "name":f"Cross-module chain handoff - historical DNS reveals {len(chain_next)} forgotten assets",
+        "severity":"INFO",
+        "evidence":f"Historical DNS shows {'; '.join(reasons)}; suggests {len(chain_next)} follow-up scanner(s): "+", ".join(chain_next),
+        "remediation":"Historical DNS often reveals decommissioned-but-still-reachable assets. Cross-check + port scan + takeover audit each.",
+        "cwe":"CWE-1006",
+        "chain_next":chain_next,
+        "discovery_method":"passive_dns_to_historical_asset_chain",
+        "source_stage":"chain_handoff",
+        "confidence":"INFO",
+    }
+FINDING_RULES=[_r_historical,_r_clean,_r_chain_handoff]
 INTEL_FIELDS=[("Historical IPs","historical_ip_count"),("Sample","historical_ips")]
 @router.post("/api/recon/passive_dns")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
@@ -49,3 +96,17 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["historical_ips","historical_ip_count"])
 def register(app): app.include_router(router)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Chain registry registration
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "passive_dns", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+
+
+from tools._methodology import chain_registry
+chain_registry.register("passive_dns", _chain_callable)

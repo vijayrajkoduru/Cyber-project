@@ -190,8 +190,76 @@ def r_unreach(s):
     return {"name":"TLS endpoint unreachable","severity":"INFO",
             "evidence":s.get("error","Connection failed")}
 
+def _r_chain_handoff(s):
+    """Cross-module chain handoff: TLS posture -> follow-up scanners."""
+    if not s.get("target_reachable"): return None
+    chain_next = []
+    issues = []
+
+    sup = s.get("protocols_supported") or {}
+    legacy = [v for v in ("SSLv3","TLSv1.0","TLSv1.1") if sup.get(v)]
+    if legacy:
+        for sc in ("tls_version_audit","vpn_appliance_cve"):
+            if sc not in chain_next: chain_next.append(sc)
+        issues.append(f"legacy proto({','.join(legacy)})")
+
+    cipher = (s.get("cipher_negotiated") or "").upper()
+    weak_c = [w for w in ("RC4","3DES") if w in cipher]
+    if weak_c:
+        if "tls_version_audit" not in chain_next: chain_next.append("tls_version_audit")
+        issues.append(f"weak cipher({','.join(weak_c)})")
+
+    issuer = s.get("cert_issuer") or ""
+    subject = s.get("cert_subject_cn") or ""
+    d = s.get("cert_days_to_expiry")
+    self_signed = bool(issuer and subject and issuer == subject)
+    expired = d is not None and d < 0
+    if self_signed or expired:
+        if "cert_validation_bypass_audit" not in chain_next:
+            chain_next.append("cert_validation_bypass_audit")
+        issues.append("self-signed" if self_signed else f"expired({abs(d)}d)")
+
+    sig_algo = (s.get("cert_sig_algo") or "").lower()
+    if "sha1" in sig_algo:
+        if "tls_version_audit" not in chain_next: chain_next.append("tls_version_audit")
+        issues.append("SHA-1 in chain")
+
+    san = s.get("cert_san") or []
+    internal_san = [h for h in san if any(tok in (h or "").lower()
+                    for tok in (".local",".internal",".lan",".corp",".intra","localhost"))]
+    if internal_san:
+        if "subdomain_bruteforce" not in chain_next: chain_next.append("subdomain_bruteforce")
+        issues.append(f"internal SANs({len(internal_san)})")
+
+    key_bits = s.get("cert_key_bits")
+    try:
+        if key_bits is not None and int(key_bits) < 2048:
+            if "rsa_key_size_audit" not in chain_next: chain_next.append("rsa_key_size_audit")
+            issues.append(f"weak RSA({key_bits}b)")
+    except Exception:
+        pass
+
+    hsts_missing = s.get("hsts_present") is False
+    if hsts_missing:
+        for sc in ("hsts_audit","security_headers"):
+            if sc not in chain_next: chain_next.append(sc)
+        issues.append("HSTS missing")
+
+    if not chain_next: return None
+    return {
+        "name":"Cross-module chain handoff - TLS posture suggests follow-up scanners",
+        "severity":"INFO",
+        "evidence":f"TLS issues: {'; '.join(issues)}; suggests {len(chain_next)} follow-up scanner(s)",
+        "remediation":"Run TLS-version + cert validation scanners. Internal hostnames in SANs reveal new attack surface.",
+        "cwe":"CWE-1006",
+        "chain_next":chain_next,
+        "discovery_method":"tls_posture_to_cve_chain",
+        "source_stage":"chain_handoff",
+        "confidence":"INFO",
+    }
+
 FINDING_RULES = [r_expired, r_expires_soon, r_old_tls, r_no_tls13, r_weak_cipher,
-                 r_self_signed, r_grade, r_long_runway, r_unreach]
+                 r_self_signed, r_grade, r_long_runway, r_unreach, _r_chain_handoff]
 
 INTEL_FIELDS = [("Target reachable","target_reachable"),("TLS version","tls_version_negotiated"),
                 ("Cipher","cipher_negotiated"),("Issuer","cert_issuer"),
@@ -206,3 +274,17 @@ async def recon_ssl_tls_audit(req: ScanRequest, _=Depends(verify_scan_quota)):
                          "protocols_supported","cipher_negotiated"])
 
 def register(app): app.include_router(router)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Chain registry registration
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "ssl_tls_audit", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+
+
+from tools._methodology import chain_registry
+chain_registry.register("ssl_tls_audit", _chain_callable)
