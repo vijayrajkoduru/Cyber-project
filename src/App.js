@@ -19331,23 +19331,20 @@ const ADVANCED_INPUT_PRESETS = {
 // a syntactic format example. Click on one to populate the target input.
 const MODULE_TEST_TARGETS = {
   recon: [
-    {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
-    {label:"example.com",         value:"example.com",                           desc:"IANA reserved demo domain"},
+    {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Nmap's official authorized scan target"},
     {label:"hackerone.com",       value:"hackerone.com",                         desc:"Bug-bounty platform (public surface)"},
-    {label:"testphp.vulnweb.com", value:"testphp.vulnweb.com",                   desc:"Acunetix public test web app"},
+    {label:"example.com",         value:"example.com",                           desc:"IANA reserved demo domain"},
   ],
   vuln: [
-    {label:"scanme.nmap.org",       value:"scanme.nmap.org",                     desc:"Legal nmap test target"},
-    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com",          desc:"Acunetix public test web app"},
-    {label:"demo.testfire.net",     value:"http://demo.testfire.net",            desc:"IBM AltoroMutual demo app"},
-    {label:"juice-shop.herokuapp",  value:"https://juice-shop.herokuapp.com",    desc:"OWASP Juice Shop online"},
+    {label:"demo.testfire.net",     value:"http://demo.testfire.net",            desc:"IBM AltoroMutual - Java/Tomcat 5.5 CVEs"},
+    {label:"lab_metasploitable",    value:"lab_metasploitable",                  desc:"Internal lab - many real CVEs (Samba/vsftpd/etc)"},
+    {label:"scanme.nmap.org",       value:"scanme.nmap.org",                     desc:"Nmap's official authorized test target"},
   ],
   webapp: [
-    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com",          desc:"Acunetix legal pentest app"},
+    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com/listproducts.php?cat=1", desc:"Acunetix Acuart - SQLi on cat param"},
+    {label:"lab_dvwa",              value:"http://lab_dvwa",                     desc:"Internal DVWA lab (admin/password)"},
+    {label:"lab_juiceshop",         value:"http://lab_juiceshop:3000",           desc:"Internal OWASP Juice Shop"},
     {label:"demo.testfire.net",     value:"http://demo.testfire.net",            desc:"IBM AltoroMutual demo"},
-    {label:"juice-shop.herokuapp",  value:"https://juice-shop.herokuapp.com",    desc:"OWASP Juice Shop online"},
-    {label:"testhtml5.vulnweb.com", value:"http://testhtml5.vulnweb.com",        desc:"Acunetix HTML5 vulnerable app"},
-    {label:"google-gruyere",        value:"https://google-gruyere.appspot.com",  desc:"Google's deliberately vulnerable lab"},
   ],
   osint: [
     {label:"example.com",                value:"example.com",                desc:"Domain — passive DNS / cert / OSINT"},
@@ -19367,9 +19364,10 @@ const MODULE_TEST_TARGETS = {
     {label:"vulnserver:9999",      value:"vulnserver.local:9999",                 desc:"Stephen Bradshaw vulnerable TCP server"},
   ],
   password: [
-    {label:"scanme.nmap.org:22",   value:"scanme.nmap.org:22",                    desc:"Legal SSH brute target"},
-    {label:"example.com:22",       value:"example.com:22",                        desc:"SSH host (lockout-safe spray)"},
-    {label:"hash file path",       value:"/tmp/hashes.txt",                       desc:"Local NTLM/bcrypt file for hashcat"},
+    {label:"lab_pwd_ssh",          value:"lab_pwd_ssh",                           desc:"Internal SSH lab (admin/admin on port 2222)"},
+    {label:"lab_pwd_smb",          value:"lab_pwd_smb",                           desc:"Internal SMB lab (admin/admin)"},
+    {label:"lab_pwd_web",          value:"lab_pwd_web",                           desc:"Internal HTTP form lab (admin/admin on port 5000)"},
+    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"External-style target (msfadmin/msfadmin)"},
   ],
   client_side: [
     {label:"juice-shop.herokuapp", value:"https://juice-shop.herokuapp.com",      desc:"OWASP Juice Shop (XSS / clickjack)"},
@@ -19377,24 +19375,21 @@ const MODULE_TEST_TARGETS = {
     {label:"google-gruyere",       value:"https://google-gruyere.appspot.com",    desc:"Google's vulnerable lab"},
   ],
   system_exploit: [
-    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
-    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (local)"},
-    {label:"htb starting point",   value:"10.10.10.x",                            desc:"HackTheBox Starting Point IP"},
+    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Internal Metasploitable - verified CVEs"},
+    {label:"log4shell sandbox",    value:"https://log4shell.huntress.com",        desc:"Huntress official Log4j CVE-2021-44228 test"},
+    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Nmap's authorized test target"},
   ],
   metasploit: [
-    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (local lab)"},
-    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
-    {label:"CVE-2024-XXXX",        value:"CVE-2024-XXXX",                         desc:"Recent exploitable CVE id"},
+    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Internal Metasploitable lab (multiple verified CVEs)"},
+    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Nmap's authorized test target"},
   ],
   privesc: [
+    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Internal lab - known privesc paths (suid, sudo, kernel)"},
     {label:"localhost",            value:"localhost",                             desc:"Run linpeas/winpeas on this host"},
-    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (post-foothold)"},
-    {label:"compromised-host",     value:"compromised-host.local",                desc:"Your post-compromise context"},
   ],
   post_exploit: [
-    {label:"metasploitable2",      value:"192.168.56.101",                        desc:"Metasploitable VM (post-foothold)"},
+    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Internal lab (post-foothold persistence)"},
     {label:"compromised-host",     value:"compromised-host.local",                desc:"Your established session"},
-    {label:"htb starting point",   value:"10.10.10.x",                            desc:"HackTheBox machine"},
   ],
   pivot: [
     {label:"local jump",           value:"192.168.56.101",                        desc:"Local Metasploitable jump host"},
@@ -19405,14 +19400,14 @@ const MODULE_TEST_TARGETS = {
     {label:"egress-restricted",    value:"192.168.1.50",                          desc:"Host on egress-restricted segment"},
   ],
   network: [
-    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Legal nmap test target"},
-    {label:"local /24",            value:"192.168.1.0/24",                        desc:"Local LAN scan (auth required)"},
-    {label:"htb /24",              value:"10.10.10.0/24",                         desc:"HackTheBox network range"},
+    {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Nmap's authorized test target"},
+    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Internal lab - multiple open ports"},
+    {label:"your /24",             value:"192.168.1.0/24",                        desc:"Your own LAN range (authorization required)"},
   ],
   auth_attacks: [
-    {label:"juice-shop login",     value:"https://juice-shop.herokuapp.com/#/login", desc:"OWASP Juice Shop login (auth testing)"},
-    {label:"testphp login",        value:"http://testphp.vulnweb.com/login.php",     desc:"Acunetix login form"},
-    {label:"demo.testfire login",  value:"http://demo.testfire.net/login.jsp",       desc:"IBM AltoroMutual login"},
+    {label:"demo.testfire.net",    value:"http://demo.testfire.net/login.jsp",       desc:"IBM AltoroMutual - session + JWT issues"},
+    {label:"lab_juiceshop",        value:"http://lab_juiceshop:3000/#/login",        desc:"Internal Juice Shop - modern JWT auth"},
+    {label:"lab_pwd_oauth",        value:"http://lab_pwd_oauth:8080",                desc:"Internal Keycloak lab (opt-in)"},
   ],
   wireless: [
     {label:"sample BSSID",         value:"AA:BB:CC:DD:EE:FF",                     desc:"Example BSSID format"},
@@ -19420,9 +19415,9 @@ const MODULE_TEST_TARGETS = {
     {label:"channel 6",            value:"6",                                     desc:"Channel number"},
   ],
   ad: [
-    {label:"corp.local",           value:"corp.local",                            desc:"Default AD domain example"},
-    {label:"htb sandbox",          value:"htb.local",                             desc:"HackTheBox AD lab"},
-    {label:"DC hostname",          value:"dc01.corp.local",                       desc:"Domain controller hostname"},
+    {label:"lab_pwd_ad",           value:"dc01.vlrange.local",                    desc:"Internal Samba AD lab (opt-in - see PHASE_CDE_LABS.md)"},
+    {label:"your AD domain",       value:"corp.local",                            desc:"Your own AD test environment"},
+    {label:"your DC hostname",     value:"dc01.corp.local",                       desc:"Your own Domain Controller"},
   ],
   av_evasion: [
     {label:"sample payload",       value:"/tmp/payload.exe",                      desc:"Local PE payload to obfuscate"},
@@ -19430,10 +19425,10 @@ const MODULE_TEST_TARGETS = {
     {label:"msfvenom output",      value:"shell.bin",                             desc:"msfvenom raw shellcode file"},
   ],
   cloud: [
-    {label:"example.com",          value:"example.com",                           desc:"Public domain — bucket discovery"},
-    {label:"AWS account id",       value:"123456789012",                          desc:"12-digit AWS account number"},
-    {label:"S3 bucket",            value:"s3://example-bucket",                   desc:"S3 bucket URL"},
-    {label:"GCP project id",       value:"my-gcp-project-id",                     desc:"GCP project identifier"},
+    {label:"AWS account id",       value:"123456789012",                          desc:"Your own 12-digit AWS account number"},
+    {label:"S3 bucket",            value:"s3://your-bucket-name",                 desc:"Your own S3 bucket URL"},
+    {label:"GCP project id",       value:"your-gcp-project-id",                   desc:"Your own GCP project identifier"},
+    {label:"Azure subscription",   value:"sub-00000000-0000-0000-0000-000000000000", desc:"Your own Azure subscription ID"},
   ],
   apisec: [
     {label:"crapi.apisec.ai",      value:"https://crapi.apisec.ai",               desc:"OWASP crAPI demo (vulnerable API)"},
@@ -19442,9 +19437,9 @@ const MODULE_TEST_TARGETS = {
     {label:"swapi.dev",            value:"https://swapi.dev/api/",                desc:"Star Wars test REST API"},
   ],
   ai_llm: [
-    {label:"api.openai.com",       value:"https://api.openai.com/v1/chat/completions", desc:"OpenAI Chat Completions"},
-    {label:"api.anthropic.com",    value:"https://api.anthropic.com/v1/messages", desc:"Anthropic Messages API"},
-    {label:"local ollama",         value:"http://localhost:11434/api/generate",   desc:"Local Ollama LLM endpoint"},
+    {label:"gandalf.lakera.ai",    value:"https://gandalf.lakera.ai",             desc:"Lakera's official prompt-injection challenge"},
+    {label:"local ollama",         value:"http://localhost:11434/api/generate",   desc:"Your local Ollama LLM endpoint"},
+    {label:"your LLM endpoint",    value:"https://your-llm.example.com/v1/chat",  desc:"Your own deployed LLM API"},
   ],
   // container_k8s — NO test targets. Container scans should be driven by
   // the `image_ref` advanced input (a real image like nginx:1.21-alpine),
@@ -19456,18 +19451,19 @@ const MODULE_TEST_TARGETS = {
     {label:"github example",       value:"https://github.com/octocat/Hello-World", desc:"Public GitHub repo"},
   ],
   hybrid_identity: [
-    {label:"contoso.onmicrosoft",  value:"contoso.onmicrosoft.com",               desc:"Microsoft demo tenant"},
-    {label:"yourtenant",           value:"yourtenant.onmicrosoft.com",            desc:"Entra ID tenant format"},
+    {label:"your Entra tenant",    value:"yourtenant.onmicrosoft.com",            desc:"Your own Entra ID tenant (audit-only)"},
+    {label:"your AD federation",   value:"adfs.yourcompany.com",                  desc:"Your own ADFS endpoint"},
   ],
   sspm: [
-    {label:"yourorg.salesforce",   value:"https://yourorg.my.salesforce.com",     desc:"Salesforce instance URL"},
-    {label:"M365 admin",           value:"https://admin.microsoft.com",           desc:"M365 admin portal"},
-    {label:"workspace admin",      value:"https://admin.google.com",              desc:"Google Workspace admin"},
+    {label:"your Salesforce",      value:"https://yourorg.my.salesforce.com",     desc:"Your own Salesforce instance"},
+    {label:"your M365",            value:"https://admin.microsoft.com",           desc:"Your own M365 admin portal"},
+    {label:"your Workspace",       value:"https://admin.google.com",              desc:"Your own Google Workspace admin"},
+    {label:"your Slack",           value:"yourorg.slack.com",                     desc:"Your own Slack workspace"},
   ],
   iot_ot: [
-    {label:"shodan modbus",        value:"shodan.io/search?query=port%3A502",     desc:"Find exposed Modbus on Shodan"},
-    {label:"local Modbus",         value:"192.168.1.50:502",                      desc:"Modbus default port (502)"},
-    {label:"BACnet",               value:"192.168.1.51:47808",                    desc:"BACnet default port (47808)"},
+    {label:"local Modbus",         value:"192.168.1.50:502",                      desc:"Your own Modbus device (default port 502)"},
+    {label:"BACnet",               value:"192.168.1.51:47808",                    desc:"Your own BACnet device (default port 47808)"},
+    {label:"local pymodbus sim",   value:"127.0.0.1:5020",                        desc:"Run: pip install pymodbus && python -m pymodbus.examples.server"},
   ],
   firmware: [
     {label:"DVRF",                 value:"https://github.com/praetorian-inc/DVRF", desc:"Damn Vulnerable Router Firmware"},
@@ -19475,13 +19471,13 @@ const MODULE_TEST_TARGETS = {
     {label:"local fw.bin",         value:"/tmp/firmware.bin",                     desc:"Local firmware dump to analyze"},
   ],
   phishing: [
-    {label:"example.com",          value:"example.com",                           desc:"Phishing-surface OSINT of domain"},
-    {label:"hackerone.com",        value:"hackerone.com",                         desc:"Public bug-bounty surface"},
+    {label:"your corp domain",     value:"yourcompany.com",                       desc:"Your own domain (DKIM/SPF/DMARC posture)"},
+    {label:"hackerone.com",        value:"hackerone.com",                         desc:"Public bug-bounty surface for OSINT only"},
   ],
   red_team: [
-    {label:"example.com",          value:"example.com",                           desc:"Engagement scope (domain)"},
-    {label:"corp.local",           value:"corp.local",                            desc:"Internal AD domain scope"},
-    {label:"10.0.0.0/8",           value:"10.0.0.0/8",                            desc:"Engagement network range"},
+    {label:"your scope domain",    value:"yourcompany.com",                       desc:"Your own authorized engagement domain"},
+    {label:"your AD domain",       value:"corp.local",                            desc:"Your own internal AD scope"},
+    {label:"your /16 range",       value:"10.0.0.0/16",                           desc:"Your own engagement network range"},
   ],
   mobile_static: [
     {label:"DVHMA",                value:"https://github.com/logicalhacking/DVHMA", desc:"Damn Vulnerable Hybrid Mobile App"},
@@ -19492,6 +19488,11 @@ const MODULE_TEST_TARGETS = {
   mobile_runtime:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
   mobile_crypto:   [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
   mobile_network:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_ipc:      [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_webview:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_privacy:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_payment:  [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
+  mobile_aiml:     [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
 };
 
 function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
