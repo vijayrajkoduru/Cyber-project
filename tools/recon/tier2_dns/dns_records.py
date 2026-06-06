@@ -62,7 +62,7 @@ def r_no_spf(s):
             "remediation":"Publish 'v=spf1 mx -all' TXT record at apex."}
 
 def r_weak_spf(s):
-    spf = s.get("spf_record"); 
+    spf = s.get("spf_record");
     if not spf or s.get("spf_strict"): return None
     return {"name":"SPF uses weak policy (no -all)","severity":"MEDIUM","cwe":"CWE-290",
             "evidence":f"SPF: {spf[:120]}","remediation":"Tighten to '-all' or '~all'."}
@@ -112,71 +112,9 @@ def r_records_summary(s):
     return {"name":f"DNS records: {', '.join(nonzero)}","severity":"INFO",
             "evidence":"From 3-resolver merged query"}
 
-def _r_chain_handoff(s):
-    """VL-METHOD Stage 7: map DNS record types to follow-up scanners."""
-    chain_next = []
-    detected = []
-    mx = s.get("mx_records") or []
-    if mx:
-        for sc in ("mail_server_cve", "email_security", "mx_enum"):
-            if sc not in chain_next: chain_next.append(sc)
-        detected.append(f"MX({len(mx)})")
-    txts = s.get("txt_records") or []
-    txt_blob = " ".join(txts).lower()
-    has_spf = bool(s.get("spf_record")) or "v=spf1" in txt_blob
-    has_dmarc = bool(s.get("dmarc_record")) or "v=dmarc1" in txt_blob
-    has_dkim = "v=dkim1" in txt_blob or "dkim" in txt_blob
-    if has_spf or has_dmarc or has_dkim:
-        for sc in ("email_security", "phishing_email_posture"):
-            if sc not in chain_next: chain_next.append(sc)
-        tags = []
-        if has_spf: tags.append("SPF")
-        if has_dmarc: tags.append("DMARC")
-        if has_dkim: tags.append("DKIM")
-        detected.append("TXT(" + "/".join(tags) + ")")
-    srv = s.get("srv_records") or []
-    if srv:
-        if "tcp_port_scan" not in chain_next: chain_next.append("tcp_port_scan")
-        detected.append(f"SRV({len(srv)})")
-    ns = s.get("ns_records") or []
-    if ns and len(ns) >= 2:
-        if "zone_transfer" not in chain_next: chain_next.append("zone_transfer")
-        detected.append(f"NS({len(ns)})")
-    cname = s.get("cname_records") or []
-    if cname:
-        if "subdomain_takeover" not in chain_next: chain_next.append("subdomain_takeover")
-        detected.append(f"CNAME({len(cname)})")
-    a_blob = " ".join(s.get("a_records") or []).lower()
-    cname_blob = " ".join(cname).lower()
-    cloud_blob = a_blob + " " + cname_blob
-    cloud_hits = []
-    if any(k in cloud_blob for k in ("amazonaws", "aws", "cloudfront", "s3.")):
-        cloud_hits.append("AWS")
-    if any(k in cloud_blob for k in ("azure", "windows.net", "azureedge")):
-        cloud_hits.append("Azure")
-    if any(k in cloud_blob for k in ("googleusercontent", "googleapis", "gcp", "appspot")):
-        cloud_hits.append("GCP")
-    if cloud_hits:
-        for sc in ("cloudfront_disco", "s3_bucket_enum"):
-            if sc not in chain_next: chain_next.append(sc)
-        detected.append("Cloud(" + "/".join(cloud_hits) + ")")
-    if not chain_next:
-        return None
-    return {
-        "name": f"Cross-module chain handoff - DNS surface maps to {len(chain_next)} scanners",
-        "severity": "INFO",
-        "evidence": f"Detected records: {', '.join(detected)}; suggests {len(chain_next)} follow-up scanner(s)",
-        "remediation": "Each record type opens a different attack surface. Run chained scanners.",
-        "cwe": "CWE-1006",
-        "chain_next": chain_next,
-        "discovery_method": "dns_records_to_surface_chain",
-        "source_stage": "chain_handoff",
-        "confidence": "INFO",
-    }
-
 FINDING_RULES = [
                  r_caa_missing, r_caa_present, r_resolver_inconsistent, r_resolver_consistent,
-                 r_records_summary, _r_chain_handoff]
+                 r_records_summary]
 
 INTEL_FIELDS = [("A records","a_records"),("AAAA records","aaaa_records"),
                 ("MX records","mx_records"),("NS records","ns_records"),
@@ -191,18 +129,3 @@ async def recon_dns_records(req: ScanRequest, _=Depends(verify_scan_quota)):
                          "spf_record","dmarc_record","caa_records"])
 
 def register(app): app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration - upstream scanners trigger us via
-#  _chain_callable.
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "dns_records", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-
-from tools._methodology import chain_registry
-chain_registry.register("dns_records", _chain_callable)

@@ -10846,9 +10846,9 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
     // Subdomains (from §3 scanners)
     const _subs = new Set();
-    ["subdomain_bruteforce","ai_wordlist_subdomain","permutation_gen","passive_aggregation","shuffled_bruteforce","github_subdomains","virustotal_subdomains","securitytrails_subdomains","wayback_subdomain_extract","amass_passive","search_engine_scrape","crt_search","cert_san_aggregator",
+    ["subdomain_bruteforce","ai_wordlist_subdomain","permutation_gen","passive_aggregation","github_subdomains","virustotal_subdomains","securitytrails_subdomains","wayback_subdomain_extract","amass_passive","search_engine_scrape","crt_search","cert_san_aggregator",
      "search_engine_scrape","securitytrails_subdomains","virustotal_subdomains","github_subdomains",
-     "wayback_subdomain_extract","amass_passive","shuffled_bruteforce","crt_search","cert_san_aggregator"].forEach(k=>{
+     "wayback_subdomain_extract","amass_passive","crt_search","cert_san_aggregator"].forEach(k=>{
       const d = r[k] || {};
       const intel = d.intel || {};
       const _allD = [...(d.discovered||[]), ...(d.subdomains||[]), ...(d.sans||[]),
@@ -11587,7 +11587,6 @@ const SECTION_OF = {
   "service_version_detect":9,
   "sherlock_username":4,
   "shodan_keyed":8,
-  "shuffled_bruteforce":3,
   "smb_netbios_enum":9,
   "snmp_enum":9,
   "source_code_rag_llm":13,
@@ -11672,7 +11671,6 @@ const RECON_PHASES = [
   {name:"Permutation Gen", tool:"permutation_gen", endpoint:"/api/recon/permutation_gen", icon:""},
   {name:"Search Engine Scrape", tool:"search_engine_scrape", endpoint:"/api/recon/search_engine_scrape", icon:""},
   {name:"Securitytrails Subdomains", tool:"securitytrails_subdomains", endpoint:"/api/recon/securitytrails_subdomains", icon:""},
-  {name:"Shuffled Bruteforce", tool:"shuffled_bruteforce", endpoint:"/api/recon/shuffled_bruteforce", icon:""},
   {name:"Subdomain Bruteforce", tool:"subdomain_bruteforce", endpoint:"/api/recon/subdomain_bruteforce", icon:""},
   {name:"Virustotal Subdomains", tool:"virustotal_subdomains", endpoint:"/api/recon/virustotal_subdomains", icon:""},
   {name:"Wayback Subdomain Extract", tool:"wayback_subdomain_extract", endpoint:"/api/recon/wayback_subdomain_extract", icon:""},

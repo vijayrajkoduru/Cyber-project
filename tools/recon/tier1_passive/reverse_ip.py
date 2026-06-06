@@ -61,40 +61,7 @@ def _r_no_ptr(s):
     return {"name":"No PTR records (reverse DNS not configured)","severity":"LOW","cwe":"CWE-200",
         "evidence":"Reverse DNS lookups failed for all IPs",
         "remediation":"PTR records help email deliverability + log readability."}
-def _r_chain_handoff(s):
-    shared=s.get("shared_domains") or []
-    n=len(shared)
-    ips=s.get("ips") or []
-    if n==0: return None
-    chain_next=[]
-    if "tcp_port_scan" not in chain_next: chain_next.append("tcp_port_scan")
-    if "subdomain_bruteforce" not in chain_next: chain_next.append("subdomain_bruteforce")
-    if n>20 and "cloudfront_disco" not in chain_next: chain_next.append("cloudfront_disco")
-    hv=[d for d in shared if any(k in d.lower() for k in ("admin","dev","staging","test","internal"))]
-    if hv:
-        for sc in ("exposed_env_scan","tech_stack_detect"):
-            if sc not in chain_next: chain_next.append(sc)
-    cloud_ranges=("52.","54.","13.","18.","35.","34.","104.","23.")
-    if ips and any(ip.startswith(cloud_ranges) for ip in ips):
-        if "s3_bucket_enum" not in chain_next: chain_next.append("s3_bucket_enum")
-    tlds=set()
-    for d in shared:
-        parts=d.rsplit(".",1)
-        if len(parts)==2: tlds.add(parts[1].lower())
-    if len(tlds)>1 and "dnstwist" not in chain_next: chain_next.append("dnstwist")
-    if not chain_next: return None
-    return {
-        "name":"Cross-module chain handoff - co-hosted sites discovered for follow-up",
-        "severity":"INFO",
-        "evidence":f"Found {n} co-hosted site(s); suggests {len(chain_next)} follow-up scanner(s)",
-        "remediation":"Each co-hosted site is independent attack surface. Run port_scan + subdomain enum + tech stack per host.",
-        "cwe":"CWE-1006",
-        "chain_next":chain_next,
-        "discovery_method":"reverse_ip_to_cohost_chain",
-        "source_stage":"chain_handoff",
-        "confidence":"INFO",
-    }
-FINDING_RULES=[_r_shared,_r_ptr,_r_no_ptr,_r_chain_handoff]
+FINDING_RULES=[_r_shared,_r_ptr,_r_no_ptr]
 INTEL_FIELDS=[("IPs","ips"),("PTR records","ptr_count"),("Shared domains","shared_count")]
 @router.post("/api/recon/reverse_ip")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
@@ -102,17 +69,3 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["ips","ptr_data","shared_domains"])
 def register(app): app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "reverse_ip", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-
-from tools._methodology import chain_registry
-chain_registry.register("reverse_ip", _chain_callable)

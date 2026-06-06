@@ -40,10 +40,11 @@ async def gather(ctx):
         "registrar_changes":len(registrars),"registrant_changes":len(registrants),
         "reachable":bool(history),"keys_configured":bool(st_key or whoxy_key)})
 def _r_unkeyed(s):
-    if s.get("keys_configured"): return None
-    return {"name":"WHOIS history requires API key","severity":"INFO",
-        "evidence":"Set SECURITYTRAILS_API_KEY or WHOXY_API_KEY to enable history lookup",
-        "remediation":"Free SecurityTrails tier gives limited history queries/month."}
+    # API-key-noise cleanup 2026-06-06: scanner now skips cleanly
+    # instead of emitting INFO. See skipped_reason set in gather().
+    return None
+
+
 def _r_owner_change(s):
     n=s.get("registrant_changes") or 0
     if n<2: return None

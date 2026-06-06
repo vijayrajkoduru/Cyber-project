@@ -9,12 +9,17 @@ async def gather(ctx):
     candidates=["LEAKCHECK_SEARCH_API_KEY","LEAKCHECK_SEARCH_KEY","INTELX_API_KEY","LEAKCHECK_API_KEY","DEHASHED_API_KEY"]
     key=next((os.environ.get(c) for c in candidates if os.environ.get(c)),None)
     ctx.state["api_key_configured"]=bool(key)
+    if not key:
+        ctx.state["skipped_reason"] = "Requires LeakCheck.net API key — set env LEAKCHECK_API_KEY to enable. Free tiers available at vendor's site."
+        return
     ctx.state["host"]=ctx.host
     if key: ctx.source("leakcheck_search-keyed")
 def _r_unkeyed(s):
-    if s.get("api_key_configured"): return None
-    return {"name":"leakcheck_search requires API key","severity":"INFO",
-        "evidence":"Set appropriate env var for leakcheck_search intel"}
+    # API-key-noise cleanup 2026-06-06: scanner now skips cleanly
+    # instead of emitting INFO. See skipped_reason set in gather().
+    return None
+
+
 def _r_keyed(s):
     if not s.get("api_key_configured"): return None
     return {"name":"leakcheck_search configured","severity":"INFO",

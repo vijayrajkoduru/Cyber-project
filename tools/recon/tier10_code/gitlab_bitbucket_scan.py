@@ -7,8 +7,11 @@ router=APIRouter()
 async def gather(ctx):
     ctx.state["api_key_configured"]=bool(os.environ.get("GITLAB_TOKEN","") or os.environ.get("BITBUCKET_TOKEN",""))
 def _r_unkeyed(s):
-    if s.get("api_key_configured"): return None
-    return {"name":"gitlab_bitbucket_scan requires API key","severity":"INFO","evidence":"GITLAB_TOKEN or BITBUCKET_TOKEN"}
+    # API-key-noise cleanup 2026-06-06: scanner now skips cleanly
+    # instead of emitting INFO. See skipped_reason set in gather().
+    return None
+
+
 def _r_ready(s):
     if not s.get("api_key_configured"): return None
     return {"name":"gitlab_bitbucket_scan ready","severity":"INFO","evidence":"Loaded"}

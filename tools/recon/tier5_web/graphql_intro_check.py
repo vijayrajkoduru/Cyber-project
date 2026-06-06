@@ -95,48 +95,7 @@ def _r_found(s):
     return {"name": "GraphQL endpoint present, introspection disabled",
             "severity": "POSITIVE",
             "evidence": "Endpoint(s): " + ", ".join(found[:5]) + " — introspection blocked"}
-def _r_chain_handoff(s):
-    eps = s.get("graphql_endpoints") or []
-    if not eps:
-        return None
-    intro = s.get("introspection_enabled") or []
-    chain_next = []
-    # Any reachable GraphQL -> brute paths is always useful
-    if "graphql_path_brute" not in chain_next:
-        chain_next.append("graphql_path_brute")
-    if intro:
-        for n in ("jwt_forge_audit", "oauth_token_audit"):
-            if n not in chain_next:
-                chain_next.append(n)
-    if s.get("auth_mutations_present"):
-        for n in ("patator_http_form_brute", "jwt_forge_audit"):
-            if n not in chain_next:
-                chain_next.append(n)
-    if s.get("admin_queries_present") and "exposed_env_scan" not in chain_next:
-        chain_next.append("exposed_env_scan")
-    if s.get("subscriptions_present"):
-        for n in ("websocket_security", "websocket_origin_audit"):
-            if n not in chain_next:
-                chain_next.append(n)
-    if s.get("federation_present") and "service_mesh_misconfig" not in chain_next:
-        chain_next.append("service_mesh_misconfig")
-    if not chain_next:
-        return None
-    return {
-        "name": "Cross-module chain handoff - GraphQL exposes auth + admin surface",
-        "severity": "INFO",
-        "evidence": ("GraphQL at " + ", ".join(eps[:3])
-                     + "; introspection: " + ("enabled" if intro else "disabled")
-                     + "; suggests %d follow-up scanner(s)" % len(chain_next)),
-        "remediation": ("GraphQL endpoints commonly expose more queries than REST. "
-                        "Run JWT + auth flow audits + brute-force resolver discovery."),
-        "cwe": "CWE-1006",
-        "chain_next": chain_next,
-        "discovery_method": "graphql_to_auth_chain",
-        "source_stage": "chain_handoff",
-        "confidence": "INFO",
-    }
-FINDING_RULES = [_r_intro, _r_found, _r_chain_handoff]
+FINDING_RULES = [_r_intro, _r_found]
 INTEL_FIELDS = [("GraphQL endpoints","graphql_endpoints"),
                 ("Introspection enabled","introspection_enabled"),
                 ("Endpoints found","endpoint_count")]
@@ -148,18 +107,3 @@ async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
         flat_field_keys=["graphql_endpoints","introspection_enabled","endpoint_count"])
 def register(app):
     app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration - upstream scanners trigger us via
-#  _chain_callable.
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "graphql_intro_check", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-
-from tools._methodology import chain_registry
-chain_registry.register("graphql_intro_check", _chain_callable)
