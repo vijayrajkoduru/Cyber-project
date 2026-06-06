@@ -98,7 +98,60 @@ def r_unreach(s):
     if s.get("target_reachable"): return None
     return {"name": "Target unreachable","severity":"INFO","evidence":"HTTP fetch failed"}
 
-FINDING_RULES = [r_open_json, r_auth, r_clean, r_unreach]
+def _r_chain_handoff(s):
+    hits = (s.get("hits") or [])
+    if not hits: return None
+    chain_next = []
+    matched = []
+    for h in hits:
+        p = (h.get("path") or "").lower()
+        if any(k in p for k in ("login","oauth","token","auth","signin","session")):
+            for n in ("jwt_forge_audit","oauth_token_audit","patator_http_form_brute"):
+                if n not in chain_next: chain_next.append(n)
+            matched.append((p,"auth"))
+        if "admin" in p:
+            for n in ("exposed_env_scan","patator_http_form_brute"):
+                if n not in chain_next: chain_next.append(n)
+            matched.append((p,"admin"))
+        if "graphql" in p:
+            for n in ("graphql_intro_check","graphql_path_brute"):
+                if n not in chain_next: chain_next.append(n)
+            matched.append((p,"graphql"))
+        if any(k in p for k in ("swagger","openapi","/docs","api-docs")):
+            if "swagger_openapi_discovery" not in chain_next:
+                chain_next.append("swagger_openapi_discovery")
+            matched.append((p,"swagger"))
+        if any(k in p for k in ("/user","/users","/data","/account","/profile","/order")):
+            if "session_predict_audit" not in chain_next:
+                chain_next.append("session_predict_audit")
+            matched.append((p,"rest"))
+        if any(v in p for v in ("/api/v1","/api/v2","/api/v3","/v1/","/v2/","/v3/")):
+            if "api_versioning_skew" not in chain_next:
+                chain_next.append("api_versioning_skew")
+            matched.append((p,"versioned"))
+        if any(k in p for k in ("/ws","/websocket","/socket")):
+            for n in ("websocket_security","websocket_origin_audit"):
+                if n not in chain_next: chain_next.append(n)
+            matched.append((p,"ws"))
+        if any(k in p for k in ("apikey=","api_key=","access_token=","key=")):
+            if "api_key_in_url_leak" not in chain_next:
+                chain_next.append("api_key_in_url_leak")
+            matched.append((p,"keyleak"))
+    if not chain_next: return None
+    evidence_parts = [f"{p}->{kind}" for p,kind in matched[:8]]
+    return {
+        "name": "Cross-module chain handoff - API endpoints map to follow-up auth + injection scanners",
+        "severity": "INFO",
+        "evidence": f"Discovered {len(hits)} endpoint(s); patterns suggest {len(chain_next)} follow-up scanner(s): " + ", ".join(evidence_parts),
+        "remediation": "Each endpoint type opens auth + injection surface. Run JWT/OAuth/session audits + parameter discovery.",
+        "cwe": "CWE-1006",
+        "chain_next": chain_next,
+        "discovery_method": "api_endpoints_to_auth_chain",
+        "source_stage": "chain_handoff",
+        "confidence": "INFO",
+    }
+
+FINDING_RULES = [r_open_json, r_auth, _r_chain_handoff, r_clean, r_unreach]
 INTEL_FIELDS = [("Target reachable","target_reachable"),("Paths probed","probed"),
                 ("Endpoints found","hits_count")]
 
@@ -109,3 +162,16 @@ async def recon_api_endpoint_brute(req: ScanRequest, _=Depends(verify_scan_quota
         flat_field_keys=["hits","json_endpoints","auth_endpoints"])
 
 def register(app): app.include_router(router)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Chain registry registration
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "api_endpoint_brute", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+
+from tools._methodology import chain_registry
+chain_registry.register("api_endpoint_brute", _chain_callable)
