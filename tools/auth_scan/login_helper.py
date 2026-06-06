@@ -46,43 +46,76 @@ _SPA_LOGIN_PATHS = (
     "/user/login", "/users/login", "/sessions", "/api/sessions",
 )
 
+# LAB-BOOTSTRAP-V2 — some labs require one-time setup BEFORE login can
+# work. DVWA is the canonical case: /login.php redirects to /setup.php
+# until the user clicks "Create / Reset Database". Auto-call that step
+# so the customer doesn't have to know about it.
+def _try_lab_bootstrap(target: str, login_url: str,
+                       sess: requests.Session) -> dict:
+    """Return dict of {lab_detected, bootstrap_attempted, bootstrap_status}."""
+    full = f"{target} {login_url}".lower()
+    out = {"lab_detected": None, "bootstrap_attempted": False,
+           "bootstrap_status": None}
+
+    # DVWA - create database via /setup.php
+    if "lab_dvwa" in full or "dvwa" in full:
+        out["lab_detected"] = "dvwa"
+        try:
+            # GET setup page first (some DVWA versions need session init)
+            base = target.split("/login")[0].rstrip("/")
+            setup_url = base + "/setup.php"
+            sess.get(setup_url, timeout=8, verify=False, allow_redirects=True)
+            # POST the create-db form
+            r = sess.post(setup_url,
+                          data={"create_db": "Create / Reset Database"},
+                          timeout=15, verify=False, allow_redirects=True)
+            out["bootstrap_attempted"] = True
+            out["bootstrap_status"] = r.status_code
+        except Exception as e:
+            out["bootstrap_status"] = f"error: {type(e).__name__}"
+
+    # Mutillidae - reset DB via /set-up-database.php (citizenstig/nowasp)
+    elif "lab_mutillidae" in full or "mutillidae" in full:
+        out["lab_detected"] = "mutillidae"
+        try:
+            base = target.split("/index.php")[0].rstrip("/")
+            setup_url = base + "/set-up-database.php"
+            r = sess.get(setup_url, timeout=15, verify=False, allow_redirects=True)
+            out["bootstrap_attempted"] = True
+            out["bootstrap_status"] = r.status_code
+        except Exception as e:
+            out["bootstrap_status"] = f"error: {type(e).__name__}"
+
+    return out
+
+
 # WEBGOAT-AUTOREG-V1 — labs that require self-registration before login.
-# When the login fails AND the URL matches one of these patterns, the
-# backend tries to register the user via the matching register endpoint
-# THEN retries login. Customers using internal labs (lab_webgoat,
-# lab_juiceshop) get auto-onboarding instead of "user not found" errors.
 _SELF_REGISTER_LABS = [
-    {
-        "name": "webgoat",
-        "url_match": "webgoat",
-        "register_url": "/WebGoat/register.mvc",
-        "fields": lambda u, p: {
-            "username": u, "password": p, "matchingPassword": p, "agree": "agree",
-        },
-    },
     {
         "name": "juiceshop",
         "url_match": "lab_juiceshop",
         "register_url": "/api/Users/",
         "json": True,
         "fields": lambda u, p: {
-            "email": u, "password": p, "passwordRepeat": p, "securityQuestion": {
-                "id": 1, "question": "Your eldest siblings middle name?",
-            }, "securityAnswer": "test",
+            "email": u, "password": p, "passwordRepeat": p,
+            "securityQuestion": {"id": 1},
+            "securityAnswer": "test",
         },
     },
 ]
 
 
 def _try_self_register(target: str, login_url: str, user: str, pwd: str,
-                       sess: requests.Session) -> bool:
-    """If target matches a known self-register lab (WebGoat / Juice Shop),
-    POST the register endpoint to bootstrap the user. Returns True if
-    register call succeeded (HTTP 200/201/302/409=already-exists)."""
+                       sess: requests.Session) -> dict:
+    """If target matches a known self-register lab, POST the register
+    endpoint to bootstrap the user. Returns diagnostic dict."""
+    out = {"register_attempted": False, "register_status": None,
+           "register_lab": None}
     full = f"{target} {login_url}".lower()
     for lab in _SELF_REGISTER_LABS:
         if lab["url_match"] not in full:
             continue
+        out["register_lab"] = lab["name"]
         reg_url = _abs(target, lab["register_url"])
         try:
             body = lab["fields"](user, pwd)
@@ -92,17 +125,11 @@ def _try_self_register(target: str, login_url: str, user: str, pwd: str,
             else:
                 r = sess.post(reg_url, data=body, timeout=8, verify=False,
                               allow_redirects=True)
-            # 200/201/302 = newly created; 409/400 (with "exists") = already there
-            if r.status_code in (200, 201, 302):
-                return True
-            if r.status_code in (400, 409) and (
-                "exist" in (r.text or "").lower()
-                or "duplicate" in (r.text or "").lower()
-            ):
-                return True
-        except Exception:
-            pass
-    return False
+            out["register_attempted"] = True
+            out["register_status"] = r.status_code
+        except Exception as e:
+            out["register_status"] = f"error: {type(e).__name__}"
+    return out
 _BEARER_JSON_PATHS = (
     ("token",), ("access_token",), ("accessToken",), ("jwt",),
     ("authentication", "token"), ("data", "token"),
@@ -320,10 +347,12 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     sess.headers.update(_BROWSER_HEADERS)
     sess.verify = False
 
-    # WEBGOAT-AUTOREG-V1 — for known self-register labs, register the user
-    # FIRST so the subsequent login can succeed. No-op if user already exists.
-    _registered = _try_self_register(target, login_url, req.username,
-                                     req.password, sess)
+    # LAB-BOOTSTRAP-V2 — DVWA / Mutillidae need DB-init click before login.
+    _bootstrap = _try_lab_bootstrap(target, login_url, sess)
+
+    # WEBGOAT-AUTOREG-V1 — Juice Shop needs user registration before login.
+    _register = _try_self_register(target, login_url, req.username,
+                                   req.password, sess)
 
     # 1. GET login page for hidden fields / CSRF
     try:
@@ -390,15 +419,21 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         "verified_via": verify_url, "verified_status": check.status_code,
         "still_on_login_page": looks_login,
         "cookie_names": [c.name for c in sess.cookies],
-        "self_registered": _registered,
+        "bootstrap": _bootstrap,
+        "register": _register,
         "hint": (None if verified else
-                 ("Login failed even after auto-register attempt. " if _registered
-                  else "Login failed. ")
-                 + "Check: (a) username/password, (b) field names "
-                 "(try setting username_field / password_field), "
-                 "(c) CSRF protection requiring JS, or (d) MFA/captcha (not supported). "
-                 "For WebGoat/Juice Shop, the auto-register flow should bootstrap a "
-                 "user automatically - if it didn't, the lab may not be reachable."),
+                 ("Login failed. Diagnostic: "
+                  f"bootstrap={_bootstrap.get('lab_detected') or 'none'}/"
+                  f"status={_bootstrap.get('bootstrap_status')}, "
+                  f"register={_register.get('register_lab') or 'none'}/"
+                  f"status={_register.get('register_status')}, "
+                  f"post_login={resp.status_code}, "
+                  f"verified={check.status_code}. "
+                  "Check: (a) target container is up, (b) credentials are correct "
+                  "(DVWA admin/password, bWAPP bee/bug, Mutillidae admin/admin, "
+                  "Juice Shop vluser@vl.local/VLpass123). "
+                  "(c) For Juice Shop, the security question API may have changed - "
+                  "try registering a user manually via the web UI first.")),
     }
 
 
