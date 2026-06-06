@@ -384,43 +384,10 @@ def _r_sources_thin(s):
             "severity": "LOW",
             "evidence": "Cross-validation limited — registry may be rate-limiting"}
 
-def _r_chain_handoff(s):
-    chain_next = []
-    parts = []
-    if s.get("registrar") or s.get("expires"):
-        for n in ("dns_records", "dns_propagation_check"):
-            if n not in chain_next: chain_next.append(n)
-        parts.append(f"registrar={s.get('registrar') or '?'}")
-        parts.append(f"expiry={s.get('expires') or '?'}")
-    if s.get("asn_org") and not s.get("privacy_enabled"):
-        for n in ("github_org_intel", "harvester_emails"):
-            if n not in chain_next: chain_next.append(n)
-        parts.append(f"org={s.get('asn_org')}")
-    d = s.get("days_to_expiry")
-    if d is not None and 0 < d < 90:
-        if "dnstwist" not in chain_next: chain_next.append("dnstwist")
-        parts.append(f"expires_in={d}d")
-    if not s.get("privacy_enabled") and s.get("registrar"):
-        if "social_handles" not in chain_next: chain_next.append("social_handles")
-        parts.append("privacy=off")
-    if not chain_next: return None
-    return {
-        "name": "Cross-module chain handoff - WHOIS reveals follow-up surface",
-        "severity": "INFO",
-        "evidence": f"Registrar: {s.get('registrar') or '?'}, expiry: {s.get('expires') or '?'}; suggests {len(chain_next)} follow-up scanner(s) ({'; '.join(parts[:4])})",
-        "remediation": "Run the chained OSINT + DNS scanners to expand attack surface mapping.",
-        "cwe": "CWE-1006",
-        "chain_next": chain_next,
-        "discovery_method": "whois_to_osint_chain",
-        "source_stage": "chain_handoff",
-        "confidence": "INFO",
-    }
-
 _INLINE_RULES = [_r_expired, _r_expires_30, _r_expires_90, _r_newly_registered,
                  _r_free_dns, _r_no_abuse, _r_privacy_only, _r_long_runway,
                  _r_registrar, _r_cdn, _r_ct_subs,
-                 _r_age, _r_sources_consistent, _r_sources_thin,
-                 _r_chain_handoff]
+                 _r_age, _r_sources_consistent, _r_sources_thin]
 
 try:
     from tools._payloads.whois_findings import WHOIS_FINDING_RULES as _EXTERNAL_RULES
@@ -444,18 +411,3 @@ async def recon_whois(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 def register(app):
     app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration - upstream scanners trigger us via
-#  _chain_callable.
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "whois", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-
-from tools._methodology import chain_registry
-chain_registry.register("whois", _chain_callable)

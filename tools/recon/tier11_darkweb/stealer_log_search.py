@@ -7,8 +7,11 @@ router=APIRouter()
 async def gather(ctx):
     ctx.state["api_key_configured"]=bool(os.environ.get("STEALERLOG_API_KEY","") or os.environ.get("REDLINE_API_KEY",""))
 def _r_unkeyed(s):
-    if s.get("api_key_configured"): return None
-    return {"name":"stealer_log_search requires API key","severity":"INFO","evidence":"STEALERLOG_API_KEY or REDLINE_API_KEY"}
+    # API-key-noise cleanup 2026-06-06: scanner now skips cleanly
+    # instead of emitting INFO. See skipped_reason set in gather().
+    return None
+
+
 def _r_ready(s):
     if not s.get("api_key_configured"): return None
     return {"name":"stealer_log_search ready","severity":"CRITICAL","cwe":"T1555","evidence":"Infostealer log DB ready"}

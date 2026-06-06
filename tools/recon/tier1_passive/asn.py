@@ -57,53 +57,7 @@ def _r_no_asn(s):
     return {"name":"ASN lookup returned no data","severity":"INFO","cwe":"T1590.005",
         "evidence":"Cymru returned no AS — could indicate Cloudflare/CDN obscuring",
         "remediation":"Investigate via Shodan or origin_ip_bypass scanner"}
-def _r_chain_handoff(s):
-    org=(s.get("asn_org") or "").lower()
-    country=(s.get("asn_country") or "").upper()
-    asn=s.get("asn") or ""
-    asn_count=s.get("asn_count") or 0
-    if not asn and asn_count<2: return None
-    chain_next=[]
-    reasons=[]
-    cloud_kw=["amazon","aws","microsoft","azure","google","gcp","digitalocean","cloudflare","linode","oracle cloud","alibaba"]
-    hosting_kw=["hosting","ovh","hetzner","leaseweb","godaddy","namecheap","dreamhost","bluehost","contabo","vultr"]
-    isp_kw=["telecom","broadband","comcast","verizon","at&t","spectrum","reliance","airtel","bsnl","jio","vodafone","bt group"]
-    if any(k in org for k in cloud_kw):
-        for n in ("s3_bucket_enum","azure_blob_enum","gcs_bucket_enum"):
-            if n not in chain_next: chain_next.append(n)
-        reasons.append("cloud-provider ASN -> bucket enum")
-    if any(k in org for k in hosting_kw):
-        if "reverse_ip" not in chain_next: chain_next.append("reverse_ip")
-        reasons.append("hosting ASN -> reverse_ip co-hosted")
-    if any(k in org for k in isp_kw):
-        if "ipv6_alive_enum" not in chain_next: chain_next.append("ipv6_alive_enum")
-        reasons.append("ISP/residential ASN -> ipv6_alive_enum")
-    if asn_count>=2:
-        for n in ("anycast_detect","cloudfront_disco"):
-            if n not in chain_next: chain_next.append(n)
-        reasons.append(f"multi-homed ({asn_count} ASNs) -> anycast/cloudfront")
-    registry=(s.get("asn_registry") or "").upper()
-    reg_country_map={"ARIN":"US","RIPE":"EU","APNIC":"AP","LACNIC":"LA","AFRINIC":"AF"}
-    expected=reg_country_map.get(registry)
-    if expected and country and expected not in ("EU","AP","LA","AF") and country!=expected:
-        if "geoip" not in chain_next: chain_next.append("geoip")
-        reasons.append(f"ASN country {country} differs from registry {registry}")
-    if asn_count>=3:
-        if "reverse_ip" not in chain_next: chain_next.append("reverse_ip")
-        reasons.append("many neighbors -> reverse_ip peer enum")
-    if not chain_next: return None
-    return {
-        "name":"Cross-module chain handoff - ASN ownership maps to follow-up scanners",
-        "severity":"INFO",
-        "evidence":f"ASN: {asn or 'multi'}; org: {s.get('asn_org') or 'n/a'}; suggests {len(chain_next)} follow-up scanner(s) [{'; '.join(reasons)}]",
-        "remediation":"ASN reveals hosting infrastructure. Cloud ASNs = bucket enum. Multi-ASN = anycast detect.",
-        "cwe":"CWE-1006",
-        "chain_next":chain_next,
-        "discovery_method":"asn_to_hosting_chain",
-        "source_stage":"chain_handoff",
-        "confidence":"INFO",
-    }
-FINDING_RULES=[_r_done,_r_multi,_r_un,_r_no_asn,_r_chain_handoff]
+FINDING_RULES=[_r_done,_r_multi,_r_un,_r_no_asn]
 INTEL_FIELDS=[("Reachable","reachable"),("Resolved IPs","ips"),("ASN","asn"),
     ("ASN org","asn_org"),("Country","asn_country"),("Registry","asn_registry"),("ASN count","asn_count")]
 @router.post("/api/recon/asn")
@@ -112,17 +66,3 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["asn","asn_org","ips"])
 def register(app): app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "asn", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-
-from tools._methodology import chain_registry
-chain_registry.register("asn", _chain_callable)

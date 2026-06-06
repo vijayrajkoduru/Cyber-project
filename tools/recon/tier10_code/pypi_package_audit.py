@@ -10,9 +10,11 @@ async def gather(ctx):
     if not keyed:
         ctx.state["skipped_reason"]="pypi_package_audit: set PYPI_TOKEN or GITHUB_TOKEN to enable package-leak audit"
 def _r_unkeyed(s):
-    if s.get("api_key_configured"): return None
-    return {"name":"pypi_package_audit requires API key","severity":"INFO",
-        "evidence":"Set PYPI_TOKEN or GITHUB_TOKEN"}
+    # API-key-noise cleanup 2026-06-06: scanner now skips cleanly
+    # instead of emitting INFO. See skipped_reason set in gather().
+    return None
+
+
 FINDING_RULES=[_r_unkeyed]
 INTEL_FIELDS=[("API key","api_key_configured")]
 @router.post("/api/recon/pypi_package_audit")

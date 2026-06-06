@@ -46,38 +46,7 @@ def _r_clean(s):
     if s.get("count",0)>0: return None
     return {"name":"No subdomains found via brute-force","severity":"POSITIVE",
         "evidence":f"Probed {s.get('wordlist_size',0)} candidates"}
-def _r_chain_handoff(s):
-    subs=s.get("subdomains_found") or []
-    if not subs: return None
-    base={"tcp_port_scan","tech_stack_detect","subdomain_takeover","tls_ssl_audit"}
-    extras=set()
-    for f in subs:
-        sub=(f.get("subdomain") or "").lower()
-        if not sub: continue
-        parts=sub.split(".")
-        first=parts[0] if parts else ""
-        if first in ("admin","manage") or ".admin." in sub or ".manage." in sub:
-            extras.add("exposed_env_scan")
-        if first=="api" or ".api." in sub:
-            extras.update({"graphql_intro_check","swagger_openapi_discovery"})
-        if first=="vpn" or ".vpn." in sub:
-            extras.add("vpn_appliance_cve")
-        if first in ("mail","smtp") or ".mail." in sub or ".smtp." in sub:
-            extras.add("mail_server_cve")
-    chain_next=sorted(base|extras)
-    n=len(subs); m=len(chain_next)
-    return {
-        "name":"Cross-module chain handoff - subdomains discovered for follow-up",
-        "severity":"INFO",
-        "evidence":f"Discovered {n} subdomain(s); top patterns suggest {m} follow-up scanner(s)",
-        "remediation":"Each discovered subdomain is a fresh attack surface. Run the suggested follow-up scanners (port_scan, tech_stack, subdomain_takeover) per subdomain.",
-        "cwe":"CWE-1006",
-        "chain_next":chain_next,
-        "discovery_method":"subdomain_to_attack_surface_chain",
-        "source_stage":"chain_handoff",
-        "confidence":"INFO",
-    }
-FINDING_RULES=[_r_found,_r_clean,_r_chain_handoff]
+FINDING_RULES=[_r_found,_r_clean]
 INTEL_FIELDS=[("Wordlist size","wordlist_size"),("Subdomains","count"),("Found","subdomains_found")]
 @router.post("/api/recon/subdomain_bruteforce")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
@@ -85,9 +54,3 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["subdomains_found","count"])
 def register(app): app.include_router(router)
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "subdomain_bruteforce", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-from tools._methodology import chain_registry
-chain_registry.register("subdomain_bruteforce", _chain_callable)

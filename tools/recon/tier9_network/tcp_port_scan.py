@@ -58,41 +58,6 @@ def _r_web(s):
     if not web: return None
     return {"name":f"Web services on {len(web)} port(s)","severity":"INFO",
         "evidence":f"Ports: {web}"}
-def _r_chain_handoff(s):
-    op=s.get("open_ports") or []
-    if not op: return None
-    port_map={
-        22:["hydra_ssh_spray"],
-        21:["ftp_brute"],
-        445:["medusa_smb_spray"],
-        139:["medusa_smb_spray"],
-        3389:["ncrack_rdp_spray"],
-        3306:["mysql_brute"],
-        5432:["postgres_brute"],
-        389:["ldap_brute"],
-        636:["ldap_brute"],
-    }
-    chain_next=[]
-    matched=[]
-    for p in op:
-        if p in port_map:
-            for s_name in port_map[p]:
-                if s_name not in chain_next:
-                    chain_next.append(s_name)
-            matched.append((p,port_map[p][0]))
-    if not chain_next: return None
-    evidence_parts=[f":{p}->{name}" for p,name in matched[:8]]
-    return {
-        "name":"Cross-module chain handoff suggested - protocol services discovered",
-        "severity":"INFO",
-        "evidence":f"Open ports map to {len(chain_next)} Password Attacks scanner(s): "+", ".join(evidence_parts),
-        "remediation":"If these services are intentionally exposed, run the suggested Password Attacks scanners with appropriate credentials to verify they reject default/weak passwords. Otherwise, firewall them.",
-        "cwe":"CWE-1006",
-        "chain_next":chain_next,
-        "discovery_method":"tcp_port_scan_protocol_inference",
-        "source_stage":"chain_handoff",
-        "confidence":"INFO",
-    }
 def _r_count(s):
     n=s.get("port_count",0)
     if n==0: return None
@@ -102,7 +67,7 @@ def _r_clean(s):
     if s.get("port_count",0)>0 or not s.get("reachable"): return None
     return {"name":"No open TCP ports in top-100","severity":"POSITIVE",
         "evidence":f"Probed {s.get('ports_probed',0)} — all closed/filtered"}
-FINDING_RULES=[_r_dangerous,_r_web,_r_chain_handoff,_r_count,_r_clean]
+FINDING_RULES=[_r_dangerous,_r_web,_r_count,_r_clean]
 INTEL_FIELDS=[("Target IP","ip_scanned"),("Open ports","open_ports"),
     ("Open count","port_count"),("Ports probed","ports_probed")]
 @router.post("/api/recon/tcp_port_scan")
@@ -111,30 +76,3 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["open_ports","port_count","ip_scanned"])
 def register(app): app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration - upstream scanners (subdomain_enum,
-#  service discovery) trigger us via _chain_callable.
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target: str, options: dict, jwt=None) -> dict:
-    """ChainExecutor entry point - upstream scanners (subdomain_enum,
-    service discovery) trigger us via this wrapper."""
-    from tools._shared import ScanRequest
-    req = ScanRequest(target=target, options=options or {})
-    # Build minimal context and call gather() + rules
-    # NOTE: this is best-effort; full integration may need orchestrator-side wiring
-    # For now, just emit a placeholder so the chain link is visible
-    return {
-        "tool": "tcp_port_scan",
-        "target": target,
-        "_skipped": True,
-        "skipped_reason": "Recon scanner not yet directly chain-callable; use orchestrator instead",
-        "findings": [],
-    }
-
-
-from tools._methodology import chain_registry
-chain_registry.register("tcp_port_scan", _chain_callable)

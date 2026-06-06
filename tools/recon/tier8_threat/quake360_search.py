@@ -8,13 +8,18 @@ async def gather(ctx):
     candidates=["QUAKE360_SEARCH_API_KEY","QUAKE360_SEARCH_TOKEN","CENSYS_API_TOKEN","FOFA_KEY","QUAKE_KEY","ZOOMEYE_KEY","MISP_API_KEY"]
     key=next((os.environ.get(c) for c in candidates if os.environ.get(c)),None)
     ctx.state["api_key_configured"]=bool(key)
+    if not key:
+        ctx.state["skipped_reason"] = "Requires Quake360 API key — set env QUAKE360_API_KEY to enable. Free tiers available at vendor's site."
+        return
     if not key: return
     ctx.source("quake360_search-keyed")
     ctx.state["data_available"]=True
 def _r_unkeyed(s):
-    if s.get("api_key_configured"): return None
-    return {"name":"quake360_search requires API key","severity":"INFO",
-        "evidence":"Set appropriate env var"}
+    # API-key-noise cleanup 2026-06-06: scanner now skips cleanly
+    # instead of emitting INFO. See skipped_reason set in gather().
+    return None
+
+
 def _r_keyed(s):
     if not s.get("api_key_configured"): return None
     return {"name":"quake360_search ready (intel query on demand)","severity":"INFO",

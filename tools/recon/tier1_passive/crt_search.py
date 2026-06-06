@@ -71,43 +71,7 @@ def _r_clean(s):
     if not s.get("reachable"): return None
     return {"name":"No subdomains in CT logs","severity":"POSITIVE",
         "evidence":"Limited cert history — narrow public footprint"}
-def _r_chain_handoff(s):
-    sub_count=s.get("subdomain_count") or 0
-    wildcard=s.get("wildcard_count") or 0
-    san_total=s.get("san_total") or 0
-    ev_ov=s.get("ev_ov_orgs") or []
-    sha1=s.get("sha1_seen") or False
-    chain_next=[]
-    reasons=[]
-    if sub_count>0:
-        for s_name in ("subdomain_bruteforce","tcp_port_scan","tech_stack_detect"):
-            if s_name not in chain_next: chain_next.append(s_name)
-        reasons.append(f"{sub_count} subdomain(s)->bruteforce/portscan/techstack")
-    if wildcard>0:
-        if "subdomain_takeover" not in chain_next: chain_next.append("subdomain_takeover")
-        reasons.append(f"{wildcard} wildcard SAN(s)->takeover audit")
-    if wildcard>0 and san_total>20:
-        if "passive_dns" not in chain_next: chain_next.append("passive_dns")
-        reasons.append(f"wildcard+{san_total} SANs->passive_dns")
-    if ev_ov:
-        if "harvester_emails" not in chain_next: chain_next.append("harvester_emails")
-        reasons.append(f"EV/OV org '{ev_ov[0]}'->employee email harvest")
-    if sha1:
-        if "tls_ssl_audit" not in chain_next: chain_next.append("tls_ssl_audit")
-        reasons.append("SHA-1 cert->tls_ssl_audit")
-    if not chain_next: return None
-    return {
-        "name":f"Cross-module chain handoff - cert transparency reveals {sub_count} subdomains",
-        "severity":"INFO",
-        "evidence":f"Found {sub_count} subdomain(s) via CT; suggests {len(chain_next)} follow-up scanner(s). "+"; ".join(reasons[:5]),
-        "remediation":"Each cert-discovered subdomain is fresh attack surface. Run port_scan + tech_stack + takeover audit per subdomain.",
-        "cwe":"CWE-1006",
-        "chain_next":chain_next,
-        "discovery_method":"ct_log_to_attack_surface_chain",
-        "source_stage":"chain_handoff",
-        "confidence":"INFO",
-    }
-FINDING_RULES=[_r_subs,_r_issuer,_r_chain_handoff,_r_clean]
+FINDING_RULES=[_r_subs,_r_issuer,_r_clean]
 INTEL_FIELDS=[("Subdomain count","subdomain_count"),("Cert issuers","issuers"),
     ("Recent certs","recent_certs_count")]
 @router.post("/api/recon/crt_search")
@@ -116,17 +80,3 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["subdomains","subdomain_count","issuers"])
 def register(app): app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration - VL-METHOD chain_handoff entry point
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "crt_search", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-
-from tools._methodology import chain_registry
-chain_registry.register("crt_search", _chain_callable)

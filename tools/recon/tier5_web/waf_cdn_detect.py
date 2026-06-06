@@ -31,48 +31,8 @@ async def gather(ctx: ScanContext):
     ctx.state["detected"] = bool(fingerprints)
     ctx.source("Header fingerprint — 9 WAF/CDN providers")
 
-def _r_chain_handoff(s):
-    fps = s.get("fingerprints") or []
-    detected = s.get("detected")
-    chain_next = []
-    reasons = []
-    fps_lower = " ".join(f.lower() for f in fps)
-    if "cloudflare" in fps_lower:
-        for n in ("origin_ip_bypass","cloudfront_disco"):
-            if n not in chain_next: chain_next.append(n)
-        reasons.append("Cloudflare->origin_ip_bypass,cloudfront_disco")
-    if any(k in fps_lower for k in ("akamai","fastly","aws waf")):
-        if "origin_ip_bypass" not in chain_next: chain_next.append("origin_ip_bypass")
-        reasons.append("Akamai/Fastly/AWS-WAF->origin_ip_bypass")
-    if detected:
-        if "http_server_cve" not in chain_next: chain_next.append("http_server_cve")
-        reasons.append("WAF->http_server_cve")
-    else:
-        for n in ("http_method_enum","api_endpoint_brute"):
-            if n not in chain_next: chain_next.append(n)
-        reasons.append("no-WAF->http_method_enum,api_endpoint_brute")
-    if any(k in fps_lower for k in ("cloudfront","fastly","akamai","azure cdn","cloudflare")):
-        if "passive_dns" not in chain_next: chain_next.append("passive_dns")
-        reasons.append("CDN-edge->passive_dns")
-    if s.get("waf_bypassed"):
-        if "tech_stack_detect" not in chain_next: chain_next.append("tech_stack_detect")
-        reasons.append("WAF-bypassed->tech_stack_detect")
-    if not chain_next: return None
-    return {
-        "name": "Cross-module chain handoff - WAF/CDN posture identifies follow-up scanners",
-        "severity": "INFO",
-        "evidence": f"Detected: {', '.join(fps) if fps else 'none'}; suggests {len(chain_next)} follow-up scanner(s) ("+ "; ".join(reasons) +")",
-        "remediation": "WAF/CDN typically hide origin IP. Run origin-discovery + passive-DNS to find real backend.",
-        "cwe": "CWE-1006",
-        "chain_next": chain_next,
-        "discovery_method": "waf_cdn_to_origin_chain",
-        "source_stage": "chain_handoff",
-        "confidence": "INFO",
-    }
-
 RULES = [
-    _r_chain_handoff,
-]
+    ]
 
 @router.post("/api/recon/waf_cdn_detect")
 async def recon_waf_cdn_detect(req: ScanRequest, _=Depends(verify_scan_quota)):
@@ -83,17 +43,3 @@ async def recon_waf_cdn_detect(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 def register(app):
     app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration - upstream scanners trigger us via
-#  _chain_callable. Full chain execution goes through the orchestrator.
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "waf_cdn_detect", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-from tools._methodology import chain_registry
-chain_registry.register("waf_cdn_detect", _chain_callable)

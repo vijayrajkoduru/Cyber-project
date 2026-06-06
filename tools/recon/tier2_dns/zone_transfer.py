@@ -43,47 +43,7 @@ def _r_safe(s):
     if not s.get("ns_list"): return None
     return {"name":"AXFR refused on all NS","severity":"POSITIVE",
         "evidence":f"All {len(s['ns_list'])} authoritative NS rejected zone transfer"}
-def _r_chain_handoff(s):
-    if not s.get("ns_list"): return None
-    chain_next=[]
-    vulnerable=bool(s.get("vulnerable"))
-    leaked=int(s.get("leaked_records",0) or 0)
-    vuln_ns=s.get("vulnerable_ns") or []
-    attempts=s.get("transfer_attempts") or []
-    ns_responded=bool(s.get("ns_list"))
-    refused=[a for a in attempts if not a.get("success")]
-    refused_codes={a.get("error","") for a in refused}
-    dnssec_present=any("DNSSEC" in (a.get("error","") or "") for a in attempts) or any(
-        "NSEC" in str(a) for a in attempts)
-    internal_markers=("10.","172.","192.168.","internal","corp","ad.","dc.")
-    open_internal=any(any(m in (ns or "").lower() for m in internal_markers) for ns in vuln_ns)
-
-    if vulnerable and leaked>0:
-        for s_name in ("subdomain_bruteforce","tcp_port_scan","subdomain_takeover","dns_records"):
-            if s_name not in chain_next: chain_next.append(s_name)
-    if (not vulnerable) and ns_responded and refused:
-        if "nsec_walking" not in chain_next: chain_next.append("nsec_walking")
-    if dnssec_present and not vulnerable:
-        for s_name in ("dnssec","nsec_walking"):
-            if s_name not in chain_next: chain_next.append(s_name)
-    if vulnerable and open_internal:
-        if "smb_netbios_enum" not in chain_next: chain_next.append("smb_netbios_enum")
-
-    if not chain_next: return None
-    axfr_result=("succeeded" if vulnerable else
-                 ("refused" if refused else "no-response"))
-    return {
-        "name":"Cross-module chain handoff - zone transfer posture suggests follow-up",
-        "severity":"INFO",
-        "evidence":f"AXFR result: {axfr_result}; leaked records: {leaked}; suggests {len(chain_next)} follow-up scanner(s)",
-        "remediation":"Leaked zone = full DNS topology. If refused, NSEC walking + subdomain brute still reveal records.",
-        "cwe":"CWE-1006",
-        "chain_next":chain_next,
-        "discovery_method":"axfr_to_dns_chain",
-        "source_stage":"chain_handoff",
-        "confidence":"INFO",
-    }
-FINDING_RULES=[_r_vuln,_r_safe,_r_chain_handoff]
+FINDING_RULES=[_r_vuln,_r_safe]
 INTEL_FIELDS=[("NS list","ns_list"),("Vulnerable","vulnerable"),
     ("Leaked records","leaked_records"),("Vulnerable NS","vulnerable_ns")]
 @router.post("/api/recon/zone_transfer")
@@ -92,18 +52,3 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["vulnerable","ns_list","vulnerable_ns"])
 def register(app): app.include_router(router)
-
-
-# ════════════════════════════════════════════════════════════════════
-#  Chain registry registration - upstream scanners trigger us via
-#  _chain_callable.
-# ════════════════════════════════════════════════════════════════════
-
-
-async def _chain_callable(target, options, jwt=None) -> dict:
-    return {"tool": "zone_transfer", "target": target, "_skipped": True,
-            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
-
-
-from tools._methodology import chain_registry
-chain_registry.register("zone_transfer", _chain_callable)

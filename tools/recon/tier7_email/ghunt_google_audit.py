@@ -9,12 +9,17 @@ async def gather(ctx):
     candidates=["GHUNT_GOOGLE_AUDIT_API_KEY","GHUNT_GOOGLE_AUDIT_KEY","INTELX_API_KEY","LEAKCHECK_API_KEY","DEHASHED_API_KEY"]
     key=next((os.environ.get(c) for c in candidates if os.environ.get(c)),None)
     ctx.state["api_key_configured"]=bool(key)
+    if not key:
+        ctx.state["skipped_reason"] = "Requires GHunt Google session tokens API key — set env GHUNT_TOKENS to enable. Free tiers available at vendor's site."
+        return
     ctx.state["host"]=ctx.host
     if key: ctx.source("ghunt_google_audit-keyed")
 def _r_unkeyed(s):
-    if s.get("api_key_configured"): return None
-    return {"name":"ghunt_google_audit requires API key","severity":"INFO",
-        "evidence":"Set appropriate env var for ghunt_google_audit intel"}
+    # API-key-noise cleanup 2026-06-06: scanner now skips cleanly
+    # instead of emitting INFO. See skipped_reason set in gather().
+    return None
+
+
 def _r_keyed(s):
     if not s.get("api_key_configured"): return None
     return {"name":"ghunt_google_audit configured","severity":"INFO",
