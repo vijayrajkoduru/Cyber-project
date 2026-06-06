@@ -47,7 +47,47 @@ def _r_exposed(s):
         "cwe":"CWE-200","owasp":"A05:2021",
         "evidence":", ".join(ports),
         "remediation":"Block SMB/NetBIOS at perimeter firewall. Never expose to internet — ransomware vector."}
-FINDING_RULES=[_r_exposed]
+def _r_chain_handoff(s):
+    if not s.get("exposed"): return None
+    chain_next=[]; ev=[]
+    smb_up = s.get("smb_445") or s.get("netbios_139")
+    if smb_up:
+        if "medusa_smb_spray" not in chain_next: chain_next.append("medusa_smb_spray")
+        ev.append("SMB port responding")
+    if s.get("smb1_enabled"):
+        if "medusa_smb_spray" not in chain_next: chain_next.append("medusa_smb_spray")
+        if "smb_rdp_exposure" not in chain_next: chain_next.append("smb_rdp_exposure")
+        ev.append("SMB1 enabled (CVE class)")
+    if s.get("workgroup") or s.get("domain"):
+        for n in ("ad_bloodhound_audit","kerberoast_audit","asreproast_audit"):
+            if n not in chain_next: chain_next.append(n)
+        ev.append(f"AD context: {s.get('domain') or s.get('workgroup')}")
+    if s.get("shares"):
+        for n in ("medusa_smb_spray","post_exploit_smb_share_dump"):
+            if n not in chain_next: chain_next.append(n)
+        ev.append(f"{len(s.get('shares') or [])} share(s) enumerated")
+    if s.get("browser_hosts"):
+        if "tcp_port_scan" not in chain_next: chain_next.append("tcp_port_scan")
+        ev.append(f"{len(s.get('browser_hosts') or [])} browser host(s)")
+    if s.get("wsdd") or s.get("llmnr"):
+        if "ipv6_alive_enum" not in chain_next: chain_next.append("ipv6_alive_enum")
+        ev.append("WSDD/LLMNR responses")
+    if s.get("smb_signing_required") is False:
+        if "medusa_smb_spray" not in chain_next: chain_next.append("medusa_smb_spray")
+        ev.append("SMB signing not required (PetitPotam class)")
+    if not chain_next: return None
+    return {
+        "name":"Cross-module chain handoff - SMB/NetBIOS exposes AD attack surface",
+        "severity":"INFO",
+        "evidence":f"SMB info: {'; '.join(ev)}; suggests {len(chain_next)} follow-up scanner(s)",
+        "remediation":"Any reachable SMB is an AD lateral movement vector. Run AD enum + credential spray. SMB1 + no-signing = full NTLM relay class.",
+        "cwe":"CWE-1006",
+        "chain_next":chain_next,
+        "discovery_method":"smb_to_ad_chain",
+        "source_stage":"chain_handoff",
+        "confidence":"INFO",
+    }
+FINDING_RULES=[_r_exposed,_r_chain_handoff]
 INTEL_FIELDS=[("IP","ip"),("SMB 445","smb_445"),("NetBIOS 139","netbios_139"),("NBNS 137","nbns_137")]
 @router.post("/api/recon/smb_netbios_enum")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
@@ -55,3 +95,22 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["smb_445","netbios_139","nbns_137"])
 def register(app): app.include_router(router)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Chain registry registration
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _chain_callable(target: str, options: dict, jwt=None) -> dict:
+    return {
+        "tool": "smb_netbios_enum",
+        "target": target,
+        "_skipped": True,
+        "skipped_reason": "Use orchestrator for full chain execution",
+        "findings": [],
+    }
+
+
+from tools._methodology import chain_registry
+chain_registry.register("smb_netbios_enum", _chain_callable)

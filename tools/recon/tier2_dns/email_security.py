@@ -84,8 +84,48 @@ def _r_bimi(s):
     if not s.get("bimi_record"): return None
     return {"name":"BIMI configured","severity":"POSITIVE",
         "evidence":"Brand Indicators for Message Identification — logo in inbox"}
+def _r_chain_handoff(s):
+    if not s.get("mx_records"): return None
+    spf=s.get("spf_record");dmarc=s.get("dmarc_record");dmarc_policy=s.get("dmarc_policy")
+    dkim=s.get("dkim_selectors") or [];mx=s.get("mx_records") or []
+    chain_next=[];reasons=[];spoofable=False
+    if not dmarc or dmarc_policy=="none":
+        for n in ("phishing_email_posture","dnstwist"):
+            if n not in chain_next: chain_next.append(n)
+        reasons.append("DMARC missing/p=none");spoofable=True
+    spf_weak=bool(spf and ("+all" in spf))
+    if not spf or spf_weak:
+        if "phishing_email_posture" not in chain_next: chain_next.append("phishing_email_posture")
+        reasons.append("SPF missing/+all");spoofable=True
+    if not dkim:
+        if "phishing_email_posture" not in chain_next: chain_next.append("phishing_email_posture")
+        reasons.append("DKIM missing")
+    if spoofable:
+        for n in ("dnstwist","social_handles"):
+            if n not in chain_next: chain_next.append(n)
+        reasons.append("spoofable domain")
+    mx_join=" ".join(str(m).lower() for m in mx)
+    if "outlook.com" in mx_join or "office365" in mx_join or "protection.outlook" in mx_join:
+        if "entra_user_enum_unauth" not in chain_next: chain_next.append("entra_user_enum_unauth")
+        reasons.append("MX=Office365")
+    if "google.com" in mx_join or "googlemail.com" in mx_join or "aspmx" in mx_join:
+        if "gworkspace_admin_audit" not in chain_next: chain_next.append("gworkspace_admin_audit")
+        reasons.append("MX=Google")
+    if not chain_next: return None
+    posture=f"SPF={'yes' if spf else 'no'}{'/+all' if spf_weak else ''}; DKIM={'yes' if dkim else 'no'}; DMARC={dmarc_policy or 'missing'}"
+    return {
+        "name":"Cross-module chain handoff - email posture exploitable for phishing",
+        "severity":"INFO",
+        "evidence":f"SPF/DKIM/DMARC posture: {posture} ({'; '.join(reasons)}); suggests {len(chain_next)} follow-up scanner(s)",
+        "remediation":"Run phishing posture + dnstwist + employee enum to assess pretext + delivery risk.",
+        "cwe":"CWE-1006",
+        "chain_next":chain_next,
+        "discovery_method":"email_posture_to_phishing_chain",
+        "source_stage":"chain_handoff",
+        "confidence":"INFO",
+    }
 FINDING_RULES=[_r_no_spf,_r_weak_spf,_r_no_dmarc,_r_dmarc_none,_r_dmarc_strict,
-    _r_no_dkim,_r_dkim_present,_r_no_mta_sts,_r_bimi]
+    _r_no_dkim,_r_dkim_present,_r_no_mta_sts,_r_bimi,_r_chain_handoff]
 INTEL_FIELDS=[("SPF","spf_record"),("SPF strict","spf_strict"),
     ("DMARC policy","dmarc_policy"),("DKIM selectors","dkim_selectors"),
     ("MTA-STS","mta_sts_record"),("BIMI","bimi_record"),("MX","mx_records")]
@@ -95,3 +135,17 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["spf_record","dmarc_record","dkim_selectors","mx_records"])
 def register(app): app.include_router(router)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Chain registry registration
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "email_security", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+
+
+from tools._methodology import chain_registry
+chain_registry.register("email_security", _chain_callable)
