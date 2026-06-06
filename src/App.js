@@ -22621,21 +22621,23 @@ export default function App() {
                       style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
                       <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
-                      {/* VA/PT badge — instant signal of what the module does */}
+                      {/* VA/PT badge — subtle tag, low-opacity, refined look */}
                       {MODULE_TYPE[m.id] && (() => {
                         const t = MODULE_TYPE[m.id];
-                        const bg = t === "PT" ? "rgba(239,68,68,0.15)"
-                                 : t === "VA+" ? "rgba(245,158,11,0.15)"
-                                 : "rgba(59,130,246,0.15)";
-                        const fg = t === "PT" ? "#fca5a5"
-                                 : t === "VA+" ? "#fcd34d"
-                                 : "#93c5fd";
+                        // Pale, low-opacity backgrounds so they don't dominate
+                        const bg = t === "PT"  ? "rgba(239,68,68,0.08)"
+                                 : t === "VA+" ? "rgba(245,158,11,0.08)"
+                                 :                "rgba(59,130,246,0.08)";
+                        // Muted foreground (one shade lighter than before)
+                        const fg = t === "PT"  ? "#f87171"
+                                 : t === "VA+" ? "#fbbf24"
+                                 :                "#60a5fa";
                         return <span title={t === "PT" ? "Penetration Test - active exploitation"
                                           : t === "VA+" ? "VA + light active probing"
                                           : "Vulnerability Assessment - passive"}
-                          style={{fontSize:8,color:fg,fontWeight:800,background:bg,
-                                  padding:"1px 5px",borderRadius:3,letterSpacing:0.8,
-                                  flexShrink:0}}>{t}</span>;
+                          style={{fontSize:8.5, color:fg, fontWeight:600, background:bg,
+                                  padding:"1px 4px", borderRadius:2, letterSpacing:0.3,
+                                  flexShrink:0, opacity:0.75}}>{t}</span>;
                       })()}
                       {locked   && <span style={{fontSize:10}}></span>}
                       {m.comingSoon && !locked && <span style={{fontSize:8,color:"#8b5cf6",fontWeight:700,background:"rgba(139,92,246,0.15)",padding:"1px 5px",borderRadius:3,letterSpacing:0.5}}>SOON</span>}
