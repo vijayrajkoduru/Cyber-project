@@ -347,7 +347,21 @@ async def run_module_streaming(
                 yield (json.dumps(hb) + "\n").encode("utf-8")
                 continue
             for task in done_set:
-                tool_name, result, dur = task.result()
+                # STREAM-RESILIENCE-V1: ANY uncaught exception in task.result()
+                # used to kill the whole stream + cause frontend to mark every
+                # remaining scanner as "stream ended". Wrap each task individually
+                # so one bad result can't take down the other 59.
+                try:
+                    tool_name, result, dur = task.result()
+                except Exception as e:
+                    # Synthesize a failed result so the frontend gets a proper
+                    # tool_complete event instead of mysterious silence
+                    tool_name = "unknown_tool"
+                    result = {
+                        "ok": False, "_failed": True,
+                        "error": f"task crashed: {type(e).__name__}: {str(e)[:200]}",
+                    }
+                    dur = 0.0
                 results[tool_name] = result
                 timings[tool_name] = round(dur, 2)
                 event = {
