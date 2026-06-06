@@ -3790,13 +3790,14 @@ function WebAppModule(props) {
           </div>
         )}
 
+        {/* Login-verified targets only. Each chip auto-fills working
+            credentials. WebGoat removed — upstream image keeps renaming
+            login routes between versions, breaking auto-login. */}
         <TestTargets targets={[
           {label:"DVWA",       value:"http://lab_dvwa",                   color:"#dc2626", lab:"dvwa"},
-          {label:"WebGoat",    value:"http://lab_webgoat:8080/WebGoat",   color:"#ea580c", lab:"webgoat"},
-          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:"juiceshop"},
-          {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
           {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
-          {label:"testphp",    value:"http://testphp.vulnweb.com",        color:"#0ea5e9", lab:null},
+          {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
+          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:"juiceshop"},
         ]} onSelect={async (t, lab) => {
           setTarget(t);
           setAuthorized(false);
