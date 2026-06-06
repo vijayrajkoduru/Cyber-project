@@ -67,3 +67,6 @@ src/.cache-buster.js
 
 # Safety net snapshots (rollback.sh history — local-only)
 .safety/
+
+# Per-module backups (backup_recon.sh archives — local-only, can grow large)
+.recon_backups/
