@@ -60,7 +60,47 @@ def _r_clean(s):
     if s.get("tech_count",0)>0: return None
     return {"name":"No common technology fingerprints detected","severity":"INFO",
         "evidence":"Custom-built or well-hidden stack"}
-FINDING_RULES=[_r_old_tech,_r_detected,_r_clean]
+def _r_chain_handoff(s):
+    techs=s.get("technologies") or []
+    if not techs: return None
+    tech_set={t.lower() for t in techs}
+    chain_next=[]
+    if "wordpress" in tech_set:
+        chain_next.extend(["cms_fingerprint_cve","wp_plugin_brute"])
+    if "drupal" in tech_set or "joomla" in tech_set:
+        chain_next.append("cms_fingerprint_cve")
+    if "apache" in tech_set:
+        chain_next.append("http_server_cve")
+    if "nginx" in tech_set:
+        chain_next.append("http_server_cve")
+    if any(t in tech_set for t in ("tomcat","jboss","jetty","weblogic")):
+        chain_next.append("appserver_cve")
+    if any("spring" in t for t in tech_set):
+        chain_next.append("spring4shell_verify")
+    if any("log4j" in t for t in tech_set):
+        chain_next.append("log4shell_verify")
+    framework_markers=("wordpress","drupal","joomla","magento","shopify","asp.net","express.js","php")
+    if any(t in tech_set for t in framework_markers):
+        chain_next.extend(["patator_http_form_brute","jwt_forge_audit"])
+    if any("graphql" in t for t in tech_set):
+        chain_next.append("graphql_intro_check")
+    seen=set(); deduped=[]
+    for n in chain_next:
+        if n not in seen:
+            seen.add(n); deduped.append(n)
+    if not deduped: return None
+    return {
+        "name":"Cross-module chain handoff - tech stack maps to follow-up scanners",
+        "severity":"INFO",
+        "evidence":f"Detected stack: {', '.join(techs)}; suggests {len(deduped)} follow-up scanner(s)",
+        "remediation":"Each identified technology has known CVEs and configuration issues. Run the suggested follow-up scanners to verify patch level and find applicable exploits.",
+        "cwe":"CWE-1006",
+        "chain_next":deduped,
+        "discovery_method":"tech_stack_to_cve_chain",
+        "source_stage":"chain_handoff",
+        "confidence":"INFO",
+    }
+FINDING_RULES=[_r_old_tech,_r_detected,_r_clean,_r_chain_handoff]
 INTEL_FIELDS=[("Technologies","technologies"),("Tech count","tech_count")]
 @router.post("/api/recon/tech_stack_detect")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
@@ -68,3 +108,9 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["technologies","tech_count"])
 def register(app): app.include_router(router)
+
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "tech_stack_detect", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+from tools._methodology import chain_registry
+chain_registry.register("tech_stack_detect", _chain_callable)

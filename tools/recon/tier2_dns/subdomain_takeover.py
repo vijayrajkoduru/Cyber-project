@@ -70,7 +70,36 @@ def _r_no_cname(s):
     if s.get("reachable"): return None
     return {"name":"No CNAME (not vulnerable to takeover via dangling CNAME)","severity":"POSITIVE",
         "evidence":"Direct A record, no CNAME indirection"}
-FINDING_RULES=[_r_takeover,_r_cname,_r_no_cname]
+def _r_chain_handoff(s):
+    v=s.get("vulnerable_takeover") or []
+    if not v: return None
+    chain_next=["post_exploit_subdomain_claim","exposed_env_scan","git_secrets_scan"]
+    services_lower=" ".join((x.get("service") or "").lower() for x in v)
+    sigs_lower=" ".join((x.get("signature") or "").lower() for x in v)
+    high_conf_markers=("amazonaws.com","herokuapp.com","github.io")
+    sig_markers=("nosuchbucket","404","no such app")
+    high_conf=any(m in services_lower for m in high_conf_markers) or \
+              any(m in sigs_lower for m in sig_markers)
+    if s.get("cname") and not any(x.get("cname") for x in v):
+        chain_next.append("dns_zone_walk_nsec")
+    services_summary=", ".join(sorted({x.get("service","unknown") for x in v}))
+    confidence="HIGH" if high_conf else "INFO"
+    return {
+        "name":"Cross-module chain handoff - takeover-vulnerable CNAMEs found",
+        "severity":"INFO",
+        "evidence":(f"{len(v)} vulnerable CNAME(s) detected pointing to "
+                    f"abandoned cloud service(s): {services_summary}. "
+                    f"Confidence: {confidence}."),
+        "remediation":("Either reclaim the abandoned cloud resource (recommended) "
+                       "or remove the DNS CNAME. If reclaiming, also audit for any "
+                       "cached references in repo/env configs."),
+        "cwe":"CWE-1006",
+        "chain_next":chain_next,
+        "discovery_method":"subdomain_takeover_to_post_exploit_chain",
+        "source_stage":"chain_handoff",
+        "confidence":"INFO",
+    }
+FINDING_RULES=[_r_takeover,_r_cname,_r_no_cname,_r_chain_handoff]
 INTEL_FIELDS=[("CNAME","cname"),("Vulnerable","vulnerable_takeover")]
 @router.post("/api/recon/subdomain_takeover")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
@@ -78,3 +107,10 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["cname","vulnerable_takeover"])
 def register(app): app.include_router(router)
+
+# ── VL-METHOD chain_registry registration ────────────────────────
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "subdomain_takeover", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+from tools._methodology import chain_registry
+chain_registry.register("subdomain_takeover", _chain_callable)
