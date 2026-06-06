@@ -13224,11 +13224,19 @@ function generateUniversalVLReport(opts) {
   txt("FIELD", margin + 3, y + 5.5, 8, WHITE, true);
   txt("VALUE", margin + 55, y + 5.5, 8, WHITE, true);
   y += 8;
+  // VA vs PT label for Report Type — drives compliance framing
+  // (SOC 2 CC4.1 = VA, CC4.2 = PT; PCI-DSS 11.4 = PT).
+  const _moduleType = (typeof MODULE_TYPE !== "undefined" && MODULE_TYPE[moduleKey]) || "VA";
+  const _reportTypeLabel = _moduleType === "PT"
+    ? `${moduleLabel} - Penetration Test [PT]`
+    : _moduleType === "VA+"
+    ? `${moduleLabel} - Vulnerability Assessment [VA+ light active probing]`
+    : `${moduleLabel} - Vulnerability Assessment [VA]`;
   [
     ["Target", target || "(none)"],
     ["Scan Date", date],
     ["Classification", "CONFIDENTIAL"],
-    ["Report Type", moduleLabel + " Assessment"],
+    ["Report Type", _reportTypeLabel],
     ["Authenticated", authenticated ? "Yes - scanned with captured session" : "No - public surface only"]
   ].forEach((row, i) => {
     fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
@@ -19080,6 +19088,90 @@ const MANUAL_TESTS_AUTO = {
   ],
 };
 
+// Per-module classification — VA (Vulnerability Assessment, passive) vs
+// PT (Penetration Testing, active exploitation). Used to render a badge
+// on every module tile + the PDF Report Type field, so customers know
+// at-a-glance whether a module touches the target.
+//
+// VA  = passive / static / config-audit, safe to run on any target
+// PT  = active exploitation, requires customer authorization
+// VA+ = mostly passive but does light active probing (port scan, banner)
+//
+// Drives Starter (VA only) vs Professional (VA+PT) vs Enterprise plan tiers.
+const MODULE_TYPE = {
+  // ── VA: passive enumeration, static analysis, config audit ──────────
+  recon:            "VA",
+  osint:            "VA",
+  vuln:             "VA",
+  cloud:            "VA",
+  container_k8s:    "VA",
+  supply_chain:     "VA",
+  firmware:         "VA",
+  sspm:             "VA",
+  apisec:           "VA",
+  client_side:      "VA",
+  mobile_static:    "VA",
+  mobile_storage:   "VA",
+  mobile_crypto:    "VA",
+  mobile_network:   "VA",
+  // ── VA+: mostly passive but touches the target lightly ─────────────
+  network:          "VA+",
+  // ── PT: active exploitation, authorization required ────────────────
+  password:         "PT",
+  auth_attacks:     "PT",
+  ad:               "PT",
+  hybrid_identity:  "PT",
+  privesc:          "PT",
+  post_exploit:     "PT",
+  webapp:           "PT",
+  wireless:         "PT",
+  bof:              "PT",
+  av_evasion:       "PT",
+  red_team:         "PT",
+  exploit:          "PT",
+  system_exploit:   "PT",
+  metasploit:       "PT",
+  pivot:            "PT",
+  tunnel:           "PT",
+  iot_ot:           "PT",
+  phishing:         "PT",
+  mobile_runtime:   "PT",
+  ai_llm:           "PT",
+  // ── Additional mobile sub-modules ──
+  mobile_ipc:       "VA",
+  mobile_webview:   "VA",
+  mobile_privacy:   "VA",
+  mobile_payment:   "PT",
+  mobile_aiml:      "PT",
+};
+
+// VA/PT badge component — small inline pill in module headers.
+// VA = blue (safe), PT = red (aggressive), VA+ = amber.
+function ModuleTypeBadge({moduleKey}) {
+  const t = MODULE_TYPE[moduleKey] || "VA";
+  const cfg = {
+    "VA":  { bg: "#1e3a8a", border: "#3b82f6", color: "#bfdbfe",
+             label: "VA",  tip: "Vulnerability Assessment - passive, safe to run on any target" },
+    "VA+": { bg: "#78350f", border: "#f59e0b", color: "#fde68a",
+             label: "VA+", tip: "Mostly passive but does light active probing (port scan, banner grab)" },
+    "PT":  { bg: "#7f1d1d", border: "#ef4444", color: "#fecaca",
+             label: "PT",  tip: "Penetration Testing - actively exploits target. Authorization required." },
+  }[t] || {};
+  return (
+    <span title={cfg.tip}
+      style={{
+        display:"inline-flex", alignItems:"center", gap:4,
+        background: cfg.bg, border: `1px solid ${cfg.border}`,
+        borderRadius:4, padding:"2px 8px",
+        color: cfg.color, fontSize:10, fontWeight:800,
+        letterSpacing:1, textTransform:"uppercase",
+        cursor:"help",
+      }}>
+      {cfg.label}
+    </span>
+  );
+}
+
 // Per-module input schema — different modules need different target types.
 // Each entry: { ph: placeholder text, hint: short helper, needsUpload?: bool,
 //               targetType?: tells the user what kind of value to enter }
@@ -19835,6 +19927,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:8}}>
         <span style={{fontSize:28}}>{emoji}</span>
         <h1 style={{fontSize:22, fontWeight:700}}>{moduleLabel}</h1>
+        <ModuleTypeBadge moduleKey={moduleKey}/>
       </div>
 
       {/* Container module: the Target field + TestTargets chips are
@@ -22528,6 +22621,22 @@ export default function App() {
                       style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
                       <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
+                      {/* VA/PT badge — instant signal of what the module does */}
+                      {MODULE_TYPE[m.id] && (() => {
+                        const t = MODULE_TYPE[m.id];
+                        const bg = t === "PT" ? "rgba(239,68,68,0.15)"
+                                 : t === "VA+" ? "rgba(245,158,11,0.15)"
+                                 : "rgba(59,130,246,0.15)";
+                        const fg = t === "PT" ? "#fca5a5"
+                                 : t === "VA+" ? "#fcd34d"
+                                 : "#93c5fd";
+                        return <span title={t === "PT" ? "Penetration Test - active exploitation"
+                                          : t === "VA+" ? "VA + light active probing"
+                                          : "Vulnerability Assessment - passive"}
+                          style={{fontSize:8,color:fg,fontWeight:800,background:bg,
+                                  padding:"1px 5px",borderRadius:3,letterSpacing:0.8,
+                                  flexShrink:0}}>{t}</span>;
+                      })()}
                       {locked   && <span style={{fontSize:10}}></span>}
                       {m.comingSoon && !locked && <span style={{fontSize:8,color:"#8b5cf6",fontWeight:700,background:"rgba(139,92,246,0.15)",padding:"1px 5px",borderRadius:3,letterSpacing:0.5}}>SOON</span>}
                       {isTrial  && !locked && !m.comingSoon && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
