@@ -118,8 +118,8 @@ restore_image() {
 
 say "docker: restoring images from :stable tags..."
 RESTORE_OK=1
-restore_image vulnuslab_backend  || RESTORE_OK=0
-restore_image vulnuslab_frontend || RESTORE_OK=0
+restore_image cyber-project-backend  || RESTORE_OK=0
+restore_image cyber-project-frontend || RESTORE_OK=0
 
 say "docker: restarting containers..."
 docker compose up -d >/dev/null 2>&1 || {
@@ -143,7 +143,7 @@ if [ "$HEALTH_OK" = "1" ]; then
     ok "ROLLBACK COMPLETE — backend healthy on $TARGET_SHA"
 else
     err "ROLLBACK partially complete — backend NOT healthy after restore"
-    echo "    Check logs: docker logs vulnuslab_backend --tail 50"
+    echo "    Check logs: docker logs cyber-project-backend --tail 50"
 fi
 echo ""
 echo "  Undo this rollback (if needed):  ./rollback.sh $PRE_TAG"
