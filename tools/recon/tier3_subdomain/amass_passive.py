@@ -51,7 +51,59 @@ def _r_found(s):
 def _r_clean(s):
     if s.get("count",0)>0: return None
     return {"name":"No subdomains from passive enum","severity":"POSITIVE","evidence":"All sources empty"}
-FINDING_RULES=[_r_no_amass,_r_found,_r_clean]
+def _r_chain_handoff(s):
+    subs=s.get("subdomains") or []
+    n=s.get("count",0)
+    if n==0 or not subs: return None
+    chain_next=[]
+    reasons=[]
+    # Any subdomains -> baseline attack-surface fan-out
+    for name in ("tcp_port_scan","tech_stack_detect","subdomain_takeover","tls_ssl_audit"):
+        if name not in chain_next: chain_next.append(name)
+    reasons.append(f"{n} subdomain(s) -> port/tech/takeover/tls fan-out")
+    # Many subdomains -> historical asset audit
+    if n>50:
+        if "passive_dns" not in chain_next: chain_next.append("passive_dns")
+        reasons.append(">50 subs -> passive_dns history")
+    # Env-revealing names
+    env_tokens=("dev","staging","stage","test","qa","uat","preprod")
+    env_hits=[x for x in subs if any(t in x.split(".")[0] for t in env_tokens)]
+    if env_hits:
+        for name in ("exposed_env_scan","git_secrets_scan"):
+            if name not in chain_next: chain_next.append(name)
+        reasons.append(f"env names ({len(env_hits)}) -> exposed_env+git_secrets")
+    # Admin/internal-revealing names
+    admin_tokens=("admin","internal","intranet","mgmt","manage","panel","corp","private")
+    admin_hits=[x for x in subs if any(t in x.split(".")[0] for t in admin_tokens)]
+    if admin_hits:
+        for name in ("exposed_env_scan","patator_http_form_brute"):
+            if name not in chain_next: chain_next.append(name)
+        reasons.append(f"admin names ({len(admin_hits)}) -> env+http_form_brute")
+    # API/GraphQL surfaces
+    api_hits=[x for x in subs if x.split(".")[0] in ("api","graphql","gql") or x.split(".")[0].startswith(("api-","graphql-"))]
+    if api_hits:
+        for name in ("graphql_intro_check","swagger_openapi_discovery"):
+            if name not in chain_next: chain_next.append(name)
+        reasons.append(f"api/graphql names ({len(api_hits)}) -> graphql_intro+swagger")
+    # Multi-ASN footprint hint (heuristic: many distinct second-level prefixes)
+    prefixes={x.split(".")[0] for x in subs}
+    if len(prefixes)>=8:
+        for name in ("asn","cloudfront_disco"):
+            if name not in chain_next: chain_next.append(name)
+        reasons.append(f"{len(prefixes)} distinct prefixes -> asn+cloudfront_disco")
+    if not chain_next: return None
+    return {
+        "name":"Cross-module chain handoff - amass-discovered subdomains for follow-up",
+        "severity":"INFO",
+        "evidence":f"Amass found {n} subdomain(s); patterns suggest {len(chain_next)} follow-up scanner(s) ("+"; ".join(reasons)+")",
+        "remediation":"Each subdomain = independent attack surface. Port scan + tech stack per subdomain.",
+        "cwe":"CWE-1006",
+        "chain_next":chain_next,
+        "discovery_method":"amass_to_attack_surface_chain",
+        "source_stage":"chain_handoff",
+        "confidence":"INFO",
+    }
+FINDING_RULES=[_r_no_amass,_r_found,_r_clean,_r_chain_handoff]
 INTEL_FIELDS=[("amass installed","amass_binary_available"),("Subdomains","count")]
 @router.post("/api/recon/amass_passive")
 async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
@@ -59,3 +111,17 @@ async def f(req:ScanRequest,_=Depends(verify_scan_quota)):
         gather_func=gather,finding_rules=FINDING_RULES,intel_fields=INTEL_FIELDS,
         flat_field_keys=["subdomains","count"])
 def register(app): app.include_router(router)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Chain registry registration
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "amass_passive", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+
+
+from tools._methodology import chain_registry
+chain_registry.register("amass_passive", _chain_callable)

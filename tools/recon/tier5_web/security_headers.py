@@ -57,6 +57,7 @@ async def gather(ctx: ScanContext):
     ctx.state["grade_letter"] = "A" if pct>=90 else ("B" if pct>=75 else ("C" if pct>=60 else ("D" if pct>=40 else "F")))
     ctx.state["server_header"] = hdrs.get("server","")[:80]
     ctx.state["powered_by"] = hdrs.get("x-powered-by","")[:80]
+    ctx.state["set_cookie_raw"] = hdrs.get("set-cookie","")[:400]
     ctx.source(f"audit-{len(present)}of{len(_HEADERS_AUDIT)}")
 
 def r_missing(s):
@@ -120,8 +121,66 @@ def r_unreach(s):
     if s.get("target_reachable"): return None
     return {"name":"Target unreachable","severity":"INFO","evidence":"HTTP fetch failed"}
 
+def _r_chain_handoff(s):
+    if not s.get("target_reachable"): return None
+    miss = s.get("missing_headers") or []
+    miss_lower = {h.lower() for h in miss}
+    sv = (s.get("server_header") or "").strip()
+    pb = (s.get("powered_by") or "").strip()
+    cookies = s.get("set_cookie_raw") or ""
+    chain_next: list[str] = []
+    evidence_parts: list[str] = []
+
+    def _add(name):
+        if name not in chain_next:
+            chain_next.append(name)
+
+    if "content-security-policy" in miss_lower:
+        _add("xss_dom_sinks_audit"); _add("csp_bypass_audit")
+        evidence_parts.append("CSP->xss_dom_sinks_audit,csp_bypass_audit")
+    if "x-frame-options" in miss_lower:
+        _add("csp_bypass_audit"); _add("session_predict_audit")
+        evidence_parts.append("XFO->csp_bypass_audit,session_predict_audit")
+    if "x-content-type-options" in miss_lower:
+        _add("exposed_files")
+        evidence_parts.append("XCTO->exposed_files")
+    if "strict-transport-security" in miss_lower:
+        _add("tls_ssl_audit"); _add("hsts_audit")
+        evidence_parts.append("HSTS->tls_ssl_audit,hsts_audit")
+    if "referrer-policy" in miss_lower:
+        _add("session_predict_audit")
+        evidence_parts.append("Referrer->session_predict_audit")
+    if "permissions-policy" in miss_lower:
+        _add("postmessage_audit")
+        evidence_parts.append("PermPolicy->postmessage_audit")
+    if sv and "/" in sv and any(c.isdigit() for c in sv):
+        _add("http_server_cve"); _add("framework_cve")
+        evidence_parts.append(f"Server[{sv[:40]}]->http_server_cve,framework_cve")
+    if pb:
+        _add("framework_cve")
+        evidence_parts.append(f"X-Powered-By[{pb[:40]}]->framework_cve")
+    if cookies:
+        cl = cookies.lower()
+        if ("secure" not in cl) or ("httponly" not in cl) or ("samesite" not in cl):
+            _add("session_predict_audit"); _add("cookie_security_flags")
+            evidence_parts.append("Cookie-flags->session_predict_audit,cookie_security_flags")
+
+    if not chain_next:
+        return None
+    return {
+        "name": "Cross-module chain handoff - missing headers map to follow-up scanners",
+        "severity": "INFO",
+        "evidence": f"Missing: {', '.join(miss) or 'none'}; suggests {len(chain_next)} follow-up scanner(s) [{'; '.join(evidence_parts[:8])}]",
+        "remediation": "Each missing header opens a different attack class. Add headers + run downstream audits.",
+        "cwe": "CWE-1006",
+        "chain_next": chain_next,
+        "discovery_method": "headers_to_client_side_chain",
+        "source_stage": "chain_handoff",
+        "confidence": "INFO",
+    }
+
 FINDING_RULES = [r_missing, r_missing_med, r_missing_low, r_grade, r_server_leak,
-                 r_powered_by, r_clean, r_unreach]
+                 r_powered_by, r_clean, r_unreach, _r_chain_handoff]
 
 INTEL_FIELDS = [("Target reachable","target_reachable"),("Grade","grade_letter"),
                 ("Grade %","grade_pct"),("Server","server_header"),
@@ -139,3 +198,17 @@ async def recon_security_headers(req: ScanRequest, _=Depends(verify_scan_quota))
         flat_field_keys=["present_headers","missing_headers","grade_letter","grade_pct","server_header"])
 
 def register(app): app.include_router(router)
+
+
+# ════════════════════════════════════════════════════════════════════
+#  Chain registry registration - upstream scanners can trigger us via
+#  _chain_callable.
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _chain_callable(target, options, jwt=None) -> dict:
+    return {"tool": "security_headers", "target": target, "_skipped": True,
+            "skipped_reason": "Use orchestrator for full chain execution", "findings": []}
+
+from tools._methodology import chain_registry
+chain_registry.register("security_headers", _chain_callable)
