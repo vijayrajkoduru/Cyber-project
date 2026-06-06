@@ -7,6 +7,7 @@ import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import ScanContext, run_scanner
+from tools.recon._web_helpers import set_auth_from_req, current_auth
 
 router = APIRouter()
 _PAYLOAD = Path(__file__).resolve().parent.parent.parent / "_payloads" / "recon" / "api_endpoints.txt"
@@ -22,9 +23,17 @@ def _load():
             "/api/docs","/swagger.json","/openapi.json","/graphql"]
 
 def _get(url):
+    # AUTHED-RECON-V1 — pull session from contextvar set by endpoint, so
+    # authenticated probes reach protected /api/users etc. instead of 401.
+    hdrs = {"User-Agent": "VulnusLab/1.0"}
+    a = current_auth()
+    if a["auth_cookie"]:
+        hdrs["Cookie"] = a["auth_cookie"]
+    if a["auth_bearer"]:
+        hdrs["Authorization"] = f"Bearer {a['auth_bearer']}"
     try:
         return requests.get(url, timeout=_TO, verify=False, allow_redirects=False,
-                            headers={"User-Agent":"VulnusLab/1.0"})
+                            headers=hdrs)
     except Exception: return None
 
 def _probe(base, path):
@@ -157,6 +166,7 @@ INTEL_FIELDS = [("Target reachable","target_reachable"),("Paths probed","probed"
 
 @router.post("/api/recon/api_endpoint_brute")
 async def recon_api_endpoint_brute(req: ScanRequest, _=Depends(verify_scan_quota)):
+    set_auth_from_req(req)
     return await run_scanner(host=recon_host(req.target), tool="api_endpoint_brute",
         gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS,
         flat_field_keys=["hits","json_endpoints","auth_endpoints"])

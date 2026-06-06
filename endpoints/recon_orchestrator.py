@@ -57,6 +57,13 @@ class RunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
     concurrency: Optional[int] = 8
+    # AUTHED-RECON-V1 (2026-06-06): customer-supplied login session for
+    # authenticated recon. Captured by frontend via POST /api/scan/login,
+    # then echoed into this request so every web-facing scanner crawls the
+    # post-login surface. Both fields optional — unauthenticated scan is
+    # the default.
+    auth_cookie: Optional[str] = None       # e.g. "PHPSESSID=abc; token=xyz"
+    auth_bearer: Optional[str] = None       # e.g. "eyJhbGci..." (JWT/OAuth)
 
 
 @router.post("/api/recon/run_all")
@@ -71,7 +78,10 @@ async def recon_run_all(req: RunAllRequest, request: Request, _=Depends(verify_s
     auth = request.headers.get("authorization", "")
     jwt = auth.split(" ",1)[1].strip() if auth.lower().startswith("bearer ") else None
     gen = run_module_streaming(target=req.target, tools=tools, module_name="recon",
-                                concurrency=max(1, min(req.concurrency or 8, 16)), jwt_token=jwt)
+                                concurrency=max(1, min(req.concurrency or 8, 16)),
+                                auth_cookie=req.auth_cookie,
+                                auth_bearer=req.auth_bearer,
+                                jwt_token=jwt)
     return StreamingResponse(gen, media_type="application/x-ndjson",
         headers={"X-Accel-Buffering":"no", "Cache-Control":"no-store", "Connection":"keep-alive"})
 

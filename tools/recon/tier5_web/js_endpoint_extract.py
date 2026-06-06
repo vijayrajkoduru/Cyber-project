@@ -3,7 +3,7 @@ import asyncio, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
-from tools.recon._web_helpers import fetch, base_url
+from tools.recon._web_helpers import fetch, base_url, set_auth_from_req
 import urllib.parse
 
 router = APIRouter()
@@ -31,6 +31,7 @@ RULES = [
 
 @router.post("/api/recon/js_endpoint_extract")
 async def recon_js_endpoint_extract(req: ScanRequest, _=Depends(verify_scan_quota)):
+    set_auth_from_req(req)
     host = recon_host(req.target)
     return await run_scanner(host=host, tool="js_endpoint_extract",
                               gather_func=gather, finding_rules=RULES,
