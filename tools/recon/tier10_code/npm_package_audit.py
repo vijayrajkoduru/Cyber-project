@@ -3,7 +3,13 @@ import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
+from tools.recon._targeting import get_org_name, can_do_osint
 router=APIRouter()
+_GENERIC_ORG_NAMES = frozenset({
+    "app","api","www","web","dev","staging","test","demo","admin",
+    "portal","site","shop","blog","mail","cdn","static","assets",
+    "io","co","ai","me","org","net","com",
+})
 def _search(term):
     try:
         r=requests.get("https://registry.npmjs.org/-/v1/search",
@@ -11,12 +17,25 @@ def _search(term):
         return r.json() if r.status_code==200 else None
     except Exception: return None
 async def gather(ctx):
-    org=str(ctx.host).split(".")[0]
+    if not can_do_osint(ctx.host):
+        ctx.state["skipped_reason"]="OSINT not applicable for IP / internal hostname"
+        return
+    org = get_org_name(ctx.host)
+    if not org or org.lower() in _GENERIC_ORG_NAMES or len(org) < 4:
+        ctx.state["skipped_reason"]=f"Org name '{org}' too generic to search npm without massive false-positive risk"
+        return
     j=await asyncio.to_thread(_search, org)
     if not j: ctx.state["reachable"]=False; return
     ctx.state["reachable"]=True; ctx.source("npm")
-    pk=[{"name":o["package"]["name"]} for o in (j.get("objects") or [])
-        if org.lower() in str(o.get("package",{}).get("name","")).lower()]
+    # Strict match: package name must equal org, start with org-/org_,
+    # or be in the @org/* scope. No substring matches.
+    pk=[]
+    for o in (j.get("objects") or []):
+        n = str(o.get("package",{}).get("name","")).lower()
+        if (n == org.lower()
+            or n.startswith(org.lower() + "-") or n.startswith(org.lower() + "_")
+            or n.startswith("@" + org.lower() + "/")):
+            pk.append({"name": o["package"]["name"]})
     ctx.state.update({"org":org,"packages":pk,"pkg_count":len(pk)})
 def _r_found(s):
     p=s.get("packages") or []

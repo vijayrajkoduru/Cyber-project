@@ -1,15 +1,29 @@
-"""Sherlock Username v3 — VL-FORGE. Brand-stem verified to eliminate FPs."""
+"""Sherlock Username v3 — VL-FORGE. Brand-stem verified to eliminate FPs.
+
+ZERO-FP-V1 (2026-06-06): brand stem now uses the APEX domain (eTLD+1
+domain part), not the subdomain. Previously `app.vulnuslab.com` gave
+stem `app` and Sherlock matched random Minecraft player `app_official` -
+clearly not the customer's social profile.
+"""
 import asyncio, shutil, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
+from tools.recon._targeting import get_org_name, can_do_osint
 router=APIRouter()
 _SHERLOCK=shutil.which("sherlock")
 
+# Generic words that produce massive FP fan-out as usernames.
+_GENERIC_STEMS = frozenset({
+    "app","api","www","web","dev","staging","test","demo","admin",
+    "portal","site","shop","blog","mail","cdn","static","assets",
+    "user","users","official","main",
+})
+
 def _stem(host):
-    """Brand stem = leftmost label minus common gTLD prefixes."""
-    s=(host or "").split(".")[0].lower()
-    return re.sub(r"[^a-z0-9]","",s)
+    """Brand stem = apex-domain org name (not subdomain), alphanumeric-only."""
+    s = get_org_name(host) or ""
+    return re.sub(r"[^a-z0-9]","",s.lower())
 
 def _url_contains_stem(url, stem):
     """Match only if the username segment in the URL contains the full stem.
@@ -23,7 +37,13 @@ def _url_contains_stem(url, stem):
 async def gather(ctx):
     ctx.state["sherlock_installed"]=bool(_SHERLOCK)
     if not _SHERLOCK: return
+    if not can_do_osint(ctx.host):
+        ctx.state["skipped_reason"]="OSINT not applicable for IP / internal hostname"
+        return
     stem=_stem(ctx.host)
+    if not stem or stem in _GENERIC_STEMS or len(stem) < 4:
+        ctx.state["skipped_reason"]=f"Brand stem '{stem}' too generic for Sherlock without massive false-positive risk"
+        return
     ctx.state["brand_stem"]=stem
     candidates=[stem,f"{stem}_official",f"{stem}team",f"the{stem}"]
     raw_profiles=[]

@@ -3,7 +3,12 @@ import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
+from tools.recon._targeting import get_org_name, can_do_osint
 router=APIRouter()
+_GENERIC_ORG_NAMES = frozenset({
+    "app","api","www","web","dev","staging","test","demo","admin",
+    "portal","site","shop","blog","mail","cdn","static","assets",
+})
 def _search(term):
     try:
         r=requests.get("https://itunes.apple.com/search",
@@ -12,13 +17,33 @@ def _search(term):
         return r.json() if r.status_code==200 else None
     except Exception: return None
 async def gather(ctx):
-    org=str(ctx.host).split(".")[0]
+    if not can_do_osint(ctx.host):
+        ctx.state["skipped_reason"]="OSINT not applicable for IP / internal hostname"
+        return
+    org = get_org_name(ctx.host)
+    if not org or org.lower() in _GENERIC_ORG_NAMES or len(org) < 4:
+        ctx.state["skipped_reason"]=f"Org name '{org}' too generic to search App Store without massive false-positive risk"
+        return
     j=await asyncio.to_thread(_search, org)
     if not j: ctx.state["reachable"]=False; return
     ctx.state["reachable"]=True; ctx.source("itunes")
+    # Strict: bundle ID must contain org as a token (e.g. com.vulnuslab.app)
+    # OR seller name must match org. Track name match alone is not enough -
+    # WhatsApp matched "app" via trackName "WhatsApp" -> obvious FP.
+    org_lc = org.lower()
+    def _is_match(x):
+        seller = str(x.get("sellerName","")).lower()
+        bundle = str(x.get("bundleId","")).lower()
+        # Bundle ID is reverse-DNS; org must appear as a path segment
+        if org_lc and any(seg == org_lc for seg in bundle.split(".")):
+            return True
+        # Seller name must contain org as a whole word, not substring
+        import re as _re
+        if _re.search(rf"\b{_re.escape(org_lc)}\b", seller):
+            return True
+        return False
     apps=[{"name":x.get("trackName"),"seller":x.get("sellerName"),"bundle":x.get("bundleId")}
-          for x in (j.get("results") or [])
-          if org.lower() in (str(x.get("sellerName",""))+str(x.get("trackName",""))+str(x.get("bundleId",""))).lower()]
+          for x in (j.get("results") or []) if _is_match(x)]
     ctx.state.update({"org":org,"apps":apps,"app_count":len(apps)})
 def _r_found(s):
     a=s.get("apps") or []
