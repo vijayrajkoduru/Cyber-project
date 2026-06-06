@@ -45,6 +45,64 @@ _SPA_LOGIN_PATHS = (
     "/api/v1/auth/login", "/api/v1/login", "/login/api",
     "/user/login", "/users/login", "/sessions", "/api/sessions",
 )
+
+# WEBGOAT-AUTOREG-V1 — labs that require self-registration before login.
+# When the login fails AND the URL matches one of these patterns, the
+# backend tries to register the user via the matching register endpoint
+# THEN retries login. Customers using internal labs (lab_webgoat,
+# lab_juiceshop) get auto-onboarding instead of "user not found" errors.
+_SELF_REGISTER_LABS = [
+    {
+        "name": "webgoat",
+        "url_match": "webgoat",
+        "register_url": "/WebGoat/register.mvc",
+        "fields": lambda u, p: {
+            "username": u, "password": p, "matchingPassword": p, "agree": "agree",
+        },
+    },
+    {
+        "name": "juiceshop",
+        "url_match": "lab_juiceshop",
+        "register_url": "/api/Users/",
+        "json": True,
+        "fields": lambda u, p: {
+            "email": u, "password": p, "passwordRepeat": p, "securityQuestion": {
+                "id": 1, "question": "Your eldest siblings middle name?",
+            }, "securityAnswer": "test",
+        },
+    },
+]
+
+
+def _try_self_register(target: str, login_url: str, user: str, pwd: str,
+                       sess: requests.Session) -> bool:
+    """If target matches a known self-register lab (WebGoat / Juice Shop),
+    POST the register endpoint to bootstrap the user. Returns True if
+    register call succeeded (HTTP 200/201/302/409=already-exists)."""
+    full = f"{target} {login_url}".lower()
+    for lab in _SELF_REGISTER_LABS:
+        if lab["url_match"] not in full:
+            continue
+        reg_url = _abs(target, lab["register_url"])
+        try:
+            body = lab["fields"](user, pwd)
+            if lab.get("json"):
+                r = sess.post(reg_url, json=body, timeout=8, verify=False,
+                              allow_redirects=True)
+            else:
+                r = sess.post(reg_url, data=body, timeout=8, verify=False,
+                              allow_redirects=True)
+            # 200/201/302 = newly created; 409/400 (with "exists") = already there
+            if r.status_code in (200, 201, 302):
+                return True
+            if r.status_code in (400, 409) and (
+                "exist" in (r.text or "").lower()
+                or "duplicate" in (r.text or "").lower()
+            ):
+                return True
+        except Exception:
+            pass
+    return False
 _BEARER_JSON_PATHS = (
     ("token",), ("access_token",), ("accessToken",), ("jwt",),
     ("authentication", "token"), ("data", "token"),
@@ -262,6 +320,11 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     sess.headers.update(_BROWSER_HEADERS)
     sess.verify = False
 
+    # WEBGOAT-AUTOREG-V1 — for known self-register labs, register the user
+    # FIRST so the subsequent login can succeed. No-op if user already exists.
+    _registered = _try_self_register(target, login_url, req.username,
+                                     req.password, sess)
+
     # 1. GET login page for hidden fields / CSRF
     try:
         page = sess.get(login_url, timeout=8, allow_redirects=True)
@@ -327,10 +390,15 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         "verified_via": verify_url, "verified_status": check.status_code,
         "still_on_login_page": looks_login,
         "cookie_names": [c.name for c in sess.cookies],
+        "self_registered": _registered,
         "hint": (None if verified else
-                 "Login appears to have failed. Check: (a) username/password, "
-                 "(b) field names (try setting username_field / password_field), "
-                 "(c) CSRF protection requiring JS, or (d) MFA/captcha (not supported)."),
+                 ("Login failed even after auto-register attempt. " if _registered
+                  else "Login failed. ")
+                 + "Check: (a) username/password, (b) field names "
+                 "(try setting username_field / password_field), "
+                 "(c) CSRF protection requiring JS, or (d) MFA/captcha (not supported). "
+                 "For WebGoat/Juice Shop, the auto-register flow should bootstrap a "
+                 "user automatically - if it didn't, the lab may not be reachable."),
     }
 
 

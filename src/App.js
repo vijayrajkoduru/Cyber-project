@@ -3802,10 +3802,14 @@ function WebAppModule(props) {
           setAuthorized(false);
           setShowHistory(false);
           const LAB_CREDS = {
+            // Verified-working credentials. WebGoat + Juice Shop require
+            // self-registration before login; backend auto-registers when
+            // it sees the WebGoat/Juice Shop URL patterns (login_helper.py
+            // WEBGOAT-AUTOREG-V1 fix).
             dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",              pass: "password" },
-            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "guest",              pass: "guest"    },
-            juiceshop:  { url: "http://lab_juiceshop:3000/#/login",                      user: "admin@juice-sh.op",  pass: "admin123" },
-            mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",              pass: "adminpass"},
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "vluser",             pass: "VLpass123"},
+            juiceshop:  { url: "http://lab_juiceshop:3000/rest/user/login",              user: "vluser@vl.local",    pass: "VLpass123"},
+            mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",              pass: "admin"    },
             bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",                pass: "bug"      },
           };
           const creds = lab && LAB_CREDS[lab];
