@@ -4,12 +4,28 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
 from tools.recon._web_helpers import fetch, base_url
+from tools.recon._targeting import get_org_name, can_do_osint
 
 
 router = APIRouter()
 
+_GENERIC_NAMES = frozenset({
+    "app","api","www","web","dev","staging","test","demo","admin",
+    "portal","site","shop","blog","mail","cdn","static","assets",
+    "main","home","index",
+})
+
 async def gather(ctx: ScanContext):
-    base_name = ctx.host.split(".")[0]
+    # ZERO-FP-V1: use customer's brand name, not subdomain. Previously
+    # 'app.vulnuslab.com' probed 'app-prod.appspot.com' which someone else
+    # owns and returns 200 - reported as the customer's asset.
+    if not can_do_osint(ctx.host):
+        ctx.state["skipped_reason"]="not applicable for IP / internal hostname"
+        return
+    base_name = get_org_name(ctx.host) or ""
+    if not base_name or base_name.lower() in _GENERIC_NAMES or len(base_name) < 4:
+        ctx.state["skipped_reason"]=f"Brand name '{base_name}' too generic to probe App Engine namespaces without false-positive risk"
+        return
     candidates = [f"{base_name}.appspot.com", f"{base_name}.uc.r.appspot.com", f"{base_name}-prod.appspot.com"]
     found = []
     for hn in candidates:

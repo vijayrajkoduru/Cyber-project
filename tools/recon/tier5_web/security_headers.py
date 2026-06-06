@@ -9,11 +9,14 @@ from tools._framework import ScanContext, run_scanner
 
 router = APIRouter()
 
+# ZERO-FP-V1 (2026-06-06): HSTS was emitted both here AND by the dedicated
+# hsts_audit scanner, producing a duplicate HIGH finding ("No HSTS header" +
+# "Missing critical security headers: Strict-Transport-Security"). HSTS is
+# now owned exclusively by hsts_audit; this scanner only handles the other
+# response headers.
 _HEADERS_AUDIT = {
     "Content-Security-Policy":  {"sev":"MEDIUM","cwe":"CWE-693","weight":15,
         "fix":"Add 'default-src \\'self\\'; script-src \\'self\\'' to ALL responses."},
-    "Strict-Transport-Security":{"sev":"HIGH","cwe":"CWE-319","weight":20,
-        "fix":"Add 'max-age=31536000; includeSubDomains; preload'."},
     "X-Frame-Options":          {"sev":"MEDIUM","cwe":"CWE-1021","weight":10,
         "fix":"Add 'X-Frame-Options: DENY' (or CSP frame-ancestors)."},
     "X-Content-Type-Options":   {"sev":"LOW","cwe":"CWE-79","weight":5,

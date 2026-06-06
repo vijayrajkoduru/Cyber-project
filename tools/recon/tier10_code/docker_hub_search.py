@@ -3,7 +3,17 @@ import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
+from tools.recon._targeting import get_org_name, can_do_osint
 router=APIRouter()
+# Generic words that produce massive FP fan-out when used as the org name.
+# If the extracted org is in this list, the scanner SKIPS rather than
+# returning thousands of unrelated images. Customer can manually supply a
+# real org name via a future intake field if they want.
+_GENERIC_ORG_NAMES = frozenset({
+    "app", "api", "www", "web", "dev", "staging", "test", "demo", "admin",
+    "portal", "site", "shop", "blog", "mail", "cdn", "static", "assets",
+    "io", "co", "ai", "me", "org", "net", "com",
+})
 def _search(term):
     try:
         r=requests.get("https://hub.docker.com/v2/search/repositories/",
@@ -11,13 +21,27 @@ def _search(term):
         return r.json() if r.status_code==200 else None
     except Exception: return None
 async def gather(ctx):
-    org=str(ctx.host).split(".")[0]
+    # ZERO-FP-V1: use apex-extracted org, not the subdomain. Skip if target
+    # has no real-world brand (IP, internal hostname).
+    if not can_do_osint(ctx.host):
+        ctx.state["skipped_reason"]="OSINT not applicable for IP / internal hostname"
+        return
+    org = get_org_name(ctx.host)
+    if not org or org.lower() in _GENERIC_ORG_NAMES or len(org) < 4:
+        ctx.state["skipped_reason"]=f"Org name '{org}' too generic to search Docker Hub without massive false-positive risk"
+        return
     j=await asyncio.to_thread(_search, org)
     if not j: ctx.state["reachable"]=False; return
     ctx.state["reachable"]=True; ctx.source("dockerhub")
-    hits=[{"name":x.get("repo_name") or x.get("name"),"stars":x.get("star_count",0)}
-          for x in (j.get("results") or [])
-          if org.lower() in str(x.get("repo_name") or x.get("name") or "").lower()]
+    # Match must be STRICT: image namespace or name must equal/begin with org.
+    # Substring matching (old) reported 'istio/app' as a vulnuslab hit because
+    # 'app' appeared anywhere in the repo name.
+    hits=[]
+    for x in (j.get("results") or []):
+        name = str(x.get("repo_name") or x.get("name") or "").lower()
+        namespace = name.split("/",1)[0] if "/" in name else name
+        if namespace == org.lower() or namespace.startswith(org.lower() + "-") or namespace.startswith(org.lower() + "_"):
+            hits.append({"name": x.get("repo_name") or x.get("name"), "stars": x.get("star_count", 0)})
     ctx.state.update({"org":org,"images":hits,"image_count":len(hits)})
 def _r_found(s):
     im=s.get("images") or []
