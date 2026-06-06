@@ -40,11 +40,11 @@ safety_snapshot_once() {
 auto_rollback_backend() {
   [ "${VL_SAFETY_OFF:-0}" = "1" ] && { err "safety net OFF — leaving backend in failed state"; return 1; }
   warn "AUTO-ROLLBACK: backend unhealthy, restoring previous :stable image..."
-  if ! docker image inspect vulnuslab_backend:stable >/dev/null 2>&1; then
-    err "no vulnuslab_backend:stable image exists — first deploy or snapshot missing. Run: docker compose up -d (manual recovery)"
+  if ! docker image inspect cyber-project-backend:stable >/dev/null 2>&1; then
+    err "no cyber-project-backend:stable image exists — first deploy or snapshot missing. Run: docker compose up -d (manual recovery)"
     return 1
   fi
-  docker tag vulnuslab_backend:stable vulnuslab_backend:latest
+  docker tag cyber-project-backend:stable cyber-project-backend:latest
   docker compose up -d backend >/dev/null 2>&1
   for i in $(seq 1 30); do
     if curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then

@@ -49,10 +49,10 @@ snap_image() {
 }
 
 if docker info >/dev/null 2>&1; then
-    snap_image "vulnuslab_backend"
-    snap_image "vulnuslab_frontend"
+    snap_image "cyber-project-backend"
+    snap_image "cyber-project-frontend"
     # Prune old dated snapshots — keep the last 5 only so we don't fill disk.
-    for img in vulnuslab_backend vulnuslab_frontend; do
+    for img in cyber-project-backend cyber-project-frontend; do
         docker images --format '{{.Repository}}:{{.Tag}}' \
             | grep -E "^${img}:stable-[0-9]" \
             | sort -r \
