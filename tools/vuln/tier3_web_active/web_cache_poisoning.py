@@ -4,7 +4,7 @@ reflects in response body. Conservative — flags only when reflection + cacheab
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get_h
+from tools.vuln._vuln_common import probe_url_async, http_get_h_async
 
 router = APIRouter()
 
@@ -13,7 +13,7 @@ CANARY = "vlcache9k.example.com"
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -29,7 +29,7 @@ async def gather(ctx):
         ("X-Rewrite-URL", f"/?{CANARY}"),
     ]
     for hn, hv in test_headers:
-        r = http_get_h(base_url, headers={hn: hv}, timeout=8)
+        r = await http_get_h_async(base_url, headers={hn: hv}, timeout=8)
         if not r:
             continue
         body = r.get("body", "")

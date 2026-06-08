@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get
+from tools.vuln._vuln_common import probe_url_async, http_get_async
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ OIDC_PATH = "/.well-known/openid-configuration"
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -23,7 +23,7 @@ async def gather(ctx):
     ctx.state["tested"] = 1
     issues = []
     config_url = f"{base_url}{OIDC_PATH}"
-    r = http_get(config_url, timeout=8, read=20000)
+    r = await http_get_async(config_url, timeout=8, read=20000)
     if not r or r.get("status") != 200:
         ctx.state["oidc_config_found"] = False
         return

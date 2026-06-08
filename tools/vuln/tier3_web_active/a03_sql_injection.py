@@ -5,7 +5,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get, SQL_ERROR_PATTERNS
+from tools.vuln._vuln_common import probe_url_async, http_get_async, SQL_ERROR_PATTERNS
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ PAYLOAD = "1'\""
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base or base.get("status", 0) >= 500:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable on HTTP/HTTPS"
@@ -26,7 +26,7 @@ async def gather(ctx):
     hits = []
     for p in PROBE_PARAMS:
         url = f"{base_url}?{p}={PAYLOAD}"
-        r = http_get(url, timeout=8)
+        r = await http_get_async(url, timeout=8)
         if not r:
             continue
         body_lower = r.get("body", "").lower()

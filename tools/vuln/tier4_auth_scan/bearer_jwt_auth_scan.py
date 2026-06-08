@@ -6,7 +6,7 @@ import time
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get, decode_jwt
+from tools.vuln._vuln_common import probe_url_async, http_get_async, decode_jwt
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -27,7 +27,7 @@ async def gather(ctx):
     issues = []
     for path in PROBE_PATHS:
         url = f"{base_url}{path}"
-        r = http_get(url, timeout=8, read=40000)
+        r = await http_get_async(url, timeout=8, read=40000)
         if not r:
             continue
         haystack = " ".join([

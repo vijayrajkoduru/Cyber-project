@@ -4,7 +4,7 @@ Self-contained. Strategy: probe destructive/admin-only API paths, check if they 
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get, http_post
+from tools.vuln._vuln_common import probe_url_async, http_get_async, http_post_async
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ PRIV_PATHS_POST = ["/api/admin/users", "/api/users"]  # Test if POST creates use
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -27,7 +27,7 @@ async def gather(ctx):
     protected = []
     for path in PRIV_PATHS_GET:
         url = f"{base_url}{path}"
-        r = http_get(url, timeout=6, read=4000)
+        r = await http_get_async(url, timeout=6, read=4000)
         if not r:
             continue
         status = r.get("status", 0)
@@ -39,7 +39,7 @@ async def gather(ctx):
             protected.append({"method": "GET", "path": path, "status": status})
     for path in PRIV_PATHS_POST:
         url = f"{base_url}{path}"
-        r = http_post(url, data=b'{}', headers={"Content-Type": "application/json"}, timeout=6)
+        r = await http_post_async(url, data=b'{}', headers={"Content-Type": "application/json"}, timeout=6)
         if not r:
             continue
         status = r.get("status", 0)

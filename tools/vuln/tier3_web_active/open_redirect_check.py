@@ -4,7 +4,7 @@ domain, check if Location header reflects the external domain."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get
+from tools.vuln._vuln_common import probe_url_async, http_get_async
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ PROBE_PARAMS = ["url", "redirect", "redirect_uri", "next", "return", "returnTo",
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -26,7 +26,7 @@ async def gather(ctx):
     hits = []
     for p in PROBE_PARAMS:
         url = f"{base_url}?{p}={REDIRECT_PAYLOAD}"
-        r = http_get(url, timeout=8)
+        r = await http_get_async(url, timeout=8)
         if not r:
             continue
         loc = (r.get("headers") or {}).get("location", "") or ""

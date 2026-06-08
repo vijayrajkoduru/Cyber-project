@@ -4,7 +4,7 @@ Strategy: send GET with attacker Origin header, check Access-Control-Allow-Origi
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get_h
+from tools.vuln._vuln_common import probe_url_async, http_get_h_async
 
 router = APIRouter()
 
@@ -13,14 +13,14 @@ ATTACKER_ORIGIN = "https://evil.vlattacker.com"
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
         return
     ctx.source("http")
     ctx.state["tested"] = 1
-    r = http_get_h(base_url, headers={"Origin": ATTACKER_ORIGIN}, timeout=8)
+    r = await http_get_h_async(base_url, headers={"Origin": ATTACKER_ORIGIN}, timeout=8)
     if not r:
         ctx.state["cors_response"] = None
         return
@@ -38,7 +38,7 @@ async def gather(ctx):
         else:
             issues.append({"severity": "MEDIUM", "issue": "Reflects arbitrary Origin (data leak possible if any auth via API key in URL)"})
     # null origin allowed
-    r2 = http_get_h(base_url, headers={"Origin": "null"}, timeout=6)
+    r2 = await http_get_h_async(base_url, headers={"Origin": "null"}, timeout=6)
     if r2:
         acao2 = (r2.get("headers", {}) or {}).get("access-control-allow-origin", "") or ""
         if acao2.strip().lower() == "null":

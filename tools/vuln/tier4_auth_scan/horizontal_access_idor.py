@@ -4,7 +4,7 @@ exposing /users/1 /orders/1 /items/1 style and check if /users/2 returns 200 pub
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get
+from tools.vuln._vuln_common import probe_url_async, http_get_async
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ ID_PATHS = [
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -30,8 +30,8 @@ async def gather(ctx):
     suspect = []
     for path in ID_PATHS:
         # Test id=1 and id=2 - if both return same status 200 with different bodies, IDOR surface
-        r1 = http_get(f"{base_url}{path}", timeout=6, read=12000)
-        r2 = http_get(f"{base_url}{path[:-1]}2", timeout=6, read=12000)
+        r1 = await http_get_async(f"{base_url}{path}", timeout=6, read=12000)
+        r2 = await http_get_async(f"{base_url}{path[:-1]}2", timeout=6, read=12000)
         if not r1 or not r2:
             continue
         s1, s2 = r1.get("status"), r2.get("status")
