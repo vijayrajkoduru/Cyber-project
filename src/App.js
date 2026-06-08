@@ -19397,7 +19397,7 @@ const MODULE_TEST_TARGETS = {
   mobile_aiml:     [{label:"reuse APK path", value:"/uploads/mobile_static/SCAN_ID_app.apk", desc:"Reuse the APK uploaded for mobile_static"}],
 };
 
-function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
+function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl, activeTiers}) {
   const schema = MODULE_INPUT_SCHEMAS[moduleKey] || { ph: "Target", hint: "Target value" };
   const [target,    setTarget]    = useState("");
   const [authBearer,setAuthBearer]= useState("");   // optional: API key / JWT for some modules
@@ -20318,6 +20318,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           return sevColor(r.severity);
         };
         return tiers.map((tier, idx) => {
+          // VL-TIER filter: when sidebar tier sub-menu has selection(s),
+          // hide tiers not in the active set. Empty set = show all.
+          if (activeTiers && activeTiers.size > 0 && !activeTiers.has(tier.id)) return null;
           const filteredTools = (tier.tools || []).filter(tool => {
             const r = results[tool] || {};
             if (sevFilter && r.status === "done") {
@@ -22118,6 +22121,11 @@ export default function App() {
   const [vulnRunning,setVulnRunning]       = useState(false);
   const [reconExpanded, setReconExpanded] = useState(true);
   const [reconSections, setReconSections] = useState(new Set());
+  // VL-TIER: left-sidebar expandable tier sub-menu for Vuln module.
+  // vulnTiersExpanded toggles caret; vulnTiers is a Set of tier-IDs;
+  // empty Set means "show all 15 tiers" (no filter).
+  const [vulnTiersExpanded, setVulnTiersExpanded] = useState(true);
+  const [vulnTiers, setVulnTiers] = useState(new Set());
 
   const handleLogin = (t, r, u, p) => {
     setToken(t); setRole(r); setUsername(u); setPlan(p);
@@ -22226,6 +22234,34 @@ export default function App() {
 
   const topic = MODULES.find(m => m.id === active);
 
+  // VL-TIER: 15-tier plain-label index for the Vuln sidebar sub-menu.
+  // IDs MUST match the backend tier folder names in tools/vuln/tier*_*/.
+  // Labels are PLAIN headings (no §, no symbols) per project_vl_tier_process.md.
+  const VULN_TIER_LABELS = [
+    { id: "tier1_network",        label: "Network" },
+    { id: "tier2_cve_match",      label: "Service / CVE Match" },
+    { id: "tier3_web_active",     label: "Web Active (OWASP)" },
+    { id: "tier4_auth_scan",      label: "Authenticated Web" },
+    { id: "tier5_api",            label: "API (OWASP API Top 10)" },
+    { id: "tier6_protocol",       label: "Modern Protocol" },
+    { id: "tier7_sca",            label: "SCA / Dependency" },
+    { id: "tier8_container",      label: "Container" },
+    { id: "tier9_iac",            label: "IaC / Cloud Config" },
+    { id: "tier10_cloud_native",  label: "Cloud-Native Runtime" },
+    { id: "tier11_cis",           label: "CIS Benchmarks" },
+    { id: "tier12_auth_identity", label: "Auth / Identity" },
+    { id: "tier13_supply_chain",  label: "Supply Chain" },
+    { id: "tier14_llm",           label: "LLM (OWASP LLM Top 10)" },
+    { id: "tier15_wireless_iot",  label: "Wireless / IoT" },
+  ];
+  const toggleVulnTier = (tierId) => {
+    setVulnTiers(prev => {
+      const next = new Set(prev);
+      if (next.has(tierId)) next.delete(tierId); else next.add(tierId);
+      return next;
+    });
+  };
+
   const SECTIONS = [
     { key:"recon",    label:"RECONNAISSANCE",    color:"#06b6d4" },
     { key:"scan",     label:"SCANNING",          color:"#3b82f6" },
@@ -22286,7 +22322,7 @@ export default function App() {
         </div>
         <div style={{display: active==="vuln"     ? "block" : "none"}}>
           <ModuleWithTabs moduleKey="vuln" moduleLabel="Vulnerability Scanning" autoCount={196} manualTests={MANUAL_TESTS_VULN} color="#ef4444"
-            autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
+            autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API} activeTiers={vulnTiers}/>}/>
         </div>
         <div style={{display: active==="network" ? "block" : "none"}}>
           <NetworkAttacksModule token={token} apiUrl={API}/>
@@ -22519,8 +22555,15 @@ export default function App() {
                   // Recon's expandable section navigator removed \u2014 in-panel
                   // SECTION headers (commit 2ce07fba) already group scanners
                   // by section, making sidebar tier nav redundant.
+                  // VL-TIER: Vuln still gets a sidebar tier sub-menu (15 tiers)
+                  // because its run_all spans heterogeneous scanner classes
+                  // (network / web / api / container / k8s / llm / wireless).
+                  // Showing all 196 in one in-panel list is overwhelming;
+                  // tier filter lets users focus on one category at a time.
+                  const isVulnActive = (m.id === "vuln" && isActive && !locked);
                   return (
-                    <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
+                    <React.Fragment key={m.id}>
+                    <button className="nav-btn" onClick={()=>handleNavClick(m)}
                       style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
                       <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
@@ -22548,7 +22591,34 @@ export default function App() {
                       {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="recon"   && reconRunning  && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="vuln"    && vulnRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                      {/* VL-TIER caret — only on Vuln nav button */}
+                      {isVulnActive && (
+                        <span onClick={(e)=>{e.stopPropagation();setVulnTiersExpanded(v=>!v);}}
+                              style={{fontSize:10,color:"#94a3b8",padding:"2px 4px",cursor:"pointer",flexShrink:0,lineHeight:1,userSelect:"none"}}>
+                          {vulnTiersExpanded ? "▾" : "▸"}
+                        </span>
+                      )}
                     </button>
+                    {/* VL-TIER tier sub-menu (Vuln only, when active + expanded) */}
+                    {isVulnActive && vulnTiersExpanded && (
+                      <div style={{margin:"2px 8px 6px 22px",borderLeft:"1px solid #1e293b",paddingLeft:6}}>
+                        <button onClick={()=>setVulnTiers(new Set())}
+                          style={{width:"100%",background:vulnTiers.size===0?"#172554":"transparent",border:"none",borderRadius:4,padding:"6px 10px",display:"flex",alignItems:"center",cursor:"pointer",textAlign:"left",marginBottom:1}}>
+                          <span style={{fontSize:12,color:vulnTiers.size===0?"#60a5fa":"#94a3b8",fontWeight:vulnTiers.size===0?600:400}}>All tiers</span>
+                        </button>
+                        {VULN_TIER_LABELS.map(t => {
+                          const on = vulnTiers.has(t.id);
+                          return (
+                            <button key={t.id} onClick={()=>toggleVulnTier(t.id)}
+                              style={{width:"100%",background:on?"#172554":"transparent",border:"none",borderRadius:4,padding:"5px 10px",display:"flex",alignItems:"center",cursor:"pointer",textAlign:"left",marginBottom:1}}>
+                              <span style={{width:8,height:8,borderRadius:2,marginRight:8,flexShrink:0,background:on?"#3b82f6":"#334155"}}/>
+                              <span style={{fontSize:12,color:on?"#e2e8f0":"#94a3b8",lineHeight:1.3}}>{t.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </div>
