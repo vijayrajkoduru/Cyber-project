@@ -14875,16 +14875,20 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     reportPrefix:   "VULN",
     playbookPath:   "vuln.md",
     methodology: [
-      "Vulnerability assessment follows Nessus / Qualys / OpenVAS-equivalent industry practice and OWASP Top 10 (2021).",
-      "16 scanners across CVE / templates, discovery, TLS/crypto, default-credentials, and service enumeration.",
-      "Every finding is independently triggered against the live target; findings list confirmed evidence, not template matches."
+      "Vulnerability assessment follows Nessus / Qualys / OpenVAS-equivalent industry practice plus modern coverage standards: OWASP Top 10 (2021), OWASP API Top 10 (2023), OWASP LLM Top 10 (2025), CIS Benchmarks, and SLSA / Sigstore supply-chain assurance.",
+      "196 scanners across 15 tiers: Network, CVE Matching, Web Active (OWASP A01-A10), Authenticated Web, API, Modern Protocols (HTTP/2 / gRPC / WebSocket / HTTP/3), SCA / SBOM, Container, IaC, Cloud-Native, CIS, Auth / Identity, Supply Chain, LLM, and Wireless / IoT.",
+      "Self-contained module: every scanner runs its own passive probes against the live target with zero cross-module routing. Findings list confirmed evidence (HTTP responses, banner versions, header reflections), not template matches."
     ],
     references: [
       "OWASP Top 10 (2021) - https://owasp.org/Top10/",
+      "OWASP API Top 10 (2023) - https://owasp.org/API-Security/",
+      "OWASP LLM Top 10 (2025) - https://genai.owasp.org/llm-top-10/",
       "NIST SP 800-115 - https://csrc.nist.gov/publications/detail/sp/800-115/final",
       "CISA KEV Catalog - https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
       "NVD CVE Database - https://nvd.nist.gov",
-      "CVSS v3.1 - https://www.first.org/cvss/v3.1/specification-document"
+      "CVSS v3.1 - https://www.first.org/cvss/v3.1/specification-document",
+      "CIS Benchmarks - https://www.cisecurity.org/cis-benchmarks",
+      "SLSA Supply Chain Framework - https://slsa.dev"
     ]
   });
 }
