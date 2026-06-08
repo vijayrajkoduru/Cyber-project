@@ -5,14 +5,14 @@ flags strong indicators (chunked + content-length both echoed, weird HTTP server
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get_h
+from tools.vuln._vuln_common import probe_url_async, http_get_h_async
 
 router = APIRouter()
 
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -33,7 +33,7 @@ async def gather(ctx):
     if has_te and has_cl:
         indicators.append("Both Transfer-Encoding and Content-Length present in response (RFC 7230 ambiguity)")
     # Send TE: chunked with body to see how server handles it
-    r2 = http_get_h(base_url, headers={"Transfer-Encoding": "chunked", "Connection": "keep-alive"}, timeout=6)
+    r2 = await http_get_h_async(base_url, headers={"Transfer-Encoding": "chunked", "Connection": "keep-alive"}, timeout=6)
     if r2 and r2.get("status") not in (200, 204, 301, 302, 304, 400):
         indicators.append(f"Server returned status {r2.get('status')} on chunked GET (unusual)")
     ctx.state["smuggling_indicators"] = indicators

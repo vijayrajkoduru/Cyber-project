@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_post
+from tools.vuln._vuln_common import probe_url_async, http_post_async
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ PROBE_BODY = json.dumps({"_vlcanary": "test", "is_admin": True, "role": "admin",
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -29,7 +29,7 @@ async def gather(ctx):
     rejecting = []
     for path in PROBE_PATHS:
         url = f"{base_url}{path}"
-        r = http_post(url, data=PROBE_BODY,
+        r = await http_post_async(url, data=PROBE_BODY,
                        headers={"Content-Type": "application/json"}, timeout=8)
         if not r:
             continue
