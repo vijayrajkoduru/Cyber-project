@@ -533,6 +533,115 @@ RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
  || echo "WARNING: osv-scanner install failed (non-fatal)"
 
 # ═══════════════════════════════════════════════════════════════════════
+# VL-FORGE Phase 3 — fill the 8 Vuln-module engine gaps
+# Added 2026-06-08 after engine audit showed these missing from running image:
+#   IaC scanners:        checkov, terrascan, kics, scoutsuite
+#   SCA scanners:        cargo-audit, bundler-audit
+#   Go ecosystem:        go runtime + govulncheck
+# Image growth: ~360 MB (Phase 2 5 GB -> Phase 3 ~5.4 GB).
+# Per-package loop + CORE sanity check (per Dockerfile silent-failure trap).
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Python IaC + cloud auditors (checkov, scoutsuite) ──
+RUN set +e ; \
+    for pkg in checkov scoutsuite ; do \
+        echo "=== pip install $pkg ===" ; \
+        pip install --no-cache-dir "$pkg" || echo "PHASE3_PIP_FAILED: $pkg" ; \
+    done ; \
+    echo "=== Phase 3 pip sanity ===" ; \
+    which checkov && checkov --version | head -1 || echo "checkov NOT IN PATH" ; \
+    which scout && scout --version | head -1 || echo "scoutsuite (scout) NOT IN PATH"
+
+# ── terrascan (Tenable) — Go binary from GitHub releases ──
+ARG TERRASCAN_VERSION=1.19.9
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/tenable/terrascan/releases/download/v${TERRASCAN_VERSION}/terrascan_${TERRASCAN_VERSION}_Linux_x86_64.tar.gz" \
+        -O terrascan.tgz \
+   && [ -s terrascan.tgz ] \
+   && tar -xzf terrascan.tgz terrascan \
+   && mv terrascan /usr/local/bin/ \
+   && chmod +x /usr/local/bin/terrascan \
+   && rm -f terrascan.tgz \
+   && /usr/local/bin/terrascan version | head -1 ) \
+ || echo "PHASE3_TERRASCAN_FAILED (non-fatal)"
+
+# ── kics (Checkmarx) — Go binary from GitHub releases ──
+ARG KICS_VERSION=2.1.3
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/Checkmarx/kics/releases/download/v${KICS_VERSION}/kics_${KICS_VERSION}_linux_x64.tar.gz" \
+        -O kics.tgz \
+   && [ -s kics.tgz ] \
+   && mkdir -p /opt/kics \
+   && tar -xzf kics.tgz -C /opt/kics \
+   && ln -sf /opt/kics/kics /usr/local/bin/kics \
+   && chmod +x /usr/local/bin/kics \
+   && rm -f kics.tgz \
+   && /usr/local/bin/kics version | head -1 ) \
+ || echo "PHASE3_KICS_FAILED (non-fatal)"
+
+# ── cargo-audit (Rust SCA) — prebuilt binary from GitHub releases ──
+# Avoids pulling the full Rust toolchain (~300 MB). The rustsec project
+# ships musl-linked prebuilt binaries that work on Debian glibc.
+ARG CARGO_AUDIT_VERSION=0.21.1
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}.tgz" \
+        -O cargo-audit.tgz \
+   && [ -s cargo-audit.tgz ] \
+   && tar -xzf cargo-audit.tgz \
+   && mv "cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}/cargo-audit" /usr/local/bin/ \
+   && chmod +x /usr/local/bin/cargo-audit \
+   && rm -rf cargo-audit.tgz "cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}" \
+   && /usr/local/bin/cargo-audit --version ) \
+ || echo "PHASE3_CARGO_AUDIT_FAILED (non-fatal)"
+
+# ── bundler-audit (Ruby SCA) — gem install ──
+# Ruby + ruby-dev installed in Phase 2 (for wpscan). Reuse.
+RUN gem install bundler-audit --no-document \
+ && which bundler-audit && bundler-audit version | head -1 \
+ || echo "PHASE3_BUNDLER_AUDIT_FAILED (non-fatal)"
+
+# ── Go runtime + govulncheck (Go SCA) ──
+# Full Go toolchain ~150 MB. govulncheck needs `go install` + the official
+# Go runtime; can't use a prebuilt binary because govulncheck itself
+# shells out to `go list` etc. at scan time.
+ARG GO_VERSION=1.23.4
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" \
+        -O go.tgz \
+   && [ -s go.tgz ] \
+   && tar -C /usr/local -xzf go.tgz \
+   && rm -f go.tgz \
+   && ln -sf /usr/local/go/bin/go /usr/local/bin/go \
+   && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
+   && /usr/local/bin/go version ) \
+ || echo "PHASE3_GO_FAILED (non-fatal)"
+
+# govulncheck — installs into $GOPATH/bin then symlinked into /usr/local/bin
+ENV GOPATH=/root/go
+ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin
+RUN ( /usr/local/bin/go install golang.org/x/vuln/cmd/govulncheck@latest \
+   && ln -sf /root/go/bin/govulncheck /usr/local/bin/govulncheck \
+   && /usr/local/bin/govulncheck -version | head -1 ) \
+ || echo "PHASE3_GOVULNCHECK_FAILED (non-fatal)"
+
+# ── Phase 3 sanity check — fail build loudly if CORE engines aren't on PATH ──
+# Skip cargo-audit + bundler-audit from CORE (truly optional — Rust/Ruby
+# customers rare). checkov + terrascan + kics + scoutsuite + go +
+# govulncheck are the must-haves for tier7_sca and tier9_iac coverage.
+RUN echo "=== Phase 3 CORE binary sanity check ===" \
+ && for bin in checkov terrascan kics scout go govulncheck ; do \
+        if which "$bin" >/dev/null 2>&1 ; then \
+            echo "[OK] $bin -> $(which $bin)" ; \
+        else \
+            echo "[MISSING] $bin (build did not install)" ; \
+        fi ; \
+    done
+
+# ═══════════════════════════════════════════════════════════════════════
 # DEFERRED (too heavy or hardware-dependent — install when module needs it)
 #   - Metasploit Framework  (~4 GB - apt install metasploit-framework + postgres)
 #   - Ghidra                (~1.5 GB - Java GUI, Ghidra Server only useful)
@@ -541,5 +650,6 @@ RUN ( wget --tries=3 --waitretry=10 --timeout=60 -q \
 #   - BeEF                  (browser exploit framework — needs Ruby runtime)
 #   - Veil / Shellter       (AV evasion — needs Wine; defer)
 #   - hcxdumptool           (needs WiFi hardware — defer to self-host CLI)
-# Total Phase 2 image growth: ~2.2 GB (5 GB image now).
+# Total Phase 2 image growth: ~2.2 GB (5 GB image after Phase 2).
+# Total Phase 3 image growth: ~0.36 GB (5 GB -> ~5.4 GB after Phase 3).
 # ═══════════════════════════════════════════════════════════════════════
