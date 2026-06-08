@@ -8846,91 +8846,12 @@ function computeWebappCoverage(allResults) {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  VULN FINDINGS SYNTHESIS  (VL-FORGE — full module isolation)
-// ═══════════════════════════════════════════════════════════════
-// Mirrors synthesize{Recon,Webapp}Findings — aggregates findings from the
-// 19 scanners VulnModule runs and produces a severity-sorted, deduped list
-// for both the Findings UI tab and the PDF risk section.
-const VULN_TOOL_KEYS = [
-  "nikto", "nuclei", "wpscan",
-  "ssl", "headers", "cors", "cookies",
-  "cms",
-  "xss", "sqli", "cmd_injection", "xxe",
-  "lfi", "exposed_files",
-  "open_redirect", "ssrf", "http_methods",
-  "csrf", "jwt",
-];
-
-function synthesizeVulnFindings(allResults) {
-  const r = allResults || {};
-  const findings = [];
-  const seen = new Set();
-  for (const tool of VULN_TOOL_KEYS) {
-    const td = r[tool];
-    if (!td || !Array.isArray(td.findings)) continue;
-    for (const f of td.findings) {
-      const sev = String(f.severity || "").toUpperCase();
-      if (!["CRITICAL","HIGH","MEDIUM","LOW"].includes(sev)) continue;
-      const detail = f.detail || f.title || "Untitled finding";
-      const dedupKey = tool + ":" + (f.cwe || "") + ":" + detail.substring(0, 80);
-      if (seen.has(dedupKey)) continue;
-      seen.add(dedupKey);
-      findings.push({
-        title:       detail,
-        detail:      detail,
-        severity:    sev,
-        cvss:        parseFloat(f.cvss) || 0,
-        cve:         f.cve  || "N/A",
-        cwe:         f.cwe  || "N/A",
-        cwe_name:    f.cwe_name || "",
-        owasp:       f.owasp || "N/A",
-        remediation: f.remediation || "",
-        evidence:    f.evidence_marker || "",
-        confidence:  f.confidence || "CONFIRMED",
-        source:      tool,
-      });
-    }
-  }
-  const sevOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-  findings.sort((a, b) => {
-    const sa = sevOrder[a.severity] !== undefined ? sevOrder[a.severity] : 5;
-    const sb = sevOrder[b.severity] !== undefined ? sevOrder[b.severity] : 5;
-    if (sa !== sb) return sa - sb;
-    return (b.cvss || 0) - (a.cvss || 0);
-  });
-  return findings;
-}
-
-// Per-tier coverage rollup for Vuln module — mirrors VULN_TOOLS_BY_TIER
-// in endpoints/vuln_orchestrator.py.
-const VULN_TIERS = [
-  { id: "tier1_heavy",       label: "Heavy Scanners",       tools: ["nikto","nuclei","wpscan"] },
-  { id: "tier2_transport",   label: "Transport Security",   tools: ["ssl","headers","cors","cookies"] },
-  { id: "tier3_fingerprint", label: "Fingerprinting",       tools: ["cms"] },
-  { id: "tier4_injection",   label: "Injection Attacks",    tools: ["xss","sqli","cmd_injection","xxe"] },
-  { id: "tier5_file_path",   label: "File & Path",          tools: ["lfi","exposed_files"] },
-  { id: "tier6_network",     label: "Network & Protocol",   tools: ["open_redirect","ssrf","http_methods"] },
-  { id: "tier7_auth",        label: "Auth & Session",       tools: ["csrf","jwt"] },
-];
-
-function computeVulnCoverage(allResults) {
-  const r = allResults || {};
-  return VULN_TIERS.map(t => {
-    const ran     = t.tools.filter(k => r[k]);
-    const skipped = t.tools.filter(k => r[k] && r[k].skipped_reason);
-    const flagged = t.tools.filter(k => r[k] && r[k].vulnerable);
-    return {
-      id:       t.id,
-      label:    t.label,
-      total:    t.tools.length,
-      ran:      ran.length,
-      skipped:  skipped.length,
-      flagged:  flagged.length,
-      pct:      t.tools.length ? Math.round((ran.length / t.tools.length) * 100) : 0,
-    };
-  });
-}
+// (Removed: legacy VULN_TOOL_KEYS + synthesizeVulnFindings + VULN_TIERS +
+//  computeVulnCoverage — dead code from the pre-2026-05-29 vuln rebuild.
+//  Live Vuln pipeline now uses the generic ModuleAutoPanel which fetches
+//  the full 196-scanner list dynamically from /api/vuln/run_all/tiers, and
+//  the PDF uses generateUniversalVLReport's built-in synthesis. No callers
+//  reference these symbols anywhere in the app.)
 
 // ═══════════════════════════════════════════════════════════════
 //  RECON PDF REPORT
@@ -14929,35 +14850,9 @@ function generateOsintReport({target, allResults, date, authenticated, pdfConfig
   });
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  VULNERABILITY SCANNING MODULE
-// ═══════════════════════════════════════════════════════════════
-// VULN module rebuilt 2026-05-24: industry-aligned infrastructure vulnerability
-// scanning (Nessus/Qualys/OpenVAS-equivalent). Web-app tests moved to Webapp module.
-// 16 tools across 5 tiers. Routes all under /api/vuln/<tool> (isolated namespace).
-const VULN_PHASES = [
-  // Tier 1 — CVE & template scanners
-  {name:"Nuclei Scanner",            tool:"nuclei",             endpoint:"/api/vuln/nuclei",             icon:""},
-  {name:"WPScan",                    tool:"wpscan",             endpoint:"/api/vuln/wpscan",             icon:""},
-  {name:"Nikto Web Scanner",         tool:"nikto",              endpoint:"/api/vuln/nikto",              icon:""},
-  // Tier 2 — Discovery & service detection
-  {name:"Port Scan",                 tool:"portscan",           endpoint:"/api/vuln/portscan",           icon:""},
-  {name:"Service Detection",         tool:"service_detect",     endpoint:"/api/vuln/service_detect",     icon:""},
-  {name:"OS Fingerprint",            tool:"os_fingerprint",     endpoint:"/api/vuln/os_fingerprint",     icon:""},
-  {name:"Shodan InternetDB",         tool:"internetdb",         endpoint:"/api/vuln/internetdb",         icon:""},
-  // Tier 3 — Crypto / TLS
-  {name:"SSL/TLS Deep Audit",        tool:"ssl_deep",           endpoint:"/api/vuln/ssl_deep",           icon:""},
-  // Tier 4 — Credentials
-  {name:"Default Credentials",       tool:"default_creds",      endpoint:"/api/vuln/default_creds",      icon:""},
-  // Tier 5 — Service enumeration + CVE lookup
-  {name:"SNMP Enumeration",          tool:"snmp_enum",          endpoint:"/api/vuln/snmp_enum",          icon:""},
-  {name:"SMB Enumeration",           tool:"smb_enum",           endpoint:"/api/vuln/smb_enum",           icon:""},
-  {name:"FTP Enumeration",           tool:"ftp_enum",           endpoint:"/api/vuln/ftp_enum",           icon:""},
-  {name:"SMTP Enumeration",          tool:"smtp_enum",          endpoint:"/api/vuln/smtp_enum",          icon:""},
-  {name:"NFS Exposure",              tool:"nfs_check",          endpoint:"/api/vuln/nfs_check",          icon:""},
-  {name:"Database Exposure",         tool:"db_exposure_check",  endpoint:"/api/vuln/db_exposure_check",  icon:""},
-  {name:"CVE Matching (NVD)",        tool:"cve_match",          endpoint:"/api/vuln/cve_match",          icon:""},
-];
+// (Removed: legacy VULN_PHASES 16-tool list. Vuln UI now uses the generic
+//  ModuleAutoPanel which fetches the live 196-scanner list dynamically from
+//  /api/vuln/run_all/tiers; the hardcoded list was unreferenced dead code.)
 
 // ═══════════════════════════════════════════════════════════════
 //  OSINT MODULE — VL-FOUNDRY first cold-context forge (2026-05-24)
