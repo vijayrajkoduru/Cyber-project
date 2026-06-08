@@ -192,8 +192,67 @@ const CSS = `
   .fade{animation:fadeUp .3s ease;}
 
   /* Sidebar nav */
-  .nav-btn:hover{background:#1e293b!important;}
-  .nav-btn span{ font-size:13px !important; font-weight:500 !important; color:#94a3b8; letter-spacing:0.2px; }
+  .nav-btn{
+    position:relative !important;
+    transition:background .12s ease, color .12s ease !important;
+  }
+  .nav-btn:hover{
+    background:#162033 !important;
+  }
+  .nav-btn:hover .nav-label{
+    color:#e2e8f0 !important;
+  }
+  .nav-btn.active{
+    background:linear-gradient(90deg,#1e3a8a 0%, #1e3a8a 60%, #1e293b 100%) !important;
+  }
+  .nav-btn.active::before{
+    content:"";
+    position:absolute;
+    left:0; top:6px; bottom:6px;
+    width:3px;
+    background:#3b82f6;
+    border-radius:0 2px 2px 0;
+    box-shadow:0 0 8px rgba(59,130,246,0.5);
+  }
+  .nav-btn .nav-label{ font-size:13px !important; font-weight:500 !important; color:#94a3b8; letter-spacing:0.2px; transition:color .12s ease; }
+  .nav-btn.active .nav-label{ color:#f1f5f9 !important; font-weight:600 !important; }
+
+  /* Sidebar section header — divider + colored accent dot */
+  .nav-section{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:14px 14px 6px;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:1.4px;
+    text-transform:uppercase;
+  }
+  .nav-section::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background:linear-gradient(90deg, currentColor 0%, transparent 100%);
+    opacity:0.25;
+  }
+  .nav-section-dot{
+    width:6px; height:6px;
+    border-radius:50%;
+    background:currentColor;
+    flex-shrink:0;
+    box-shadow:0 0 6px currentColor;
+  }
+
+  /* Unified badge pill (replaces inline-styled VA/PT/SOON/TRIAL) */
+  .nav-pill{
+    font-size:8.5px !important;
+    font-weight:700 !important;
+    padding:2px 5px !important;
+    border-radius:3px !important;
+    letter-spacing:0.4px !important;
+    flex-shrink:0;
+    line-height:1.4;
+  }
 
   /* Table rows */
   .row:hover{background:#0f172a!important;}
@@ -22589,14 +22648,15 @@ export default function App() {
         <div style={{flex:1,overflowY:"auto"}}>
 
           {/* Dashboard — always free */}
-          <div style={{padding:"8px 8px 2px"}}>
-            <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Overview</span>
+          <div className="nav-section" style={{color:"#3b82f6"}}>
+            <span className="nav-section-dot"/>
+            <span>Overview</span>
           </div>
           {MODULES.filter(m=>m.id==="dashboard").map(m=>(
-            <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
-              style={{width:"calc(100% - 16px)",background:active===m.id?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
-              <span style={{fontSize:17,width:24,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-              <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:400,flex:1}}>{m.label}</span>
+            <button key={m.id} className={"nav-btn"+(active===m.id?" active":"")} onClick={()=>setActive(m.id)}
+              style={{width:"calc(100% - 16px)",background:"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
+              {m.icon && <span style={{fontSize:17,width:20,textAlign:"center",flexShrink:0}}>{m.icon}</span>}
+              <span className="nav-label" style={{flex:1}}>{m.label}</span>
             </button>
           ))}
 
@@ -22610,8 +22670,9 @@ export default function App() {
             if (!mods.length) return null;
             return (
               <div key={sec.key}>
-                <div style={{padding:"10px 8px 3px"}}>
-                  <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
+                <div className="nav-section" style={{color:sec.color}}>
+                  <span className="nav-section-dot"/>
+                  <span>{sec.label}</span>
                 </div>
                 {mods.map(m => {
                   const locked = !canAccess(m);
@@ -22621,10 +22682,10 @@ export default function App() {
                   // SECTION headers (commit 2ce07fba) already group scanners
                   // by section, making sidebar tier nav redundant.
                   return (
-                    <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
-                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
-                      <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-                      <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
+                    <button key={m.id} className={"nav-btn"+(isActive?" active":"")} onClick={()=>handleNavClick(m)}
+                      style={{width:"calc(100% - 16px)",background:"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
+                      {m.icon && <span style={{fontSize:16,width:20,textAlign:"center",flexShrink:0}}>{m.icon}</span>}
+                      <span className="nav-label" style={{color:locked?"#475569":undefined,flex:1,lineHeight:1.35}}>{m.label}</span>
                       {/* VA/PT badge — subtle tag, low-opacity, refined look */}
                       {MODULE_TYPE[m.id] && (() => {
                         const t = MODULE_TYPE[m.id];
@@ -22636,16 +22697,13 @@ export default function App() {
                         const fg = t === "PT"  ? "#f87171"
                                  : t === "VA+" ? "#fbbf24"
                                  :                "#60a5fa";
-                        return <span title={t === "PT" ? "Penetration Test - active exploitation"
+                        return <span className="nav-pill" title={t === "PT" ? "Penetration Test - active exploitation"
                                           : t === "VA+" ? "VA + light active probing"
                                           : "Vulnerability Assessment - passive"}
-                          style={{fontSize:8.5, color:fg, fontWeight:600, background:bg,
-                                  padding:"1px 4px", borderRadius:2, letterSpacing:0.3,
-                                  flexShrink:0, opacity:0.75}}>{t}</span>;
+                          style={{color:fg, background:bg, opacity:0.85}}>{t}</span>;
                       })()}
-                      {locked   && <span style={{fontSize:10}}></span>}
-                      {m.comingSoon && !locked && <span style={{fontSize:8,color:"#8b5cf6",fontWeight:700,background:"rgba(139,92,246,0.15)",padding:"1px 5px",borderRadius:3,letterSpacing:0.5}}>SOON</span>}
-                      {isTrial  && !locked && !m.comingSoon && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
+                      {m.comingSoon && !locked && <span className="nav-pill" style={{color:"#a78bfa",background:"rgba(139,92,246,0.15)"}}>SOON</span>}
+                      {isTrial  && !locked && !m.comingSoon && <span className="nav-pill" style={{color:"#fbbf24",background:"rgba(245,158,11,0.12)"}}>TRIAL</span>}
                       {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="recon"   && reconRunning  && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                       {!locked && m.id==="vuln"    && vulnRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
@@ -22657,8 +22715,9 @@ export default function App() {
           })}
 
           {/* System — always accessible */}
-          <div style={{padding:"10px 8px 3px"}}>
-            <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>System</span>
+          <div className="nav-section" style={{color:"#64748b"}}>
+            <span className="nav-section-dot"/>
+            <span>System</span>
           </div>
           {[
             {id:"health",  icon:"", label:"System Health"},
@@ -22666,10 +22725,10 @@ export default function App() {
             {id:"settings",icon:"",  label:"Settings"},
             ...(isSuperAdmin ? [{id:"adminpanel", icon:"", label:"Admin Panel"}] : []),
           ].map(m => (
-            <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
-              style={{width:"calc(100% - 16px)",background:active===m.id?(m.id==="adminpanel"?"#3b0764":"#1e293b"):"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
-              <span style={{fontSize:15,width:22,textAlign:"center"}}>{m.icon}</span>
-              <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:500,letterSpacing:"0.1px"}}>{m.label}</span>
+            <button key={m.id} className={"nav-btn"+(active===m.id?" active":"")} onClick={()=>setActive(m.id)}
+              style={{width:"calc(100% - 16px)",background:"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
+              {m.icon && <span style={{fontSize:15,width:20,textAlign:"center"}}>{m.icon}</span>}
+              <span className="nav-label">{m.label}</span>
             </button>
           ))}
 
