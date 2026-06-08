@@ -4,7 +4,7 @@ benign URL (no internal probing!). Check response delta vs control. Conservative
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get
+from tools.vuln._vuln_common import probe_url_async, http_get_async
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ INDICATORS = ["example domain", "<title>example domain", "iana"]  # text from ex
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -26,7 +26,7 @@ async def gather(ctx):
     suspects = []
     for p in SSRF_PARAMS:
         url = f"{base_url}?{p}={CONTROL_PAYLOAD}"
-        r = http_get(url, timeout=10, read=8000)
+        r = await http_get_async(url, timeout=10, read=8000)
         if not r:
             continue
         body_lower = r.get("body", "").lower()

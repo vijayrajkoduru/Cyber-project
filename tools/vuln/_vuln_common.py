@@ -1,5 +1,6 @@
 """tools/vuln/_vuln_common.py - shared probe helpers for Vuln scanners.
 Underscore-prefixed so the autoloader skips it (helper, not a scanner)."""
+import asyncio
 import json
 import socket
 import ssl
@@ -134,6 +135,61 @@ SQL_ERROR_PATTERNS = [
 
 # Command injection output fingerprints
 CMD_PATTERNS = [r"uid=\d+\(", r"gid=\d+\(", r"root:[x*]:0:0:", r"groups=\d+\("]
+
+
+# ── ASYNC WRAPPERS — eliminate event-loop blocking ─────────────────────
+# All the http_* helpers above use synchronous urllib. Calling them from
+# `async def gather()` BLOCKS the event loop for the duration of the HTTP
+# call. The orchestrator wraps each scanner in asyncio.wait_for(...) with
+# a per-scanner cap; when a sync urllib call exceeds that cap, the task
+# can't be cancelled cleanly and the scanner gets marked ERROR.
+#
+# Fix: run the sync call inside asyncio.to_thread, which puts it on a
+# worker thread so the event loop stays free and wait_for can cancel.
+
+async def http_get_async(url, timeout=10, read=200000):
+    return await asyncio.to_thread(http_get, url, timeout, read)
+
+
+async def http_get_h_async(url, headers=None, timeout=10, read=200000):
+    return await asyncio.to_thread(http_get_h, url, headers, timeout, read)
+
+
+async def http_post_async(url, data=b"", headers=None, timeout=10):
+    return await asyncio.to_thread(http_post, url, data, headers, timeout)
+
+
+async def probe_url_async(host, path="/", scheme=None, timeout=10):
+    """Async version of probe_url. Tries https then http, returns (url, response)."""
+    if scheme:
+        url = f"{scheme}://{host}{path}"
+        r = await http_get_async(url, timeout=timeout)
+        return (url, r)
+    for s in ("https", "http"):
+        url = f"{s}://{host}{path}"
+        r = await http_get_async(url, timeout=timeout)
+        if r is not None:
+            return (url, r)
+    return (None, None)
+
+
+async def bounded_gather_probes(probes, per_probe_timeout=8, max_total=50):
+    """Run a list of awaitable probe-coroutines with a hard per-probe timeout
+    and a soft cap on total wall-clock. Returns list of results (None for the
+    ones that errored or timed out). Use this in scanner gather() functions to
+    guarantee they never exceed `max_total` seconds regardless of network."""
+    async def _one(coro):
+        try:
+            return await asyncio.wait_for(coro, timeout=per_probe_timeout)
+        except Exception:
+            return None
+    try:
+        return await asyncio.wait_for(
+            asyncio.gather(*(_one(p) for p in probes)),
+            timeout=max_total,
+        )
+    except asyncio.TimeoutError:
+        return [None] * len(probes)
 
 
 def decode_jwt(token):
