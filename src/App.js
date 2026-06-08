@@ -9363,6 +9363,129 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     });
     y += 30;
 
+    // ── Severity Pie Chart + Scanner Status Bar (industry-standard visualization) ──
+    // Added 2026-06-08 to match Nessus / Qualys reports that include visual
+    // breakdowns alongside the data tables. Uses jsPDF triangle primitives
+    // to approximate arc sectors - no canvas / no Chart.js dependency.
+    {
+      const _totalFx = _sc.CRITICAL + _sc.HIGH + _sc.MEDIUM + _sc.LOW + _sc.INFO;
+      if (_totalFx > 0) {
+        chk(58);
+        // Left side: donut pie chart
+        const _cx = margin + 22, _cy = y + 22, _r = 18, _r2 = 9;
+        const _segs = [
+          {v: _sc.CRITICAL, c: _SEVCOL.CRITICAL, l: "C"},
+          {v: _sc.HIGH,     c: _SEVCOL.HIGH,     l: "H"},
+          {v: _sc.MEDIUM,   c: _SEVCOL.MEDIUM,   l: "M"},
+          {v: _sc.LOW,      c: _SEVCOL.LOW,      l: "L"},
+          {v: _sc.INFO,     c: _SEVCOL.INFO,     l: "I"},
+        ];
+        let _ang = -Math.PI / 2; // start at top
+        _segs.forEach(s => {
+          if (s.v <= 0) return;
+          const sw = (s.v / _totalFx) * 2 * Math.PI;
+          const steps = Math.max(2, Math.ceil(sw * 18));
+          doc.setFillColor.apply(doc, s.c);
+          for (let i = 0; i < steps; i++) {
+            const a1 = _ang + (sw * i / steps);
+            const a2 = _ang + (sw * (i + 1) / steps);
+            doc.triangle(
+              _cx, _cy,
+              _cx + _r * Math.cos(a1), _cy + _r * Math.sin(a1),
+              _cx + _r * Math.cos(a2), _cy + _r * Math.sin(a2),
+              'F'
+            );
+          }
+          _ang += sw;
+        });
+        // White center hole = donut effect
+        doc.setFillColor(255, 255, 255);
+        doc.circle(_cx, _cy, _r2, 'F');
+        doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
+        const _tStr = String(_totalFx);
+        doc.text(_tStr, _cx - (_tStr.length * 1.4), _cy + 1);
+        doc.setFont("Arial","normal"); doc.setFontSize(5.5); doc.setTextColor(...GRAY);
+        doc.text("findings", _cx - 4.5, _cy + 5);
+        // Right side: legend + horizontal stacked bar
+        const _legX = margin + 50;
+        const _legW = contentW - 52;
+        doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+        doc.text("Severity Distribution", _legX, y + 5);
+        // Stacked bar
+        const _barY = y + 10, _barH = 7;
+        let _bX = _legX;
+        _segs.forEach(s => {
+          if (s.v <= 0) return;
+          const w = Math.max(2, (s.v / _totalFx) * _legW);
+          fillR(_bX, _barY, w, _barH, s.c);
+          if (w >= 14) {
+            doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(255,255,255);
+            doc.text(String(s.v), _bX + w/2 - 1, _barY + 4.5);
+          }
+          _bX += w;
+        });
+        // Legend rows below the bar
+        let _legY = y + 21;
+        _segs.forEach((s, i) => {
+          const _row = Math.floor(i / 3), _col = i % 3;
+          const _lx = _legX + _col * ((_legW - 4) / 3);
+          const _ly = _legY + _row * 6;
+          fillR(_lx, _ly, 4, 3.5, s.c);
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
+          const _pct = ((s.v / _totalFx) * 100).toFixed(0);
+          const _full = {C:"Critical",H:"High",M:"Medium",L:"Low",I:"Info"}[s.l];
+          doc.text(`${_full}: ${s.v} (${_pct}%)`, _lx + 6, _ly + 3);
+        });
+        y += 50;
+      }
+    }
+
+    // ── Scanner Status Stacked Bar (DATA / EMPTY / SKIPPED / ERROR) ──
+    // Visual companion to the existing "Scan Coverage" section. Shows the
+    // health distribution across all scanners at-a-glance.
+    {
+      const _scn = (typeof _scanCounts !== "undefined") ? _scanCounts :
+                   (function(){
+                     // Fallback: derive from r if _scanCounts not in scope here
+                     let _d=0,_e=0,_s=0,_er=0;
+                     Object.values(r||{}).forEach(v=>{
+                       if (!v || typeof v !== "object") return;
+                       if (v._failed || v.error) _er++;
+                       else if (v._skipped || v.skipped_reason) _s++;
+                       else if (Array.isArray(v.findings) && v.findings.length > 0) _d++;
+                       else _e++;
+                     });
+                     return {data:_d, empty:_e, skipped:_s, error:_er};
+                   })();
+        const _total = _scn.data + _scn.empty + _scn.skipped + _scn.error;
+        if (_total > 0) {
+          chk(28);
+          doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...DARK);
+          doc.text("Scanner Status Distribution", margin, y + 5);
+          doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+          doc.text(`${_total} scanner${_total!==1?"s":""} executed`, margin + 60, y + 5);
+          const _stbY = y + 8, _stbH = 8;
+          const _scnSegs = [
+            {n:"DATA",    v:_scn.data,    c:[34,197,94]},   // green
+            {n:"EMPTY",   v:_scn.empty,   c:[148,163,184]}, // gray-blue
+            {n:"SKIPPED", v:_scn.skipped, c:[245,158,11]},  // amber
+            {n:"ERROR",   v:_scn.error,   c:[239,68,68]},   // red
+          ];
+          let _sbX = margin;
+          _scnSegs.forEach(seg => {
+            if (seg.v <= 0) return;
+            const w = Math.max(3, (seg.v / _total) * contentW);
+            fillR(_sbX, _stbY, w, _stbH, seg.c);
+            if (w >= 18) {
+              doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(255,255,255);
+              doc.text(`${seg.n} ${seg.v}`, _sbX + w/2 - 6, _stbY + 5.5);
+            }
+            _sbX += w;
+          });
+          y += 20;
+        }
+    }
+
     // Top concerns
     if (_top3.length > 0) {
       chk(50); y = sHead("Top Concerns", y);
