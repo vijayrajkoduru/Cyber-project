@@ -4,7 +4,7 @@ in HTML body context. Only flags if response contains canary + content-type is H
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url, http_get
+from tools.vuln._vuln_common import probe_url_async, http_get_async
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ PROBE_PARAMS = ["q", "search", "name", "msg", "comment", "ref", "callback", "v"]
 
 async def gather(ctx):
     host = str(ctx.host)
-    base_url, base = probe_url(host, "/")
+    base_url, base = await probe_url_async(host, "/")
     if not base or base.get("status", 0) >= 500:
         ctx.state["tested"] = 0
         ctx.state["skipped_reason"] = "Target unreachable"
@@ -25,7 +25,7 @@ async def gather(ctx):
     reflected = []
     for p in PROBE_PARAMS:
         url = f"{base_url}?{p}={CANARY}"
-        r = http_get(url, timeout=8)
+        r = await http_get_async(url, timeout=8)
         if not r:
             continue
         body = r.get("body", "")
