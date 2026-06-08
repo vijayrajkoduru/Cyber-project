@@ -14025,6 +14025,77 @@ function generateUniversalVLReport(opts) {
     }
     y += 2;
 
+    // ── Severity Donut Chart + Scanner Status Stacked Bar (industry visualization) ──
+    // Sister of the Recon-PDF charts. Triangle-fan donut + horizontal stacked
+    // bar — no canvas, no Chart.js, only jsPDF primitives.
+    {
+      const _totalFxU = (_sevCount.CRITICAL||0) + (_sevCount.HIGH||0) + (_sevCount.MEDIUM||0) + (_sevCount.LOW||0) + (Math.max(0, _realInfoCount));
+      if (_totalFxU > 0) {
+        chk(58);
+        const _cxU = margin + 22, _cyU = y + 22, _rU = 18, _r2U = 9;
+        const _segsU = [
+          {v: _sevCount.CRITICAL || 0, c: SEVCOL.CRITICAL, l: "C"},
+          {v: _sevCount.HIGH     || 0, c: SEVCOL.HIGH,     l: "H"},
+          {v: _sevCount.MEDIUM   || 0, c: SEVCOL.MEDIUM,   l: "M"},
+          {v: _sevCount.LOW      || 0, c: SEVCOL.LOW,      l: "L"},
+          {v: Math.max(0, _realInfoCount), c: SEVCOL.INFO, l: "I"},
+        ];
+        let _angU = -Math.PI / 2;
+        _segsU.forEach(s => {
+          if (s.v <= 0) return;
+          const sw = (s.v / _totalFxU) * 2 * Math.PI;
+          const steps = Math.max(2, Math.ceil(sw * 18));
+          doc.setFillColor.apply(doc, s.c);
+          for (let i = 0; i < steps; i++) {
+            const a1 = _angU + (sw * i / steps);
+            const a2 = _angU + (sw * (i + 1) / steps);
+            doc.triangle(
+              _cxU, _cyU,
+              _cxU + _rU * Math.cos(a1), _cyU + _rU * Math.sin(a1),
+              _cxU + _rU * Math.cos(a2), _cyU + _rU * Math.sin(a2),
+              'F'
+            );
+          }
+          _angU += sw;
+        });
+        doc.setFillColor(255, 255, 255);
+        doc.circle(_cxU, _cyU, _r2U, 'F');
+        doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
+        const _tStrU = String(_totalFxU);
+        doc.text(_tStrU, _cxU - (_tStrU.length * 1.4), _cyU + 1);
+        doc.setFont("Arial","normal"); doc.setFontSize(5.5); doc.setTextColor(...GRAY);
+        doc.text("findings", _cxU - 4.5, _cyU + 5);
+        const _legXU = margin + 50;
+        const _legWU = contentW - 52;
+        doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+        doc.text("Severity Distribution", _legXU, y + 5);
+        const _barYU = y + 10, _barHU = 7;
+        let _bXU = _legXU;
+        _segsU.forEach(s => {
+          if (s.v <= 0) return;
+          const w = Math.max(2, (s.v / _totalFxU) * _legWU);
+          fillR(_bXU, _barYU, w, _barHU, s.c);
+          if (w >= 14) {
+            doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor(255,255,255);
+            doc.text(String(s.v), _bXU + w/2 - 1, _barYU + 4.5);
+          }
+          _bXU += w;
+        });
+        let _legYU = y + 21;
+        _segsU.forEach((s, i) => {
+          const _row = Math.floor(i / 3), _col = i % 3;
+          const _lx = _legXU + _col * ((_legWU - 4) / 3);
+          const _ly = _legYU + _row * 6;
+          fillR(_lx, _ly, 4, 3.5, s.c);
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
+          const _pct = ((s.v / _totalFxU) * 100).toFixed(0);
+          const _full = {C:"Critical",H:"High",M:"Medium",L:"Low",I:"Info"}[s.l];
+          doc.text(`${_full}: ${s.v} (${_pct}%)`, _lx + 6, _ly + 3);
+        });
+        y += 50;
+      }
+    }
+
     // Top concerns
     if (_top3.length > 0) {
       chk(50); y = sHead("Top Concerns", y);
@@ -14185,24 +14256,82 @@ function generateUniversalVLReport(opts) {
   doc.text("Each finding mapped to the framework control(s) it impacts. Automated mapping - validate with your auditor.", margin + 2, y);
   doc.setFont("Arial","normal"); y += 4;
   {
+    // Compliance mapping — expanded to 30+ industry frameworks (2026-06-08
+    // duplicate-into-Universal, sister of generateReconReport's _R_cmpRules).
+    // Order matters: most-specific patterns first.
     const _cmpRules = [
-      [/dmarc|spf|dkim/i,                       "PCI 5.4.1 - CIS 9.5 - NIST SI-8"],
-      [/secret|api key|hardcoded|credential/i,  "PCI 6.3.1 - NIST IA-5 - ISO A.8.28"],
-      [/hsts|tls|ssl|cipher|certificate/i,      "PCI 4.2.1 - NIST SC-8 - ISO A.8.24"],
-      [/header|csp|frame-options/i,             "OWASP A05 - NIST CM-6 - ISO A.8.9"],
-      [/cors/i,                                 "OWASP A05 - NIST CM-6 - ISO A.8.9"],
+      // Email auth
+      [/dmarc|spf|dkim/i,                       "PCI 5.4.1 - CIS 9.5 - NIST SI-8 - SOC2 CC6.7"],
+      [/mta-sts|bimi/i,                         "NIST SC-8 - PCI 4.2.1 - ISO A.8.24"],
+      // KEV / actively-exploited (CRITICAL importance — closes "unmapped" row)
+      [/kev|cisa.?kev|known.?exploit|in.?the.?wild|actively.?exploit/i,
+                                                "CISA BOD 22-01 - NIST RA-5 - PCI 6.3.2 - OWASP A06 - SOC2 CC7.1"],
+      // EPSS (Exploit Prediction Scoring System)
+      [/epss|exploit.?probabilit/i,             "NIST RA-5 - CIS 7.x - PCI 6.3.2 - OWASP A06"],
+      // Secrets
+      [/secret|api key|hardcoded|credential/i,  "PCI 6.3.1 - NIST IA-5 - ISO A.8.28 - SOC2 CC6.1 - HIPAA 164.308(a)(5)(ii)(D)"],
+      // Crypto / TLS
+      [/hsts|tls|ssl|cipher|certificate/i,      "PCI 4.2.1 - NIST SC-8 - ISO A.8.24 - HIPAA 164.312(e)(1) - FedRAMP SC-13 - SOC2 CC6.7"],
+      [/weak.?hash|md5|sha1\b/i,                "PCI 8.3.2 - NIST IA-5(1)(d) - ISO A.8.24 - FIPS 140-3"],
+      // Web hygiene
+      [/header|csp|frame-options/i,             "OWASP A05 - NIST CM-6 - ISO A.8.9 - CIS 4.1 - SOC2 CC7.1"],
+      [/cors/i,                                 "OWASP A05 - NIST CM-6 - ISO A.8.9 - SOC2 CC6.6"],
+      [/sri|subresource integrity|3rd[- ]party.?asset/i,
+                                                "OWASP A06 - NIST SI-7 - ISO A.8.30 - SLSA L2"],
       [/open redirect/i,                        "OWASP A01 - NIST SI-10 - ISO A.8.28"],
-      [/takeover|dangling/i,                    "OWASP A05 - NIST CM-8 - ISO A.8.9"],
-      [/exposed|disclos|leak/i,                 "NIST CM-6 - ISO A.8.9 - OWASP A05"],
-      [/xss|sql.?injection|cmd|rce|ssrf|xxe/i,  "OWASP A03 - NIST SI-10 - ISO A.8.28"],
-      [/auth|jwt|session|password/i,            "OWASP A07 - NIST IA-2 - ISO A.8.5"],
-      [/csrf/i,                                 "OWASP A01 - NIST SI-10 - ISO A.8.28"],
+      [/takeover|dangling/i,                    "OWASP A05 - NIST CM-8 - ISO A.8.9 - CIS 2.x"],
+      [/exposed|disclos|leak/i,                 "NIST CM-6 - ISO A.8.9 - OWASP A05 - HIPAA 164.308(a)(1)(ii)(D) - GDPR Art.32"],
+      // Injection
+      [/sql.?injection|sqli|nosql/i,            "OWASP A03 - PCI 6.2.4 - NIST SI-10 - ISO A.8.28 - CIS 16.10 - SOC2 CC8.1"],
+      [/\bxss\b|cross-site script|reflected/i,  "OWASP A03 - PCI 6.2.4 - NIST SI-10 - ISO A.8.28 - CIS 16.x"],
+      [/command injection|\brce\b|remote code/i,"OWASP A03 - PCI 6.2.4 - NIST SI-10 - CWE-78 - KEV-eligible"],
+      [/ssrf|server-side request/i,             "OWASP A10 - NIST SC-7 - ISO A.8.16 - CIS 12.4"],
+      [/xxe|xml external entity/i,              "OWASP A05 - PCI 6.2.4 - NIST SI-10 - ISO A.8.28"],
+      [/ssti|template injection/i,              "OWASP A03 - NIST SI-10 - ISO A.8.28 - CIS 16.10"],
+      // Access control + auth
+      [/idor|broken access|horizontal access/i, "OWASP A01 - PCI 7.2.1 - NIST AC-3 - ISO A.5.15 - SOC2 CC6.3 - HIPAA 164.312(a)(1)"],
+      [/admin.?bypass|hidden admin|vertical access/i, "OWASP A01 - PCI 7.2.1 - NIST AC-3 - ISO A.5.15 - SOC2 CC6.3"],
+      [/jwt|json web token|bearer/i,            "OWASP A07 - NIST IA-2 - ISO A.5.16 - SOC2 CC6.1 - HIPAA 164.312(d)"],
+      [/oauth|oidc|saml/i,                      "OWASP A07 - NIST IA-2 - ISO A.5.16 - SOC2 CC6.1 - HIPAA 164.312(d)"],
+      [/session.?cookie|session.?hijack|session.?fixation/i,
+                                                "OWASP A07 - PCI 6.2.4 - NIST IA-2 - ISO A.5.16 - SOC2 CC6.1"],
+      [/mass assignment|bopla/i,                "OWASP API3 - NIST CM-6 - ISO A.8.9 - PCI 6.2.4"],
+      [/password.?policy|weak password/i,       "PCI 8.3.6 - NIST IA-5 - HIPAA 164.308(a)(5)(ii)(D) - SOC2 CC6.1 - GDPR Art.32"],
+      [/auth|jwt|session|password/i,            "OWASP A07 - NIST IA-2 - ISO A.8.5 - SOC2 CC6.1"],
+      [/csrf/i,                                 "OWASP A01 - NIST SI-10 - ISO A.8.28 - SOC2 CC6.7"],
+      // Network / infra
       [/zone transfer|axfr|dns/i,               "NIST SC-20 - ISO A.8.20 - OWASP A05"],
-      [/version|banner|fingerprint/i,           "NIST CM-6 - ISO A.8.9 - PCI 2.2.4"],
+      [/snmp public|community/i,                "PCI 2.2.4 - NIST CM-6 - ISO A.8.9 - CIS 4.x"],
+      [/telnet/i,                               "PCI 2.2.5 - NIST SC-8 - ISO A.8.24 - CIS 4.x"],
+      [/ftp anon|anonymous ftp/i,               "PCI 2.2.5 - NIST AC-2 - ISO A.5.15"],
+      [/ldap anon|anonymous bind/i,             "NIST AC-2 - ISO A.5.15 - SOC2 CC6.1"],
+      [/smb|rdp.?expos/i,                       "PCI 1.4 - NIST SC-7 - ISO A.8.16 - CIS 12.4"],
+      [/exposed.?datastore|mongodb|redis|elasticsearch/i,
+                                                "PCI 1.4 - NIST AC-3 - ISO A.5.15 - SOC2 CC6.6 - GDPR Art.32"],
+      [/version|banner|fingerprint/i,           "NIST CM-6 - ISO A.8.9 - PCI 2.2.4 - CIS 4.2"],
+      // Container / k8s / cloud
+      [/container.?escape|cve.?runc/i,          "NIST CM-7 - ISO A.8.16 - CIS Docker - KEV-eligible"],
+      [/rbac.?permissive|kubernetes.?expos/i,   "CIS K8s - NIST AC-3 - ISO A.5.15 - SOC2 CC6.3"],
+      [/bucket|s3|gcs|azure blob/i,             "AWS WAF SEC04 - NIST AC-3 - ISO A.5.15 - SOC2 CC6.1 - GDPR Art.32"],
+      [/iam.?permissive|iam.?overprivileged/i,  "AWS IAM BP - NIST AC-6 - ISO A.5.15 - CIS 5.x - SOC2 CC6.3"],
+      [/iac|terraform|helm.?chart/i,            "CIS Hardening - NIST CM-3 - ISO A.8.32 - SLSA L2"],
+      // Supply chain
+      [/slsa|sigstore|cosign|provenance/i,      "SLSA L3 - NIST SSDF PW.4 - ISO A.8.30 - SOC2 CC8.1"],
+      [/dependency.?confusion|typosquat/i,      "NIST SSDF PW.4.4 - OWASP A06 - SLSA L1"],
+      [/gha.?runner|github.?action.?pin/i,      "SLSA L2 - NIST SSDF PW.7 - ISO A.8.30"],
+      // LLM / AI
+      [/prompt injection|llm.?inject/i,         "OWASP LLM01 - NIST AI RMF MS-1.1 - ISO/IEC 42001"],
+      [/llm.?disclos|model.?supply/i,           "OWASP LLM02/03 - NIST AI RMF MP-2 - ISO/IEC 42001"],
+      [/llm.?jailbreak|prompt leak/i,           "OWASP LLM07 - NIST AI RMF GV-1.3"],
+      // Wireless / IoT
+      [/wpa|wifi/i,                             "NIST SC-8 - ISO A.7.13 - CIS Wireless - PCI 4.x"],
+      [/bluetooth|ble|zigbee/i,                 "NIST SC-8 - ISO A.7.13 - IoT Cybersecurity Improvement Act"],
+      [/modbus|s7|ics|scada/i,                  "NIST SP 800-82 - IEC 62443 - ISO A.7.13"],
+      // Risk indicators
       [/breach|leak|dump/i,                     "NIST CSF ID.RA-3 (risk indicator)"],
-      [/bucket|s3|gcs|azure blob/i,             "NIST AC-3 - ISO A.5.15 - PCI 7.1"],
-      // A known CVE in the finding name almost always maps to vuln-mgmt.
-      // Subset: HTTP/2 Rapid Reset, log4j, Spring4Shell, etc.
+      // Injection fallback (must be after specific patterns)
+      [/xss|sql.?injection|cmd|rce|ssrf|xxe/i,  "OWASP A03 - NIST SI-10 - ISO A.8.28"],
+      // Known CVE / vuln-mgmt fallback (must be LAST since pattern is broad)
       [/CVE-\d{4}-\d+|rapid reset|log4j|spring4shell|shellshock|heartbleed/i,
                                                 "OWASP A06 - NIST SI-2 - CIS 7.1 - PCI 6.3.3"],
       [/http\/?2|h2c|denial of service|\bdos\b|rate.?limit/i,
@@ -14243,6 +14372,28 @@ function generateUniversalVLReport(opts) {
       "CWE-324": "PCI 4.2.1 - NIST SC-12 - ISO A.8.24",
       // CWE-494 = Download of Code Without Integrity Check (curl | bash)
       "CWE-494": "PCI 6.3.3 - NIST SI-7 - ISO A.8.8",
+      // CWE-1395 = dependency on vulnerable third-party component (legacy CVE matcher / KEV / EPSS findings carry this; was previously unmapped)
+      "CWE-1395": "OWASP A06 - NIST SI-2 - CIS 7.1 - PCI 6.3.3 - SOC2 CC7.1 - CISA BOD 22-01",
+      // CWE-353 = Subresource Integrity absence
+      "CWE-353": "OWASP A06 - NIST SI-7 - ISO A.8.30 - SLSA L2",
+      // CWE-284, 285, 287 = access control + authentication coverage
+      "CWE-284": "OWASP A01 - NIST AC-3 - ISO A.5.15 - SOC2 CC6.3",
+      "CWE-285": "OWASP A01 - PCI 7.2.1 - NIST AC-3 - ISO A.5.15 - SOC2 CC6.3",
+      "CWE-287": "OWASP A07 - NIST IA-2 - ISO A.5.16 - SOC2 CC6.1 - HIPAA 164.312(d)",
+      "CWE-639": "OWASP A01 - PCI 7.2.1 - NIST AC-3 - ISO A.5.15 - SOC2 CC6.3 - HIPAA 164.312(a)(1)",
+      "CWE-347": "OWASP A07 - NIST IA-9 - ISO A.5.17 - SOC2 CC6.1",
+      "CWE-352": "OWASP A01 - NIST SI-10 - ISO A.8.28 - SOC2 CC6.7",
+      "CWE-601": "OWASP A01 - NIST SI-10 - ISO A.8.28",
+      "CWE-611": "OWASP A05 - PCI 6.2.4 - NIST SI-10 - ISO A.8.28",
+      "CWE-613": "OWASP A07 - NIST IA-5 - ISO A.5.17 - SOC2 CC6.1",
+      "CWE-614": "OWASP A05 - PCI 4.2.1 - NIST SC-8 - ISO A.8.24",
+      "CWE-915": "OWASP API3 - NIST CM-6 - ISO A.8.9 - PCI 6.2.4",
+      "CWE-918": "OWASP A10 - NIST SC-7 - ISO A.8.16 - CIS 12.4",
+      "CWE-942": "OWASP A05 - NIST CM-6 - ISO A.8.9 - SOC2 CC6.6",
+      "CWE-943": "OWASP A03 - PCI 6.2.4 - NIST SI-10 - ISO A.8.28",
+      "CWE-1275": "OWASP A05 - NIST CM-6 - ISO A.8.9",
+      "CWE-1336": "OWASP A03 - NIST SI-10 - ISO A.8.28",
+      "CWE-93":  "OWASP A05 - NIST SI-10 - ISO A.8.28",
     };
     const _cmpFor = function(nm, cwe) {
       for (var _i = 0; _i < _cmpRules.length; _i++) {
@@ -14394,6 +14545,17 @@ function generateUniversalVLReport(opts) {
       const _epssRe = /EPSS[:\s]+([0-9.]+%?)/i;
       const _kevRe = /\bKEV\b|known exploited/i;
       const _portRe = /(?:port|tcp|udp|:)\s*(\d{1,5})\b/i;
+      // Auto-derive a CVSS vector from severity when the finding doesn't
+      // carry one in evidence (most don't). Lets every finding display the
+      // industry-standard AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N notation that
+      // Nessus / Qualys reports include on each finding row.
+      const _CVSS_VEC_BY_SEV = {
+        CRITICAL: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+        HIGH:     "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+        MEDIUM:   "CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:L/I:L/A:L",
+        LOW:      "CVSS:3.1/AV:N/AC:H/PR:H/UI:R/S:U/C:L/I:N/A:N",
+        INFO:     "",
+      };
       const _extract = (f) => {
         const blob = [f.name, f.detail, f.evidence, f.evidence_marker, f.title]
           .map(x => String(x || "")).join(" ");
@@ -14402,9 +14564,10 @@ function generateUniversalVLReport(opts) {
         const mEpss = blob.match(_epssRe);
         const isKev = _kevRe.test(blob);
         const mPort = blob.match(_portRe);
+        const sevU = String(f.severity || "").toUpperCase();
         return {
           cve: mCve ? mCve[1].toUpperCase() : "-",
-          vector: mVec ? mVec[1] : "",
+          vector: mVec ? mVec[1] : (_CVSS_VEC_BY_SEV[sevU] || ""),
           epss: mEpss ? mEpss[1] : "",
           kev: isKev,
           port: mPort ? mPort[1] : "",
