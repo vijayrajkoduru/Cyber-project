@@ -1,18 +1,61 @@
-"""A08 Software & Data Integrity (deser) - advisory. VL-FORGE Vuln tier3_web_active (playbook technique).
-Cleanly SKIPS on a passive URL scan (no false positive). Method: run LIVE via Web App Pentesting (deserialization_probe)"""
+"""A08 Software & Data Integrity - passive SRI absence check. Self-contained.
+Strategy: parse <script src=...> / <link href=...> with external origins, check for
+integrity= attribute (SRI). Missing SRI on 3rd-party assets = supply chain risk."""
+import re
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
+from tools.vuln._vuln_common import probe_url
 
 router = APIRouter()
 
 
 async def gather(ctx):
-    ctx.state["skipped_reason"] = "a08_software_integrity: run LIVE via Web App Pentesting (deserialization_probe)"
+    host = str(ctx.host)
+    base_url, base = probe_url(host, "/")
+    if not base:
+        ctx.state["tested"] = 0
+        ctx.state["skipped_reason"] = "Target unreachable"
+        return
+    ctx.source("http")
+    ctx.state["tested"] = 1
+    body = base.get("body") or ""
+    base_host = urlparse(base_url).netloc.lower()
+    # Find all <script src="..."> and <link rel="stylesheet" href="..."> tags
+    tag_re = re.compile(r"""<(?:script|link)\s+[^>]*?(?:src|href)\s*=\s*["']([^"']+)["'][^>]*>""", re.IGNORECASE)
+    sri_re = re.compile(r"""integrity\s*=\s*["'][^"']+["']""", re.IGNORECASE)
+    third_party = []
+    missing_sri = []
+    for m in tag_re.finditer(body):
+        url = m.group(1)
+        full_tag = m.group(0)
+        parsed = urlparse(url)
+        # Only check absolute URLs with external host
+        if not parsed.netloc:
+            continue
+        if parsed.netloc.lower() == base_host:
+            continue
+        third_party.append(parsed.netloc)
+        if not sri_re.search(full_tag):
+            missing_sri.append(url)
+    ctx.state["third_party_assets"] = list(set(third_party))[:20]
+    ctx.state["missing_sri"] = missing_sri[:20]
 
 
-FINDING_RULES = []
-INTEL_FIELDS = []
+def _r_sri(s):
+    missing = s.get("missing_sri") or []
+    if not missing:
+        return None
+    sev = "HIGH" if len(missing) >= 3 else "MEDIUM"
+    return {"name": f"{len(missing)} third-party asset(s) loaded without Subresource Integrity",
+            "severity": sev, "cvss": 6.5 if sev == "HIGH" else 4.3, "cwe": "CWE-353",
+            "evidence": "; ".join(missing[:5]) + (f" (+{len(missing)-5} more)" if len(missing) > 5 else ""),
+            "remediation": "Add integrity=\"sha384-...\" + crossorigin=\"anonymous\" to all external <script>/<link> tags."}
+
+
+FINDING_RULES = [_r_sri]
+INTEL_FIELDS = [("3rd-party origins", "third_party_assets"), ("Missing SRI", "missing_sri")]
 
 
 @router.post("/api/vuln/a08_software_integrity")

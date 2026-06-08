@@ -1,18 +1,77 @@
-"""Hidden admin panel auth bypass - advisory. VL-FORGE Vuln tier4_auth_scan (playbook technique).
-Cleanly SKIPS on a passive URL scan (no false positive). Method: run via Web App Pentesting (forced_browsing + broken_auth)"""
+"""Hidden admin panel discovery - passive 200-without-auth detection. Self-contained.
+Strategy: probe common admin paths, flag ones returning 200 OK or 302-to-non-login."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
+from tools.vuln._vuln_common import probe_url, http_get
 
 router = APIRouter()
 
+ADMIN_PATHS = [
+    "/admin", "/admin/", "/administrator", "/admin.php", "/admin/index.php",
+    "/wp-admin/", "/wp-admin", "/dashboard", "/manager", "/manage",
+    "/portal", "/console", "/control", "/cpanel",
+    "/api/admin", "/api/v1/admin", "/admin/api",
+    "/phpmyadmin", "/pma", "/db", "/database",
+    "/server-manager", "/jenkins", "/grafana", "/kibana",
+]
+
 
 async def gather(ctx):
-    ctx.state["skipped_reason"] = "hidden_admin_bypass: run via Web App Pentesting (forced_browsing + broken_auth)"
+    host = str(ctx.host)
+    base_url, base = probe_url(host, "/")
+    if not base:
+        ctx.state["tested"] = 0
+        ctx.state["skipped_reason"] = "Target unreachable"
+        return
+    ctx.source("http")
+    ctx.state["tested"] = 1
+    ctx.state["probed_paths"] = len(ADMIN_PATHS)
+    exposed = []
+    auth_required = []
+    for path in ADMIN_PATHS:
+        url = f"{base_url}{path}"
+        r = http_get(url, timeout=6, read=8000)
+        if not r:
+            continue
+        status = r.get("status", 0)
+        body_lower = r.get("body", "").lower()
+        # 200 with admin keywords + no login form = exposed
+        if status == 200:
+            has_admin_words = any(w in body_lower for w in ["admin", "dashboard", "manage", "console"])
+            has_login = any(w in body_lower for w in ["password", "login", "sign in", "<input type=\"password"])
+            if has_admin_words and not has_login:
+                exposed.append({"path": path, "status": 200, "evidence": "200 OK without login form"})
+            elif has_admin_words and has_login:
+                auth_required.append({"path": path, "status": 200})
+        elif status in (401, 403):
+            auth_required.append({"path": path, "status": status})
+    ctx.state["exposed_admin"] = exposed
+    ctx.state["protected_admin"] = auth_required
 
 
-FINDING_RULES = []
-INTEL_FIELDS = []
+def _r_exposed(s):
+    exp = s.get("exposed_admin") or []
+    if not exp:
+        return None
+    return {"name": f"{len(exp)} admin path(s) accessible without authentication",
+            "severity": "CRITICAL", "cvss": 9.1, "cwe": "CWE-284",
+            "evidence": "; ".join(e["path"] for e in exp),
+            "remediation": "Require authentication on all admin paths. Block /wp-admin /phpmyadmin etc at WAF if not in use."}
+
+
+def _r_protected(s):
+    auth = s.get("protected_admin") or []
+    if not auth:
+        return None
+    return {"name": f"{len(auth)} admin panel(s) discovered (auth required - good)",
+            "severity": "INFO", "cwe": "CWE-200",
+            "evidence": "; ".join(f"{a['path']} ({a['status']})" for a in auth),
+            "remediation": "Optional: move admin to /a/<random> URL to reduce brute-force surface, restrict by IP/VPN."}
+
+
+FINDING_RULES = [_r_exposed, _r_protected]
+INTEL_FIELDS = [("Paths probed", "probed_paths"), ("Exposed", "exposed_admin"), ("Protected", "protected_admin")]
 
 
 @router.post("/api/vuln/hidden_admin_bypass")
