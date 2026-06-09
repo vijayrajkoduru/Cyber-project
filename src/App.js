@@ -20741,6 +20741,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [sevFilter, setSevFilter] = useState(null);
   const [expanded,  setExpanded]  = useState(null);
   const [searchTerm,setSearchTerm]= useState("");
+  // VL-TIER: selectedTiers controls which tiers get dispatched on Run All.
+  // Defaults to all tiers selected; user toggles tier chips to scope the
+  // scan. Null = run everything (initial state before tiers load).
+  const [selectedTiers, setSelectedTiers] = useState(null);
   const [activeTab, setActiveTab] = useState("auto");
   const [manualState, setManualState] = useState({});
   const [manualExpanded, setManualExpanded] = useState({});  // {testId: true} → show steps/tools/prereqs
@@ -20873,6 +20877,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           if (cancelled) return;
           if (Array.isArray(d.tiers) && d.tiers.length > 0) {
             setTiers(d.tiers);
+            // VL-TIER: initialize tier-select set to "all tiers selected"
+            // the first time tiers arrive. Don't reset if the user has
+            // already toggled chips (defensive — fetchTiers should only
+            // succeed once per module-mount cycle).
+            setSelectedTiers(prev => prev || new Set(d.tiers.map(t => t.id)));
             setTiersStatus("ready");
             return;
           }
@@ -20903,8 +20912,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     setResults({});
     setProgress({done:0, total: totalTools});
 
+    // VL-TIER: filter to selected tiers only. If user has unchecked some
+    // tier chips, only run those tiers; orchestrator gets `tiers:[...]`.
+    const _tiersToRun = selectedTiers
+      ? tiers.filter(t => selectedTiers.has(t.id))
+      : tiers;
     const all = [];
-    tiers.forEach(t => (t.tools || []).forEach(tool => all.push({tool, tier:t.id})));
+    _tiersToRun.forEach(t => (t.tools || []).forEach(tool => all.push({tool, tier:t.id})));
     const initial = {};
     all.forEach(x => { initial[x.tool] = {status:"queued", tier:x.tier, started:Date.now()}; });
     setResults(initial);
@@ -20926,6 +20940,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       const runBody = {target: _resolvedTarget || "n/a", concurrency: 16};
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
+      // VL-TIER: pass tiers:[ids] so orchestrator only dispatches those.
+      // Omit field when ALL tiers selected so backend takes its default
+      // "run everything" path (saves payload size + matches existing
+      // observed behaviour).
+      if (selectedTiers && _tiersToRun.length < tiers.length) {
+        runBody.tiers = _tiersToRun.map(t => t.id);
+      }
       // Advanced per-module inputs (image_ref / dockerfile_text / pod_spec_yaml
       // / kubeconfig / repo_url / api_spec_url). Only attach what's set + what
       // the module declares it accepts — scanners ignore extras.
@@ -21549,6 +21570,59 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </div>
       )}
 
+      {/* VL-TIER: tier-select chips. Always rendered when tiers loaded so
+          user can scope scan BEFORE clicking Run, plus jump-to-section
+          links the chip name to scroll to that section in the result list. */}
+      {activeTab === "auto" && tiers.length > 0 && selectedTiers && (
+        <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:8,
+                     flexWrap:"wrap", padding:"8px 10px",
+                     background:"#0b1220", border:"1px solid #1e293b", borderRadius:6}}>
+          <span style={{color:"#94a3b8", fontSize:10, fontWeight:700,
+                        textTransform:"uppercase", letterSpacing:1.2, marginRight:4}}>
+            Tiers ({selectedTiers.size}/{tiers.length}):
+          </span>
+          {tiers.map(t => {
+            const active = selectedTiers.has(t.id);
+            const m = t.id.match(/^tier(\d+)_(.+)$/);
+            const lbl = m ? `T${m[1]} ${m[2].replace(/_/g," ")}` : t.id;
+            return (
+              <button key={t.id}
+                onClick={() => {
+                  setSelectedTiers(prev => {
+                    const next = new Set(prev);
+                    if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
+                    return next;
+                  });
+                }}
+                onDoubleClick={() => {
+                  // scroll to that section if results have rendered
+                  const el = document.getElementById(`vl-tier-${t.id}`);
+                  if (el) el.scrollIntoView({behavior:"smooth", block:"start"});
+                }}
+                title={active
+                  ? `Click to skip this tier. Double-click to jump to section.`
+                  : `Click to include this tier in Run All.`}
+                style={{background: active ? color : "#1e293b",
+                        border: `1px solid ${active ? color : "#334155"}`,
+                        borderRadius:4, padding:"3px 9px",
+                        color: active ? "#fff" : "#94a3b8",
+                        fontSize:10, fontWeight:600, cursor:"pointer",
+                        textTransform:"capitalize"}}>
+                {lbl} <span style={{opacity:0.7}}>({t.count})</span>
+              </button>
+            );
+          })}
+          {selectedTiers.size < tiers.length && (
+            <button onClick={() => setSelectedTiers(new Set(tiers.map(t => t.id)))}
+              style={{background:"transparent", border:"1px solid #334155",
+                      borderRadius:4, padding:"3px 8px", color:"#94a3b8",
+                      fontSize:10, cursor:"pointer", marginLeft:"auto"}}>
+              select all
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Severity filter chips + tool-name search (auto tab only) */}
       {activeTab === "auto" && tiers.length > 0 && completedCount > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:12,
@@ -21626,7 +21700,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           if (filteredTools.length === 0 && (sevFilter || searchTerm)) return null;
           const tcolor = tierPalette[idx % tierPalette.length];
           return (
-            <div key={tier.id} style={{marginBottom:20}}>
+            <div key={tier.id} id={`vl-tier-${tier.id}`} style={{marginBottom:20, scrollMarginTop:80}}>
               {/* Section header — colored left bar + label + subtitle */}
               <div style={{borderLeft:`3px solid ${tcolor}`,
                             paddingLeft:14, paddingBottom:8, marginBottom:0}}>

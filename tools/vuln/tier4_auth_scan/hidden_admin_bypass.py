@@ -1,9 +1,15 @@
 """Hidden admin panel discovery - passive 200-without-auth detection. Self-contained.
-Strategy: probe common admin paths, flag ones returning 200 OK or 302-to-non-login."""
+Strategy: probe common admin paths, flag ones returning 200 OK or 302-to-non-login.
+
+VL-VERIFY: existing content-word gates ("admin"/"dashboard"/"manage"/"console"
+in body, no login form) already filter most SPA FPs, but SPA shells whose
+title contains "Dashboard" (e.g. analytics dashboards) can leak through.
+Belt-and-braces canary check ensures no SPA catch-all response is flagged.
+"""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async
+from tools.vuln._vuln_common import probe_url_async, http_get_async, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()
 
@@ -27,6 +33,12 @@ async def gather(ctx):
     ctx.source("http")
     ctx.state["tested"] = 1
     ctx.state["probed_paths"] = len(ADMIN_PATHS)
+    # VL-VERIFY canary — fired once so we can reject 200 responses that
+    # match the SPA shell verbatim, even if the shell happens to contain
+    # "dashboard" / "admin" words.
+    spa = await detect_spa_catchall(base_url)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
+    canary_body = spa.get("canary_body", "")
     exposed = []
     auth_protected = []   # 401/403 - confirmed auth required
     login_page = []       # 200 with login form - likely safe but verify
@@ -36,8 +48,12 @@ async def gather(ctx):
         if not r:
             continue
         status = r.get("status", 0)
-        body_lower = r.get("body", "").lower()
+        body = r.get("body", "")
+        body_lower = body.lower()
         if status == 200:
+            # Reject SPA catch-all — same body as the bogus canary path
+            if spa.get("is_spa") and is_same_as_canary(body, canary_body):
+                continue
             has_admin_words = any(w in body_lower for w in ["admin", "dashboard", "manage", "console"])
             has_login = any(w in body_lower for w in ["password", "login", "sign in", "<input type=\"password"])
             if has_admin_words and not has_login:
