@@ -13952,68 +13952,42 @@ function generateUniversalVLReport(opts) {
       }
     })();
 
-    // ── COMPLIANCE COVERAGE BADGE STRIP (top of report - single instance) ──
-    // Shows the customer at-a-glance which compliance frameworks this report
-    // can automatically map findings against. Pattern mirrors Nessus / Qualys /
-    // Vanta / Drata "Supports N+ frameworks" badge wall. Drawn with jsPDF
-    // primitives only - no external image dependency.
+    // ── COMPLIANCE COVERAGE BAR (top of report - single instance, plain text) ──
+    // Lists the frameworks this report's automated mapping pipeline ACTUALLY
+    // covers (verified against _cmpRules + _cmpCwe in the Compliance Mapping
+    // section below). No drawn logos / no third-party trademarks - just a
+    // clean text bar listing the standard names. Two reasons:
+    //   1. Real org logos (PCI Council, AICPA SOC 2, ISO, HHS HIPAA, etc.) are
+    //      trademarked - embedding them without licensing carries IP risk.
+    //   2. Customer feedback (2026-06-09): the badge wall was visually noisy
+    //      and listed frameworks (HITRUST / COBIT / PSD2) that have no actual
+    //      mapping rule yet. Trimmed to only what _cmpRules genuinely supports.
     {
-      const _BADGES = [
-        {ac:"OWASP",  name:"OWASP Top 10",   color:[220,38,38]},
-        {ac:"PCI",    name:"PCI DSS 4.0",    color:[234,88,12]},
-        {ac:"NIST",   name:"NIST 800-53",    color:[13,148,136]},
-        {ac:"CSF",    name:"NIST CSF 2.0",   color:[20,184,166]},
-        {ac:"ISO",    name:"ISO 27001",      color:[124,58,237]},
-        {ac:"SOC",    name:"SOC 2 Type II",  color:[16,163,74]},
-        {ac:"HIPAA",  name:"HIPAA",          color:[37,99,235]},
-        {ac:"GDPR",   name:"GDPR Art.32",    color:[217,119,6]},
-        {ac:"CIS",    name:"CIS Controls v8",color:[30,64,175]},
-        {ac:"FedRAMP",name:"FedRAMP",        color:[79,70,229]},
-        {ac:"SLSA",   name:"SLSA L1-L3",     color:[5,150,105]},
-        {ac:"CISA",   name:"CISA KEV BOD",   color:[220,38,38]},
-        {ac:"FIPS",   name:"FIPS 140-3",     color:[55,65,81]},
-        {ac:"AI RMF", name:"NIST AI RMF",    color:[219,39,119]},
-        {ac:"42001",  name:"ISO/IEC 42001",  color:[147,51,234]},
-        {ac:"IEC",    name:"IEC 62443",      color:[75,85,99]},
-        {ac:"AWS",    name:"AWS WAF / IAM",  color:[255,153,0]},
-        {ac:"HITRUST",name:"HITRUST CSF",    color:[124,58,237]},
-        {ac:"COBIT",  name:"COBIT 2019",     color:[59,130,246]},
-        {ac:"PSD2",   name:"PSD2 RTS",       color:[34,197,94]},
+      const _COVERS = [
+        "OWASP Top 10", "OWASP API Top 10", "OWASP LLM Top 10",
+        "PCI DSS 4.0", "HIPAA", "SOC 2", "GDPR Art.32",
+        "ISO 27001", "ISO/IEC 42001",
+        "NIST SP 800-53", "NIST CSF 2.0", "NIST AI RMF", "NIST SSDF",
+        "CIS Controls v8", "FedRAMP", "FIPS 140-3",
+        "CISA KEV / BOD 22-01", "SLSA L1-L3", "IEC 62443", "AWS WAF / IAM",
       ];
-      const _per   = 5;
-      const _rows  = Math.ceil(_BADGES.length / _per);
-      const _cellW = contentW / _per;
-      const _R     = 7.0;
-      const _rowH  = 26;
-      const _totH  = _rows * _rowH + 8;
-      chk(_totH + 4);
-      fillR(margin, y, contentW, _totH, [248,250,252]);
-      doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor.apply(doc, GRAY);
-      doc.text("REPORT COVERAGE - " + _BADGES.length + " compliance frameworks", margin + 4, y + 5);
-      doc.setFont("Arial","italic"); doc.setFontSize(6.3); doc.setTextColor.apply(doc, GRAY);
-      doc.text("Findings in this report are mapped automatically against the controls below. See Compliance Mapping section for per-finding detail.", margin + 4, y + 9);
-      const _startY = y + 14;
-      _BADGES.forEach(function(b, idx){
-        const _row = Math.floor(idx / _per);
-        const _col = idx % _per;
-        const _cx  = margin + _col * _cellW + _cellW / 2;
-        const _cy  = _startY + _row * _rowH + _R;
-        doc.setFillColor.apply(doc, b.color);
-        doc.circle(_cx, _cy, _R, 'F');
-        doc.setDrawColor(255, 255, 255);
-        doc.setLineWidth(0.45);
-        doc.circle(_cx, _cy, _R - 1.3, 'S');
-        const _fontPx = b.ac.length <= 3 ? 9 : b.ac.length <= 4 ? 7.5 : b.ac.length <= 5 ? 6.5 : 5.5;
-        doc.setFont("Arial","bold"); doc.setFontSize(_fontPx);
-        doc.setTextColor(255, 255, 255);
-        const _acW = doc.getTextWidth(b.ac);
-        doc.text(b.ac, _cx - _acW / 2, _cy + _fontPx * 0.32);
-        doc.setFont("Arial","normal"); doc.setFontSize(6.0);
-        doc.setTextColor.apply(doc, DARK);
-        const _nmW = doc.getTextWidth(b.name);
-        doc.text(b.name, _cx - _nmW / 2, _cy + _R + 5);
+      const _barH = 14;
+      chk(_barH + 4);
+      fillR(margin, y, contentW, _barH, [248,250,252]);
+      fillR(margin, y, 3, _barH, [30, 64, 175]);    // accent strip
+      doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor.apply(doc, [30, 64, 175]);
+      doc.text("REPORT COVERAGE", margin + 6, y + 5);
+      doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor.apply(doc, GRAY);
+      doc.text("(" + _COVERS.length + " frameworks - see Compliance Mapping section for per-finding control mapping)",
+                margin + 40, y + 5);
+      // Two-line list of framework names, separated by " - "
+      doc.setFont("Arial","normal"); doc.setFontSize(7.0); doc.setTextColor.apply(doc, DARK);
+      const _joined = _COVERS.join("  -  ");
+      const _bodyLines = doc.splitTextToSize(_joined, contentW - 12).slice(0, 2);
+      _bodyLines.forEach(function(ln, li){
+        doc.text(ln, margin + 6, y + 10 + (li * 3.6));
       });
-      y += _totH + 4;
+      y += _barH + 4;
     }
 
     chk(50); y = sHead("Engagement Scope", y);
@@ -14504,74 +14478,17 @@ function generateUniversalVLReport(opts) {
         var _cn = Number(f.cvss) || 0;
         var cv = (_cn > 0 ? _cn : (_cm[sev]||0)).toFixed(1);
         var cw = (String(f.cwe||"").trim() || "-");
-        // FRAMEWORK COLOR PILLS — render each compliance framework (OWASP / PCI /
-        // NIST / ISO / SOC2 / HIPAA / GDPR / CIS / CISA / FedRAMP / SLSA / AWS /
-        // FIPS / HITRUST / IEC / KEV) as a small colored letter badge before
-        // its control id. Matches Nessus / Qualys / Tenable.io reports which
-        // colour-code each framework so the auditor can recognise it at a glance.
-        var _FW_COLORS = {
-          OWASP:[220,38,38], PCI:[234,88,12], HIPAA:[37,99,235],
-          SOC2:[16,163,74], ISO:[124,58,237], NIST:[13,148,136],
-          CIS:[30,64,175], GDPR:[217,119,6], FedRAMP:[79,70,229],
-          SLSA:[5,150,105], CISA:[220,38,38], AWS:[255,153,0],
-          FIPS:[55,65,81], HITRUST:[124,58,237], IEC:[75,85,99],
-          KEV:[220,38,38], BOD:[220,38,38], "ISO/IEC":[124,58,237],
-        };
-        var _FW_DEFAULT = [100,116,139];
-        var _renderCompliancePills = function(cmpText, startX, baseY, maxWidth) {
-          // Special-case unmapped row: plain italic gray phrase.
-          if (cmpText.indexOf("unmapped") !== -1) {
-            doc.setFont("Arial","italic"); doc.setFontSize(6.3); doc.setTextColor.apply(doc, GRAY);
-            doc.text(cmpText, startX, baseY);
-            return 1;
-          }
-          var parts = cmpText.split(" - ");
-          var curX = startX, lineN = 0;
-          var endX = startX + maxWidth;
-          var lineH = 4.0;
-          for (var pi = 0; pi < parts.length; pi++) {
-            var part = parts[pi];
-            // Extract leading framework acronym + remaining control text.
-            var m = part.match(/^([A-Z][A-Z0-9\/]+)\s*(.*)$/);
-            var fwk, ctrl;
-            if (m) { fwk = m[1]; ctrl = m[2] || ""; }
-            else   { fwk = part.split(/\s/)[0].toUpperCase().substring(0,6); ctrl = part.substring(fwk.length + 1); }
-            doc.setFont("Arial","bold"); doc.setFontSize(5.2);
-            var pillW = Math.max(6, doc.getTextWidth(fwk) + 2);
-            doc.setFont("Arial","normal"); doc.setFontSize(5.8);
-            var ctrlW = ctrl ? doc.getTextWidth(ctrl) + 1.5 : 0;
-            var partW = pillW + 0.8 + ctrlW + (pi < parts.length - 1 ? 1.5 : 0);
-            // Wrap to next line if doesn't fit + still have lines budget
-            if (curX + partW > endX) {
-              if (lineN >= 1) {
-                // No more lines — show "+N more" hint.
-                doc.setFont("Arial","normal"); doc.setFontSize(5.8); doc.setTextColor.apply(doc, GRAY);
-                doc.text("+" + (parts.length - pi) + " more", curX, baseY + lineN * lineH);
-                return lineN + 1;
-              }
-              curX = startX; lineN += 1;
-            }
-            var color = _FW_COLORS[fwk] || _FW_DEFAULT;
-            // Pill
-            rrect(curX, baseY + lineN * lineH - 3.0, pillW, 3.8, 0.5, color);
-            doc.setFont("Arial","bold"); doc.setFontSize(5.2); doc.setTextColor(255,255,255);
-            doc.text(fwk, curX + 1, baseY + lineN * lineH - 0.3);
-            curX += pillW + 0.8;
-            // Control id
-            if (ctrl) {
-              doc.setFont("Arial","normal"); doc.setFontSize(5.8); doc.setTextColor.apply(doc, DARK);
-              doc.text(ctrl, curX, baseY + lineN * lineH);
-              curX += ctrlW;
-            }
-          }
-          return lineN + 1;
-        };
-        // Compute height: count lines compliance pills will use vs name lines
+        // Per-finding compliance: plain wrapped text (auditor reads left-to-right).
+        // Reverted from coloured framework pills (commit dc224eca) per user
+        // 2026-06-09 - pills on every row were visually noisy. The colour-coded
+        // identification of frameworks lives in the top-of-report coverage bar.
+        var cmpLines = doc.splitTextToSize(ob.cmp, 58).slice(0, 2);
         var nmLines  = doc.splitTextToSize(ob.nm, 66).slice(0, 2);
-        // Reserve up to 2 lines for compliance pills (matches existing layout)
-        var _rh = Math.max(6.5, 2.5 + 3.6 * Math.max(2, nmLines.length));
+        var _rh = Math.max(6.5, 2.5 + 3.6 * Math.max(cmpLines.length, nmLines.length));
         chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
-        _renderCompliancePills(ob.cmp, margin + 3, y + 4.6, 60);
+        cmpLines.forEach(function(ln, li){
+          txt(ln, margin + 3, y + 4.6 + (li * 3.6), 6.8, DARK);
+        });
         nmLines.forEach(function(ln, li){
           txt(ln, margin + 67, y + 4.6 + (li * 3.6), 7, GRAY);
         });
