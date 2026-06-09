@@ -14437,13 +14437,74 @@ function generateUniversalVLReport(opts) {
         var _cn = Number(f.cvss) || 0;
         var cv = (_cn > 0 ? _cn : (_cm[sev]||0)).toFixed(1);
         var cw = (String(f.cwe||"").trim() || "-");
-        var cmpLines = doc.splitTextToSize(ob.cmp, 58).slice(0, 2);
+        // FRAMEWORK COLOR PILLS — render each compliance framework (OWASP / PCI /
+        // NIST / ISO / SOC2 / HIPAA / GDPR / CIS / CISA / FedRAMP / SLSA / AWS /
+        // FIPS / HITRUST / IEC / KEV) as a small colored letter badge before
+        // its control id. Matches Nessus / Qualys / Tenable.io reports which
+        // colour-code each framework so the auditor can recognise it at a glance.
+        var _FW_COLORS = {
+          OWASP:[220,38,38], PCI:[234,88,12], HIPAA:[37,99,235],
+          SOC2:[16,163,74], ISO:[124,58,237], NIST:[13,148,136],
+          CIS:[30,64,175], GDPR:[217,119,6], FedRAMP:[79,70,229],
+          SLSA:[5,150,105], CISA:[220,38,38], AWS:[255,153,0],
+          FIPS:[55,65,81], HITRUST:[124,58,237], IEC:[75,85,99],
+          KEV:[220,38,38], BOD:[220,38,38], "ISO/IEC":[124,58,237],
+        };
+        var _FW_DEFAULT = [100,116,139];
+        var _renderCompliancePills = function(cmpText, startX, baseY, maxWidth) {
+          // Special-case unmapped row: plain italic gray phrase.
+          if (cmpText.indexOf("unmapped") !== -1) {
+            doc.setFont("Arial","italic"); doc.setFontSize(6.3); doc.setTextColor.apply(doc, GRAY);
+            doc.text(cmpText, startX, baseY);
+            return 1;
+          }
+          var parts = cmpText.split(" - ");
+          var curX = startX, lineN = 0;
+          var endX = startX + maxWidth;
+          var lineH = 4.0;
+          for (var pi = 0; pi < parts.length; pi++) {
+            var part = parts[pi];
+            // Extract leading framework acronym + remaining control text.
+            var m = part.match(/^([A-Z][A-Z0-9\/]+)\s*(.*)$/);
+            var fwk, ctrl;
+            if (m) { fwk = m[1]; ctrl = m[2] || ""; }
+            else   { fwk = part.split(/\s/)[0].toUpperCase().substring(0,6); ctrl = part.substring(fwk.length + 1); }
+            doc.setFont("Arial","bold"); doc.setFontSize(5.2);
+            var pillW = Math.max(6, doc.getTextWidth(fwk) + 2);
+            doc.setFont("Arial","normal"); doc.setFontSize(5.8);
+            var ctrlW = ctrl ? doc.getTextWidth(ctrl) + 1.5 : 0;
+            var partW = pillW + 0.8 + ctrlW + (pi < parts.length - 1 ? 1.5 : 0);
+            // Wrap to next line if doesn't fit + still have lines budget
+            if (curX + partW > endX) {
+              if (lineN >= 1) {
+                // No more lines — show "+N more" hint.
+                doc.setFont("Arial","normal"); doc.setFontSize(5.8); doc.setTextColor.apply(doc, GRAY);
+                doc.text("+" + (parts.length - pi) + " more", curX, baseY + lineN * lineH);
+                return lineN + 1;
+              }
+              curX = startX; lineN += 1;
+            }
+            var color = _FW_COLORS[fwk] || _FW_DEFAULT;
+            // Pill
+            rrect(curX, baseY + lineN * lineH - 3.0, pillW, 3.8, 0.5, color);
+            doc.setFont("Arial","bold"); doc.setFontSize(5.2); doc.setTextColor(255,255,255);
+            doc.text(fwk, curX + 1, baseY + lineN * lineH - 0.3);
+            curX += pillW + 0.8;
+            // Control id
+            if (ctrl) {
+              doc.setFont("Arial","normal"); doc.setFontSize(5.8); doc.setTextColor.apply(doc, DARK);
+              doc.text(ctrl, curX, baseY + lineN * lineH);
+              curX += ctrlW;
+            }
+          }
+          return lineN + 1;
+        };
+        // Compute height: count lines compliance pills will use vs name lines
         var nmLines  = doc.splitTextToSize(ob.nm, 66).slice(0, 2);
-        var _rh = Math.max(6.5, 2.5 + 3.6 * Math.max(cmpLines.length, nmLines.length));
+        // Reserve up to 2 lines for compliance pills (matches existing layout)
+        var _rh = Math.max(6.5, 2.5 + 3.6 * Math.max(2, nmLines.length));
         chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
-        cmpLines.forEach(function(ln, li){
-          txt(ln, margin + 3, y + 4.6 + (li * 3.6), 6.8, DARK);
-        });
+        _renderCompliancePills(ob.cmp, margin + 3, y + 4.6, 60);
         nmLines.forEach(function(ln, li){
           txt(ln, margin + 67, y + 4.6 + (li * 3.6), 7, GRAY);
         });
@@ -19578,6 +19639,26 @@ const MODULE_ADVANCED_INPUTS = {
   supply_chain:  ["repo_url"],
   apisec:        ["api_spec_url"],
   cloud:         ["repo_url"],   // IaC scans (tfsec / checkov) need repo with .tf files
+  // Vuln has scanners that benefit from all four (tier8_container/dockerfile_hadolint
+  // needs Dockerfile, tier9_iac/k8s_manifest_scan needs pod YAML,
+  // tier10_cloud_native/kube_hunter_scan needs kubeconfig,
+  // tier7_sca/* + tier9_iac/* need repo_url with source / IaC files).
+  vuln:          ["dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"],
+};
+
+// Per-module example targets shown as clickable "Try:" chips below the target
+// input. Pre-vetted public scan-friendly targets that a customer can use to
+// test a module without scanning their own infra first.
+const MODULE_TARGET_EXAMPLES = {
+  vuln:    ["scanme.nmap.org", "testphp.vulnweb.com", "https://demo.testfire.net"],
+  recon:   ["scanme.nmap.org", "example.com", "github.com"],
+  webapp:  ["https://testphp.vulnweb.com", "http://demo.testfire.net", "https://juice-shop.herokuapp.com"],
+  osint:   ["example.com", "user@example.com", "@torvalds"],
+  apisec:  ["https://petstore.swagger.io/v2", "https://api.restful-api.dev"],
+  network: ["scanme.nmap.org", "192.168.1.0/24"],
+  password:["scanme.nmap.org:22"],
+  cloud:   ["example.com", "https://github.com/aws-samples/aws-iam-permissions-guardrails"],
+  ai_llm:  ["https://api.openai.com", "https://api.anthropic.com"],
 };
 
 // MODULE_OPTIONS_INPUTS — fields that go into the {options: {}} dict of the
@@ -20335,6 +20416,26 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           PDF
         </button>
       </div>
+
+      {/* Example targets — clickable chips. Lets the customer try the module
+          on a safe public test target without having to scan their own infra. */}
+      {!_containerMode && (MODULE_TARGET_EXAMPLES[moduleKey] || []).length > 0 && (
+        <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap"}}>
+          <span style={{fontSize:10, color:"#64748b", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
+          {(MODULE_TARGET_EXAMPLES[moduleKey] || []).map((ex, idx) => (
+            <button key={idx}
+              onClick={() => setTarget(ex)}
+              disabled={running}
+              title={`Use ${ex} as the target (safe public test target)`}
+              style={{background:"#0c1424", border:"1px solid #1e3a8a", color:"#93c5fd",
+                       borderRadius:12, padding:"3px 10px", fontSize:11,
+                       fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer",
+                       opacity: running ? 0.5 : 1}}>
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Per-module hint + optional auth toggle */}
       <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:14,
