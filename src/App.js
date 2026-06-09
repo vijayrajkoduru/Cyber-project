@@ -13975,18 +13975,20 @@ function generateUniversalVLReport(opts) {
     //      and listed frameworks (HITRUST / COBIT / PSD2) that have no actual
     //      mapping rule yet. Trimmed to only what _cmpRules genuinely supports.
     {
+      // Shortened labels so the 20-framework list fits cleanly on 2 lines
+      // (no orphan word on a 3rd line). User feedback 2026-06-09.
       const _COVERS = [
-        "OWASP Top 10", "OWASP API Top 10", "OWASP LLM Top 10",
+        "OWASP Top 10", "OWASP API 10", "OWASP LLM 10",
         "PCI DSS 4.0", "HIPAA", "SOC 2", "GDPR Art.32",
-        "ISO 27001", "ISO/IEC 42001",
-        "NIST SP 800-53", "NIST CSF 2.0", "NIST AI RMF", "NIST SSDF",
-        "CIS Controls v8", "FedRAMP", "FIPS 140-3",
-        "CISA KEV / BOD 22-01", "SLSA L1-L3", "IEC 62443", "AWS WAF / IAM",
+        "ISO 27001", "ISO 42001",
+        "NIST 800-53", "NIST CSF 2.0", "NIST AI RMF", "NIST SSDF",
+        "CIS v8", "FedRAMP", "FIPS 140-3",
+        "CISA KEV/BOD 22-01", "SLSA L1-L3", "IEC 62443", "AWS WAF/IAM",
       ];
       // Wrap framework list; grow bar to fit every line so the last framework
       // is never clipped (per pdf_industry_standard.md hard rule).
       doc.setFont("Arial","normal"); doc.setFontSize(7.0);
-      const _joined = _COVERS.join("  -  ");
+      const _joined = _COVERS.join(" | ");
       const _bodyLines = doc.splitTextToSize(_joined, contentW - 12);
       const _barH = 7 + (_bodyLines.length * 3.6) + 2;
       chk(_barH + 4);
@@ -14006,22 +14008,18 @@ function generateUniversalVLReport(opts) {
 
     chk(50); y = sHead("Engagement Scope", y);
     y = tHead(["FIELD","VALUE"], [45,135], y);
-    const _yn = (b) => b ? "provided" : "(empty)";
     const _scope = [
       ["Target (as supplied)", target || "(none)"],
     ];
     if (_resolvedImage && _resolvedImage !== target) {
       _scope.push(["Image (as resolved)", _resolvedImage]);
     }
-    // Auditor-facing input traceability — exposes the FULL input surface
-    // the scan actually exercised. Findings later in the report cite these
-    // inputs by name so the reviewer can trace each finding to its source.
-    _scope.push(
-      ["Dockerfile input", _yn(_inputUsed.dockerfile)],
-      ["Pod / Deployment YAML input", _yn(_inputUsed.pod_spec)],
-      ["Kubeconfig input", _yn(_inputUsed.kubeconfig)],
-      ["Repository URL input", _yn(_inputUsed.repo_url)],
-    );
+    // Only show input rows that were actually provided — empty rows are
+    // noise that doesn't help the auditor (pdf_industry_standard.md gap 10).
+    if (_inputUsed.dockerfile) _scope.push(["Dockerfile input", "provided"]);
+    if (_inputUsed.pod_spec)   _scope.push(["Pod / Deployment YAML input", "provided"]);
+    if (_inputUsed.kubeconfig) _scope.push(["Kubeconfig input", "provided"]);
+    if (_inputUsed.repo_url)   _scope.push(["Repository URL input", "provided"]);
     _scope.push(
       ["Scan Date", date],
       ["Methodology", `VulnusLab ${moduleLabel} - ${Object.keys(r).length} scanners`],
@@ -14508,10 +14506,10 @@ function generateUniversalVLReport(opts) {
         nmLines.forEach(function(ln, li){
           txt(ln, margin + 67, y + 4.6 + (li * 3.6), 7, GRAY);
         });
-        rrect(margin + 139, y + 1.4, 18, 4.8, 1, sc);
-        txt(sev, margin + 148, y + 4.7, 6, WHITE, true, "center");
-        txt(cv, margin + 160, y + 4.6, 9, sc, true);
-        txt(cw, margin + 175, y + 4.6, 7.5, DARK, true);
+        rrect(margin + 134, y + 1.4, 18, 4.8, 1, sc);
+        txt(sev, margin + 143, y + 4.7, 6, WHITE, true, "center");
+        txt(cv, margin + 156, y + 4.6, 9, sc, true);
+        txt(cw, margin + 168, y + 4.6, 7.5, DARK, true);
         y += _rh;
       });
       y += 6;
@@ -14724,11 +14722,9 @@ function generateUniversalVLReport(opts) {
         // Reproduce hint
         const _repro = _reproduce(f, x);
         txt("Reproduce: " + _repro, margin + 3, y + 11.2, 6.1, [55,65,81]);
-        // KEV/EPSS badge top-right corner if applicable
-        if (x.kev) {
-          rrect(margin + contentW - 22, y + 1.4, 20, 3.6, 1, [220,38,38]);
-          txt("KEV", margin + contentW - 12, y + 4.0, 5.5, WHITE, true, "center");
-        }
+        // KEV indicator: shown as text in the meta line ("CISA KEV") so the
+        // top-right corner chip would just double up and overlap the CWE column.
+        // Kept the meta-line text only (pdf_industry_standard.md gap 9).
         y += 12.5;
       });
       y += 6;
