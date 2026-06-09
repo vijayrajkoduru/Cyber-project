@@ -1,18 +1,38 @@
-"""Robots + Sitemap v2 — VL-FORGE."""
+"""Robots + Sitemap v2 — VL-FORGE.
+
+VL-VERIFY: SPA catch-all returns 200+index.html for every path. Naive
+robots.txt detection would report "0 disallow rules" as INFO even though
+the file doesn't exist. Reject responses matching the SPA canary AND
+require valid file markers (User-agent / Disallow for robots.txt;
+<urlset> / <loc> for sitemap.xml).
+"""
 import asyncio, requests, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import ScanContext, run_scanner
+from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router=APIRouter()
 def _g(u):
     try: return requests.get(u,timeout=8,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
     except: return None
+_ROBOTS_RX=re.compile(r"^\s*(User-agent|Allow|Disallow|Sitemap)\s*:",re.I|re.M)
+_SITEMAP_RX=re.compile(r"<(urlset|sitemapindex|loc)[\s>]",re.I)
+def _is_real_robots(body): return bool(_ROBOTS_RX.search(body or ""))
+def _is_real_sitemap(body): return bool(_SITEMAP_RX.search(body or ""))
 async def gather(ctx):
     base=web_url(ctx.host).rstrip("/")
+    spa = await asyncio.to_thread(detect_spa_catchall_sync, base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
     robots,sitemap=await asyncio.gather(
         asyncio.to_thread(_g,base+"/robots.txt"),
         asyncio.to_thread(_g,base+"/sitemap.xml"))
-    if robots and robots.status_code==200:
+    def _real(r, validator):
+        if not r or r.status_code!=200: return False
+        body = r.text or ""
+        if spa.get("is_spa") and is_same_as_canary(body, spa.get("canary_body","")):
+            return False
+        return validator(body)
+    if _real(robots, _is_real_robots):
         ctx.source("robots.txt")
         ctx.state["robots_txt"]=robots.text[:5000]
         disallows=re.findall(r"Disallow:\s*(\S+)",robots.text,re.I)
@@ -20,7 +40,7 @@ async def gather(ctx):
         sitemaps=re.findall(r"Sitemap:\s*(\S+)",robots.text,re.I)
         ctx.state.update({"disallow_paths":disallows[:50],"allow_paths":allows[:30],
             "sitemap_urls":sitemaps,"disallow_count":len(disallows)})
-    if sitemap and sitemap.status_code==200:
+    if _real(sitemap, _is_real_sitemap):
         ctx.source("sitemap.xml")
         urls=re.findall(r"<loc>([^<]+)</loc>",sitemap.text[:50000])
         ctx.state["sitemap_xml_urls"]=urls[:30]

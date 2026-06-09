@@ -1,25 +1,43 @@
-"""Sourcemap Check v2 — VL-FORGE. Probe .map files."""
+"""Sourcemap Check v2 — VL-FORGE. Probe .map files.
+
+VL-VERIFY: SPA shells can match the `"version"` substring (some React
+manifests, MUI themes, etc.), so the existing content gate isn't enough.
+Add SPA canary check + require sourcemap-shaped JSON (mappings field) to
+fully eliminate FPs.
+"""
 import asyncio, requests, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import ScanContext, run_scanner
+from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router=APIRouter()
 _PATHS=["/static/js/main.js.map","/static/js/bundle.js.map","/js/app.js.map","/dist/main.js.map",
     "/build/static/js/main.js.map","/assets/main.js.map","/app.bundle.js.map","/vendor.js.map"]
 def _g(u):
     try: return requests.get(u,timeout=6,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
     except: return None
+def _is_real_sourcemap(body):
+    """Real sourcemaps are JSON with 'mappings' field per Source Map Spec v3."""
+    if not body: return False
+    head = body[:2000]
+    return '"mappings"' in head and '"version"' in head
 async def gather(ctx):
     base=web_url(ctx.host).rstrip("/")
+    spa = await asyncio.to_thread(detect_spa_catchall_sync, base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
     # Probe common paths
     sem=asyncio.Semaphore(10)
     async def one(p):
         async with sem:
             r=await asyncio.to_thread(_g,base+p)
-            if r and r.status_code==200:
-                # Validate it's a real sourcemap
-                if "sourceMappingURL" in (r.text or "")[:500] or '"version"' in (r.text or "")[:200]:
-                    return {"path":p,"size":len(r.content)}
+            if not r or r.status_code!=200: return None
+            body = r.text or ""
+            if spa.get("is_spa") and is_same_as_canary(body, spa.get("canary_body","")):
+                return None
+            # Real sourcemap = JSON with mappings + version fields.
+            # sourceMappingURL inside the body also OK (rare inline case).
+            if _is_real_sourcemap(body) or "sourceMappingURL" in body[:500]:
+                return {"path":p,"size":len(r.content)}
             return None
     results=await asyncio.gather(*[one(p) for p in _PATHS])
     found=[r for r in results if r]
