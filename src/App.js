@@ -3552,26 +3552,48 @@ function WebAppModule(props) {
       };
     }
 
+    // Migrated 2026-06-09: Pentest now uses the unified generateUniversalVLReport
+    // along with all other modules. The legacy generatePDF function still
+    // exists but is no longer called. Will be deleted once verified in prod.
+    // Branding (companyName / reporterName / customLogo) flows through pdfConfig
+    // for Universal to surface in the Document Control section.
+    generateUniversalVLReport({
+      target,
+      allResults: allResults || {},
+      authenticated: false,
+      date: (cfg.date ? cfg.date + " " : "") + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+      pdfConfig: {
+        ...(cfg || {}),
+        companyName:  cfg.companyName  || "VulnusLab",
+        reporterName: (cfg.reporterName && cfg.reporterName !== "Security Analyst") ? cfg.reporterName : "VulnusLab Automated Pentest",
+        reporterRole: (cfg.reporterRole && cfg.reporterRole !== "Penetration Tester") ? cfg.reporterRole : "Security Assessment Engine - vulnuslab.com",
+        customLogo:   cfg.customLogo   || null,
+        template:     cfg.template     || "standard",
+      },
+      moduleKey:   "webapp",
+      moduleLabel: "Web Application Pentest",
+      moduleTitle: "PENETRATION TEST REPORT",
+      moduleSubtitle: "Web Application Security Assessment",
+      playbookPath: "03_webapp.md",
+      methodology: [
+        "Web application testing follows OWASP Web Security Testing Guide (WSTG) v4.2 + OWASP Top 10 (2021).",
+        "Each scanner targets a specific vulnerability class (injection, auth, sensitive data, broken access control, etc.) using context-aware payloads with zero-FP confirmation.",
+        "Every finding has been actively triggered and re-confirmed.",
+      ],
+    });
+    // Legacy code below kept commented for one cycle in case rollback is needed.
+    /*
     generatePDF({
       target, riskScore, riskLabel,
       remediation: _remediation,
-      // VL-FORGE: per-tier coverage matrix (Discovery / Recon / Injection / Auth / File / Network / Access / Framework)
       webappCoverage: computeWebappCoverage(allResults),
       companyName:  cfg.companyName  || "VulnusLab",
-      // Upgrade stale defaults from older app versions automatically — if user has
-      // the OLD generic "Security Analyst / Penetration Tester" cached, replace with
-      // the new branded defaults. Custom values set by the user are preserved.
       reporterName: (cfg.reporterName && cfg.reporterName !== "Security Analyst") ? cfg.reporterName : "VulnusLab Automated Pentest",
       reporterRole: (cfg.reporterRole && cfg.reporterRole !== "Penetration Tester") ? cfg.reporterRole : "Security Assessment Engine · vulnuslab.com",
       customLogo:   cfg.customLogo   || null,
       template:     cfg.template     || "standard",
       date: (cfg.date ? cfg.date + " " : "") + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
-      summary: {
-        critical: allFindings.filter(f=>f.severity==="CRITICAL").length,
-        high:     allFindings.filter(f=>f.severity==="HIGH").length,
-        medium:   allFindings.filter(f=>f.severity==="MEDIUM").length,
-        low:      allFindings.filter(f=>f.severity==="LOW").length,
-      },
+      summary: { critical: allFindings.filter(f=>f.severity==="CRITICAL").length, high: allFindings.filter(f=>f.severity==="HIGH").length, medium: allFindings.filter(f=>f.severity==="MEDIUM").length, low: allFindings.filter(f=>f.severity==="LOW").length },
       findings:  allFindings,
       ports:     allResults["nmap"]     ? allResults["nmap"].ports        : [],
       gobuster:  allResults["gobuster"] ? allResults["gobuster"].discovered: [],
@@ -3634,6 +3656,7 @@ function WebAppModule(props) {
       smtp:             allResults["smtp"]             || null,
       snmp:             allResults["snmp"]             || null,
     });
+    */ // end of legacy generatePDF block kept commented for rollback
   };
 
   // Aggregate findings ONCE — same logic the PDF uses — so CSV / JSON / SARIF
@@ -12806,12 +12829,26 @@ function ReconModule({token, onRunningChange, activeSections}) {
   };
 
   // ── PDF export ─────────────────────────────────────────────────
+  // Migrated 2026-06-09: Recon now uses the unified generateUniversalVLReport
+  // along with all other modules. Same chrome, same OWASP grade, same Tools
+  // Used + Compliance Coverage. The legacy generateReconReport function still
+  // exists but is no longer called. Will be deleted once verified in prod.
   const dlReconPDF = () => setShowPDFModal(true);
-  const _generateReconPDFWithCfg = (cfg) => generateReconReport({
-    target, allResults,
+  const _generateReconPDFWithCfg = (cfg) => generateUniversalVLReport({
+    target, allResults: allResults || {},
     authenticated: !!(authCookie||authBearer),
     date: (cfg && cfg.date) || (new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})+" "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})),
     pdfConfig: cfg || {},
+    moduleKey: "recon",
+    moduleLabel: "Reconnaissance",
+    moduleTitle: "RECONNAISSANCE REPORT",
+    moduleSubtitle: "Information Gathering & OSINT Assessment",
+    playbookPath: "01_recon.md",
+    methodology: [
+      "Reconnaissance follows PTES Intelligence Gathering + NIST SP 800-115 + MITRE PRE-ATT&CK.",
+      "Each scanner targets a specific discovery surface with minimal target impact.",
+      "No exploitation is attempted at the recon stage - findings are passive intel.",
+    ],
   });
 
   return (
