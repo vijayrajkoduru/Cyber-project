@@ -39,8 +39,11 @@ def _r_kev(s):
             "remediation": "Confirm running version; if affected, patch immediately (CISA KEV / BOD 22-01)."}
 def _r_clean(s):
     if (s.get("tested") or 0) < 1 or (s.get("matches") or []): return None
+    techs = ', '.join(s.get('techs') or []) or 'none'
+    kev_size = s.get('kev_size')
+    tail = f"; checked vs {kev_size} KEV entries" if isinstance(kev_size, int) and kev_size > 0 else "; checked against the CISA KEV catalog"
     return {"name": "No detected technology matches the CISA KEV catalog", "severity": "POSITIVE",
-            "evidence": f"Detected: {', '.join(s.get('techs') or []) or 'none'}; checked vs {s.get('kev_size','?')} KEV entries."}
+            "evidence": f"Detected: {techs}{tail}."}
 FINDING_RULES = [_r_kev, _r_clean]; INTEL_FIELDS = [("Detected technologies", "techs")]
 @router.post("/api/vuln/cisa_kev_crossref")
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
