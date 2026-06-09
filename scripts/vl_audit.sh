@@ -29,13 +29,24 @@ while [[ "$#" -gt 0 ]]; do
 done
 MODULES="${MODULES_ARG:-$MODULES_DEFAULT}"
 
-# Resolve token
+# Resolve token. Strip whitespace/newlines/CR aggressively so a paste that
+# accidentally included line breaks doesn't corrupt the Authorization header
+# (which produced "Invalid HTTP request received" responses 2026-06-09).
 if [[ -z "${VL_TOKEN:-}" ]] && [[ -f .env ]]; then
   VL_TOKEN="$(grep -m1 '^VL_TOKEN=' .env | cut -d= -f2- || true)"
 fi
+VL_TOKEN="$(printf %s "${VL_TOKEN:-}" | tr -d '\n\r\t ')"
 if [[ -z "${VL_TOKEN:-}" ]]; then
   echo "VL-AUDIT: VL_TOKEN not set in env or .env — aborting." >&2
   echo "         Set VL_TOKEN=<your-jwt> in .env or export VL_TOKEN=..." >&2
+  exit 1
+fi
+# Sanity check: a real JWT is base64.base64.base64 — 3 dot-separated
+# segments. If we don't see at least 1 dot the token is malformed.
+if [[ "$VL_TOKEN" != *.*.* ]]; then
+  echo "VL-AUDIT: VL_TOKEN does not look like a JWT (expect eyJ...xxx.yyy.zzz)." >&2
+  echo "         Got length=${#VL_TOKEN}, first 10 chars: ${VL_TOKEN:0:10}" >&2
+  echo "         Reset via: sed -i '/^VL_TOKEN=/d' .env  then paste fresh." >&2
   exit 1
 fi
 
