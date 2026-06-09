@@ -33,8 +33,14 @@ def _r_kev(s):
     if not m: return None
     lst = ", ".join(f"{x['cve']} ({x['product']})" for x in m[:4])
     ranso = any(x["ransomware"].lower() == "known" for x in m)
+    # Product-level fingerprint match is SUSPECTED, not confirmed. Cap at
+    # MEDIUM (not HIGH) until version is verified - aligns with industry VA
+    # severity conventions where unverified findings stay below HIGH.
+    # Ransomware-linked KEVs still escalate to HIGH because the impact
+    # justifies the operational urgency even on suspected matches.
+    sev, cvss = ("HIGH", 8.1) if ranso else ("MEDIUM", 5.8)
     return {"name": f"Detected tech matches {len(m)} CISA KEV entry(ies) - known-exploited class present",
-            "severity": "HIGH", "cvss": 8.1, "cwe": "CWE-1395",
+            "severity": sev, "cvss": cvss, "cwe": "CWE-1395",
             "evidence": f"KEV match (product-level, SUSPECTED - verify version): {lst}." + (" Ransomware-linked." if ranso else ""),
             "remediation": "Confirm running version; if affected, patch immediately (CISA KEV / BOD 22-01)."}
 def _r_clean(s):
