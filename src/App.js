@@ -9444,19 +9444,19 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     // Visual companion to the existing "Scan Coverage" section. Shows the
     // health distribution across all scanners at-a-glance.
     {
-      const _scn = (typeof _scanCounts !== "undefined") ? _scanCounts :
-                   (function(){
-                     // Fallback: derive from r if _scanCounts not in scope here
-                     let _d=0,_e=0,_s=0,_er=0;
-                     Object.values(r||{}).forEach(v=>{
-                       if (!v || typeof v !== "object") return;
-                       if (v._failed || v.error) _er++;
-                       else if (v._skipped || v.skipped_reason) _s++;
-                       else if (Array.isArray(v.findings) && v.findings.length > 0) _d++;
-                       else _e++;
-                     });
-                     return {data:_d, empty:_e, skipped:_s, error:_er};
-                   })();
+      // Derive scanner-status counts inline from r (the per-scanner result map).
+      // No closure over outer _scanCounts to keep ESLint no-undef happy.
+      const _scn = (function(){
+        let _d=0,_e=0,_s=0,_er=0;
+        Object.values(r||{}).forEach(v=>{
+          if (!v || typeof v !== "object") return;
+          if (v._failed || v.error) _er++;
+          else if (v._skipped || v.skipped_reason) _s++;
+          else if (Array.isArray(v.findings) && v.findings.length > 0) _d++;
+          else _e++;
+        });
+        return {data:_d, empty:_e, skipped:_s, error:_er};
+      })();
         const _total = _scn.data + _scn.empty + _scn.skipped + _scn.error;
         if (_total > 0) {
           chk(28);
