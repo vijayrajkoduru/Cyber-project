@@ -14585,6 +14585,108 @@ function generateUniversalVLReport(opts) {
       }
     }
 
+    // ── COMPLIANCE COVERAGE - 8 FRAMEWORKS (opt-in via opts.sections.complianceWide) ──
+    // For each finding's CWE, look up the impacted control across PCI-DSS,
+    // SOC 2, ISO 27001, NIST 800-53, HIPAA, GDPR, NIST CSF 2.0, CIS Controls.
+    // Renders 8 separate framework cards with top-finding-per-control rows.
+    // Skipped when opts.sections.complianceWide === false (default ON).
+    // (Ported from generateReconReport line ~10233 for Phase 2 consolidation.)
+    if (opts.sections == null || opts.sections.complianceWide !== false) {
+      const _CWE_MAP_W = {
+        "CWE-22":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.AC-4","CIS 16.10"],
+        "CWE-78":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-79":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-89":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.DS-5","CIS 16.10"],
+        "CWE-94":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-200":["3.4.1","CC6.1","A.5.10","SC-8","164.312(e)(1)","Art. 32","PR.DS-1","CIS 3.3"],
+        "CWE-285":["7.2.1","CC6.3","A.5.15","AC-3","164.312(a)(1)","Art. 32","PR.AC-4","CIS 6.8"],
+        "CWE-287":["7.2","CC6.1","A.5.15","IA-2","164.312(d)","Art. 32","PR.AC-1","CIS 6.3"],
+        "CWE-306":["8.3.4","CC6.1","A.5.17","IA-2","164.312(d)","Art. 32","PR.AC-7","CIS 6.6"],
+        "CWE-307":["8.3.4","CC6.1","A.5.17","AC-7","164.312(a)(2)(i)","Art. 32","PR.AC-7","CIS 6.6"],
+        "CWE-319":["4.2.1","CC6.7","A.8.24","SC-8","164.312(e)(1)","Art. 32","PR.DS-2","CIS 13.6"],
+        "CWE-327":["3.5.1","CC6.7","A.8.24","SC-13","164.312(a)(2)(iv)","Art. 32","PR.DS-1","CIS 3.11"],
+        "CWE-352":["6.2.4","CC6.1","A.5.15","SC-23","164.312(d)","Art. 32","PR.AC-7","CIS 16.5"],
+        "CWE-353":["6.3.3","CC7.1","A.8.30","SI-7","164.312(c)(1)","Art. 32","ID.RA-1","CIS 7.1"],
+        "CWE-538":["2.2.7","CC6.1","A.5.10","AC-6","164.312(a)(1)","Art. 25","PR.AC-4","CIS 3.7"],
+        "CWE-601":["6.2.4","CC6.6","A.8.21","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-611":["6.2.4","CC6.6","A.8.28","SI-10","164.312(a)(1)","Art. 32","PR.IP-2","CIS 16.10"],
+        "CWE-693":["6.2.4","CC6.6","A.8.23","SC-7","164.312(a)(1)","Art. 32","PR.IP-1","CIS 16.10"],
+        "CWE-918":["6.2.4","CC6.6","A.8.23","SC-7","164.312(a)(1)","Art. 32","PR.AC-5","CIS 16.10"],
+        "CWE-942":["6.2.4","CC6.6","A.8.23","SC-7","164.312(a)(1)","Art. 32","PR.AC-5","CIS 16.10"],
+        "CWE-1004":["6.2.4","CC6.1","A.5.15","AC-12","164.312(a)(2)(iii)","Art. 32","PR.AC-7","CIS 16.5"],
+        "CWE-1021":["6.4.3","CC6.6","A.8.23","SC-7","164.312(a)(1)","Art. 32","PR.AC-5","CIS 16.10"],
+        "CWE-1275":["6.2.4","CC6.1","A.5.15","SC-23","164.312(d)","Art. 32","PR.AC-7","CIS 16.5"],
+        "CWE-1395":["6.3.3","CC7.1","A.8.8","SI-2","164.308(a)(5)","Art. 32","ID.RA-1","CIS 7.1"],
+      };
+      const _FW_W = [
+        {n:"PCI-DSS v4.0",            b:"Payment Card Industry"},
+        {n:"SOC 2 (Trust Services)",  b:"AICPA Common Criteria"},
+        {n:"ISO 27001:2022",          b:"Annex A controls"},
+        {n:"NIST 800-53 Rev 5",       b:"US federal security controls"},
+        {n:"HIPAA Security Rule",     b:"45 CFR 164.308/312"},
+        {n:"GDPR",                    b:"EU privacy - Art. 32/25/33"},
+        {n:"NIST CSF 2.0",            b:"IDENTIFY/PROTECT/DETECT/RESPOND"},
+        {n:"CIS Controls v8",         b:"18 critical controls"},
+      ];
+      const _SEV_RANK_W = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+      const _fwMaps = _FW_W.map(() => new Map());
+      _allFindings.forEach(f => {
+        const cweM = String(f.cwe||"").trim().toUpperCase().match(/CWE-\d+/);
+        if (!cweM) return;
+        const ctrls = _CWE_MAP_W[cweM[0]];
+        if (!ctrls) return;
+        ctrls.forEach((ctrl, i) => {
+          if (!ctrl) return;
+          if (!_fwMaps[i].has(ctrl)) _fwMaps[i].set(ctrl, []);
+          _fwMaps[i].get(ctrl).push(f);
+        });
+      });
+      const _hasAnyMapped = _fwMaps.some(m => m.size > 0);
+      if (_hasAnyMapped) {
+        chk(30); y = sHead("Compliance Coverage - 8 Frameworks", y);
+        doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor.apply(doc, GRAY);
+        doc.text("Findings mapped onto 8 frameworks. Each control row shows the top finding (worst severity) impacting it.", margin+2, y);
+        y += 5;
+        _FW_W.forEach((fw, fi) => {
+          const fwMap = _fwMaps[fi];
+          if (fwMap.size === 0) return;
+          chk(14);
+          fillR(margin, y, contentW, 6, [30,64,175]);
+          doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(241,245,249);
+          doc.text(fw.n, margin+4, y+4.2);
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(203,213,225);
+          doc.text(fw.b, margin+60, y+4.2);
+          doc.setFont("Arial","bold"); doc.setFontSize(6.5);
+          doc.text(`${fwMap.size} control(s) impacted`, pageW - margin - 4, y+4.2, {align:"right"});
+          y += 6;
+          const sortedCtrls = Array.from(fwMap.entries()).sort((a,b) => {
+            const aWorst = Math.min(...a[1].map(f => _SEV_RANK_W[String(f.severity||"INFO").toUpperCase()] ?? 5));
+            const bWorst = Math.min(...b[1].map(f => _SEV_RANK_W[String(f.severity||"INFO").toUpperCase()] ?? 5));
+            return aWorst - bWorst;
+          });
+          sortedCtrls.forEach(([ctrl, fs], i) => {
+            chk(5.5);
+            fs.sort((a,b) => (_SEV_RANK_W[String(a.severity||"INFO").toUpperCase()]??5) - (_SEV_RANK_W[String(b.severity||"INFO").toUpperCase()]??5));
+            const top = fs[0];
+            const sev = String(top.severity||"INFO").toUpperCase();
+            const sBg = sev==="CRITICAL"?[254,226,226]:sev==="HIGH"?[255,237,213]:sev==="MEDIUM"?[254,252,232]:[220,252,231];
+            const sFg = sev==="CRITICAL"?[162,28,28]:sev==="HIGH"?[194,65,12]:sev==="MEDIUM"?[133,79,11]:[15,118,82];
+            fillR(margin, y, contentW, 5, i%2===0 ? LIGHT : WHITE);
+            doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, DARK);
+            doc.text(ctrl, margin+4, y+3.5);
+            rrect(margin+36, y+0.8, 14, 3.5, 1, sBg);
+            doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor.apply(doc, sFg);
+            doc.text(sev, margin+43, y+3.2, {align:"center"});
+            doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor.apply(doc, GRAY);
+            const nm = String(top.name||top.detail||top.title||"finding").substring(0, 90);
+            doc.text(`${fs.length} finding(s) - top: ${nm}`, margin+52, y+3.5);
+            y += 5;
+          });
+          y += 2;
+        });
+      }
+    }
+
     // Top concerns
     if (_top3.length > 0) {
       chk(50); y = sHead("Top Concerns", y);
