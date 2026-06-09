@@ -13326,7 +13326,12 @@ function generateUniversalVLReport(opts) {
   const _inputsSupplied = ["dockerfile","pod_spec","kubeconfig","repo_url","image"]
     .filter(k => _inputUsed[k]).length;
   const _scopeFactor = Math.max(0.4, Math.min(1.0, 0.4 + 0.15 * _inputsSupplied));
-  const _riskScore = Math.round(_rawRiskScore * _scopeFactor);
+  // Worst-severity floor: the cover page must never read LOW/MINIMAL while a
+  // CRITICAL or HIGH finding exists (per pdf_industry_standard.md gap 6).
+  // Scope-factor reduction can drag the raw score below the band that matches
+  // the worst severity; floor it so the band always reflects worst impact.
+  const _sevFloor = _sevCount.CRITICAL > 0 ? 40 : _sevCount.HIGH > 0 ? 20 : 0;
+  const _riskScore = Math.max(_sevFloor, Math.round(_rawRiskScore * _scopeFactor));
   const _riskLabel = (_riskScore>=80&&_sevCount.CRITICAL>0)?"CRITICAL RISK":_riskScore>=60?"HIGH RISK":_riskScore>=40?"MODERATE RISK":_riskScore>=20?"LOW RISK":"MINIMAL RISK";
   const _riskColor = (_riskScore>=80&&_sevCount.CRITICAL>0)?[162,28,28]:_riskScore>=60?[194,65,12]:_riskScore>=40?[133,79,11]:_riskScore>=20?[202,138,4]:[15,118,82];
   // Footnote for the auditor: explain WHY the headline score isn't the raw.
@@ -13705,9 +13710,16 @@ function generateUniversalVLReport(opts) {
       const _key = f => String(f && (f.name || f.detail || f.title) || "").toLowerCase().trim()
                        + "|" + String(f && f.cwe || "").toUpperCase().trim();
       const _sevOf = f => String(f && f.severity || "INFO").toUpperCase();
+      // Delta must compare real findings only — POSITIVE/INFO entries are
+      // status rollups, not exposures, and inflate the "unchanged" count.
+      // (pdf_industry_standard.md gap 7)
+      const _realSev = new Set(["CRITICAL","HIGH","MEDIUM","LOW"]);
+      const _filt = arr => (arr || []).filter(f => _realSev.has(_sevOf(f)));
+      const _curR = _filt(cur);
+      const _priorR = _filt(prior);
       const _curMap = new Map(); const _priorMap = new Map();
-      (cur || []).forEach(f => { const k = _key(f); if (k !== "|") _curMap.set(k, f); });
-      (prior || []).forEach(f => { const k = _key(f); if (k !== "|") _priorMap.set(k, f); });
+      _curR.forEach(f => { const k = _key(f); if (k !== "|") _curMap.set(k, f); });
+      _priorR.forEach(f => { const k = _key(f); if (k !== "|") _priorMap.set(k, f); });
       let added = 0, removed = 0, unchanged = 0;
       const sevDelta = {CRITICAL:{a:0,r:0},HIGH:{a:0,r:0},MEDIUM:{a:0,r:0},LOW:{a:0,r:0},INFO:{a:0,r:0}};
       _curMap.forEach((f, k) => {
@@ -14437,6 +14449,8 @@ function generateUniversalVLReport(opts) {
       "CWE-1275": "OWASP A05 - NIST CM-6 - ISO A.8.9",
       "CWE-1336": "OWASP A03 - NIST SI-10 - ISO A.8.28",
       "CWE-93":  "OWASP A05 - NIST SI-10 - ISO A.8.28",
+      // CWE-1004 = Sensitive Cookie Without HttpOnly (raised by cookie_security_flags)
+      "CWE-1004":"OWASP A05 - PCI 6.2.4 - NIST SC-23 - ISO A.8.5 - SOC2 CC6.1",
     };
     const _cmpFor = function(nm, cwe) {
       for (var _i = 0; _i < _cmpRules.length; _i++) {
@@ -14625,7 +14639,9 @@ function generateUniversalVLReport(opts) {
       // finding shape so customers can re-confirm independently.
       const _reproduce = (f, x) => {
         const nm = String(f.name||f.detail||"").toLowerCase();
-        const host = x.host || target;
+        // Strip leading scheme so we never emit `https://http://...` in the
+        // copy-pasteable command (pdf_industry_standard.md gap 8).
+        const host = String(x.host || target || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
         if (x.cve !== "-") {
           if (/http\/?2|rapid reset/.test(nm))
             return `curl --http2 -k -I https://${host}/  # ALPN must NOT advertise h2 on patched stack`;
