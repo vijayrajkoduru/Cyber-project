@@ -1302,8 +1302,9 @@ function generatePDF(reportData) {
       y += _stLines.length * 3.8 + 4;
     }
 
-    // Tools used table on cover
-    if(toolsUsed&&toolsUsed.length>0){
+    // Tools Used section removed 2026-06-09: scanner count now appears in
+    // the Scan Coverage section below (DATA/EMPTY/SKIPPED/ERROR breakdown).
+    if(false && toolsUsed&&toolsUsed.length>0){
       y = sectionHead("Tools Used",y);
       y = tableHeader(["TOOL","PURPOSE","COST"],[40,110,30],y);
       const toolInfo={
@@ -14694,36 +14695,10 @@ function generateUniversalVLReport(opts) {
       y += 5;
     }
 
-    // ── TOOLS USED (opt-in via opts.sections.toolsUsed) ──
-    // Lists every scanner that ran with a short purpose blurb. Built from
-    // the `r{}` keys (one per tool). Skip when opts.sections.toolsUsed === false.
-    // Transparency signal: customer sees exactly what was tested.
-    if (opts.sections == null || opts.sections.toolsUsed !== false) {
-      const _toolKeys = Object.keys(r).filter(k => r[k] && (Array.isArray(r[k].findings) || r[k].intel)).sort();
-      if (_toolKeys.length > 0) {
-        chk(20); y = sHead("Tools Used", y);
-        doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor.apply(doc, GRAY);
-        doc.text(`${_toolKeys.length} scanner(s) executed in this scan - all included in your subscription.`, margin+2, y);
-        y += 5;
-        y = tHead(["TOOL","PURPOSE","COST"],[55,107,18],y);
-        const _prettyTool = k => String(k).replace(/_/g," ").replace(/\b\w/g, c => c.toUpperCase());
-        _toolKeys.forEach((k, i) => {
-          chk(6);
-          const d = r[k] || {};
-          const purpose = String(d.purpose || d.description || (d.findings && d.findings[0] && d.findings[0]._purpose) || "Security check").substring(0, 80);
-          fillR(margin, y, contentW, 5.5, i%2===0 ? LIGHT : WHITE);
-          doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, DARK);
-          doc.text(_prettyTool(k), margin+3, y+3.8);
-          doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor.apply(doc, GRAY);
-          doc.text(purpose, margin+58, y+3.8);
-          rrect(margin + contentW - 16, y + 0.8, 13, 3.8, 1, [220,252,231]);
-          doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(15,118,82);
-          doc.text("FREE", margin + contentW - 9.5, y+3.5, {align:"center"});
-          y += 5.5;
-        });
-        y += 5;
-      }
-    }
+    // Tools Used section removed 2026-06-09: scanner count now reported in
+    // §Scan Coverage above (DATA/EMPTY/SKIPPED/ERROR breakdown) so the
+    // standalone tool table was redundant. Per-tool intelligence still
+    // renders in the §Per-Tool Intelligence panels below.
 
     // ── COMPLIANCE COVERAGE - 8 FRAMEWORKS (opt-in via opts.sections.complianceWide) ──
     // For each finding's CWE, look up the impacted control across PCI-DSS,
