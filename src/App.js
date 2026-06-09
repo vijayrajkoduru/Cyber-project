@@ -8913,12 +8913,63 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }
     return null;
   };
+  // Recon-specific reproduce: emit a real copy-pasteable command tailored
+  // to the finding shape. Mirrors the Universal generator's _reproduce()
+  // pattern so customers get actual shell commands instead of generic
+  // "Re-run the X check" placeholders. (Ported from generateUniversalVLReport
+  // 2026-06-09 for cross-module parity.)
   const _reproSteps = (f, toolKey) => {
-    const ev = String(f.evidence_marker||f.evidence||"").substring(0, 90);
+    const nm = String(f.name||f.detail||f.title||"").toLowerCase();
+    const ev = String(f.evidence_marker||f.evidence||"").toLowerCase();
+    const blob = nm + " " + ev;
+    const host = String(target || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    const tk = String(toolKey || "");
+    let cmd = null;
+    if (/dmarc/.test(blob)) cmd = `dig +short TXT _dmarc.${host}`;
+    else if (/spf/.test(blob)) cmd = `dig +short TXT ${host} | grep spf`;
+    else if (/dkim/.test(blob)) cmd = `for s in default google selector1 selector2 mail email k1 mandrill; do dig +short TXT $s._domainkey.${host}; done`;
+    else if (/mta-sts/.test(blob)) cmd = `dig +short TXT _mta-sts.${host} ; curl -sI https://mta-sts.${host}/.well-known/mta-sts.txt`;
+    else if (/caa/.test(blob)) cmd = `dig +short CAA ${host}`;
+    else if (/smtp.*vrfy|user enumeration/.test(blob)) cmd = `echo "VRFY postmaster" | nc -w 4 mail.${host} 25`;
+    else if (/smtp banner|smtp/.test(blob)) cmd = `nc -w 4 mail.${host} 25`;
+    else if (/zone transfer|axfr/.test(blob)) cmd = `for ns in $(dig +short NS ${host}); do dig +noall +answer @$ns ${host} AXFR; done`;
+    else if (/whois|registrar|domain age|newly registered/.test(blob)) cmd = `whois ${host} | head -40`;
+    else if (/cache snoop/.test(blob)) cmd = `dig +norecurse @<authoritative-ns> example.com`;
+    else if (/subdomain|ct logs|certificate transparency/.test(blob)) cmd = `curl -s "https://crt.sh/?q=%25.${host}&output=json" | jq -r '.[].name_value' | sort -u`;
+    else if (/cdn|cloudflare|fastly|akamai/.test(blob)) cmd = `dig +short NS ${host} ; curl -sI https://${host}/ | grep -i "server\\|via\\|cf-ray"`;
+    else if (/asn|ip ownership|aws|google cloud/.test(blob)) cmd = `whois -h whois.cymru.com " -v $(dig +short ${host} | head -1)"`;
+    else if (/wayback|archive/.test(blob)) cmd = `curl -s "https://web.archive.org/cdx/search/cdx?url=${host}/*&output=json&limit=20"`;
+    else if (/dependency confusion/.test(blob)) cmd = `for p in vulnuslab-internal vulnuslab-utils vulnuslab-common; do npm view $p 2>&1 | head -1; done`;
+    else if (/holehe|email registered|external site/.test(blob)) cmd = `holehe <email@${host}>`;
+    else if (/sherlock|social profile/.test(blob)) cmd = `sherlock <username>`;
+    else if (/github|gitlab|bitbucket/.test(blob)) cmd = `curl -s "https://api.github.com/search/code?q=${host}+in:file" -H "Authorization: token \$GH_TOKEN"`;
+    else if (/job postings|hiring/.test(blob)) cmd = `curl -s "https://www.google.com/search?q=site:linkedin.com/jobs+${host}"`;
+    else if (/wordpress|wp-content|wp-includes/.test(blob)) cmd = `curl -sI https://${host}/wp-login.php`;
+    else if (/robots|sitemap/.test(blob)) cmd = `curl -s https://${host}/robots.txt ; curl -s https://${host}/sitemap.xml`;
+    else if (/tls|ssl|certificate/.test(blob)) cmd = `nmap --script ssl-enum-ciphers,ssl-cert -p 443 ${host}`;
+    else if (/csp|content.security/.test(blob)) cmd = `curl -sI https://${host}/ | grep -i "content-security-policy"`;
+    else if (/hsts/.test(blob)) cmd = `curl -sI https://${host}/ | grep -i "strict-transport-security"`;
+    else if (/cors/.test(blob)) cmd = `curl -H "Origin: https://evil.test" -I https://${host}/`;
+    else if (/banner|server header/.test(blob)) cmd = `curl -sI https://${host}/ | grep -i "server\\|x-powered-by"`;
+    else if (/os fingerprint|operating system/.test(blob)) cmd = `nmap -O -Pn ${host}`;
+    else if (/anycast/.test(blob)) cmd = `dig +short ${host} ; for resolver in 1.1.1.1 8.8.8.8 9.9.9.9; do dig +short @$resolver ${host}; done`;
+    else if (/load balancer|lb/.test(blob)) cmd = `for i in $(seq 1 5); do dig +short ${host}; done`;
+    if (cmd) {
+      return [
+        "$ " + cmd,
+        "# Compare output to: " + (String(f.evidence_marker||f.evidence||"").substring(0, 90) || "the documented signal"),
+      ];
+    }
+    // Tool-specific fallback if we recognise the tool but not the pattern
+    if (tk) {
+      return [
+        "# Re-run: POST /api/recon/" + tk + ' { "target": "' + host + '" }',
+        "# Compare output to: " + (String(f.evidence_marker||f.evidence||"").substring(0, 90) || "the documented signal"),
+      ];
+    }
     return [
-      "Re-run the " + (toolKey || "recon") + " check against the target",
-      "Review the returned evidence: " + (ev || "the documented signal"),
-      "Independently confirm with a standard tool (dig / whois / curl / openssl) before acting"
+      "# Re-run /api/recon/<scanner> against " + host,
+      "# Compare output to: " + (String(f.evidence_marker||f.evidence||"").substring(0, 90) || "the documented signal"),
     ];
   };
 
@@ -8996,31 +9047,40 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _R_REPORT_ID = _R_genId(target, date);
   const _R_contentHash = _R_hash(JSON.stringify(_R_allFindings));
 
-  // ── COVER ──────────────────────────────────────────────────
-  fillR(0,0,pageW,64,DARK);
-  // VulnusLab shield logo + wordmark (top-center)
+  // ── BRANDED COVER PAGE ──
+  // Same two-band design as Universal generator: dark navy header + blue
+  // accent strip + prominent title + ASSESSMENT TARGET callout. Ported
+  // 2026-06-09 so Recon matches Vuln/Webapp/Cloud at parity.
+  fillR(0, 0, pageW, 95, DARK);
+  fillR(0, 88, pageW, 4, BLUE);
+  // VulnusLab shield logo top-left
   {
-    const sx = pageW/2, sy = 16, w = 12, h = 14;
+    const sx = margin + 8, sy = 20, w = 14, h = 16;
     doc.setFillColor(15,23,42);
-    doc.setDrawColor(59,130,246); doc.setLineWidth(0.6);
+    doc.setDrawColor(59,130,246); doc.setLineWidth(0.7);
     doc.lines([
       [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
       [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
       [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
-    ], sx-w*0.45, sy-h*0.4, [1,1], 'FD');
-    doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(59,130,246);
-    doc.text("V", sx, sy + 1, {align:"center"});
-    doc.setFont("helvetica","bold"); doc.setFontSize(7);
-    doc.setTextColor(241,245,249);
-    doc.text("VULNUS", sx - 1, sy + 10, {align:"right"});
-    doc.setTextColor(59,130,246);
-    doc.text("LAB", sx, sy + 10, {align:"left"});
+    ], sx - w*0.45, sy - h*0.4, [1,1], 'FD');
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(59,130,246);
+    doc.text("V", sx, sy + 2, {align:"center"});
   }
-  doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(...BLUE);
-  doc.text("RECON REPORT",pageW/2,38,{align:"center"});
-  doc.setFont("Arial","normal"); doc.setFontSize(10); doc.setTextColor(...GRAY);
-  doc.text("Information Gathering & OSINT",pageW/2,46,{align:"center"});
-  y = 74;
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(241,245,249);
+  doc.text("VULNUS", margin + 18, 18);
+  doc.setTextColor(59,130,246);
+  doc.text("LAB", margin + 32, 18);
+  doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(148,163,184);
+  doc.text("Automated Reconnaissance & OSINT Platform", margin + 18, 24);
+  doc.setFont("Arial","bold"); doc.setFontSize(26); doc.setTextColor(...BLUE);
+  doc.text("RECONNAISSANCE REPORT", pageW/2, 56, {align:"center"});
+  doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(203,213,225);
+  doc.text("Information Gathering & OSINT Assessment", pageW/2, 66, {align:"center"});
+  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(148,163,184);
+  doc.text("ASSESSMENT TARGET", pageW/2, 76, {align:"center"});
+  doc.setFont("Arial","bold"); doc.setFontSize(13); doc.setTextColor(241,245,249);
+  doc.text(String(target || "(target)"), pageW/2, 83, {align:"center"});
+  y = 105;
 
   // Info table
   fillR(margin,y,contentW,8,DARK); txt("FIELD",margin+3,y+5.5,8,WHITE,true); txt("VALUE",margin+55,y+5.5,8,WHITE,true); y+=8;
@@ -9348,6 +9408,48 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       doc.text(vl[0]||"",margin+48,y+5); y+=7;
     });
     y += 6;
+
+    // ── METHODOLOGY (two-column attack-class detail) ──
+    // 8 recon-domain cards explaining what we test for. Ported from
+    // Universal generator 2026-06-09 for cross-module parity.
+    {
+      chk(50); y = sHead("Methodology", y);
+      const _intro = `Reconnaissance follows PTES Intelligence Gathering + NIST SP 800-115 + MITRE PRE-ATT&CK. Each scanner targets a specific discovery surface with minimal target impact. No exploitation is attempted at the recon stage - findings are passive intel.`;
+      const _introLines = doc.splitTextToSize(_intro, contentW - 4);
+      _introLines.forEach((ln, i) => txt(ln, margin + 2, y + (i * 4), 8, DARK));
+      y += _introLines.length * 4 + 3;
+      const _methodology = [
+        ["DNS & Email Hygiene", "Audits SPF, DKIM, DMARC, MTA-STS, CAA, DNSSEC records. Probes for zone-transfer (AXFR), cache snooping, and weak resolver configurations. Flags missing email-authentication records that enable phishing impersonation."],
+        ["Subdomain Discovery", "Enumerates subdomains via Certificate Transparency logs (crt.sh), passive DNS (HackerTarget, BufferOver), AI-curated wordlists, and search-engine pivoting. Identifies forgotten dev / staging / legacy hosts."],
+        ["WHOIS & Asset Ownership", "Cross-references domain registrar, expiry, abuse contact, and IP/ASN ownership via WHOIS, RDAP, and Team Cymru. Detects newly-registered domains (phishing indicator) and infrastructure provider."],
+        ["TLS / Certificate Audit", "Inspects TLS configuration (ciphers, DH params, certificate chain, SAN list, expiry, OCSP stapling). Detects weak ciphers, expired certs, and certificate-pinning gaps."],
+        ["OSINT & Social Surface", "Discovers leaked emails (Holehe, Hunter), social-profile registrations (Sherlock), code-repo exposure (GitHub Code Search, GitLab), and breach-data presence (HIBP, Dehashed, LeakCheck)."],
+        ["Cloud & Storage", "Probes for exposed S3 / GCS / Azure buckets, Firebase databases, Docker registries, etcd endpoints, and Kubernetes API servers. Identifies misconfigured public storage."],
+        ["Threat Intelligence", "Cross-references discovered IPs / domains against GreyNoise, ThreatFox, URLhaus, AbuseIPDB, AlienVault OTX, and ransomware-leak-site catalogs. Flags known-malicious or known-benign infrastructure."],
+        ["AI-Augmented Discovery", "Uses LLM-curated wordlists for subdomain brute-force, phishing-pretext generation, and parameter inference. Cross-references job postings + Wayback Machine for tech-stack fingerprinting."],
+      ];
+      const _colW = (contentW - 4) / 2;
+      for (let _mi = 0; _mi < _methodology.length; _mi += 2) {
+        const _left = _methodology[_mi];
+        const _right = _methodology[_mi + 1];
+        const _lt = doc.splitTextToSize(_left[1], _colW - 6);
+        const _rt = _right ? doc.splitTextToSize(_right[1], _colW - 6) : [];
+        const _rh = 6 + Math.max(_lt.length, _rt.length) * 3.4 + 2;
+        chk(_rh + 0.5);
+        fillR(margin, y, _colW - 1, _rh, [248,250,252]);
+        fillR(margin, y, 2, _rh, BLUE);
+        txt(_left[0], margin + 4, y + 4.5, 8.5, BLUE, true);
+        _lt.forEach((ln, li) => txt(ln, margin + 4, y + 8.5 + (li * 3.4), 7.5, DARK));
+        if (_right) {
+          fillR(margin + _colW + 1, y, _colW - 1, _rh, [248,250,252]);
+          fillR(margin + _colW + 1, y, 2, _rh, BLUE);
+          txt(_right[0], margin + _colW + 5, y + 4.5, 8.5, BLUE, true);
+          _rt.forEach((ln, li) => txt(ln, margin + _colW + 5, y + 8.5 + (li * 3.4), 7.5, DARK));
+        }
+        y += _rh + 1.5;
+      }
+      y += 2;
+    }
 
     // Findings distribution bars
     chk(40); y = sHead("Findings Distribution", y);
@@ -11634,10 +11736,14 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
     if(i>=2){
+      // Branded footer: accent line + 3-zone layout + VL glyph on right.
+      // Ported from Universal generator 2026-06-09 for cross-module parity.
+      fillR(margin, 286, contentW, 0.5, BLUE);
       txt(_ftr,margin,290,6.5,GRAY);
-      // Section 17 canon — Report ID + Content Hash centered in footer
       txt(`Report ID: ${_R_REPORT_ID}  ·  Content: ${_R_contentHash}`,pageW/2,290,6.5,GRAY,false,"center");
-      txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
+      txt("Page "+i+" of "+total,pageW-margin-18,290,6.5,BLUE,true,"right");
+      doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(...BLUE);
+      doc.text("VL", pageW - margin, 290, {align:"right"});
     }
   }
   txt("— END OF REPORT —",pageW/2,bY+8,10,BLUE,true,"center");
