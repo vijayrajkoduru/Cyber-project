@@ -1,9 +1,15 @@
-"""Swagger/OpenAPI spec exposure + shadow-API inventory. VL-FORGE Vuln tier5 - §5 #69/#71."""
+"""Swagger/OpenAPI spec exposure + shadow-API inventory. VL-FORGE Vuln tier5 - §5 #69/#71.
+
+VL-VERIFY: existing content gate requires `"swagger"` / `"openapi"` / `"paths"`
+substrings, which is JSON-specific. Add SPA canary so an SPA shell that
+happens to contain `"paths":` in inlined React Router config doesn't
+falsely flag as an exposed spec.
+"""
 import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import http_get
+from tools.vuln._vuln_common import http_get, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()
 _PATHS = ["/swagger.json", "/openapi.json", "/v2/api-docs", "/v3/api-docs", "/api-docs",
@@ -13,13 +19,27 @@ _PATHS = ["/swagger.json", "/openapi.json", "/v2/api-docs", "/v3/api-docs", "/ap
 
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/")
+    # VL-VERIFY canary baseline
+    spa = await detect_spa_catchall(base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
+    canary_body = spa.get("canary_body", "")
 
     async def _c(p):
         r = await asyncio.to_thread(http_get, base + p, 8, 4000)
-        if r and r.get("status") == 200:
-            b = r.get("body", "")
-            if '"swagger"' in b or '"openapi"' in b or '"paths"' in b:
-                return p
+        if not (r and r.get("status") == 200):
+            return None
+        b = r.get("body", "")
+        # SPA catch-all -> drop
+        if spa.get("is_spa") and is_same_as_canary(b, canary_body):
+            return None
+        # Real OpenAPI spec must have either explicit swagger/openapi version
+        # field, or a JSON `"paths":` object with `"/"` route keys.
+        if '"swagger"' in b or '"openapi"' in b:
+            return p
+        # Stricter `paths` check: must be a JSON key followed by an object
+        # with a route key (real specs have routes starting with `/`).
+        if '"paths"' in b and ('":{"/' in b or '": {\n  "/' in b or '":\n  {"/' in b):
+            return p
         return None
 
     res = await asyncio.gather(*[_c(p) for p in _PATHS])
