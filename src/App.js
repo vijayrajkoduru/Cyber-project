@@ -13122,6 +13122,70 @@ function generateUniversalVLReport(opts) {
     _allFindings.splice(0, _allFindings.length, ..._dd);
   })();
 
+  // ── Semantic dedup: cross-scanner overlap with different titles ──
+  // The name-based dedup above only catches exact-title duplicates. Multiple
+  // scanners often flag the SAME underlying issue under different titles
+  // (e.g. JSESSIONID missing SameSite reported by 3 cookie scanners). This
+  // pass groups findings by semantic signature - cookie attribute or
+  // server-disclosure - keeps the highest-severity one as primary, and
+  // appends "[Also flagged by: X, Y]" to the evidence so the auditor sees
+  // provenance. Per-Tool Intelligence panels still show each scanner's
+  // finding individually because they iterate r{} directly.
+  // (pdf_industry_standard.md gap 11; user feedback 2026-06-09)
+  (function(){
+    const _sr = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,POSITIVE:4,INFO:5};
+    const _sigOf = f => {
+      const ev = String(f.evidence||"").toLowerCase();
+      const nm = String(f.name||f.title||f.detail||"").toLowerCase();
+      const blob = nm + " | " + ev;
+      // Cookie attribute hygiene
+      const _cn = blob.match(/\b(jsessionid|phpsessid|asp\.net_sessionid|connect\.sid|laravel_session|[a-z_-]*sess(?:ion)?[a-z_-]*id)\b/);
+      if (_cn && /\b(samesite|httponly|secure)\b/.test(blob)) {
+        const attrs = [];
+        if (/\bsamesite\b/.test(blob)) attrs.push("samesite");
+        if (/\bhttponly\b/.test(blob)) attrs.push("httponly");
+        if (/\b(missing|without|no)\s+secure\b/.test(blob)) attrs.push("secure");
+        if (attrs.length) return "cookie:" + _cn[1] + ":" + attrs.sort().join(",");
+      }
+      // Server / app-server version disclosure
+      const _sv = blob.match(/\b(apache|nginx|iis|tomcat|coyote|jetty|jboss|websphere|weblogic|caddy|kestrel|lighttpd|openssh|exim|postfix)\b/);
+      if (_sv && /(disclos|reveal|version|banner)/.test(nm)) {
+        return "server-disclosure:" + _sv[1];
+      }
+      return null;
+    };
+    const _bySig = new Map();
+    _allFindings.forEach(f => {
+      const sig = _sigOf(f);
+      if (!sig) return;
+      if (!_bySig.has(sig)) _bySig.set(sig, []);
+      _bySig.get(sig).push(f);
+    });
+    const _suppress = new Set();
+    _bySig.forEach(group => {
+      if (group.length < 2) return;
+      group.sort((a, b) => {
+        const ra = _sr[String(a.severity||"INFO").toUpperCase()];
+        const rb = _sr[String(b.severity||"INFO").toUpperCase()];
+        return (ra == null ? 9 : ra) - (rb == null ? 9 : rb);
+      });
+      const primary = group[0];
+      const dups = group.slice(1);
+      const merged = dups.map(d => String(d._tool||"").replace(/_/g, " ").trim()).filter(Boolean);
+      if (merged.length) {
+        primary._related_scanners = (primary._related_scanners || []).concat(merged);
+        primary.evidence = (primary.evidence ? primary.evidence + " " : "")
+          + "[Also flagged by: " + merged.join(", ") + "]";
+      }
+      dups.forEach(d => _suppress.add(d));
+    });
+    if (_suppress.size) {
+      const _kept = _allFindings.filter(f => !_suppress.has(f));
+      _allFindings.splice(0, _allFindings.length, ..._kept);
+    }
+  })();
+
+
   // ── CVE source-package dedup ──
   // Trivy/Grype emit one row PER binary package, so a single source-package
   // CVE (e.g. apache2 -> apache2, apache2-bin, apache2-data, apache2-utils,
