@@ -8854,6 +8854,83 @@ function computeWebappCoverage(allResults) {
 //  reference these symbols anywhere in the app.)
 
 // ═══════════════════════════════════════════════════════════════
+//  SHARED PDF CHROME — used by BOTH generateReconReport and
+//  generateUniversalVLReport. Extracted 2026-06-09 to kill the
+//  cover/footer code duplication so design improvements ship to
+//  every module's PDF with a single edit. (User: "create common
+//  template for all modules - is that good")
+// ═══════════════════════════════════════════════════════════════
+function _vlDrawBrandedCover(doc, opts) {
+  // opts: { pageW, contentW, margin, moduleTitle, moduleSubtitle, tagline, target, _ascii }
+  // Returns: Y position to continue rendering from (~105mm)
+  const pageW = opts.pageW || 210;
+  const margin = opts.margin || 12;
+  const _ascii = opts._ascii || (s => String(s == null ? "" : s));
+  const DARK = [15,23,42], BLUE = [59,130,246];
+  // Two-band: 95mm dark navy + 4mm blue accent strip
+  doc.setFillColor(...DARK); doc.rect(0, 0, pageW, 95, "F");
+  doc.setFillColor(...BLUE); doc.rect(0, 88, pageW, 4, "F");
+  // Shield logo top-left
+  {
+    const sx = margin + 8, sy = 20, w = 14, h = 16;
+    doc.setFillColor(15,23,42);
+    doc.setDrawColor(59,130,246); doc.setLineWidth(0.7);
+    doc.lines([
+      [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
+      [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
+      [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
+    ], sx - w*0.45, sy - h*0.4, [1,1], 'FD');
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(59,130,246);
+    doc.text("V", sx, sy + 2, {align:"center"});
+  }
+  // Wordmark + tagline
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(241,245,249);
+  doc.text("VULNUS", margin + 18, 18);
+  doc.setTextColor(59,130,246);
+  doc.text("LAB", margin + 32, 18);
+  doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(148,163,184);
+  doc.text(opts.tagline || "Automated Security Assessment Platform", margin + 18, 24);
+  // Title block
+  doc.setFont("Arial","bold"); doc.setFontSize(26); doc.setTextColor(...BLUE);
+  doc.text(_ascii(opts.moduleTitle || "ASSESSMENT REPORT"), pageW/2, 56, {align:"center"});
+  doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(203,213,225);
+  doc.text(_ascii(opts.moduleSubtitle || ""), pageW/2, 66, {align:"center"});
+  // ASSESSMENT TARGET callout
+  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(148,163,184);
+  doc.text("ASSESSMENT TARGET", pageW/2, 76, {align:"center"});
+  doc.setFont("Arial","bold"); doc.setFontSize(13); doc.setTextColor(241,245,249);
+  doc.text(_ascii(opts.target || "(target)"), pageW/2, 83, {align:"center"});
+  return 105;
+}
+
+function _vlDrawBrandedFooter(doc, opts) {
+  // opts: { pageW, contentW, margin, pageNum, pageTotal, target, reportId, contentHash, sep }
+  // Renders the accent line + 3-zone layout + VL glyph at y=286-290.
+  // No return — called per page after content is drawn.
+  const pageW = opts.pageW || 210;
+  const margin = opts.margin || 12;
+  const contentW = opts.contentW || (pageW - margin*2);
+  const sep = opts.sep || "-";
+  const BLUE = [59,130,246], GRAY = [100,116,139];
+  // Accent line
+  doc.setFillColor(...BLUE); doc.rect(margin, 286, contentW, 0.5, "F");
+  // Left zone: CONFIDENTIAL + target
+  doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...GRAY);
+  const ftrL = `VulnusLab | CONFIDENTIAL ${sep} ${String(opts.target || "target").substring(0, 40)}`;
+  doc.text(ftrL, margin, 290);
+  // Center zone: report ID + hash
+  if (opts.reportId) {
+    const hashPart = opts.contentHash ? ` ${sep} Content: ${String(opts.contentHash).substring(0, 8)}` : "";
+    doc.text(`Report ID: ${opts.reportId}${hashPart}`, pageW/2, 290, {align:"center"});
+  }
+  // Right zone: page count + VL glyph
+  doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(...BLUE);
+  doc.text(`Page ${opts.pageNum} of ${opts.pageTotal}`, pageW - margin - 8, 290, {align:"right"});
+  doc.setFont("helvetica","bold"); doc.setFontSize(6.5);
+  doc.text("VL", pageW - margin, 290, {align:"right"});
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  RECON PDF REPORT
 // ═══════════════════════════════════════════════════════════════
 function generateReconReport({target, allResults, date, authenticated, pdfConfig}) { /*RECON-AUTH-PDF-SIG-V1*/
@@ -9047,40 +9124,17 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
   const _R_REPORT_ID = _R_genId(target, date);
   const _R_contentHash = _R_hash(JSON.stringify(_R_allFindings));
 
-  // ── BRANDED COVER PAGE ──
-  // Same two-band design as Universal generator: dark navy header + blue
-  // accent strip + prominent title + ASSESSMENT TARGET callout. Ported
-  // 2026-06-09 so Recon matches Vuln/Webapp/Cloud at parity.
-  fillR(0, 0, pageW, 95, DARK);
-  fillR(0, 88, pageW, 4, BLUE);
-  // VulnusLab shield logo top-left
-  {
-    const sx = margin + 8, sy = 20, w = 14, h = 16;
-    doc.setFillColor(15,23,42);
-    doc.setDrawColor(59,130,246); doc.setLineWidth(0.7);
-    doc.lines([
-      [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
-      [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
-      [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
-    ], sx - w*0.45, sy - h*0.4, [1,1], 'FD');
-    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(59,130,246);
-    doc.text("V", sx, sy + 2, {align:"center"});
-  }
-  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(241,245,249);
-  doc.text("VULNUS", margin + 18, 18);
-  doc.setTextColor(59,130,246);
-  doc.text("LAB", margin + 32, 18);
-  doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(148,163,184);
-  doc.text("Automated Reconnaissance & OSINT Platform", margin + 18, 24);
-  doc.setFont("Arial","bold"); doc.setFontSize(26); doc.setTextColor(...BLUE);
-  doc.text("RECONNAISSANCE REPORT", pageW/2, 56, {align:"center"});
-  doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(203,213,225);
-  doc.text("Information Gathering & OSINT Assessment", pageW/2, 66, {align:"center"});
-  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(148,163,184);
-  doc.text("ASSESSMENT TARGET", pageW/2, 76, {align:"center"});
-  doc.setFont("Arial","bold"); doc.setFontSize(13); doc.setTextColor(241,245,249);
-  doc.text(String(target || "(target)"), pageW/2, 83, {align:"center"});
-  y = 105;
+  // ── BRANDED COVER PAGE (shared helper) ──
+  // Calls the SAME _vlDrawBrandedCover used by Universal so that future
+  // cover design changes ship to BOTH generators with a single edit.
+  y = _vlDrawBrandedCover(doc, {
+    pageW, contentW, margin,
+    moduleTitle: "RECONNAISSANCE REPORT",
+    moduleSubtitle: "Information Gathering & OSINT Assessment",
+    tagline: "Automated Reconnaissance & OSINT Platform",
+    target,
+    _ascii: s => String(s == null ? "" : s),
+  });
 
   // Info table
   fillR(margin,y,contentW,8,DARK); txt("FIELD",margin+3,y+5.5,8,WHITE,true); txt("VALUE",margin+55,y+5.5,8,WHITE,true); y+=8;
@@ -11736,14 +11790,12 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,210,297,"S");
     if(i>=2){
-      // Branded footer: accent line + 3-zone layout + VL glyph on right.
-      // Ported from Universal generator 2026-06-09 for cross-module parity.
-      fillR(margin, 286, contentW, 0.5, BLUE);
-      txt(_ftr,margin,290,6.5,GRAY);
-      txt(`Report ID: ${_R_REPORT_ID}  ·  Content: ${_R_contentHash}`,pageW/2,290,6.5,GRAY,false,"center");
-      txt("Page "+i+" of "+total,pageW-margin-18,290,6.5,BLUE,true,"right");
-      doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(...BLUE);
-      doc.text("VL", pageW - margin, 290, {align:"right"});
+      // Branded footer (shared helper): same as Universal generator.
+      _vlDrawBrandedFooter(doc, {
+        pageW, contentW, margin,
+        pageNum: i, pageTotal: total,
+        target, reportId: _R_REPORT_ID, contentHash: _R_contentHash, sep: "·",
+      });
     }
   }
   txt("— END OF REPORT —",pageW/2,bY+8,10,BLUE,true,"center");
@@ -13605,45 +13657,16 @@ function generateUniversalVLReport(opts) {
     return yy + 8;
   };
 
-  // ── BRANDED COVER PAGE ──
-  // Two-band design inspired by industry-leading PT reports: dark navy
-  // header band + lighter accent strip + prominent title + target name.
-  // (pdf_industry_standard.md gap 14)
-  fillR(0, 0, pageW, 95, DARK);
-  // Accent strip (blue) below the main fill to add visual depth
-  fillR(0, 88, pageW, 4, BLUE);
-  // VulnusLab shield logo top-left
-  {
-    const sx = margin + 8, sy = 20, w = 14, h = 16;
-    doc.setFillColor(15,23,42);
-    doc.setDrawColor(59,130,246); doc.setLineWidth(0.7);
-    doc.lines([
-      [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
-      [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
-      [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
-    ], sx - w*0.45, sy - h*0.4, [1,1], 'FD');
-    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(59,130,246);
-    doc.text("V", sx, sy + 2, {align:"center"});
-  }
-  // Wordmark to the right of the logo
-  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(241,245,249);
-  doc.text("VULNUS", margin + 18, 18);
-  doc.setTextColor(59,130,246);
-  doc.text("LAB", margin + 32, 18);
-  doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(148,163,184);
-  doc.text("Automated Vulnerability Assessment Platform", margin + 18, 24);
-  // Big title centered
-  doc.setFont("Arial","bold"); doc.setFontSize(26); doc.setTextColor(...BLUE);
-  doc.text(_ascii(moduleTitle), pageW/2, 56, {align:"center"});
-  // Subtitle
-  doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(203,213,225);
-  doc.text(_ascii(moduleSubtitle), pageW/2, 66, {align:"center"});
-  // Target callout
-  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(148,163,184);
-  doc.text("ASSESSMENT TARGET", pageW/2, 76, {align:"center"});
-  doc.setFont("Arial","bold"); doc.setFontSize(13); doc.setTextColor(241,245,249);
-  doc.text(_ascii(target || "(target)"), pageW/2, 83, {align:"center"});
-  y = 105;
+  // ── BRANDED COVER PAGE (shared helper) ──
+  // Single source of truth: _vlDrawBrandedCover handles the design.
+  // Every module's PDF cover is identical because every generator now
+  // calls this same function.
+  y = _vlDrawBrandedCover(doc, {
+    pageW, contentW, margin,
+    moduleTitle, moduleSubtitle,
+    tagline: "Automated Vulnerability Assessment Platform",
+    target, _ascii,
+  });
 
   // Info table
   fillR(margin, y, contentW, 8, DARK);
@@ -15655,17 +15678,12 @@ function generateUniversalVLReport(opts) {
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0, 0, pageW, pageH, "S");
     if (i >= 2) {
-      // Branded footer: accent line + 3-zone layout (left CONFIDENTIAL +
-      // target, center report ID, right page count + module logo glyph).
-      // (pdf_industry_standard.md gap 18 - XBOW reference parity)
-      fillR(margin, 286, contentW, 0.5, BLUE);
-      const ftrL = `VulnusLab | CONFIDENTIAL - ${String(target||"target").substring(0,40)}`;
-      txt(ftrL, margin, 290, 6.5, GRAY);
-      txt(`Report ID: ${_REPORT_ID} - Content: ${_contentHash.substring(0,8)}`, pageW/2, 290, 6.5, GRAY, false, "center");
-      txt(`Page ${i} of ${total}`, pageW - margin - 18, 290, 6.5, BLUE, true, "right");
-      // Tiny VL glyph on the right edge of the footer
-      doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(...BLUE);
-      doc.text("VL", pageW - margin, 290, {align:"right"});
+      // Branded footer (shared helper): accent line + 3-zone + VL glyph.
+      _vlDrawBrandedFooter(doc, {
+        pageW, contentW, margin,
+        pageNum: i, pageTotal: total,
+        target, reportId: _REPORT_ID, contentHash: _contentHash, sep: "-",
+      });
     }
   }
 
