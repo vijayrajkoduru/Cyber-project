@@ -4,7 +4,7 @@ without auth (info leak that aids privesc). True multi-role testing requires aut
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async
+from tools.vuln._vuln_common import probe_url_async, http_get_async, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()
 
@@ -12,6 +12,10 @@ ROLE_PATHS = [
     "/api/roles", "/api/permissions", "/api/v1/roles", "/api/v1/permissions",
     "/roles", "/permissions", "/api/users/me/roles",
 ]
+# Use word-boundary checks via simple list - the keyword "root" appears in
+# React SPA shells as <div id="root"> which made every React app false-
+# positive. We now require JSON content-type AND the keyword in the JSON
+# body, not just any substring match.
 ROLE_KEYWORDS = ["admin", "superuser", "root", "operator", "owner", "moderator"]
 
 
@@ -25,17 +29,37 @@ async def gather(ctx):
     ctx.source("http")
     ctx.state["tested"] = 1
     ctx.state["probed_paths"] = len(ROLE_PATHS)
+    # SPA-detect: React shells contain `<div id="root">` which previously
+    # made this scanner false-positive on every React/Vue/Angular app.
+    # (User feedback 2026-06-09)
+    spa = await detect_spa_catchall(base_url)
+    ctx.state["spa_detected"] = spa["is_spa"]
     leaks = []
+    spa_suppressed = []
     for path in ROLE_PATHS:
         url = f"{base_url}{path}"
         r = await http_get_async(url, timeout=6, read=12000)
         if not r or r.get("status") != 200:
             continue
-        body_lower = r.get("body", "").lower()
+        body = r.get("body", "") or ""
+        # SPA suppression
+        if spa["is_spa"] and is_same_as_canary(body, spa["canary_body"]):
+            spa_suppressed.append({"path": path, "reason": "SPA shell"})
+            continue
+        # Confidence boost: require JSON content-type OR JSON-shaped body.
+        # A real /api/roles endpoint returns JSON, not HTML.
+        ctype = (r.get("headers") or {}).get("content-type", "").lower()
+        looks_json = "json" in ctype or body.lstrip().startswith(("{", "["))
+        if not looks_json:
+            spa_suppressed.append({"path": path, "reason": "expected JSON, got non-JSON"})
+            continue
+        body_lower = body.lower()
         matched = [k for k in ROLE_KEYWORDS if k in body_lower]
         if matched:
             leaks.append({"path": path, "roles_seen": matched})
     ctx.state["role_endpoint_leaks"] = leaks
+    if spa_suppressed:
+        ctx.state["spa_suppressed_findings"] = spa_suppressed
 
 
 def _r_priv(s):

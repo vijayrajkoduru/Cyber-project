@@ -173,6 +173,69 @@ async def probe_url_async(host, path="/", scheme=None, timeout=10):
     return (None, None)
 
 
+async def detect_spa_catchall(base_url, timeout=6):
+    """Detect React/Vue/Angular SPA catch-all routing.
+
+    Fetches a deliberately-bogus path that no real app would handle. If the
+    server returns 200 with substantial body, the app is using SPA catch-all
+    routing (frontend serves index.html for every path, React Router handles
+    real routing client-side). In that case ANY 200 response from any path
+    will return the same SPA shell - which means scanners that flag
+    "200 + body > 50 = exposed" will false-positive on every endpoint.
+
+    Returns a dict with:
+      - is_spa: bool - True if SPA catch-all detected
+      - canary_status: int - status of the canary probe
+      - canary_body: str - first 2000 chars of canary response body (for
+        cmp against suspicious endpoints later)
+      - canary_len: int - full canary body length
+
+    Scanner usage pattern:
+        spa = await detect_spa_catchall(base_url)
+        # ... probe suspicious paths ...
+        for r in suspicious_responses:
+            if spa["is_spa"] and r["body"][:2000] == spa["canary_body"]:
+                continue  # SPA catch-all, not real exposure
+            # ... real finding ...
+    """
+    # Canary path: highly unlikely to exist on any real app, includes
+    # randomish chars + ascii letters so no path-traversal filter blocks it.
+    import time
+    canary_path = f"/__vl_canary_{int(time.time()*1000) % 1000000}_zzzqxq"
+    url = f"{base_url.rstrip('/')}{canary_path}"
+    r = await http_get_async(url, timeout=timeout, read=20000)
+    if not r:
+        return {"is_spa": False, "canary_status": 0, "canary_body": "", "canary_len": 0}
+    status = r.get("status", 0)
+    body = r.get("body", "") or ""
+    # SPA catch-all signature: status 200 + substantial body (typically the
+    # HTML shell). Real apps return 404 for bogus paths.
+    is_spa = (status == 200 and len(body) > 200)
+    return {
+        "is_spa": is_spa,
+        "canary_status": status,
+        "canary_body": body[:2000],
+        "canary_len": len(body),
+    }
+
+
+def is_same_as_canary(response_body, canary_body, threshold=0.9):
+    """Return True if response_body matches the SPA canary closely enough
+    to conclude it's the same catch-all response. Uses simple length-bounded
+    prefix comparison rather than full-body diff for speed.
+    """
+    if not response_body or not canary_body:
+        return False
+    rb = response_body[:2000]
+    cb = canary_body[:2000]
+    if rb == cb:
+        return True
+    # Exact-prefix check: most SPAs serve byte-identical index.html shells
+    # so this is the common case. Fall back to first-200-char compare for
+    # SPAs that inject per-request meta tags (CSP nonces, build hash).
+    return rb[:200] == cb[:200]
+
+
 async def bounded_gather_probes(probes, per_probe_timeout=8, max_total=50):
     """Run a list of awaitable probe-coroutines with a hard per-probe timeout
     and a soft cap on total wall-clock. Returns list of results (None for the

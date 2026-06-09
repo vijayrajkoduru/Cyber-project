@@ -3,7 +3,7 @@ Strategy: probe common exposed admin/config/info paths and detect dangerous 200 
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async
+from tools.vuln._vuln_common import probe_url_async, http_get_async, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()
 
@@ -36,7 +36,14 @@ async def gather(ctx):
     ctx.source("http")
     ctx.state["tested"] = 1
     ctx.state["probed_paths"] = len(EXPOSED_PATHS)
+    # SPA-detect: React/Vue/Angular catch-all returns 200 + HTML shell for
+    # any path - and HTML shells often contain substrings like '"name"' from
+    # meta tags or JSON-LD blocks, which trips marker-based detection.
+    # (User feedback 2026-06-09: /package.json false-positive on SPA target)
+    spa = await detect_spa_catchall(base_url)
+    ctx.state["spa_detected"] = spa["is_spa"]
     findings = []
+    spa_suppressed = []
     for path, sev, marker, name in EXPOSED_PATHS:
         url = f"{base_url}{path}"
         r = await http_get_async(url, timeout=8, read=4000)
@@ -47,8 +54,27 @@ async def gather(ctx):
         body = r.get("body", "")
         if marker and marker not in body:
             continue
+        # SPA suppression: if body matches the SPA canary, the marker hit
+        # was just because the shell HTML happens to contain that substring.
+        # Real config files would have body uniquely different from the
+        # canary's HTML shell.
+        if spa["is_spa"] and is_same_as_canary(body, spa["canary_body"]):
+            spa_suppressed.append({"path": path, "name": name, "reason": "SPA shell"})
+            continue
+        # Additional confidence boost for file-format-bound paths: e.g.
+        # /package.json must be valid JSON, /web.config must be XML. Reject
+        # any response whose content-type or body shape doesn't match.
+        ctype = (r.get("headers") or {}).get("content-type", "").lower()
+        if path.endswith(".json") and "json" not in ctype and not body.lstrip().startswith("{"):
+            spa_suppressed.append({"path": path, "name": name, "reason": "expected JSON, got HTML"})
+            continue
+        if path.endswith(".config") and "xml" not in ctype and not body.lstrip().startswith("<"):
+            spa_suppressed.append({"path": path, "name": name, "reason": "expected XML, got non-XML"})
+            continue
         findings.append({"path": path, "severity": sev, "name": name, "marker_seen": bool(marker)})
     ctx.state["exposed"] = findings
+    if spa_suppressed:
+        ctx.state["spa_suppressed_findings"] = spa_suppressed
 
 
 def _r_critical(s):
