@@ -4,7 +4,7 @@ Self-contained. Strategy: probe destructive/admin-only API paths, check if they 
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async, http_post_async
+from tools.vuln._vuln_common import probe_url_async, http_get_async, http_post_async, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()
 
@@ -23,8 +23,17 @@ async def gather(ctx):
         return
     ctx.source("http")
     ctx.state["tested"] = 1
+    # SPA-detect: React/Vue/Angular catch-all routing serves index.html for
+    # every path. Without this check, every 200 response gets flagged as
+    # "exposed admin endpoint" even when it's just the SPA shell.
+    # (User feedback 2026-06-09: 5 false-positives on app.vulnuslab.com)
+    spa = await detect_spa_catchall(base_url)
+    ctx.state["spa_detected"] = spa["is_spa"]
+    if spa["is_spa"]:
+        ctx.state["spa_note"] = "SPA catch-all routing detected - suppressing 200-only findings; only real API responses (JSON, non-shell HTML) flagged."
     exposed = []
     protected = []
+    spa_suppressed = []
     for path in PRIV_PATHS_GET:
         url = f"{base_url}{path}"
         r = await http_get_async(url, timeout=6, read=4000)
@@ -32,9 +41,17 @@ async def gather(ctx):
             continue
         status = r.get("status", 0)
         if status == 200:
-            body = r.get("body", "")[:300]
-            if len(body) > 50:
-                exposed.append({"method": "GET", "path": path, "evidence": "200 with body"})
+            body = r.get("body", "")
+            # SPA suppression: if response body matches the SPA canary, skip.
+            if spa["is_spa"] and is_same_as_canary(body, spa["canary_body"]):
+                spa_suppressed.append({"method": "GET", "path": path, "reason": "SPA shell"})
+                continue
+            # Real API confidence boost: require JSON content-type OR clearly
+            # non-HTML body to count as a real privileged endpoint.
+            ctype = (r.get("headers") or {}).get("content-type", "").lower()
+            looks_json = "json" in ctype or body.strip().startswith(("{", "["))
+            if len(body[:300]) > 50 and looks_json:
+                exposed.append({"method": "GET", "path": path, "evidence": "200 with JSON body"})
         elif status in (401, 403):
             protected.append({"method": "GET", "path": path, "status": status})
     for path in PRIV_PATHS_POST:
@@ -43,11 +60,20 @@ async def gather(ctx):
         if not r:
             continue
         status = r.get("status", 0)
-        # 401/403 = good. 405 = method not allowed (fine). 200/201 with empty body = bad.
-        if status in (200, 201) and r.get("body", "").strip():
-            exposed.append({"method": "POST", "path": path, "evidence": f"status {status} on empty body"})
+        body = (r.get("body", "") or "").strip()
+        if status in (200, 201) and body:
+            # Same SPA + JSON-confidence check on POST responses.
+            if spa["is_spa"] and is_same_as_canary(body, spa["canary_body"]):
+                spa_suppressed.append({"method": "POST", "path": path, "reason": "SPA shell"})
+                continue
+            ctype = (r.get("headers") or {}).get("content-type", "").lower()
+            looks_json = "json" in ctype or body.startswith(("{", "["))
+            if looks_json:
+                exposed.append({"method": "POST", "path": path, "evidence": f"status {status} with JSON body"})
     ctx.state["exposed_privileged"] = exposed
     ctx.state["protected_privileged"] = protected
+    if spa_suppressed:
+        ctx.state["spa_suppressed_findings"] = spa_suppressed
 
 
 def _r_exposed(s):
