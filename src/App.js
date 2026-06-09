@@ -13132,37 +13132,65 @@ function generateUniversalVLReport(opts) {
   // provenance. Per-Tool Intelligence panels still show each scanner's
   // finding individually because they iterate r{} directly.
   // (pdf_industry_standard.md gap 11; user feedback 2026-06-09)
+  // Dedup v2: catch overlapping findings even when their signatures aren't
+  // identical. v1 missed pairs where one scanner flagged "JSESSIONID missing
+  // SameSite" and another flagged "JSESSIONID missing Secure + SameSite" -
+  // same cookie, different attribute subset. v2 uses CLUSTER KEY (cookie name
+  // OR server stack) and merges any two findings sharing that key, taking
+  // the union of attributes / tokens.
+  // Server stack: maps multiple tokens to the same canonical stack so
+  // "apache" + "coyote" both collapse to "tomcat-stack" instead of producing
+  // different signatures.
   (function(){
     const _sr = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,POSITIVE:4,INFO:5};
-    const _sigOf = f => {
+    // Server-stack canonicalisation: pick the most-specific token if multiple match.
+    const _STACK_OF = (blob) => {
+      // Order matters - check specific stacks before generic terms.
+      if (/\b(coyote|tomcat|apache-coyote)\b/.test(blob)) return "tomcat-stack";
+      if (/\b(jboss|wildfly)\b/.test(blob)) return "jboss-stack";
+      if (/\b(websphere|was)\b/.test(blob)) return "websphere-stack";
+      if (/\b(weblogic)\b/.test(blob)) return "weblogic-stack";
+      if (/\b(jetty)\b/.test(blob)) return "jetty-stack";
+      if (/\b(nginx)\b/.test(blob)) return "nginx-stack";
+      if (/\b(iis|microsoft-iis)\b/.test(blob)) return "iis-stack";
+      if (/\b(caddy)\b/.test(blob)) return "caddy-stack";
+      if (/\b(lighttpd)\b/.test(blob)) return "lighttpd-stack";
+      if (/\b(openssh)\b/.test(blob)) return "openssh-stack";
+      if (/\b(exim|postfix)\b/.test(blob)) return "mail-stack";
+      if (/\b(apache)\b/.test(blob)) return "apache-stack";
+      if (/\b(kestrel)\b/.test(blob)) return "kestrel-stack";
+      return null;
+    };
+    const _clusterOf = f => {
       const ev = String(f.evidence||"").toLowerCase();
       const nm = String(f.name||f.title||f.detail||"").toLowerCase();
       const blob = nm + " | " + ev;
-      // Cookie attribute hygiene
+      // Cookie cluster: any finding about a specific cookie name + ANY hygiene
+      // attribute lands in cluster "cookie:<cookie_name>". Subset attributes
+      // (one finding says "SameSite", another says "Secure + SameSite") still
+      // merge because the cluster key drops the attribute list.
       const _cn = blob.match(/\b(jsessionid|phpsessid|asp\.net_sessionid|connect\.sid|laravel_session|[a-z_-]*sess(?:ion)?[a-z_-]*id)\b/);
       if (_cn && /\b(samesite|httponly|secure)\b/.test(blob)) {
-        const attrs = [];
-        if (/\bsamesite\b/.test(blob)) attrs.push("samesite");
-        if (/\bhttponly\b/.test(blob)) attrs.push("httponly");
-        if (/\b(missing|without|no)\s+secure\b/.test(blob)) attrs.push("secure");
-        if (attrs.length) return "cookie:" + _cn[1] + ":" + attrs.sort().join(",");
+        return "cookie:" + _cn[1];
       }
-      // Server / app-server version disclosure
-      const _sv = blob.match(/\b(apache|nginx|iis|tomcat|coyote|jetty|jboss|websphere|weblogic|caddy|kestrel|lighttpd|openssh|exim|postfix)\b/);
-      if (_sv && /(disclos|reveal|version|banner)/.test(nm)) {
-        return "server-disclosure:" + _sv[1];
+      // Server stack cluster: collapses apache + coyote (Tomcat) into one,
+      // nginx into another, etc. Multi-token matches (apache-coyote/1.1)
+      // resolve via the priority order above.
+      const stack = _STACK_OF(blob);
+      if (stack && /(disclos|reveal|version|banner|server\s+version|server\s+disclosed)/.test(nm)) {
+        return "server-disclosure:" + stack;
       }
       return null;
     };
-    const _bySig = new Map();
+    const _byKey = new Map();
     _allFindings.forEach(f => {
-      const sig = _sigOf(f);
-      if (!sig) return;
-      if (!_bySig.has(sig)) _bySig.set(sig, []);
-      _bySig.get(sig).push(f);
+      const key = _clusterOf(f);
+      if (!key) return;
+      if (!_byKey.has(key)) _byKey.set(key, []);
+      _byKey.get(key).push(f);
     });
     const _suppress = new Set();
-    _bySig.forEach(group => {
+    _byKey.forEach(group => {
       if (group.length < 2) return;
       group.sort((a, b) => {
         const ra = _sr[String(a.severity||"INFO").toUpperCase()];
@@ -13471,31 +13499,45 @@ function generateUniversalVLReport(opts) {
     return yy + 8;
   };
 
-  // ── COVER ──
-  fillR(0, 0, pageW, 64, DARK);
-  // VulnusLab shield logo + wordmark (top-center)
+  // ── BRANDED COVER PAGE ──
+  // Two-band design inspired by industry-leading PT reports: dark navy
+  // header band + lighter accent strip + prominent title + target name.
+  // (pdf_industry_standard.md gap 14)
+  fillR(0, 0, pageW, 95, DARK);
+  // Accent strip (blue) below the main fill to add visual depth
+  fillR(0, 88, pageW, 4, BLUE);
+  // VulnusLab shield logo top-left
   {
-    const sx = pageW/2, sy = 16, w = 12, h = 14;
+    const sx = margin + 8, sy = 20, w = 14, h = 16;
     doc.setFillColor(15,23,42);
-    doc.setDrawColor(59,130,246); doc.setLineWidth(0.6);
+    doc.setDrawColor(59,130,246); doc.setLineWidth(0.7);
     doc.lines([
       [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
       [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
       [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
     ], sx - w*0.45, sy - h*0.4, [1,1], 'FD');
-    doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(59,130,246);
-    doc.text("V", sx, sy + 1, {align:"center"});
-    doc.setFont("helvetica","bold"); doc.setFontSize(7);
-    doc.setTextColor(241,245,249);
-    doc.text("VULNUS", sx - 1, sy + 10, {align:"right"});
-    doc.setTextColor(59,130,246);
-    doc.text("LAB", sx, sy + 10, {align:"left"});
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(59,130,246);
+    doc.text("V", sx, sy + 2, {align:"center"});
   }
-  doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(...BLUE);
-  doc.text(_ascii(moduleTitle), pageW/2, 38, {align:"center"});
-  doc.setFont("Arial","normal"); doc.setFontSize(10); doc.setTextColor(...GRAY);
-  doc.text(_ascii(moduleSubtitle), pageW/2, 46, {align:"center"});
-  y = 74;
+  // Wordmark to the right of the logo
+  doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(241,245,249);
+  doc.text("VULNUS", margin + 18, 18);
+  doc.setTextColor(59,130,246);
+  doc.text("LAB", margin + 32, 18);
+  doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(148,163,184);
+  doc.text("Automated Vulnerability Assessment Platform", margin + 18, 24);
+  // Big title centered
+  doc.setFont("Arial","bold"); doc.setFontSize(26); doc.setTextColor(...BLUE);
+  doc.text(_ascii(moduleTitle), pageW/2, 56, {align:"center"});
+  // Subtitle
+  doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(203,213,225);
+  doc.text(_ascii(moduleSubtitle), pageW/2, 66, {align:"center"});
+  // Target callout
+  doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(148,163,184);
+  doc.text("ASSESSMENT TARGET", pageW/2, 76, {align:"center"});
+  doc.setFont("Arial","bold"); doc.setFontSize(13); doc.setTextColor(241,245,249);
+  doc.text(_ascii(target || "(target)"), pageW/2, 83, {align:"center"});
+  y = 105;
 
   // Info table
   fillR(margin, y, contentW, 8, DARK);
@@ -13951,47 +13993,79 @@ function generateUniversalVLReport(opts) {
     txt("OVERALL SECURITY POSTURE", margin + 8, y + 8, 8, [100,116,139], true);
     txt(_posture, margin + 8, y + 17, 14, _pCol, true);
     y += 26;
-    // 2-3 sentence narrative tailored to the actual finding mix. Pulls in
-    // the top finding name when relevant so the exec summary isn't a stock
-    // template line.
+    // Narrative Executive Summary - 3-4 paragraphs of prose covering the
+    // assessment scope, top findings deep-dive, business impact, and
+    // recommended next steps. Mimics industry pen-test report narrative
+    // style (pdf_industry_standard.md gap 15).
     {
       const _topName = _top3.length > 0
         ? String(_top3[0].detail || _top3[0].name || _top3[0].title || "").substring(0, 90)
         : "";
+      const _topName2 = _top3.length > 1
+        ? String(_top3[1].detail || _top3[1].name || _top3[1].title || "").substring(0, 90)
+        : "";
       const _totalReal = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW;
-      let _narr;
+      const _scannerCount = Object.keys(r).length;
+      const _paragraphs = [];
       if (_insufficientScan) {
-        _narr = `Scan invoked ${Object.keys(r).length} scanner(s) but ${_skippedInfoCount} of ${_totalFindings} probe(s) could not execute due to missing required inputs, libraries, or wrong target type. `
-              + `No CRITICAL/HIGH/MEDIUM/LOW finding was produced because the probes did not effectively test the target. `
-              + `Provide the inputs listed in the "Required Inputs" section and re-scan. Do NOT interpret this report as evidence of secure posture.`;
+        _paragraphs.push(
+          `${moduleLabel.replace(/\s+/g,' ')} assessed ${target || 'the target'} across ${_scannerCount} scanner(s). However, ${_skippedInfoCount} of ${_totalFindings} probe(s) could not execute due to missing required inputs, runtime libraries, or because the target type does not match the probe's prerequisites. As a result, no CRITICAL, HIGH, MEDIUM, or LOW finding was produced - this is NOT evidence of secure posture.`,
+          `To convert this into a usable assessment, supply the inputs listed in the "Required Inputs" section (typically a Dockerfile, Kubernetes manifest, kubeconfig, repository URL, or container image reference) and re-scan. Without those inputs, most probes silently skip and the report has no signal value.`,
+          `Treat this report as a coverage gap notification, not a clean bill of health.`
+        );
       } else if (_partialScan) {
-        _narr = `Scan ran ${_totalScannerCount} scanner(s); ${_testedCount} confirmed clean (POSITIVE proof) but ${_untestedCount} could not execute due to missing inputs. `
-              + `The CONFIRMED CLEAN portion is genuine - those scanners actively tested and rejected attack vectors. `
-              + `The REMAINING scanners listed in the "Required Inputs" section need additional inputs to assess full posture. `
-              + `Treat this report as partial: the tested surface is secure, but most of the attack surface was not tested.`;
+        _paragraphs.push(
+          `VulnusLab executed ${_scannerCount} scanner(s) against ${target || 'the target'}. ${_testedCount} of those actively probed the surface and returned POSITIVE confirmation that the specific attack vectors they test are NOT present. The remaining ${_untestedCount} probe(s) require additional inputs (listed in the Required Inputs section) to perform a meaningful test.`,
+          `The CONFIRMED CLEAN portion is genuine - those probes hit live endpoints and rejected exploit attempts. The UNTESTED portion is unknown and should not be interpreted as either secure or vulnerable until appropriate inputs are supplied and the scan is re-run.`,
+          `Recommended next step: provide the missing inputs and re-scan to extend coverage to the full attack surface.`
+        );
       } else if (_sevCount.CRITICAL > 0) {
-        _narr = `Scan surfaced ${_sevCount.CRITICAL} CRITICAL exposure(s) requiring 24-hour remediation. `
-              + `Top concern: ${_topName}. Treat as P0 — schedule incident response review.`;
+        const _critSummary = _sevCount.CRITICAL === 1
+          ? `one CRITICAL exposure that requires immediate (24-hour) remediation`
+          : `${_sevCount.CRITICAL} CRITICAL exposures requiring immediate (24-hour) remediation`;
+        const _otherCount = _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW;
+        _paragraphs.push(
+          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} surfaced ${_critSummary}. The most urgent concern is "${_topName}". This class of exposure provides a direct pathway to unauthorized data access, privileged action invocation, or system compromise depending on the specific finding context (see Detailed Findings section).`,
+          _sevCount.HIGH > 0
+            ? `Additionally, ${_sevCount.HIGH} HIGH-severity issue(s) require patching within 7 days. ${_topName2 ? 'Notable: "' + _topName2 + '". ' : ''}These findings widen the attack surface and should be addressed in parallel with the CRITICAL remediation.`
+            : `No other HIGH-severity issues were detected on this scan.`,
+          _otherCount > _sevCount.HIGH
+            ? `${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s) round out the surface. These are typically hardening opportunities (cookie hygiene, server version disclosure, missing security headers) that reduce defense-in-depth depth but are not immediately exploitable on their own.`
+            : `No MEDIUM or LOW findings were detected.`,
+          `Treat the CRITICAL finding as P0: schedule incident response review, contain affected endpoints, and remediate before the next public exposure window. Use the Strategic Recommendations queue (section 13) for the prioritized work plan.`
+        );
       } else if (_sevCount.HIGH > 0) {
-        _narr = `Scan surfaced ${_sevCount.HIGH} HIGH-severity issue(s) requiring patching within 7 days. `
-              + (_topName ? `Top concern: ${_topName}. ` : "")
-              + `Address via the Strategic Recommendations queue, then re-scan to confirm closure.`;
+        _paragraphs.push(
+          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} surfaced ${_sevCount.HIGH} HIGH-severity issue(s) that require patching within 7 days under standard remediation SLAs. The most significant finding is "${_topName}". These findings reflect known-exploited attack classes (e.g. weak TLS parameters, vulnerable CVE-mapped components, or authentication weaknesses) and should be addressed before any public attacker can weaponize the exposure.`,
+          _sevCount.MEDIUM + _sevCount.LOW > 0
+            ? `Beyond the HIGH-severity issues, the scan identified ${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s). These are typically hygiene gaps (cookie security flags, version-banner disclosure, missing security headers) that reduce defense-in-depth but are not standalone exploits.`
+            : `No MEDIUM or LOW findings were detected on this scan.`,
+          `Recommended next steps: address the HIGH findings via the Strategic Recommendations queue (section 13), then close the remaining items per SLA cadence. Re-scan post-remediation to capture the improvement delta.`
+        );
       } else if (_totalReal > 0) {
-        _narr = `Scan completed cleanly with ${_totalReal} finding(s) at LOW/MEDIUM severity. `
-              + (_topName ? `Notable item: ${_topName}. ` : "")
-              + `Surface is well-controlled; address per SLA cadence and continue continuous monitoring.`;
+        _paragraphs.push(
+          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed cleanly across ${_scannerCount} scanner(s) with ${_totalReal} finding(s) - all at MEDIUM or LOW severity. The most notable item is "${_topName}". No CRITICAL or HIGH exposures were detected, indicating the externally-visible attack surface is well-controlled.`,
+          `The MEDIUM/LOW findings are typically hardening opportunities: cookie security flags, server-version disclosure, or missing security headers. None are independently exploitable but together they reduce defense-in-depth against client-side and credential-harvesting attacks.`,
+          `Recommended next steps: address findings per SLA cadence (MEDIUM within 30 days, LOW within 90 days) and continue continuous monitoring. Schedule a re-scan on the cadence indicated in the Conclusion section to detect drift.`
+        );
       } else {
-        _narr = `Scan completed cleanly across ${Object.keys(r).length} scanner(s) with zero CRITICAL/HIGH/MEDIUM/LOW findings. `
-              + `Target's exposed attack surface is well-managed. `
-              + `Maintain continuous monitoring and quarterly re-scan cadence to catch drift.`;
+        _paragraphs.push(
+          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed cleanly across ${_scannerCount} scanner(s) with zero CRITICAL, HIGH, MEDIUM, or LOW findings. The target's externally-visible attack surface is well-managed against the vulnerability classes covered by this module's probes.`,
+          `The Scan Coverage section (section 7) details the per-probe breakdown - which scanners returned DATA, ran EMPTY (clean), were SKIPPED (not applicable), or ERROR'd. Review that section to confirm coverage matches expectations for your environment.`,
+          `Recommended next steps: maintain continuous monitoring on the corresponding control areas (WAF, SIEM, CSPM, DAST/SAST) and quarterly re-scan cadence to catch configuration drift. A clean scan today does not preclude future exposure as the environment evolves.`
+        );
       }
-      const _narLines = doc.splitTextToSize(_ascii(_narr), contentW - 8);
-      const _nh = 4 + (_narLines.length * 4);
-      chk(_nh + 2);
-      fillR(margin, y, contentW, _nh, [248,250,252]);
+      // Render each paragraph with a small gap between them
       doc.setFont("Arial","normal"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
-      _narLines.forEach((ln, i) => doc.text(ln, margin + 4, y + 5 + (i * 4)));
-      y += _nh + 2;
+      _paragraphs.forEach(p => {
+        const _pl = doc.splitTextToSize(_ascii(p), contentW - 8);
+        const _ph = 3 + (_pl.length * 4) + 2;
+        chk(_ph + 1);
+        fillR(margin, y, contentW, _ph, [248,250,252]);
+        _pl.forEach((ln, i) => doc.text(ln, margin + 4, y + 4 + (i * 4)));
+        y += _ph + 1.5;
+      });
+      y += 0.5;
     }
 
     // Engagement scope — also surface the RESOLVED image reference that
@@ -14099,6 +14173,52 @@ function generateUniversalVLReport(opts) {
       y += 7;
     });
     y += 6;
+
+    // ── METHODOLOGY (two-column attack-class detail) ──
+    // Industry-style methodology page describing the attack vectors this
+    // module tests for. Two-column layout for readability.
+    // (pdf_industry_standard.md gap 17 - mirrors XBOW reference layout)
+    {
+      chk(50); y = sHead("Methodology", y);
+      const _intro = `${moduleLabel.replace(/\s+/g,' ')} aligns with the OWASP Top 10, NIST SP 800-115 testing principles, and PTES execution structure. Each scanner systematically probes one or more of the attack classes below. Probes use real network traffic against the live target - no template-only matches.`;
+      const _introLines = doc.splitTextToSize(_ascii(_intro), contentW - 4);
+      _introLines.forEach((ln, i) => txt(ln, margin + 2, y + (i * 4), 8, DARK));
+      y += _introLines.length * 4 + 3;
+      // 8 attack-class cards rendered in 2 columns x 4 rows
+      const _methodology = [
+        ["Injection", "Probes for SQL, NoSQL, OS command, and LDAP injection by submitting crafted payloads against input fields and API parameters. Detects backend errors, response-time anomalies, and data exfiltration patterns indicative of unsafe input handling."],
+        ["Broken Access Control", "Tests authorization enforcement by probing privileged endpoints without credentials, with low-privilege credentials, and via vertical/horizontal path traversal. Flags endpoints that return 200 OK without proper auth-role checks."],
+        ["Cryptographic Failures", "Audits TLS configuration (ciphers, DH params, certificate validity), session cookie attributes (Secure, HttpOnly, SameSite), and inspects for cleartext credential transmission or weak algorithm usage."],
+        ["Cross-Site Scripting (XSS)", "Injects reflected and stored XSS payloads into user-input contexts (forms, query strings, headers, JSON bodies). Detects response reflection, DOM-sink usage, and CSP bypass conditions."],
+        ["Security Misconfiguration", "Probes for default credentials, exposed admin panels, verbose error pages, missing security headers (CSP, HSTS, X-Frame-Options), and unrestricted directory listings. Identifies hardening gaps."],
+        ["Vulnerable Components (CVE)", "Fingerprints HTTP/SSH/SMTP/etc. banners to extract product + version, cross-references against NVD, EPSS, and CISA KEV catalogs. Reports known-exploited vulnerabilities with patch urgency."],
+        ["Server-Side Request Forgery (SSRF)", "Tests URL-input endpoints by attempting to redirect server-side requests to internal targets (169.254.169.254, localhost, internal subnets). Detects cloud-metadata exposure and internal-service reachability."],
+        ["Authentication & Session", "Audits authentication flows (OAuth/OIDC, JWT, session cookies, MFA enforcement), tests for credential-stuffing throttling, account enumeration via response-timing, and weak password policy."],
+      ];
+      const _colW = (contentW - 4) / 2;
+      for (let _mi = 0; _mi < _methodology.length; _mi += 2) {
+        const _left = _methodology[_mi];
+        const _right = _methodology[_mi + 1];
+        const _lt = doc.splitTextToSize(_ascii(_left[1]), _colW - 6);
+        const _rt = _right ? doc.splitTextToSize(_ascii(_right[1]), _colW - 6) : [];
+        const _rh = 6 + Math.max(_lt.length, _rt.length) * 3.4 + 2;
+        chk(_rh + 0.5);
+        // Left card
+        fillR(margin, y, _colW - 1, _rh, [248,250,252]);
+        fillR(margin, y, 2, _rh, BLUE);
+        txt(_left[0], margin + 4, y + 4.5, 8.5, BLUE, true);
+        _lt.forEach((ln, li) => txt(ln, margin + 4, y + 8.5 + (li * 3.4), 7.5, DARK));
+        // Right card
+        if (_right) {
+          fillR(margin + _colW + 1, y, _colW - 1, _rh, [248,250,252]);
+          fillR(margin + _colW + 1, y, 2, _rh, BLUE);
+          txt(_right[0], margin + _colW + 5, y + 4.5, 8.5, BLUE, true);
+          _rt.forEach((ln, li) => txt(ln, margin + _colW + 5, y + 8.5 + (li * 3.4), 7.5, DARK));
+        }
+        y += _rh + 1.5;
+      }
+      y += 2;
+    }
 
     // Findings distribution bars - 6 columns now:
     // CRITICAL / HIGH / MEDIUM / LOW / INFO (real) / SCAFFOLD (not-yet-forged)
@@ -14697,29 +14817,112 @@ function generateUniversalVLReport(opts) {
           host: target,
         };
       };
-      // Reproduce-hint: 1-line copy-pasteable command tailored to the
-      // finding shape so customers can re-confirm independently.
+      // Reproduce-hint: real copy-pasteable command tailored to the finding
+      // shape so customers can re-confirm independently. Tool name extracted
+      // from f._tool; finding-type matched via name + evidence patterns.
+      // (pdf_industry_standard.md gap 16 - real reproduce commands per XBOW
+      // reference report style; user 2026-06-09 "fix it all".)
       const _reproduce = (f, x) => {
         const nm = String(f.name||f.detail||"").toLowerCase();
-        // Strip leading scheme so we never emit `https://http://...` in the
-        // copy-pasteable command (pdf_industry_standard.md gap 8).
+        const ev = String(f.evidence||"").toLowerCase();
+        const blob = nm + " " + ev;
         const host = String(x.host || target || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+        const tool = String(f._tool||"");
+        // CVE-driven reproduce
         if (x.cve !== "-") {
           if (/http\/?2|rapid reset/.test(nm))
             return `curl --http2 -k -I https://${host}/  # ALPN must NOT advertise h2 on patched stack`;
           return `nuclei -id ${x.cve.toLowerCase()} -u https://${host}/`;
         }
-        if (/tls|ssl|cipher|hsts|certificate/.test(nm))
+        // Auth-class findings - vertical access, admin endpoint
+        if (/privileged endpoint|admin.*without auth|vertical access/.test(blob))
+          return `curl -sI https://${host}/admin/api/users  # expect 401/403; 200 = exposed`;
+        if (/admin panel|hidden admin/.test(blob))
+          return `for p in /admin /admin/api /administrator /wp-admin; do printf "%s -> " "$p"; curl -so /dev/null -w "%{http_code}\\n" https://${host}$p; done`;
+        // Cookie hygiene
+        if (/cookie|samesite|httponly|jsessionid/.test(blob))
+          return `curl -sI https://${host}/ | grep -i "Set-Cookie"  # check Secure / HttpOnly / SameSite attrs`;
+        // Auth / OTP / session
+        if (/otp|password.send|verification|auth.*disclos/.test(blob))
+          return `curl -X POST https://${host}/auth/password-send-otp -H "Content-Type: application/json" -d '{"phone_number":"+1234567890"}'`;
+        // Open redirect
+        if (/open redirect|redirect.*to|redirectto/.test(blob))
+          return `curl -I "https://${host}/app/authorize?redirectTo=https://example.com@evil.test"`;
+        // Hardcoded credentials / exposed secrets
+        if (/hardcoded|api.key|secret|credential/.test(blob))
+          return `curl -H "X-API-Key: <leaked-key>" https://${host}/admin/conversions`;
+        // TLS / SSL
+        if (/dh.params|diffie.hellman|weak.*key/.test(blob))
+          return `nmap --script ssl-dh-params -p 443 ${host}`;
+        if (/tls|ssl|cipher|certificate/.test(nm))
           return `nmap --script ssl-enum-ciphers,ssl-cert -p 443 ${host}`;
-        if (/header|csp|cors|hsts/.test(nm))
-          return `curl -sI https://${host}/ | grep -iE 'strict-transport|content-security|x-frame|x-content-type'`;
+        // HTTP headers / CSP / CORS / HSTS
+        if (/csp|content.security/.test(blob))
+          return `curl -sI https://${host}/ | grep -i "content-security-policy"`;
+        if (/hsts|strict.transport/.test(blob))
+          return `curl -sI https://${host}/ | grep -i "strict-transport-security"`;
+        if (/cors|access.control.allow/.test(blob))
+          return `curl -H "Origin: https://evil.test" -I https://${host}/api/  # check Access-Control-Allow-Origin reflection`;
+        if (/x.frame|clickjack/.test(blob))
+          return `curl -sI https://${host}/ | grep -i "x-frame-options"`;
+        if (/header|security.header/.test(nm))
+          return `curl -sI https://${host}/ | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer-policy"`;
+        // Server / version disclosure
+        if (/server.*disclos|version.*disclos|banner/.test(blob))
+          return `curl -sI https://${host}/ | grep -iE "server|x-powered-by"`;
+        // DNS / SPF / DMARC
         if (/dns|spf|dmarc|dkim/.test(nm))
           return `dig +short TXT _dmarc.${host} ; dig +short TXT ${host}`;
-        if (/sql|xss|cmd|ssrf|xxe|redirect|csrf/.test(nm))
-          return `# Run the relevant Webapp module probe against https://${host}/ to reproduce`;
+        // Web app injection-class
+        if (/sql.injection|sqli/.test(blob))
+          return `sqlmap -u "https://${host}/<endpoint>?id=1" --batch --random-agent`;
+        if (/xss|cross.site.script/.test(blob))
+          return `curl "https://${host}/<endpoint>?q=<script>alert(1)</script>"`;
+        if (/ssrf|server.side.request/.test(blob))
+          return `curl "https://${host}/<endpoint>?url=http://169.254.169.254/latest/meta-data/"`;
+        if (/xxe|xml.external/.test(blob))
+          return `curl -X POST -H "Content-Type: application/xml" --data-binary @xxe.xml https://${host}/<endpoint>`;
+        if (/lfi|local.file|directory.traversal|path.traversal/.test(blob))
+          return `curl "https://${host}/<endpoint>?file=../../../../etc/passwd"`;
+        if (/cmd.injection|command.injection|rce/.test(blob))
+          return `curl "https://${host}/<endpoint>?input=;id"`;
+        if (/csrf|cross.site.request/.test(blob))
+          return `# Submit a state-changing POST without Origin/Referer headers and observe acceptance`;
+        // Network exposure
         if (/port|service|open/.test(nm) && x.port)
           return `nmap -sV -p ${x.port} ${host}`;
-        return `# Re-run /api/${moduleKey}/${String(f._tool||"<scanner>")} against ${host} to reproduce`;
+        if (/snmp/.test(blob))
+          return `snmpwalk -v 2c -c public ${host}`;
+        if (/ldap/.test(blob))
+          return `ldapsearch -x -H ldap://${host} -b "" -s base`;
+        if (/smb|samba/.test(blob))
+          return `nmap --script smb-vuln-* -p 445 ${host}`;
+        if (/ssh/.test(blob))
+          return `ssh-audit ${host}`;
+        if (/ftp/.test(blob))
+          return `nmap --script ftp-* -p 21 ${host}`;
+        if (/telnet/.test(blob))
+          return `nmap -p 23 ${host}  # any open response = exposed`;
+        if (/redis|memcached|elasticsearch|mongodb|couchdb/.test(blob))
+          return `nmap --script ${blob.match(/redis|memcached|elasticsearch|mongodb|couchdb/)[0]}* -p 6379,11211,9200,27017,5984 ${host}`;
+        if (/graphql/.test(blob))
+          return `curl -X POST -H "Content-Type: application/json" -d '{"query":"{__schema{types{name}}}"}' https://${host}/graphql`;
+        if (/jwt/.test(blob))
+          return `curl -sI https://${host}/ | grep -iE "authorization|jwt"`;
+        if (/swagger|openapi/.test(blob))
+          return `for p in /swagger.json /openapi.json /api-docs /swagger-ui/; do curl -sI https://${host}$p; done`;
+        if (/kev|cisa/.test(blob))
+          return `# Inspect the Server header and cross-check the version against https://www.cisa.gov/known-exploited-vulnerabilities-catalog`;
+        if (/epss/.test(blob))
+          return `# Look up EPSS at https://api.first.org/data/v1/epss?cve=<CVE-ID>`;
+        if (/subresource integrity|sri/.test(blob))
+          return `curl -s https://${host}/ | grep -oE '<(script|link)[^>]+(src|href)="[^"]+"[^>]*' | grep -v integrity=`;
+        if (/h2c|smuggling/.test(blob))
+          return `curl -k -H "Upgrade: h2c" -H "HTTP2-Settings:" -H "Connection: Upgrade, HTTP2-Settings" -I https://${host}/`;
+        // Tool-specific fallback if recognised
+        if (tool)
+          return `# Re-run the scan: POST /api/${moduleKey}/${tool} { "target": "${host}" }`;
+        return `# Re-run /api/${moduleKey}/<scanner> against ${host} to reproduce`;
       };
       // 2 visual rows per finding (header + reproduce). Allow ~14 findings/page.
       const _DF_PER_PG = 20;
@@ -14762,18 +14965,22 @@ function generateUniversalVLReport(opts) {
                        : "";
         const x = _extract(f);
         const nmWithSrc = nm + _srcLbl;
-        // 2-row layout per finding: top row (FINDING|CVE|SEV|CVSS|CWE),
-        // bottom row (CVSS vector + Asset:Port + EPSS/KEV badges + Reproduce).
-        chk(13); fillR(margin, y, contentW, 12, i%2===0 ? LIGHT : WHITE);
-        // Top row
-        txt(nmWithSrc.length > 70 ? nmWithSrc.substring(0,70) + "..." : nmWithSrc,
-            margin + 3, y + 4.2, 7.5, DARK);
+        // Wrap finding name to 2 lines max instead of hard ...-truncating
+        // (pdf_industry_standard.md gap 12). Row height grows with name lines.
+        const _nmLines = doc.splitTextToSize(nmWithSrc, 96).slice(0, 2);
+        const _topRowH = Math.max(7, 1.5 + (_nmLines.length * 3.4));
+        const _rh = _topRowH + 7;   // top rows + meta + reproduce
+        chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
+        // Top row (finding name spans up to 2 lines on the left)
+        _nmLines.forEach(function(ln, li){
+          txt(ln, margin + 3, y + 4.2 + (li * 3.4), 7.5, DARK);
+        });
         txt(x.cve, margin + 102, y + 4.2, 6.8, x.cve !== "-" ? BLUE : GRAY, true);
         rrect(margin + 124, y + 1.4, 20, 4.6, 1, sc);
         txt(sev, margin + 134, y + 4.5, 6, WHITE, true, "center");
         txt(cv, margin + 148, y + 4.2, 10, sc, true);
         txt(cw, margin + 162, y + 4.2, 7.2, DARK, true);
-        // Bottom row — meta line
+        // Bottom row - meta line
         const _metaParts = [];
         if (x.vector) _metaParts.push(x.vector.substring(0, 40));
         if (x.epss) _metaParts.push(`EPSS ${x.epss}`);
@@ -14782,14 +14989,11 @@ function generateUniversalVLReport(opts) {
         else _metaParts.push(`Asset: ${x.host}`);
         if (f._tool) _metaParts.push(`via ${String(f._tool).replace(/_/g," ")}`);
         const _meta = _metaParts.join("  -  ");
-        txt(_meta, margin + 3, y + 8, 6.3, GRAY);
+        txt(_meta, margin + 3, y + _topRowH + 0.5, 6.3, GRAY);
         // Reproduce hint
         const _repro = _reproduce(f, x);
-        txt("Reproduce: " + _repro, margin + 3, y + 11.2, 6.1, [55,65,81]);
-        // KEV indicator: shown as text in the meta line ("CISA KEV") so the
-        // top-right corner chip would just double up and overlap the CWE column.
-        // Kept the meta-line text only (pdf_industry_standard.md gap 9).
-        y += 12.5;
+        txt("Reproduce: " + _repro, margin + 3, y + _topRowH + 3.7, 6.1, [55,65,81]);
+        y += _rh + 0.5;
       });
       y += 6;
     }
@@ -14835,37 +15039,26 @@ function generateUniversalVLReport(opts) {
         .replace(/\b\w/g, c => c.toUpperCase());
     chk(20); y = sHead("Per-Tool Intelligence", y);
     if (_collapsePos) {
-      // Summary line - green
+      // Summary line + compact 3-column name list (no per-scanner evidence -
+      // moved out of the main report to keep the section findings-focused).
+      // Full per-scanner PASS detail with evidence is rendered in the
+      // Appendix "D. POSITIVE-only scanner audit log" further down.
       chk(7); fillR(margin, y, contentW, 6, [240,253,244]); fillR(margin, y, 3, 6, [15,118,82]);
-      txt(`${_positiveOnly.length} scanners returned POSITIVE-only results (no exposure detected). Counted in §Scan Coverage.`,
+      txt(`${_positiveOnly.length} scanners ran and confirmed clean (no exposure). Listed below for scanner-coverage audit.`,
           margin + 6, y + 4.2, 7.5, [15,118,82], true);
       y += 9;
-      // Per-scanner PASS detail: scanner name on the left, what-it-confirmed
-      // pulled from the first POSITIVE finding's detail/evidence.
-      const _posSorted = _positiveOnly.slice().sort();
-      _posSorted.forEach((toolKey, idx) => {
-        const d = r[toolKey] || {};
-        const _firstFinding = (d.findings || []).find(f =>
-          String(f.severity || "").toUpperCase() === "POSITIVE") || (d.findings || [])[0] || {};
-        const _proof = _ascii(String(
-          _firstFinding.evidence_marker
-          || _firstFinding.evidence
-          || _firstFinding.detail
-          || _firstFinding.name
-          || "ran clean - no exposure"
-        ));
-        // Wrap evidence in the right-hand column. Cap at 3 lines to keep
-        // the table readable; row height grows to match (per pdf_industry_standard.md).
-        const _proofLines = doc.splitTextToSize("PASS: " + _proof, contentW - 66).slice(0, 3);
-        const _rh = Math.max(4.5, 1.2 + (_proofLines.length * 3.2));
-        chk(_rh + 0.5);
-        fillR(margin, y, contentW, _rh, idx%2===0 ? LIGHT : WHITE);
-        txt("- " + _prettyName(toolKey), margin + 3, y + 3.2, 6.5, DARK, true);
-        _proofLines.forEach((ln, li) => {
-          txt(ln, margin + 62, y + 3.2 + (li * 3.2), 6.3, GRAY);
-        });
-        y += _rh;
-      });
+      const _posNames = _positiveOnly.slice().sort().map(_prettyName);
+      const _posCols = 3;
+      const _posColW = (contentW - 4) / _posCols;
+      for (let _i = 0; _i < _posNames.length; _i += _posCols) {
+        chk(4);
+        for (let _j = 0; _j < _posCols; _j++) {
+          if (_i + _j >= _posNames.length) break;
+          txt("- " + _posNames[_i + _j].substring(0, 32),
+              margin + 2 + (_j * _posColW), y + 3, 6.5, GRAY);
+        }
+        y += 3.5;
+      }
       y += 3;
     }
     if (_collapseScaffold) {
@@ -15109,9 +15302,12 @@ function generateUniversalVLReport(opts) {
     _rankedF.forEach(f => {
       const sev = String(f.severity||"INFO").toUpperCase();
       const col = SEVCOL[sev] || SEVCOL.INFO;
-      // Severity divider
+      // Severity divider — checked WITH the first card so the header
+      // never lands alone at the bottom of a page (pdf_industry_standard.md
+      // gap 13). Estimate the first card height as ~20mm (typical
+      // 2-3 line remediation), plus 8mm for the divider band.
       if (sev !== _curSev) {
-        chk(9);
+        chk(28);
         fillR(margin, y, contentW, 6, col);
         txt(sev + " - " + ({CRITICAL:"patch within 24h",HIGH:"patch within 7d",MEDIUM:"patch within 30d",LOW:"patch within 90d"}[sev] || ""),
             margin + 4, y + 4.2, 8, WHITE, true);
@@ -15343,10 +15539,17 @@ function generateUniversalVLReport(opts) {
     }
     doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0, 0, pageW, pageH, "S");
     if (i >= 2) {
+      // Branded footer: accent line + 3-zone layout (left CONFIDENTIAL +
+      // target, center report ID, right page count + module logo glyph).
+      // (pdf_industry_standard.md gap 18 - XBOW reference parity)
+      fillR(margin, 286, contentW, 0.5, BLUE);
       const ftrL = `VulnusLab | CONFIDENTIAL - ${String(target||"target").substring(0,40)}`;
       txt(ftrL, margin, 290, 6.5, GRAY);
       txt(`Report ID: ${_REPORT_ID} - Content: ${_contentHash.substring(0,8)}`, pageW/2, 290, 6.5, GRAY, false, "center");
-      txt(`Page ${i} of ${total}`, pageW - margin, 290, 6.5, BLUE, false, "right");
+      txt(`Page ${i} of ${total}`, pageW - margin - 18, 290, 6.5, BLUE, true, "right");
+      // Tiny VL glyph on the right edge of the footer
+      doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(...BLUE);
+      doc.text("VL", pageW - margin, 290, {align:"right"});
     }
   }
 

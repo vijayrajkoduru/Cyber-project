@@ -28,7 +28,8 @@ async def gather(ctx):
     ctx.state["tested"] = 1
     ctx.state["probed_paths"] = len(ADMIN_PATHS)
     exposed = []
-    auth_required = []
+    auth_protected = []   # 401/403 - confirmed auth required
+    login_page = []       # 200 with login form - likely safe but verify
     for path in ADMIN_PATHS:
         url = f"{base_url}{path}"
         r = await http_get_async(url, timeout=6, read=8000)
@@ -36,18 +37,23 @@ async def gather(ctx):
             continue
         status = r.get("status", 0)
         body_lower = r.get("body", "").lower()
-        # 200 with admin keywords + no login form = exposed
         if status == 200:
             has_admin_words = any(w in body_lower for w in ["admin", "dashboard", "manage", "console"])
             has_login = any(w in body_lower for w in ["password", "login", "sign in", "<input type=\"password"])
             if has_admin_words and not has_login:
                 exposed.append({"path": path, "status": 200, "evidence": "200 OK without login form"})
             elif has_admin_words and has_login:
-                auth_required.append({"path": path, "status": 200})
+                login_page.append({"path": path, "status": 200})
         elif status in (401, 403):
-            auth_required.append({"path": path, "status": status})
+            auth_protected.append({"path": path, "status": status})
     ctx.state["exposed_admin"] = exposed
-    ctx.state["protected_admin"] = auth_required
+    # Keep auth-protected (401/403) separate from "200 with login form" - the
+    # latter only LOOKS auth-required but a 200 response code doesn't actually
+    # prove auth enforcement. Per user feedback 2026-06-09: don't claim
+    # "auth required - good" on 200 responses that share scope with paths
+    # other scanners (vertical_access_admin) confirmed as exposed.
+    ctx.state["protected_admin"] = auth_protected
+    ctx.state["login_page_admin"] = login_page
 
 
 def _r_exposed(s):
@@ -64,14 +70,26 @@ def _r_protected(s):
     auth = s.get("protected_admin") or []
     if not auth:
         return None
-    return {"name": f"{len(auth)} admin panel(s) discovered (auth required - good)",
+    return {"name": f"{len(auth)} admin panel(s) returned 401/403 - auth enforcement confirmed",
             "severity": "INFO", "cwe": "CWE-200",
             "evidence": "; ".join(f"{a['path']} ({a['status']})" for a in auth),
             "remediation": "Optional: move admin to /a/<random> URL to reduce brute-force surface, restrict by IP/VPN."}
 
 
-FINDING_RULES = [_r_exposed, _r_protected]
-INTEL_FIELDS = [("Paths probed", "probed_paths"), ("Exposed", "exposed_admin"), ("Protected", "protected_admin")]
+def _r_login_page(s):
+    pages = s.get("login_page_admin") or []
+    if not pages:
+        return None
+    return {"name": f"{len(pages)} admin path(s) returned 200 with login form - verify auth manually",
+            "severity": "INFO", "cwe": "CWE-200",
+            "evidence": "; ".join(f"{p['path']} (200)" for p in pages),
+            "remediation": "Verify each path actually requires auth (POST a request without credentials). A 200 status alone does not prove auth enforcement."}
+
+
+FINDING_RULES = [_r_exposed, _r_protected, _r_login_page]
+INTEL_FIELDS = [("Paths probed", "probed_paths"), ("Exposed", "exposed_admin"),
+                ("Auth-protected (401/403)", "protected_admin"),
+                ("Login page (200, verify)", "login_page_admin")]
 
 
 @router.post("/api/vuln/hidden_admin_bypass")
