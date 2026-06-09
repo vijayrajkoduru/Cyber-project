@@ -14255,6 +14255,77 @@ function generateUniversalVLReport(opts) {
   doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
   doc.text("Each finding mapped to the framework control(s) it impacts. Automated mapping - validate with your auditor.", margin + 2, y);
   doc.setFont("Arial","normal"); y += 4;
+
+  // ── COMPLIANCE COVERAGE BADGE STRIP (industry-standard, NESSUS / VAULT-style)
+  // Drawn at the top of the section to show "this report covers these frameworks".
+  // All badges drawn with jsPDF primitives (circle + text) - no external image deps.
+  {
+    const _BADGES = [
+      {ac:"OWASP",  name:"OWASP Top 10",   color:[220,38,38]},
+      {ac:"PCI",    name:"PCI DSS 4.0",    color:[234,88,12]},
+      {ac:"NIST",   name:"NIST 800-53",    color:[13,148,136]},
+      {ac:"CSF",    name:"NIST CSF 2.0",   color:[20,184,166]},
+      {ac:"ISO",    name:"ISO 27001",      color:[124,58,237]},
+      {ac:"SOC",    name:"SOC 2 Type II",  color:[16,163,74]},
+      {ac:"HIPAA",  name:"HIPAA",          color:[37,99,235]},
+      {ac:"GDPR",   name:"GDPR Art.32",    color:[217,119,6]},
+      {ac:"CIS",    name:"CIS Controls v8",color:[30,64,175]},
+      {ac:"FedRAMP",name:"FedRAMP",        color:[79,70,229]},
+      {ac:"SLSA",   name:"SLSA L1-L3",     color:[5,150,105]},
+      {ac:"CISA",   name:"CISA KEV BOD",   color:[220,38,38]},
+      {ac:"FIPS",   name:"FIPS 140-3",     color:[55,65,81]},
+      {ac:"AI RMF", name:"NIST AI RMF",    color:[219,39,119]},
+      {ac:"42001",  name:"ISO/IEC 42001",  color:[147,51,234]},
+      {ac:"IEC",    name:"IEC 62443",      color:[75,85,99]},
+      {ac:"AWS",    name:"AWS WAF / IAM",  color:[255,153,0]},
+      {ac:"HITRUST",name:"HITRUST CSF",    color:[124,58,237]},
+      {ac:"COBIT",  name:"COBIT 2019",     color:[59,130,246]},
+      {ac:"PSD2",   name:"PSD2 RTS",       color:[34,197,94]},
+    ];
+    // Layout: 5 badges per row, each cell ~36mm wide, badge centered.
+    const _per   = 5;
+    const _rows  = Math.ceil(_BADGES.length / _per);
+    const _cellW = contentW / _per;
+    const _R     = 7.0;            // medium radius (~14mm dia)
+    const _rowH  = 26;             // includes caption + spacing
+    const _totH  = _rows * _rowH + 8;
+    chk(_totH + 4);
+    // Soft container background
+    fillR(margin, y, contentW, _totH, [248,250,252]);
+    // Header line
+    doc.setFont("Arial","bold"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    doc.text("REPORT COVERAGE - " + _BADGES.length + " compliance frameworks", margin + 4, y + 5);
+    doc.setFont("Arial","italic"); doc.setFontSize(6.3); doc.setTextColor(...GRAY);
+    doc.text("Findings mapped automatically against the controls below.", margin + 4, y + 9);
+    const _startY = y + 14;
+    _BADGES.forEach(function(b, idx){
+      const _row = Math.floor(idx / _per);
+      const _col = idx % _per;
+      const _cx  = margin + _col * _cellW + _cellW / 2;
+      const _cy  = _startY + _row * _rowH + _R;
+      // Outer filled circle (the badge)
+      doc.setFillColor.apply(doc, b.color);
+      doc.circle(_cx, _cy, _R, 'F');
+      // Inner ring for depth - white outline ~1mm in
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.45);
+      doc.circle(_cx, _cy, _R - 1.3, 'S');
+      // Acronym centred inside the circle. Font size scales with text length
+      // so longer acronyms ("FedRAMP", "HITRUST") still fit.
+      const _fontPx = b.ac.length <= 3 ? 9 : b.ac.length <= 4 ? 7.5 : b.ac.length <= 5 ? 6.5 : 5.5;
+      doc.setFont("Arial","bold"); doc.setFontSize(_fontPx);
+      doc.setTextColor(255, 255, 255);
+      const _acW = doc.getTextWidth(b.ac);
+      doc.text(b.ac, _cx - _acW / 2, _cy + _fontPx * 0.32);
+      // Caption directly below the circle - framework full name
+      doc.setFont("Arial","normal"); doc.setFontSize(6.0);
+      doc.setTextColor.apply(doc, DARK);
+      const _nmW = doc.getTextWidth(b.name);
+      doc.text(b.name, _cx - _nmW / 2, _cy + _R + 5);
+    });
+    y += _totH + 4;
+  }
+
   {
     // Compliance mapping — expanded to 30+ industry frameworks (2026-06-08
     // duplicate-into-Universal, sister of generateReconReport's _R_cmpRules).
