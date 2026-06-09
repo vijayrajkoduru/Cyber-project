@@ -1414,6 +1414,63 @@ function generatePDF(reportData) {
       }
     }
 
+    // ─── SCAN COVERAGE (DATA / EMPTY / SKIPPED / ERROR) ──────────
+    // User explicit ask 2026-06-09: this breakdown is critical for auditor
+    // trust; add it to every module's PDF. Counts DATA / EMPTY / SKIPPED /
+    // ERROR by inspecting each per-tool variable that's destructured at
+    // the top of this function. Matches the Universal + Recon generators'
+    // Scan Coverage format.
+    {
+      // Each per-tool result has shape { vulnerable, findings, error, ... }.
+      // toolsUsed lists every scanner that was supposed to run; we cross-
+      // reference each entry against its destructured variable.
+      const _toolVars = {
+        sqli:sqlmap, xss, cmd_injection:commix, lfi, openredirect, sensitivefiles,
+        hydra, ssrf, xxe, clickjacking, http_methods:verbtamper, pollution,
+        csrf, idor, ssti, file_upload:fileupload, deserialization_probe:deserial,
+        prototype_pollution:protopollution, typejuggling, jwt, graphql, nosql,
+        oauth_redirect_bypass:oauth, host_header_injection:hostheader, websocket,
+        takeover, otp, rfi, http_smuggling:smuggling, crlf_injection:responsesplitting,
+        session_fixation:sessionfixation, dataexfil, race_condition:racecondition,
+        smb, ftp, smtp, snmp, cors, cookies, cms, headers:wafw00f, portscan:ports,
+      };
+      const _toolKeys = toolsUsed && Array.isArray(toolsUsed) ? toolsUsed.slice() : Object.keys(_toolVars);
+      let _data = 0, _empty = 0, _skipped = 0, _errored = 0;
+      _toolKeys.forEach(tk => {
+        const r = _toolVars[tk];
+        if (r == null) { _skipped++; return; }
+        if (typeof r === "object" && (r.error || r.errored)) { _errored++; return; }
+        const hasFindings = Array.isArray(r) ? r.length > 0
+          : (Array.isArray(r.findings) && r.findings.length > 0)
+          || r.vulnerable === true
+          || (r.discovered && Array.isArray(r.discovered) && r.discovered.length > 0);
+        if (hasFindings) _data++;
+        else _empty++;
+      });
+      const _total = _data + _empty + _skipped + _errored;
+      if (_total > 0) {
+        chk(28);
+        y = sectionHead("Scan Coverage", y);
+        const _pct = Math.round(((_total - _errored) / _total) * 100);
+        doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(15,118,82);
+        doc.text(`${_pct}%`, margin+8, y+10);
+        doc.setFont("Arial","bold"); doc.setFontSize(10); doc.setTextColor(15,23,42);
+        doc.text(`${_total - _errored}/${_total} scanners completed cleanly`, margin+30, y+5);
+        doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42);
+        doc.text(`${_data}`, margin+30, y+11); doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(15,118,82); doc.text("DATA", margin+36, y+11);
+        doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_empty}`, margin+58, y+11);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(100,116,139); doc.text("EMPTY", margin+64, y+11);
+        doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_skipped}`, margin+88, y+11);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(133,79,11); doc.text("SKIPPED", margin+94, y+11);
+        doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_errored}`, margin+122, y+11);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(162,28,28); doc.text("ERROR", margin+128, y+11);
+        y += 16;
+        doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
+        doc.text("DATA returned findings    EMPTY ran clean, no data    SKIPPED not applicable    ERROR tool had a problem", margin, y);
+        y += 6;
+      }
+    }
+
     // ─── RISK SCORE BAR ──────────────────────────────────────────
     if(y < 240){
       y+=6;
@@ -6901,6 +6958,52 @@ function generateOsintPdf(results, target, _pdfConfig) {
     txt(r[0],margin+3,y+5.5,8.5,GRAY,true); txt(String(r[1]),margin+55,y+5.5,8.5,DARK); y+=8;
   });
   y+=10;
+
+  // ─── SCAN COVERAGE (DATA / EMPTY / SKIPPED / ERROR) ──────────
+  // User explicit ask 2026-06-09: every module's PDF must show this
+  // breakdown for auditor trust. Mirrors the Universal + Recon Scan
+  // Coverage section. Counts each OSINT probe against its result key.
+  {
+    const _osintProbes = ["geoip","email_osint","recon_ng","spiderfoot","virustotal","abuseipdb","sherlock","hibp","dnstwist","googledorks","maltego"];
+    let _data = 0, _empty = 0, _skipped = 0, _errored = 0;
+    _osintProbes.forEach(k => {
+      const r = results[k];
+      if (r == null) { _skipped++; return; }
+      if (typeof r === "object" && r.error) { _errored++; return; }
+      const hasData = (Array.isArray(r.emails) && r.emails.length > 0)
+        || (Array.isArray(r.hosts) && r.hosts.length > 0)
+        || (Array.isArray(r.breaches) && r.breaches.length > 0)
+        || (Array.isArray(r.domains) && r.domains.length > 0)
+        || (Array.isArray(r.dorks) && r.dorks.length > 0)
+        || (Array.isArray(r.accounts_found) && r.accounts_found.length > 0)
+        || r.ip || r.malicious !== undefined || r.abuse_score !== undefined || r.guide
+        || (r.checked && r.breaches);
+      if (hasData) _data++;
+      else _empty++;
+    });
+    const _total = _data + _empty + _skipped + _errored;
+    if (_total > 0) {
+      chk(28);
+      y = sHead("Scan Coverage", y);
+      const _pct = Math.round(((_total - _errored) / _total) * 100);
+      doc.setFont("helvetica","bold"); doc.setFontSize(20); doc.setTextColor(15,118,82);
+      doc.text(`${_pct}%`, margin+8, y+10);
+      doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(15,23,42);
+      doc.text(`${_total - _errored}/${_total} probes completed cleanly`, margin+30, y+5);
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42);
+      doc.text(`${_data}`, margin+30, y+11); doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(15,118,82); doc.text("DATA", margin+36, y+11);
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_empty}`, margin+58, y+11);
+      doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(100,116,139); doc.text("EMPTY", margin+64, y+11);
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_skipped}`, margin+88, y+11);
+      doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(133,79,11); doc.text("SKIPPED", margin+94, y+11);
+      doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(15,23,42); doc.text(`${_errored}`, margin+122, y+11);
+      doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(162,28,28); doc.text("ERROR", margin+128, y+11);
+      y += 16;
+      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
+      doc.text("DATA returned findings    EMPTY ran clean, no data    SKIPPED not applicable    ERROR tool had a problem", margin, y);
+      y += 8;
+    }
+  }
 
   // ── GeoIP ──
   const geo=results.geoip||{};
