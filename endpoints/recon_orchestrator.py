@@ -56,7 +56,10 @@ def _all_tools():
 class RunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
-    concurrency: Optional[int] = 8
+    # VL-TURBO 2.0 default — matches Vuln + Webapp orchestrators. 185
+    # scanners across 13 tiers benefit from higher in-flight parallelism
+    # on dispatch (most wall-clock time is HTTP/DNS wait, not CPU).
+    concurrency: Optional[int] = 24
     # AUTHED-RECON-V1 (2026-06-06): customer-supplied login session for
     # authenticated recon. Captured by frontend via POST /api/scan/login,
     # then echoed into this request so every web-facing scanner crawls the
@@ -77,8 +80,12 @@ async def recon_run_all(req: RunAllRequest, request: Request, _=Depends(verify_s
         tools = _all_tools()
     auth = request.headers.get("authorization", "")
     jwt = auth.split(" ",1)[1].strip() if auth.lower().startswith("bearer ") else None
+    # VL-TURBO 2.0 — default concurrency 8 -> 24 (cap 16 -> 32). Matches
+    # Vuln + Webapp orchestrators. 185 scanners + 24 in-flight cuts
+    # full-tier wall-clock by ~3x with same memory footprint.
+    concurrency = max(1, min(req.concurrency or 24, 32))
     gen = run_module_streaming(target=req.target, tools=tools, module_name="recon",
-                                concurrency=max(1, min(req.concurrency or 8, 16)),
+                                concurrency=concurrency,
                                 auth_cookie=req.auth_cookie,
                                 auth_bearer=req.auth_bearer,
                                 jwt_token=jwt)

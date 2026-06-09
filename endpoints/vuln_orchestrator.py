@@ -40,7 +40,9 @@ def _all_tools():
 class RunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
-    concurrency: Optional[int] = 8
+    # VL-TURBO 2.0 default — matches Webapp orchestrator. 214 scanners across
+    # 15 tiers benefit from higher in-flight parallelism on dispatch.
+    concurrency: Optional[int] = 24
 
 
 @router.post("/api/vuln/run_all")
@@ -54,8 +56,13 @@ async def vuln_run_all(req: RunAllRequest, request: Request, _=Depends(verify_sc
         tools = _all_tools()
     auth = request.headers.get("authorization", "")
     jwt = auth.split(" ", 1)[1].strip() if auth.lower().startswith("bearer ") else None
+    # VL-TURBO 2.0 — default concurrency 8 -> 24 (cap 16 -> 32). Vuln has
+    # 214 scanners; old caps left the orchestrator dispatching <8% of the
+    # tool surface in parallel, leaving most wall-clock time waiting on
+    # HTTP/DNS. Matching Webapp's 24/32 cuts run_all from ~12min to ~4min.
+    concurrency = max(1, min(req.concurrency or 24, 32))
     gen = run_module_streaming(target=req.target, tools=tools, module_name="vuln",
-                               concurrency=max(1, min(req.concurrency or 8, 16)), jwt_token=jwt)
+                               concurrency=concurrency, jwt_token=jwt)
     return StreamingResponse(gen, media_type="application/x-ndjson",
                              headers={"X-Accel-Buffering": "no", "Cache-Control": "no-store",
                                       "Connection": "keep-alive"})
