@@ -14460,6 +14460,131 @@ function generateUniversalVLReport(opts) {
       }
     }
 
+    // ── OWASP TOP 10 COVERAGE (opt-in via opts.sections.owaspTop10) ──
+    // Auto-computed from CWE-XX in findings using the standard OWASP A01..A10
+    // mapping. Skipped when opts.sections.owaspTop10 === false.
+    // Ported from Pentest/Recon generators 2026-06-09 as part of the
+    // "one template for all modules" consolidation.
+    if (opts.sections == null || opts.sections.owaspTop10 !== false) {
+      const _OWASP_2021 = [
+        ["A01", "Broken Access Control"],
+        ["A02", "Cryptographic Failures"],
+        ["A03", "Injection"],
+        ["A04", "Insecure Design"],
+        ["A05", "Security Misconfiguration"],
+        ["A06", "Vulnerable & Outdated Components"],
+        ["A07", "Identification & Authentication Failures"],
+        ["A08", "Software & Data Integrity Failures"],
+        ["A09", "Security Logging & Monitoring Failures"],
+        ["A10", "Server-Side Request Forgery"],
+      ];
+      // CWE -> OWASP A0X mapping. Findings without a recognised CWE land in "Other".
+      const _CWE_TO_OWASP = {
+        "CWE-22":"A01","CWE-23":"A01","CWE-284":"A01","CWE-285":"A01","CWE-639":"A01","CWE-862":"A01","CWE-863":"A01","CWE-538":"A01","CWE-200":"A01","CWE-601":"A01",
+        "CWE-261":"A02","CWE-296":"A02","CWE-310":"A02","CWE-319":"A02","CWE-321":"A02","CWE-322":"A02","CWE-323":"A02","CWE-324":"A02","CWE-325":"A02","CWE-326":"A02","CWE-327":"A02","CWE-328":"A02","CWE-329":"A02","CWE-330":"A02","CWE-331":"A02","CWE-335":"A02","CWE-336":"A02","CWE-337":"A02","CWE-338":"A02","CWE-340":"A02","CWE-347":"A02","CWE-523":"A02","CWE-720":"A02","CWE-757":"A02","CWE-759":"A02","CWE-760":"A02","CWE-780":"A02","CWE-818":"A02","CWE-916":"A02",
+        "CWE-20":"A03","CWE-74":"A03","CWE-75":"A03","CWE-77":"A03","CWE-78":"A03","CWE-79":"A03","CWE-80":"A03","CWE-83":"A03","CWE-87":"A03","CWE-88":"A03","CWE-89":"A03","CWE-90":"A03","CWE-91":"A03","CWE-93":"A03","CWE-94":"A03","CWE-95":"A03","CWE-96":"A03","CWE-97":"A03","CWE-98":"A03","CWE-99":"A03","CWE-100":"A03","CWE-113":"A03","CWE-116":"A03","CWE-138":"A03","CWE-184":"A03","CWE-470":"A03","CWE-471":"A03","CWE-564":"A03","CWE-610":"A03","CWE-643":"A03","CWE-644":"A03","CWE-652":"A03","CWE-917":"A03","CWE-943":"A03",
+        "CWE-209":"A04","CWE-256":"A04","CWE-501":"A04","CWE-522":"A04","CWE-525":"A04","CWE-539":"A04","CWE-579":"A04","CWE-598":"A04","CWE-602":"A04","CWE-642":"A04","CWE-646":"A04","CWE-650":"A04","CWE-653":"A04","CWE-656":"A04","CWE-657":"A04","CWE-799":"A04","CWE-840":"A04","CWE-841":"A04",
+        "CWE-2":"A05","CWE-11":"A05","CWE-13":"A05","CWE-15":"A05","CWE-16":"A05","CWE-260":"A05","CWE-315":"A05","CWE-520":"A05","CWE-526":"A05","CWE-537":"A05","CWE-541":"A05","CWE-547":"A05","CWE-611":"A05","CWE-614":"A05","CWE-693":"A05","CWE-756":"A05","CWE-776":"A05","CWE-942":"A05","CWE-1004":"A05","CWE-1032":"A05","CWE-1021":"A05","CWE-1174":"A05","CWE-1275":"A05",
+        "CWE-937":"A06","CWE-1035":"A06","CWE-1104":"A06","CWE-1395":"A06","CWE-353":"A06",
+        "CWE-255":"A07","CWE-259":"A07","CWE-287":"A07","CWE-288":"A07","CWE-290":"A07","CWE-294":"A07","CWE-295":"A07","CWE-297":"A07","CWE-300":"A07","CWE-302":"A07","CWE-304":"A07","CWE-306":"A07","CWE-307":"A07","CWE-346":"A07","CWE-384":"A07","CWE-521":"A07","CWE-613":"A07","CWE-620":"A07","CWE-640":"A07","CWE-798":"A07",
+        "CWE-345":"A08","CWE-353":"A08","CWE-426":"A08","CWE-494":"A08","CWE-502":"A08","CWE-565":"A08","CWE-784":"A08","CWE-829":"A08","CWE-830":"A08","CWE-915":"A08",
+        "CWE-117":"A09","CWE-223":"A09","CWE-532":"A09","CWE-778":"A09",
+        "CWE-918":"A10",
+      };
+      const _owaspMap = { A01:[], A02:[], A03:[], A04:[], A05:[], A06:[], A07:[], A08:[], A09:[], A10:[] };
+      _allFindings.forEach(f => {
+        const sev = String(f.severity||"").toUpperCase();
+        if (!["CRITICAL","HIGH","MEDIUM","LOW"].includes(sev)) return;
+        const cwe = String(f.cwe||"").trim().toUpperCase().match(/CWE-\d+/);
+        if (!cwe) return;
+        const owasp = _CWE_TO_OWASP[cwe[0]];
+        if (owasp && _owaspMap[owasp]) _owaspMap[owasp].push(f);
+      });
+      const _passCats = Object.values(_owaspMap).filter(arr => arr.length === 0).length;
+      const _failCats = 10 - _passCats;
+      const _grade =
+        _passCats === 10 ? "A" :
+        _passCats >= 9  ? "B" :
+        _passCats >= 7  ? "C" :
+        _passCats >= 5  ? "D" : "F";
+      const _gradeColor =
+        _grade === "A" ? [15,118,82] :
+        _grade === "B" ? [22,163,74] :
+        _grade === "C" ? [202,138,4] :
+        _grade === "D" ? [194,65,12] : [162,28,28];
+
+      chk(40); y = sHead("OWASP Top 10 - 2021 Coverage", y);
+      fillR(margin, y, contentW, 16, LIGHT);
+      fillR(margin, y, 4, 16, _gradeColor);
+      doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor.apply(doc, _gradeColor);
+      doc.text(_grade, margin+10, y+11);
+      doc.setFont("Arial","bold"); doc.setFontSize(12); doc.setTextColor.apply(doc, DARK);
+      doc.text(`${_passCats}/10 OWASP categories passing`, margin+28, y+7);
+      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc, GRAY);
+      doc.text(_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`, margin+28, y+12);
+      y += 19;
+      y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
+      _OWASP_2021.forEach(([code, name], i) => {
+        const matches = _owaspMap[code] || [];
+        const passing = matches.length === 0;
+        chk(9);
+        fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
+        fillR(margin, y, 1.5, 8, passing ? [15,118,82] : [162,28,28]);
+        doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor.apply(doc, DARK);
+        doc.text(code+":2021", margin+4, y+5.5);
+        doc.setFont("Arial","normal"); doc.setFontSize(8);
+        doc.text(name, margin+24, y+5.5);
+        const stBg = passing ? [220,252,231] : [254,226,226];
+        const stFg = passing ? [15,118,82] : [162,28,28];
+        rrect(margin+106, y+1.5, 18, 5, 1, stBg);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, stFg);
+        doc.text(passing ? "PASS" : "FAIL", margin+(passing?112:111.5), y+5);
+        if (passing) {
+          doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(15,118,82);
+          doc.text("No findings in this category", margin+128, y+5.5);
+        } else {
+          const _sc = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0};
+          matches.forEach(f => { const s = String(f.severity||"").toUpperCase(); if (_sc[s] !== undefined) _sc[s]++; });
+          const parts = ["CRITICAL","HIGH","MEDIUM","LOW"].filter(s => _sc[s] > 0).map(s => `${_sc[s]} ${s}`);
+          doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor.apply(doc, GRAY);
+          doc.text(parts.join(" - ") || `${matches.length} finding(s)`, margin+128, y+5.5);
+        }
+        y += 8;
+      });
+      y += 5;
+    }
+
+    // ── TOOLS USED (opt-in via opts.sections.toolsUsed) ──
+    // Lists every scanner that ran with a short purpose blurb. Built from
+    // the `r{}` keys (one per tool). Skip when opts.sections.toolsUsed === false.
+    // Transparency signal: customer sees exactly what was tested.
+    if (opts.sections == null || opts.sections.toolsUsed !== false) {
+      const _toolKeys = Object.keys(r).filter(k => r[k] && (Array.isArray(r[k].findings) || r[k].intel)).sort();
+      if (_toolKeys.length > 0) {
+        chk(20); y = sHead("Tools Used", y);
+        doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor.apply(doc, GRAY);
+        doc.text(`${_toolKeys.length} scanner(s) executed in this scan - all included in your subscription.`, margin+2, y);
+        y += 5;
+        y = tHead(["TOOL","PURPOSE","COST"],[55,107,18],y);
+        const _prettyTool = k => String(k).replace(/_/g," ").replace(/\b\w/g, c => c.toUpperCase());
+        _toolKeys.forEach((k, i) => {
+          chk(6);
+          const d = r[k] || {};
+          const purpose = String(d.purpose || d.description || (d.findings && d.findings[0] && d.findings[0]._purpose) || "Security check").substring(0, 80);
+          fillR(margin, y, contentW, 5.5, i%2===0 ? LIGHT : WHITE);
+          doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, DARK);
+          doc.text(_prettyTool(k), margin+3, y+3.8);
+          doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor.apply(doc, GRAY);
+          doc.text(purpose, margin+58, y+3.8);
+          rrect(margin + contentW - 16, y + 0.8, 13, 3.8, 1, [220,252,231]);
+          doc.setFont("Arial","bold"); doc.setFontSize(6.5); doc.setTextColor(15,118,82);
+          doc.text("FREE", margin + contentW - 9.5, y+3.5, {align:"center"});
+          y += 5.5;
+        });
+        y += 5;
+      }
+    }
+
     // Top concerns
     if (_top3.length > 0) {
       chk(50); y = sHead("Top Concerns", y);

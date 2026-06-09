@@ -140,12 +140,51 @@ If any check fails, fix BEFORE showing the PDF to the user.
 
 ## 11. Generator Reference
 
-- **Recon**: `generateReconReport` in `src/App.js` (Recon-specific, multi-tab layout).
-- **Vuln / Webapp / Cloud / others**: `generateUniversalVLReport` in `src/App.js` (~line 13700). Single shared generator — edits here affect ALL non-Recon modules.
-- When editing for one module, verify the other modules using Universal still render cleanly.
+The codebase currently has **8 PDF generators** (legacy from organic growth). Target end-state is **ONE generator** (`generateUniversalVLReport`) with module-specific content rendered via opt-in plug-in sections.
+
+**Current state:**
+- `generateUniversalVLReport` (line ~13174): Vuln + Webapp + Cloud + K8s + OSINT + API Sec + AI/LLM + Mobile (20+ modules)
+- `generateReconReport` (line ~8936): Recon only
+- `generatePDF` (line ~783): Pentest module
+- `generateModuleReport` (line ~2594), `generateShellReport` (~4897), `generateManualTestsReport` (~6402), `generateOsintPdf` (~6814), `generateVulnReport` (~15699, legacy), `generateOsintReport` (~15737), `generateMobileReport` (~15842, alias)
+- Shared chrome: `_vlDrawBrandedCover` + `_vlDrawBrandedFooter` (line ~8856) — used by Recon + Universal only
+
+**Opt-in sections in Universal** (toggle via `opts.sections.<name>`, default true):
+- `owaspTop10` — OWASP Top 10 Coverage with letter-grade A-F (auto-computed from CWE-XX in findings)
+- `toolsUsed` — Tools Used transparency table (every scanner listed + FREE label)
+- (more to come in Phase 2)
+
+## 12. Consolidation Roadmap (single template for all modules)
+
+Goal: kill 7 of 8 generators. Every module routes through `generateUniversalVLReport`. Module-specific content opts in via `opts.sections.<name>`.
+
+**Phase 1 (shipped 2026-06-09):**
+- Shared chrome helpers: cover + footer
+- Opt-in OWASP Top 10 Coverage section in Universal
+- Opt-in Tools Used table in Universal
+
+**Phase 2 (next):**
+- Port Pentest's Compliance Coverage 8-framework section → Universal opt-in
+- Port Pentest's Verification Audit "what was tested" section → Universal opt-in
+- Port Pentest's Pentest Coverage Matrix bar chart → Universal opt-in
+- Migrate webapp/pentest module's `dlPDF` to call `generateUniversalVLReport` with `sections: { owaspTop10: true, toolsUsed: true, complianceWide: true, verifAudit: true, coverageMatrix: true }`
+- Test against app.vulnuslab.com Pentest run — verify output matches current `generatePDF` quality
+- Delete `generatePDF`
+
+**Phase 3:**
+- Port Recon's unique sections (Coverage Gaps / WHOIS Lookup / ASN Intel / Asset Inventory / Per-Scanner Intel) → Universal opt-in
+- Migrate Recon's `dlPDF` to Universal with `sections: { coverageGaps: true, whoisLookup: true, asnIntel: true, assetInventory: true, perScannerIntel: true }`
+- Delete `generateReconReport`
+
+**Phase 4:**
+- Audit `generateModuleReport`, `generateShellReport`, `generateManualTestsReport`, `generateOsintPdf`, `generateVulnReport`, `generateOsintReport`, `generateMobileReport` — most are legacy unused or alias.
+- Delete unused, migrate the rest if callsites remain.
+
+Per-phase effort estimate: 2-4 hours each (real testing across multiple modules is what takes time).
 
 ---
 
-## 12. Change Log
+## 13. Change Log
 
-- 2026-06-09: Initial spec. Seeded from Vuln PDF gap review (5 gaps: coverage truncation, per-tool truncation, `?` placeholder, internal path leak, orange scope-adjusted line). Anti-patterns from badge-wall + pills feedback.
+- 2026-06-09 morning: Initial spec seeded from Vuln PDF gap review.
+- 2026-06-09 evening: Added Section 11 (8-generator audit) + Section 12 (consolidation roadmap). Shipped Phase 1: shared chrome helpers (`_vlDrawBrandedCover` + `_vlDrawBrandedFooter`) + opt-in OWASP Top 10 + Tools Used sections in Universal.
