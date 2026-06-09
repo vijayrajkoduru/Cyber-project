@@ -14873,20 +14873,27 @@ function generateUniversalVLReport(opts) {
         // DNS / SPF / DMARC
         if (/dns|spf|dmarc|dkim/.test(nm))
           return `dig +short TXT _dmarc.${host} ; dig +short TXT ${host}`;
-        // Web app injection-class
-        if (/sql.injection|sqli/.test(blob))
+        // Subresource Integrity - check BEFORE injection class to avoid the
+        // /rce/ substring matching "sub-RCE-source integrity" (fix for
+        // user-reported regex bug 2026-06-09).
+        if (/subresource integrity|\bsri\b/.test(blob))
+          return `curl -s https://${host}/ | grep -oE '<(script|link)[^>]+(src|href)="[^"]+"[^>]*' | grep -v integrity=`;
+        // Web app injection-class. Use \b on short identifiers (rce, lfi,
+        // sri, xxe, xss, sqli) so the regex matches whole words only,
+        // never substrings inside longer words like "subresource".
+        if (/sql injection|\bsqli\b/.test(blob))
           return `sqlmap -u "https://${host}/<endpoint>?id=1" --batch --random-agent`;
-        if (/xss|cross.site.script/.test(blob))
+        if (/\bxss\b|cross.site.script/.test(blob))
           return `curl "https://${host}/<endpoint>?q=<script>alert(1)</script>"`;
-        if (/ssrf|server.side.request/.test(blob))
+        if (/\bssrf\b|server.side.request/.test(blob))
           return `curl "https://${host}/<endpoint>?url=http://169.254.169.254/latest/meta-data/"`;
-        if (/xxe|xml.external/.test(blob))
+        if (/\bxxe\b|xml.external/.test(blob))
           return `curl -X POST -H "Content-Type: application/xml" --data-binary @xxe.xml https://${host}/<endpoint>`;
-        if (/lfi|local.file|directory.traversal|path.traversal/.test(blob))
+        if (/\blfi\b|local file|directory traversal|path traversal/.test(blob))
           return `curl "https://${host}/<endpoint>?file=../../../../etc/passwd"`;
-        if (/cmd.injection|command.injection|rce/.test(blob))
+        if (/command injection|\bcmd injection\b|\brce\b/.test(blob))
           return `curl "https://${host}/<endpoint>?input=;id"`;
-        if (/csrf|cross.site.request/.test(blob))
+        if (/\bcsrf\b|cross.site.request/.test(blob))
           return `# Submit a state-changing POST without Origin/Referer headers and observe acceptance`;
         // Network exposure
         if (/port|service|open/.test(nm) && x.port)
@@ -14915,8 +14922,6 @@ function generateUniversalVLReport(opts) {
           return `# Inspect the Server header and cross-check the version against https://www.cisa.gov/known-exploited-vulnerabilities-catalog`;
         if (/epss/.test(blob))
           return `# Look up EPSS at https://api.first.org/data/v1/epss?cve=<CVE-ID>`;
-        if (/subresource integrity|sri/.test(blob))
-          return `curl -s https://${host}/ | grep -oE '<(script|link)[^>]+(src|href)="[^"]+"[^>]*' | grep -v integrity=`;
         if (/h2c|smuggling/.test(blob))
           return `curl -k -H "Upgrade: h2c" -H "HTTP2-Settings:" -H "Connection: Upgrade, HTTP2-Settings" -I https://${host}/`;
         // Tool-specific fallback if recognised
@@ -14992,7 +14997,12 @@ function generateUniversalVLReport(opts) {
         txt(_meta, margin + 3, y + _topRowH + 0.5, 6.3, GRAY);
         // Reproduce hint
         const _repro = _reproduce(f, x);
-        txt("Reproduce: " + _repro, margin + 3, y + _topRowH + 3.7, 6.1, [55,65,81]);
+        // Shell-prompt prefix "$ " instead of "Reproduce: " so users can
+        // copy the visible line and the shell only sees a (harmless) "$ "
+        // before the actual command, rather than treating "Reproduce:" as
+        // an unknown command. User feedback 2026-06-09.
+        const _reproLine = _repro.startsWith("#") ? _repro : "$ " + _repro;
+        txt(_reproLine, margin + 3, y + _topRowH + 3.7, 6.1, [55,65,81]);
         y += _rh + 0.5;
       });
       y += 6;
