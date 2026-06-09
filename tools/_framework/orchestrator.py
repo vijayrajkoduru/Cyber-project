@@ -364,6 +364,21 @@ async def run_module_streaming(
                     dur = 0.0
                 results[tool_name] = result
                 timings[tool_name] = round(dur, 2)
+                # VL-PRIME (vuln): roll-up scanner runtime stats so
+                # /api/admin/vuln/scanner_stats can surface p50/p99 drift.
+                # Lazy-import to avoid circular dep at module load time.
+                if module_name == "vuln":
+                    try:
+                        from endpoints.vuln_prime import record_scanner_run
+                        record_scanner_run(
+                            tool_name,
+                            success=bool(result and not result.get("_failed")
+                                          and not result.get("error")),
+                            duration_ms=int(dur * 1000),
+                        )
+                    except Exception:
+                        # Stats are best-effort — never break a scan
+                        pass
                 event = {
                     "event":        "tool_complete",
                     "tool":         tool_name,
