@@ -3,6 +3,7 @@ import asyncio
 from fastapi import APIRouter, Depends
 from urllib.parse import quote
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ except Exception:
 @router.post("/api/webapp/ldap_injection")
 async def webapp_ldap_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
 
     # VL-TURBO: parallelize baselines (10 params) AND injection probes (200 reqs)
@@ -97,7 +99,8 @@ async def webapp_ldap_injection(req: ScanRequest, payload=Depends(verify_scan_qu
         tool="ldap_injection", target=req.target,
         findings=findings, tests_performed=len(probe_tasks),
         tests_summary=f"{len(probe_tasks)} LDAP filter probes across {len(valid_baselines)} params x {len(_PAYLOADS)} payloads (parallel)",
-        raw_data={"ldap_injection": {"payloads_tested": [p for p,_ in _PAYLOADS]}},
+        raw_data={"ldap_injection": {"payloads_tested": [p for p,_ in _PAYLOADS],
+                                        "spa_catchall": spa["is_spa"]}},
     )
 
 
