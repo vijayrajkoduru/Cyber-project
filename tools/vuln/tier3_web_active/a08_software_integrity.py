@@ -1,12 +1,17 @@
 """A08 Software & Data Integrity - passive SRI absence check. Self-contained.
 Strategy: parse <script src=...> / <link href=...> with external origins, check for
-integrity= attribute (SRI). Missing SRI on 3rd-party assets = supply chain risk."""
+integrity= attribute (SRI). Missing SRI on 3rd-party assets = supply chain risk.
+
+VL-VERIFY: this scanner inspects tag attributes on the homepage, so it isn't
+directly SPA-FP prone. We stamp spa_catchall onto state so the report shows
+the SPA context, useful for downstream interpretation.
+"""
 import re
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url_async
+from tools.vuln._vuln_common import probe_url_async, detect_spa_catchall
 
 router = APIRouter()
 
@@ -20,6 +25,8 @@ async def gather(ctx):
         return
     ctx.source("http")
     ctx.state["tested"] = 1
+    spa = await detect_spa_catchall(base_url)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
     body = base.get("body") or ""
     base_host = urlparse(base_url).netloc.lower()
     # Find all <script src="..."> and <link rel="stylesheet" href="..."> tags
