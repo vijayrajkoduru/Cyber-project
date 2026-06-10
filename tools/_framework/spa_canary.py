@@ -32,6 +32,7 @@ keeps a re-export shim for backward compatibility.
 """
 import asyncio
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -40,6 +41,17 @@ _UA = "Mozilla/5.0 (VulnusLab VL-VERIFY)"
 _SSL = ssl.create_default_context()
 _SSL.check_hostname = False
 _SSL.verify_mode = ssl.CERT_NONE
+
+# Per-target canary cache — keyed by base_url.
+# 2026-06-10 fix: 28 Webapp scanners now fire detect_spa_catchall_sync()
+# at scan start. Without caching, that's 28 extra HTTP calls per scan
+# burst-fired against the same target — Cloudflare-fronted targets
+# (app.vulnuslab.com) rate-limit those and produce scanner errors
+# (32-ERROR regression). The cache TTL is short (60s) so cross-target
+# isolation still holds for legitimately back-to-back scans.
+_CACHE_TTL = 60.0
+_canary_cache: dict = {}     # base_url -> (timestamp, result_dict)
+_canary_lock = threading.Lock()
 
 
 def _http_get(url, timeout=6, read=20000):
@@ -63,25 +75,49 @@ def _canary_path():
 def detect_spa_catchall_sync(base_url, timeout=6):
     """Sync version — for scanners that use plain `requests` calls.
 
+    Cached per base_url for 60s so 28 Webapp scanners sharing the same
+    target only fire ONE canary probe across the whole scan.
+
     Returns dict with:
       - is_spa (bool)
       - canary_status (int)
       - canary_body (str, first 2000 chars)
       - canary_len (int, full length)
     """
-    url = f"{base_url.rstrip('/')}{_canary_path()}"
+    cache_key = base_url.rstrip("/")
+    now = time.time()
+    # Fast path: cache hit + still fresh
+    with _canary_lock:
+        cached = _canary_cache.get(cache_key)
+        if cached and (now - cached[0]) < _CACHE_TTL:
+            return cached[1]
+    # Cache miss / stale: fire the probe (no lock held during network I/O
+    # so other scanners can do their own work in parallel)
+    url = f"{cache_key}{_canary_path()}"
     r = _http_get(url, timeout=timeout, read=20000)
     if not r:
-        return {"is_spa": False, "canary_status": 0, "canary_body": "", "canary_len": 0}
-    status = r.get("status", 0)
-    body = r.get("body", "") or ""
-    is_spa = (status == 200 and len(body) > 200)
-    return {
-        "is_spa": is_spa,
-        "canary_status": status,
-        "canary_body": body[:2000],
-        "canary_len": len(body),
-    }
+        result = {"is_spa": False, "canary_status": 0, "canary_body": "", "canary_len": 0}
+    else:
+        status = r.get("status", 0)
+        body = r.get("body", "") or ""
+        result = {
+            "is_spa":         (status == 200 and len(body) > 200),
+            "canary_status":  status,
+            "canary_body":    body[:2000],
+            "canary_len":     len(body),
+        }
+    # Store in cache. If two threads raced, last writer wins - same result
+    # either way since the canary is deterministic for the target.
+    with _canary_lock:
+        _canary_cache[cache_key] = (now, result)
+        # Evict entries older than 5*TTL to bound memory across long-running
+        # workers serving many different targets.
+        if len(_canary_cache) > 200:
+            cutoff = now - 5 * _CACHE_TTL
+            stale = [k for k, (t, _) in _canary_cache.items() if t < cutoff]
+            for k in stale:
+                _canary_cache.pop(k, None)
+    return result
 
 
 async def detect_spa_catchall(base_url, timeout=6):
