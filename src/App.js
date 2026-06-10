@@ -16065,7 +16065,7 @@ function generateVulnReport({target, allResults, date, authenticated, pdfConfig}
     playbookPath:   "vuln.md",
     methodology: [
       "Vulnerability assessment follows Nessus / Qualys / OpenVAS-equivalent industry practice plus modern coverage standards: OWASP Top 10 (2021), OWASP API Top 10 (2023), OWASP LLM Top 10 (2025), CIS Benchmarks, and SLSA / Sigstore supply-chain assurance.",
-      "196 scanners across 15 tiers: Network, CVE Matching, Web Active (OWASP A01-A10), Authenticated Web, API, Modern Protocols (HTTP/2 / gRPC / WebSocket / HTTP/3), SCA / SBOM, Container, IaC, Cloud-Native, CIS, Auth / Identity, Supply Chain, LLM, and Wireless / IoT.",
+      "63 real scanners across the active tiers: Network, CVE Matching, Web Active (OWASP A01-A10), Authenticated Web, API, Modern Protocols (HTTP/2 / gRPC / WebSocket / HTTP/3). Compliance categories (CIS, Container, IaC, Cloud-Native, Supply Chain, LLM, Wireless / IoT) are covered when the appropriate input type (image, IaC repo, SBOM, LLM endpoint) is supplied via the dedicated module.",
       "Self-contained module: every scanner runs its own passive probes against the live target with zero cross-module routing. Findings list confirmed evidence (HTTP responses, banner versions, header reflections), not template matches."
     ],
     references: [
