@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 try:
     from tools._payloads.osint.social_handles import (
@@ -99,6 +100,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
 
 @router.post("/api/osint/social_handles")
+@vl_verify()
 async def scan_social(req: ScanRequest, _=Depends(verify_scan_quota)):
     try:
         return await asyncio.wait_for(

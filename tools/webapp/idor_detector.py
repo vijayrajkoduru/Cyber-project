@@ -10,6 +10,7 @@ canary check + stamp added for transparency.
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ _ID_PATHS = [
 
 
 @router.post("/api/webapp/idor_detector")
+@vl_verify()
 async def webapp_idor_detector(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = detect_spa_catchall_sync(base)

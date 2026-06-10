@@ -11,6 +11,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 WALL_CLOCK_S = 10
@@ -88,6 +89,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
 
 @router.post("/api/osint/discord_invite_intel")
+@vl_verify()
 async def scan_discord_invite_intel(req: ScanRequest, _=Depends(verify_scan_quota)):
     try:
         return await asyncio.wait_for(

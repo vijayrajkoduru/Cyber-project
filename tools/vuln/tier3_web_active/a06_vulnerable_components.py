@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import probe_url_async, detect_spa_catchall
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -84,6 +85,7 @@ INTEL_FIELDS = [("JS libs detected", "libs_found"), ("Vulnerable libs", "libs_vu
 
 
 @router.post("/api/vuln/a06_vulnerable_components")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="a06_vulnerable_components",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

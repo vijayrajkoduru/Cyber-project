@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
 from tools.vuln._cve_intel import tcp_banner, high_cves
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _PORTS = [(25,"SMTP"),(587,"SMTP"),(143,"IMAP"),(110,"POP3"),(993,"IMAPS"),(995,"POP3S")]
 _VER = re.compile(r"([A-Za-z][A-Za-z0-9_+.-]*?)[/ ]v?(\d+\.\d+(?:\.\d+)?)")
@@ -39,6 +40,7 @@ def _r_clean(s):
     return {"name": "No mail-service banners exposed", "severity": "POSITIVE", "evidence": "No SMTP/IMAP/POP service returned an identifiable banner."}
 FINDING_RULES = [_r_cve, _r_disc, _r_clean]; INTEL_FIELDS = [("Mail banners","banners")]
 @router.post("/api/vuln/mail_server_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="mail_server_cve", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

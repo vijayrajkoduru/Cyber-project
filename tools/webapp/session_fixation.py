@@ -4,6 +4,7 @@ import requests
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -11,6 +12,7 @@ _LOGIN_PATHS = ["/login","/signin","/auth/login","/api/login","/api/auth/login"]
 
 
 @router.post("/api/webapp/session_fixation")
+@vl_verify()
 async def webapp_session_fixation(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

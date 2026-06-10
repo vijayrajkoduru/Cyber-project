@@ -4,6 +4,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _ATTACKER = "https://evil-attacker.example"
 
@@ -16,6 +17,7 @@ def _probe(url, origin, req):
 
 @router.post("/api/webapp/scan/cors")
 @vl_turbo()
+@vl_verify()
 def scan_cors(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     findings, probes = [], []

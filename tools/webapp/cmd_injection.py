@@ -16,6 +16,7 @@ from tools._payloads.cmd_injection import CMD_PAYLOADS
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 # AI-curated extras: more shell variants + powershell + template-injection + WAF-bypass.
@@ -57,6 +58,7 @@ def _time_get(url, req, timeout):
 
 @router.post("/api/webapp/scan/cmd_injection")
 @vl_turbo()
+@vl_verify()
 def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     unreachable = precheck_target(base, req)

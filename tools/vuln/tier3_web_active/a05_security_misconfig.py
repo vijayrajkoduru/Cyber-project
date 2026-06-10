@@ -16,6 +16,7 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
 from tools.vuln._vuln_common import (probe_url_async, http_get_async,
                                       detect_spa_catchall, is_same_as_canary)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -207,6 +208,7 @@ INTEL_FIELDS = [
 
 
 @router.post("/api/vuln/a05_security_misconfig")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     scanner = A05SecurityMisconfig()
     return await scanner.run_as_endpoint(req,

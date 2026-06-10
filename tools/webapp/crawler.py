@@ -21,6 +21,7 @@ import httpx
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -70,6 +71,7 @@ def _extract_same_origin_links(html, base_origin):
 
 
 @router.post("/api/webapp/crawler")
+@vl_verify(check_spa=True)
 async def webapp_crawler(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     parsed = urlparse(base)

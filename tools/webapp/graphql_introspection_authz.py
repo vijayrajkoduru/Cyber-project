@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -32,6 +33,7 @@ def _post(url, body, headers, req):
 
 @router.post("/api/webapp/scan/graphql_introspection_authz")
 @vl_turbo()
+@vl_verify()
 def scan_graphql_introspection_authz(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
 

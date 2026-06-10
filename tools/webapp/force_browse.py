@@ -5,6 +5,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._payloads.force_browse import FORCE_BROWSE_PATHS
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _MAX_PATHS = 200  # top-severity slice — politeness + speed
@@ -21,6 +22,7 @@ def _cvss(sev):
 
 @router.post("/api/webapp/scan/force_browse")
 @vl_turbo()
+@vl_verify(check_spa=True)
 def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
 

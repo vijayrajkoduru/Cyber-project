@@ -4,6 +4,7 @@ import socket
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _BIND = bytes([0x30, 0x0c, 0x02, 0x01, 0x01, 0x60, 0x07, 0x02, 0x01, 0x03, 0x04, 0x00, 0x80, 0x00])
@@ -79,6 +80,7 @@ INTEL_FIELDS = [("LDAP ports probed", "tested")]
 
 
 @router.post("/api/vuln/ldap_anon_bind")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="ldap_anon_bind",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

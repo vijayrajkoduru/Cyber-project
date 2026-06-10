@@ -11,6 +11,7 @@ import json
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_post, wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 WALL_CLOCK_S = 15
@@ -105,6 +106,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
 
 @router.post("/api/osint/uspto_patent_search")
+@vl_verify()
 async def scan_uspto_patent_search(req: ScanRequest, _=Depends(verify_scan_quota)):
     try:
         return await asyncio.wait_for(

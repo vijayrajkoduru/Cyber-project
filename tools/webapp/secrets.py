@@ -18,6 +18,7 @@ import httpx
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -82,6 +83,7 @@ async def _fetch_with_extracted_js(client, base):
 
 
 @router.post("/api/webapp/secrets")
+@vl_verify(check_spa=True)
 async def webapp_secrets(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

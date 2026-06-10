@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 # Cognito user-pool ID format: us-east-1_XXXXX
@@ -14,6 +15,7 @@ CLIENT_RE = re.compile(rb"\b([0-9a-z]{26})\b(?=.{0,100}cognito)")
 
 @router.post("/api/webapp/scan/aws_cognito_unauth_admin")
 @vl_turbo()
+@vl_verify()
 def scan_aws_cognito_unauth_admin(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     r = safe_request("GET", base + "/",

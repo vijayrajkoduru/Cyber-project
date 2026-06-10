@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -64,6 +65,7 @@ def _smuggle_te_cl_test(url, timeout=10):
 
 @router.post("/api/webapp/scan/http2_request_smuggling")
 @vl_turbo()
+@vl_verify()
 def scan_http2_request_smuggling(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     parsed = urlparse(url)

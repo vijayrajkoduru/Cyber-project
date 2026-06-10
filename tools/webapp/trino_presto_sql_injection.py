@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 TRINO_PATHS = ["/v1/info", "/v1/statement", "/ui/", "/v1/cluster"]
@@ -11,6 +12,7 @@ TRINO_PATHS = ["/v1/info", "/v1/statement", "/ui/", "/v1/cluster"]
 
 @router.post("/api/webapp/scan/trino_presto_sql_injection")
 @vl_turbo()
+@vl_verify()
 def scan_trino_presto_sql_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     is_trino = False

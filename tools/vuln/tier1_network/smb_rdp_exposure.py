@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import port_open
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _PORTS = [("smb", 445), ("netbios", 139), ("rdp", 3389)]
@@ -52,6 +53,7 @@ INTEL_FIELDS = [("Exposure ports probed", "tested")]
 
 
 @router.post("/api/vuln/smb_rdp_exposure")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="smb_rdp_exposure",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

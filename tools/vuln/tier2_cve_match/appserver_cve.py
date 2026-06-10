@@ -5,6 +5,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
 from tools.vuln._cve_intel import high_cves
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _VER = re.compile(r"([A-Za-z][A-Za-z0-9_+.-]*?)[/ ]v?(\d+\.\d+(?:\.\d+)?)")
 _APP = ["tomcat","coyote","jboss","wildfly","jetty","weblogic","websphere","glassfish","resin"]
@@ -37,6 +38,7 @@ def _r_clean(s):
     return {"name": "No application-server banner disclosed", "severity": "POSITIVE", "evidence": "No Tomcat/JBoss/Jetty/WebLogic/WebSphere identification exposed."}
 FINDING_RULES = [_r_cve, _r_disc, _r_clean]; INTEL_FIELDS = [("App server","appserver"),("Version","version")]
 @router.post("/api/vuln/appserver_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="appserver_cve", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

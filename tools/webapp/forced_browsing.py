@@ -2,6 +2,7 @@
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ _LOGIN_REDIRECT = re.compile(r"(?:login|sign[\s-]?in|authenticat)", re.I)
 
 
 @router.post("/api/webapp/forced_browsing")
+@vl_verify()
 async def webapp_forced_browsing(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

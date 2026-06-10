@@ -12,6 +12,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 WALL_CLOCK_S = 25
@@ -133,6 +134,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
 
 @router.post("/api/osint/wayback_robots_history")
+@vl_verify()
 async def scan_wayback_robots_history(req: ScanRequest, _=Depends(verify_scan_quota)):
     try:
         return await asyncio.wait_for(

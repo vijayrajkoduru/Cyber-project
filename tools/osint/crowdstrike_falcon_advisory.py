@@ -2,6 +2,7 @@
 import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, wrap_finding, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -21,6 +22,7 @@ def _do_scan(req):
 
 
 @router.post("/api/osint/crowdstrike_falcon_advisory")
+@vl_verify()
 async def scan_crowdstrike_falcon_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await asyncio.wait_for(asyncio.to_thread(_do_scan, req), timeout=5)
 

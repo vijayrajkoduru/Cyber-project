@@ -12,6 +12,7 @@ import httpx
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -55,6 +56,7 @@ async def _probe(client, base, name, baseline_size, baseline_status, sem):
 
 
 @router.post("/api/webapp/param_discovery")
+@vl_verify(check_spa=True)
 async def webapp_param_discovery(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

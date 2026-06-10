@@ -10,6 +10,7 @@ import json
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ _SPEC_PATHS = [
 
 
 @router.post("/api/webapp/swagger_discovery")
+@vl_verify(check_spa=True)
 async def webapp_swagger_discovery(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = detect_spa_catchall_sync(base)

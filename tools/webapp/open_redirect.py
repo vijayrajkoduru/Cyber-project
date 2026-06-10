@@ -18,6 +18,7 @@ from tools._payloads.open_redirect import OPEN_REDIRECT_PAYLOADS, ATTACKER_HOST
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 # AI-curated extras: more bypass families (userinfo, subdomain, double-encoded, unicode, fragment).
 _AI_EXTRA_REDIR = load_json("open_redirect_extra", fallback=[])
 _MERGED_REDIR = list(OPEN_REDIRECT_PAYLOADS) + [p for p in _AI_EXTRA_REDIR if isinstance(p, dict) and "payload" in p]
@@ -104,6 +105,7 @@ _CANARY_HOST = "benign-canary-vulnuslab.example"
 
 @router.post("/api/webapp/scan/open_redirect")
 @vl_turbo()
+@vl_verify()
 def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     unreachable = precheck_target(base, req)

@@ -5,6 +5,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
 from tools.vuln._cve_intel import kev_catalog, detect_tech_tokens, TECH_ALIASES
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/")
@@ -52,6 +53,7 @@ def _r_clean(s):
             "evidence": f"Detected: {techs}{tail}."}
 FINDING_RULES = [_r_kev, _r_clean]; INTEL_FIELDS = [("Detected technologies", "techs")]
 @router.post("/api/vuln/cisa_kev_crossref")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="cisa_kev_crossref", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

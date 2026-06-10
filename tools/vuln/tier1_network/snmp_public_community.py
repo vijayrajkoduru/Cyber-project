@@ -4,6 +4,7 @@ import socket
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _GET = bytes.fromhex("302902010104067075626c6963a01c020412345678020100020100300e300c06082b060102010101000500")
@@ -58,6 +59,7 @@ INTEL_FIELDS = [("SNMP sysDescr", "snmp_sysdescr")]
 
 
 @router.post("/api/vuln/snmp_public_community")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="snmp_public_community",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

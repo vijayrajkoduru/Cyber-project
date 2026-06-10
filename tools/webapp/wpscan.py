@@ -17,6 +17,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 
 _FALLBACK_PATHS = [
@@ -71,6 +72,7 @@ def _matches_entry(r, entry, baseline):
 
 @router.post("/api/webapp/scan/wpscan")
 @vl_turbo()
+@vl_verify()
 def scan_wpscan(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     if not _is_wp(base, req):

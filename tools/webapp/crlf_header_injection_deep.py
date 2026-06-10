@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -32,6 +33,7 @@ PROBE_PATHS = [
 
 @router.post("/api/webapp/scan/crlf_header_injection_deep")
 @vl_turbo()
+@vl_verify()
 def scan_crlf_header_injection_deep(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     confirmed = []

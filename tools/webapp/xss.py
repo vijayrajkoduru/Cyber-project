@@ -19,6 +19,7 @@ from tools._payloads.xss import XSS_PAYLOADS
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 # Merge baked-in 265-entry XSS library with AI-curated extras (DOM sinks, polyglot, mutation).
@@ -110,6 +111,7 @@ def _confirm_with_library(url, key, params, req, ctx):
 
 @router.post("/api/webapp/scan/xss")
 @vl_turbo()
+@vl_verify()
 def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     r = safe_get(base, req=req, allow_redirects=True)

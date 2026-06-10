@@ -4,6 +4,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_post, wrap_finding, standard_response)
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ for _p in _AI_EXTRA_GRAPHQL:
 
 @router.post("/api/webapp/scan/graphql")
 @vl_turbo()
+@vl_verify()
 def scan_graphql(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings, tests, confirmed = [], 0, []

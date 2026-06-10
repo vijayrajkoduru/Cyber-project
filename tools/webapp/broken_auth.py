@@ -12,6 +12,7 @@ import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ _LOGIN_PATHS = ["/login","/api/login","/auth/login","/api/auth/login","/signin",
 
 
 @router.post("/api/webapp/broken_auth")
+@vl_verify()
 async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = detect_spa_catchall_sync(base)
