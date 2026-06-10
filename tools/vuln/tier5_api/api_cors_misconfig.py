@@ -1,10 +1,16 @@
-"""API CORS misconfiguration (origin reflection / null / wildcard+creds). VL-FORGE Vuln tier5 - §5 #68."""
+"""API CORS misconfiguration (origin reflection / null / wildcard+creds). VL-FORGE Vuln tier5 - §5 #68.
+
+VL-VERIFY: scanner audits CORS headers on the homepage. SPA homepages are
+real - their CORS config is the real config under test. We stamp
+spa_catchall on state for report transparency, but no behavior change.
+"""
 import asyncio
 import ssl
 import urllib.request
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import run_scanner
+from tools.vuln._vuln_common import detect_spa_catchall
 
 router = APIRouter()
 _EVIL = "https://evil.example.com"
@@ -25,6 +31,8 @@ def _cors(url, origin, timeout=8):
 
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/")
+    spa = await detect_spa_catchall(base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
     acao, acac = await asyncio.to_thread(_cors, base + "/", _EVIL)
     acao_null, _ = await asyncio.to_thread(_cors, base + "/", "null")
     ctx.source("http")

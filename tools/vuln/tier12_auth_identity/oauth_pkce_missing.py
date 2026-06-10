@@ -1,12 +1,19 @@
-"""OAuth/OIDC PKCE (S256) advertisement audit via discovery doc. VL-FORGE Vuln tier12 §12 #180."""
+"""OAuth/OIDC PKCE (S256) advertisement audit via discovery doc. VL-FORGE Vuln tier12 §12 #180.
+
+VL-VERIFY: http_json already returns None if the response is HTML (SPA
+shell isn't valid JSON), so this scanner is inherently SPA-safe. We stamp
+spa_catchall onto state for report transparency only.
+"""
 import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import http_json
+from tools.vuln._vuln_common import http_json, detect_spa_catchall
 router = APIRouter()
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/"); cfg = None; src = None
+    spa = await detect_spa_catchall(base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
     for path in ("/.well-known/openid-configuration","/.well-known/oauth-authorization-server"):
         d = await asyncio.to_thread(http_json, base + path)
         if isinstance(d, dict) and (d.get("authorization_endpoint") or d.get("token_endpoint")):

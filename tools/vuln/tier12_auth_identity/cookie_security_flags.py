@@ -1,10 +1,16 @@
-"""Cookie security flags audit (Secure/HttpOnly/SameSite). VL-FORGE Vuln tier12 - §12 #185."""
+"""Cookie security flags audit (Secure/HttpOnly/SameSite). VL-FORGE Vuln tier12 - §12 #185.
+
+VL-VERIFY: scanner audits Set-Cookie headers on the homepage. SPA
+homepages are real - their cookies are the real ones under test. We
+stamp spa_catchall on state for report transparency.
+"""
 import asyncio
 import ssl
 import urllib.request
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import run_scanner
+from tools.vuln._vuln_common import detect_spa_catchall
 
 router = APIRouter()
 _SSL = ssl.create_default_context()
@@ -24,6 +30,8 @@ def _cookies(url, timeout=10):
 
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/")
+    spa = await detect_spa_catchall(base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
     cookies = await asyncio.to_thread(_cookies, base + "/")
     ctx.source("http")
     ctx.state["tested"] = 1

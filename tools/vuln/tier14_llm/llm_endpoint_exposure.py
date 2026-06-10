@@ -1,9 +1,16 @@
-"""Exposed LLM / chat-completion endpoint detection. VL-FORGE Vuln tier14 - §14 (LLM attack surface)."""
+"""Exposed LLM / chat-completion endpoint detection. VL-FORGE Vuln tier14 - §14 (LLM attack surface).
+
+VL-VERIFY: SPA bundles routinely contain LLM marker words ('messages',
+'completion', 'prompt', 'temperature', 'openai', 'anthropic') because
+they ship chat-UI widgets, docs, or marketing copy. The SPA catch-all
+returns the same bundle for every probed path, so any path whose marker
+count came from the SPA shell is a FP. We drop those.
+"""
 import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import http_get
+from tools.vuln._vuln_common import http_get, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()
 _PATHS = ["/v1/chat/completions", "/api/chat", "/chat", "/v1/completions", "/api/completions",
@@ -14,13 +21,20 @@ _MARK = ["messages", "max_tokens", "completion", "choices", "model required", "p
 
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/")
+    spa = await detect_spa_catchall(base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
+    canary_body = spa.get("canary_body", "") or ""
 
     async def _c(p):
         r = await asyncio.to_thread(http_get, base + p, 8, 4000)
         if not r or r.get("status") == 404:
             return None
-        b = (r.get("body", "") or "").lower()
-        if sum(1 for m in _MARK if m in b) >= 2:
+        b = (r.get("body", "") or "")
+        # SPA suppression: if response IS the SPA shell, marker count came
+        # from bundle - not a real LLM endpoint.
+        if spa.get("is_spa") and is_same_as_canary(b, canary_body):
+            return ("__spa_suppressed__", p)
+        if sum(1 for m in _MARK if m in b.lower()) >= 2:
             return (p, r.get("status"))
         return None
 
@@ -28,11 +42,17 @@ async def gather(ctx):
     ctx.source("http")
     ctx.state["tested"] = len(_PATHS)
     found = []
+    suppressed = []
     for item in res:
-        if item:
+        if not item: continue
+        if item[0] == "__spa_suppressed__":
+            suppressed.append(item[1])
+        else:
             found.append(f"{item[0]} ({item[1]})")
     if found:
         ctx.state["llm_endpoints"] = found
+    if suppressed:
+        ctx.state["spa_suppressed_endpoints"] = suppressed
 
 
 def _r_llm(s):
