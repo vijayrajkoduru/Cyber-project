@@ -84,14 +84,12 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("stored_xss",     "/api/webapp/scan/stored_xss"),
         ("wpscan",         "/api/webapp/scan/wpscan"),
     ],
-    # Tier 8b — Nuclei tag-specific fan-out. Each scanner runs Nuclei with a
-    # different tag set so the PDF shows category-level coverage instead of
-    # one giant "Nuclei templates" row. Combined coverage ~3,400 templates.
-    "tier8b_nuclei_fanout": [
-        ("nuclei_sqli",          "/api/webapp/scan/nuclei_sqli"),
-        ("nuclei_xss",           "/api/webapp/scan/nuclei_xss"),
-        ("nuclei_rce",           "/api/webapp/scan/nuclei_rce"),
-        ("nuclei_ssrf",          "/api/webapp/scan/nuclei_ssrf"),
+    # Tier 8b — Nuclei tag-specific scanners limited to areas your
+    # existing engines do NOT cover (subdomain takeover patterns and
+    # vendor default-credentials catalog). SQLi/XSS/SSRF/RCE/misconfig
+    # were dropped because your calibrated scanners + AI-curated
+    # payloads handle those better than Nuclei's generic templates.
+    "tier8b_nuclei_complement": [
         ("nuclei_takeover",      "/api/webapp/scan/nuclei_takeover"),
         ("nuclei_default_creds", "/api/webapp/scan/nuclei_default_creds"),
     ],
