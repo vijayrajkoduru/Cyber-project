@@ -12,8 +12,8 @@ MASVS-NETWORK-2 / MSTG-NETWORK-3.
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
-from tools._framework.binary_cache import get_unpacked
+from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.certificate_pinning_static_findings import \
     CERTIFICATE_PINNING_STATIC_FINDING_RULES
 

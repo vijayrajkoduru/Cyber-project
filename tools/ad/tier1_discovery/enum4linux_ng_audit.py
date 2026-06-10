@@ -13,7 +13,7 @@ import json
 import shutil
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.enum4linux_ng_audit_findings import ENUM4LINUX_NG_AUDIT_FINDING_RULES
 
 router = APIRouter()

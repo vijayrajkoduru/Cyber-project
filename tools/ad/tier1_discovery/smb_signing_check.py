@@ -10,7 +10,7 @@ Customer input (ScanRequest.target = DC IP). No creds needed.
 from __future__ import annotations
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.smb_signing_check_findings import SMB_SIGNING_CHECK_FINDING_RULES
 
 router = APIRouter()

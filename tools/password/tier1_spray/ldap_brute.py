@@ -67,7 +67,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext
+from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.ldap_brute_findings import LDAP_BRUTE_FINDING_RULES, INTEL_FIELDS
 

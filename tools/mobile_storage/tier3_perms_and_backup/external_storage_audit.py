@@ -10,8 +10,8 @@ from xml.etree import ElementTree as ET
 from fastapi import APIRouter, Depends
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
-from tools._framework.binary_cache import get_unpacked
+from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.external_storage_audit_findings import EXTERNAL_STORAGE_AUDIT_FINDING_RULES
 
 router = APIRouter()
