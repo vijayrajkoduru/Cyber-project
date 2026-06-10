@@ -84,6 +84,17 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("stored_xss",     "/api/webapp/scan/stored_xss"),
         ("wpscan",         "/api/webapp/scan/wpscan"),
     ],
+    # Tier 8b — Nuclei tag-specific fan-out. Each scanner runs Nuclei with a
+    # different tag set so the PDF shows category-level coverage instead of
+    # one giant "Nuclei templates" row. Combined coverage ~3,400 templates.
+    "tier8b_nuclei_fanout": [
+        ("nuclei_sqli",          "/api/webapp/scan/nuclei_sqli"),
+        ("nuclei_xss",           "/api/webapp/scan/nuclei_xss"),
+        ("nuclei_rce",           "/api/webapp/scan/nuclei_rce"),
+        ("nuclei_ssrf",          "/api/webapp/scan/nuclei_ssrf"),
+        ("nuclei_takeover",      "/api/webapp/scan/nuclei_takeover"),
+        ("nuclei_default_creds", "/api/webapp/scan/nuclei_default_creds"),
+    ],
     # Tier 9 — AI-curated discovery (newly forged, big wordlists, async-parallel)
     "tier9_ai_curated_discovery": [
         ("directory_brute",  "/api/webapp/directory_brute"),    # 940 paths
