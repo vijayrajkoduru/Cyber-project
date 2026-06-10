@@ -9,6 +9,7 @@ import json
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 PROFILE_PATHS = ["/api/users/me", "/api/me", "/api/profile",
@@ -19,6 +20,7 @@ PRIV_FIELDS = ["isAdmin", "is_admin", "role", "balance",
 
 
 @router.post("/api/webapp/scan/mass_assignment_patch")
+@vl_turbo()
 def scan_mass_assignment_patch(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     token = (req.auth_bearer or "").strip()

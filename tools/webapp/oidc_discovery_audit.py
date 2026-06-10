@@ -11,6 +11,7 @@ This scanner fetches the doc and flags risky configs:
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ WELL_KNOWN_PATHS = [
 
 
 @router.post("/api/webapp/scan/oidc_discovery_audit")
+@vl_turbo()
 def scan_oidc_discovery_audit(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
 

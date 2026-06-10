@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends
 
 from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding
 from tools.webapp._webapp_common import precheck_target, vuln_response
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -150,6 +151,7 @@ def _parse_csv(text: str) -> list[dict]:
 
 
 @router.post("/api/webapp/scan/nikto")
+@vl_turbo()
 def scan_nikto(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
 

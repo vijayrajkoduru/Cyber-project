@@ -3,11 +3,13 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools.webapp._webapp_common import vuln_response
 from tools._vl_core.nuclei_runner import run_nuclei
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
 
 @router.post("/api/webapp/scan/nuclei_takeover")
+@vl_turbo()
 def scan(req: ScanRequest, _=Depends(verify_scan_quota)):
     res = run_nuclei(req, tags=["takeover"], severity_min="medium")
     if res["skipped"]:

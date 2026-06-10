@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 LEAK_PROBES = ["/", "/debug/vars", "/_status", "/.env",
@@ -18,6 +19,7 @@ PATTERNS = [
 
 
 @router.post("/api/webapp/scan/k8s_serviceaccount_token_leak")
+@vl_turbo()
 def scan_k8s_serviceaccount_token_leak(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     hits = []

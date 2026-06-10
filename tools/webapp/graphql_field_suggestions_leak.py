@@ -11,12 +11,14 @@ import json
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 GRAPHQL_PATHS = ["/graphql", "/api/graphql", "/v1/graphql", "/query"]
 
 
 @router.post("/api/webapp/scan/graphql_field_suggestions_leak")
+@vl_turbo()
 def scan_graphql_field_suggestions_leak(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     endpoint = None

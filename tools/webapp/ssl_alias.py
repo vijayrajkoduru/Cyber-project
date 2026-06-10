@@ -10,10 +10,12 @@ look at the Recon module output.
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, wrap_finding
 from tools.webapp._webapp_common import vuln_response
+from tools._vl_core.turbo import vl_turbo
 router = APIRouter()
 
 
 @router.post("/api/webapp/scan/ssl")
+@vl_turbo()
 def scan_ssl(req: ScanRequest, payload=Depends(verify_scan_quota)):
     info = wrap_finding(
         "SSL/TLS analysis delegated — see Recon module's tls_deep scanner",

@@ -17,6 +17,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
+from tools._vl_core.turbo import vl_turbo
 router = APIRouter()
 
 _FALLBACK_PATHS = [
@@ -55,6 +56,7 @@ def _fingerprint(r):
 
 
 @router.post("/api/webapp/scan/exposed_files")
+@vl_turbo()
 def scan_exposed_files(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     unreachable = precheck_target(base, req, active_probes=False)  # file-existence GETs — WAF passes through

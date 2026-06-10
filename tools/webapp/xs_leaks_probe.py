@@ -14,6 +14,7 @@ defense-in-depth. Apps with sensitive endpoints SHOULD have them.
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -54,6 +55,7 @@ SENSITIVE_PATHS = [
 
 
 @router.post("/api/webapp/scan/xs_leaks_probe")
+@vl_turbo()
 def scan_xs_leaks_probe(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     issues_by_path = {}

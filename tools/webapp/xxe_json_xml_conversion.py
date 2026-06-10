@@ -8,6 +8,7 @@ parser AND DOCTYPE is processed → XXE.
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 PROBE_PATHS = ["/api/users", "/api/data", "/api/import",
@@ -20,6 +21,7 @@ XXE_PAYLOAD = (
 
 
 @router.post("/api/webapp/scan/xxe_json_xml_conversion")
+@vl_turbo()
 def scan_xxe_json_xml_conversion(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     hits = []

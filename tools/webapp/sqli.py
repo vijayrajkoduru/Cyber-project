@@ -8,6 +8,7 @@ from tools._payloads.sqli import SQL_PAYLOADS
 from tools._spa_state import load_spa_state
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
+from tools._vl_core.turbo import vl_turbo
 router = APIRouter()
 # Merge baked-in library with AI-curated extras (tools/_payloads/vuln/sqli_extra_payloads.json).
 # Format: (name, template, dbms) — same tuple shape the rest of the scanner expects.
@@ -36,6 +37,7 @@ def _time_get(url, req, timeout):
     return r, time.time() - t0
 
 @router.post("/api/webapp/scan/sqli")
+@vl_turbo()
 def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     unreachable = precheck_target(base, req)

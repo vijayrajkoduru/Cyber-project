@@ -13,12 +13,14 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 AJP_PORT = 8009
 
 
 @router.post("/api/webapp/scan/tomcat_ajp_exposure")
+@vl_turbo()
 def scan_tomcat_ajp_exposure(req: ScanRequest, payload=Depends(verify_scan_quota)):
     parsed = urlparse(web_url(req.target))
     host = parsed.hostname or req.target

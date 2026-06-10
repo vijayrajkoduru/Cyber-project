@@ -11,6 +11,7 @@ at the rendered consent page / 400 error.
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ def _probe(url, params, req):
 
 
 @router.post("/api/webapp/scan/oauth_scope_creep")
+@vl_turbo()
 def scan_oauth_scope_creep(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     endpoint = None

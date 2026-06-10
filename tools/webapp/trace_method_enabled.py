@@ -10,11 +10,13 @@ still works. Best practice: disable at edge.
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
 
 @router.post("/api/webapp/scan/trace_method_enabled")
+@vl_turbo()
 def scan_trace_method_enabled(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target).rstrip("/")
     r = safe_request("TRACE", url + "/",

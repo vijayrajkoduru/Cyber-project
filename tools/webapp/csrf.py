@@ -13,6 +13,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.turbo import vl_turbo
 router = APIRouter()
 _TOKEN_RE = re.compile(r"(csrf|csrftoken|_token|authenticity_token|xsrf|nonce|state)", re.IGNORECASE)
 _PAGES = ["/", "/login", "/signin", "/register", "/signup", "/profile", "/settings", "/account"]
@@ -25,6 +26,7 @@ def _form_has_token(html):
     return False, None
 
 @router.post("/api/webapp/scan/csrf")
+@vl_turbo()
 def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     unreachable = precheck_target(base, req, active_probes=False)  # token-field inspection only — no payload injection

@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                              wrap_finding, safe_get)
 from tools.webapp._webapp_common import precheck_target, vuln_response
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -157,6 +158,7 @@ def _resolve_cnames(hostname: str, max_hops: int = 5) -> list[str]:
 
 
 @router.post("/api/webapp/scan/subdomain_takeover")
+@vl_turbo()
 def scan_subdomain_takeover(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     parsed = urlparse(base)

@@ -14,6 +14,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -43,6 +44,7 @@ def _probe(url, params, req):
 
 
 @router.post("/api/webapp/scan/ssrf_url_schema_smuggle")
+@vl_turbo()
 def scan_ssrf_url_schema_smuggle(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     hits = []

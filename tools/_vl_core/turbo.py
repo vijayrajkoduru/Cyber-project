@@ -98,6 +98,57 @@ def timed_scanner(scanner_func):
     return wrapper
 
 
+def vl_turbo(timeout_s: int = None):
+    """VL-TURBO: universal scanner wrapper.
+
+    Drop on any scanner endpoint (sync OR async). Provides:
+      - sync->async bridge via asyncio.to_thread (sync scanner no longer
+        blocks the FastAPI event loop)
+      - wall-clock timeout (default 60s, override per scanner)
+      - VL-TURBO killed -> standard skipped_reason response
+
+    Usage:
+        from tools._vl_core.turbo import vl_turbo
+
+        @router.post("/api/webapp/scan/foo")
+        @vl_turbo(timeout_s=45)
+        def scan_foo(req: ScanRequest, _=Depends(verify_scan_quota)):
+            ...  # sync body, blocking I/O OK
+
+    The decorator returns an async coroutine FastAPI can await, regardless
+    of whether the underlying scanner is sync or async. No body changes
+    needed in the scanner itself.
+    """
+    cap = timeout_s if timeout_s is not None else SCANNER_WALL_CLOCK_S
+
+    def _decorator(fn):
+        is_async = asyncio.iscoroutinefunction(fn)
+
+        @wraps(fn)
+        async def _wrapper(*args, **kwargs):
+            try:
+                if is_async:
+                    coro = fn(*args, **kwargs)
+                else:
+                    coro = asyncio.to_thread(fn, *args, **kwargs)
+                return await asyncio.wait_for(coro, timeout=cap)
+            except asyncio.TimeoutError:
+                tool = getattr(fn, "__name__", "unknown")
+                log.warning(f"[VL-TURBO] {tool} exceeded {cap}s wall-clock cap")
+                from tools._shared import standard_response
+                req = args[0] if args else kwargs.get("req")
+                target = getattr(req, "target", "unknown") if req else "unknown"
+                return standard_response(
+                    tool=tool, target=str(target), findings=[],
+                    tests_performed=0, vulnerable=False,
+                    skipped_reason=f"VL-TURBO killed scanner at {cap}s wall-clock cap",
+                )
+
+        return _wrapper
+
+    return _decorator
+
+
 # Auto-apply patches to existing requests when this module imported
 def _autopatch_requests():
     """Bump default connection pool on requests' default Session."""

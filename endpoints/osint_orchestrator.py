@@ -174,7 +174,12 @@ def _all_tools() -> list[tuple[str, str]]:
 class OsintRunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
-    concurrency: Optional[int] = 6
+    # VL-TURBO 2.0 for OSINT: default 12 (cap 20). Higher than the legacy
+    # 6 default but still respects API rate limits — OSINT calls 30+
+    # third-party APIs and the per-source VL-PRIME rate buckets prevent
+    # any single provider being hammered. The orchestrator parallelism
+    # is module-level, not per-source.
+    concurrency: Optional[int] = 12
     options: Optional[dict] = None
 
 
@@ -195,7 +200,7 @@ def _resolve(req: "OsintRunAllRequest", request: Request):
 async def osint_run_all(req: "OsintRunAllRequest", request: Request,
                         _=Depends(verify_scan_quota)):
     tools, extra, jwt = _resolve(req, request)
-    concurrency = max(1, min(req.concurrency or 6, 12))
+    concurrency = max(1, min(req.concurrency or 12, 20))  # VL-TURBO 2.0
     gen = run_module_streaming(
         target=req.target, tools=tools, module_name="osint",
         concurrency=concurrency, extra_body=extra or None, jwt_token=jwt,
@@ -210,7 +215,7 @@ async def osint_run_all(req: "OsintRunAllRequest", request: Request,
 async def osint_run_all_buffered(req: "OsintRunAllRequest", request: Request,
                                  _=Depends(verify_scan_quota)):
     tools, extra, jwt = _resolve(req, request)
-    concurrency = max(1, min(req.concurrency or 6, 12))
+    concurrency = max(1, min(req.concurrency or 12, 20))  # VL-TURBO 2.0
     return await run_module_parallel(
         target=req.target, tools=tools, module_name="osint",
         concurrency=concurrency, extra_body=extra or None, jwt_token=jwt)

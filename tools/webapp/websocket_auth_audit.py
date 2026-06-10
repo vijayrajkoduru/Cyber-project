@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -81,6 +82,7 @@ def _ws_handshake(scheme, host, port, path, with_auth=False, timeout=8):
 
 
 @router.post("/api/webapp/scan/websocket_auth_audit")
+@vl_turbo()
 def scan_websocket_auth_audit(req: ScanRequest, payload=Depends(verify_scan_quota)):
     parsed = urlparse(web_url(req.target))
     host = parsed.hostname or req.target

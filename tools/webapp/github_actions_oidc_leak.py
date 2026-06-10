@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 PATTERNS = [
@@ -16,6 +17,7 @@ SCRIPT_SRC_RE = re.compile(r'<script[^>]*\bsrc=["\']([^"\']+\.js)["\']', re.IGNO
 
 
 @router.post("/api/webapp/scan/github_actions_oidc_leak")
+@vl_turbo()
 def scan_github_actions_oidc_leak(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     root = safe_request("GET", base + "/",

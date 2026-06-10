@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -100,6 +101,7 @@ def _ws_init(scheme, host, port, path, subprotocol, timeout=8):
 
 
 @router.post("/api/webapp/scan/graphql_subscription_auth")
+@vl_turbo()
 def scan_graphql_subscription_auth(req: ScanRequest, payload=Depends(verify_scan_quota)):
     parsed = urlparse(web_url(req.target))
     host = parsed.hostname or req.target

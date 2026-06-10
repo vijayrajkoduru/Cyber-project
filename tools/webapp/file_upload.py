@@ -5,6 +5,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
 from tools._payloads.webapp._loader import load_json
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -53,6 +54,7 @@ for _p in _AI_EXTRA_UPLOADS:
 
 
 @router.post("/api/webapp/scan/file_upload")
+@vl_turbo()
 def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)

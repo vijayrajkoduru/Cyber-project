@@ -101,6 +101,9 @@ from tools._vl_core.vl_core import (
     assert_isolated_import,
 )
 
+# ── VL-TURBO universal scanner decorator ─────────────────────────────────
+from tools._vl_core.turbo import vl_turbo, with_wall_clock_cap, timed_scanner
+
 
 __all__ = [
     # Orchestration
@@ -122,4 +125,6 @@ __all__ = [
     "run_theharvester", "run_sherlock", "run_holehe",
     # Module registry
     "MODULES", "module_root", "shared_root", "assert_isolated_import",
+    # VL-TURBO
+    "vl_turbo", "with_wall_clock_cap", "timed_scanner",
 ]
