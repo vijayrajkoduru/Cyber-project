@@ -12,14 +12,36 @@ async def gather(ctx):
     org=ctx.host.split(".")[0]
     emails=[f"admin@{ctx.host}",f"info@{ctx.host}",f"{org}@{ctx.host}",f"contact@{ctx.host}"]
     found=[]
+    # VL-VERIFY (zero-FP): holehe prints a startup legend like
+    #   "[+] Email used, [-] Email not used, [x] Rate limit"
+    # the old version was grepping `[+]` anywhere and matching this legend
+    # banner line, falsely concluding the email was "used on N sites".
+    # Real positive lines have the shape:  "[+] amazon.com" / "[+] github.com".
+    # We require:
+    #   - line starts (after whitespace) with literal "[+]"
+    #   - the substring after "[+]" must be a domain-like token (contains
+    #     a dot AND no spaces in the token), not a free-form sentence.
+    import re as _re
+    _SITE_LINE = _re.compile(r"^\s*\[\+\]\s+([^\s]+\.[^\s]+)")
+    _LEGEND_TOKENS = ("email used","email not used","rate limit","email exist","not exist")
     for em in emails[:2]:  # limit for speed
         try:
             proc=await asyncio.create_subprocess_exec(_HOLEHE,em,"--only-used","--no-color",
                 stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL)
             out,_=await asyncio.wait_for(proc.communicate(),timeout=120)
             for line in out.decode("utf-8",errors="ignore").splitlines():
-                if "[+]" in line or "USED" in line.upper():
-                    found.append({"email":em,"site":line.strip()[:200]})
+                low = line.lower()
+                # Skip the holehe startup legend / help text
+                if any(t in low for t in _LEGEND_TOKENS):
+                    continue
+                m = _SITE_LINE.match(line)
+                if not m:
+                    continue
+                site = m.group(1).strip(".,").lower()
+                # Sanity: site must be a real domain shape (a.b minimum)
+                if "." not in site or len(site) > 80:
+                    continue
+                found.append({"email":em,"site":site})
             ctx.source(f"holehe-{em}")
         except: pass
     ctx.state["registrations_found"]=found[:30]

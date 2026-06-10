@@ -21,12 +21,31 @@ def _grab(ip,port,payload=b"",timeout=4):
             return s.recv(4096).decode("utf-8",errors="ignore")
     except: return ""
 def _parse_version(banner):
-    patterns=[r"OpenSSH[_\- ]([\d.]+)",r"nginx/([\d.]+)",r"Apache/([\d.]+)",
-        r"Postfix",r"Microsoft IIS/([\d.]+)",r"Server: ([^\r\n]+)",
-        r"redis_version:([\d.]+)",r"VERSION ([\d.]+)"]
-    for p in patterns:
+    """Return a version string only when REAL version info is disclosed.
+
+    VL-VERIFY (zero-FP): the old version had a catch-all `Server: ([^\\r\\n]+)`
+    pattern that fired on `Server: Netlify`, `Server: cloudflare`, etc. - brand
+    names with no version info. Real version disclosure is, e.g.,
+    `Server: Apache/2.4.41 (Ubuntu)`. We now require either:
+      - A version-bearing product pattern (nginx/X.Y.Z, OpenSSH_X.Y, ...)
+      - OR a Server header whose value contains digits (e.g. `nginx/1.18.0`)
+    Bare-brand Server headers like 'Netlify' / 'cloudflare' are returned as
+    intel only (handled by INTEL_FIELDS), not as a finding.
+    """
+    # Version-bearing product patterns (must have a digit-only capture group)
+    versioned=[r"OpenSSH[_\- ]([\d.]+)",r"nginx/([\d.]+)",r"Apache/([\d.]+)",
+        r"Microsoft IIS/([\d.]+)",r"redis_version:([\d.]+)",
+        r"VERSION ([\d.]+)",r"lighttpd/([\d.]+)",r"Caddy/([\d.]+)"]
+    for p in versioned:
         m=re.search(p,banner)
         if m: return m.group(0)[:80]
+    # Fallback: bare 'Server: <value>' - only flag if <value> contains a digit
+    m=re.search(r"Server:\s*([^\r\n]+)",banner)
+    if m:
+        val=m.group(1).strip()
+        if re.search(r"\d", val):
+            return f"Server: {val[:60]}"
+    # Postfix advertises itself without version - mention but don't flag
     return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
