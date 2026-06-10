@@ -12,6 +12,7 @@ import json
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -35,6 +36,7 @@ PAYLOADS = {
 
 
 @router.post("/api/webapp/scan/webhook_secret_validation")
+@vl_turbo()
 def scan_webhook_secret_validation(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     discovered = []

@@ -8,11 +8,13 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
 
 @router.post("/api/webapp/scan/nestjs_pipe_injection")
+@vl_turbo()
 def scan_nestjs_pipe_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     r = safe_request("GET", base + "/",

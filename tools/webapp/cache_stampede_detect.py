@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ def _timed_get(url, req):
 
 
 @router.post("/api/webapp/scan/cache_stampede_detect")
+@vl_turbo()
 def scan_cache_stampede_detect(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target).rstrip("/") + "/"
     # Sequential baseline (10 reqs)

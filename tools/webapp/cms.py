@@ -17,6 +17,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.turbo import vl_turbo
 router = APIRouter()
 
 _FALLBACK_FINGERPRINTS = [
@@ -42,6 +43,7 @@ else:
     _FINGERPRINTS = _FALLBACK_FINGERPRINTS
 
 @router.post("/api/webapp/scan/cms")
+@vl_turbo()
 def scan_cms(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     unreachable = precheck_target(base, req, active_probes=False)  # read-only fingerprinting — runs behind WAF

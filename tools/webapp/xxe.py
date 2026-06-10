@@ -16,6 +16,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
 from tools._payloads.xxe import XXE_PAYLOADS
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
+from tools._vl_core.turbo import vl_turbo
 # AI-curated extras: more file targets, parameter-entity, XInclude, SVG, SOAP, UTF-16.
 _AI_EXTRA_XXE = load_json("xxe_extra_payloads", fallback=[])
 _MERGED_XXE = list(XXE_PAYLOADS) + [p for p in _AI_EXTRA_XXE if isinstance(p, dict) and "body" in p and "matcher" in p]
@@ -44,6 +45,7 @@ def _pick_cts_for(category):
 
 
 @router.post("/api/webapp/scan/xxe")
+@vl_turbo()
 def scan_xxe(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     unreachable = precheck_target(url, req)

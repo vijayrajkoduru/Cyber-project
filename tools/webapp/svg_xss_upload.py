@@ -11,6 +11,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -61,6 +62,7 @@ def _extract_url(body, base):
 
 
 @router.post("/api/webapp/scan/svg_xss_upload")
+@vl_turbo()
 def scan_svg_xss_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     accepted = []

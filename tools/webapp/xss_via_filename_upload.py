@@ -10,6 +10,7 @@ body contains the unescaped <script> tag, BUG.
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -39,6 +40,7 @@ def _upload(url, filename, req):
 
 
 @router.post("/api/webapp/scan/xss_via_filename_upload")
+@vl_turbo()
 def scan_xss_via_filename_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     xss_hits = []

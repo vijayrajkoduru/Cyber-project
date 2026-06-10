@@ -2,12 +2,14 @@
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 KAFKA_PATHS = ["/topics", "/brokers", "/consumers", "/v3/clusters"]
 
 
 @router.post("/api/webapp/scan/kafka_rest_proxy_exposure")
+@vl_turbo()
 def scan_kafka_rest_proxy_exposure(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     exposed = []

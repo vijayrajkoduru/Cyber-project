@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -103,6 +104,7 @@ def _send_large_text_frame(sock, size_kb=512):
 
 
 @router.post("/api/webapp/scan/websocket_message_size_dos")
+@vl_turbo()
 def scan_websocket_message_size_dos(req: ScanRequest, payload=Depends(verify_scan_quota)):
     parsed = urlparse(web_url(req.target))
     host = parsed.hostname or req.target

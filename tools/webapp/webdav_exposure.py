@@ -7,12 +7,14 @@ upload files, even RCE via PUT then GET. IIS WebDAV CVE-2017-7269.
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 PROBE_PATHS = ["/", "/dav/", "/webdav/", "/files/", "/upload/"]
 
 
 @router.post("/api/webapp/scan/webdav_exposure")
+@vl_turbo()
 def scan_webdav_exposure(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     hits = []

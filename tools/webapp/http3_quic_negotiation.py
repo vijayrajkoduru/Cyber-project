@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -31,6 +32,7 @@ def _parse_alt_svc(header: str) -> list:
 
 
 @router.post("/api/webapp/scan/http3_quic_negotiation")
+@vl_turbo()
 def scan_http3_quic_negotiation(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     parsed = urlparse(url)

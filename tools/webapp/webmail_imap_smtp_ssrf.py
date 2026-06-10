@@ -12,6 +12,7 @@ URLs (imap://internal-host, smtp://169.254.169.254).
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.turbo import vl_turbo
 
 router = APIRouter()
 
@@ -27,6 +28,7 @@ WEBMAIL_MARKERS = [
 
 
 @router.post("/api/webapp/scan/webmail_imap_smtp_ssrf")
+@vl_turbo()
 def scan_webmail_imap_smtp_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     webmail_found = []
