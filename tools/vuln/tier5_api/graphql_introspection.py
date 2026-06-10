@@ -1,10 +1,17 @@
-"""GraphQL introspection enabled (schema disclosure). VL-FORGE Vuln tier5 - §5 #72."""
+"""GraphQL introspection enabled (schema disclosure). VL-FORGE Vuln tier5 - §5 #72.
+
+VL-VERIFY: existing content gates (__schema + queryType in body) already
+prevent SPA-shell FPs since those strings are GraphQL-specific. Belt-and-
+braces canary check + state stamp catches edge cases like Apollo Studio
+demo embeds in SPA bundles.
+"""
 import asyncio
 import ssl
 import urllib.request
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import run_scanner
+from tools.vuln._vuln_common import detect_spa_catchall
 
 router = APIRouter()
 _EP = ["/graphql", "/api/graphql", "/v1/graphql", "/graphql/v1", "/query", "/api/gql"]
@@ -27,10 +34,20 @@ def _post(url, timeout=8):
 
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/")
+    spa = await detect_spa_catchall(base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
+    canary_body = spa.get("canary_body", "") or ""
 
     async def _c(ep):
         st, body = await asyncio.to_thread(_post, base + ep)
-        if st == 200 and "__schema" in body and "queryType" in body:
+        if st != 200:
+            return None
+        # Drop if the body markers ALSO appear in the SPA canary - means
+        # the page is the SPA shell with Apollo/GraphiQL docs inlined.
+        if spa.get("is_spa") and canary_body and \
+           "__schema" in canary_body and "queryType" in canary_body:
+            return None
+        if "__schema" in body and "queryType" in body:
             return ep
         return None
 
