@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
-from tools._payloads.vuln._loader import load_lines
+from tools._payloads.webapp._loader import load_lines
 from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router = APIRouter()
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")

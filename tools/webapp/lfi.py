@@ -15,7 +15,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
 from tools._spa_state import load_spa_state
 from tools._payloads.lfi import LFI_PAYLOADS
 from tools.webapp._webapp_common import vuln_response, precheck_target
-from tools._payloads.vuln._loader import load_json
+from tools._payloads.webapp._loader import load_json
 # AI-curated extras: system files, history, logs, configs, cloud-meta, container indicators.
 _AI_EXTRA_LFI = load_json("lfi_extra_paths", fallback=[])
 _MERGED_LFI = list(LFI_PAYLOADS) + [p for p in _AI_EXTRA_LFI if isinstance(p, dict) and "payload" in p]

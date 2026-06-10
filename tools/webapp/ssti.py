@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, safe_post, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
-from tools._payloads.vuln._loader import load_json
+from tools._payloads.webapp._loader import load_json
 
 router = APIRouter()
 
