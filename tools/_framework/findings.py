@@ -18,6 +18,7 @@ Rules NEVER raise — exceptions are caught and the rule is skipped so a
 single buggy rule doesn't kill the whole scan.
 """
 from tools._shared import wrap_finding
+from tools._framework.severity_policy import cap_if_advisory
 
 
 def run_rules(state: dict, rules: list) -> list:
@@ -40,6 +41,10 @@ def run_rules(state: dict, rules: list) -> list:
             continue
         if not res:
             continue
+        # Global advisory-severity cap: precondition-style "verify your patch"
+        # findings get clamped to INFO unless the scanner stamped
+        # `verified_exploit: True`. Single seam, no per-scanner edits.
+        res = cap_if_advisory(res)
         findings.append(wrap_finding(
             res["name"],
             res["severity"],
@@ -50,6 +55,7 @@ def run_rules(state: dict, rules: list) -> list:
             owasp=res.get("owasp", "N/A"),
             remediation=res.get("remediation", ""),
             evidence_marker=res.get("evidence", ""),
+            verified_exploit=res.get("verified_exploit", False),
         ))
     return findings
 

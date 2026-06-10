@@ -312,7 +312,7 @@ def wrap_finding(detail: str, severity: str, **kw) -> dict:
                                      feedback-real-findings-zero-fp)
         verified_at:  ISO timestamp of this stamp
     """
-    return {
+    f = {
         "detail":          detail,
         "severity":        severity,
         "cvss":            kw.get("cvss", "0.0"),
@@ -326,6 +326,23 @@ def wrap_finding(detail: str, severity: str, **kw) -> dict:
         "evidence_marker": kw.get("evidence_marker", ""),
         "tests_performed": kw.get("tests_performed", 1),
     }
+    # Global advisory cap (Webapp + Vuln + Recon). Scanners that have
+    # demonstrated the issue opt out by passing verified_exploit=True.
+    if kw.get("verified_exploit"):
+        f["verified_exploit"] = True
+    else:
+        try:
+            from tools._framework.severity_policy import is_advisory, _RANK
+            blob_name = detail or ""
+            blob_evi = f["evidence_marker"] or ""
+            cur_rank = _RANK.get(str(severity).upper(), 0)
+            if cur_rank > 0 and is_advisory(blob_name, blob_evi):
+                f["_original_severity"] = severity
+                f["severity"] = "INFO"
+                f["_policy"] = "advisory-cap"
+        except Exception:
+            pass
+    return f
 
 
 def standard_response(*, tool: str, target: str, findings: list,
