@@ -17,6 +17,18 @@ WALL_CLOCK_S = 10
 
 def _do_scan(req: ScanRequest) -> dict:
     q = (req.target or "").strip()
+
+    # VL-VERIFY deep: skip reserved domains. DeHashed will return matches
+    # for example.com because the string appears in countless breach
+    # samples, but those aren't breaches OF example.com.
+    from tools._vl_core.reserved_domains import is_reserved
+    if "." in q and is_reserved(q):
+        return standard_response(
+            tool="dehashed_search", target=req.target, findings=[],
+            tests_performed=0, vulnerable=False,
+            skipped_reason=("Target is RFC 2606 / 6761 reserved domain. "
+                             "DeHashed search is not applicable."))
+
     creds = (req.auth_bearer or "").strip()
     if ":" not in creds:
         return standard_response(

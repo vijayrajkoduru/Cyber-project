@@ -97,10 +97,42 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=0, vulnerable=False,
             skipped_reason="target must be a valid email")
 
+    # VL-VERIFY deep: skip reserved-domain emails (RFC 2606) — they will
+    # return FOUND on services that 200 for any email-shaped string.
+    domain = email.split("@", 1)[1].lower() if "@" in email else ""
+    from tools._vl_core.reserved_domains import is_reserved
+    if is_reserved(domain):
+        return standard_response(
+            tool="holehe_email_check", target=req.target, findings=[],
+            tests_performed=0, vulnerable=False,
+            skipped_reason=("Email domain is RFC 2606 / 6761 reserved "
+                             "(example.com, *.test, etc.). Account-existence "
+                             "checks are not applicable."))
+
+    # VL-VERIFY deep: sentinel email — probe a guaranteed-nonexistent
+    # email on each service first. If a service returns FOUND for the
+    # sentinel, it's unreliable; drop those services from real probes.
+    import secrets as _sec
+    sentinel = f"vlxxx_no_exist_{_sec.token_hex(8)}@example.org"
+    unreliable_services = set()
+    with ThreadPoolExecutor(max_workers=12) as ex:
+        sentinel_futs = {
+            ex.submit(_check_one, sentinel, l, m, t, mk, mt): l
+            for (l, m, t, mk, mt) in SERVICES
+        }
+        for fut, label in sentinel_futs.items():
+            try:
+                _, status, _ = fut.result(timeout=6)
+            except Exception:
+                continue
+            if status == "FOUND":
+                unreliable_services.add(label)
+
     found = []; clean = []; ambig = []
     with ThreadPoolExecutor(max_workers=12) as ex:
         futures = [ex.submit(_check_one, email, l, m, t, mk, mt)
-                    for (l, m, t, mk, mt) in SERVICES]
+                    for (l, m, t, mk, mt) in SERVICES
+                    if l not in unreliable_services]
         for fut in futures:
             try:
                 label, status, detail = fut.result(timeout=8)
@@ -109,31 +141,42 @@ def _do_scan(req: ScanRequest) -> dict:
             elif status == "CLEAN": clean.append(label)
             else: ambig.append(label)
 
+    reliable_count = len(SERVICES) - len(unreliable_services)
     findings = []
     if found:
+        sentinel_suffix = (f" [VL-VERIFY: {len(unreliable_services)} "
+                           f"services sentinel-dropped]"
+                           if unreliable_services else "")
         findings.append(wrap_finding(
-            f"Email registered on {len(found)} service(s)",
+            f"Email registered on {len(found)} service(s) (sentinel-verified)",
             severity="MEDIUM" if len(found) >= 5 else "LOW",
             cwe="CWE-200", cvss="3.7" if len(found) < 5 else "5.3",
             owasp="A05:2021",
+            verified_exploit=True,
             remediation="Each registered service = candidate breach pivot. "
                         "For exec/security-team emails: ALWAYS use email aliases "
                         "(+work, +banking, +social) to compartmentalize. Run "
                         "hibp_breaches_domain + hudson_rock_cavalier for matched services.",
-            evidence_marker=" | ".join(f"{l}: {d}" for l, d in found[:15])))
+            evidence_marker=(" | ".join(f"{l}: {d}" for l, d in found[:15])
+                              + sentinel_suffix)))
     else:
         findings.append(wrap_finding(
-            f"Email not found on any of {len(SERVICES)} checked services",
+            f"Email not found on any of {reliable_count} reliable services",
             severity="POSITIVE", cwe="CWE-200",
             remediation="Either email is fresh / private or our checks missed it. "
                         "Run github_user_intel + sherlock_username for username-based pivots.",
-            evidence_marker=f"{len(clean)} services confirmed CLEAN, {len(ambig)} ambiguous (CONFIRMED)"))
+            evidence_marker=(f"{len(clean)} services CLEAN, {len(ambig)} ambiguous"
+                              f"{', ' + str(len(unreliable_services)) + ' sentinel-dropped' if unreliable_services else ''}"
+                              " (CONFIRMED)")))
 
     return standard_response(
         tool="holehe_email_check", target=req.target, findings=findings,
         tests_performed=len(SERVICES), vulnerable=bool(found),
-        tests_summary=f"checked {len(SERVICES)} services, found on {len(found)}, clean on {len(clean)}",
-        raw_data={"found": found, "clean": clean, "ambiguous": ambig})
+        tests_summary=(f"sentinel-checked {len(SERVICES)} services "
+                        f"({reliable_count} reliable); "
+                        f"real email found on {len(found)}, clean on {len(clean)}"),
+        raw_data={"found": found, "clean": clean, "ambiguous": ambig,
+                   "sentinel_dropped": sorted(unreliable_services)})
 
 
 @router.post("/api/osint/holehe_email_check")

@@ -30,6 +30,16 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=0, vulnerable=False,
             skipped_reason="invalid domain")
 
+    # VL-VERIFY deep: reserved-domain skip — HIBP returns matches for
+    # example.com because countless breach analysis articles reference it.
+    from tools._vl_core.reserved_domains import is_reserved
+    if is_reserved(domain):
+        return standard_response(
+            tool="hibp_breaches_domain", target=req.target, findings=[],
+            tests_performed=0, vulnerable=False,
+            skipped_reason=("Target is RFC 2606 / 6761 reserved domain. "
+                             "HIBP breach lookup is not applicable."))
+
     r = safe_get(f"https://haveibeenpwned.com/api/v3/breaches?domain={domain}",
                   req=req, timeout=8,
                   headers={"User-Agent": "VulnusLab-OSINT/1.0",
@@ -49,6 +59,21 @@ def _do_scan(req: ScanRequest) -> dict:
             skipped_reason="non-JSON HIBP response")
 
     breaches = data if isinstance(data, list) else []
+
+    # VL-VERIFY deep: filter to breaches whose Domain field actually matches.
+    # HIBP's domain query can return breaches that merely reference the
+    # domain in their data classes / description. Real "this domain was
+    # breached" requires Domain field equality.
+    verified = []
+    weak_match = []
+    for b in breaches:
+        b_domain = (b.get("Domain") or "").lower()
+        if b_domain == domain or b_domain.endswith("." + domain):
+            verified.append(b)
+        else:
+            weak_match.append(b)
+    breaches = verified
+
     if not breaches:
         return standard_response(
             tool="hibp_breaches_domain", target=req.target,
@@ -68,11 +93,14 @@ def _do_scan(req: ScanRequest) -> dict:
     biggest = breaches[0]
     top5 = breaches[:5]
 
+    weak_note = (f" [{len(weak_match)} title-only matches dropped]"
+                  if weak_match else "")
     findings = [wrap_finding(
-        f"{domain} appears in {len(breaches)} breach(es) — {total_accounts:,} accounts exposed",
+        f"{domain} appears in {len(breaches)} breach(es) — {total_accounts:,} accounts exposed (CONFIRMED via Domain field)",
         severity="HIGH" if total_accounts >= 100000 else "MEDIUM",
         cvss="7.5" if total_accounts >= 100000 else "5.3",
         cwe="CWE-359", owasp="A05:2021",
+        verified_exploit=True,
         remediation="For each breach: identify affected users, force password "
                     "reset, audit for credential reuse on internal systems, monitor "
                     "for HIBP-domain-monitoring service via paid API. Worst-case: "
@@ -80,8 +108,8 @@ def _do_scan(req: ScanRequest) -> dict:
         evidence_marker=(
             f"biggest: {biggest.get('Name')} "
             f"({biggest.get('PwnCount', 0):,} accts, {biggest.get('BreachDate', '?')}) | "
-            f"top 5: {', '.join(f'{b.get(chr(34)+chr(78)+chr(97)+chr(109)+chr(101)+chr(34), chr(63))} ({b.get(chr(34)+chr(80)+chr(119)+chr(110)+chr(67)+chr(111)+chr(117)+chr(110)+chr(116)+chr(34), 0):,})' for b in top5)} "
-            f"(CONFIRMED via HIBP)"
+            f"top 5: {', '.join(f'{b.get(chr(34)+chr(78)+chr(97)+chr(109)+chr(101)+chr(34), chr(63))} ({b.get(chr(34)+chr(80)+chr(119)+chr(110)+chr(67)+chr(111)+chr(117)+chr(110)+chr(116)+chr(34), 0):,})' for b in top5)}"
+            + weak_note
         ))]
 
     return standard_response(
