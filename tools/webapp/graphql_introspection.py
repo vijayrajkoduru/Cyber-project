@@ -1,7 +1,13 @@
-"""Webapp: GraphQL introspection detection."""
+"""Webapp: GraphQL introspection detection.
+
+VL-VERIFY: requires __schema in JSON response body. The JSON-parse gate
+catches most SPA-shell FPs. Stamp spa_catchall on output for report
+transparency.
+"""
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -12,6 +18,7 @@ _INTROSPECTION_QUERY = '{"query":"{__schema{queryType{name}mutationType{name}typ
 @router.post("/api/webapp/graphql_introspection")
 async def webapp_graphql_introspection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     discovered = []
     for path in _GRAPHQL_PATHS:
@@ -48,7 +55,8 @@ async def webapp_graphql_introspection(req: ScanRequest, payload=Depends(verify_
         tool="graphql_introspection", target=req.target,
         findings=findings, tests_performed=len(_GRAPHQL_PATHS),
         tests_summary=f"Tested {len(_GRAPHQL_PATHS)} GraphQL endpoints; {len(discovered)} expose introspection",
-        raw_data={"graphql_introspection": {"discovered": discovered}},
+        raw_data={"graphql_introspection": {"discovered": discovered,
+                                              "spa_catchall": spa["is_spa"]}},
     )
 
 

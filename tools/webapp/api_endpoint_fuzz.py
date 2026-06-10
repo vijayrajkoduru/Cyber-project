@@ -1,7 +1,13 @@
-"""Webapp: API endpoint fuzz - discovers Swagger spec, fuzzes each endpoint with bad inputs."""
+"""Webapp: API endpoint fuzz - discovers Swagger spec, fuzzes each endpoint with bad inputs.
+
+VL-VERIFY: scanner finds Swagger spec then fuzzes its endpoints. JSON-parse
+gate already filters SPA-shell FPs at the spec-discovery stage. Stamp
+spa_catchall on output so the report carries the SPA context.
+"""
 import json
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 
 router = APIRouter()
 
@@ -12,6 +18,7 @@ _FUZZ_VALUES = ["", "0", "-1", "null", "{}", "[]", "'", '"', "../../etc/passwd",
 @router.post("/api/webapp/api_endpoint_fuzz")
 async def webapp_api_endpoint_fuzz(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
     # 1) Find Swagger spec
@@ -70,7 +77,8 @@ async def webapp_api_endpoint_fuzz(req: ScanRequest, payload=Depends(verify_scan
         tool="api_endpoint_fuzz", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Fuzzed {len(paths)} Swagger-discovered endpoints with {len(_FUZZ_VALUES)} bad inputs",
-        raw_data={"api_endpoint_fuzz": {"crashes": crashes, "spec_endpoints": len(paths)}},
+        raw_data={"api_endpoint_fuzz": {"crashes": crashes, "spec_endpoints": len(paths),
+                                          "spa_catchall": spa["is_spa"]}},
     )
 
 

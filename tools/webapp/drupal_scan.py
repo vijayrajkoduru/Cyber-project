@@ -1,7 +1,13 @@
-"""Webapp: Drupal-specific scanner (CHANGELOG, install pages, version disclosure)."""
+"""Webapp: Drupal-specific scanner (CHANGELOG, install pages, version disclosure).
+
+VL-VERIFY: _is_drupal() checks for 'generator.*Drupal' regex in body, or
+specific Drupal paths. Strong content gates already protect against SPA
+FPs. Stamp spa_catchall on output for report transparency.
+"""
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -29,6 +35,7 @@ def _is_drupal(base, req):
 @router.post("/api/webapp/drupal_scan")
 async def webapp_drupal_scan(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     is_drupal, home_r = _is_drupal(base, req)
     if not is_drupal:
         return standard_response(
@@ -115,7 +122,7 @@ async def webapp_drupal_scan(req: ScanRequest, payload=Depends(verify_scan_quota
         tool="drupal_scan", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Drupal-specific scanner: {tests} active probes (CHANGELOG / install / update / user/register)",
-        raw_data={"drupal_scan": {"is_drupal": True}},
+        raw_data={"drupal_scan": {"is_drupal": True, "spa_catchall": spa["is_spa"]}},
     )
 
 

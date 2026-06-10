@@ -1,10 +1,17 @@
-"""Webapp: Broken authentication audit - predictable tokens, weak sessions, no rate limit."""
+"""Webapp: Broken authentication audit - predictable tokens, weak sessions, no rate limit.
+
+VL-VERIFY: probes 6 login paths; the SPA catch-all returns 200 + same shell
+for every path. If first probed login_url is just the SPA shell, the
+rate-limit + token-strength tests below fire against a non-existent endpoint.
+Canary check skips paths whose body matches the SPA shell.
+"""
 import re
 import time
 import secrets
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 
 router = APIRouter()
 
@@ -14,15 +21,21 @@ _LOGIN_PATHS = ["/login","/api/login","/auth/login","/api/auth/login","/signin",
 @router.post("/api/webapp/broken_auth")
 async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
-    
-    # Find a login endpoint
+    spa_suppressed = []
+
+    # Find a login endpoint - skip SPA shells
     login_url = None
     for path in _LOGIN_PATHS:
         tests += 1
         r = safe_get(base + path, req=req, allow_redirects=True, timeout=6)
         if r is None or r.status_code == 404:
+            continue
+        # SPA catch-all: body matches canary -> path isn't a real login page
+        if spa["is_spa"] and is_same_as_canary(r.text or "", spa["canary_body"]):
+            spa_suppressed.append(path)
             continue
         login_url = base + path
         break
@@ -92,7 +105,9 @@ async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota
         tool="broken_auth", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Audited login endpoint at {login_url} for rate-limit / user enumeration / weak sessions",
-        raw_data={"broken_auth": {"login_url": login_url}},
+        raw_data={"broken_auth": {"login_url": login_url,
+                                     "spa_catchall": spa["is_spa"],
+                                     "spa_suppressed_paths": spa_suppressed}},
     )
 
 
