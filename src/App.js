@@ -20741,6 +20741,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [sevFilter, setSevFilter] = useState(null);
   const [expanded,  setExpanded]  = useState(null);
   const [searchTerm,setSearchTerm]= useState("");
+  // VL-TIER (compact form per user feedback): collapsed dropdown button,
+  // NOT a visible chip band. Opens a popover with per-tier checkboxes
+  // when user clicks the "Tiers (N/M)" button.
+  const [tierMenuOpen, setTierMenuOpen] = useState(false);
+  const [selectedTiers, setSelectedTiers] = useState(null);   // null = all selected
   const [activeTab, setActiveTab] = useState("auto");
   const [manualState, setManualState] = useState({});
   const [manualExpanded, setManualExpanded] = useState({});  // {testId: true} → show steps/tools/prereqs
@@ -20873,6 +20878,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           if (cancelled) return;
           if (Array.isArray(d.tiers) && d.tiers.length > 0) {
             setTiers(d.tiers);
+            // VL-TIER: seed selected-tiers to "all" the first time tiers arrive
+            setSelectedTiers(prev => prev || new Set(d.tiers.map(t => t.id)));
             setTiersStatus("ready");
             return;
           }
@@ -20903,8 +20910,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     setResults({});
     setProgress({done:0, total: totalTools});
 
+    // VL-TIER: only dispatch tools from tiers the user has selected.
+    const _tiersToRun = selectedTiers
+      ? tiers.filter(t => selectedTiers.has(t.id))
+      : tiers;
     const all = [];
-    tiers.forEach(t => (t.tools || []).forEach(tool => all.push({tool, tier:t.id})));
+    _tiersToRun.forEach(t => (t.tools || []).forEach(tool => all.push({tool, tier:t.id})));
     const initial = {};
     all.forEach(x => { initial[x.tool] = {status:"queued", tier:x.tier, started:Date.now()}; });
     setResults(initial);
@@ -20926,6 +20937,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       const runBody = {target: _resolvedTarget || "n/a", concurrency: 16};
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
+      // VL-TIER: pass tiers:[ids] when user has scoped scan to subset.
+      // Omit field when ALL tiers selected so backend takes default path.
+      if (selectedTiers && _tiersToRun.length < tiers.length) {
+        runBody.tiers = _tiersToRun.map(t => t.id);
+      }
       // Advanced per-module inputs (image_ref / dockerfile_text / pod_spec_yaml
       // / kubeconfig / repo_url / api_spec_url). Only attach what's set + what
       // the module declares it accepts — scanners ignore extras.
@@ -21578,9 +21594,73 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               clear ×
             </button>
           )}
+          {/* VL-TIER: compact dropdown button. NOT a chip band.
+              Single small pill -> popover with checkboxes when clicked. */}
+          {tiers.length > 1 && selectedTiers && (
+            <div style={{position:"relative", marginLeft:"auto"}}>
+              <button onClick={() => setTierMenuOpen(o => !o)}
+                style={{background: selectedTiers.size < tiers.length ? color : "#1e293b",
+                        border:`1px solid ${selectedTiers.size < tiers.length ? color : "#334155"}`,
+                        borderRadius:4, padding:"4px 10px",
+                        color: selectedTiers.size < tiers.length ? "#fff" : "#cbd5e1",
+                        fontSize:10, fontWeight:600, cursor:"pointer",
+                        textTransform:"uppercase", letterSpacing:0.5}}>
+                Tiers {selectedTiers.size}/{tiers.length} {tierMenuOpen ? "▴" : "▾"}
+              </button>
+              {tierMenuOpen && (
+                <div style={{position:"absolute", top:"calc(100% + 4px)", right:0, zIndex:50,
+                              background:"#0f172a", border:"1px solid #334155",
+                              borderRadius:6, padding:"8px 4px", minWidth:260,
+                              maxHeight:300, overflowY:"auto",
+                              boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
+                  <div style={{display:"flex", justifyContent:"space-between",
+                                padding:"4px 10px 8px", borderBottom:"1px solid #1e293b",
+                                marginBottom:4}}>
+                    <button onClick={() => setSelectedTiers(new Set(tiers.map(t=>t.id)))}
+                      style={{background:"none", border:"none", color:"#94a3b8",
+                              fontSize:10, cursor:"pointer", textDecoration:"underline"}}>
+                      select all
+                    </button>
+                    <button onClick={() => setSelectedTiers(new Set())}
+                      style={{background:"none", border:"none", color:"#94a3b8",
+                              fontSize:10, cursor:"pointer", textDecoration:"underline"}}>
+                      clear all
+                    </button>
+                  </div>
+                  {tiers.map(t => {
+                    const active = selectedTiers.has(t.id);
+                    const m = t.id.match(/^tier(\d+)_(.+)$/);
+                    const lbl = m ? `T${m[1]} · ${m[2].replace(/_/g," ")}` : t.id;
+                    return (
+                      <label key={t.id}
+                        style={{display:"flex", alignItems:"center", gap:8,
+                                padding:"5px 10px", cursor:"pointer", fontSize:11,
+                                color:active ? "#f1f5f9" : "#94a3b8"}}
+                        onMouseEnter={e => e.currentTarget.style.background = "#1e293b"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                        <input type="checkbox" checked={active}
+                          onChange={() => {
+                            setSelectedTiers(prev => {
+                              const next = new Set(prev);
+                              if (next.has(t.id)) next.delete(t.id); else next.add(t.id);
+                              return next;
+                            });
+                          }}
+                          style={{accentColor: color}}/>
+                        <span style={{flex:1, textTransform:"capitalize"}}>{lbl}</span>
+                        <span style={{color:"#64748b", fontSize:10, fontFamily:"monospace"}}>
+                          {t.count}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           <input type="text" placeholder="search tool name..." value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            style={{marginLeft:"auto", background:"#0f172a", border:"1px solid #334155",
+            style={{background:"#0f172a", border:"1px solid #334155",
                     borderRadius:4, padding:"4px 8px", color:"#cbd5e1", fontSize:11,
                     width:180, outline:"none"}}/>
         </div>
