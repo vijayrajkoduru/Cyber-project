@@ -1,20 +1,36 @@
-"""DNS Cache Snooping v2 — VL-FORGE. Non-recursive query check."""
+"""DNS Cache Snooping v2 — VL-FORGE. Non-recursive query check.
+
+VL-VERIFY (zero-FP): the previous version flagged a hit when an NS returned
+ANY answer to a non-recursive query. That mis-flagged authoritative servers
+that happen to BE authoritative for the probe name (e.g. asking Cloudflare's
+auth NS about cloudflare.com - they answer authoritatively, not from cache).
+
+Real cache snooping = recursive resolver that LEAKS what other clients have
+queried. Signal: response has answer AND the AA (Authoritative Answer) flag
+is NOT set. If AA=1, the server is answering from its own zone, not its
+cache. We also probe a guaranteed-not-cached unique name as a control;
+if the server answers THAT, it's an open recursor responding to anything,
+not a cache snoop.
+"""
 import asyncio
-import dns.message, dns.query, dns.flags, dns.name
+import secrets
+import dns.message, dns.query, dns.flags, dns.name, dns.rcode
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import ScanContext, run_scanner
 router=APIRouter()
 _PROBES=["google.com","facebook.com","amazon.com","cloudflare.com"]
 async def _q_nonrecursive(host,target_name):
-    """Query target's NS with RD=0 (non-recursive)."""
+    """Query target's NS with RD=0 (non-recursive). Returns (answer, aa_flag, rcode).
+    Empty answer = not cached. AA=True = authoritative response (not cache)."""
     try:
         m=dns.message.make_query(target_name,"A")
         m.flags &= ~dns.flags.RD  # disable recursion desired
         r=await asyncio.to_thread(dns.query.udp,m,host,timeout=4)
-        return r.answer  # empty if not cached
+        aa_set = bool(r.flags & dns.flags.AA)
+        return r.answer, aa_set, r.rcode()
     except Exception:
-        return None
+        return None, False, None
 async def _resolve_ns(h):
     import dns.asyncresolver
     try:
@@ -36,12 +52,30 @@ async def gather(ctx):
     ctx.state["reachable"]=True; ctx.state["ns_ips_tested"]=ns_ips[:2]
     ctx.source(f"ns-ips-{len(ns_ips)}")
     cached_probes=[]
+    auth_skipped=[]
     for ns_ip in ns_ips[:2]:
+        # CONTROL probe: a guaranteed-unique nonsense name. If the server
+        # answers THIS, it's an open recursor responding to anything, not a
+        # cache-snooping target - skip the whole NS.
+        nonsense=f"vl-cache-{secrets.token_hex(6)}.example.invalid"
+        ctrl_ans, ctrl_aa, ctrl_rcode = await _q_nonrecursive(ns_ip, nonsense)
+        if ctrl_ans:
+            # Open resolver pretending - flag separately, not as cache snoop
+            auth_skipped.append({"ns": ns_ip, "reason": "responds to nonsense - open resolver"})
+            continue
         for probe in _PROBES:
-            ans=await _q_nonrecursive(ns_ip,probe)
-            if ans:
-                cached_probes.append({"ns":ns_ip,"probe":probe,"cached":True})
-    ctx.state.update({"cached_probes":cached_probes,"vulnerable":bool(cached_probes)})
+            ans, aa_set, rcode = await _q_nonrecursive(ns_ip, probe)
+            if not ans:
+                continue
+            if aa_set:
+                # Server is AUTHORITATIVE for this name (e.g. asking Cloudflare's
+                # NS about cloudflare.com) - NOT cache snooping, just normal auth.
+                auth_skipped.append({"ns": ns_ip, "probe": probe, "reason": "AA=1 authoritative"})
+                continue
+            cached_probes.append({"ns":ns_ip,"probe":probe,"cached":True})
+    ctx.state.update({"cached_probes":cached_probes,
+                       "auth_skipped":auth_skipped,
+                       "vulnerable":bool(cached_probes)})
 def _r_vuln(s):
     cp=s.get("cached_probes") or []
     if not cp: return None
