@@ -33,9 +33,38 @@ async def gather(ctx):
     found=[r for r in res if r]
     ctx.state["subdomains_found"]=found; ctx.state["count"]=len(found)
     if found: ctx.source(f"resolved-{len(found)}")
+# VL-VERIFY (zero-FP): some SaaS providers EXPOSE these subdomain names by
+# design (admin.google.com = Google Workspace admin console, login.microsoft
+# .com, console.aws.amazon.com, etc.). Flagging them as "high-value exposed"
+# is wrong - they are public by design. We skip when the subdomain is on
+# the public-by-design allowlist.
+_PUBLIC_BY_DESIGN = {
+    "admin.google.com",          # Google Workspace admin
+    "admin.microsoft.com",       # Microsoft 365 admin
+    "admin.office.com",          # Microsoft 365 admin alt
+    "console.aws.amazon.com",    # AWS console
+    "portal.azure.com",          # Azure portal
+    "console.cloud.google.com",  # GCP console
+    "login.microsoftonline.com", # Microsoft login
+    "admin.shopify.com",         # Shopify
+    "admin.atlassian.com",       # Atlassian admin
+    "id.atlassian.com",
+    "admin.slack.com",
+    "admin.zoom.us",
+}
+
+
 def _r_high_value(s):
     found=s.get("subdomains_found") or []
-    high_value=[f for f in found if any(k in f["subdomain"].lower() for k in ["admin","internal","vpn","jenkins","grafana","kibana","jenkins","staging","dev"])]
+    raw_high=[f for f in found if any(k in f["subdomain"].lower() for k in
+              ["admin","internal","vpn","jenkins","grafana","kibana","staging","dev"])]
+    # Filter out public-by-design admin subdomains
+    high_value=[f for f in raw_high
+                 if f["subdomain"].lower().strip(".") not in _PUBLIC_BY_DESIGN]
+    suppressed=[f["subdomain"] for f in raw_high
+                 if f["subdomain"].lower().strip(".") in _PUBLIC_BY_DESIGN]
+    if suppressed:
+        s["high_value_suppressed"] = suppressed
     if not high_value: return None
     return {"name":f"High-value subdomains exposed ({len(high_value)})","severity":"MEDIUM","cwe":"T1596.001",
         "evidence":"; ".join(h["subdomain"] for h in high_value[:5]),
