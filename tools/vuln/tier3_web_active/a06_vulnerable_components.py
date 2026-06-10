@@ -1,11 +1,16 @@
 """A06 Vulnerable Components - passive script src parsing for known-vuln library versions.
 Self-contained. Strategy: parse <script src=> for jQuery/Bootstrap/Angular/Lodash and flag
-versions with known CVEs (very conservative ranges)."""
+versions with known CVEs (very conservative ranges).
+
+VL-VERIFY: this scanner parses tag attributes, so it isn't directly SPA-FP
+prone. We still stamp spa_catchall onto state so the auditor sees the SPA
+context (relevant for downstream interpretation of library findings).
+"""
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import probe_url_async
+from tools.vuln._vuln_common import probe_url_async, detect_spa_catchall
 
 router = APIRouter()
 
@@ -36,6 +41,10 @@ async def gather(ctx):
         return
     ctx.source("http")
     ctx.state["tested"] = 1
+    # VL-VERIFY context stamp (no behavior change - JS library audit is
+    # legitimately analyzing the SPA shell itself).
+    spa = await detect_spa_catchall(base_url)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
     body = (base.get("body") or "").lower()
     found_libs = []
     vuln_libs = []

@@ -1,4 +1,11 @@
-"""JWT exposure + weak algorithm audit (alg:none / HS / no-exp). VL-FORGE Vuln tier12 - §12 #175."""
+"""JWT exposure + weak algorithm audit (alg:none / HS / no-exp). VL-FORGE Vuln tier12 - §12 #175.
+
+VL-VERIFY: SPA bundles can carry example JWTs (CodeMirror / jwt.io demo
+tokens, JWT-decoder samples, GraphQL playground fixtures) that match the
+eyJ.eyJ regex but aren't real secrets. The SPA canary returns the same
+bundle for every URL; any JWT that ALSO appears in the canary body is a
+bundle-static token, not a real exposed credential. We drop those.
+"""
 import asyncio
 import base64
 import json
@@ -6,7 +13,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._framework import run_scanner
-from tools.vuln._vuln_common import http_get
+from tools.vuln._vuln_common import http_get, detect_spa_catchall
 
 router = APIRouter()
 _JWT = re.compile(r"eyJ[A-Za-z0-9_-]{6,}\.eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]*")
@@ -22,6 +29,10 @@ def _b64(seg):
 
 async def gather(ctx):
     base = web_url(str(ctx.host)).rstrip("/")
+    # VL-VERIFY canary
+    spa = await detect_spa_catchall(base)
+    ctx.state["spa_catchall"] = spa.get("is_spa", False)
+    canary_body = spa.get("canary_body", "") or ""
     r = await asyncio.to_thread(http_get, base + "/", 10, 200000)
     if not r:
         ctx.state["tested"] = 0
@@ -29,7 +40,20 @@ async def gather(ctx):
     ctx.source("http")
     ctx.state["tested"] = 1
     blob = (r.get("body", "") or "") + " " + " ".join(f"{k}:{v}" for k, v in (r.get("headers") or {}).items())
-    toks = _JWT.findall(blob)
+    raw_toks = _JWT.findall(blob)
+    # SPA suppression - drop any JWT that also appears in the SPA canary
+    if spa.get("is_spa") and canary_body:
+        kept, suppressed = [], []
+        for t in raw_toks:
+            if t in canary_body:
+                suppressed.append(t[:12] + "...")
+            else:
+                kept.append(t)
+        toks = kept
+        if suppressed:
+            ctx.state["jwt_spa_suppressed"] = suppressed[:5]
+    else:
+        toks = raw_toks
     if not toks:
         return
     ctx.state["jwt_found"] = len(toks)
