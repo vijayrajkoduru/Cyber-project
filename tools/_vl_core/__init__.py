@@ -86,6 +86,12 @@ from tools._vl_core.spa_canary import (
     detect_spa_catchall_sync,
     is_same_as_canary,
 )
+from tools._vl_core.external_bins import (
+    run_nmap, run_nmap_nse, run_amass,
+    run_hydra,
+    run_nikto, run_gobuster, run_wpscan, run_sqlmap,
+    run_theharvester, run_sherlock, run_holehe,
+)
 
 # ── Module registry + isolation contract ─────────────────────────────────
 from tools._vl_core.vl_core import (
@@ -110,6 +116,10 @@ __all__ = [
     # Engine wrappers
     "run_nuclei", "nuclei_available",
     "detect_spa_catchall_sync", "is_same_as_canary",
+    "run_nmap", "run_nmap_nse", "run_amass",
+    "run_hydra",
+    "run_nikto", "run_gobuster", "run_wpscan", "run_sqlmap",
+    "run_theharvester", "run_sherlock", "run_holehe",
     # Module registry
     "MODULES", "module_root", "shared_root", "assert_isolated_import",
 ]
