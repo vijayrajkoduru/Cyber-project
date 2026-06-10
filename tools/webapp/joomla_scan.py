@@ -6,7 +6,7 @@ already prevents SPA-shell FPs. Stamp spa_catchall on output.
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
-from tools._framework.spa_canary import detect_spa_catchall_sync
+from tools._vl_core.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 

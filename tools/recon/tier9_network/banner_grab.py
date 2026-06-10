@@ -3,7 +3,7 @@ import asyncio, socket
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 router=APIRouter()
 _PORTS=[21,22,23,25,80,110,143,443,587,993,995,3306,5432,6379,11211]
 async def _resolve(h):

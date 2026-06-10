@@ -3,7 +3,7 @@ VL-FORGE Vuln tier1 - playbook §1 #11/#12."""
 import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import tcp_probe
 
 router = APIRouter()

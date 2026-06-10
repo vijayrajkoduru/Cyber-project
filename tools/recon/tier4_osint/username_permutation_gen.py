@@ -6,7 +6,7 @@ NO active probing — safe for any target.
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 
 router = APIRouter()
 _BASE = Path(__file__).resolve().parent.parent.parent / "_payloads" / "recon"

@@ -3,7 +3,7 @@ Self-contained. Strategy: probe destructive/admin-only API paths, check if they 
 200 without authentication (full privesc) or 401/403 (auth correctly required)."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import probe_url_async, http_get_async, http_post_async, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()

@@ -2,7 +2,7 @@
 Cleanly SKIPS on a passive URL scan (no false positive). Method: authenticated object-ID enumeration (run with auth)"""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 
 router = APIRouter()
 

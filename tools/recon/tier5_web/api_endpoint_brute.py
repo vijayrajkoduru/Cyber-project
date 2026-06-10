@@ -6,7 +6,7 @@ from pathlib import Path
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools.recon._web_helpers import set_auth_from_req, current_auth
 
 router = APIRouter()

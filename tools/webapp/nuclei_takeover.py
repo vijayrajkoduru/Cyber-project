@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools.webapp._webapp_common import vuln_response
-from tools._framework.nuclei_runner import run_nuclei
+from tools._vl_core.nuclei_runner import run_nuclei
 
 router = APIRouter()
 

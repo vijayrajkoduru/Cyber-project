@@ -2,7 +2,7 @@
 import asyncio, socket, ssl, urllib.error, urllib.request
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 router = APIRouter()
 _CTX = ssl._create_unverified_context()
 def _open(host, port, timeout=4):

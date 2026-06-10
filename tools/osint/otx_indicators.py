@@ -13,7 +13,7 @@ import socket
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
-from tools._framework.reserved_domains import is_reserved, reason as reserved_reason
+from tools._vl_core.reserved_domains import is_reserved, reason as reserved_reason
 
 router = APIRouter()
 WALL_CLOCK_S = 12

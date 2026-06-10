@@ -16,7 +16,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
-from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router = APIRouter()
 
 _FALLBACK_FINGERPRINTS = [

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
-from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router = APIRouter()
 _TOKEN_RE = re.compile(r"(csrf|csrftoken|_token|authenticity_token|xsrf|nonce|state)", re.IGNORECASE)
 _PAGES = ["/", "/login", "/signin", "/register", "/signup", "/profile", "/settings", "/account"]

@@ -1,7 +1,7 @@
 """drone_adsb_ais_passive v2 — VL-FORGE (RF passive)."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 router=APIRouter()
 async def gather(ctx):
     ctx.state["radio_passive"]=True

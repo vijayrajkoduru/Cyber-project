@@ -178,7 +178,7 @@ async def probe_url_async(host, path="/", scheme=None, timeout=10):
 # for backward compatibility with the 5 Vuln scanners that import from this
 # module directly (multirole_privesc, horizontal_access_idor, vertical_access_admin,
 # a05_security_misconfig, api_versioning_skew).
-from tools._framework.spa_canary import (  # noqa: E402,F401
+from tools._vl_core.spa_canary import (  # noqa: E402,F401
     detect_spa_catchall,
     is_same_as_canary,
 )

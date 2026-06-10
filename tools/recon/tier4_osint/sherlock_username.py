@@ -8,7 +8,7 @@ clearly not the customer's social profile.
 import asyncio, shutil, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools.recon._targeting import get_org_name, can_do_osint
 router=APIRouter()
 _SHERLOCK=shutil.which("sherlock")

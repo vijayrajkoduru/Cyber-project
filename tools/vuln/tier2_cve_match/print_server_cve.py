@@ -2,7 +2,7 @@
 import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
 from tools.vuln._cve_intel import tcp_banner
 router = APIRouter()
