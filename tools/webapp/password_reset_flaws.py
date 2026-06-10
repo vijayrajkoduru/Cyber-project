@@ -5,6 +5,7 @@ import requests
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -14,6 +15,7 @@ _RESET_PATHS = ["/password/reset","/forgot-password","/forgot","/reset-password"
 @router.post("/api/webapp/password_reset_flaws")
 async def webapp_password_reset_flaws(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
     reset_url = None
@@ -77,7 +79,7 @@ async def webapp_password_reset_flaws(req: ScanRequest, payload=Depends(verify_s
         tool="password_reset_flaws", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Audited {reset_url} for email enumeration via response differential",
-        raw_data={"password_reset_flaws": {"reset_url": reset_url}},
+        raw_data={"password_reset_flaws": {"reset_url": reset_url, "spa_catchall": spa["is_spa"]}},
     )
 
 

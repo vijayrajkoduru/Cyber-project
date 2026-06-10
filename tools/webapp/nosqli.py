@@ -1,6 +1,7 @@
 """Webapp: NoSQL injection (MongoDB operator injection)."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -39,6 +40,7 @@ except Exception:
 @router.post("/api/webapp/nosqli")
 async def webapp_nosqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
     for param in _PARAMS:
@@ -72,7 +74,8 @@ async def webapp_nosqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
         tool="nosqli", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"{tests} NoSQL probes across {len(_PARAMS)} params x {len(_PAYLOADS)} operators",
-        raw_data={"nosqli": {"operators_tested": [op for op,_,_ in _PAYLOADS]}},
+        raw_data={"nosqli": {"operators_tested": [op for op,_,_ in _PAYLOADS],
+                                "spa_catchall": spa["is_spa"]}},
     )
 
 

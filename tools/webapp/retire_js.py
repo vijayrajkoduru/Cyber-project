@@ -2,6 +2,7 @@
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -41,6 +42,7 @@ for _ai in _AI_RETIRE:
 @router.post("/api/webapp/retire_js")
 async def webapp_retire_js(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
     detected = []
@@ -85,7 +87,8 @@ async def webapp_retire_js(req: ScanRequest, payload=Depends(verify_scan_quota))
         tool="retire_js", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Scanned {len(bodies)} JS source(s) against {len(_VULN_LIBS)} known-vulnerable library signatures",
-        raw_data={"retire_js": {"detected": detected, "js_files_scanned": len(bodies)}},
+        raw_data={"retire_js": {"detected": detected, "js_files_scanned": len(bodies),
+                                   "spa_catchall": spa["is_spa"]}},
     )
 
 

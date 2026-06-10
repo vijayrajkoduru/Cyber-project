@@ -3,6 +3,7 @@ import re
 import base64
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -51,6 +52,7 @@ def _looks_like_serialized(value):
 @router.post("/api/webapp/deserialization_probe")
 async def webapp_deserialization_probe(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
     detected = []
@@ -100,7 +102,7 @@ async def webapp_deserialization_probe(req: ScanRequest, payload=Depends(verify_
         tool="deserialization_probe", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Probed {tests} endpoints for serialized-payload markers (PHP/Java/Python/.NET)",
-        raw_data={"deserialization_probe": {"detected": detected}},
+        raw_data={"deserialization_probe": {"detected": detected, "spa_catchall": spa["is_spa"]}},
     )
 
 

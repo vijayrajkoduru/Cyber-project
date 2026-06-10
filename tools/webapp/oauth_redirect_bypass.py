@@ -3,6 +3,7 @@ import re
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -32,6 +33,7 @@ except Exception:
 @router.post("/api/webapp/oauth_redirect_bypass")
 async def webapp_oauth_redirect_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
     suspect = []
@@ -75,7 +77,8 @@ async def webapp_oauth_redirect_bypass(req: ScanRequest, payload=Depends(verify_
         tool="oauth_redirect_bypass", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Tested {len(_BYPASS_VARIANTS)} redirect_uri bypass variants at {oauth_url}",
-        raw_data={"oauth_redirect_bypass": {"oauth_url": oauth_url, "suspect": suspect}},
+        raw_data={"oauth_redirect_bypass": {"oauth_url": oauth_url, "suspect": suspect,
+                                              "spa_catchall": spa["is_spa"]}},
     )
 
 

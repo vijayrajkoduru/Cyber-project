@@ -1,6 +1,7 @@
 """Webapp: CSP weakness detection (unsafe-inline, unsafe-eval, * wildcards, JSONP hosts)."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -39,6 +40,7 @@ def _parse_csp(csp_header):
 @router.post("/api/webapp/csp_bypass")
 async def webapp_csp_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 1
     
@@ -111,7 +113,8 @@ async def webapp_csp_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)
         tool="csp_bypass", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Parsed CSP header; found {len(weaknesses)} weakness(es)",
-        raw_data={"csp_bypass": {"csp": csp, "weaknesses": weaknesses, "script_src": script_src}},
+        raw_data={"csp_bypass": {"csp": csp, "weaknesses": weaknesses, "script_src": script_src,
+                                    "spa_catchall": spa["is_spa"]}},
     )
 
 

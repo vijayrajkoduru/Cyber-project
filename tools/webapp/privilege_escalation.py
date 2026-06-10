@@ -2,6 +2,7 @@
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 
 router = APIRouter()
 
@@ -19,15 +20,23 @@ _AUTH_BYPASS_HEADERS = [
 @router.post("/api/webapp/privilege_escalation")
 async def webapp_privilege_escalation(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
     suspect = []
-    
+    spa_suppressed = []
+
     for path in _ADMIN_PATHS:
         # Baseline: request without any custom headers
         tests += 1
         baseline = safe_get(base + path, req=req, allow_redirects=False, timeout=6)
         if baseline is None:
+            continue
+        # SPA catch-all: if the baseline is just the SPA shell, the 200-on-
+        # bypass-header would always be the SPA shell too. Skip.
+        if spa["is_spa"] and baseline.status_code == 200 and \
+           is_same_as_canary(baseline.text or "", spa["canary_body"]):
+            spa_suppressed.append(path)
             continue
         # If baseline is already 200, this is a forced_browsing issue (separate scanner)
         if baseline.status_code in (200, 302):
@@ -65,7 +74,9 @@ async def webapp_privilege_escalation(req: ScanRequest, payload=Depends(verify_s
         tool="privilege_escalation", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Tested {len(_ADMIN_PATHS)} admin paths against {len(_AUTH_BYPASS_HEADERS)} bypass headers",
-        raw_data={"privilege_escalation": {"suspect": suspect}},
+        raw_data={"privilege_escalation": {"suspect": suspect,
+                                              "spa_catchall": spa["is_spa"],
+                                              "spa_suppressed_paths": spa_suppressed}},
     )
 
 

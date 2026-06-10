@@ -2,6 +2,7 @@
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._framework.spa_canary import detect_spa_catchall_sync
 
 router = APIRouter()
 
@@ -18,6 +19,7 @@ except Exception:
 @router.post("/api/webapp/file_upload_bypass")
 async def webapp_file_upload_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
     findings = []
     discovered = []
     tests = 0
@@ -51,7 +53,7 @@ async def webapp_file_upload_bypass(req: ScanRequest, payload=Depends(verify_sca
         tool="file_upload_bypass", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Probed {tests} common upload paths; {len(discovered)} endpoint(s) found",
-        raw_data={"file_upload_bypass": {"endpoints": discovered}},
+        raw_data={"file_upload_bypass": {"endpoints": discovered, "spa_catchall": spa["is_spa"]}},
     )
 
 
