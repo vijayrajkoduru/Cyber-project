@@ -1,4 +1,13 @@
-"""HTTP/2 enabled -> Rapid Reset (CVE-2023-44487) advisory. VL-FORGE Vuln tier6 - §6 #91."""
+"""HTTP/2 enabled -> Rapid Reset (CVE-2023-44487) advisory. VL-FORGE Vuln tier6 - §6 #91.
+
+VL-VERIFY (zero-FP): the bare 'HTTP/2 is enabled, verify your patch' finding
+fires on every HTTPS site that supports h2. That includes Google (who
+DISCOVERED and patched CVE-2023-44487 before public disclosure), Cloudflare,
+AWS CloudFront, etc. Calling Google 'needs to verify the patch' is absurd.
+Fix: identify the edge-server provider from the TLS peer certificate's
+issuer / SNI hostname / Server header; suppress the finding when it is a
+known-patched major CDN/cloud.
+"""
 import asyncio
 import socket
 import ssl
@@ -9,38 +18,92 @@ from tools._framework import run_scanner
 router = APIRouter()
 
 
-def _alpn(host, timeout=6):
+# Provider -> patched-since description. Each of these auto-mitigated
+# CVE-2023-44487 well before public disclosure.
+_KNOWN_PATCHED_PROVIDERS = {
+    "cloudflare":      "Cloudflare (auto-mitigated 2023-08)",
+    "google":          "Google (disclosed + patched 2023-08, was the discoverer)",
+    "gws":             "Google Web Server (GWS - patched at disclosure)",
+    "amazon":          "AWS CloudFront / ALB (auto-mitigated 2023-10)",
+    "cloudfront":      "AWS CloudFront (auto-mitigated 2023-10)",
+    "akamai":          "Akamai (auto-mitigated 2023-10)",
+    "fastly":          "Fastly (auto-mitigated 2023-10)",
+    "azureedge":       "Azure Front Door (auto-mitigated 2023-10)",
+    "azurefd":         "Azure Front Door (auto-mitigated 2023-10)",
+    "microsoft":       "Microsoft edge (patched at disclosure)",
+    "netlify":         "Netlify (uses managed nginx/H2, auto-mitigated)",
+    "vercel":          "Vercel (uses managed edge, auto-mitigated)",
+}
+
+
+def _alpn_and_cert(host, timeout=6):
+    """Return (alpn_proto, server_cert_issuer_lower, server_header_lower)."""
     c = ssl.create_default_context()
     c.check_hostname = False
     c.verify_mode = ssl.CERT_NONE
     try:
         c.set_alpn_protocols(["h2", "http/1.1"])
     except Exception:
-        return None
+        return None, "", ""
     try:
         with socket.create_connection((host, 443), timeout=timeout) as s:
             with c.wrap_socket(s, server_hostname=host) as ss:
-                return ss.selected_alpn_protocol()
+                alpn = ss.selected_alpn_protocol()
+                # Grab cert issuer (in plain form is a tuple of tuples)
+                issuer_str = ""
+                try:
+                    cert = ss.getpeercert()
+                    issuer = cert.get("issuer", ()) if cert else ()
+                    issuer_str = " ".join(
+                        v for tup in issuer for k, v in tup if isinstance(v, str)
+                    ).lower()
+                except Exception:
+                    pass
+                # Send a tiny GET to grab the Server header
+                server_hdr = ""
+                try:
+                    ss.send(f"GET / HTTP/1.0\r\nHost: {host}\r\n\r\n".encode())
+                    data = ss.recv(2000).decode("utf-8", "ignore")
+                    for line in data.split("\r\n"):
+                        if line.lower().startswith("server:"):
+                            server_hdr = line[7:].strip().lower()
+                            break
+                except Exception:
+                    pass
+                return alpn, issuer_str, server_hdr
     except Exception:
-        return None
+        return None, "", ""
 
 
 async def gather(ctx):
-    proto = await asyncio.to_thread(_alpn, str(ctx.host))
+    proto, issuer, server = await asyncio.to_thread(_alpn_and_cert, str(ctx.host))
     if proto is None:
         ctx.state["tested"] = 0
         return
     ctx.source("tls-alpn")
     ctx.state["tested"] = 1
     ctx.state["alpn"] = proto
+    ctx.state["cert_issuer"] = issuer[:200]
+    ctx.state["server_header"] = server[:80]
+    # Provider fingerprint
+    blob = f"{issuer} {server}".lower()
+    patched_label = next((label for key, label in _KNOWN_PATCHED_PROVIDERS.items()
+                           if key in blob), None)
+    ctx.state["patched_provider"] = patched_label
 
 
 def _r_h2(s):
     if s.get("alpn") != "h2":
         return None
-    # Evidence string carries CVSS vector + EPSS + KEV markers so the PDF generator
-    # picks them up via its regex extractors (CVSS_VECTOR_RE / EPSS_RE / KEV_RE).
-    # CVE-2023-44487 is in CISA KEV (added 2023-10-10) and consistently EPSS >= 90%.
+    patched = s.get("patched_provider")
+    if patched:
+        # Known-patched provider - downgrade to POSITIVE info, not LOW.
+        return {"name": f"HTTP/2 enabled on known-patched edge: {patched}",
+                "severity": "POSITIVE",
+                "evidence": f"CVE-2023-44487 (Rapid Reset) was auto-mitigated by this provider. "
+                             f"Cert issuer: {(s.get('cert_issuer') or '')[:80]}; "
+                             f"Server header: {(s.get('server_header') or '')[:60]}"}
+    # Unknown provider - keep the verify-your-patch advisory
     return {"name": "HTTP/2 enabled - verify Rapid Reset patch (CVE-2023-44487)", "severity": "LOW", "cvss": 3.7,
             "cwe": "CWE-400",
             "evidence": ("ALPN negotiated h2; Rapid Reset DoS affects unpatched HTTP/2 stacks. "

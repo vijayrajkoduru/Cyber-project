@@ -44,8 +44,14 @@ def _r_provider(s):
     return {"name":f"Mail provider: {s['provider']}","severity":"INFO","cwe":"T1592",
         "evidence":f"MX fingerprint match"}
 def _r_single_mx(s):
+    """VL-VERIFY (zero-FP): cloud mail providers (Google Workspace,
+    Microsoft 365, etc.) expose a single MX hostname that internally
+    load-balances across multiple backend hosts. Flagging 'single MX (no
+    fallback)' on those is FP - the HA is hidden behind the one hostname.
+    Only flag when the provider is unknown."""
     if not s.get("single_mx"): return None
     if not s.get("mx_records"): return None
+    if s.get("provider"): return None  # cloud mail = HA behind one hostname
     return {"name":"Single MX record (no fallback)","severity":"LOW",
         "evidence":f"MX: {s['mx_records']}",
         "remediation":"Add backup MX with higher priority for redundancy."}

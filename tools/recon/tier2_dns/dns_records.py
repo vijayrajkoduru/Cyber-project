@@ -49,9 +49,31 @@ async def gather(ctx: ScanContext):
                                 ("quarantine" if dmarc and "p=quarantine" in dmarc else \
                                 ("reject" if dmarc and "p=reject" in dmarc else None))
     if dmarc: ctx.source("dmarc-record")
-    # Cross-resolver consistency
+    # Cross-resolver consistency.
+    # VL-VERIFY (zero-FP): the previous version flagged any A-record disagreement
+    # as HIGH "possible DNS hijack". That mis-fired on every geo-DNS / CDN
+    # target (google.com - 192.178.x range from all resolvers, AWS, Cloudflare).
+    # Now: only treat as suspicious when the differing IPs span DIFFERENT /16
+    # networks. If all IPs share /16 (or /8 for cloud edges), it is geo-DNS,
+    # not a hijack.
     a_sets = [tuple(sorted(by_resolver[n]["A"])) for n,_ in _RESOLVERS]
     ctx.state["resolver_consistent"] = len(set(a_sets)) <= 1
+    # Compute /16 network span across all resolver responses
+    all_ips = sorted({ip for s in a_sets for ip in s if ip})
+    def _net16(ip):
+        try:
+            parts = ip.split(".")
+            if len(parts) >= 2: return f"{parts[0]}.{parts[1]}"
+        except Exception: pass
+        return ""
+    net16_set = {_net16(ip) for ip in all_ips if _net16(ip)}
+    ctx.state["resolver_a_networks"] = sorted(net16_set)[:8]
+    # geo-DNS: more than 1 distinct answer set BUT all IPs in same /16 (or /8)
+    nets8 = {n.split(".")[0] for n in net16_set if n}
+    ctx.state["resolver_geo_dns_likely"] = (
+        not ctx.state["resolver_consistent"]
+        and (len(net16_set) <= 2 or len(nets8) == 1)
+    )
     ctx.source("multi-resolver-check")
 
 def r_no_spf(s):
@@ -96,9 +118,20 @@ def r_caa_present(s):
 
 def r_resolver_inconsistent(s):
     if s.get("resolver_consistent"): return None
-    return {"name":"DNS resolvers return inconsistent A records","severity":"HIGH","cwe":"CWE-345",
-            "evidence":"Cloudflare/Google/Quad9 disagreed — possible DNS hijack",
-            "remediation":"Investigate DNS poisoning. Check at all 3 resolvers manually."}
+    # Geo-DNS likely - same /16 or /8 - downgrade to INFO, this is expected.
+    if s.get("resolver_geo_dns_likely"):
+        nets = s.get("resolver_a_networks") or []
+        return {"name":"Geo-DNS / multi-region routing detected",
+                "severity":"INFO",
+                "evidence":f"Resolver responses differed but all IPs share network space "
+                           f"({', '.join(nets[:4])}{'+' if len(nets) > 4 else ''}). "
+                           f"Expected behaviour for CDN / cloud-fronted services."}
+    # Different /16 networks across resolvers - genuinely suspicious.
+    return {"name":"DNS resolvers return A records in DIFFERENT networks","severity":"HIGH","cwe":"CWE-345",
+            "evidence":f"Cloudflare/Google/Quad9 returned IPs in distinct networks "
+                       f"({', '.join((s.get('resolver_a_networks') or [])[:4])}) "
+                       f"- could indicate DNS hijack, cache poisoning, or split-horizon DNS.",
+            "remediation":"Verify each resolver's answer manually; check authoritative NS records."}
 
 def r_resolver_consistent(s):
     if not s.get("resolver_consistent"): return None

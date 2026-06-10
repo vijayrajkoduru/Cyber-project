@@ -41,12 +41,18 @@ def _r_history(s):
         "evidence":f"First: {s.get('first_snapshot')} | Last: {s.get('last_snapshot')}",
         "remediation":"Review historical snapshots for forgotten endpoints / leaked data."}
 def _r_old(s):
+    """VL-VERIFY (zero-FP): existence of a long Wayback history is NOT a
+    security finding by itself - any major site (google.com since 1998,
+    wikipedia.org, etc.) would trip a LOW severity flag for nothing.
+    The audit-old-snapshots-for-secrets advice still has value, so we keep
+    surfacing the information - just at INFO not LOW, with no CVSS."""
     fs=s.get("first_snapshot","") or ""
     if not fs or len(fs)<4: return None
     yr=int(fs[:4])
     if yr>2010: return None
-    return {"name":f"Long Wayback history (since {yr})","severity":"LOW","cwe":"CWE-200",
-        "evidence":f"Site indexed since {fs} — old content may have leaked secrets",
+    return {"name":f"Long Wayback history (since {yr})","severity":"INFO",
+        "evidence":f"Site indexed since {fs} - manual audit of early snapshots "
+                    f"can surface accidentally-committed secrets / API keys.",
         "remediation":"Audit early snapshots for hardcoded creds / API keys."}
 def _r_clean(s):
     if (s.get("snapshot_count") or 0)>0: return None

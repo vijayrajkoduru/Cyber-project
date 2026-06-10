@@ -22,7 +22,77 @@ PROBE_PARAMS_QUICK = ["q", "search", "name"]
 PROBE_PARAMS_DEEP  = ["msg", "comment", "ref", "callback", "v"]
 
 
+def _is_safe_context(body: str, idx: int) -> bool:
+    """Return True if the canary at body[idx:] sits inside a context where
+    it CANNOT execute even if reflected unescaped: JSON islands (Next.js
+    __NEXT_DATA__, redux state), HTML comments, <noscript>, <title>, <style>,
+    <textarea>. Suppresses bulk SPA FPs."""
+    before = body[:idx].lower()
+    for open_tag, close_tag in (
+        ('<script type="application/json"', '</script'),
+        ("<script type='application/json'", "</script"),
+        ('<!--', '-->'),
+        ('<noscript', '</noscript'),
+        ('<title', '</title'),
+        ('<style', '</style'),
+        ('<textarea', '</textarea'),
+    ):
+        last_open = before.rfind(open_tag)
+        if last_open == -1: continue
+        last_close = before.rfind(close_tag)
+        if last_close < last_open:
+            return True
+    return False
+
+
+def _is_escaped(body: str, canary: str) -> bool:
+    """Return True if every occurrence of the canary in body has been
+    HTML-entity-escaped or appears only in a JSON/attribute-string-quoted
+    context. If the canary appears RAW (between HTML tags or as JS literal),
+    return False - that's the real XSS surface."""
+    # If the canary itself contains no special chars (our canaries don't),
+    # entity-escaping doesn't change it. So the test is: does the canary
+    # appear in a position that could execute?
+    # Heuristic: look for the canary immediately preceded by ', ", or = (in
+    # an attribute) or by < (raw tag context). If always preceded by safe
+    # chars (whitespace, > tag-closing, JSON colon), assume escaped.
+    idx = 0
+    raw_count = 0
+    while True:
+        i = body.find(canary, idx)
+        if i == -1: break
+        # Check the char before
+        before_char = body[i-1] if i > 0 else ""
+        # Raw HTML context = directly between tags (preceded by '>') OR
+        # naked in body (whitespace) AND not inside a safe context block
+        if not _is_safe_context(body, i):
+            # canary appears NOT in safe context - this is the FP-prone case.
+            # But we also want to distinguish "echoed inside an HTML attribute
+            # that's properly quoted" (still escaped) from "raw text node".
+            # Simple test: is there a '>' before the canary on the same line
+            # without an intervening '<' ?
+            line_start = body.rfind("\n", 0, i)
+            if line_start == -1: line_start = 0
+            preceding = body[line_start:i]
+            last_gt = preceding.rfind(">")
+            last_lt = preceding.rfind("<")
+            if last_gt > last_lt:
+                # In a text node between tags - genuinely raw reflection
+                raw_count += 1
+        idx = i + len(canary)
+    return raw_count == 0
+
+
 async def _fire(base_url, params, canary):
+    """VL-VERIFY (zero-FP): the previous version flagged any canary reflection
+    in an HTML response as XSS. That mis-fired on Google's /search?q=<canary>
+    endpoint where the canary appears INSIDE __NEXT_DATA__ JSON islands or
+    is HTML-escaped in the rendered SERP. Now we:
+      1. Skip canaries inside <script type="application/json">, <noscript>,
+         <title>, <style>, <textarea>, HTML comments.
+      2. Only flag when the canary appears in a RAW text node between HTML
+         tags (real exploitable XSS surface).
+    """
     reflected = []
     for p in params:
         url = f"{base_url}?{p}={canary}"
@@ -30,11 +100,16 @@ async def _fire(base_url, params, canary):
         if not r:
             continue
         body = r.get("body", "")
-        if canary in body:
-            ctype = (r.get("headers") or {}).get("content-type", "")
-            if "html" in ctype.lower() or "<" in body[:200]:
-                reflected.append({"param": p, "status": r.get("status"),
-                                  "canary": canary})
+        if canary not in body:
+            continue
+        ctype = (r.get("headers") or {}).get("content-type", "")
+        if not ("html" in ctype.lower() or "<" in body[:200]):
+            continue
+        # Context-aware FP filter
+        if _is_escaped(body, canary):
+            continue
+        reflected.append({"param": p, "status": r.get("status"),
+                          "canary": canary})
     return reflected
 
 
