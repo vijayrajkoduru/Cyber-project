@@ -57,38 +57,38 @@ Usage:
 from __future__ import annotations
 
 # ── Orchestration ────────────────────────────────────────────────────────
-from tools._framework.orchestrator import (
+from tools._vl_core.orchestrator import (
     run_module_parallel,
     run_module_streaming,
 )
 
 # ── Scanner framework (per-scanner runtime) ──────────────────────────────
-from tools._framework.scanner import run_scanner, ScanContext
+from tools._vl_core.scanner import run_scanner, ScanContext
 
 # ── Finding shape + policy ───────────────────────────────────────────────
 from tools._shared import wrap_finding, standard_response
-from tools._framework.findings import run_rules, severity_counts
-from tools._framework.severity_policy import (
+from tools._vl_core.findings import run_rules, severity_counts
+from tools._vl_core.severity_policy import (
     cap_if_advisory,
     is_advisory,
     apply_policy,
 )
 
 # ── Pre-flight target guards ─────────────────────────────────────────────
-from tools._framework.reserved_domains import (
+from tools._vl_core.reserved_domains import (
     is_reserved,
     reason as reserved_reason,
 )
 
 # ── Shared engine wrappers ───────────────────────────────────────────────
-from tools._framework.nuclei_runner import run_nuclei, nuclei_available
-from tools._framework.spa_canary import (
+from tools._vl_core.nuclei_runner import run_nuclei, nuclei_available
+from tools._vl_core.spa_canary import (
     detect_spa_catchall_sync,
     is_same_as_canary,
 )
 
 # ── Module registry + isolation contract ─────────────────────────────────
-from tools._framework.vl_core import (
+from tools._vl_core.vl_core import (
     MODULES,
     module_root,
     shared_root,
