@@ -13,6 +13,7 @@ import socket
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
+from tools._framework.reserved_domains import is_reserved, reason as reserved_reason
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -42,6 +43,15 @@ def _do_scan(req: ScanRequest) -> dict:
             skipped_reason="empty target")
 
     otx_type, value = _classify(target)
+
+    # Reserved documentation domains appear in nearly every OTX pulse as a
+    # placeholder URL ("see example.com for details"). Skip cleanly.
+    if otx_type == "domain" and is_reserved(value):
+        return standard_response(
+            tool="otx_indicators", target=req.target, findings=[],
+            tests_performed=1, vulnerable=False,
+            skipped_reason=reserved_reason(value))
+
     url = f"https://otx.alienvault.com/api/v1/indicators/{otx_type}/{value}/general"
     headers = {"User-Agent": "VulnusLab-OSINT/1.0"}
     if req.auth_bearer:
@@ -93,14 +103,24 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_summary="Clean per OTX")
 
     pulse_names = [p.get("name", "?")[:60] for p in pulse_list]
+    # Severity tiered by pulse count. OTX inclusion alone is not exploitation
+    # evidence — it just means the indicator appears in community-curated
+    # threat reports. A popular brand domain hit by even 50 pulses is often
+    # the result of being referenced as an example URL ("attacker registered
+    # google.com-lookalike") rather than being itself malicious. Require
+    # heavy reference (500+) before MEDIUM and never HIGH from OTX alone.
+    if pulses >= 500:
+        sev, cvss = "MEDIUM", "5.3"
+    elif pulses >= 50:
+        sev, cvss = "LOW", "3.1"
+    else:
+        sev, cvss = "INFO", "0.0"
     findings = [wrap_finding(
-        f"OTX FLAGGED — {value} referenced in {pulses} threat pulse(s)",
-        severity="HIGH" if pulses >= 5 else "MEDIUM",
-        cvss="7.5" if pulses >= 5 else "5.3", cwe="CWE-829",
+        f"OTX referenced — {value} appears in {pulses} threat pulse(s)",
+        severity=sev, cvss=cvss, cwe="CWE-829",
         owasp="A06:2021",
-        remediation="Multiple OTX community pulses reference this indicator. "
-                    "Cross-check each pulse for the named campaign / malware family "
-                    "and apply IOC blocking at firewall + email gateway + EDR.",
+        remediation=("Cross-check each pulse for the named campaign / malware family. "
+                     "OTX inclusion is not exploitation evidence; manual triage required."),
         evidence_marker=(
             f"pulse_count={pulses} | top_pulses: {' | '.join(pulse_names)} "
             f"(CONFIRMED via AlienVault OTX)"

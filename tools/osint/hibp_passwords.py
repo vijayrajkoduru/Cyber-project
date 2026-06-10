@@ -10,12 +10,32 @@ exact appearance count from breach corpus.
 """
 import asyncio
 import hashlib
+import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 
 router = APIRouter()
 WALL_CLOCK_S = 10
+
+# Anything that looks like a domain (label.tld) or URL or email is NOT a
+# password. The OSINT orchestrator passes the scan target (usually a domain)
+# to every scanner; without this guard, HIBP hashes the domain string itself
+# and reports it as "exposed" because common words like "example.com" appear
+# in breach corpora as ACTUAL passwords used by other people.
+_DOMAINISH = re.compile(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+_TLDS = {"com","net","org","co","io","ai","app","dev","me","us","uk","in",
+          "de","fr","ca","au","jp","cn","ru","br","es","it","nl","gov","edu"}
+
+
+def _looks_like_target_not_password(s: str) -> bool:
+    if "://" in s or "@" in s:
+        return True
+    if _DOMAINISH.match(s):
+        tld = s.rsplit(".", 1)[-1].lower()
+        if tld in _TLDS:
+            return True
+    return False
 
 
 def _do_scan(req: ScanRequest) -> dict:
@@ -25,6 +45,16 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="hibp_passwords", target="(redacted)", findings=[],
             tests_performed=0, vulnerable=False,
             skipped_reason="empty target — pass the password as the target string")
+
+    if _looks_like_target_not_password(password):
+        return standard_response(
+            tool="hibp_passwords", target="(redacted)", findings=[],
+            tests_performed=0, vulnerable=False,
+            skipped_reason=("Target looks like a domain or URL, not a password. "
+                            "This scanner requires an actual password string. "
+                            "Pass the password directly when running this check "
+                            "standalone; the OSINT orchestrator should not call "
+                            "this scanner with the scan target domain."))
 
     sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
     prefix, suffix = sha1[:5], sha1[5:]

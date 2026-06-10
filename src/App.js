@@ -10399,7 +10399,10 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         m.get(label).push(f);
       });
     };
+    const _R_CMPL_SEVS = new Set(["CRITICAL","HIGH","MEDIUM","LOW"]);
     _findings.forEach(f => {
+      const sev = String(f.severity||"INFO").toUpperCase();
+      if (!_R_CMPL_SEVS.has(sev)) return;
       const refs = String(f.references || "");
       const cweMatch = refs.match(/CWE-\d+/i);
       if (!cweMatch) return;
@@ -14745,7 +14748,16 @@ function generateUniversalVLReport(opts) {
       ];
       const _SEV_RANK_W = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
       const _fwMaps = _FW_W.map(() => new Map());
+      // Compliance controls are impacted by EXPOSURES, not by cleanliness
+      // signals. Filter out INFO/POSITIVE/SCAFFOLD so the count shown
+      // ("26 finding(s)") matches the real exposure count, not the bulk
+      // of "scanner ran clean" findings. Earlier reports showed counts
+      // (26 / 27 / 53) exceeding total findings shown elsewhere because
+      // every POSITIVE entry was being attributed to controls.
+      const _CMPL_SEVS = new Set(["CRITICAL","HIGH","MEDIUM","LOW"]);
       _allFindings.forEach(f => {
+        const sev = String(f.severity||"INFO").toUpperCase();
+        if (!_CMPL_SEVS.has(sev)) return;
         const cweM = String(f.cwe||"").trim().toUpperCase().match(/CWE-\d+/);
         if (!cweM) return;
         const ctrls = _CWE_MAP_W[cweM[0]];

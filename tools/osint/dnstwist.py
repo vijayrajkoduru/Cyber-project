@@ -19,8 +19,24 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             wrap_finding, standard_response)
+from tools._framework.reserved_domains import is_reserved, reason as reserved_reason
 router = APIRouter()
 WALL_CLOCK_S = 25
+
+
+def _has_mx(domain: str, timeout: float = 1.5) -> bool:
+    """True if the domain has at least one MX record. MX = capable of
+    receiving mail = phishing-prep evidence. Used to elevate severity from
+    INFO (typo exists) to LOW (typo is mail-ready)."""
+    try:
+        import dns.resolver  # already a project dep
+        r = dns.resolver.Resolver()
+        r.timeout = timeout
+        r.lifetime = timeout
+        ans = r.resolve(domain, "MX")
+        return len(list(ans)) > 0
+    except Exception:
+        return False
 
 # Homoglyph substitution table — visually-similar character mappings
 _HOMOGLYPHS = {
@@ -101,6 +117,11 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=1, vulnerable=False,
             skipped_reason="Target must be a domain name (e.g. example.com), not an IP.")
 
+    if is_reserved(target):
+        return standard_response(tool="dnstwist", target=req.target, findings=[],
+            tests_performed=1, vulnerable=False,
+            skipped_reason=reserved_reason(target))
+
     perms = _generate(target, cap=80)
     if not perms:
         return standard_response(tool="dnstwist", target=req.target, findings=[],
@@ -114,18 +135,31 @@ def _do_scan(req: ScanRequest) -> dict:
             if ip:
                 resolved.append({"domain": p, "ip": ip})
 
+    # Verification gate: an MX record on a typo = mail-capable = phishing-ready.
+    # Without MX, the typo is just passive squatting (could be a real different
+    # business, parked, or held by a registrar). Default severity is INFO unless
+    # MX evidence elevates to LOW.
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        mx_flags = list(pool.map(_has_mx, [r["domain"] for r in resolved], timeout=15))
+    for entry, has_mx in zip(resolved, mx_flags):
+        entry["mx"] = bool(has_mx)
+
     findings = []
     for entry in resolved:
-        sev = "HIGH" if entry["domain"].replace("-", "").replace(".", "") in \
-              target.replace("-", "").replace(".", "") + "comnetorgio" else "MEDIUM"
+        if entry["mx"]:
+            sev, cvss = "LOW", "3.1"
+            verdict = "MX present (mail-capable, phishing-ready)"
+        else:
+            sev, cvss = "INFO", "0.0"
+            verdict = "no MX (passive squat — could be parked / unrelated business)"
         findings.append(wrap_finding(
             f"Lookalike domain registered: {entry['domain']} -> {entry['ip']}",
-            sev, cvss="6.5" if sev == "MEDIUM" else "8.0",
+            sev, cvss=cvss,
             cwe="CWE-345", owasp="A07:2021",
             remediation=("If this domain isn't yours: register defensively, monitor for "
                         "phishing campaigns, file abuse reports with the registrar. If yours: "
                         "consolidate to canonical domain and 301-redirect."),
-            evidence_marker=f"DNS A record: {entry['domain']} -> {entry['ip']}"))
+            evidence_marker=f"DNS A: {entry['domain']} -> {entry['ip']} | {verdict}"))
 
     if not findings:
         findings.append(wrap_finding(
