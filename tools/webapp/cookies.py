@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
+from tools._framework.spa_canary import detect_spa_catchall_sync
 router = APIRouter()
 _SESSION = re.compile(r"(sess|session|sid|auth|token|jwt|csrf|xsrf|connect\.sid)", re.I)
 
@@ -37,6 +38,9 @@ def _is_csrf_token_by_design(name: str) -> bool:
 @router.post("/api/webapp/scan/cookies")
 def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
+    # VL-VERIFY: stamp SPA context. Cookies on a SPA homepage are real
+    # cookies under audit; no behavior change, just transparency.
+    spa = detect_spa_catchall_sync(url.rstrip("/"))
     r = safe_get(url, req=req, allow_redirects=True)
     if r is None:
         return standard_response(tool="cookies", target=req.target,
@@ -91,5 +95,6 @@ def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
         what_checked="cookie Secure / HttpOnly / SameSite flags (framework-CSRF aware)",
         tests_summary=summary,
         raw_data={"cookies": {"analyzed": analyzed, "is_https": is_https,
-                              "suppressed_fps": suppressed}})
+                              "suppressed_fps": suppressed,
+                              "spa_catchall": spa["is_spa"]}})
 def register(app): app.include_router(router)

@@ -1,12 +1,20 @@
-"""Clickjacking — X-Frame-Options + CSP frame-ancestors check."""
+"""Clickjacking — X-Frame-Options + CSP frame-ancestors check.
+
+VL-VERIFY: single-path scanner that audits the homepage's X-Frame-Options
+header. The SPA homepage IS the real homepage under audit, so the canary
+check is a context stamp only - no behavior change. The stamp surfaces
+the SPA context in the report alongside the header finding.
+"""
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
+from tools._framework.spa_canary import detect_spa_catchall_sync
 router = APIRouter()
 
 @router.post("/api/webapp/scan/clickjacking")
 def scan_clickjacking(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
+    spa = detect_spa_catchall_sync(url.rstrip("/"))
     r = safe_get(url, req=req, allow_redirects=True)
     if r is None:
         return standard_response(tool="clickjacking", target=req.target,
@@ -26,5 +34,7 @@ def scan_clickjacking(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return standard_response(tool="clickjacking", target=req.target,
         findings=findings, tests_performed=1,
         tests_summary="Frame-embedding protection check",
-        raw_data={"clickjacking": {"x_frame_options": xfo, "csp_frame_ancestors": has_fa}})
+        raw_data={"clickjacking": {"x_frame_options": xfo,
+                                     "csp_frame_ancestors": has_fa,
+                                     "spa_catchall": spa["is_spa"]}})
 def register(app): app.include_router(router)
