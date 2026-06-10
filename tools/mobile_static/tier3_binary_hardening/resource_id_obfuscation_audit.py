@@ -12,8 +12,8 @@ MASVS-RESILIENCE-4 / general size-optimization.
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
-from tools._framework.binary_cache import get_unpacked
+from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.resource_id_obfuscation_audit_findings import \
     RESOURCE_ID_OBFUSCATION_AUDIT_FINDING_RULES
 

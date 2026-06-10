@@ -9,8 +9,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
-from tools._framework.binary_cache import get_unpacked
+from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.logcat_leak_audit_findings import LOGCAT_LEAK_AUDIT_FINDING_RULES
 
 router = APIRouter()

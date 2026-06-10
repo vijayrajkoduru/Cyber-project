@@ -71,7 +71,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel  # noqa: F401  (kept for parity with reference scanner)
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext
+from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.mysql_brute_findings import (
     MYSQL_BRUTE_FINDING_RULES,

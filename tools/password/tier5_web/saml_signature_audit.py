@@ -100,7 +100,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel  # noqa: F401 (kept for ScanRequest extension)
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext
+from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.saml_signature_audit_findings import (
     SAML_SIGNATURE_AUDIT_FINDING_RULES,

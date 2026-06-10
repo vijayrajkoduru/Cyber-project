@@ -7,8 +7,8 @@ import re
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
-from tools._framework.binary_cache import get_unpacked
+from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.prompt_injection_in_app_audit_findings import PROMPT_INJECTION_IN_APP_AUDIT_FINDING_RULES
 
 router = APIRouter()

@@ -36,7 +36,7 @@ import asyncio
 from typing import Optional
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.m365_security_score_findings import (
     M365_SECURITY_SCORE_FINDING_RULES,
 )

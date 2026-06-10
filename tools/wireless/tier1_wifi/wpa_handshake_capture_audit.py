@@ -22,7 +22,7 @@ import shutil
 import tempfile
 from fastapi import APIRouter, Depends, Request
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.wpa_handshake_capture_audit_findings import (
     WPA_HANDSHAKE_CAPTURE_AUDIT_FINDING_RULES,
 )

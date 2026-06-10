@@ -46,7 +46,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.landing_page_clone_test_findings import (
     LANDING_PAGE_CLONE_TEST_FINDING_RULES,
 )

@@ -23,7 +23,7 @@ import re
 import shutil
 from fastapi import APIRouter, Depends, Request
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.wps_pin_audit_findings import WPS_PIN_AUDIT_FINDING_RULES
 
 router = APIRouter()

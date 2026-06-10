@@ -83,7 +83,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext
+from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner, helpers
 from tools._payloads.ncrack_rdp_spray_findings import NCRACK_RDP_SPRAY_FINDING_RULES
 

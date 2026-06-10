@@ -15,7 +15,7 @@ import asyncio
 import shutil
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.monitor_mode_capability_audit_findings import (
     MONITOR_MODE_CAPABILITY_AUDIT_FINDING_RULES,
 )

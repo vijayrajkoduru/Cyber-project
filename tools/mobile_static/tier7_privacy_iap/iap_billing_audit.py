@@ -10,8 +10,8 @@ MASVS-PRIVACY-2 / MASVS-CODE-2 (payment compliance).
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
-from tools._framework.binary_cache import get_unpacked
+from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.iap_billing_audit_findings import \
     IAP_BILLING_AUDIT_FINDING_RULES
 

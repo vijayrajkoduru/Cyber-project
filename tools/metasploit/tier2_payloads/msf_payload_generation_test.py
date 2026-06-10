@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.msf_payload_generation_test_findings import (
     MSF_PAYLOAD_GENERATION_TEST_FINDING_RULES,
 )

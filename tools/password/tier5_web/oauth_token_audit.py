@@ -76,7 +76,7 @@ import httpx
 from fastapi import APIRouter, Depends
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._framework import ScanContext
+from tools._vl_core import ScanContext
 from tools._methodology import MethodologyScanner
 from tools._payloads.oauth_token_audit_findings import (
     OAUTH_TOKEN_AUDIT_FINDING_RULES,
