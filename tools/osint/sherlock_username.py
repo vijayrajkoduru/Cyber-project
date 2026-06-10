@@ -65,13 +65,49 @@ def _check_one(username, label, url_tpl, present_marker, absent_marker):
     return (label, url, "FOUND", f"HTTP 200 ({len(body)} bytes)")
 
 
+# Common TLDs we strip when the orchestrator passes a domain as the username.
+_KNOWN_TLDS = {"com","net","org","co","io","ai","app","dev","me","us","uk",
+                "in","de","fr","ca","au","jp","cn","ru","br","es","it","nl"}
+
+
+def _to_brand_stem(target: str) -> str:
+    """If target looks like a domain (contains a known TLD), strip TLD +
+    subdomains and return only the brand-stem suitable for username search.
+
+    "dasplc.com"          -> "dasplc"
+    "www.example.com"     -> "example"
+    "admin.acme.co.uk"    -> "acme"  (best-effort)
+    "@cooluser"           -> "cooluser"
+    "user.name"           -> "user.name"  (not a domain pattern)
+    """
+    t = (target or "").strip().lstrip("@")
+    for pfx in ("http://", "https://"):
+        if t.startswith(pfx):
+            t = t[len(pfx):]
+    t = t.split("/", 1)[0].split(":", 1)[0]
+    if t.startswith("www."):
+        t = t[4:]
+    parts = t.lower().split(".")
+    # Domain heuristic: last token is a known TLD AND >= 2 parts
+    if len(parts) >= 2 and parts[-1] in _KNOWN_TLDS:
+        # Take the rightmost non-TLD token as brand stem
+        # (e.g. acme.co.uk -> "acme", dasplc.com -> "dasplc")
+        if len(parts) >= 3 and parts[-2] in {"co","com","org","net","gov","ac"}:
+            return parts[-3]
+        return parts[-2]
+    return t
+
+
 def _do_scan(req: ScanRequest) -> dict:
-    username = (req.target or "").strip().lstrip("@")
-    if not username or not re.match(r"^[A-Za-z0-9._-]{2,40}$", username):
+    raw = (req.target or "").strip().lstrip("@")
+    username = _to_brand_stem(raw)
+    if not username or not re.match(r"^[A-Za-z0-9_-]{2,40}$", username):
         return standard_response(
             tool="sherlock_username", target=req.target, findings=[],
             tests_performed=0, vulnerable=False,
-            skipped_reason="invalid username (2-40 alphanumeric + . _ -)")
+            skipped_reason=("invalid username after brand-stem extraction "
+                            "(2-40 alphanumeric + _ -). Sherlock requires a "
+                            "username, not a domain or email."))
 
     found = []
     clean = []
