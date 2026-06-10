@@ -4,12 +4,20 @@ Secret dictionary: AI-curated 695-entry wordlist at
 tools/_payloads/vuln/jwt_secrets.txt (loaded once at import, falls back
 to a 32-entry hardcoded baseline if the file is missing).
 """
+"""VL-VERIFY: JWT bundles can contain sample tokens (CodeMirror demos, JWT
+debugger fixtures) that match the eyJ.eyJ regex. SPA catch-all returns the
+same bundle for every probed path, so any token in the bundle would be
+found over and over. Per-path check: if response body matches the canary
+shell, skip - any token in it is a bundle-static fixture, not a real
+session token leak.
+"""
 import base64, hashlib, hmac, json, re, time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.vuln._loader import load_lines
+from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router = APIRouter()
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
 _FALLBACK_SECRETS = ["secret","password","jwt","jwt-secret","jwtsecret","your-256-bit-secret",
@@ -76,6 +84,8 @@ def _analyze(token, findings, confirmed):
 @router.post("/api/webapp/scan/jwt")
 def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    spa = detect_spa_catchall_sync(base)
+    spa_suppressed = []
     findings, confirmed, tokens = [], [], []
     pages = 0
     # VL-TURBO wall-clock cap: 11 page crawls × 10s × 3 retries = up to ~5 min worst case.
@@ -100,6 +110,10 @@ def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
         pages += 1
         r = safe_get(base + path, req=req, allow_redirects=True, timeout=6, retries=0)
         if r is None: continue
+        # SPA catch-all: body matches canary -> JWTs in it are bundle-static
+        if spa["is_spa"] and is_same_as_canary(r.text or "", spa["canary_body"]):
+            spa_suppressed.append(path)
+            continue
         haystack = " ".join([str(r.headers.get("Set-Cookie", "")),
                               str(r.headers.get("Authorization", "")),
                               (r.text or "")[:20000]])
@@ -125,5 +139,7 @@ def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
         tests_summary=summary,
         raw_data={"jwt": {"tokens_found": len(tokens), "issues_confirmed": confirmed,
                           "secret_dictionary_size": len(_SECRETS),
-                          "wallclock_bailed": _bailed}})
+                          "wallclock_bailed": _bailed,
+                          "spa_catchall": spa["is_spa"],
+                          "spa_suppressed_paths": spa_suppressed}})
 def register(app): app.include_router(router)

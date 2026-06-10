@@ -5,6 +5,10 @@ Fingerprint dictionary: tools/_payloads/vuln/cms_fingerprints.json
 CMS, static-site generators, e-commerce, forum, LMS, panel software).
 Falls back to a 14-entry hardcoded baseline if missing.
 """
+"""VL-VERIFY: probes 89 fingerprint paths and matches CMS markers in body.
+SPA shells could falsely match generic markers like 'WordPress' if the page
+mentions it in marketing copy. SPA-canary check skips paths whose body is
+byte-identical to the bogus-path probe."""
 import re
 import time
 from fastapi import APIRouter, Depends
@@ -12,6 +16,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.vuln._loader import load_json
+from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router = APIRouter()
 
 _FALLBACK_FINGERPRINTS = [
@@ -43,6 +48,8 @@ def scan_cms(req: ScanRequest, payload=Depends(verify_scan_quota)):
     if unreachable:
         return vuln_response(tool="cms", target=req.target, findings=[],
             tested=1, skipped_reason=unreachable)
+    spa = detect_spa_catchall_sync(base)
+    spa_suppressed = 0
     findings, tests, detected = [], 0, set()
     # VL-TURBO wall-clock cap: 89 fingerprints × 8s × 3 retries = up to 35 min
     # on slow targets. Bail at 30s with whatever we've detected so far.
@@ -58,6 +65,10 @@ def scan_cms(req: ScanRequest, payload=Depends(verify_scan_quota)):
         r = safe_get(base + path, req=req, allow_redirects=True, timeout=6, retries=0)
         if r is None or r.status_code != 200: continue
         body = (r.text or "")[:20000]
+        # SPA catch-all: body matches canary -> match would be SPA-shell FP
+        if spa["is_spa"] and is_same_as_canary(body, spa["canary_body"]):
+            spa_suppressed += 1
+            continue
         if re.search(marker, body, re.IGNORECASE) or re.search(marker, str(dict(r.headers)), re.IGNORECASE):
             detected.add(name)
             version = None
@@ -88,5 +99,7 @@ def scan_cms(req: ScanRequest, payload=Depends(verify_scan_quota)):
         raw_data={"cms": {"detected": sorted(detected),
                           "wordlist_size": len(_FINGERPRINTS),
                           "platforms_covered": platform_count,
-                          "wallclock_bailed": _bailed}})
+                          "wallclock_bailed": _bailed,
+                          "spa_catchall": spa["is_spa"],
+                          "spa_suppressed_count": spa_suppressed}})
 def register(app): app.include_router(router)
