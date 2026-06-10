@@ -3,7 +3,7 @@ import asyncio
 import socket
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 
 router = APIRouter()
 _GET = bytes.fromhex("302902010104067075626c6963a01c020412345678020100020100300e300c06082b060102010101000500")

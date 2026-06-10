@@ -2,7 +2,7 @@
 import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, detect_spa_catchall, is_same_as_canary
 router = APIRouter()
 _PATHS = ["/api/v1/","/api/v2/","/api/v3/","/v1/","/v2/","/api/"]

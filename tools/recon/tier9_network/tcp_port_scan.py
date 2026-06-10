@@ -3,7 +3,7 @@ import asyncio, socket
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 router=APIRouter()
 _TOP_TCP=[21,22,23,25,53,80,110,111,135,139,143,443,445,465,587,
     993,995,1433,1521,1723,2049,2375,2376,3306,3389,5432,5601,5900,5984,

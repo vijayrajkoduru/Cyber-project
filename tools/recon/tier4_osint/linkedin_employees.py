@@ -2,7 +2,7 @@
 import asyncio, requests, os, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 router=APIRouter()
 def _g(u,h=None,t=12):
     try:

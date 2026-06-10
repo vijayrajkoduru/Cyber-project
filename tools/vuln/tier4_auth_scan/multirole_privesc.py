@@ -3,7 +3,7 @@ Strategy: probe common role/permission endpoints to detect if they expose role n
 without auth (info leak that aids privesc). True multi-role testing requires auth."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import probe_url_async, http_get_async, detect_spa_catchall, is_same_as_canary
 
 router = APIRouter()

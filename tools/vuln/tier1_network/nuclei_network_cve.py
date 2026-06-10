@@ -2,7 +2,7 @@
 import asyncio, json, shutil
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 router = APIRouter()
 _TAGS = "cve,network,exposure,default-login,misconfiguration"; _SEV = "critical,high,medium"; _T = 50; _MAX = 40
 _SEV_MAP = {"critical":("CRITICAL",9.5),"high":("HIGH",8.1),"medium":("MEDIUM",5.5),"low":("LOW",3.1),"info":("INFO",0.0)}

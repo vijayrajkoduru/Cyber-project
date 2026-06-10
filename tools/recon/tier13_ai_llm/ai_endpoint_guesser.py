@@ -14,7 +14,7 @@ import urllib.request
 
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.recon._llm import ask_claude_list_async, llm_available
 
 router = APIRouter()

@@ -5,7 +5,7 @@ import re
 import urllib.parse
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, http_json
 
 router = APIRouter()

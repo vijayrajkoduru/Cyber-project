@@ -24,11 +24,11 @@ import socket
 from fastapi import APIRouter, Depends
 
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.portscan_findings import (
     PORTSCAN_FINDING_RULES, PORT_CATALOG,
 )
-from tools._framework.portscan_engine import tcp_probe
+from tools._vl_core.portscan_engine import tcp_probe
 
 router = APIRouter()
 

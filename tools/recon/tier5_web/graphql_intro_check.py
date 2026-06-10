@@ -2,7 +2,7 @@
 import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import ScanContext, run_scanner
+from tools._vl_core import ScanContext, run_scanner
 from tools.recon._web_helpers import set_auth_from_req, current_auth
 router = APIRouter()
 PATHS = ["/graphql","/api/graphql","/v1/graphql","/graphql/v1","/query","/gql","/graphiql","/playground"]

@@ -3,7 +3,7 @@ Requires physical RF radio / LAN proximity; for an external URL scan it cleanly 
 Canonical: nmap --script bacnet-info"""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 
 router = APIRouter()
 

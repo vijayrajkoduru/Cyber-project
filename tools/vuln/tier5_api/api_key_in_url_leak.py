@@ -9,7 +9,7 @@ canary response is in the bundle - not a real exposure. We suppress those.
 import asyncio, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, detect_spa_catchall, is_same_as_canary
 router = APIRouter()
 _KEYS = [("AWS Access Key ID","HIGH",8.2,re.compile(r"AKIA[0-9A-Z]{16}")),

@@ -2,7 +2,7 @@
 import asyncio, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 from tools.vuln._cve_intel import tcp_banner, high_cves
 router = APIRouter()
 _PORTS = [(25,"SMTP"),(587,"SMTP"),(143,"IMAP"),(110,"POP3"),(993,"IMAPS"),(995,"POP3S")]

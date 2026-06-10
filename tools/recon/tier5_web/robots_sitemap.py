@@ -9,8 +9,8 @@ require valid file markers (User-agent / Disallow for robots.txt;
 import asyncio, requests, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._framework import ScanContext, run_scanner
-from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router=APIRouter()
 def _g(u):
     try: return requests.get(u,timeout=8,verify=False,headers={"User-Agent":"VulnusLab/1.0"})

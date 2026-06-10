@@ -3,7 +3,7 @@ import asyncio, shutil
 import xml.etree.ElementTree as ET
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._framework import run_scanner
+from tools._vl_core import run_scanner
 router = APIRouter()
 _PORTS = "21,22,23,25,80,110,135,139,143,443,445,993,995,1433,3306,3389,5432,5900,6379,8080,8443,9200,11211,27017"
 _SCRIPTS = ("ssl-heartbleed,ssl-poodle,ssl-dh-params,ssl-ccs-injection,smb-vuln-ms17-010,smb-vuln-ms08-067,"

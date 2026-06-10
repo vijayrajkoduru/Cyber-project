@@ -2,7 +2,7 @@
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
-from tools._framework.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 
 router = APIRouter()
 
