@@ -10,6 +10,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.spa_canary import detect_spa_catchall_sync
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 
 def _csp(h):
@@ -95,10 +96,12 @@ def scan_security_headers(req, payload):
 
 @router.post("/api/webapp/scan/security_headers")
 @vl_turbo()
+@vl_verify()
 def ep_sh(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return scan_security_headers(req, payload)
 @router.post("/api/webapp/scan/headers")
 @vl_turbo()
+@vl_verify()
 def ep_h(req: ScanRequest, payload=Depends(verify_scan_quota)):
     r = scan_security_headers(req, payload)
     if isinstance(r, dict): r["tool"] = "headers"

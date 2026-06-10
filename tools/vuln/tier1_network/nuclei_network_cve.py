@@ -3,6 +3,7 @@ import asyncio, json, shutil
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _TAGS = "cve,network,exposure,default-login,misconfiguration"; _SEV = "critical,high,medium"; _T = 50; _MAX = 40
 _SEV_MAP = {"critical":("CRITICAL",9.5),"high":("HIGH",8.1),"medium":("MEDIUM",5.5),"low":("LOW",3.1),"info":("INFO",0.0)}
@@ -70,6 +71,7 @@ def _r_clean(s):
             "evidence": f"nuclei (cve/network/exposure/default-login) matched nothing actionable{note}; {s.get('info_count',0)} info templates noted."}
 FINDING_RULES = [_mk(i) for i in range(_MAX)] + [_r_clean]; INTEL_FIELDS = []
 @router.post("/api/vuln/nuclei_network_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="nuclei_network_cve", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

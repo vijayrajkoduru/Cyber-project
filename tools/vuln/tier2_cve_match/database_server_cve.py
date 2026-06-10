@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
 from tools.vuln._cve_intel import tcp_banner, high_cves
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _MYSQL = re.compile(r"([3-9]\.[0-9][0-9.]*)")
 async def gather(ctx):
@@ -32,6 +33,7 @@ def _r_clean(s):
             "evidence": f"DB ports reachable: {', '.join(s.get('open_db_ports') or []) or 'none'}; no CVE-mappable version banner."}
 FINDING_RULES = [_r_cve, _r_clean]; INTEL_FIELDS = [("Open DB ports","open_db_ports"),("DB version","version")]
 @router.post("/api/vuln/database_server_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="database_server_cve", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

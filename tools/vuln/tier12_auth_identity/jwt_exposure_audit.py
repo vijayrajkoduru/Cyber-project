@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, detect_spa_catchall
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _JWT = re.compile(r"eyJ[A-Za-z0-9_-]{6,}\.eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]*")
@@ -102,6 +103,7 @@ INTEL_FIELDS = [("JWTs found", "jwt_found")]
 
 
 @router.post("/api/vuln/jwt_exposure_audit")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="jwt_exposure_audit",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

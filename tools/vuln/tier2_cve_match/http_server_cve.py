@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, http_json
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _VER = re.compile(r"([A-Za-z][A-Za-z0-9_+.-]*?)[/ ]v?(\d+\.\d+(?:\.\d+)?)")
@@ -87,6 +88,7 @@ INTEL_FIELDS = [("Server banners", "banners")]
 
 
 @router.post("/api/vuln/http_server_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="http_server_cve",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

@@ -4,6 +4,7 @@ import aiohttp
 import ssl
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -30,6 +31,7 @@ async def _fire_parallel(url, n=10):
 
 
 @router.post("/api/webapp/race_condition")
+@vl_verify()
 async def webapp_race_condition(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -33,6 +34,7 @@ def _classify(url, target_host):
 
 @router.post("/api/webapp/scan/sri_audit")
 @vl_turbo()
+@vl_verify()
 def scan_sri_audit(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     target_host = urlparse(url).hostname or ""

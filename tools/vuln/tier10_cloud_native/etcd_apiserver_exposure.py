@@ -3,6 +3,7 @@ import asyncio, socket, ssl, urllib.error, urllib.request
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _CTX = ssl._create_unverified_context()
 def _open(host, port, timeout=4):
@@ -63,6 +64,7 @@ def _r_clean(s):
             "evidence": f"Probed docker(2375)/etcd(2379)/kube-apiserver(6443)/kubelet(10250); open: {', '.join(s.get('open_ports') or []) or 'none'}; none unauthenticated."}
 FINDING_RULES = [_mk(i) for i in range(8)] + [_r_clean]; INTEL_FIELDS = [("Control-plane ports", "open_ports")]
 @router.post("/api/vuln/etcd_apiserver_exposure")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="etcd_apiserver_exposure", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

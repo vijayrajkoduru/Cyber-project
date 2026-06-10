@@ -10,6 +10,7 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
 from tools.vuln._vuln_common import (probe_url_async, http_get_h_async,
                                       http_get_async)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -171,6 +172,7 @@ INTEL_FIELDS = [
 
 
 @router.post("/api/vuln/web_cors_misconfig")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     scanner = WebCorsMisconfig()
     return await scanner.run_as_endpoint(req,

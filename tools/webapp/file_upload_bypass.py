@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
 from tools._vl_core.spa_canary import detect_spa_catchall_sync
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -17,6 +18,7 @@ except Exception:
 
 
 @router.post("/api/webapp/file_upload_bypass")
+@vl_verify()
 async def webapp_file_upload_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = detect_spa_catchall_sync(base)

@@ -5,6 +5,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
 from tools.vuln._cve_intel import nvd_cves, epss_scores
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _VER = re.compile(r"([A-Za-z][A-Za-z0-9_+.-]*?)[/ ]v?(\d+\.\d+(?:\.\d+)?)")
 async def gather(ctx):
@@ -47,6 +48,7 @@ def _r_clean(s):
             "evidence": f"{s.get('cve_count',0)} candidate CVE(s); none with EPSS >= 10%."}
 FINDING_RULES = [_r_high, _r_clean]; INTEL_FIELDS = [("Detected product", "product")]
 @router.post("/api/vuln/epss_score_lookup")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="epss_score_lookup", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

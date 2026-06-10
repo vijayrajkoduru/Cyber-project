@@ -29,6 +29,7 @@ from tools._payloads.portscan_findings import (
     PORTSCAN_FINDING_RULES, PORT_CATALOG,
 )
 from tools._vl_core.portscan_engine import tcp_probe
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -77,6 +78,7 @@ INTEL_FIELDS = [
 # WAP-isolated copy — only registers /api/webapp/scan/portscan. The Recon
 # module keeps its own portscan at /api/recon/masscan in tools/recon/.
 @router.post("/api/webapp/scan/portscan")
+@vl_verify()
 async def webapp_portscan(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = recon_host(req.target)
 

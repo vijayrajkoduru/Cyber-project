@@ -17,6 +17,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -41,6 +42,7 @@ _CVSS_DEFAULT = {"CRITICAL": "9.5", "HIGH": "7.5", "MEDIUM": "5.5", "LOW": "3.0"
 
 @router.post("/api/webapp/scan/nuclei")
 @vl_turbo()
+@vl_verify()
 def scan_nuclei(req: ScanRequest, _=Depends(verify_scan_quota)):
     if not os.path.isfile(_which()):
         return standard_response(tool="nuclei", target=req.target, findings=[],

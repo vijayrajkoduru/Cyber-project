@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import detect_spa_catchall
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _EP = ["/graphql", "/api/graphql", "/v1/graphql", "/graphql/v1", "/query", "/api/gql"]
@@ -80,6 +81,7 @@ INTEL_FIELDS = [("GraphQL endpoints", "graphql_introspection")]
 
 
 @router.post("/api/vuln/graphql_introspection")
+@vl_verify(check_spa=True)
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="graphql_introspection",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

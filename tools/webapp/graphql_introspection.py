@@ -8,6 +8,7 @@ import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, standard_response
 from tools._vl_core.spa_canary import detect_spa_catchall_sync
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -16,6 +17,7 @@ _INTROSPECTION_QUERY = '{"query":"{__schema{queryType{name}mutationType{name}typ
 
 
 @router.post("/api/webapp/graphql_introspection")
+@vl_verify(check_spa=True)
 async def webapp_graphql_introspection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     spa = detect_spa_catchall_sync(base)

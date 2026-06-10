@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, detect_spa_catchall, is_same_as_canary
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _PATHS = ["/api/v1/","/api/v2/","/api/v3/","/v1/","/v2/","/api/"]
 async def gather(ctx):
@@ -53,6 +54,7 @@ def _r_clean(s):
     return {"name": "No conflicting API versions exposed", "severity": "POSITIVE", "evidence": f"Reachable API paths: {', '.join(s.get('live_api_paths') or []) or 'none'}; no version skew."}
 FINDING_RULES = [_r, _r_clean]; INTEL_FIELDS = [("Reachable API paths","live_api_paths")]
 @router.post("/api/vuln/api_versioning_skew")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="api_versioning_skew", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

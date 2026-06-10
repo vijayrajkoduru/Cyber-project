@@ -2,6 +2,7 @@
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -9,6 +10,7 @@ _COMMON_PARAMS = ["q","search","query","s","name","title","msg","message","conte
 
 
 @router.post("/api/webapp/param_reflection")
+@vl_verify()
 async def webapp_param_reflection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

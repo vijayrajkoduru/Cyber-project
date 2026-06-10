@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 OPA_PATHS = ["/v1/data/", "/v1/policies", "/v1/query", "/health",
@@ -12,6 +13,7 @@ OPA_PATHS = ["/v1/data/", "/v1/policies", "/v1/query", "/health",
 
 @router.post("/api/webapp/scan/opa_policy_bypass")
 @vl_turbo()
+@vl_verify()
 def scan_opa_policy_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

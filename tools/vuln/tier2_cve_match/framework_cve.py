@@ -5,6 +5,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
 from tools.vuln._cve_intel import high_cves
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _VER = re.compile(r"([A-Za-z][A-Za-z0-9_.+-]*?)[/ ]v?(\d+\.\d+(?:\.\d+)?)")
 _FWH = ("x-powered-by","x-aspnet-version","x-aspnetmvc-version","x-runtime","x-drupal-dynamic-cache")
@@ -48,6 +49,7 @@ def _r_clean(s):
     return {"name": "No web framework version disclosed", "severity": "POSITIVE", "evidence": "No framework headers / identifiable session cookies exposed."}
 FINDING_RULES = [_r_cve, _r_disc, _r_ck, _r_clean]; INTEL_FIELDS = [("Framework headers","fw_banners"),("Framework cookies","fw_cookies")]
 @router.post("/api/vuln/framework_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="framework_cve", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

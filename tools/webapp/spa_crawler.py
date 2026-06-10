@@ -41,6 +41,7 @@ from tools._spa_state import save_spa_state
 from tools._shared import (
     ScanRequest, verify_scan_quota, standard_response, web_url, recon_host,
 )
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -93,6 +94,7 @@ def _extract_query_params(url: str) -> List[str]:
 
 
 @router.post("/api/webapp/spa_crawler")
+@vl_verify()
 async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota)):
     """Run the headless browser crawl."""
 
@@ -328,6 +330,7 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
 
 
 @router.post("/api/webapp/scan/spa_crawler")
+@vl_verify()
 async def scan_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota)):
     """Alias so the WebApp module's /api/scan/* tile grid can call us."""
     return await webapp_spa_crawler(req, payload)

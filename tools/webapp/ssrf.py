@@ -20,6 +20,7 @@ from tools._payloads.ssrf import SSRF_PAYLOADS
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 # AI-curated extras: more cloud metadata endpoints, k8s, docker, redis, vault, etcd.
 _AI_EXTRA_SSRF = load_json("ssrf_extra_targets", fallback=[])
 _MERGED_SSRF = list(SSRF_PAYLOADS) + [p for p in _AI_EXTRA_SSRF if isinstance(p, dict) and "url" in p]
@@ -78,6 +79,7 @@ def _extra_headers_for(ssrf_url):
 
 @router.post("/api/webapp/scan/ssrf")
 @vl_turbo()
+@vl_verify()
 def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
     unreachable = precheck_target(base, req)

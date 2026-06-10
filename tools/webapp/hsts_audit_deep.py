@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -35,6 +36,7 @@ def _parse_hsts(header_value: str) -> dict:
 
 @router.post("/api/webapp/scan/hsts_audit_deep")
 @vl_turbo()
+@vl_verify()
 def scan_hsts_audit_deep(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     parsed = urlparse(url)

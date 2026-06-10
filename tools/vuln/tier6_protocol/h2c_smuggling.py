@@ -3,6 +3,7 @@ import asyncio, socket, ssl
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _REQ = ("GET / HTTP/1.1\r\nHost: {h}\r\nConnection: Upgrade, HTTP2-Settings\r\n"
         "Upgrade: h2c\r\nHTTP2-Settings: AAMAAABkAAQAoAAAAAIAAAAA\r\n\r\n")
@@ -41,6 +42,7 @@ def _r_clean(s):
     return {"name": "No h2c upgrade accepted", "severity": "POSITIVE", "evidence": f"Server did not switch to h2c (status: {', '.join(s.get('status_lines') or []) or 'no response'})."}
 FINDING_RULES = [_r, _r_clean]; INTEL_FIELDS = []
 @router.post("/api/vuln/h2c_smuggling")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="h2c_smuggling", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

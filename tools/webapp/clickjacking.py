@@ -10,10 +10,12 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.spa_canary import detect_spa_catchall_sync
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 
 @router.post("/api/webapp/scan/clickjacking")
 @vl_turbo()
+@vl_verify()
 def scan_clickjacking(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     spa = detect_spa_catchall_sync(url.rstrip("/"))

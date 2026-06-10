@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _CTX = ssl._create_unverified_context()
 _MANIFESTS = ["/package-lock.json", "/package.json", "/composer.lock", "/requirements.txt", "/Gemfile.lock"]
@@ -94,6 +95,7 @@ def _r_clean(s):
     return {"name": "No dependency manifests exposed", "severity": "POSITIVE", "evidence": "No package-lock.json / composer.lock / requirements.txt / Gemfile.lock reachable in the web root."}
 FINDING_RULES = [_mk(i) for i in range(10)] + [_r_exposed, _r_clean]; INTEL_FIELDS = [("Exposed manifests", "exposed")]
 @router.post("/api/vuln/osv_scanner")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="osv_scanner", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

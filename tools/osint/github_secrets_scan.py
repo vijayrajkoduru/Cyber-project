@@ -13,6 +13,7 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 WALL_CLOCK_S = 35
@@ -154,6 +155,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
 
 @router.post("/api/osint/github_secrets_scan")
+@vl_verify()
 async def scan_github_secrets_scan(req: ScanRequest, _=Depends(verify_scan_quota)):
     try:
         return await asyncio.wait_for(

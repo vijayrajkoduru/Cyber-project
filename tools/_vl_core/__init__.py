@@ -104,6 +104,9 @@ from tools._vl_core.vl_core import (
 # ── VL-TURBO universal scanner decorator ─────────────────────────────────
 from tools._vl_core.turbo import vl_turbo, with_wall_clock_cap, timed_scanner
 
+# ── VL-VERIFY universal zero-FP guard decorator ──────────────────────────
+from tools._vl_core.verify import vl_verify
+
 
 __all__ = [
     # Orchestration
@@ -127,4 +130,6 @@ __all__ = [
     "MODULES", "module_root", "shared_root", "assert_isolated_import",
     # VL-TURBO
     "vl_turbo", "with_wall_clock_cap", "timed_scanner",
+    # VL-VERIFY
+    "vl_verify",
 ]

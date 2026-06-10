@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, detect_spa_catchall, is_same_as_canary
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _KEYS = [("AWS Access Key ID","HIGH",8.2,re.compile(r"AKIA[0-9A-Z]{16}")),
          ("Google API Key","HIGH",8.2,re.compile(r"AIza[0-9A-Za-z_\-]{35}")),
@@ -67,6 +68,7 @@ def _r_clean(s):
 FINDING_RULES = [_mk(i) for i in range(5)] + [_r_clean]
 INTEL_FIELDS = [("SPA catch-all detected","spa_catchall"),("SPA-suppressed matches","spa_suppressed")]
 @router.post("/api/vuln/api_key_in_url_leak")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="api_key_in_url_leak", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

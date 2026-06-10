@@ -5,6 +5,7 @@ Findings are tagged by source_tool so customers see which sub-check fired each f
 """
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -26,6 +27,7 @@ _SCANNERS = [
 
 
 @router.post("/api/webapp/burp_lite")
+@vl_verify()
 async def webapp_burp_lite(req: ScanRequest, payload=Depends(verify_scan_quota)):
     all_findings = []
     sub_results = {}

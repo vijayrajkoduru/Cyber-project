@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _PORTS = "21,22,23,25,80,110,135,139,143,443,445,993,995,1433,3306,3389,5432,5900,6379,8080,8443,9200,11211,27017"
 _SCRIPTS = ("ssl-heartbleed,ssl-poodle,ssl-dh-params,ssl-ccs-injection,smb-vuln-ms17-010,smb-vuln-ms08-067,"
@@ -66,6 +67,7 @@ def _r_clean(s):
             "evidence": f"nmap NSE vuln scripts on {len(op)} open port(s) [{', '.join(op) or 'none'}] found nothing exploitable{note}."}
 FINDING_RULES = [_mk(i) for i in range(_MAX)] + [_r_clean]; INTEL_FIELDS = [("Open ports","open_ports")]
 @router.post("/api/vuln/nmap_nse_vuln_scripts")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="nmap_nse_vuln_scripts", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

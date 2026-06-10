@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
+from tools._vl_core.verify import vl_verify
 
 try:
     from tools._payloads.osint.email_patterns import EMAIL_PATTERNS
@@ -97,6 +98,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
 
 @router.post("/api/osint/gravatar_check")
+@vl_verify()
 async def scan_gravatar(req: ScanRequest, _=Depends(verify_scan_quota)):
     try:
         return await asyncio.wait_for(

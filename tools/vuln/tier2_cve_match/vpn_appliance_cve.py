@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _SIGS = [("Fortinet FortiGate SSL-VPN","/remote/login",["fortinet","fgt_lang","sslvpn"],"CVE-2024-21762 / CVE-2022-40684 (KEV)"),
          ("Pulse Connect Secure","/dana-na/auth/url_default/welcome.cgi",["dana-na","pulse"],"CVE-2021-22893 / CVE-2019-11510 (KEV)"),
@@ -32,6 +33,7 @@ def _r_clean(s):
     return {"name": "No known VPN/edge appliance login surface exposed", "severity": "POSITIVE", "evidence": "No Fortinet/Pulse/Citrix/Ivanti/SonicWall signatures matched."}
 FINDING_RULES = [_r, _r_clean]; INTEL_FIELDS = []
 @router.post("/api/vuln/vpn_appliance_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="vpn_appliance_cve", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

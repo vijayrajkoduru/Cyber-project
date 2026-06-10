@@ -5,6 +5,7 @@ import time
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -45,6 +46,7 @@ def _raw_request(host, port, use_ssl, request_bytes, timeout=10):
 
 
 @router.post("/api/webapp/http_smuggling")
+@vl_verify()
 async def webapp_http_smuggling(req: ScanRequest, payload=Depends(verify_scan_quota)):
     parsed = urlparse(web_url(req.target))
     host = parsed.hostname

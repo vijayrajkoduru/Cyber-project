@@ -7,6 +7,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ def _hash(text):
 
 @router.post("/api/webapp/scan/idor")
 @vl_turbo()
+@vl_verify()
 def scan_idor(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     has_auth = bool(getattr(req, "auth_cookie", None) or getattr(req, "auth_bearer", None))

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _DEV = {"mikrotik":"MikroTik RouterOS","routeros":"MikroTik RouterOS","cisco":"Cisco","fortigate":"FortiGate","pfsense":"pfSense","ubiquiti":"Ubiquiti EdgeOS","draytek":"DrayTek","zyxel":"Zyxel","huawei":"Huawei","mikrotik httpproxy":"MikroTik"}
 async def gather(ctx):
@@ -26,6 +27,7 @@ def _r_clean(s):
     return {"name": "No network-device management interface fingerprinted", "severity": "POSITIVE", "evidence": "No router/firewall vendor signature in HTTP banners."}
 FINDING_RULES = [_r, _r_clean]; INTEL_FIELDS = [("Devices","devices")]
 @router.post("/api/vuln/network_device_cve")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="network_device_cve", gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)
 def register(app): app.include_router(router)

@@ -4,6 +4,7 @@ import socket
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _MONLIST = b"\x17\x00\x03\x2a" + b"\x00" * 4
@@ -54,6 +55,7 @@ INTEL_FIELDS = [("NTP monlist", "ntp_monlist")]
 
 
 @router.post("/api/vuln/ntp_monlist")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="ntp_monlist",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

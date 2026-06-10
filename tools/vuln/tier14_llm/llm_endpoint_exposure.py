@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, detect_spa_catchall, is_same_as_canary
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _PATHS = ["/v1/chat/completions", "/api/chat", "/chat", "/v1/completions", "/api/completions",
@@ -77,6 +78,7 @@ INTEL_FIELDS = [("LLM endpoints", "llm_endpoints")]
 
 
 @router.post("/api/vuln/llm_endpoint_exposure")
+@vl_verify()
 async def f(req: ScanRequest, _=Depends(verify_scan_quota)):
     return await run_scanner(host=recon_host(req.target), tool="llm_endpoint_exposure",
                              gather_func=gather, finding_rules=FINDING_RULES, intel_fields=INTEL_FIELDS)

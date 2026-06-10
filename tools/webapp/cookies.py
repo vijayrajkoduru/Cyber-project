@@ -14,6 +14,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.spa_canary import detect_spa_catchall_sync
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 router = APIRouter()
 _SESSION = re.compile(r"(sess|session|sid|auth|token|jwt|csrf|xsrf|connect\.sid)", re.I)
 
@@ -38,6 +39,7 @@ def _is_csrf_token_by_design(name: str) -> bool:
 
 @router.post("/api/webapp/scan/cookies")
 @vl_turbo()
+@vl_verify()
 def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     # VL-VERIFY: stamp SPA context. Cookies on a SPA homepage are real

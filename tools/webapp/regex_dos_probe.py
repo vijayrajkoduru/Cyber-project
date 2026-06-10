@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
 from tools._vl_core.turbo import vl_turbo
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -53,6 +54,7 @@ def _request(method, url, params=None, data=None, req=None, timeout=15):
 
 @router.post("/api/webapp/scan/regex_dos_probe")
 @vl_turbo()
+@vl_verify()
 def scan_regex_dos_probe(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []

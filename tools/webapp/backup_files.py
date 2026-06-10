@@ -1,6 +1,7 @@
 """Webapp: backup file hunter (.bak/.old/.swp/.orig/.copy/~)."""
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
@@ -10,6 +11,7 @@ _BASE_EXTS = [".php",".html",".aspx",".jsp",".py",".rb",".js",".json",".yml",".x
 
 
 @router.post("/api/webapp/backup_files")
+@vl_verify(check_spa=True)
 async def webapp_backup_files(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     findings = []
