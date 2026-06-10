@@ -113,24 +113,52 @@ def vl_verify(*, check_reserved: bool = True,
                     pass  # fall through; downstream handles invalid
 
             # Guard 3: SPA canary pre-flight
+            spa_detected = None
             if check_spa and target:
                 try:
                     from tools._vl_core.spa_canary import detect_spa_catchall_sync
-                    spa = await asyncio.to_thread(detect_spa_catchall_sync, target)
-                    # If target is a clear SPA catch-all, ANY scanner that
-                    # would react to 200 responses is FP-prone. We don't
-                    # short-circuit the scan (some scanners legitimately
-                    # work in SPA mode), but we set a marker on the request
-                    # the scanner CAN consult.
-                    if spa and req:
-                        setattr(req, "_vl_spa_detected", spa)
+                    spa_detected = await asyncio.to_thread(
+                        detect_spa_catchall_sync, target)
+                    if spa_detected and req:
+                        setattr(req, "_vl_spa_detected", spa_detected)
                 except Exception:
-                    pass  # SPA cache unavailable; fall through
+                    spa_detected = None  # SPA cache unavailable; fall through
 
             # Run the wrapped scanner (sync or async)
             if is_async:
-                return await fn(*args, **kwargs)
-            return await asyncio.to_thread(fn, *args, **kwargs)
+                result = await fn(*args, **kwargs)
+            else:
+                result = await asyncio.to_thread(fn, *args, **kwargs)
+
+            # Guard 3 post-pass: when SPA was detected, demote any LOW/MEDIUM/
+            # HIGH/CRITICAL "URL hit" finding to INFO. SPA catch-alls return
+            # 200 for every path including /admin, /api/foo, /backup.zip etc.,
+            # so a scanner that flagged "/backup.zip exists" against an SPA
+            # is producing a verifiable FP — the same path on any random
+            # SPA-fronted site returns the same 200.
+            if check_spa and spa_detected and isinstance(result, dict):
+                findings = result.get("findings") or []
+                downgraded = 0
+                for f in findings:
+                    if not isinstance(f, dict):
+                        continue
+                    sev = str(f.get("severity") or "INFO").upper()
+                    if sev in ("LOW", "MEDIUM", "HIGH", "CRITICAL"):
+                        f["_original_severity"] = sev
+                        f["severity"] = "INFO"
+                        f["_policy"] = "vl-verify-spa-suppressed"
+                        evi = f.get("evidence_marker") or f.get("evidence") or ""
+                        f["evidence_marker"] = (
+                            f"{evi} [VL-VERIFY: SPA catch-all detected at "
+                            f"target; finding downgraded to INFO because SPAs "
+                            f"return 200 for arbitrary paths]"
+                        )
+                        downgraded += 1
+                if downgraded:
+                    result.setdefault("intel", {})
+                    if isinstance(result["intel"], dict):
+                        result["intel"]["vl_verify_spa_suppressed"] = downgraded
+            return result
 
         return _wrapper
 
