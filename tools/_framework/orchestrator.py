@@ -364,12 +364,15 @@ async def run_module_streaming(
                     dur = 0.0
                 results[tool_name] = result
                 timings[tool_name] = round(dur, 2)
-                # VL-PRIME (vuln): roll-up scanner runtime stats so
-                # /api/admin/vuln/scanner_stats can surface p50/p99 drift.
-                # Lazy-import to avoid circular dep at module load time.
-                if module_name == "vuln":
+                # VL-PRIME: roll-up scanner runtime stats so admin endpoints
+                # can surface p50/p99 drift per scanner. Per-module modules
+                # lazy-imported to avoid circular dep at module load.
+                if module_name in ("vuln", "webapp"):
                     try:
-                        from endpoints.vuln_prime import record_scanner_run
+                        if module_name == "vuln":
+                            from endpoints.vuln_prime import record_scanner_run
+                        else:
+                            from endpoints.webapp_prime import record_scanner_run
                         record_scanner_run(
                             tool_name,
                             success=bool(result and not result.get("_failed")
