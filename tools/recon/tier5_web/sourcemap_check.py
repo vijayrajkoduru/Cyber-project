@@ -8,7 +8,7 @@ fully eliminate FPs.
 import asyncio, requests, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 router=APIRouter()
 _PATHS=["/static/js/main.js.map","/static/js/bundle.js.map","/js/app.js.map","/dist/main.js.map",

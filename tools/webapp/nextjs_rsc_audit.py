@@ -119,11 +119,11 @@ def scan_nextjs_rsc_audit(req: ScanRequest, payload=Depends(verify_scan_quota)):
             evidence_marker=" | ".join(f"{m} [{s}]" for m, s in issues[:5])))
     else:
         findings.append(wrap_finding(
-            f"Next.js detected, no common misconfigs",
+            "Next.js detected, no common misconfigs",
             "POSITIVE", cwe="CWE-200",
             remediation="Maintain. Re-audit on Next.js major upgrades (App Router "
                         "evolves rapidly).",
-            evidence_marker=f"Next.js footprint confirmed, all probes clean"))
+            evidence_marker="Next.js footprint confirmed, all probes clean"))
 
     return standard_response(
         tool="nextjs_rsc_audit", target=req.target, findings=findings,

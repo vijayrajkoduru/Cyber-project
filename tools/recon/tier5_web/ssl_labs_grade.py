@@ -1,9 +1,8 @@
 """ssl_labs_grade — VL-FORGE Recon §5 Web App Recon (real, zero-FP)."""
-import asyncio, re
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import ScanContext, run_scanner
-from tools.recon._web_helpers import fetch, base_url
 import urllib.request, json
 
 router = APIRouter()

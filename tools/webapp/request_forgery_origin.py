@@ -107,7 +107,7 @@ def scan_request_forgery_origin(req: ScanRequest, payload=Depends(verify_scan_qu
 
     if reflected_origin:
         findings.append(wrap_finding(
-            f"Origin header REFLECTED in body — XSS / SSRF-by-logging risk",
+            "Origin header REFLECTED in body — XSS / SSRF-by-logging risk",
             "MEDIUM", cvss="5.3", cwe="CWE-79", owasp="A03:2021",
             remediation="Avoid logging or reflecting unsanitized Origin/Referer "
                         "headers. If you use them for CORS / CSRF protection, "

@@ -119,7 +119,7 @@ def scan_xs_leaks_probe(req: ScanRequest, payload=Depends(verify_scan_quota)):
             f"All {tested} tested paths have proper XS-Leak headers",
             "POSITIVE", cwe="CWE-203",
             remediation="Maintain. Re-audit on every framework upgrade.",
-            evidence_marker=f"CORP + COOP + frame-ancestors validated"))
+            evidence_marker="CORP + COOP + frame-ancestors validated"))
 
     return standard_response(
         tool="xs_leaks_probe", target=req.target, findings=findings,

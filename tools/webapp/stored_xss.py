@@ -3,7 +3,6 @@ import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, safe_post, wrap_finding, standard_response)
-from tools._spa_state import load_spa_state
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 

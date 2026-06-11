@@ -1,9 +1,9 @@
 """DNS Rebinding v2 — VL-FORGE. Low-TTL + private-IP A record check."""
-import asyncio, ipaddress
+import ipaddress
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 async def _q(h,rt="A"):
     try:

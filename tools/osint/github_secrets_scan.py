@@ -172,7 +172,7 @@ def _do_scan(req: ScanRequest) -> dict:
                         "Set up gitleaks pre-commit + GitHub Advanced Security "
                         "secret scanning push protection.",
             evidence_marker=" | ".join(evidence_lines) +
-                              f" (CONFIRMED via diff-pattern match)")],
+                              " (CONFIRMED via diff-pattern match)")],
         tests_performed=scanned, vulnerable=True,
         tests_summary=f"{len(secret_hits)} secrets in {scanned} diffs",
         raw_data={"hits": secret_hits[:20], "scanned_diffs": scanned,

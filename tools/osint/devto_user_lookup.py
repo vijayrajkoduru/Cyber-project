@@ -35,7 +35,7 @@ def _do_scan(req: ScanRequest) -> dict:
                 f"dev.to user '{user}' not found",
                 severity="POSITIVE", cwe="CWE-200",
                 remediation="No public footprint.",
-                evidence_marker=f"dev.to 404 (CONFIRMED)")],
+                evidence_marker="dev.to 404 (CONFIRMED)")],
             tests_performed=1, vulnerable=False,
             tests_summary="Not found")
     if r.status_code != 200:

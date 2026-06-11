@@ -1,8 +1,10 @@
 """GitHub Subdomains v2 — VL-FORGE. Code search for *.target leaks."""
-import asyncio, requests, os, re
+import requests
+import os
+import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 async def gather(ctx):
     token=os.environ.get("GITHUB_TOKEN","")

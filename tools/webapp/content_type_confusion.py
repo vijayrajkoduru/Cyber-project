@@ -8,7 +8,6 @@ If server STILL parses it as JSON, it defeats:
 
 Symmetric test: send form-encoded body with Content-Type: application/json.
 """
-import json
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)

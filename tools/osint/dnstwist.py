@@ -14,7 +14,6 @@ Layer 6b: parallel via ThreadPoolExecutor (80 perms in ~15s vs 120s seq).
 """
 import asyncio
 import socket
-import string
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,

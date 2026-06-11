@@ -44,7 +44,7 @@ def _do_scan(req: ScanRequest) -> dict:
             f"IntelX query accepted: id={data.get('id', '?')[:16]}",
             severity="INFO", cwe="CWE-200",
             remediation="Query ID can be retrieved via /intelligent/search/result?id=ID.",
-            evidence_marker=f"IntelX search initiated (CONFIRMED)")],
+            evidence_marker="IntelX search initiated (CONFIRMED)")],
         tests_performed=1, vulnerable=False,
         tests_summary="IntelX search initiated",
         raw_data=data if isinstance(data, dict) else {})

@@ -7,7 +7,6 @@ for understanding security posture from regulatory disclosures.
 Real probe. Zero false positives.
 """
 import asyncio
-import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)

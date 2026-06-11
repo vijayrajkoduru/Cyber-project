@@ -86,7 +86,7 @@ def scan_x_original_url_bypass(req: ScanRequest, payload=Depends(verify_scan_quo
             )))
     else:
         findings.append(wrap_finding(
-            f"No X-Original-URL / X-Rewrite-URL bypasses detected",
+            "No X-Original-URL / X-Rewrite-URL bypasses detected",
             "POSITIVE", cwe="CWE-444",
             remediation="Maintain. Continue stripping override headers at edge.",
             evidence_marker=f"tested {len(TARGETS)} sensitive paths × {len(HEADERS)} headers"))

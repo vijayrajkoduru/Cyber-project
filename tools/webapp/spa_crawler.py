@@ -32,14 +32,14 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import Optional, Set, List, Dict, Tuple
-from urllib.parse import urlparse, urljoin
+from typing import Set, List, Dict, Tuple
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends
 
 from tools._spa_state import save_spa_state
 from tools._shared import (
-    ScanRequest, verify_scan_quota, standard_response, web_url, recon_host,
+    ScanRequest, verify_scan_quota, standard_response, web_url,
 )
 from tools._vl_core.verify import vl_verify
 

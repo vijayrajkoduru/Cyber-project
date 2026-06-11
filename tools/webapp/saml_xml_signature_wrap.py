@@ -9,11 +9,8 @@ IdP — out of scope for SaaS-friendly scan. This scanner flags the
 presence of SAML SP endpoints AND known-vulnerable library versions
 (via Server: header / response banners) so the human can pursue.
 """
-import re
 import base64
-import zlib
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)

@@ -4,7 +4,6 @@ NestJS apps that don't enable ValidationPipe globally have routes
 accepting unvalidated body — mass assignment + prototype pollution
 chains. Detect NestJS footprint + missing global validation.
 """
-import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -47,7 +46,7 @@ def scan_nestjs_pipe_injection(req: ScanRequest, payload=Depends(verify_scan_quo
                         "Disable entirely if not needed: don't call SwaggerModule"
                         ".setup() in production NestJS bootstrap. Default /api "
                         "exposes schema to anyone.",
-            evidence_marker=f"GET /api → Swagger/OpenAPI content"))
+            evidence_marker="GET /api → Swagger/OpenAPI content"))
     elif is_nest:
         findings.append(wrap_finding(
             "NestJS detected — manually verify ValidationPipe is global",

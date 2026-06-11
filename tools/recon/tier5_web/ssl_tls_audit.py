@@ -168,7 +168,7 @@ def r_grade(s):
     if not g: return None
     sev = "POSITIVE" if g == "A" else ("INFO" if g == "B" else ("LOW" if g == "C" else ("MEDIUM" if g == "D" else "HIGH")))
     return {"name":f"TLS configuration grade: {g}","severity":sev,
-            "evidence":f"Based on cert validity, TLS versions, cipher strength"}
+            "evidence":"Based on cert validity, TLS versions, cipher strength"}
 
 def r_self_signed(s):
     issuer = s.get("cert_issuer") or ""

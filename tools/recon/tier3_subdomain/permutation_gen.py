@@ -3,7 +3,7 @@ import asyncio
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 _BASES=["api","www","admin","app","dev","staging","prod"]
 _AFFIXES=["1","2","01","02","-new","-old","-test","-dev","-staging","-prod","-eu","-us","-eu1","-us1","-1","-2","2024","2025","2026"]

@@ -10,7 +10,7 @@ the request line back, which is the actual attack signature.
 import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
-                            safe_request, wrap_finding, standard_response)
+                            safe_request, wrap_finding)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify

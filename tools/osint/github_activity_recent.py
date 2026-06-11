@@ -8,7 +8,6 @@ Real probe. Zero false positives.
 """
 import asyncio
 from collections import Counter
-from datetime import datetime
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)

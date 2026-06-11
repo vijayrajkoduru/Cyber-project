@@ -1,5 +1,4 @@
 """opensearch_query_injection — OpenSearch/Elasticsearch query DSL injection."""
-import json
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,

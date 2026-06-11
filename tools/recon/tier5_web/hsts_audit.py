@@ -1,8 +1,8 @@
 """HSTS Audit v2 — VL-FORGE. Strict-Transport-Security policy check."""
 import asyncio, requests
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._vl_core import ScanContext, run_scanner
+from tools._shared import ScanRequest, verify_scan_quota, recon_host
+from tools._vl_core import run_scanner
 router=APIRouter()
 def _g(u):
     try: return requests.get(u,timeout=8,verify=False,allow_redirects=False,headers={"User-Agent":"VulnusLab/1.0"})

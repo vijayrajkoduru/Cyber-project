@@ -6,7 +6,6 @@ Free, no key, no rate limit (crt.sh public endpoint).
 VL-FOUNDRY Layer 6: 7-check DoD compliant.
 """
 import asyncio
-import json
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,

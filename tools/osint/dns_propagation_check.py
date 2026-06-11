@@ -9,7 +9,6 @@ for the same record type and reports disagreement. Useful for:
 Real probe. Zero false positives — each resolver answers for itself.
 """
 import asyncio
-import socket
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,

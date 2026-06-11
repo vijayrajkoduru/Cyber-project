@@ -110,7 +110,7 @@ def scan_ms_graph_api_leak(req: ScanRequest, payload=Depends(verify_scan_quota))
 
     if not hits:
         findings.append(wrap_finding(
-            f"No MS Graph / Azure AD bundling detected",
+            "No MS Graph / Azure AD bundling detected",
             "POSITIVE", cwe="CWE-200",
             remediation="No MS-specific surface from this scan.",
             evidence_marker=f"scanned {1+fetched} JS sources × {len(PATTERNS)} patterns"))

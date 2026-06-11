@@ -1,8 +1,9 @@
 """Job Postings v2 — VL-FORGE. Indeed + LinkedIn scrape for tech stack hints."""
-import asyncio, requests, re
+import asyncio
+import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 def _g(u,t=12):
     try:

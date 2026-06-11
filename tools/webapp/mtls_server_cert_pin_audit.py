@@ -85,7 +85,7 @@ def scan_mtls_server_cert_pin_audit(req: ScanRequest, payload=Depends(verify_sca
             "POSITIVE", cwe="CWE-295",
             remediation="Maintain. For client-side cert pinning (mobile/API "
                         "clients), use the SPKI pin shown.",
-            evidence_marker=f"no HPKP, no Expect-CT" + (
+            evidence_marker="no HPKP, no Expect-CT" + (
                 f", SPKI={cert_pin_sha256[:32]}…" if cert_pin_sha256 else "")))
     return standard_response(
         tool="mtls_server_cert_pin_audit", target=req.target, findings=findings,

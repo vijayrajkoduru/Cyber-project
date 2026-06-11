@@ -143,7 +143,7 @@ def scan_oidc_discovery_audit(req: ScanRequest, payload=Depends(verify_scan_quot
             evidence_marker=" | ".join(f"{m} [{s}]" for m, s in issues[:5])))
     else:
         findings.append(wrap_finding(
-            f"OIDC config looks well-configured",
+            "OIDC config looks well-configured",
             "POSITIVE", cwe="CWE-287",
             remediation="Maintain. Periodically re-audit against RFC 9700.",
             evidence_marker=f"issuer: {discovery.get('issuer','?')[:60]} | "

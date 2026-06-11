@@ -15,7 +15,6 @@ Workflow:
 from __future__ import annotations
 
 import re
-import socket
 from urllib.parse import urlparse
 
 import dns.resolver
@@ -25,7 +24,7 @@ from fastapi import APIRouter, Depends
 
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                              wrap_finding, safe_get)
-from tools.webapp._webapp_common import precheck_target, vuln_response
+from tools.webapp._webapp_common import vuln_response
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 

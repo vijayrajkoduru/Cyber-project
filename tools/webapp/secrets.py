@@ -11,7 +11,6 @@ Workflow:
   3. Emit a finding per (file, pattern) hit — capped at 30 to avoid spam
 """
 import re
-import asyncio
 
 import httpx
 

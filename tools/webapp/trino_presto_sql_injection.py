@@ -1,5 +1,4 @@
 """trino_presto_sql_injection — Trino/Presto SQL endpoint detection + injection."""
-import json
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -58,7 +57,7 @@ def scan_trino_presto_sql_injection(req: ScanRequest, payload=Depends(verify_sca
                         "PASSWORD or KERBEROS authenticator in coordinator. "
                         "Internet-exposed Trino = query any connected catalog "
                         "(Hive, MySQL, S3, ...) = exfil of structured data.",
-            evidence_marker=f"POST /v1/statement with SELECT 1 → 200 + data"))
+            evidence_marker="POST /v1/statement with SELECT 1 → 200 + data"))
     elif is_trino:
         findings.append(wrap_finding(
             "Trino/Presto detected — verify auth enforcement",

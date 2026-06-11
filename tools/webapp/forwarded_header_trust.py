@@ -114,7 +114,7 @@ def scan_forwarded_header_trust(req: ScanRequest, payload=Depends(verify_scan_qu
 
     if not findings:
         findings.append(wrap_finding(
-            f"No forwarded-header trust issues detected",
+            "No forwarded-header trust issues detected",
             "POSITIVE", cwe="CWE-302",
             remediation="Maintain. Continue using request.remote_addr / properly "
                         "configured proxy_pass real-ip resolution.",
