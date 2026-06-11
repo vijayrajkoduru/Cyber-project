@@ -11,6 +11,9 @@ register(app) function in your tool file. Examples:
 import os
 import re
 import sys
+import hmac
+import hashlib
+import logging
 import time
 import uuid
 import random
@@ -28,6 +31,8 @@ import requests as _req_lib
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+log = logging.getLogger("vulnuslab.shared")
 
 # ── JWT auth ────────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
@@ -69,13 +74,39 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     try:
         payload = _jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
     except Exception as e:
-        raise HTTPException(401, f"Invalid token: {e}")
+        log.warning("JWT decode failed: %s", e)
+        raise HTTPException(401, "Invalid or expired token")
     _USER_CTX.set(payload.get("sub", "unknown"))
     return payload
 
 
-_INTERNAL_FANOUT_HEADER = "x-vl-internal-fanout"
-_INTERNAL_FANOUT_TOKEN = os.getenv("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal")
+INTERNAL_FANOUT_HEADER = "x-vl-internal-fanout"
+
+
+def _derive_internal_fanout_token() -> str:
+    """Secret that marks a request as internal orchestrator fan-out (so one
+    user scan fanning out to N scanners counts as 1 unit, not N). An explicit
+    VL_INTERNAL_FANOUT_TOKEN wins; otherwise derive it from JWT_SECRET so all
+    uvicorn workers agree WITHOUT shipping a public default. The old hardcoded
+    "vlforge-internal" was committed to the repo, so anyone could forge the
+    marker and bypass quota; JWT_SECRET is per-deployment and secret (main.py
+    refuses to boot without it)."""
+    explicit = os.getenv("VL_INTERNAL_FANOUT_TOKEN", "").strip()
+    if explicit:
+        return explicit
+    seed = (JWT_SECRET or "").encode()
+    if not seed:
+        # No JWT_SECRET (e.g. a bare unit-test import). Random per process —
+        # safe because there is no real cross-worker fan-out to authenticate.
+        seed = os.urandom(32)
+    return hmac.new(seed, b"vl-internal-fanout-v1", hashlib.sha256).hexdigest()
+
+
+INTERNAL_FANOUT_TOKEN = _derive_internal_fanout_token()
+
+# Back-compat aliases — internal callers referenced the underscore names.
+_INTERNAL_FANOUT_HEADER = INTERNAL_FANOUT_HEADER
+_INTERNAL_FANOUT_TOKEN = INTERNAL_FANOUT_TOKEN
 _INTERNAL_TRUSTED_IPS = ("127.0.0.1", "::1", "localhost")
 _INTERNAL_TRUSTED_PREFIXES = ("10.", "172.", "192.168.")
 
