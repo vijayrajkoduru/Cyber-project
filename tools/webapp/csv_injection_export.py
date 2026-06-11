@@ -8,6 +8,7 @@ POST data containing formula payloads to endpoints, then GET the CSV
 export and check for un-escaped formulas.
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -35,19 +36,27 @@ EXPORT_PATHS = [
 @vl_verify()
 def scan_csv_injection_export(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    csv_endpoints = []
 
-    # 1. Find CSV/Excel export endpoints
-    for path in EXPORT_PATHS:
+    # VL-TURBO deep: Phase 1 - probe all 8 export paths in parallel.
+    # Was 8 paths * 8s timeout = 64s sequential. Now ~8s in parallel.
+    def _discover(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0",
                       "Accept": "text/csv,application/csv,*/*"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code == 404: continue
+        if r is None or r.status_code == 404:
+            return None
         ct = (r.headers.get("content-type") or "").lower()
         cd = (r.headers.get("content-disposition") or "").lower()
         if "csv" in ct or "excel" in ct or ".csv" in cd or ".xlsx" in cd:
-            csv_endpoints.append({"path": path, "content_type": ct})
+            return {"path": path, "content_type": ct}
+        return None
+
+    csv_endpoints = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for hit in pool.map(_discover, EXPORT_PATHS, timeout=20):
+            if hit:
+                csv_endpoints.append(hit)
 
     if not csv_endpoints:
         return standard_response(
@@ -56,32 +65,37 @@ def scan_csv_injection_export(req: ScanRequest, payload=Depends(verify_scan_quot
             skipped_reason="No CSV/Excel export endpoints found")
 
     findings = []
-    risk_endpoints = []
 
-    # 2. For each export endpoint, GET it + scan body for un-escaped formulas
-    for ep in csv_endpoints:
+    # Phase 2: parallel formula scan of each export endpoint
+    def _scan_endpoint(ep):
         r = safe_request("GET", base + ep["path"],
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=10, allow_redirects=False)
-        if r is None: continue
+        if r is None:
+            return None
         body = (r.text or "")[:50000]
-        # Heuristic: look for cell content starting with = + - @ NOT preceded by '
-        # (apostrophe is the proper escape)
         risky_lines = []
         for line in body.splitlines()[:500]:
             for sep in (",", "\t", ";"):
-                if sep not in line: continue
+                if sep not in line:
+                    continue
                 for cell in line.split(sep):
                     cell = cell.strip().strip('"')
                     if cell and cell[0] in "=+-@\x09" and not cell.startswith("'"):
-                        # Looks risky
                         risky_lines.append({"path": ep["path"],
                                               "cell_start": cell[:50]})
                         break
-            if len(risky_lines) > 5: break
+            if len(risky_lines) > 5:
+                break
         if risky_lines:
-            risk_endpoints.append({"path": ep["path"],
-                                     "risky_cells": risky_lines[:3]})
+            return {"path": ep["path"], "risky_cells": risky_lines[:3]}
+        return None
+
+    risk_endpoints = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for risk in pool.map(_scan_endpoint, csv_endpoints, timeout=25):
+            if risk:
+                risk_endpoints.append(risk)
 
     if risk_endpoints:
         findings.append(wrap_finding(
