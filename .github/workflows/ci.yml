@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (compile + boot smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'        # matches Dockerfile (python:3.11-slim-bookworm)
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile all sources (syntax gate)
+        run: python -m compileall -q main.py tools endpoints
+
+      - name: Boot smoke (autoload must bring tools up)
+        env:
+          JWT_SECRET: ci-smoke-secret
+        run: |
+          python - <<'PY'
+          import main
+          loaded = main.app.state.tools_loaded
+          failed = main.app.state.tools_failed
+          print(f"tools_loaded={loaded}  tools_failed={len(failed)}  routes={len(main.app.routes)}")
+          for f in failed:
+              # Quarantined tools are tolerated by design (one bad tool can't
+              # crash boot) and some need external binaries CI lacks (sqlmap,
+              # nikto, ...). Surface them, but don't fail the build on them.
+              print("  quarantined:", f)
+          assert loaded > 0, "no tools loaded — boot is broken"
+          PY
+
+  frontend:
+    name: Frontend (test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'            # matches preflight.sh (node:18-alpine)
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        env:
+          CI: true
+        run: npm test -- --watchAll=false --passWithNoTests
+
+      - name: Build
+        env:
+          # CRA's react-scripts build treats ESLint warnings as errors when
+          # CI is truthy (GitHub Actions sets CI=true). Keep the first CI green
+          # by gating on real build errors only; flip to "true" once the
+          # existing warnings are cleaned up to enforce a zero-warning build.
+          CI: false
+        run: npm run build
