@@ -7,6 +7,7 @@ Attacker uploads file named: pwn"><script>alert(1)</script>.txt
 POST to common upload endpoints with payload-in-filename. If response
 body contains the unescaped <script> tag, BUG.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -45,27 +46,50 @@ def _upload(url, filename, req):
 @vl_verify()
 def scan_xss_via_filename_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    xss_hits = []
-    tested = 0
-
-    for path in UPLOAD_PATHS:
+    # VL-TURBO deep: parallelize across (path, filename) jobs.
+    # Was 6 paths * (6s GET + 3 * 10s POST) = ~216s sequential.
+    # Now: phase 1 (existence) ~6s pool(6), phase 2 (uploads) ~10s pool(18).
+    def _exists(path):
         url = base + path
-        # Skip non-existent
         r0 = safe_request("GET", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=6, allow_redirects=False)
-        if r0 is None or r0.status_code == 404: continue
-        tested += 1
+        if r0 is None or r0.status_code == 404:
+            return None
+        return path
 
-        for fn in PAYLOAD_FILENAMES:
-            r = _upload(url, fn, req)
-            if r is None: continue
-            body = (r.text or "")[:10000]
-            # XSS signal: payload reflected UNESCAPED in body
-            if "<script>alert(1)" in body or "onerror=alert(1)" in body or "onload=alert(1)" in body:
+    valid_paths = []
+    with ThreadPoolExecutor(max_workers=min(6, len(UPLOAD_PATHS))) as pool:
+        for res in pool.map(_exists, UPLOAD_PATHS, timeout=15):
+            if res is not None:
+                valid_paths.append(res)
+    tested = len(valid_paths)
+
+    def _try_upload(job):
+        path, fn = job
+        url = base + path
+        r = _upload(url, fn, req)
+        if r is None:
+            return None
+        body = (r.text or "")[:10000]
+        if "<script>alert(1)" in body or "onerror=alert(1)" in body or "onload=alert(1)" in body:
+            return ("hit", path, fn, r.status_code)
+        return ("miss", path, None, None)
+
+    xss_hits = []
+    seen_paths = set()
+    jobs = [(p, fn) for p in valid_paths for fn in PAYLOAD_FILENAMES]
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(18, len(jobs))) as pool:
+            for res in pool.map(_try_upload, jobs, timeout=30):
+                if res is None or res[0] != "hit":
+                    continue
+                _v, path, fn, status = res
+                if path in seen_paths:
+                    continue
+                seen_paths.add(path)
                 xss_hits.append({"path": path, "filename": fn[:60],
-                                   "status": r.status_code})
-                break  # one finding per path
+                                   "status": status})
 
     findings = []
     if xss_hits:

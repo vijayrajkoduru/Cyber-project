@@ -12,6 +12,7 @@ Zero-FP: bomb is benign-sized (won't actually DoS); just measures
 whether server has size protection.
 """
 import gzip
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -40,37 +41,43 @@ def scan_gzip_bomb_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     bomb = _make_gzip_bomb_small()  # ~5 KB → 5 MB decompressed
 
-    accepted = []
-    rejected = []
-    tested = 0
-
-    for path in PROBE_PATHS:
+    # VL-TURBO deep: parallelize 6-path baseline+POST gauntlet.
+    # Was 6 paths * (8s + 20s) = ~168s sequential. Now ~28s in pool(6).
+    def _probe_path(path):
         url = base + path
-        # Baseline: probe path exists?
         r0 = safe_request("GET", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        # Skip clearly-nonexistent
-        if r0 is None or r0.status_code == 404: continue
-        tested += 1
-
+        if r0 is None or r0.status_code == 404:
+            return ("404", path, None)
         r = safe_request("POST", url,
             headers={"User-Agent": "VulnusLab/1.0",
                       "Content-Type": "application/octet-stream",
                       "Content-Encoding": "gzip"},
             data=bomb, req=req, timeout=20, allow_redirects=False)
-        if r is None: continue
+        if r is None:
+            return ("no-resp", path, None)
+        return ("ok", path, r.status_code)
 
-        # 413 = payload too large (good), 415 = unsupported media (good),
-        # 5xx = decompress crashed (BAD — DoS surface!)
-        if r.status_code in (413, 415):
-            rejected.append({"path": path, "status": r.status_code})
-        elif r.status_code >= 500:
-            accepted.append({"path": path, "status": r.status_code,
-                              "issue": "crash (5xx) — possible decompression DoS"})
-        elif r.status_code == 200:
-            accepted.append({"path": path, "status": 200,
-                              "issue": "accepted 5MB decompressed payload"})
+    accepted = []
+    rejected = []
+    tested = 0
+    with ThreadPoolExecutor(max_workers=min(6, len(PROBE_PATHS))) as pool:
+        for verdict, path, status in pool.map(
+                _probe_path, PROBE_PATHS, timeout=40):
+            if verdict == "404":
+                continue
+            tested += 1
+            if verdict != "ok":
+                continue
+            if status in (413, 415):
+                rejected.append({"path": path, "status": status})
+            elif status >= 500:
+                accepted.append({"path": path, "status": status,
+                                  "issue": "crash (5xx) — possible decompression DoS"})
+            elif status == 200:
+                accepted.append({"path": path, "status": 200,
+                                  "issue": "accepted 5MB decompressed payload"})
 
     findings = []
     if accepted:

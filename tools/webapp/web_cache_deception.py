@@ -9,6 +9,7 @@ URL and gets the cached copy.
 Test: GET /something/foo.css where /something is dynamic. If cache header
 (X-Cache: HIT / CF-Cache-Status: HIT / age: > 0) appears, vuln.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -50,40 +51,43 @@ def _is_cached(resp) -> tuple[bool, str]:
 @vl_verify()
 def scan_web_cache_deception(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    vulnerable_paths = []
-    not_cached = []
-    tested = 0
-
-    for path in DYNAMIC_PATHS:
-        # Skip if base path doesn't exist
+    # VL-TURBO deep: parallelize 9-path two-stage gauntlet.
+    # Was 9 paths * 2 GETs * 8s = ~144s sequential. Now ~16s in pool(9).
+    def _probe_path(path):
         r0 = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r0 is None or r0.status_code == 404: continue
-
-        # Now append .css and check if cache caches it
+        if r0 is None or r0.status_code == 404:
+            return ("404", path, None, None)
         deceived = base + path + "/foo.css"
         r1 = safe_request("GET", deceived,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r1 is None: continue
-        tested += 1
-        # Vulnerable signal: original returned 200 dynamic content +
-        # appended-extension version ALSO returned 200 + cache headers indicate caching
+        if r1 is None:
+            return ("no-resp", path, deceived, None)
         if r1.status_code == 200:
             cached, evidence = _is_cached(r1)
             if cached:
-                # And content looks like the original (not a 404 page)
                 body0 = (r0.text or "")[:1000]
                 body1 = (r1.text or "")[:1000]
-                # If lengths are similar AND content overlaps significantly
                 if abs(len(body0) - len(body1)) < 500 and len(body1) > 100:
-                    vulnerable_paths.append({
-                        "path": path, "deceived_url": deceived,
-                        "cache_evidence": evidence,
-                    })
-                    continue
-        not_cached.append(path)
+                    return ("vuln", path, deceived, evidence)
+        return ("clean", path, deceived, None)
+
+    vulnerable_paths = []
+    not_cached = []
+    tested = 0
+    with ThreadPoolExecutor(max_workers=min(9, len(DYNAMIC_PATHS))) as pool:
+        for verdict, path, deceived, evidence in pool.map(
+                _probe_path, DYNAMIC_PATHS, timeout=30):
+            if verdict == "404":
+                continue
+            tested += 1
+            if verdict == "vuln":
+                vulnerable_paths.append({"path": path, "deceived_url": deceived,
+                                           "cache_evidence": evidence})
+            else:
+                not_cached.append(path)
 
     findings = []
     if vulnerable_paths:

@@ -11,6 +11,7 @@ iceServers config. Risky patterns:
 MASVS-NETWORK / WebRTC privacy.
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -38,21 +39,35 @@ def scan_webrtc_stun_audit(req: ScanRequest, payload=Depends(verify_scan_quota))
             tests_performed=1, vulnerable=False,
             skipped_reason=f"Could not fetch homepage (HTTP {root.status_code if root else 'no-resp'})")
 
+    # VL-TURBO deep: fetch up to 8 same-origin JS sources in parallel.
+    # Was 8 sequential GETs * 8s = ~64s. Now ~8s in pool(8).
     sources = {"inline": root.text}
-    fetched = 0
+    js_srcs = []
     for m in SCRIPT_SRC_RE.finditer(root.text):
-        if fetched >= 8: break
+        if len(js_srcs) >= 8:
+            break
         src = m.group(1)
         if src.startswith("//"): src = "https:" + src
         if src.startswith("/"):  src = base + src
         elif not src.startswith("http"): src = base + "/" + src
         if not src.startswith(base): continue
+        js_srcs.append(src)
+
+    def _fetch_js(src):
         r = safe_request("GET", src,
             headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=True)
-        if r is None or r.status_code != 200: continue
-        sources[src] = r.text[:200000]
-        fetched += 1
+        if r is None or r.status_code != 200:
+            return None
+        return (src, r.text[:200000])
+
+    fetched = 0
+    if js_srcs:
+        with ThreadPoolExecutor(max_workers=min(8, len(js_srcs))) as pool:
+            for res in pool.map(_fetch_js, js_srcs, timeout=20):
+                if res is not None:
+                    sources[res[0]] = res[1]
+                    fetched += 1
 
     rtc_calls = []
     stun_urls = set()
