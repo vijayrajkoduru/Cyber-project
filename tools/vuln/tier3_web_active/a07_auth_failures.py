@@ -31,8 +31,9 @@ def _audit_response(url, r):
         issues.append({"issue": "Login form served over plain HTTP", "sev": "HIGH"})
     sc = (r.get("headers", {}) or {}).get("set-cookie", "") or ""
     if sc:
-        if "secure" not in sc.lower():
-            issues.append({"issue": "Session cookie without Secure flag", "sev": "MEDIUM"})
+        is_https = url.startswith("https://")
+        if is_https and "secure" not in sc.lower():
+            issues.append({"issue": "Session cookie without Secure flag on HTTPS", "sev": "MEDIUM"})
         if "httponly" not in sc.lower():
             issues.append({"issue": "Session cookie without HttpOnly flag", "sev": "MEDIUM"})
         if "samesite" not in sc.lower():
