@@ -10,6 +10,7 @@ Verify step re-fires with `;id;echo` shape: a real shell-injection backend
 echoes BOTH the id output AND the echo trailer; a static page or canary leak
 echoes neither or just the original.
 """
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
@@ -26,19 +27,30 @@ PAYLOAD_VERIFY     = ";id;echo VLECHO__"
 VERIFY_MARKER      = "VLECHO__"
 
 
+async def _probe_one(base_url, p, payload):
+    url = f"{base_url}?{p}={payload}"
+    r = await http_get_async(url, timeout=8)
+    if not r:
+        return None
+    body = r.get("body", "")
+    for pattern in CMD_PATTERNS:
+        if re.search(pattern, body):
+            return {"param": p, "evidence": pattern,
+                     "status": r.get("status"), "payload": payload}
+    return None
+
+
 async def _fire(base_url, params, payload):
+    # VL-TURBO deep: parallel probe across all params.
+    # Was N sequential GETs at 8s each. Now ~8s for all.
+    results = await asyncio.gather(
+        *[_probe_one(base_url, p, payload) for p in params],
+        return_exceptions=True)
     hits = []
-    for p in params:
-        url = f"{base_url}?{p}={payload}"
-        r = await http_get_async(url, timeout=8)
-        if not r:
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
             continue
-        body = r.get("body", "")
-        for pattern in CMD_PATTERNS:
-            if re.search(pattern, body):
-                hits.append({"param": p, "evidence": pattern,
-                             "status": r.get("status"), "payload": payload})
-                break
+        hits.append(res)
     return hits
 
 

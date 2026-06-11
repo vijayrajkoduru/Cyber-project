@@ -10,6 +10,7 @@ Two-stage zero-FP gate:
 Payload source: tools/_payloads/xss.py (XSS_PAYLOADS, 265 entries).
 """
 import re, secrets
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -130,34 +131,72 @@ def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
         return standard_response(tool="xss", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
             skipped_reason="No URL parameters or form inputs found to test")
-    findings, tests, confirmed = [], 0, []
+    findings, confirmed = [], []
+
+    # VL-TURBO deep: parallelize canary probes across (url, key) jobs,
+    # then parallelize the confirm-with-library stage.
+    # Was up to 12 URLs * 5 params = 60 sequential canary GETs * 10s = ~600s.
+    # Now: canary stage ~10s in pool(12); confirm stage ~10s in pool(6).
+    jobs = []
     for u in urls:
         parsed = urlparse(u)
         params = parse_qs(parsed.query)
-        if not params: continue
+        if not params:
+            continue
         for key in list(params.keys())[:5]:
-            tests += 1
-            canary = "v" + secrets.token_hex(6) + "x"
-            new_params = {k: v[0] for k, v in params.items()}
-            new_params[key] = canary
-            test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
-            r2 = safe_get(test_url, req=req, allow_redirects=True, timeout=10)
-            if r2 is None: continue
-            ctx = _reflection_context(canary, r2.text or "")
-            if not ctx: continue
-            # Stage 2: replay with context-matched XSS_PAYLOADS — zero-FP gate
-            result = _confirm_with_library(u, key, params, req, ctx)
-            if not result: continue
-            sev, cvss, payload_used = result
-            findings.append(wrap_finding(
-                f"Reflected XSS — parameter {key!r} reflects unescaped in {ctx} context",
-                sev, cvss=cvss, cwe="CWE-79", owasp="A03:2021",
-                remediation="Context-aware output encoding (HTML/JS/URL). Use auto-escaping templates.",
-                evidence_marker=(f"canary={canary} reflected in {ctx} context; "
-                                 f"payload {payload_used!r} rendered un-encoded")))
-            confirmed.append({"url": u, "param": key, "context": ctx,
-                              "payload": payload_used})
-            break
+            jobs.append((u, key, params))
+    tests = len(jobs)
+
+    def _canary_probe(job):
+        u, key, params = job
+        canary = "v" + secrets.token_hex(6) + "x"
+        parsed = urlparse(u)
+        new_params = {k: v[0] for k, v in params.items()}
+        new_params[key] = canary
+        test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
+        r2 = safe_get(test_url, req=req, allow_redirects=True, timeout=10)
+        if r2 is None:
+            return None
+        ctx = _reflection_context(canary, r2.text or "")
+        if not ctx:
+            return None
+        return (u, key, params, ctx, canary)
+
+    hits = []
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(12, len(jobs))) as pool:
+            for res in pool.map(_canary_probe, jobs, timeout=60):
+                if res is not None:
+                    hits.append(res)
+
+    # Preserve original semantics: first confirmed XSS per URL only.
+    hits_by_url = {}
+    for h in hits:
+        hits_by_url.setdefault(h[0], h)
+
+    def _confirm_job(h):
+        u, key, params, ctx, canary = h
+        result = _confirm_with_library(u, key, params, req, ctx)
+        if not result:
+            return None
+        sev, cvss, payload_used = result
+        return (u, key, ctx, canary, sev, cvss, payload_used)
+
+    confirm_jobs = list(hits_by_url.values())
+    if confirm_jobs:
+        with ThreadPoolExecutor(max_workers=min(6, len(confirm_jobs))) as pool:
+            for res in pool.map(_confirm_job, confirm_jobs, timeout=90):
+                if res is None:
+                    continue
+                u, key, ctx, canary, sev, cvss, payload_used = res
+                findings.append(wrap_finding(
+                    f"Reflected XSS — parameter {key!r} reflects unescaped in {ctx} context",
+                    sev, cvss=cvss, cwe="CWE-79", owasp="A03:2021",
+                    remediation="Context-aware output encoding (HTML/JS/URL). Use auto-escaping templates.",
+                    evidence_marker=(f"canary={canary} reflected in {ctx} context; "
+                                     f"payload {payload_used!r} rendered un-encoded")))
+                confirmed.append({"url": u, "param": key, "context": ctx,
+                                   "payload": payload_used})
     return vuln_response(tool="xss", target=req.target, findings=findings,
         tested=max(tests, 1),
         what_checked=f"URL parameters for reflected XSS (canary + {len(_MERGED_XSS)}-entry merged AI+baked-in payload library)",
