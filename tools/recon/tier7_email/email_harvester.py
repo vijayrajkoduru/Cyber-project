@@ -9,7 +9,7 @@ except Exception:
     _HAS_DNS = False
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router = APIRouter()
 _PAGES = ["", "/contact", "/contact-us", "/about", "/about-us", "/team", "/careers",
           "/support", "/privacy", "/legal", "/security.txt", "/.well-known/security.txt"]

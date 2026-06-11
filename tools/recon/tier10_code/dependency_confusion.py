@@ -2,7 +2,7 @@
 import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 def _npm(n):
     try: return requests.get(f"https://registry.npmjs.org/{n}",timeout=6).status_code==200

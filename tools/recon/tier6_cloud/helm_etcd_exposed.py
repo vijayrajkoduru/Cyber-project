@@ -11,7 +11,8 @@ Now requires PROTOCOL-SPECIFIC RESPONSE for each port:
 
 If no protocol match, the open port is NOT counted as helm/etcd exposure.
 """
-import asyncio, json, socket
+import asyncio
+import socket
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import ScanContext, run_scanner

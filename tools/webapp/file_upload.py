@@ -1,5 +1,5 @@
 """File upload — tries malicious file types on discovered upload endpoints."""
-import secrets, time
+import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)

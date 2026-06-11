@@ -9,7 +9,6 @@ Real probe. Zero false positives — only reports OTX-curated pulses.
 """
 import asyncio
 import re
-import socket
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)

@@ -1,5 +1,4 @@
 """opa_policy_bypass — Open Policy Agent (OPA) endpoint detection + default-allow."""
-import json
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,

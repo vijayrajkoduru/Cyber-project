@@ -20,7 +20,6 @@ import csv
 import io
 import shutil
 import subprocess
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends
 

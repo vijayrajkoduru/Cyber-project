@@ -237,7 +237,7 @@ def _render_finding(p: dict, base: str, dbms: str = "", partial: bool = False) -
     return wrap_finding(
         f"SQLi confirmed in {method} parameter '{param}': {type_summary}{db_suffix}{suffix}",
         sev, cvss=cvss, cwe="CWE-89", owasp="A03:2021",
-        remediation=(f"Parameterise all SQL queries using prepared statements. "
+        remediation=("Parameterise all SQL queries using prepared statements. "
                       f"Validate + reject types/lengths server-side. Apply "
                       f"least-privilege DB user. Add WAF SQLi rule as defense "
                       f"in depth."),

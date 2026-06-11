@@ -61,7 +61,7 @@ def _do_scan(req: ScanRequest) -> dict:
             "registration/UdyamVerification.aspx — needs Udyam Reg Number. | "
             "Zauba Corp (free search): https://www.zaubacorp.com/companysearchresults/" + enc
         ),
-        evidence_marker=f"Indian MCA forms are captcha-gated; Tofler/Zaubacorp "
+        evidence_marker="Indian MCA forms are captcha-gated; Tofler/Zaubacorp "
                           f"are best-effort public aggregators."))
 
     return standard_response(

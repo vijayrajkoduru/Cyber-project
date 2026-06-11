@@ -31,7 +31,7 @@ def scan_aws_cognito_unauth_admin(req: ScanRequest, payload=Depends(verify_scan_
         return standard_response(tool="aws_cognito_unauth_admin", target=req.target,
             findings=[wrap_finding("No Cognito user-pool detected", "POSITIVE",
                 cwe="CWE-200", remediation="N/A",
-                evidence_marker=f"no us-east-1_X / eu-west-1_X patterns in HTML/JS")],
+                evidence_marker="no us-east-1_X / eu-west-1_X patterns in HTML/JS")],
             tests_performed=1, vulnerable=False, tests_summary="no Cognito")
 
     # Probe SignUp on first pool — Cognito's USER_PASSWORD_AUTH/SignUp endpoint

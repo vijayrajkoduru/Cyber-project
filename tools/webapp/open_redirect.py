@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
-                            safe_get, wrap_finding, standard_response)
+                            safe_get, wrap_finding)
 from tools._payloads.open_redirect import OPEN_REDIRECT_PAYLOADS, ATTACKER_HOST
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json

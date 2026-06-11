@@ -44,7 +44,7 @@ def _do_scan(req: ScanRequest) -> dict:
                 f"Discord invite '{code}' invalid or expired",
                 severity="POSITIVE", cwe="CWE-200",
                 remediation="No metadata available.",
-                evidence_marker=f"Discord 404 (CONFIRMED)")],
+                evidence_marker="Discord 404 (CONFIRMED)")],
             tests_performed=1, vulnerable=False,
             tests_summary="Invalid invite")
     if r.status_code != 200:

@@ -9,7 +9,6 @@ attacker can inject \\r\\n into a header response, they can:
   - Split response (legacy attack but still works on naive backends)
 """
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)

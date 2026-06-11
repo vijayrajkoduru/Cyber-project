@@ -5,7 +5,6 @@ provisioning API for SSO. Endpoints: /scim/v2/Users, /scim/v2/Groups.
 Common bug: SCIM requires Bearer auth, but path is exposed without
 authentication enforcement → attacker enumerates user list with PII.
 """
-import json
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,

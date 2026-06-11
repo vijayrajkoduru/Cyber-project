@@ -1,9 +1,9 @@
 """s3_bucket_enum — VL-FORGE Recon (real, zero-FP)."""
-import asyncio, os, re
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import ScanContext, run_scanner
-from tools.recon._web_helpers import fetch, base_url
+from tools.recon._web_helpers import fetch
 from tools.recon._cloud_helpers import bucket_candidates
 
 router = APIRouter()

@@ -66,7 +66,7 @@ async def webapp_session_fixation(req: ScanRequest, payload=Depends(verify_scan_
     no_new = not any(n not in pre_cookies for n in post_cookies if any(k in n.lower() for k in ("session","sess","sid")))
     if same_cookie and no_new:
         findings.append(wrap_finding(
-            f"Suspected session fixation - server does not rotate session cookie on auth state change",
+            "Suspected session fixation - server does not rotate session cookie on auth state change",
             "MEDIUM",
             cvss="6.1", cwe="CWE-384",
             cwe_name="Session Fixation",

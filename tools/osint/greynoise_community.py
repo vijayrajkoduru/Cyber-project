@@ -43,7 +43,7 @@ def _do_scan(req: ScanRequest) -> dict:
                 severity="POSITIVE", cwe="CWE-1395",
                 remediation="Not a known mass-scanner. If you're seeing traffic "
                             "from this IP it's likely TARGETED, not opportunistic.",
-                evidence_marker=f"GreyNoise 404 (CONFIRMED) — never observed")],
+                evidence_marker="GreyNoise 404 (CONFIRMED) — never observed")],
             tests_performed=1, vulnerable=False,
             tests_summary="Not in GreyNoise")
     if r.status_code != 200:

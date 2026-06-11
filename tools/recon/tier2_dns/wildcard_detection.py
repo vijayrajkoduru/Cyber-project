@@ -3,7 +3,7 @@ import asyncio, secrets
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 async def _q(h,rt="A"):
     try:
@@ -23,7 +23,7 @@ async def gather(ctx):
     resolves=[set(r) for r in results if r]
     has_wildcard=len(resolves)>=2 and all(r==resolves[0] for r in resolves)
     if has_wildcard:
-        ctx.source(f"wildcard-detected")
+        ctx.source("wildcard-detected")
         ctx.state["wildcard_ips"]=sorted(resolves[0])
     ctx.state.update({"random_test_results":[{"host":r,"resolves":list(res)} for r,res in zip(randoms,results)],
         "wildcard_detected":has_wildcard,

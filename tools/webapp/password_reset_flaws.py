@@ -1,7 +1,6 @@
 """Webapp: Password reset flaw scanner - email enum, weak token, no rate limit."""
 import asyncio
 import re
-import time
 import requests
 import secrets
 from fastapi import APIRouter, Depends

@@ -11,7 +11,6 @@ Real probe. Zero false positives. Pure Python — mmh3 is the only dep.
 """
 import asyncio
 import base64
-import socket
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)

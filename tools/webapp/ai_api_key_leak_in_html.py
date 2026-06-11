@@ -49,7 +49,7 @@ def scan_ai_api_key_leak_in_html(req: ScanRequest, payload=Depends(verify_scan_q
         return standard_response(
             tool="ai_api_key_leak_in_html", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
-            skipped_reason=f"Could not fetch homepage")
+            skipped_reason="Could not fetch homepage")
 
     sources = {"inline": root.content}
     fetched = 0

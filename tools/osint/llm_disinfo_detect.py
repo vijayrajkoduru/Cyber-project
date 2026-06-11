@@ -33,7 +33,7 @@ def _get_text(target, req) -> tuple[str, str]:
         r = safe_get(target, req=req, timeout=12,
                       headers={"User-Agent": "Mozilla/5.0 VulnusLab-OSINT"})
         if r is None or r.status_code != 200:
-            return ("", f"URL fetch failed")
+            return ("", "URL fetch failed")
         import re
         text = re.sub(r"<[^>]+>", " ", r.text)
         text = re.sub(r"\s+", " ", text).strip()

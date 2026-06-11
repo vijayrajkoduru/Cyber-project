@@ -1,8 +1,9 @@
 """YouTube Channel v2 — VL-FORGE."""
-import asyncio, requests, os
+import requests
+import os
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 async def gather(ctx):
     org=ctx.host.split(".")[0]

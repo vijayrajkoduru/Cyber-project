@@ -105,7 +105,7 @@ def scan_http2_request_smuggling(req: ScanRequest, payload=Depends(verify_scan_q
         ratio = smug_elapsed / elapsed
         if ratio > 5 and smug_elapsed > 2000:
             findings.append(wrap_finding(
-                f"POSSIBLE HTTP/2 smuggling — TE+CL request 5x slower than baseline",
+                "POSSIBLE HTTP/2 smuggling — TE+CL request 5x slower than baseline",
                 "MEDIUM", cvss="5.3", cwe="CWE-444", owasp="A04:2021",
                 remediation="The slow response on TE+CL request suggests the front-"
                             "end proxy parses headers differently from the back-end. "

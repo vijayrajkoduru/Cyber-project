@@ -88,7 +88,7 @@ def scan_oauth_client_id_confusion(req: ScanRequest, payload=Depends(verify_scan
     findings = []
     if reflection_xss:
         findings.append(wrap_finding(
-            f"client_id REFLECTED unescaped → XSS on OAuth /authorize",
+            "client_id REFLECTED unescaped → XSS on OAuth /authorize",
             "HIGH", cvss="7.5", cwe="CWE-79", owasp="A03:2021",
             remediation="HTML-escape client_id in any error message. Better: "
                         "reject non-alphanumeric client_id format before rendering. "

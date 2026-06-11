@@ -1,5 +1,4 @@
 """waf_cdn_detect — VL-FORGE Recon §5 Web App Recon (real, zero-FP)."""
-import asyncio, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import ScanContext, run_scanner

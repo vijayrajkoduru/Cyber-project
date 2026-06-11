@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
-from tools.webapp._webapp_common import vuln_response, precheck_target
+from tools.webapp._webapp_common import vuln_response
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 router = APIRouter()
@@ -29,7 +29,7 @@ def scan_cors(req: ScanRequest, payload=Depends(verify_scan_quota)):
             sev = "CRITICAL" if ac == "true" else "HIGH"
             cvss = "9.1" if ac == "true" else "7.5"
             findings.append(wrap_finding(
-                f"CORS reflects attacker origin - cross-origin data theft "
+                "CORS reflects attacker origin - cross-origin data theft "
                 + ("WITH credentials possible" if ac == "true" else "possible"),
                 sev, cvss=cvss, cwe="CWE-942", owasp="A05:2021",
                 remediation="Use a strict allow-list of origins, not reflection.",

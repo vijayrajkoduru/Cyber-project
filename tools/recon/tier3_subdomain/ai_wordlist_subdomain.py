@@ -4,7 +4,7 @@ from pathlib import Path
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 _PAYLOAD=Path(__file__).resolve().parent.parent.parent/"_payloads"/"recon"/"ai_subs.txt"
 _FB=["api","admin","app","portal","staging","dev","beta","internal","corp","vpn","mail","cdn","graphql","gql","auth","sso","webhook","grafana","jenkins","kibana"]

@@ -97,7 +97,7 @@ def scan_server_timing_leak(req: ScanRequest, payload=Depends(verify_scan_quota)
 
     if not findings:
         findings.append(wrap_finding(
-            f"No information-disclosure headers detected",
+            "No information-disclosure headers detected",
             "POSITIVE", cwe="CWE-200",
             remediation="Maintain. Keep stripping headers at the edge.",
             evidence_marker=f"checked {len(LEAKY_HEADERS) + 1} known-leaky header names"))

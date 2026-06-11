@@ -5,9 +5,7 @@ for every path. If first probed login_url is just the SPA shell, the
 rate-limit + token-strength tests below fire against a non-existent endpoint.
 Canary check skips paths whose body matches the SPA shell.
 """
-import re
 import time
-import secrets
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response

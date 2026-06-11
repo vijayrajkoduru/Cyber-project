@@ -6,7 +6,7 @@ state-tied URLs. These are commonly used for SSO logout flows + auth
 callback, and weak validation lets attacker redirect victim to phishing
 clone post-logout.
 """
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)

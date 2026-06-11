@@ -3,7 +3,7 @@ import asyncio, socket, re
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 _PROBES={22:b"",80:b"GET / HTTP/1.0\r\n\r\n",443:b"",21:b"",25:b"",110:b"",
     143:b"",6379:b"INFO\r\n",11211:b"version\r\n",27017:b""}

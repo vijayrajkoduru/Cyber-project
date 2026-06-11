@@ -1,6 +1,5 @@
 """Webapp: OAuth redirect_uri / state tampering detection."""
 import asyncio
-import re
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response

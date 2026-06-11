@@ -116,7 +116,7 @@ def scan_cookie_security_advanced_audit(req: ScanRequest, payload=Depends(verify
             f"All {len(cookies_seen)} cookie(s) follow modern security attributes",
             "POSITIVE", cwe="CWE-1004",
             remediation="Maintain. Continue auditing newly-set cookies.",
-            evidence_marker=f"checked: " + ", ".join(c["_name"] for c in cookies_seen[:8])))
+            evidence_marker="checked: " + ", ".join(c["_name"] for c in cookies_seen[:8])))
 
     return standard_response(
         tool="cookie_security_advanced_audit", target=req.target, findings=findings,

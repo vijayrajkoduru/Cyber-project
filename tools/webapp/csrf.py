@@ -11,7 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
-                            safe_get, wrap_finding, standard_response)
+                            safe_get, wrap_finding)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.turbo import vl_turbo

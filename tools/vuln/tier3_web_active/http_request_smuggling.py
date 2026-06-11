@@ -8,7 +8,7 @@ are static facts; chunked-GET status can flap on retry which is the FP risk.
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
-from tools.vuln._vuln_common import probe_url_async, http_get_h_async, http_get_async
+from tools.vuln._vuln_common import probe_url_async, http_get_h_async
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()

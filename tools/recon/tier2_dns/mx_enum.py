@@ -3,7 +3,7 @@ import asyncio
 import dns.asyncresolver, dns.reversename
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 _PROVIDERS={"google.com":"Google Workspace","googlemail.com":"Google Workspace",
     "outlook.com":"Microsoft 365","mimecast":"Mimecast","proofpoint":"Proofpoint",
@@ -42,7 +42,7 @@ async def gather(ctx):
 def _r_provider(s):
     if not s.get("provider"): return None
     return {"name":f"Mail provider: {s['provider']}","severity":"INFO","cwe":"T1592",
-        "evidence":f"MX fingerprint match"}
+        "evidence":"MX fingerprint match"}
 def _r_single_mx(s):
     """VL-VERIFY (zero-FP): cloud mail providers (Google Workspace,
     Microsoft 365, etc.) expose a single MX hostname that internally

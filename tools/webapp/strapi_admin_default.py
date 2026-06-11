@@ -47,7 +47,7 @@ def scan_strapi_admin_default(req: ScanRequest, payload=Depends(verify_scan_quot
                         "(2) Move /admin to non-default path (custom proxy rewrite). "
                         "(3) IP-allowlist /admin at edge. (4) Default admin creds "
                         "during install MUST be rotated. (5) Audit role permissions.",
-            evidence_marker=f"Strapi signature detected" + (
+            evidence_marker="Strapi signature detected" + (
                 f", forgot-pwd → {rf.status_code if rf else '?'}" if cve_indicator else "")))
     else:
         findings.append(wrap_finding(

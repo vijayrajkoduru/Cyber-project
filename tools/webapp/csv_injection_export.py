@@ -7,7 +7,6 @@ arbitrary commands (e.g. =cmd|'/c calc'!A1 → calc.exe).
 POST data containing formula payloads to endpoints, then GET the CSV
 export and check for un-escaped formulas.
 """
-import json
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,

@@ -2,7 +2,7 @@
 import asyncio, requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
-from tools._vl_core import ScanContext, run_scanner
+from tools._vl_core import run_scanner
 router=APIRouter()
 def _g(u,origin):
     try:
@@ -44,7 +44,7 @@ def _r_null(s):
 def _r_wildcard(s):
     if not s.get("wildcard"): return None
     sev="HIGH" if s.get("credentials_allowed") else "INFO"
-    return {"name":f"CORS uses wildcard '*'","severity":sev,
+    return {"name":"CORS uses wildcard '*'","severity":sev,
         "evidence":f"Credentials with wildcard: {s.get('credentials_allowed')}",
         "remediation":"If credentials needed, list specific origins."}
 def _r_safe(s):

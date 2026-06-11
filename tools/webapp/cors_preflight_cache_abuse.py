@@ -60,7 +60,7 @@ def scan_cors_preflight_cache_abuse(req: ScanRequest, payload=Depends(verify_sca
                     "No CORS allowed origin — preflight rejected",
                     "POSITIVE", cwe="CWE-942",
                     remediation="Maintain.",
-                    evidence_marker=f"OPTIONS / → no Access-Control-Allow-Origin")],
+                    evidence_marker="OPTIONS / → no Access-Control-Allow-Origin")],
                 tests_performed=1, vulnerable=False,
                 tests_summary="CORS rejected")
     else:

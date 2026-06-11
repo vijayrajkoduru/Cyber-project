@@ -7,7 +7,6 @@ disabled, this STILL leaks schema info field-by-field.
 Probe: send query with intentionally-wrong field name, look for
 "Did you mean" or similar suggestion patterns in error response.
 """
-import json
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -82,12 +81,12 @@ def scan_graphql_field_suggestions_leak(req: ScanRequest, payload=Depends(verify
                         "RecommendedFieldNamesProvider in prod. Without this, "
                         "even with introspection off, attacker maps the schema "
                         "field-by-field via wrong-field error tells.",
-            evidence_marker=f"misspelled probe → response contains 'Did you mean'"))
+            evidence_marker="misspelled probe → response contains 'Did you mean'"))
     else:
         findings.append(wrap_finding(
             "GraphQL doesn't expose field suggestions", "POSITIVE", cwe="CWE-209",
             remediation="Maintain.",
-            evidence_marker=f"misspelled query → no 'did you mean' in response"))
+            evidence_marker="misspelled query → no 'did you mean' in response"))
     return standard_response(
         tool="graphql_field_suggestions_leak", target=req.target, findings=findings,
         tests_performed=2, vulnerable=bool(findings) and findings[0].get("severity") == "MEDIUM",

@@ -115,7 +115,7 @@ def scan_graphql_persisted_query_bypass(req: ScanRequest, payload=Depends(verify
             "APQ properly enforced — fake hash rejects raw query",
             "POSITIVE", cwe="CWE-770",
             remediation="Maintain. APQ defending against arbitrary query injection.",
-            evidence_marker=f"fake-hash + raw-query → properly rejected"))
+            evidence_marker="fake-hash + raw-query → properly rejected"))
 
     return standard_response(
         tool="graphql_persisted_query_bypass", target=req.target, findings=findings,

@@ -77,7 +77,7 @@ def _do_scan(req: ScanRequest) -> dict:
                 evidence_marker=f"{ip} matched in Feodo Tracker active C2 list "
                                   f"(blocklist size: {len(ips)} IPs) (CONFIRMED)")],
             tests_performed=1, vulnerable=True,
-            tests_summary=f"IP listed in Feodo Tracker active C2",
+            tests_summary="IP listed in Feodo Tracker active C2",
             raw_data={"ip": ip, "blocklist_size": len(ips), "match": True})
 
     return standard_response(

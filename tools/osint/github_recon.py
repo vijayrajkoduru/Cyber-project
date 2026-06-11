@@ -8,7 +8,6 @@ Uses unauth GitHub Search API (10 req/min). Three queries:
 VL-FOUNDRY Layer 6: 7-check DoD compliant.
 """
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)

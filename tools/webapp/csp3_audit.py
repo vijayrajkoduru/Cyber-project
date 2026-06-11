@@ -4,7 +4,6 @@ Existing security_headers covers CSP presence. This one audits the CSP
 QUALITY: weak directives, unsafe-inline without nonce, missing nonce on
 script-src, mixing of CSP1/2/3 directives, http: schemes allowed.
 """
-from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -95,7 +94,7 @@ def scan_csp3_audit(req: ScanRequest, payload=Depends(verify_scan_quota)):
             remediation="Remove if possible. If your app uses Vue runtime-compile / "
                         "Angular JIT / React lazy() with template-strings, switch to "
                         "AOT / precompiled mode to drop unsafe-eval.",
-            evidence_marker=f"script-src has 'unsafe-eval'"))
+            evidence_marker="script-src has 'unsafe-eval'"))
 
     # 2. http: scheme audit
     for directive, vals in parsed.items():
