@@ -5,6 +5,7 @@ and re-decodes the JWT — if the same issue (alg=none / no exp / jku set / etc.
 appears in the refetched token, finding is CONFIRMED; if the token rotated and
 the issue is gone, finding is SUSPECTED.
 """
+import asyncio
 import re, time
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
@@ -43,20 +44,35 @@ def _audit_token(token, path):
     return issues
 
 
+async def _scan_one_path(base_url, path):
+    r = await http_get_async(f"{base_url}{path}", timeout=8, read=40000)
+    if not r:
+        return (path, [])
+    haystack = " ".join([
+        r.get("body", ""),
+        (r.get("headers", {}) or {}).get("authorization", "") or "",
+        (r.get("headers", {}) or {}).get("set-cookie", "") or "",
+    ])
+    found = []
+    for m in JWT_RE.finditer(haystack):
+        found.append(m.group(0))
+    return (path, found)
+
+
 async def _scan_paths(base_url, paths):
+    # VL-TURBO deep: scan all paths concurrently.
+    # Was 3 sequential GETs at 8s = ~24s. Now ~8s.
+    results = await asyncio.gather(
+        *[_scan_one_path(base_url, p) for p in paths],
+        return_exceptions=True)
     issues, tokens = [], set()
-    for path in paths:
-        r = await http_get_async(f"{base_url}{path}", timeout=8, read=40000)
-        if not r:
+    for res in results:
+        if isinstance(res, BaseException):
             continue
-        haystack = " ".join([
-            r.get("body", ""),
-            (r.get("headers", {}) or {}).get("authorization", "") or "",
-            (r.get("headers", {}) or {}).get("set-cookie", "") or "",
-        ])
-        for m in JWT_RE.finditer(haystack):
-            token = m.group(0)
-            if token in tokens: continue
+        path, found_tokens = res
+        for token in found_tokens:
+            if token in tokens:
+                continue
             tokens.add(token)
             issues.extend(_audit_token(token, path))
     return issues, len(tokens)

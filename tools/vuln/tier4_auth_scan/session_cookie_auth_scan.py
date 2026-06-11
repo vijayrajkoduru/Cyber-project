@@ -5,6 +5,7 @@ that produced the cookie hygiene issue. If the same Set-Cookie still
 lacks the same attribute, CONFIRMED. Catches cookies that rotate per
 request and only sometimes miss flags.
 """
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
@@ -52,14 +53,27 @@ def _audit_cookies(url, r):
     return cookies_seen, issues
 
 
+async def _scan_one(base_url, path):
+    url = f"{base_url}{path}"
+    r = await http_get_async(url, timeout=6)
+    if not r:
+        return (url, [], [])
+    cookies, issues = _audit_cookies(url, r)
+    return (url, cookies, issues)
+
+
 async def _scan(base_url, paths):
+    # VL-TURBO deep: fetch all paths concurrently.
+    # Was 3 sequential GETs at 6s = ~18s. Now ~6s.
+    results = await asyncio.gather(
+        *[_scan_one(base_url, p) for p in paths],
+        return_exceptions=True)
     all_cookies, all_issues = [], []
     seen_names = set()
-    for path in paths:
-        url = f"{base_url}{path}"
-        r = await http_get_async(url, timeout=6)
-        if not r: continue
-        cookies, issues = _audit_cookies(url, r)
+    for res in results:
+        if isinstance(res, BaseException):
+            continue
+        _url, cookies, issues = res
         for c in cookies:
             if c["name"] not in seen_names:
                 seen_names.add(c["name"])

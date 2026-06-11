@@ -14,6 +14,7 @@ The 6 useful stages (chain_handoff omitted per no-chained-exploitation rule):
 Strategy still zero-exploitation: probe with safe single-quote payload in common
 param names, match SQL error fingerprints in response body. Evidence-only.
 """
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
@@ -29,20 +30,31 @@ PAYLOAD            = "1'\""                                   # safe single-quot
 PAYLOAD_VERIFY     = "1)'"                                    # alt shape for verify step
 
 
+async def _probe_one(base_url, p, payload):
+    url = f"{base_url}?{p}={payload}"
+    r = await http_get_async(url, timeout=8)
+    if not r:
+        return None
+    body_lower = r.get("body", "").lower()
+    for pattern in SQL_ERROR_PATTERNS:
+        if re.search(pattern, body_lower):
+            return {"param": p, "pattern": pattern,
+                     "status": r.get("status"), "payload": payload}
+    return None
+
+
 async def _fire(base_url, params, payload):
-    """Fire `payload` against each param, return list of error-matched hits."""
+    """Fire `payload` against each param concurrently."""
+    # VL-TURBO deep: parallel probe across all params.
+    # Was N sequential GETs at 8s each. Now ~8s for all.
+    results = await asyncio.gather(
+        *[_probe_one(base_url, p, payload) for p in params],
+        return_exceptions=True)
     hits = []
-    for p in params:
-        url = f"{base_url}?{p}={payload}"
-        r = await http_get_async(url, timeout=8)
-        if not r:
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
             continue
-        body_lower = r.get("body", "").lower()
-        for pattern in SQL_ERROR_PATTERNS:
-            if re.search(pattern, body_lower):
-                hits.append({"param": p, "pattern": pattern,
-                             "status": r.get("status"), "payload": payload})
-                break
+        hits.append(res)
     return hits
 
 

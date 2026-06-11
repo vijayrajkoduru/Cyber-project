@@ -2,6 +2,7 @@
 import hashlib
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -57,53 +58,62 @@ def scan_idor(req: ScanRequest, _=Depends(verify_scan_quota)):
             self.auth_bearer = None
     no_auth = _NoAuthReq(req)
 
-    # VL-TURBO wall-clock cap: bail at 45s, report partial findings honestly.
+    # VL-TURBO deep: parallelize the per-pattern gauntlet across all patterns.
+    # Was 15 patterns * 7 sequential GETs * 10s = ~17min sequential (saved by
+    # 45s wall-clock bail). Now all 15 patterns fan out in pool(10);
+    # per-pattern still sequential (steps gate each other).
     _wallclock_start = time.time()
     _WALLCLOCK_BUDGET = 45.0
     _bailed = False
-    for pattern in patterns[:15]:
-        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
-            _bailed = True; break
-        # Step 1 — does unauth get 401/403 here? If not, it's a public endpoint.
+
+    def _probe_pattern(pattern):
         url1 = base + pattern.replace("{id}", "1")
-        tests += 1
+        local_tests = 1
         unauth_r = safe_get(url1, req=no_auth, allow_redirects=False, timeout=10)
         if unauth_r is None:
-            continue
+            return ("unreachable", pattern, local_tests, None, None, None)
         if unauth_r.status_code not in (401, 403):
-            suppressed.append({"pattern": pattern,
-                                "reason": "public_endpoint",
-                                "unauth_status": unauth_r.status_code})
-            continue
-
-        # Step 2 — with auth, baseline ID=1 should return 200
-        tests += 1
+            return ("public", pattern, local_tests, unauth_r.status_code, None, None)
+        local_tests += 1
         r1 = safe_get(url1, req=req, allow_redirects=False, timeout=10)
         if r1 is None or r1.status_code not in (200, 304):
-            continue
+            return ("auth_failed", pattern, local_tests, unauth_r.status_code, None, None)
         hashes_seen = {1: _hash(r1.text or "")}
-
-        # Step 3 — probe more IDs with auth
         for tid in (2, 3, 5, 10, 99):
-            tests += 1
+            local_tests += 1
             ru = base + pattern.replace("{id}", str(tid))
             r = safe_get(ru, req=req, allow_redirects=False, timeout=10)
             if r is None or r.status_code != 200:
                 continue
             hashes_seen[tid] = _hash(r.text or "")
-
         unique = set(hashes_seen.values())
         if len(unique) >= 3 and len(hashes_seen) >= 4:
-            findings.append(wrap_finding(
-                f"IDOR — {pattern} returns different records for different IDs (auth required, but no per-record authorization)",
-                "HIGH", cvss="7.5", cwe="CWE-639", owasp="A01:2021",
-                remediation=("Add server-side authorization on every record fetch: verify the "
-                           "requesting user owns the record (or has been granted access) before returning data."),
-                evidence_marker=f"{pattern}: unauth=HTTP{unauth_r.status_code} (gated), auth returned {len(unique)} distinct record hashes across IDs {sorted(hashes_seen.keys())}"))
-            confirmed.append({"pattern": pattern,
-                              "unauth_status": unauth_r.status_code,
-                              "distinct_responses": len(unique),
-                              "ids_tested": sorted(hashes_seen.keys())})
+            return ("hit", pattern, local_tests, unauth_r.status_code, hashes_seen, unique)
+        return ("clean", pattern, local_tests, unauth_r.status_code, hashes_seen, unique)
+
+    pattern_slice = patterns[:15]
+    try:
+        with ThreadPoolExecutor(max_workers=min(10, len(pattern_slice))) as pool:
+            for verdict, pattern, n, unauth_status, hashes_seen, unique in \
+                    pool.map(_probe_pattern, pattern_slice, timeout=_WALLCLOCK_BUDGET):
+                tests += n
+                if verdict == "public":
+                    suppressed.append({"pattern": pattern,
+                                        "reason": "public_endpoint",
+                                        "unauth_status": unauth_status})
+                elif verdict == "hit":
+                    findings.append(wrap_finding(
+                        f"IDOR — {pattern} returns different records for different IDs (auth required, but no per-record authorization)",
+                        "HIGH", cvss="7.5", cwe="CWE-639", owasp="A01:2021",
+                        remediation=("Add server-side authorization on every record fetch: verify the "
+                                   "requesting user owns the record (or has been granted access) before returning data."),
+                        evidence_marker=f"{pattern}: unauth=HTTP{unauth_status} (gated), auth returned {len(unique)} distinct record hashes across IDs {sorted(hashes_seen.keys())}"))
+                    confirmed.append({"pattern": pattern,
+                                      "unauth_status": unauth_status,
+                                      "distinct_responses": len(unique),
+                                      "ids_tested": sorted(hashes_seen.keys())})
+    except TimeoutError:
+        _bailed = True
 
     summary = (f"IDOR: {tests} probes across {len(patterns[:15])} ID patterns "
                f"(auth=on) in {time.time() - _wallclock_start:.1f}s; "
