@@ -1,5 +1,12 @@
-"""NoSQL Injection — MongoDB-style operator injection on auth + review endpoints."""
+"""NoSQL Injection — MongoDB-style operator injection on auth + review endpoints.
+
+VL-TURBO deep: probes are parallelized via ThreadPoolExecutor. Login fan-out
+(6 paths × N payloads) + review fan-out (5 paths × M payloads) previously
+ran sequentially with 10s timeouts each = up to 280s worst case (killed at
+the 60s wall-clock cap, leaving most paths unprobed). Now ~15s total.
+"""
 import json as _json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_post, safe_request, wrap_finding, standard_response)
@@ -81,65 +88,100 @@ def scan_nosql(req: ScanRequest, _=Depends(verify_scan_quota)):
         elif any(k in low for k in ("review", "search", "query", "find")):
             review_candidates.add(path)
 
-    findings, tests, confirmed = [], 0, []
+    findings, confirmed = [], []
+    login_paths = list(login_candidates)[:6]
+    review_paths = list(review_candidates)[:5]
 
-    # ── Login bypass — operator-as-value POST JSON
-    for path in list(login_candidates)[:6]:
+    # ── Login bypass — parallel fan-out
+    login_jobs = [(p, pl) for p in login_paths for pl in _LOGIN_PAYLOADS]
+
+    def _probe_login(job):
+        path, payload = job
         url = base + (path if path.startswith("/") else "/" + path)
-        for payload in _LOGIN_PAYLOADS:
-            tests += 1
-            body = {"email": payload, "password": payload}
-            r = safe_post(url, json=body, req=req,
-                           headers={"Content-Type": "application/json"},
-                           allow_redirects=False, timeout=10)
-            if r is None or r.status_code not in (200, 201):
+        body = {"email": payload, "password": payload}
+        r = safe_post(url, json=body, req=req,
+                       headers={"Content-Type": "application/json"},
+                       allow_redirects=False, timeout=10)
+        if r is None or r.status_code not in (200, 201):
+            return None
+        if _is_auth_success(r.text or ""):
+            return (path, payload, r.status_code)
+        return None
+
+    seen_login_paths = set()
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        for hit in pool.map(_probe_login, login_jobs, timeout=45):
+            if not hit:
                 continue
-            if _is_auth_success(r.text or ""):
-                findings.append(wrap_finding(
-                    f"NoSQL Injection — auth bypass via operator on {path}",
-                    "CRITICAL", cvss="9.8", cwe="CWE-943", owasp="A03:2021",
-                    remediation=("Cast all auth inputs to string before passing to "
-                               "the database driver. Reject non-string types on "
-                               "email/password fields."),
-                    evidence_marker=f"POST {path} JSON {{'email': {payload}, 'password': {payload}}} returned auth-success markers"))
-                confirmed.append({"path": path, "kind": "login_bypass",
-                                  "payload": str(payload), "status": r.status_code})
-                break
+            path, payload, status = hit
+            if path in seen_login_paths:
+                continue  # only first hit per path
+            seen_login_paths.add(path)
+            findings.append(wrap_finding(
+                f"NoSQL Injection — auth bypass via operator on {path}",
+                "CRITICAL", cvss="9.8", cwe="CWE-943", owasp="A03:2021",
+                remediation=("Cast all auth inputs to string before passing to "
+                           "the database driver. Reject non-string types on "
+                           "email/password fields."),
+                evidence_marker=(f"POST {path} JSON {{'email': {payload}, "
+                                  f"'password': {payload}}} returned auth-success markers")))
+            confirmed.append({"path": path, "kind": "login_bypass",
+                              "payload": str(payload), "status": status})
 
-    # ── Review/search exfiltration — operator returns "more" data
-    for path in list(review_candidates)[:5]:
+    # ── Review/search exfiltration — parallel baseline + probes per path
+    def _probe_review_baseline(path):
         url = base + (path if path.startswith("/") else "/" + path)
-        # Baseline — empty / benign body
         baseline = safe_post(url, json={"query": "vulnuslab-canary-zzz"}, req=req,
                               headers={"Content-Type": "application/json"},
                               allow_redirects=False, timeout=10)
-        baseline_len = len(baseline.content) if baseline is not None else 0
-        for payload in _REVIEW_PAYLOADS:
-            tests += 1
-            body = {"query": payload, "id": payload, "search": payload}
-            r = safe_post(url, json=body, req=req,
-                           headers={"Content-Type": "application/json"},
-                           allow_redirects=False, timeout=10)
-            if r is None or r.status_code not in (200, 201):
-                continue
-            # If operator returned visibly more rows than baseline, NoSQL likely
-            if len(r.content) > max(baseline_len * 2, 500):
-                findings.append(wrap_finding(
-                    f"NoSQL Injection — operator dumps records on {path}",
-                    "HIGH", cvss="7.5", cwe="CWE-943", owasp="A03:2021",
-                    remediation=("Sanitise + cast types on every search/filter input. "
-                               "Reject non-string operators in user-controlled fields."),
-                    evidence_marker=f"POST {path} with operator {payload} returned {len(r.content)} bytes vs {baseline_len} byte baseline"))
-                confirmed.append({"path": path, "kind": "data_exfil",
-                                  "payload": str(payload),
-                                  "baseline_len": baseline_len,
-                                  "probe_len": len(r.content)})
-                break
+        return path, len(baseline.content) if baseline is not None else 0
 
+    # First pass: get baselines in parallel
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        baselines = dict(pool.map(_probe_review_baseline, review_paths, timeout=20))
+
+    review_jobs = [(p, pl) for p in review_paths for pl in _REVIEW_PAYLOADS]
+
+    def _probe_review(job):
+        path, payload = job
+        url = base + (path if path.startswith("/") else "/" + path)
+        body = {"query": payload, "id": payload, "search": payload}
+        r = safe_post(url, json=body, req=req,
+                       headers={"Content-Type": "application/json"},
+                       allow_redirects=False, timeout=10)
+        if r is None or r.status_code not in (200, 201):
+            return None
+        baseline_len = baselines.get(path, 0)
+        if len(r.content) > max(baseline_len * 2, 500):
+            return (path, payload, baseline_len, len(r.content))
+        return None
+
+    seen_review_paths = set()
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        for hit in pool.map(_probe_review, review_jobs, timeout=45):
+            if not hit:
+                continue
+            path, payload, baseline_len, probe_len = hit
+            if path in seen_review_paths:
+                continue
+            seen_review_paths.add(path)
+            findings.append(wrap_finding(
+                f"NoSQL Injection — operator dumps records on {path}",
+                "HIGH", cvss="7.5", cwe="CWE-943", owasp="A03:2021",
+                remediation=("Sanitise + cast types on every search/filter input. "
+                           "Reject non-string operators in user-controlled fields."),
+                evidence_marker=(f"POST {path} with operator {payload} returned "
+                                  f"{probe_len} bytes vs {baseline_len} byte baseline")))
+            confirmed.append({"path": path, "kind": "data_exfil",
+                              "payload": str(payload),
+                              "baseline_len": baseline_len,
+                              "probe_len": probe_len})
+
+    tests = len(login_jobs) + len(review_paths) + len(review_jobs)
     return standard_response(tool="nosql", target=req.target, findings=findings,
         tests_performed=tests,
-        tests_summary=(f"NoSQL: {tests} probes across {len(login_candidates)} login + "
-                       f"{len(review_candidates)} review/search endpoints"),
+        tests_summary=(f"NoSQL: {tests} parallel probes across "
+                       f"{len(login_paths)} login + {len(review_paths)} review/search endpoints"),
         raw_data={"nosql": {"confirmed": confirmed}})
 
 

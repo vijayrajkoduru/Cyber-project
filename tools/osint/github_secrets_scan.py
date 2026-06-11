@@ -10,6 +10,7 @@ high-confidence (AKIA / sk_live_ / xoxb-) to avoid false positives.
 """
 import asyncio
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
@@ -86,36 +87,60 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=1, vulnerable=False,
             tests_summary="No public repos")
 
-    secret_hits = []  # (repo, sha, type, snippet)
-    scanned = 0
+    # VL-TURBO deep: parallel fan-out across (repo, commit) pairs.
+    # Was: 5 repos x 10 commits = 50 sequential fetches at 6s timeout =
+    # 300s worst case (killed at 35s WALL_CLOCK_S leaving most repos
+    # unscanned). Now: ~10s for all repos + commits in parallel.
 
-    for repo in repos[:5]:
+    # Phase 1: fetch commit lists for all 5 repos in parallel
+    def _fetch_commits(repo):
         full = repo.get("full_name")
-        if not full: continue
-        # last 10 commits
+        if not full:
+            return (None, [])
         c = safe_get(f"https://api.github.com/repos/{full}/commits?per_page=10",
                       req=req, timeout=6, headers=H)
-        if c is None or c.status_code != 200: continue
-        try: commits = c.json()
-        except Exception: continue
-        for cm in commits[:10]:
-            sha = cm.get("sha", "?")
-            cd = safe_get(f"https://api.github.com/repos/{full}/commits/{sha}",
-                            req=req, timeout=6, headers=H)
-            if cd is None or cd.status_code != 200: continue
-            try:
-                files = cd.json().get("files", [])
-            except Exception:
-                continue
+        if c is None or c.status_code != 200:
+            return (full, [])
+        try:
+            return (full, c.json())
+        except Exception:
+            return (full, [])
+
+    repo_commits = []
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for full, commits in pool.map(_fetch_commits, repos[:5], timeout=15):
+            if full and commits:
+                for cm in commits[:10]:
+                    sha = cm.get("sha", "?")
+                    repo_commits.append((full, sha))
+
+    # Phase 2: fetch all commit diffs in parallel (capped at 40)
+    commit_jobs = repo_commits[:40]
+
+    def _fetch_diff(job):
+        full, sha = job
+        cd = safe_get(f"https://api.github.com/repos/{full}/commits/{sha}",
+                        req=req, timeout=6, headers=H)
+        if cd is None or cd.status_code != 200:
+            return (full, sha, [])
+        try:
+            return (full, sha, cd.json().get("files", []))
+        except Exception:
+            return (full, sha, [])
+
+    secret_hits = []
+    scanned = 0
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        for full, sha, files in pool.map(_fetch_diff, commit_jobs, timeout=25):
             for f in files:
                 patch = f.get("patch", "") or ""
-                if not patch: continue
+                if not patch:
+                    continue
                 scanned += 1
                 hits = _scan_text(patch)
                 for tname, snippet in hits:
-                    secret_hits.append((full, sha[:8], tname, snippet, f.get("filename", "?")))
-            if scanned >= 40: break  # cap to ~40 file diffs scanned
-        if scanned >= 40: break
+                    secret_hits.append((full, sha[:8], tname, snippet,
+                                          f.get("filename", "?")))
 
     if not secret_hits:
         return standard_response(

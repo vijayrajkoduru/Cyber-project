@@ -9,6 +9,7 @@ Real probe. Zero false positives — only emits what Wayback archived.
 """
 import asyncio
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
@@ -68,13 +69,15 @@ def _do_scan(req: ScanRequest) -> dict:
     sample_idx = [0, len(snapshots) // 2, len(snapshots) - 1]
     sample_idx = sorted(set(sample_idx))
 
-    all_paths = set()
-    snapshot_paths = {}
-    for idx in sample_idx:
+    # VL-TURBO deep: fetch all sample snapshots in parallel.
+    # Was 3 sequential snapshot fetches at 8s each = 24s worst case.
+    # Now ~8s for all 3 in parallel.
+    def _fetch_snapshot(idx):
         ts = snapshots[idx][0]
         snap_url = f"https://web.archive.org/web/{ts}/{domain}/robots.txt"
         sr = safe_get(snap_url, req=req, timeout=8, headers=H)
-        if sr is None or sr.status_code != 200: continue
+        if sr is None or sr.status_code != 200:
+            return (ts, [])
         paths = []
         for line in (sr.text or "").splitlines()[:200]:
             line = line.strip()
@@ -83,8 +86,15 @@ def _do_scan(req: ScanRequest) -> dict:
                 p = m.group(1).strip().split("#")[0].strip()
                 if p and p != "/":
                     paths.append(p)
-                    all_paths.add(p)
-        snapshot_paths[ts[:8]] = paths[:30]
+        return (ts, paths)
+
+    all_paths = set()
+    snapshot_paths = {}
+    with ThreadPoolExecutor(max_workers=len(sample_idx)) as pool:
+        for ts, paths in pool.map(_fetch_snapshot, sample_idx, timeout=15):
+            for p in paths:
+                all_paths.add(p)
+            snapshot_paths[ts[:8]] = paths[:30]
 
     if not all_paths:
         return standard_response(

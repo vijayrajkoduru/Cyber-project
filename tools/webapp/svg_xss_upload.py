@@ -8,6 +8,7 @@ Test: upload SVG with embedded <script> + then GET the uploaded URL
 (if discoverable from response) and check for execution markers.
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -67,40 +68,60 @@ def _extract_url(body, base):
 @vl_verify()
 def scan_svg_xss_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    accepted = []
-    served_inline = []
-    tested = 0
+    # VL-TURBO deep: parallel probe across 7 upload paths.
+    # Each path requires GET + multipart POST + (optional) GET of served URL.
+    # Sequential worst-case: 7 paths * 24s per path = ~170s killed at
+    # VL-TURBO cap. Parallel: ~24s for all paths simultaneously.
 
-    for path in UPLOAD_PATHS:
+    def _probe_path(path):
         url = base + path
         r0 = safe_request("GET", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=6, allow_redirects=False)
-        if r0 is None or r0.status_code == 404: continue
-        tested += 1
+        if r0 is None or r0.status_code == 404:
+            return ("unreachable", path, None, None)
 
         # Upload evil SVG
         r = _multipart_upload(url, "vulnuslab.svg", EVIL_SVG, "image/svg+xml", req)
-        if r is None: continue
-        if r.status_code in (200, 201):
-            body = (r.text or "")[:5000]
-            accepted.append({"path": path, "status": r.status_code})
-            # Try to find URL where the file is served
-            served_url = _extract_url(body, base)
-            if served_url:
-                rg = safe_request("GET", served_url,
-                    headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
-                    req=req, timeout=8, allow_redirects=False)
-                if rg is not None and rg.status_code == 200:
-                    ct = (rg.headers.get("content-type") or "").lower()
-                    body_g = (rg.text or "")[:5000]
-                    # XSS-vulnerable if Content-Type is svg+xml and body contains our script
-                    if "svg" in ct and "VULNUSLAB_SVG_XSS" in body_g:
-                        served_inline.append({
-                            "upload_path": path,
-                            "served_url": served_url,
-                            "content_type": ct,
-                        })
+        if r is None:
+            return ("unreachable", path, None, None)
+        if r.status_code not in (200, 201):
+            return ("rejected", path, r.status_code, None)
+
+        body = (r.text or "")[:5000]
+        served_url = _extract_url(body, base)
+        if not served_url:
+            return ("accepted_no_url", path, r.status_code, None)
+
+        rg = safe_request("GET", served_url,
+            headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
+            req=req, timeout=8, allow_redirects=False)
+        if rg is None or rg.status_code != 200:
+            return ("accepted_no_fetch", path, r.status_code, served_url)
+        ct = (rg.headers.get("content-type") or "").lower()
+        body_g = (rg.text or "")[:5000]
+        if "svg" in ct and "VULNUSLAB_SVG_XSS" in body_g:
+            return ("xss_confirmed", path, r.status_code,
+                    {"served_url": served_url, "content_type": ct})
+        return ("accepted_safe", path, r.status_code, served_url)
+
+    accepted = []
+    served_inline = []
+    tested = 0
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        for verdict, path, status, extra in pool.map(_probe_path, UPLOAD_PATHS, timeout=35):
+            if verdict == "unreachable":
+                continue
+            tested += 1
+            if verdict in ("accepted_no_url", "accepted_no_fetch",
+                            "accepted_safe", "xss_confirmed"):
+                accepted.append({"path": path, "status": status})
+            if verdict == "xss_confirmed":
+                served_inline.append({
+                    "upload_path": path,
+                    "served_url": extra["served_url"],
+                    "content_type": extra["content_type"],
+                })
 
     findings = []
     if served_inline:
