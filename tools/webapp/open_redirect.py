@@ -10,6 +10,7 @@ host. Earlier substring matching produced false positives on sites that
 preserved the malicious URL inside a same-origin redirect query string
 (e.g. 302 -> /login?next=/protected?goto=https://evil-attacker.example).
 """
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -135,44 +136,71 @@ def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota)):
     location_counts = {}
     MAX_PER_LOCATION = 1
 
-    # SPEED-V2 — wall-clock cap to prevent 240s orchestrator-timeout cascades.
+    # VL-TURBO deep: parallelize (key, payload) probes via thread pool.
+    # Was |candidates| * 24 sequential GETs * 10s = up to ~70min (capped at 45s).
+    # Now ~30s in pool(20) for full sweep. First-hit-per-key preserved by
+    # ordered iteration after parallel collection.
     import time as _time
     _wallclock_start = _time.time()
     _WALLCLOCK_BUDGET = 45.0
     _bailed = False
-    for key in candidates:
-        if _bailed: break
-        for entry in payload_set:
-            if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
-                _bailed = True; break
-            tests += 1
-            inj = entry["payload"]
-            cat = entry.get("category", "?")
-            new_params = {k: v[0] for k, v in params.items()}
-            new_params[key] = inj
-            test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
-            r = safe_get(test_url, req=req, allow_redirects=False, timeout=10)
-            if r is None or r.status_code not in (301, 302, 303, 307, 308): continue
-            location = r.headers.get("Location", "") or r.headers.get("location", "") or ""
-            if not _redirects_to_attacker(location, target_host):
-                continue
-            loc_key = location.split("?", 1)[0].split("#", 1)[0]
-            location_counts[loc_key] = location_counts.get(loc_key, 0) + 1
-            if location_counts[loc_key] > MAX_PER_LOCATION:
-                confirmed.append({"param": key, "payload": inj, "category": cat,
-                                   "location": location, "suppressed": "duplicate destination"})
-                break
-            confidence = "SUSPECTED" if canary_redirects else "CONFIRMED"
-            f = wrap_finding(
-                f"Open Redirect via {key!r} ({cat} bypass)",
-                "MEDIUM", cvss="6.1", cwe="CWE-601", owasp="A01:2021",
-                remediation="Validate redirect destinations against an internal allow-list.",
-                evidence_marker=f"{key}={inj} -> HTTP {r.status_code} Location: {location}")
-            f["confidence"] = confidence
-            findings.append(f)
+
+    candidates_list = list(candidates)
+    jobs = [(key, entry) for key in candidates_list for entry in payload_set]
+
+    def _probe(job):
+        key, entry = job
+        inj = entry["payload"]
+        new_params = {k: v[0] for k, v in params.items()}
+        new_params[key] = inj
+        test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
+        r = safe_get(test_url, req=req, allow_redirects=False, timeout=10)
+        if r is None or r.status_code not in (301, 302, 303, 307, 308):
+            return ("miss", key, entry, None, None)
+        location = r.headers.get("Location", "") or r.headers.get("location", "") or ""
+        if not _redirects_to_attacker(location, target_host):
+            return ("miss", key, entry, None, None)
+        return ("hit", key, entry, location, r.status_code)
+
+    raw_results = []
+    if jobs:
+        try:
+            with ThreadPoolExecutor(max_workers=min(20, len(jobs))) as pool:
+                for res in pool.map(_probe, jobs, timeout=_WALLCLOCK_BUDGET):
+                    raw_results.append(res)
+                    tests += 1
+        except TimeoutError:
+            _bailed = True
+
+    # First-hit-per-key in original (key, payload_set) order.
+    by_key = {}
+    for verdict, key, entry, location, status in raw_results:
+        if verdict != "hit":
+            continue
+        by_key.setdefault(key, (entry, location, status))
+
+    for key in candidates_list:
+        if key not in by_key:
+            continue
+        entry, location, status = by_key[key]
+        inj = entry["payload"]
+        cat = entry.get("category", "?")
+        loc_key = location.split("?", 1)[0].split("#", 1)[0]
+        location_counts[loc_key] = location_counts.get(loc_key, 0) + 1
+        if location_counts[loc_key] > MAX_PER_LOCATION:
             confirmed.append({"param": key, "payload": inj, "category": cat,
-                               "location": location, "confidence": confidence})
-            break
+                               "location": location, "suppressed": "duplicate destination"})
+            continue
+        confidence = "SUSPECTED" if canary_redirects else "CONFIRMED"
+        f = wrap_finding(
+            f"Open Redirect via {key!r} ({cat} bypass)",
+            "MEDIUM", cvss="6.1", cwe="CWE-601", owasp="A01:2021",
+            remediation="Validate redirect destinations against an internal allow-list.",
+            evidence_marker=f"{key}={inj} -> HTTP {status} Location: {location}")
+        f["confidence"] = confidence
+        findings.append(f)
+        confirmed.append({"param": key, "payload": inj, "category": cat,
+                           "location": location, "confidence": confidence})
 
     summary = (f"Open redirect: {tests} probes across {len(candidates)} candidate params "
                f"using {len(payload_set)}-entry payload set (merged: {len(OPEN_REDIRECT_PAYLOADS)} baked-in + {len(_AI_EXTRA_REDIR)} AI-curated, "

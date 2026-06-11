@@ -12,6 +12,7 @@ is dropped (the site is ignoring the param — typical SPA behaviour).
 import hashlib
 import re
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -108,57 +109,97 @@ def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     _WALLCLOCK_BUDGET = 45.0
     _bailed = False
 
-    baselines = {}
+    # VL-TURBO deep: parallelize baseline canaries + payload probes.
+    # Was: |params| sequential baselines + |params|*24 sequential probes
+    #      = up to ~18 + 432 probes * 8s = ~1hr (capped at 45s, leaving holes).
+    # Now: baseline pool(15) ~8s; payload pool(20) ~30s; full sweep fits in budget.
     canary_token = "vlcanary" + secrets.token_hex(4)
-    for key in candidates:
-        if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
-            _bailed = True; break
+    candidates_list = list(candidates)
+
+    def _baseline(key):
         new_params = {k: v[0] for k, v in existing.items()}
         new_params[key] = f"https://benign-{canary_token}.example/"
         canary_url = urlunparse(parsed._replace(query=urlencode(new_params)))
         cr = safe_get(canary_url, req=req, allow_redirects=False, timeout=8, retries=0)
-        baselines[key] = _resp_fingerprint(cr)
+        return (key, _resp_fingerprint(cr))
 
-    for key in candidates:
-        if _bailed: break
+    baselines = {}
+    try:
+        with ThreadPoolExecutor(max_workers=min(15, len(candidates_list) or 1)) as pool:
+            for key, fp in pool.map(_baseline, candidates_list,
+                                     timeout=_WALLCLOCK_BUDGET):
+                baselines[key] = fp
+    except TimeoutError:
+        _bailed = True
+
+    # Build (key, entry) job list preserving payload-set ordering.
+    jobs = []
+    if not _bailed:
+        for key in candidates_list:
+            for entry in payload_set:
+                jobs.append((key, entry))
+
+    def _probe(job):
+        key, entry = job
+        ssrf_url = entry["url"]
+        marker = entry["matcher"]
+        cloud = entry.get("name", entry.get("category", "internal"))
+        cat = entry.get("category", "internal")
+        new_params = {k: v[0] for k, v in existing.items()}
+        new_params[key] = ssrf_url
+        test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
+        extra = _extra_headers_for(ssrf_url)
+        r = safe_get(test_url, headers=extra, req=req, allow_redirects=False,
+                      timeout=8, retries=0)
+        if r is None or r.status_code != 200:
+            return ("miss", key, entry, None)
+        probe_fp = _resp_fingerprint(r)
         baseline_fp = baselines.get(key)
-        for entry in payload_set:
-            if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
-                _bailed = True; break
-            tests += 1
-            ssrf_url = entry["url"]
-            marker = entry["matcher"]
-            cloud = entry.get("name", entry.get("category", "internal"))
-            cat = entry.get("category", "internal")
+        if baseline_fp is not None and probe_fp == baseline_fp:
+            return ("spa", key, entry, None)
+        try:
+            if re.search(marker, (r.text or "")[:8000], re.IGNORECASE):
+                return ("hit", key, entry, marker)
+        except re.error:
+            pass
+        return ("miss", key, entry, None)
 
-            new_params = {k: v[0] for k, v in existing.items()}
-            new_params[key] = ssrf_url
-            test_url = urlunparse(parsed._replace(query=urlencode(new_params)))
-            extra = _extra_headers_for(ssrf_url)
-            r = safe_get(test_url, headers=extra, req=req, allow_redirects=False, timeout=8, retries=0)
-            if r is None or r.status_code != 200:
-                continue
-            probe_fp = _resp_fingerprint(r)
-            if baseline_fp is not None and probe_fp == baseline_fp:
-                suppressed.append({"param": key, "cloud": cloud,
-                                    "reason": "matches_spa_baseline"})
-                continue
-            try:
-                if re.search(marker, (r.text or "")[:8000], re.IGNORECASE):
-                    sev = str(entry.get("severity", "CRITICAL")).upper()
-                    cvss = str(entry.get("cvss", "9.1"))
-                    findings.append(wrap_finding(
-                        f"SSRF — param {key!r} reaches {cloud} ({cat})",
-                        sev, cvss=cvss, cwe="CWE-918", owasp="A10:2021",
-                        remediation=("Validate URLs against allow-list. Reject private IP ranges "
-                                     "(10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, ::1, fc00::/7). "
-                                     "Block file://, gopher://, dict://, ldap:// schemes."),
-                        evidence_marker=f"param={key} payload {ssrf_url!r} returned content matching {marker!r} ({cloud})"))
-                    confirmed.append({"param": key, "payload": ssrf_url,
-                                       "cloud": cloud, "category": cat})
-                    break
-            except re.error:
-                continue
+    raw_results = []
+    remaining_budget = max(5, _WALLCLOCK_BUDGET - (_time.time() - _wallclock_start))
+    if jobs and not _bailed:
+        try:
+            with ThreadPoolExecutor(max_workers=min(20, len(jobs))) as pool:
+                for res in pool.map(_probe, jobs, timeout=remaining_budget):
+                    raw_results.append(res)
+                    tests += 1
+        except TimeoutError:
+            _bailed = True
+
+    # Preserve original semantics: first-hit-per-key wins (in payload-set order).
+    seen_hit_keys = set()
+    for verdict, key, entry, marker in raw_results:
+        if verdict == "spa":
+            suppressed.append({"param": key,
+                                "cloud": entry.get("name", entry.get("category", "internal")),
+                                "reason": "matches_spa_baseline"})
+            continue
+        if verdict != "hit" or key in seen_hit_keys:
+            continue
+        seen_hit_keys.add(key)
+        ssrf_url = entry["url"]
+        cloud = entry.get("name", entry.get("category", "internal"))
+        cat = entry.get("category", "internal")
+        sev = str(entry.get("severity", "CRITICAL")).upper()
+        cvss = str(entry.get("cvss", "9.1"))
+        findings.append(wrap_finding(
+            f"SSRF — param {key!r} reaches {cloud} ({cat})",
+            sev, cvss=cvss, cwe="CWE-918", owasp="A10:2021",
+            remediation=("Validate URLs against allow-list. Reject private IP ranges "
+                         "(10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, ::1, fc00::/7). "
+                         "Block file://, gopher://, dict://, ldap:// schemes."),
+            evidence_marker=f"param={key} payload {ssrf_url!r} returned content matching {marker!r} ({cloud})"))
+        confirmed.append({"param": key, "payload": ssrf_url,
+                           "cloud": cloud, "category": cat})
 
     summary = (f"SSRF: {tests} probes across {len(candidates)} params using "
                f"{len(payload_set)}-entry payload set (merged: {len(SSRF_PAYLOADS)} baked-in + {len(_AI_EXTRA_SSRF)} AI-curated, "

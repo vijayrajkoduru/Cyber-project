@@ -10,6 +10,7 @@ import URL), attacker swaps scheme:
 
 Tests by injecting these schemes into common URL params.
 """
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -49,47 +50,59 @@ def _probe(url, params, req):
 @vl_verify()
 def scan_ssrf_url_schema_smuggle(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    # VL-TURBO deep: parallelize all (path, scheme) probes via thread pool.
+    # Was 9 paths * 7 schemes = 63 sequential GETs * 10s = ~630s.
+    # Now ~15s in pool(20). First-hit-per-path preserved by post-grouping.
+    SIGNAL_MAP = {
+        "/etc/passwd read":      ["root:x:", "root:!", "bin/bash"],
+        "Windows file read":     ["[fonts]", "[mci extensions]"],
+        "Redis via gopher":      ["redis_version:"],
+        "Memcached via dict":    ["STAT pid", "STAT version"],
+        "FTP internal scan":     ["220 ", "ftp", "220-Welcome"],
+        "data:URL XSS payload":  ["<script>alert(1)</script>"],
+        "jar protocol RCE (legacy Java)": ["jar://", "ClassNotFound"],
+    }
+    jobs = [(path, scheme, desc) for path in PROBE_PATHS
+                                  for scheme, desc in EVIL_SCHEMES]
+
+    def _probe_job(job):
+        path, scheme, desc = job
+        url = base + path
+        if path.endswith("="):
+            full_url = url + quote(scheme, safe="")
+            r = safe_request("GET", full_url,
+                headers={"User-Agent": "VulnusLab/1.0"},
+                req=req, timeout=10, allow_redirects=False)
+        else:
+            r = _probe(url, {"url": scheme}, req)
+        if r is None:
+            return None
+        body = (r.text or "")[:50000]
+        indicators = SIGNAL_MAP.get(desc, [])
+        for ind in indicators:
+            if ind.lower() in body.lower():
+                return ("hit", path, scheme, desc, ind, r.status_code)
+        return ("miss", path, None, None, None, None)
+
     hits = []
     tested = 0
+    raw_results = []
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(20, len(jobs))) as pool:
+            for res in pool.map(_probe_job, jobs, timeout=45):
+                if res is None:
+                    continue
+                raw_results.append(res)
+                tested += 1
 
-    for path in PROBE_PATHS:
-        # If path has trailing = (e.g. ?url=), append payload; otherwise add ?url=
-        url = base + path
-        for scheme, desc in EVIL_SCHEMES:
-            if path.endswith("="):
-                full_url = url + quote(scheme, safe="")
-                r = safe_request("GET", full_url,
-                    headers={"User-Agent": "VulnusLab/1.0"},
-                    req=req, timeout=10, allow_redirects=False)
-            else:
-                r = _probe(url, {"url": scheme}, req)
-            if r is None: continue
-            tested += 1
-            body = (r.text or "")[:50000]
-            # SSRF success signals:
-            # - /etc/passwd: response contains "root:" / "x:" / "bash"
-            # - Windows: "[fonts]" / "[mci extensions]"
-            # - Redis INFO: "redis_version:"
-            # - Memcached stats: "STAT pid"
-            # - data: XSS reflected as base64-decoded
-            signal_map = {
-                "/etc/passwd read":      ["root:x:", "root:!", "bin/bash"],
-                "Windows file read":     ["[fonts]", "[mci extensions]"],
-                "Redis via gopher":      ["redis_version:"],
-                "Memcached via dict":    ["STAT pid", "STAT version"],
-                "FTP internal scan":     ["220 ", "ftp", "220-Welcome"],
-                "data:URL XSS payload":  ["<script>alert(1)</script>"],
-                "jar protocol RCE (legacy Java)": ["jar://", "ClassNotFound"],
-            }
-            indicators = signal_map.get(desc, [])
-            for ind in indicators:
-                if ind.lower() in body.lower():
-                    hits.append({"path": path, "scheme": scheme[:60],
-                                   "desc": desc, "indicator": ind,
-                                   "status": r.status_code})
-                    break
-            if hits and hits[-1].get("path") == path:
-                break  # one finding per path
+    seen_paths = set()
+    for res in raw_results:
+        verdict, path, scheme, desc, ind, status = res
+        if verdict != "hit" or path in seen_paths:
+            continue
+        seen_paths.add(path)
+        hits.append({"path": path, "scheme": scheme[:60],
+                       "desc": desc, "indicator": ind, "status": status})
 
     findings = []
     if hits:

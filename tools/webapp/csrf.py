@@ -8,6 +8,7 @@ whose response is byte-identical to a bogus-path probe.
 """
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -50,13 +51,25 @@ def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
             if hasattr(c, "_rest"):
                 for k, v in c._rest.items():
                     if k.lower() == "samesite": samesite = v.lower(); break
-    for path in _PAGES:
-        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
-            _bailed = True; break
+    # VL-TURBO deep: parallelize the 8-page fetch across pool(8).
+    # Was 8 sequential GETs * 8s = ~64s. Now ~8s in parallel.
+    def _fetch_page(path):
+        r = safe_get(base + path, req=req, allow_redirects=True,
+                      timeout=8, retries=0)
+        return (path, r)
+
+    try:
+        with ThreadPoolExecutor(max_workers=min(8, len(_PAGES))) as pool:
+            page_results = list(pool.map(_fetch_page, _PAGES,
+                                          timeout=_WALLCLOCK_BUDGET))
+    except TimeoutError:
+        _bailed = True
+        page_results = []
+
+    for path, r in page_results:
         tests += 1
-        r = safe_get(base + path, req=req, allow_redirects=True, timeout=8, retries=0)
-        if r is None or r.status_code != 200: continue
-        # SPA catch-all skip: body identical to canary -> not a real page
+        if r is None or r.status_code != 200:
+            continue
         if spa["is_spa"] and is_same_as_canary(r.text or "", spa["canary_body"]):
             spa_suppressed.append(path)
             continue
