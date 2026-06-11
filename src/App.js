@@ -318,8 +318,21 @@ async function api(path, method, body, token) {
   clearTimeout(t); _activeAborts.delete(ctrl);
   if (isScan) _scanRelease();
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || res.statusText);
+    // Try JSON first, fall back to text, fall back to statusText.
+    // Always include the status code so a 401/403/404 with an empty body
+    // doesn't surface as an empty "Error:" string.
+    let detail = "";
+    try {
+      const j = await res.clone().json();
+      detail = j.detail || j.message || j.error || "";
+    } catch (_) {
+      try { detail = (await res.text()).slice(0, 300); } catch (_) { detail = ""; }
+    }
+    if (!detail || !String(detail).trim()) detail = res.statusText || "(no detail)";
+    const err = new Error(`HTTP ${res.status} on ${path}: ${detail}`);
+    err.status = res.status;
+    err.path = path;
+    throw err;
   }
   return res.json();
 }
@@ -22215,13 +22228,28 @@ function AdminPanel({ token }) {
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState("");
   const [msg, setMsg]           = useState("");
+  const [msgIsError, setMsgIsError] = useState(false);
   const [extDays, setExtDays]   = useState(30);
   const [selPlan, setSelPlan]   = useState("pro");
 
+  const _errStr = (e) => {
+    const m = (e && e.message) ? String(e.message) : "";
+    if (m && m.trim()) return m;
+    if (e && e.status) return `HTTP ${e.status}`;
+    return "Request failed (no error detail returned). Likely cause: not logged in as admin, or backend not reachable. Open browser DevTools -> Network tab and click Refresh to see the actual response.";
+  };
+
   const load = async () => {
     setLoading(true);
-    try { const d = await api("/api/admin/users","GET",null,token); setUsers(d.users||[]); }
-    catch(e) { setMsg("Error: "+e.message); }
+    setMsg(""); setMsgIsError(false);
+    try {
+      const d = await api("/api/admin/users","GET",null,token);
+      setUsers(d.users||[]);
+    } catch(e) {
+      console.error("AdminPanel load() failed:", e);
+      setMsg("Error: " + _errStr(e));
+      setMsgIsError(true);
+    }
     setLoading(false);
   };
 
@@ -22230,10 +22258,14 @@ function AdminPanel({ token }) {
   const act = async (url, method="POST", body=null) => {
     try {
       await api(url, method, body, token);
-      setMsg("Done!");
+      setMsg("Done!"); setMsgIsError(false);
       load();
-    } catch(e) { setMsg("Error: "+e.message); }
-    setTimeout(()=>setMsg(""),3000);
+    } catch(e) {
+      console.error("AdminPanel act() failed:", url, e);
+      setMsg("Error: " + _errStr(e));
+      setMsgIsError(true);
+    }
+    setTimeout(()=>{ setMsg(""); setMsgIsError(false); },5000);
   };
 
   const statusColor = (u) => {
@@ -22290,8 +22322,15 @@ function AdminPanel({ token }) {
         ))}
       </div>
 
-      {/* Message */}
-      {msg && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:8,padding:"10px 16px",color:"#4ade80",fontSize:13,marginBottom:16}}>{msg}</div>}
+      {/* Message — red on error, green on success */}
+      {msg && <div style={{
+        background: msgIsError ? "#450a0a" : "#052e16",
+        border: msgIsError ? "1px solid #991b1b" : "1px solid #166534",
+        borderRadius:8, padding:"10px 16px",
+        color: msgIsError ? "#fca5a5" : "#4ade80",
+        fontSize:13, marginBottom:16,
+        whiteSpace:"pre-wrap"
+      }}>{msg}</div>}
 
       {/* Search */}
       <input value={search} onChange={e=>setSearch(e.target.value)}
