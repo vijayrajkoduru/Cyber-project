@@ -9,6 +9,7 @@ Tests two related attack classes:
 
 Tests Host header switch + bogus Origin reflection patterns.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -49,28 +50,46 @@ def scan_request_forgery_origin(req: ScanRequest, payload=Depends(verify_scan_qu
     accepted_evil = []
     reflected_origin = []
 
-    for evil in EVIL_HOSTS:
-        # Test 1: Host header attack
-        r1 = safe_request("GET", base + "/",
-            headers={"Host": evil, "User-Agent": "VulnusLab/1.0"},
-            req=req, timeout=8, allow_redirects=False)
-        if r1 is not None:
-            # If status differs from baseline AND server didn't reject (400/421)
-            if r1.status_code not in (400, 404, 421) and r1.status_code != baseline_status:
-                # Could be vhost routing — only flag if response markedly different
-                if abs((len(r1.content) if r1.content else 0) - baseline_len) > 500:
-                    accepted_evil.append({"host": evil, "status": r1.status_code,
-                                            "size_delta": len(r1.content or b"") - baseline_len})
+    # VL-TURBO deep: parallelize host + origin probes across all evil hosts.
+    # Was 5 hosts * 2 probes * 8s = ~80s sequential worst case.
+    # Now ~8s in parallel for all 10 probes.
+    jobs = [(evil, "host") for evil in EVIL_HOSTS] + \
+           [(evil, "origin") for evil in EVIL_HOSTS]
 
-        # Test 2: Origin header reflection (XSS / SSRF via logging vector)
-        r2 = safe_request("GET", base + "/",
+    def _probe(job):
+        evil, kind = job
+        if kind == "host":
+            r = safe_request("GET", base + "/",
+                headers={"Host": evil, "User-Agent": "VulnusLab/1.0"},
+                req=req, timeout=8, allow_redirects=False)
+            if r is None:
+                return None
+            if r.status_code in (400, 404, 421) or r.status_code == baseline_status:
+                return None
+            if abs((len(r.content) if r.content else 0) - baseline_len) <= 500:
+                return None
+            return ("host", {"host": evil, "status": r.status_code,
+                              "size_delta": len(r.content or b"") - baseline_len})
+        # kind == "origin"
+        r = safe_request("GET", base + "/",
             headers={"Origin": f"https://{evil}", "User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r2 is not None:
-            body = (r2.text or "")[:20000]
-            if evil in body or f"https://{evil}" in body:
-                reflected_origin.append({"origin": f"https://{evil}",
-                                           "status": r2.status_code})
+        if r is None:
+            return None
+        body = (r.text or "")[:20000]
+        if evil in body or f"https://{evil}" in body:
+            return ("origin", {"origin": f"https://{evil}", "status": r.status_code})
+        return None
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        for result in pool.map(_probe, jobs, timeout=30):
+            if result is None:
+                continue
+            kind, payload_ = result
+            if kind == "host":
+                accepted_evil.append(payload_)
+            else:
+                reflected_origin.append(payload_)
 
     if accepted_evil:
         findings.append(wrap_finding(

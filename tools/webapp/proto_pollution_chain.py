@@ -9,6 +9,7 @@ Two-phase: (1) POST polluting payload to mutation-friendly endpoint,
 (2) GET a check-endpoint with same session and look for behavior change.
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -47,13 +48,20 @@ def _get(url, req):
 def scan_proto_pollution_chain(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
 
-    # Phase 0: baseline of each check path
-    baselines = {}
-    for p in CHECK_PATHS:
+    # VL-TURBO deep: Phase 0 — fetch all 5 check-path baselines in parallel.
+    # Was 5 sequential GETs at 8s = ~40s worst case. Now ~8s.
+    def _baseline(p):
         r = _get(base + p, req)
-        if r is None or r.status_code == 404: continue
-        baselines[p] = {"status": r.status_code,
-                          "body_snippet": (r.text or "")[:1000]}
+        if r is None or r.status_code == 404:
+            return None
+        return (p, {"status": r.status_code,
+                     "body_snippet": (r.text or "")[:1000]})
+
+    baselines = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for res in pool.map(_baseline, CHECK_PATHS, timeout=15):
+            if res is not None:
+                baselines[res[0]] = res[1]
 
     if not baselines:
         return standard_response(
@@ -61,34 +69,55 @@ def scan_proto_pollution_chain(req: ScanRequest, payload=Depends(verify_scan_quo
             tests_performed=len(CHECK_PATHS), vulnerable=False,
             skipped_reason="No check endpoints exist on target")
 
-    chain_hits = []
-    post_tested = 0
-    for post_path in POST_PATHS:
-        post_url = base + post_path
-        # Sanity: does POST path exist?
-        r_sanity = _get(post_url, req)
-        if r_sanity is None or r_sanity.status_code == 404: continue
-        post_tested += 1
+    # Phase 1: parallel sanity-check all POST paths
+    def _sanity(p):
+        r = _get(base + p, req)
+        if r is None or r.status_code == 404:
+            return None
+        return p
 
-        for payload_body in POLLUTION_PAYLOADS:
-            _post(post_url, payload_body, req)  # ignore result
-            # Now re-fetch each check path
-            for check_path, base_data in baselines.items():
-                r = _get(base + check_path, req)
-                if r is None: continue
-                # Behavior change signal: status flipped 403→200 OR body now contains "polluted"
-                if (r.status_code == 200 and base_data["status"] in (401, 403)) or \
-                   ("polluted" in (r.text or "")[:5000]):
-                    chain_hits.append({
-                        "post_path": post_path,
-                        "check_path": check_path,
-                        "baseline_status": base_data["status"],
-                        "polluted_status": r.status_code,
-                        "marker_reflected": "polluted" in (r.text or "")[:5000],
-                    })
-                    break
-            if chain_hits and chain_hits[-1]["post_path"] == post_path:
-                break
+    valid_post_paths = []
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for res in pool.map(_sanity, POST_PATHS, timeout=15):
+            if res is not None:
+                valid_post_paths.append(res)
+
+    post_tested = len(valid_post_paths)
+
+    # Phase 2: parallelize POST-then-check pollution probes.
+    # Each (post_path, payload) pair: 1 POST + N GET re-checks sequentially
+    # (re-checks need to follow the POST). Pairs run in parallel pool.
+    def _probe(job):
+        post_path, payload_body = job
+        post_url = base + post_path
+        _post(post_url, payload_body, req)  # ignore result
+        for check_path, base_data in baselines.items():
+            r = _get(base + check_path, req)
+            if r is None:
+                continue
+            if (r.status_code == 200 and base_data["status"] in (401, 403)) or \
+               ("polluted" in (r.text or "")[:5000]):
+                return {
+                    "post_path": post_path,
+                    "check_path": check_path,
+                    "baseline_status": base_data["status"],
+                    "polluted_status": r.status_code,
+                    "marker_reflected": "polluted" in (r.text or "")[:5000],
+                }
+        return None
+
+    jobs = [(p, pl) for p in valid_post_paths for pl in POLLUTION_PAYLOADS]
+    chain_hits = []
+    seen_post_paths = set()
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(10, len(jobs))) as pool:
+            for hit in pool.map(_probe, jobs, timeout=60):
+                if hit is None:
+                    continue
+                if hit["post_path"] in seen_post_paths:
+                    continue
+                chain_hits.append(hit)
+                seen_post_paths.add(hit["post_path"])
 
     findings = []
     if chain_hits:

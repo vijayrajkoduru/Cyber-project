@@ -4,6 +4,7 @@ Refactored 2026-06-09 to MethodologyScanner. Verify re-fetches each flagged
 page once more to confirm the missing-CSRF result is stable rather than a
 race with delayed form rendering or A/B-tested page variants.
 """
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
@@ -22,22 +23,39 @@ FORM_RE = re.compile(r"<form[^>]*method=[\"']post[\"'][^>]*>(.+?)</form>",
                      re.IGNORECASE | re.DOTALL)
 
 
+async def _scan_one_path(base_url, path):
+    """Single-path async probe — returns (no_csrf_entry_or_None, forms_count)."""
+    url = f"{base_url}{path}"
+    r = await http_get_async(url, timeout=8, read=40000)
+    if not r or r.get("status", 0) >= 400:
+        return (None, 0)
+    forms = FORM_RE.findall(r.get("body", ""))
+    if not forms:
+        return (None, 0)
+    forms_count = 0
+    missing = None
+    for form in forms:
+        forms_count += 1
+        form_lower = form.lower()
+        if missing is None and not any(re.search(pat, form_lower) for pat in CSRF_FIELD_PATTERNS):
+            missing = {"path": path}
+    return (missing, forms_count)
+
+
 async def _scan_paths(base_url, paths):
+    # VL-TURBO deep: scan all paths concurrently via asyncio.gather.
+    # Was 3 sequential GETs at 8s = ~24s worst case. Now ~8s.
+    results = await asyncio.gather(
+        *[_scan_one_path(base_url, p) for p in paths],
+        return_exceptions=True)
     no_csrf, forms_found = [], 0
-    for path in paths:
-        url = f"{base_url}{path}"
-        r = await http_get_async(url, timeout=8, read=40000)
-        if not r or r.get("status", 0) >= 400:
+    for res in results:
+        if isinstance(res, BaseException):
             continue
-        forms = FORM_RE.findall(r.get("body", ""))
-        if not forms:
-            continue
-        for form in forms:
-            forms_found += 1
-            form_lower = form.lower()
-            if not any(re.search(pat, form_lower) for pat in CSRF_FIELD_PATTERNS):
-                no_csrf.append({"path": path})
-                break
+        missing, count = res
+        forms_found += count
+        if missing:
+            no_csrf.append(missing)
     return no_csrf, forms_found
 
 
