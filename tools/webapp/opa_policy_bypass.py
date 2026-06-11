@@ -1,5 +1,6 @@
 """opa_policy_bypass — Open Policy Agent (OPA) endpoint detection + default-allow."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -19,15 +20,24 @@ def scan_opa_policy_bypass(req: ScanRequest, payload=Depends(verify_scan_quota))
     findings = []
     is_opa = False
     exposed = []
-    for path in OPA_PATHS:
+
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0", "Accept": "application/json"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code == 404: continue
+        if r is None or r.status_code == 404: return None
         body = (r.text or "")[:5000]
         if "openpolicyagent" in body.lower() or '"result"' in body or "rego" in body.lower():
-            is_opa = True
-            exposed.append({"path": path, "status": r.status_code})
+            return {"path": path, "status": r.status_code}
+        return None
+
+    # VL-TURBO deep: parallelize 6 probes via pool(6).
+    # Was ~48s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(6, len(OPA_PATHS))) as pool:
+        for result in pool.map(_probe, OPA_PATHS, timeout=21):
+            if result is not None:
+                is_opa = True
+                exposed.append(result)
     if is_opa:
         # Try default-allow query
         rq = safe_request("POST", base + "/v1/query",

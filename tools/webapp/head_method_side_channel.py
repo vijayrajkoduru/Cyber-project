@@ -6,6 +6,7 @@ or to bypass auth-gated endpoints that DO honor GET auth but skip HEAD.
 
 Test: GET /admin → 401/403. HEAD /admin → 200 == BUG.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -26,32 +27,39 @@ def scan_head_method_side_channel(req: ScanRequest, payload=Depends(verify_scan_
     bypasses = []
     tested = 0
 
-    for path in PROTECTED_PATHS:
+    def _probe(path):
         url = base + path
-        # GET baseline
         r_get = safe_request("GET", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r_get is None or r_get.status_code == 404: continue
-        tested += 1
+        if r_get is None or r_get.status_code == 404: return None
         get_status = r_get.status_code
-
-        # HEAD probe
         r_head = safe_request("HEAD", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r_head is None: continue
+        if r_head is None: return {"tested": True}
         head_status = r_head.status_code
-
-        # Bypass signal: GET 401/403 but HEAD 200
         if get_status in (401, 403) and head_status == 200:
-            bypasses.append({"path": path, "get_status": get_status,
-                              "head_status": head_status})
-        # Information leak: HEAD reveals more than GET (200 on HEAD where GET is 404)
+            return {"tested": True, "path": path,
+                    "get_status": get_status, "head_status": head_status}
         elif get_status == 404 and head_status == 200:
-            bypasses.append({"path": path, "get_status": get_status,
-                              "head_status": head_status,
-                              "issue": "HEAD-leaks-existence"})
+            return {"tested": True, "path": path,
+                    "get_status": get_status, "head_status": head_status,
+                    "issue": "HEAD-leaks-existence"}
+        return {"tested": True}
+
+    # VL-TURBO deep: parallelize 8 paths (each does 2 sequential probes) via pool(8).
+    # Was ~128s sequential, now ~16s parallel.
+    with ThreadPoolExecutor(max_workers=min(8, len(PROTECTED_PATHS))) as pool:
+        for result in pool.map(_probe, PROTECTED_PATHS, timeout=21):
+            if result is None: continue
+            tested += 1
+            if "path" in result:
+                b = {"path": result["path"], "get_status": result["get_status"],
+                     "head_status": result["head_status"]}
+                if "issue" in result:
+                    b["issue"] = result["issue"]
+                bypasses.append(b)
 
     findings = []
     if bypasses:

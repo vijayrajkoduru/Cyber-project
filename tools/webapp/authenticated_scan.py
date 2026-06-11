@@ -8,6 +8,7 @@ Discovers login forms at common paths and audits their security:
 
 Phase 2 (TODO): Actually log in, save session cookie, re-run scanners.
 """
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -29,17 +30,26 @@ async def webapp_authenticated_scan(req: ScanRequest, payload=Depends(verify_sca
     spa = detect_spa_catchall_sync(base)
     findings = []
     discovered = []
-    tests = 0
-    for path in _LOGIN_PATHS:
-        tests += 1
+    tests = len(_LOGIN_PATHS)
+
+    async def _probe(path):
         url = base + path
-        r = safe_get(url, req=req, allow_redirects=True, timeout=8)
+        r = await asyncio.to_thread(safe_get, url, req=req, allow_redirects=True, timeout=8)
         if r is None or r.status_code != 200:
-            continue
+            return None
         body = (r.text or "")[:50000]
         if not re.search(r'<input[^>]*type=["\']?password["\']?', body, re.I):
+            return None
+        return (path, r.status_code, body)
+
+    results = await asyncio.gather(
+        *[_probe(path) for path in _LOGIN_PATHS],
+        return_exceptions=True)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
             continue
-        discovered.append({"url": path, "status": r.status_code})
+        path, status_code, body = res
+        discovered.append({"url": path, "status": status_code})
 
         has_csrf = bool(re.search(r'name=["\']?(?:csrf|_token|authenticity_token|__RequestVerificationToken)', body, re.I))
         if not has_csrf:

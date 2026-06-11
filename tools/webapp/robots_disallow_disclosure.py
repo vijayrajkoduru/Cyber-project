@@ -8,6 +8,7 @@ Audit: fetch /robots.txt + extract Disallow entries, flag entries that
 match known-sensitive patterns (admin, api, internal, debug, backup, etc).
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -79,17 +80,24 @@ def scan_robots_disallow_disclosure(req: ScanRequest, payload=Depends(verify_sca
         if m:
             paths.append(m.group(1))
     # Probe each sensitive entry to see if it actually exists (not 404)
-    sensitive_paths = []
+    sensitive_paths = [p for p in paths if any(pat.search(p) for pat in SENSITIVE_PATTERNS)]
     confirmed_live = []
-    for p in paths:
-        if any(pat.search(p) for pat in SENSITIVE_PATTERNS):
-            sensitive_paths.append(p)
-            # Quick probe
-            r2 = safe_request("GET", base + p,
-                headers={"User-Agent": "VulnusLab/1.0"},
-                req=req, timeout=6, allow_redirects=False)
-            if r2 is not None and r2.status_code in (200, 301, 302, 401, 403):
-                confirmed_live.append({"path": p, "status": r2.status_code})
+
+    def _probe(p):
+        r2 = safe_request("GET", base + p,
+            headers={"User-Agent": "VulnusLab/1.0"},
+            req=req, timeout=6, allow_redirects=False)
+        if r2 is not None and r2.status_code in (200, 301, 302, 401, 403):
+            return {"path": p, "status": r2.status_code}
+        return None
+
+    # VL-TURBO deep: parallelize sensitive-path probes via pool(15).
+    # Was ~Nx6s sequential, now ~6s parallel.
+    if sensitive_paths:
+        with ThreadPoolExecutor(max_workers=min(15, len(sensitive_paths))) as pool:
+            for result in pool.map(_probe, sensitive_paths, timeout=17):
+                if result is not None:
+                    confirmed_live.append(result)
 
     findings = []
     if confirmed_live:

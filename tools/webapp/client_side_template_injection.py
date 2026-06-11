@@ -9,6 +9,7 @@ Test: inject `{{7*7}}` and `{{constructor.constructor('alert(1)')()}}`
 into common reflected parameters; if response body contains `49` or
 markers of execution, CSTI.
 """
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -38,8 +39,7 @@ def scan_client_side_template_injection(req: ScanRequest, payload=Depends(verify
     hits = []
     tested = 0
 
-    for path in PROBE_PATHS:
-        # Inject MARKER first to confirm reflection point
+    def _reflection_probe(path):
         sep = "&" if "?" in path else "?"
         marker = "VULNCSTIMARKER" + str(hash(path) & 0xFFFFFF)
         url = base + path + (sep + "VULNUSLAB=" + marker if "?" not in path or path.endswith("=") else marker)
@@ -48,29 +48,49 @@ def scan_client_side_template_injection(req: ScanRequest, payload=Depends(verify
         r = safe_request("GET", url,
             headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code >= 400: continue
-        if marker not in (r.text or ""): continue  # no reflection
-        tested += 1
+        if r is None or r.status_code >= 400: return None
+        if marker not in (r.text or ""): return None  # no reflection
+        return (path, sep)
 
-        # Reflection confirmed. Try CSTI payloads.
-        for pl, expected in PAYLOADS:
-            target_url = base + path
-            if path.endswith("="):
-                target_url += quote(pl, safe="")
-            else:
-                target_url += (sep + "VULNUSLAB=" + quote(pl, safe=""))
-            r2 = safe_request("GET", target_url,
-                headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
-                req=req, timeout=8, allow_redirects=False)
-            if r2 is None: continue
-            body = (r2.text or "")[:50000]
-            # CSTI signal: expected output (49 / alert(1)) in body AND payload NOT
-            # echoed as literal (rendered, not stored)
-            if expected in body and pl not in body[:5000]:
-                # Confirmed evaluation
-                hits.append({"path": path, "payload": pl,
-                              "expected": expected})
-                break  # one finding per path
+    # VL-TURBO deep: stage 1 — parallel reflection-probe across PROBE_PATHS via pool(8).
+    # Was ~64s sequential, now ~8s parallel.
+    reflected = []
+    with ThreadPoolExecutor(max_workers=min(8, len(PROBE_PATHS))) as pool:
+        for result in pool.map(_reflection_probe, PROBE_PATHS, timeout=21):
+            if result is not None:
+                reflected.append(result)
+    tested = len(reflected)
+
+    # Stage 2 — parallel CSTI probes across reflected paths × payloads.
+    # Was ~Nx4x8s sequential, now ~8s parallel batch.
+    csti_combos = [(path, sep, pl, expected)
+                   for (path, sep) in reflected
+                   for (pl, expected) in PAYLOADS]
+
+    def _csti_probe(item):
+        path, sep, pl, expected = item
+        target_url = base + path
+        if path.endswith("="):
+            target_url += quote(pl, safe="")
+        else:
+            target_url += (sep + "VULNUSLAB=" + quote(pl, safe=""))
+        r2 = safe_request("GET", target_url,
+            headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
+            req=req, timeout=8, allow_redirects=False)
+        if r2 is None: return None
+        body = (r2.text or "")[:50000]
+        if expected in body and pl not in body[:5000]:
+            return {"path": path, "payload": pl, "expected": expected}
+        return None
+
+    if csti_combos:
+        with ThreadPoolExecutor(max_workers=min(15, len(csti_combos))) as pool:
+            for result in pool.map(_csti_probe, csti_combos, timeout=21):
+                if result is None: continue
+                # Preserve "one finding per path" semantics
+                if any(h["path"] == result["path"] for h in hits):
+                    continue
+                hits.append(result)
 
     findings = []
     if hits:

@@ -1,4 +1,5 @@
 """Webapp: Insecure deserialization marker probe (PHP / Java / Python / .NET)."""
+import asyncio
 import re
 import base64
 from fastapi import APIRouter, Depends
@@ -61,9 +62,19 @@ async def webapp_deserialization_probe(req: ScanRequest, payload=Depends(verify_
     
     # Probe: homepage + common endpoints
     probes = ["/","/login","/dashboard","/profile","/api","/admin"]
-    for path in probes:
-        tests += 1
-        r = safe_get(base + path, req=req, allow_redirects=True, timeout=6)
+    tests = len(probes)
+
+    async def _probe(path):
+        r = await asyncio.to_thread(safe_get, base + path, req=req, allow_redirects=True, timeout=6)
+        return (path, r)
+
+    results = await asyncio.gather(
+        *[_probe(path) for path in probes],
+        return_exceptions=True)
+    for pres in results:
+        if isinstance(pres, BaseException) or pres is None:
+            continue
+        path, r = pres
         if r is None:
             continue
         # Check Set-Cookie values

@@ -9,6 +9,7 @@ the canary appears unescaped in HTML body. Verify re-fires with a DIFFERENT
 canary to confirm the response is dynamically reflecting input rather than
 echoing a static page that happens to contain "vlxss9k4q".
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
@@ -94,23 +95,30 @@ async def _fire(base_url, params, canary):
       2. Only flag when the canary appears in a RAW text node between HTML
          tags (real exploitable XSS surface).
     """
-    reflected = []
-    for p in params:
+    async def _probe(p):
         url = f"{base_url}?{p}={canary}"
         r = await http_get_async(url, timeout=8)
         if not r:
-            continue
+            return None
         body = r.get("body", "")
         if canary not in body:
-            continue
+            return None
         ctype = (r.get("headers") or {}).get("content-type", "")
         if not ("html" in ctype.lower() or "<" in body[:200]):
-            continue
+            return None
         # Context-aware FP filter
         if _is_escaped(body, canary):
+            return None
+        return {"param": p, "status": r.get("status"), "canary": canary}
+
+    results = await asyncio.gather(
+        *[_probe(p) for p in params],
+        return_exceptions=True)
+    reflected = []
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
             continue
-        reflected.append({"param": p, "status": r.get("status"),
-                          "canary": canary})
+        reflected.append(res)
     return reflected
 
 

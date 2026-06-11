@@ -6,6 +6,7 @@ Belt-and-braces: stamp spa_catchall + suppress when SPA canary returns
 the same body that the spec path returned (means the path didn't really
 exist - SPA catch-all served the shell).
 """
+import asyncio
 import json
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -32,8 +33,18 @@ async def webapp_swagger_discovery(req: ScanRequest, payload=Depends(verify_scan
     findings = []
     discovered = []
     spa_suppressed = []
-    for path in _SPEC_PATHS:
-        r = safe_get(base + path, req=req, allow_redirects=True, timeout=8)
+
+    async def _probe(path):
+        r = await asyncio.to_thread(safe_get, base + path, req=req, allow_redirects=True, timeout=8)
+        return (path, r)
+
+    results = await asyncio.gather(
+        *[_probe(path) for path in _SPEC_PATHS],
+        return_exceptions=True)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        path, r = res
         if r is None or r.status_code != 200:
             continue
         # SPA catch-all: body matches canary -> path doesn't exist

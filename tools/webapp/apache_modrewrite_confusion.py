@@ -5,6 +5,7 @@ bugs (CVE-2021-41773, CVE-2021-42013). Path-normalization differences
 between mod_rewrite + the backend let attacker reach files outside
 intended scope.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -37,15 +38,23 @@ def scan_apache_modrewrite_confusion(req: ScanRequest, payload=Depends(verify_sc
     server = (r0.headers.get("server") or "").lower()
     is_apache = "apache" in server
 
-    hits = []
-    for p in APACHE_CVE_PAYLOADS:
+    def _probe(p):
         r = safe_request("GET", base + p,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None: continue
+        if r is None: return None
         body = (r.text or "")[:5000]
         if "root:x:" in body or "root:!" in body or "/bin/bash" in body:
-            hits.append({"payload": p, "marker": "root: in body"})
+            return {"payload": p, "marker": "root: in body"}
+        return None
+
+    hits = []
+    # VL-TURBO deep: parallelize 3 probes via pool(3).
+    # Was ~24s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(3, len(APACHE_CVE_PAYLOADS))) as pool:
+        for result in pool.map(_probe, APACHE_CVE_PAYLOADS, timeout=21):
+            if result is not None:
+                hits.append(result)
     findings = []
     if hits:
         findings.append(wrap_finding(

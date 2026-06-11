@@ -4,6 +4,7 @@ WebDAV extends HTTP with PROPFIND/PROPPATCH/MKCOL/MOVE/COPY/LOCK/UNLOCK
 methods. If accidentally enabled, attacker can list directories,
 upload files, even RCE via PUT then GET. IIS WebDAV CVE-2017-7269.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -21,18 +22,28 @@ def scan_webdav_exposure(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
     hits = []
     tested = 0
-    for path in PROBE_PATHS:
+
+    def _probe(path):
         r = safe_request("PROPFIND", base + path,
             headers={"User-Agent": "VulnusLab/1.0", "Depth": "1",
                       "Content-Type": "application/xml"},
             data='<?xml version="1.0"?><propfind xmlns="DAV:"><prop/></propfind>',
             req=req, timeout=8, allow_redirects=False)
-        if r is None: continue
-        tested += 1
-        if r.status_code == 207:  # Multi-Status = WebDAV
-            hits.append({"path": path, "status": 207})
+        if r is None: return None
+        if r.status_code == 207:
+            return {"tested": True, "path": path, "status": 207}
         elif r.status_code == 200 and "multistatus" in (r.text or "").lower():
-            hits.append({"path": path, "status": 200})
+            return {"tested": True, "path": path, "status": 200}
+        return {"tested": True}
+
+    # VL-TURBO deep: parallelize 5 PROPFIND probes via pool(5).
+    # Was ~40s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(5, len(PROBE_PATHS))) as pool:
+        for result in pool.map(_probe, PROBE_PATHS, timeout=21):
+            if result is None: continue
+            tested += 1
+            if "path" in result:
+                hits.append({"path": result["path"], "status": result["status"]})
     findings = []
     if hits:
         findings.append(wrap_finding(

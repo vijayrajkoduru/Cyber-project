@@ -1,4 +1,5 @@
 """Webapp: File upload endpoint discovery + bypass technique enumeration."""
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -27,9 +28,19 @@ async def webapp_file_upload_bypass(req: ScanRequest, payload=Depends(verify_sca
     tests = 0
     
     # Phase 1: discover endpoints
-    for path in _UPLOAD_PATHS:
-        tests += 1
-        r = safe_get(base + path, req=req, allow_redirects=True, timeout=8)
+    tests = len(_UPLOAD_PATHS)
+
+    async def _probe(path):
+        r = await asyncio.to_thread(safe_get, base + path, req=req, allow_redirects=True, timeout=8)
+        return (path, r)
+
+    results = await asyncio.gather(
+        *[_probe(path) for path in _UPLOAD_PATHS],
+        return_exceptions=True)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        path, r = res
         if r is None or r.status_code == 404:
             continue
         body = (r.text or "")[:30000]

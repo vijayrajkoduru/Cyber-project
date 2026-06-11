@@ -1,4 +1,5 @@
 """Webapp: parameter reflection scanner - finds params that echo into response."""
+import asyncio
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -15,16 +16,25 @@ async def webapp_param_reflection(req: ScanRequest, payload=Depends(verify_scan_
     base = web_url(req.target).rstrip("/")
     findings = []
     reflected = []
-    tests = 0
-    for param in _COMMON_PARAMS:
-        tests += 1
+    tests = len(_COMMON_PARAMS)
+
+    async def _probe(param):
         canary = "vlref" + secrets.token_hex(4)
-        r = safe_get(f"{base}/?{param}={canary}", req=req, timeout=8)
+        r = await asyncio.to_thread(safe_get, f"{base}/?{param}={canary}", req=req, timeout=8)
         if r is None:
-            continue
+            return None
         body = (r.text or "")[:50000]
         if canary not in body:
+            return None
+        return (param, canary, body)
+
+    results = await asyncio.gather(
+        *[_probe(param) for param in _COMMON_PARAMS],
+        return_exceptions=True)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
             continue
+        param, canary, body = res
         # Check escaping
         escaped_html = (canary not in body) or ("&" in body.split(canary)[0][-3:] if canary in body else False)
         context = body.split(canary)[0][-30:].replace("\n"," ") if canary in body else ""

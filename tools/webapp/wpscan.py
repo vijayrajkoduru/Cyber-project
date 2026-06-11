@@ -11,6 +11,7 @@ Each path entry is data-driven (no hardcoded if-branches per path):
   - severity / cvss / title / cwe / owasp / remediation: finding shape
 """
 import random, re, string
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -88,20 +89,27 @@ def scan_wpscan(req: ScanRequest, payload=Depends(verify_scan_quota)):
                     "body": (br.text or "")[:5000].lower()}
 
     findings, tests = [], 0
-    for entry in _WP_PATHS:
-        tests += 1
+
+    def _probe(entry):
         r = safe_get(base + entry["path"], req=req, allow_redirects=False, timeout=8)
         matched, evidence = _matches_entry(r, entry, baseline)
-        if not matched:
-            continue
-        findings.append(wrap_finding(
-            entry["title"],
-            entry.get("severity", "LOW"),
-            cvss=entry.get("cvss", "3.0"),
-            cwe=entry.get("cwe", "CWE-200"),
-            owasp=entry.get("owasp", "A05:2021"),
-            remediation=entry.get("remediation", "Review exposure of this WP path."),
-            evidence_marker=evidence))
+        return (entry, matched, evidence)
+
+    # VL-TURBO deep: parallelize up to 52 WP path probes via pool(15).
+    # Was ~416s sequential, now ~28s parallel.
+    with ThreadPoolExecutor(max_workers=min(15, len(_WP_PATHS))) as pool:
+        for entry, matched, evidence in pool.map(_probe, _WP_PATHS, timeout=21):
+            tests += 1
+            if not matched:
+                continue
+            findings.append(wrap_finding(
+                entry["title"],
+                entry.get("severity", "LOW"),
+                cvss=entry.get("cvss", "3.0"),
+                cwe=entry.get("cwe", "CWE-200"),
+                owasp=entry.get("owasp", "A05:2021"),
+                remediation=entry.get("remediation", "Review exposure of this WP path."),
+                evidence_marker=evidence))
 
     # Always try the REST user enumeration extra-deeply (it has a payload check)
     r = safe_get(base + "/wp-json/wp/v2/users", req=req, allow_redirects=False, timeout=8)

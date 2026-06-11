@@ -4,6 +4,7 @@ Refactored 2026-06-09 to MethodologyScanner. Verify uses a SECOND math
 expression {{8*8}}=64 — real template engine evaluates both; static page
 with hardcoded 49 wouldn't change to 64.
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
@@ -22,18 +23,31 @@ PROBE_PARAMS_DEEP  = ["comment", "search", "template", "view"]
 
 
 async def _fire(base_url, params, payloads, marker):
+    async def _probe(p, payload):
+        url = f"{base_url}?{p}={payload}"
+        r = await http_get_async(url, timeout=8)
+        if not r:
+            return None
+        body = r.get("body", "")
+        # Marker must appear AND raw expression must NOT (template was evaluated)
+        if marker in body and "7*7" not in body:
+            return {"param": p, "payload": payload}
+        return None
+
+    jobs = [(p, payload) for p in params for payload in payloads]
+    results = await asyncio.gather(
+        *[_probe(p, payload) for p, payload in jobs],
+        return_exceptions=True)
+    # Preserve original break-on-first-hit-per-param semantics
     hits = []
-    for p in params:
-        for payload in payloads:
-            url = f"{base_url}?{p}={payload}"
-            r = await http_get_async(url, timeout=8)
-            if not r:
-                continue
-            body = r.get("body", "")
-            # Marker must appear AND raw expression must NOT (template was evaluated)
-            if marker in body and "7*7" not in body:
-                hits.append({"param": p, "payload": payload})
-                break
+    seen_params = set()
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        if res["param"] in seen_params:
+            continue
+        seen_params.add(res["param"])
+        hits.append(res)
     return hits
 
 

@@ -1,4 +1,5 @@
 """Webapp: weak crypto usage detection in JS (MD5/SHA1/DES/RC4)."""
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -35,10 +36,20 @@ async def webapp_weak_crypto(req: ScanRequest, payload=Depends(verify_scan_quota
     js_urls = list(set(re.findall(r'<script[^>]*src=["\']([^"\']+)["\']', r.text or "", re.I)))[:30]
     
     bodies = [("homepage", (r.text or "")[:300000])]
-    for ju in js_urls:
-        tests += 1
+    tests += len(js_urls)
+
+    async def _fetch_js(ju):
         full = ju if ju.startswith("http") else (base + (ju if ju.startswith("/") else "/" + ju))
-        jr = safe_get(full, req=req, timeout=6)
+        jr = await asyncio.to_thread(safe_get, full, req=req, timeout=6)
+        return (ju, jr)
+
+    js_results = await asyncio.gather(
+        *[_fetch_js(ju) for ju in js_urls],
+        return_exceptions=True)
+    for jres in js_results:
+        if isinstance(jres, BaseException) or jres is None:
+            continue
+        ju, jr = jres
         if jr is not None and jr.status_code == 200:
             bodies.append((ju, (jr.text or "")[:300000]))
     

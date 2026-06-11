@@ -9,6 +9,7 @@ weak, attacker can:
 Tests common webmail config endpoints + login pages with crafted server
 URLs (imap://internal-host, smtp://169.254.169.254).
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -35,17 +36,23 @@ def scan_webmail_imap_smtp_ssrf(req: ScanRequest, payload=Depends(verify_scan_qu
     base = web_url(req.target).rstrip("/")
     webmail_found = []
 
-    for path in WEBMAIL_PATHS:
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=True)
-        if r is None or r.status_code == 404: continue
+        if r is None or r.status_code == 404: return None
         body = (r.text or "")[:50000]
         for marker in WEBMAIL_MARKERS:
             if marker.lower() in body.lower():
-                webmail_found.append({"path": path, "marker": marker,
-                                        "status": r.status_code})
-                break
+                return {"path": path, "marker": marker, "status": r.status_code}
+        return None
+
+    # VL-TURBO deep: parallelize 7 webmail-marker probes via pool(7).
+    # Was ~56s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(7, len(WEBMAIL_PATHS))) as pool:
+        for result in pool.map(_probe, WEBMAIL_PATHS, timeout=21):
+            if result is not None:
+                webmail_found.append(result)
 
     if not webmail_found:
         return standard_response(

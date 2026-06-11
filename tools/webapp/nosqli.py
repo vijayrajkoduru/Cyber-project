@@ -1,4 +1,5 @@
 """Webapp: NoSQL injection (MongoDB operator injection)."""
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
 from tools._vl_core.spa_canary import detect_spa_catchall_sync
@@ -45,32 +46,60 @@ async def webapp_nosqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     spa = detect_spa_catchall_sync(base)
     findings = []
     tests = 0
-    for param in _PARAMS:
-        baseline = safe_get(f"{base}/?{param}=normalvalue", req=req, timeout=8)
-        if baseline is None:
-            continue
+
+    async def _fetch(url):
+        return await asyncio.to_thread(safe_get, url, req=req, timeout=8)
+
+    # Stage 1: fetch baselines for all params in parallel
+    baselines = await asyncio.gather(
+        *[_fetch(f"{base}/?{param}=normalvalue") for param in _PARAMS],
+        return_exceptions=True)
+
+    # Stage 2: for each param with a valid baseline, fan-out payload probes
+    async def _probe_param(param, baseline):
+        if isinstance(baseline, BaseException) or baseline is None:
+            return None
         b_size = len(baseline.content)
         b_status = baseline.status_code
-        for op_name, payload_str, desc in _PAYLOADS:
-            tests += 1
-            r = safe_get(f"{base}/?{param}{payload_str}", req=req, timeout=8)
-            if r is None:
+        # Fire all payloads in parallel for this param
+        urls = [(op_name, payload_str, desc,
+                 f"{base}/?{param}{payload_str}")
+                for op_name, payload_str, desc in _PAYLOADS]
+        rs = await asyncio.gather(*[_fetch(u[3]) for u in urls],
+                                   return_exceptions=True)
+        # Preserve original break-on-first-hit-per-param
+        for (op_name, payload_str, desc, _u), r in zip(urls, rs):
+            if isinstance(r, BaseException) or r is None:
                 continue
             if r.status_code != b_status:
                 continue
-            # If response is significantly different, suggests operator was processed
             if abs(len(r.content) - b_size) < 100:
                 continue
-            findings.append(wrap_finding(
-                f"NoSQL injection - parameter '{param}' processes MongoDB '{op_name}' operator",
-                "HIGH",
-                cvss="8.6", cwe="CWE-943",
-                cwe_name="Improper Neutralization of Special Elements in Data Query Logic",
-                owasp="A03:2021",
-                remediation="Validate input as a string before passing to MongoDB. Reject any value containing $ characters or object structures. Use parameterized queries.",
-                evidence_marker=f"GET ?{param}=normalvalue ({b_size}B) vs GET ?{param}{payload_str} ({len(r.content)}B) - significant size delta ({desc})",
-            ))
-            break
+            return (param, op_name, payload_str, desc, b_size, len(r.content))
+        return None
+
+    param_results = await asyncio.gather(
+        *[_probe_param(param, baseline)
+          for param, baseline in zip(_PARAMS, baselines)],
+        return_exceptions=True)
+    # Count tests: one baseline per param + one per payload per param-with-baseline
+    for baseline in baselines:
+        if isinstance(baseline, BaseException) or baseline is None:
+            continue
+        tests += len(_PAYLOADS)
+    for pres in param_results:
+        if isinstance(pres, BaseException) or pres is None:
+            continue
+        param, op_name, payload_str, desc, b_size, r_size = pres
+        findings.append(wrap_finding(
+            f"NoSQL injection - parameter '{param}' processes MongoDB '{op_name}' operator",
+            "HIGH",
+            cvss="8.6", cwe="CWE-943",
+            cwe_name="Improper Neutralization of Special Elements in Data Query Logic",
+            owasp="A03:2021",
+            remediation="Validate input as a string before passing to MongoDB. Reject any value containing $ characters or object structures. Use parameterized queries.",
+            evidence_marker=f"GET ?{param}=normalvalue ({b_size}B) vs GET ?{param}{payload_str} ({r_size}B) - significant size delta ({desc})",
+        ))
 
     return standard_response(
         tool="nosqli", target=req.target,

@@ -8,6 +8,7 @@ Probe: send query with intentionally-wrong field name, look for
 "Did you mean" or similar suggestion patterns in error response.
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -23,18 +24,33 @@ GRAPHQL_PATHS = ["/graphql", "/api/graphql", "/v1/graphql", "/query"]
 @vl_verify()
 def scan_graphql_field_suggestions_leak(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    endpoint = None
-    for path in GRAPHQL_PATHS:
+
+    def _probe(path):
         r = safe_request("POST", base + path,
             headers={"Content-Type": "application/json",
                       "User-Agent": "VulnusLab/1.0"},
             data='{"query":"{__typename}"}', req=req, timeout=8,
             allow_redirects=False)
-        if r is None or r.status_code >= 500: continue
+        if r is None or r.status_code >= 500: return None
         try:
-            if "data" in r.json() or "errors" in r.json():
-                endpoint = base + path; break
-        except Exception: continue
+            j = r.json()
+            if "data" in j or "errors" in j:
+                return base + path
+        except Exception:
+            return None
+        return None
+
+    # VL-TURBO deep: parallelize 4 endpoint discovery probes via pool(4).
+    # Was ~32s sequential, now ~8s parallel. Preserves first-match priority.
+    endpoint = None
+    results = []
+    with ThreadPoolExecutor(max_workers=min(4, len(GRAPHQL_PATHS))) as pool:
+        for result in pool.map(_probe, GRAPHQL_PATHS, timeout=21):
+            results.append(result)
+    for r in results:
+        if r is not None:
+            endpoint = r
+            break
 
     if not endpoint:
         return standard_response(

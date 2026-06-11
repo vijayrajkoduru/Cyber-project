@@ -6,6 +6,7 @@ window. Long-validity signing certs + lax NotOnOrAfter tolerance =
 'time-bomb' for replay attacks.
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -29,15 +30,26 @@ def scan_saml_response_time_bomb(req: ScanRequest, payload=Depends(verify_scan_q
     base = web_url(req.target).rstrip("/")
     metadata_xml = None
     metadata_url = None
-    for path in META_PATHS:
+
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code != 200: continue
+        if r is None or r.status_code != 200: return None
         body = (r.text or "")[:100000]
         if "EntityDescriptor" in body and ("SPSSODescriptor" in body or "IDPSSODescriptor" in body):
-            metadata_xml = body
-            metadata_url = base + path
+            return (base + path, body)
+        return None
+
+    # VL-TURBO deep: parallelize 7 metadata-discovery probes via pool(7).
+    # Was ~56s sequential, now ~8s parallel. First-match priority preserved.
+    disc_results = []
+    with ThreadPoolExecutor(max_workers=min(7, len(META_PATHS))) as pool:
+        for result in pool.map(_probe, META_PATHS, timeout=21):
+            disc_results.append(result)
+    for r in disc_results:
+        if r is not None:
+            metadata_url, metadata_xml = r
             break
 
     if not metadata_xml:

@@ -10,6 +10,7 @@ VL-METHOD Wave 5: probe privileged-action endpoints, flag ones returning
                   actually serves JSON (not a generic 200)
   privilege_check - exposed admin = "guest" privilege (no auth required)
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core.verify import vl_verify
@@ -58,9 +59,19 @@ class VerticalAccessAdmin(MethodologyScanner):
     async def _probe_get(self, ctx, paths):
         base_url = ctx.state["base_url"]
         spa = ctx.state.get("_spa") or {}
-        exposed, protected, spa_suppressed = [], [], []
-        for path in paths:
+
+        async def _probe(path):
             r = await http_get_async(f"{base_url}{path}", timeout=6, read=4000)
+            return (path, r)
+
+        results = await asyncio.gather(
+            *[_probe(path) for path in paths],
+            return_exceptions=True)
+        exposed, protected, spa_suppressed = [], [], []
+        for res in results:
+            if isinstance(res, BaseException) or res is None:
+                continue
+            path, r = res
             if not r:
                 continue
             status = r.get("status", 0)
@@ -90,10 +101,20 @@ class VerticalAccessAdmin(MethodologyScanner):
         base_url = ctx.state["base_url"]
         spa = ctx.state.get("_spa") or {}
         exposed_p, spa_p = [], []
-        for path in _DEEP_POST:
+
+        async def _probe_post(path):
             r = await http_post_async(
                 f"{base_url}{path}", data=b"{}",
                 headers={"Content-Type": "application/json"}, timeout=6)
+            return (path, r)
+
+        post_results = await asyncio.gather(
+            *[_probe_post(path) for path in _DEEP_POST],
+            return_exceptions=True)
+        for pres in post_results:
+            if isinstance(pres, BaseException) or pres is None:
+                continue
+            path, r = pres
             if not r:
                 continue
             status = r.get("status", 0)

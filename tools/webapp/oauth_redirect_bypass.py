@@ -1,4 +1,5 @@
 """Webapp: OAuth redirect_uri / state tampering detection."""
+import asyncio
 import re
 import secrets
 from fastapi import APIRouter, Depends
@@ -55,10 +56,20 @@ async def webapp_oauth_redirect_bypass(req: ScanRequest, payload=Depends(verify_
         )
     
     state = secrets.token_hex(8)
-    for variant in _BYPASS_VARIANTS:
-        tests += 1
+    tests += len(_BYPASS_VARIANTS)
+
+    async def _probe(variant):
         url = f"{oauth_url}?response_type=code&client_id=test&redirect_uri={variant}&state={state}"
-        r = safe_get(url, req=req, allow_redirects=False, timeout=8)
+        r = await asyncio.to_thread(safe_get, url, req=req, allow_redirects=False, timeout=8)
+        return (variant, r)
+
+    results = await asyncio.gather(
+        *[_probe(variant) for variant in _BYPASS_VARIANTS],
+        return_exceptions=True)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        variant, r = res
         if r is None:
             continue
         loc = r.headers.get("Location","")

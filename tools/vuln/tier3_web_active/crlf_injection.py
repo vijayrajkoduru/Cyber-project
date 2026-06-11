@@ -4,6 +4,7 @@ Refactored 2026-06-09 to MethodologyScanner. Verify re-fires with a DIFFERENT
 injected header name to confirm dynamic header reflection rather than a
 pre-existing header that happens to contain the original marker.
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
@@ -21,16 +22,24 @@ PROBE_PARAMS_DEEP  = ["q", "page", "lang"]
 
 
 async def _fire(base_url, params, payload, marker):
-    hits = []
-    for p in params:
+    async def _probe(p):
         url = f"{base_url}?{p}={payload}"
         r = await http_get_async(url, timeout=8)
         if not r:
-            continue
+            return None
         for hn, hv in (r.get("headers") or {}).items():
             if marker in str(hv).lower():
-                hits.append({"param": p, "header": hn, "value": str(hv)[:80]})
-                break
+                return {"param": p, "header": hn, "value": str(hv)[:80]}
+        return None
+
+    results = await asyncio.gather(
+        *[_probe(p) for p in params],
+        return_exceptions=True)
+    hits = []
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        hits.append(res)
     return hits
 
 

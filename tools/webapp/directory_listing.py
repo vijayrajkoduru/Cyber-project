@@ -4,6 +4,7 @@ VL-VERIFY: probes 28 common dirs and matches '<a href="../">'/'Index of /'
 patterns. SPA shells often include relative-path anchors that match the
 '<a href="../"' pattern. Canary suppresses those FPs and stamps spa_catchall.
 """
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -29,12 +30,21 @@ async def webapp_directory_listing(req: ScanRequest, payload=Depends(verify_scan
     base = web_url(req.target).rstrip("/")
     spa = detect_spa_catchall_sync(base)
     findings = []
-    tests = 0
+    tests = len(_DIRS)
     exposed = []
     spa_suppressed = []
-    for d in _DIRS:
-        tests += 1
-        r = safe_get(base + d, req=req, allow_redirects=False, timeout=6)
+
+    async def _probe(d):
+        r = await asyncio.to_thread(safe_get, base + d, req=req, allow_redirects=False, timeout=6)
+        return (d, r)
+
+    results = await asyncio.gather(
+        *[_probe(d) for d in _DIRS],
+        return_exceptions=True)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        d, r = res
         if r is None or r.status_code != 200:
             continue
         body = (r.text or "")[:20000]

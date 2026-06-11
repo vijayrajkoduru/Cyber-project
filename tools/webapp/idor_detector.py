@@ -7,6 +7,7 @@ VL-VERIFY: existing `max(sizes) - min(sizes) < 50` gate already filters
 SPA catch-all (all responses are byte-identical shells). Belt-and-braces
 canary check + stamp added for transparency.
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
@@ -33,17 +34,31 @@ async def webapp_idor_detector(req: ScanRequest, payload=Depends(verify_scan_quo
     spa_suppressed = []
     findings = []
     suspect = []
-    tests = 0
-    for tpl in _ID_PATHS:
+    tests = len(_ID_PATHS) * 3
+
+    async def _fetch(url):
+        return await asyncio.to_thread(safe_get, url, req=req, allow_redirects=False, timeout=8)
+
+    async def _probe_tpl(tpl):
+        urls = [base + tpl.replace("{id}", str(n)) for n in (1, 2, 999)]
+        rs = await asyncio.gather(*[_fetch(u) for u in urls],
+                                   return_exceptions=True)
         responses = []
         bodies = []
-        for n in (1, 2, 999):
-            tests += 1
-            r = safe_get(base + tpl.replace("{id}", str(n)), req=req, allow_redirects=False, timeout=8)
-            if r is None:
+        for r in rs:
+            if isinstance(r, BaseException) or r is None:
                 responses.append(None); bodies.append(""); continue
             responses.append({"status": r.status_code, "size": len(r.content)})
             bodies.append(r.text or "")
+        return (tpl, responses, bodies)
+
+    tpl_results = await asyncio.gather(
+        *[_probe_tpl(tpl) for tpl in _ID_PATHS],
+        return_exceptions=True)
+    for tres in tpl_results:
+        if isinstance(tres, BaseException) or tres is None:
+            continue
+        tpl, responses, bodies = tres
         if not all(r and r["status"] == 200 for r in responses):
             continue
         # SPA catch-all suppression: if ANY of the three responses matches the
