@@ -43,7 +43,7 @@ async def gather(ctx):
                     continue
                 found.append({"email":em,"site":site})
             ctx.source(f"holehe-{em}")
-        except: pass
+        except Exception: pass
     ctx.state["registrations_found"]=found[:30]
     ctx.state["registration_count"]=len(found)
 def _r_no_holehe(s):

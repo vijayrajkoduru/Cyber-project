@@ -9,13 +9,13 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _ttl(ip):
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as s:
             s.settimeout(3); s.connect((ip,53))
             return s.getsockopt(socket.IPPROTO_IP,socket.IP_TTL)
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

@@ -9,7 +9,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     key=os.environ.get("GREYNOISE_API_KEY","")
     ips=await _resolve(ctx.host)
@@ -27,7 +27,7 @@ async def gather(ctx):
             ctx.state.update({"classification":d.get("classification"),
                 "noise":d.get("noise"),"riot":d.get("riot"),"name":d.get("name"),
                 "last_seen":d.get("last_seen")})
-    except: pass
+    except Exception: pass
 def _r_malicious(s):
     c=s.get("classification","")
     if c!="malicious": return None

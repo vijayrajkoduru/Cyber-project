@@ -11,7 +11,7 @@ async def _q(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=3;r.lifetime=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     permutations=set()
     for base in _BASES:

@@ -9,7 +9,7 @@ def _g(u):
     try:
         r=requests.get(u,timeout=15,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     host=ctx.host
@@ -28,7 +28,7 @@ async def gather(ctx):
                     urls.add(u[:200])
                     sc=d.get("status","")
                     status_codes[sc]=status_codes.get(sc,0)+1
-            except: continue
+            except Exception: continue
     ctx.state["urls_found"]=sorted(urls)[:50]
     ctx.state["urls_count"]=len(urls)
     ctx.state["status_breakdown"]=status_codes

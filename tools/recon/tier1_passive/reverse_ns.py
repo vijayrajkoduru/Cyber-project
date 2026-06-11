@@ -9,14 +9,14 @@ def _g(u,t=12):
     try:
         r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     host=ctx.host
     try:
         r=dns.asyncresolver.Resolver(); r.timeout=4; r.lifetime=6
         ns=[str(x).rstrip(".") for x in await r.resolve(host,"NS")]
-    except: ns=[]
+    except Exception: ns=[]
     if not ns: ctx.state["reachable"]=False; return
     ctx.state["reachable"]=True; ctx.state["nameservers"]=ns
     ctx.source(f"ns-{len(ns)}")

@@ -10,14 +10,14 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _grab(ip,port,timeout=3):
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             s.connect((ip,port))
             return s.recv(1024).decode("utf-8",errors="ignore")[:300]
-    except: return ""
+    except Exception: return ""
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

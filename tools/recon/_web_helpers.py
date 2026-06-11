@@ -88,7 +88,7 @@ async def fetch(url, method="GET", headers=None, body=None, timeout=4):
                 return r.status, dict(r.headers), r.read(128*1024)
         except urllib.error.HTTPError as e:
             try: bb = e.read(128*1024)
-            except: bb = b""
+            except Exception: bb = b""
             return e.code, dict(e.headers or {}), bb
         except Exception:
             return 0, {}, b""

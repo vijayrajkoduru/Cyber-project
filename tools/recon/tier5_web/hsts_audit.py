@@ -6,7 +6,7 @@ from tools._vl_core import run_scanner
 router=APIRouter()
 def _g(u):
     try: return requests.get(u,timeout=8,verify=False,allow_redirects=False,headers={"User-Agent":"VulnusLab/1.0"})
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     https_r=await asyncio.to_thread(_g,f"https://{ctx.host}/")
     http_r=await asyncio.to_thread(_g,f"http://{ctx.host}/")
@@ -22,7 +22,7 @@ async def gather(ctx):
             p=part.strip().lower()
             if p.startswith("max-age="):
                 try: max_age=int(p.split("=")[1])
-                except: pass
+                except Exception: pass
             elif "includesubdomains" in p: include_subs=True
             elif "preload" in p: preload=True
     ctx.state.update({"max_age":max_age,"include_subdomains":include_subs,"preload":preload,

@@ -9,19 +9,19 @@ def _g(u,t=12):
     try:
         r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver(); r.timeout=4; r.lifetime=6
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 async def _ptr(ip):
     try:
         r=dns.asyncresolver.Resolver(); r.timeout=3; r.lifetime=5
         rev=dns.reversename.from_address(ip)
         return [str(x).rstrip(".") for x in await r.resolve(rev,"PTR")]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

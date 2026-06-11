@@ -9,7 +9,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     key=os.environ.get("ABUSEIPDB_API_KEY","")
     ctx.state["api_key_configured"]=bool(key)
@@ -29,7 +29,7 @@ async def gather(ctx):
                 "total_reports":d.get("totalReports",0),"isp":d.get("isp"),
                 "domain":d.get("domain"),"country":d.get("countryCode"),
                 "usage_type":d.get("usageType")})
-    except: pass
+    except Exception: pass
 def _r_high_abuse(s):
     score=s.get("abuse_score",0)
     if score<25: return None

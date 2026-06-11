@@ -9,7 +9,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _portmap_dump(ip,timeout=4):
     # RPC dump call: pmap_dump (proc=4)
     xid=0x12345678
@@ -20,7 +20,7 @@ def _portmap_dump(ip,timeout=4):
             s.sendto(msg,(ip,111))
             data,_=s.recvfrom(8192)
             return data
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

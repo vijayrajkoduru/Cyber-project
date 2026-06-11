@@ -9,7 +9,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _ipmi_probe(ip,timeout=3):
     payload=b"\x06\x00\xff\x07\x00\x00\x00\x00\x00\x00\x00\x00\x00\x09\x20\x18\xc8\x81\x00\x38\x8e\x04\xb5"
     try:
@@ -17,7 +17,7 @@ def _ipmi_probe(ip,timeout=3):
             s.settimeout(timeout); s.sendto(payload,(ip,623))
             data,_=s.recvfrom(2048)
             return len(data)>0
-    except: return False
+    except Exception: return False
 def _http_probe(ip,paths):
     found=[]
     for path in paths:
@@ -26,7 +26,7 @@ def _http_probe(ip,paths):
                 headers={"User-Agent":"VulnusLab/1.0"},allow_redirects=False)
             if r.status_code in (200,302) and any(k in (r.text or "").lower()[:2000] for k in ["ilo","ipmi","drac","supermicro","redfish"]):
                 found.append({"path":path,"status":r.status_code,"size":len(r.content)})
-        except: pass
+        except Exception: pass
     return found
 async def gather(ctx):
     ips=await _resolve(ctx.host)

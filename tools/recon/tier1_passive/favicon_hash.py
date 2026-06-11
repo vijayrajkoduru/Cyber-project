@@ -8,7 +8,7 @@ def _g(u):
     try:
         r=requests.get(u,timeout=8,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.content
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     base=web_url(ctx.host).rstrip("/")

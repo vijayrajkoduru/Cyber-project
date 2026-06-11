@@ -20,7 +20,7 @@ async def gather(ctx):
             ctx.source(f"virustotal-{len(subs)}")
         elif r.status_code in (401,403): ctx.state["auth_error"]=True
         elif r.status_code==429: ctx.state["rate_limited"]=True
-    except: pass
+    except Exception: pass
 def _r_unkeyed(s):
     if s.get("api_key_configured"): return None
     return {"name":"VIRUSTOTAL_API_KEY not configured","severity":"INFO",

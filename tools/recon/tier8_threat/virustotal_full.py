@@ -21,7 +21,7 @@ async def gather(ctx):
                 "harmless":stats.get("harmless",0),"reputation":d.get("reputation",0),
                 "categories":d.get("categories",{}),
                 "creation_date":d.get("creation_date")})
-    except: pass
+    except Exception: pass
 def _r_malicious(s):
     m=s.get("malicious",0)
     if m==0: return None

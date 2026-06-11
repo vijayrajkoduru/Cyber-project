@@ -8,7 +8,7 @@ def _g(u,t=15):
     try:
         r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     host=ctx.host
@@ -20,7 +20,7 @@ async def gather(ctx):
         if not txt: continue
         ctx.source("wayback")
         try: data=json.loads(txt)
-        except: continue
+        except Exception: continue
         if data and len(data)>1:
             for row in data[1:]:
                 if len(row)>=6:

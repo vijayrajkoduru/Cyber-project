@@ -11,7 +11,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _grab(ip,port,payload=b"",timeout=4):
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
@@ -19,7 +19,7 @@ def _grab(ip,port,payload=b"",timeout=4):
             s.connect((ip,port))
             if payload: s.send(payload)
             return s.recv(4096).decode("utf-8",errors="ignore")
-    except: return ""
+    except Exception: return ""
 def _parse_version(banner):
     """Return a version string only when REAL version info is disclosed.
 

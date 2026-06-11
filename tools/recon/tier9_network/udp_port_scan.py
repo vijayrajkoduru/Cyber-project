@@ -17,7 +17,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _probe(ip,port,payload,timeout=3):
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as s:
@@ -25,7 +25,7 @@ def _probe(ip,port,payload,timeout=3):
             s.sendto(payload,(ip,port))
             data,_=s.recvfrom(2048)
             return port if data else None
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

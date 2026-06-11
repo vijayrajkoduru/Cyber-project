@@ -9,13 +9,13 @@ async def _resolve(h,rt="AAAA"):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x) for x in await r.resolve(h,rt)]
-    except: return []
+    except Exception: return []
 def _v6_probe(ip,port,timeout=3):
     try:
         with socket.socket(socket.AF_INET6,socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             return s.connect_ex((ip,port,0,0))==0
-    except: return False
+    except Exception: return False
 async def gather(ctx):
     aaaa=await _resolve(ctx.host,"AAAA")
     if not aaaa: ctx.state["reachable"]=False; return

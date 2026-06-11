@@ -43,9 +43,9 @@ async def _resolve_ns(h):
             try:
                 a=await r.resolve(n,"A")
                 ns_ips.extend([str(x).rstrip(".") for x in a])
-            except: pass
+            except Exception: pass
         return ns_ips
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     ns_ips=await _resolve_ns(ctx.host)
     if not ns_ips: ctx.state["reachable"]=False; return

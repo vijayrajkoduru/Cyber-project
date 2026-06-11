@@ -29,7 +29,7 @@ async def gather(ctx):
             ctx.source(f"github-{ctx.state['count']}")
         elif r.status_code==401: ctx.state["auth_error"]=True
         elif r.status_code==403: ctx.state["rate_limited"]=True
-    except: pass
+    except Exception: pass
 def _r_unkeyed(s):
     if s.get("api_key_configured"): return None
     return {"name":"GITHUB_TOKEN not configured","severity":"INFO",

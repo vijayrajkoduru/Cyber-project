@@ -8,7 +8,7 @@ def _g(u,h=None,t=12):
     try:
         r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0",**(h or {})})
         if r.status_code==200: return r.json() if "json" in r.headers.get("Content-Type","") else r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     h=ctx.host

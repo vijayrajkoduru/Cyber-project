@@ -9,7 +9,7 @@ async def _q(h,rt):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return [str(x).rstrip(".") for x in await r.resolve(h,rt)]
-    except: return []
+    except Exception: return []
 def _randcase(s):
     return "".join(c.upper() if random.random()>0.5 else c.lower() for c in s)
 async def gather(ctx):

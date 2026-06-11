@@ -10,13 +10,13 @@ async def _q(h,rt="A"):
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         ans=await r.resolve(h,rt)
         return [str(x).rstrip(".") for x in ans], ans.rrset.ttl
-    except: return [],None
+    except Exception: return [],None
 def _http_headers(url):
     try:
         r=requests.head(url,timeout=6,verify=False,allow_redirects=True,
             headers={"User-Agent":"VulnusLab/1.0"})
         return dict(r.headers)
-    except: return {}
+    except Exception: return {}
 async def gather(ctx):
     a,ttl=await _q(ctx.host)
     if not a: ctx.state["reachable"]=False; return

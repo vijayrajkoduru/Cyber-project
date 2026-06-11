@@ -14,12 +14,12 @@ async def _q(h,rt):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return [str(x).rstrip(".") for x in await r.resolve(h,rt)]
-    except: return []
+    except Exception: return []
 async def _ptr(ip):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=3;r.lifetime=5
         return [str(x).rstrip(".") for x in await r.resolve(dns.reversename.from_address(ip),"PTR")]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     mx=await _q(ctx.host,"MX")
     if not mx: ctx.state["reachable"]=False; return

@@ -20,7 +20,7 @@ async def gather(ctx):
             ctx.state["total_pwned"]=sum(b.get("PwnCount",0) for b in breaches)
         elif r.status_code==401: ctx.state["auth_error"]=True
         elif r.status_code==429: ctx.state["rate_limited"]=True
-    except: pass
+    except Exception: pass
 def _r_breaches(s):
     n=s.get("breach_count",0)
     if n==0: return None

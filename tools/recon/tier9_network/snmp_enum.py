@@ -10,7 +10,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _probe(ip,community,timeout=3):
     payload=b"\x30"+bytes([0x1f+len(community)])+b"\x02\x01\x01\x04"+bytes([len(community)])+community.encode()+b"\xa0\x19\x02\x04\x00\x00\x00\x00\x02\x01\x00\x02\x01\x00\x30\x0b\x30\x09\x06\x05\x2b\x06\x01\x02\x01\x05\x00"
     try:
@@ -18,7 +18,7 @@ def _probe(ip,community,timeout=3):
             s.settimeout(timeout); s.sendto(payload,(ip,161))
             data,_=s.recvfrom(2048)
             return community if data else None
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

@@ -9,14 +9,14 @@ def _g(u):
     try:
         r=requests.get(u,timeout=8,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.json()
-    except: pass
+    except Exception: pass
     return None
 async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver(); r.timeout=4; r.lifetime=6
         a=await r.resolve(h,"A")
         return [str(x).rstrip(".") for x in a]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

@@ -1,12 +1,14 @@
 """Email Pattern Generator — Route: /api/recon/email_pattern_generator
 Generates likely employee email addresses from email_patterns.txt + target domain.
 Intel-only (no SMTP probing) — pairs with hunter_io / holehe for validation."""
+import logging
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import ScanContext, run_scanner
 
 router = APIRouter()
+log = logging.getLogger("vulnuslab.recon")
 _PAYLOAD = Path(__file__).resolve().parent.parent.parent / "_payloads" / "recon" / "email_patterns.txt"
 
 def _load():
@@ -14,7 +16,8 @@ def _load():
         if _PAYLOAD.exists():
             return [l.strip() for l in _PAYLOAD.read_text(encoding="utf-8").splitlines()
                     if l.strip() and not l.startswith("#")]
-    except Exception: pass
+    except Exception as e:
+        log.warning("email_pattern_generator: failed to load %s (%s); using built-in patterns", _PAYLOAD, e)
     return ["{first}.{last}@{domain}","{first}@{domain}","{f}{last}@{domain}",
             "{first}{last}@{domain}","{last}.{first}@{domain}"]
 

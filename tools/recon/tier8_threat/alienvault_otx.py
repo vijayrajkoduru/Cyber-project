@@ -19,7 +19,7 @@ async def gather(ctx):
             ctx.state.update({"pulse_count":len(pulses),
                 "pulse_names":[p.get("name") for p in pulses[:5]],
                 "validation":d.get("validation",[]),"sections":d.get("sections",[])})
-    except: pass
+    except Exception: pass
 def _r_pulses(s):
     n=s.get("pulse_count",0)
     if n==0: return None

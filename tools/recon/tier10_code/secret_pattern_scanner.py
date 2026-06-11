@@ -1,6 +1,6 @@
 """Secret Pattern Scanner — Route: /api/recon/secret_pattern_scanner
 Scans homepage + linked JS bundles for leaked secrets via regex in secret_patterns.json."""
-import asyncio, re, json
+import asyncio, re, json, logging
 from pathlib import Path
 import requests
 from fastapi import APIRouter, Depends
@@ -8,6 +8,7 @@ from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import ScanContext, run_scanner
 
 router = APIRouter()
+log = logging.getLogger("vulnuslab.recon")
 _PAYLOAD = Path(__file__).resolve().parent.parent.parent / "_payloads" / "recon" / "secret_patterns.json"
 _MAX_JS, _TO = 5, 8
 
@@ -24,7 +25,9 @@ def _load():
             data = json.loads(_PAYLOAD.read_text(encoding="utf-8"))
             if isinstance(data, list): return data
             if isinstance(data, dict) and "patterns" in data: return data["patterns"]
-    except Exception: pass
+    except Exception as e:
+        log.warning("secret_pattern_scanner: failed to load %s (%s); "
+                    "falling back to %d built-in patterns", _PAYLOAD, e, len(_FALLBACK))
     return _FALLBACK
 
 def _get(url):

@@ -14,7 +14,7 @@ from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canar
 router=APIRouter()
 def _g(u):
     try: return requests.get(u,timeout=8,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
-    except: return None
+    except Exception: return None
 _ROBOTS_RX=re.compile(r"^\s*(User-agent|Allow|Disallow|Sitemap)\s*:",re.I|re.M)
 _SITEMAP_RX=re.compile(r"<(urlset|sitemapindex|loc)[\s>]",re.I)
 def _is_real_robots(body): return bool(_ROBOTS_RX.search(body or ""))

@@ -9,7 +9,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _probe(ip,port,timeout=4):
     bind_req=b"\x30\x0c\x02\x01\x01\x60\x07\x02\x01\x03\x04\x00\x80\x00"
     try:
@@ -18,7 +18,7 @@ def _probe(ip,port,timeout=4):
             s.send(bind_req)
             r=s.recv(1024)
             return b"\x0a\x01\x00" in r  # BindResponse with resultCode=success
-    except: return False
+    except Exception: return False
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

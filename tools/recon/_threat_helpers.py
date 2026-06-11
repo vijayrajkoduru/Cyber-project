@@ -11,7 +11,7 @@ async def api_get(url, headers=None, timeout=10):
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             try: body = json.loads(e.read())
-            except: body = {}
+            except Exception: body = {}
             return e.code, body
         except Exception as e:
             return 0, {"_error": str(e)[:120]}
