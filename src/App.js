@@ -14901,6 +14901,14 @@ function generateUniversalVLReport(opts) {
           "Browser security header misconfiguration enables clickjacking, XSS amplification, or cross-origin abuse. Business impact: customer account-takeover via crafted phishing pages."],
         [/(privileged|hostnetwork|hostpid|docker.sock|capability)/i,
           "Container / runtime privilege escalation primitive present. Business impact: pod-to-host escape can collapse the entire cluster blast radius - one container compromise = full cluster."],
+        [/breach|pastebin|haveibeenpwned|leaked.+(credential|password|email)|dehashed|hibp/i,
+          "Credential leakage from external breach corpus exposes the organization to credential-stuffing and account-takeover campaigns. Business impact: customer fraud, support cost spikes, regulatory disclosure (state breach laws) if employees reused passwords."],
+        [/spf|dmarc|dkim|mail (?:server|security)|email security/i,
+          "Email authentication (SPF/DKIM/DMARC) gap allows attackers to spoof the organization's domain in phishing campaigns. Business impact: brand impersonation, supplier-fraud risk, customer phishing leading to revenue loss + trust erosion."],
+        [/subdomain.+takeover|dangling.+(cname|dns)|orphan.+(dns|record)/i,
+          "Dangling DNS / subdomain takeover hijack vector. Business impact: attacker hosts content on your subdomain (cookie theft on parent domain, phishing under your brand, SEO poisoning). Listed publicly = bug-bounty-grade severity."],
+        [/open.?redirect|host.?header|csrf|clickjack/i,
+          "Web-flow manipulation primitive (open redirect / host injection / CSRF). Business impact: phishing campaigns leveraging your legit domain bypass email-security warning rails - users trust the URL bar then enter credentials on attacker page."],
       ];
       let _impTail = null;
       if (_topFinding) {

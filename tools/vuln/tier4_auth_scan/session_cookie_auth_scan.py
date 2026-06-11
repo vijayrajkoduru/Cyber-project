@@ -41,9 +41,10 @@ def _audit_cookies(url, r):
         }
         cookies_seen.append({"name": name, "attrs": attrs})
         if is_session:
-            if not attrs["secure"]:
+            is_https = url.startswith("https://")
+            if is_https and not attrs["secure"]:
                 issues.append({"sev": "MEDIUM", "name": name, "attr": "Secure",
-                               "url": url, "issue": f"Session cookie '{name}' missing Secure flag"})
+                               "url": url, "issue": f"Session cookie '{name}' missing Secure flag on HTTPS"})
             if not attrs["httponly"]:
                 issues.append({"sev": "MEDIUM", "name": name, "attr": "HttpOnly",
                                "url": url, "issue": f"Session cookie '{name}' missing HttpOnly flag"})
