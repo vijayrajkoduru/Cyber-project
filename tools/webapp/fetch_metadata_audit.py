@@ -9,6 +9,7 @@ Audit: send a POST with Sec-Fetch-Site: cross-site to a state-changing
 endpoint. If accepted (without CSRF token), the app isn't using Fetch
 Metadata defense.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -34,16 +35,12 @@ def scan_fetch_metadata_audit(req: ScanRequest, payload=Depends(verify_scan_quot
     issues = []
     tested = 0
 
-    for path in STATE_PATHS:
+    def _probe(path):
         url = base + path
-        # Sanity: does endpoint exist? (HEAD or OPTIONS)
         r0 = safe_request("OPTIONS", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=6, allow_redirects=False)
-        if r0 is None or r0.status_code == 404: continue
-        tested += 1
-
-        # Probe 1: cross-site Sec-Fetch headers
+        if r0 is None or r0.status_code == 404: return None
         r1 = safe_request("POST", url,
             headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0",
                       "Content-Type": "application/json",
@@ -53,11 +50,21 @@ def scan_fetch_metadata_audit(req: ScanRequest, payload=Depends(verify_scan_quot
                       "Origin": "https://evil-attacker.example"},
             data='{"vulnuslab":"probe"}', req=req, timeout=8,
             allow_redirects=False)
-        if r1 is None: continue
-        # 200/302 with this set = no Fetch Metadata defense
+        if r1 is None: return {"tested": True}
         if r1.status_code in (200, 302, 201, 204):
-            issues.append({"path": path, "status": r1.status_code,
-                            "issue": "accepts cross-site POST"})
+            return {"tested": True, "path": path, "status": r1.status_code,
+                    "issue": "accepts cross-site POST"}
+        return {"tested": True}
+
+    # VL-TURBO deep: parallelize 8 path probes via pool(8). Each path runs 2 requests in sequence.
+    # Was ~112s sequential, now ~16s parallel.
+    with ThreadPoolExecutor(max_workers=min(8, len(STATE_PATHS))) as pool:
+        for result in pool.map(_probe, STATE_PATHS, timeout=21):
+            if result is None: continue
+            tested += 1
+            if "path" in result:
+                issues.append({"path": result["path"], "status": result["status"],
+                               "issue": result["issue"]})
 
     if issues:
         findings.append(wrap_finding(

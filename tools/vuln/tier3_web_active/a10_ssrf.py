@@ -11,6 +11,7 @@ Verify step re-fires with a DIFFERENT public URL (RFC 2606 example.com) so
 we confirm dynamic fetch behaviour rather than a static page that happens to
 contain "example domain" substring (common in default error pages).
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
@@ -28,15 +29,24 @@ INDICATORS_VERIFY  = ["example domain", "<title>example domain"]   # same words,
 
 
 async def _fire(base_url, params, payload_url, indicators):
-    suspects = []
-    for p in params:
+    async def _probe(p):
         url = f"{base_url}?{p}={payload_url}"
         r = await http_get_async(url, timeout=10, read=8000)
         if not r:
-            continue
+            return None
         body_lower = r.get("body", "").lower()
         if any(ind in body_lower for ind in indicators):
-            suspects.append({"param": p, "status": r.get("status")})
+            return {"param": p, "status": r.get("status")}
+        return None
+
+    results = await asyncio.gather(
+        *[_probe(p) for p in params],
+        return_exceptions=True)
+    suspects = []
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        suspects.append(res)
     return suspects
 
 

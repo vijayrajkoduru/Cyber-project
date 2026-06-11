@@ -11,6 +11,7 @@ Detection: check whether endpoints have the modern XS-Leak mitigations:
 These headers form the COIA (Cross-Origin Isolation Architecture)
 defense-in-depth. Apps with sensitive endpoints SHOULD have them.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -63,21 +64,28 @@ def scan_xs_leaks_probe(req: ScanRequest, payload=Depends(verify_scan_quota)):
     issues_by_path = {}
     tested = 0
 
-    for path in SENSITIVE_PATHS:
+    def _probe(path):
         url = base + path
         r = safe_request("GET", url,
             headers={"User-Agent": "Mozilla/5.0 VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code == 404: continue
-        tested += 1
-        # Normalize headers dict
+        if r is None or r.status_code == 404: return None
         try:
             hdrs = {k.lower(): v for k, v in r.headers.items()}
         except Exception:
             hdrs = {}
         issues = _audit(hdrs, path)
-        if issues:
-            issues_by_path[path] = issues
+        return (path, issues)
+
+    # VL-TURBO deep: parallelize 8 sensitive-path probes via pool(8).
+    # Was ~64s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(8, len(SENSITIVE_PATHS))) as pool:
+        for result in pool.map(_probe, SENSITIVE_PATHS, timeout=21):
+            if result is None: continue
+            path, issues = result
+            tested += 1
+            if issues:
+                issues_by_path[path] = issues
 
     findings = []
     if not tested:

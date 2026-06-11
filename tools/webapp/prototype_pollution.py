@@ -1,4 +1,5 @@
 """Webapp: Prototype Pollution detection (Node.js)."""
+import asyncio
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -38,29 +39,43 @@ async def webapp_prototype_pollution(req: ScanRequest, payload=Depends(verify_sc
             payloads.append(f"{key}={canary}")
     
     suspect = []
-    for p in payloads:
-        tests += 1
+    tests += len(payloads)
+
+    async def _probe(p):
         # Send pollution payload
-        r1 = safe_get(f"{base}/?{p}", req=req, timeout=8)
+        r1 = await asyncio.to_thread(safe_get, f"{base}/?{p}", req=req, timeout=8)
         if r1 is None:
-            continue
+            return None
         # Fetch a different endpoint to check if pollution persisted
-        r2 = safe_get(f"{base}/api/config", req=req, timeout=6) or safe_get(f"{base}/health", req=req, timeout=6)
+        r2 = await asyncio.to_thread(safe_get, f"{base}/api/config", req=req, timeout=6)
         if r2 is None:
-            continue
+            r2 = await asyncio.to_thread(safe_get, f"{base}/health", req=req, timeout=6)
+        if r2 is None:
+            return None
         # If canary appears in unrelated endpoint response, pollution worked
         if canary in (r2.text or ""):
-            suspect.append({"payload": p, "leaked_at": r2.url if hasattr(r2,"url") else "unknown"})
-            findings.append(wrap_finding(
-                f"Prototype Pollution confirmed via '{p}' - canary leaked to unrelated endpoint",
-                "HIGH",
-                cvss="8.1", cwe="CWE-1321",
-                cwe_name="Improperly Controlled Modification of Object Prototype Attributes",
-                owasp="A08:2021",
-                remediation="Use Object.create(null) for user-controlled object merging. Validate keys against allow-list. Upgrade lodash >= 4.17.12, jQuery >= 3.5.0.",
-                evidence_marker=f"GET ?{p} -> canary '{canary}' appeared in subsequent /api/config or /health response",
-            ))
-            break
+            return (p, r2)
+        return None
+
+    results = await asyncio.gather(
+        *[_probe(p) for p in payloads],
+        return_exceptions=True)
+    # Preserve original break-on-first-hit (only flag first matching payload)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        p, r2 = res
+        suspect.append({"payload": p, "leaked_at": r2.url if hasattr(r2,"url") else "unknown"})
+        findings.append(wrap_finding(
+            f"Prototype Pollution confirmed via '{p}' - canary leaked to unrelated endpoint",
+            "HIGH",
+            cvss="8.1", cwe="CWE-1321",
+            cwe_name="Improperly Controlled Modification of Object Prototype Attributes",
+            owasp="A08:2021",
+            remediation="Use Object.create(null) for user-controlled object merging. Validate keys against allow-list. Upgrade lodash >= 4.17.12, jQuery >= 3.5.0.",
+            evidence_marker=f"GET ?{p} -> canary '{canary}' appeared in subsequent /api/config or /health response",
+        ))
+        break
 
     return standard_response(
         tool="prototype_pollution", target=req.target,

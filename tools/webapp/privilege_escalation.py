@@ -1,4 +1,5 @@
 """Webapp: Vertical privilege escalation via header / role manipulation."""
+import asyncio
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -28,49 +29,74 @@ async def webapp_privilege_escalation(req: ScanRequest, payload=Depends(verify_s
     suspect = []
     spa_suppressed = []
 
-    for path in _ADMIN_PATHS:
-        # Baseline: request without any custom headers
-        tests += 1
-        baseline = safe_get(base + path, req=req, allow_redirects=False, timeout=6)
+    # Stage 1: fetch baselines for all paths in parallel
+    async def _baseline(path):
+        b = await asyncio.to_thread(safe_get, base + path, req=req, allow_redirects=False, timeout=6)
+        return (path, b)
+
+    baseline_results = await asyncio.gather(
+        *[_baseline(path) for path in _ADMIN_PATHS],
+        return_exceptions=True)
+    tests += len(_ADMIN_PATHS)
+
+    # Stage 2: for each path with a blocking baseline, fan-out bypass-header probes
+    async def _probe_headers(path, b_status):
+        def _get(hdr):
+            try:
+                return requests.get(base + path, headers={**hdr, "User-Agent":"VulnusLab/1.0"},
+                                    timeout=6, allow_redirects=False, verify=False)
+            except Exception:
+                return None
+        rs = await asyncio.gather(
+            *[asyncio.to_thread(_get, hdr) for hdr in _AUTH_BYPASS_HEADERS],
+            return_exceptions=True)
+        # Preserve original break-on-first-hit ordering
+        for hdr, r in zip(_AUTH_BYPASS_HEADERS, rs):
+            if isinstance(r, BaseException) or r is None:
+                continue
+            if r.status_code == 200 and len(r.content) > 200:
+                return (path, b_status, hdr, r)
+        return None
+
+    probe_jobs = []
+    for bres in baseline_results:
+        if isinstance(bres, BaseException) or bres is None:
+            continue
+        path, baseline = bres
         if baseline is None:
             continue
-        # SPA catch-all: if the baseline is just the SPA shell, the 200-on-
-        # bypass-header would always be the SPA shell too. Skip.
         if spa["is_spa"] and baseline.status_code == 200 and \
            is_same_as_canary(baseline.text or "", spa["canary_body"]):
             spa_suppressed.append(path)
             continue
-        # If baseline is already 200, this is a forced_browsing issue (separate scanner)
         if baseline.status_code in (200, 302):
             continue
-        # Only proceed if baseline blocks access (401/403)
         if baseline.status_code not in (401, 403, 404):
             continue
-        b_status = baseline.status_code
-        # Try each auth-bypass header
-        for hdr in _AUTH_BYPASS_HEADERS:
-            tests += 1
-            try:
-                r = requests.get(base + path, headers={**hdr, "User-Agent":"VulnusLab/1.0"},
-                                 timeout=6, allow_redirects=False, verify=False)
-            except Exception:
-                continue
-            if r.status_code == 200 and len(r.content) > 200:
-                hdr_name = list(hdr.keys())[0]
-                suspect.append({"path": path, "header": hdr_name, "baseline_status": b_status, "bypass_status": 200})
-                findings.append(wrap_finding(
-                    f"Privilege escalation - {hdr_name} header bypasses access control on {path}",
-                    "CRITICAL",
-                    cvss="9.8", cwe="CWE-285",
-                    cwe_name="Improper Authorization",
-                    owasp="A01:2021",
-                    remediation=("Never trust user-controllable headers for authorization. Derive the "
-                                 "user's role from a server-validated session/JWT, not from request "
-                                 "headers. If a reverse proxy injects auth headers, strip them at "
-                                 "the proxy before passing to the application."),
-                    evidence_marker=f"GET {path} baseline {b_status}; GET {path} with '{hdr_name}: admin' -> 200 ({len(r.content)} bytes)",
-                ))
-                break
+        probe_jobs.append((path, baseline.status_code))
+
+    tests += len(probe_jobs) * len(_AUTH_BYPASS_HEADERS)
+    probe_results = await asyncio.gather(
+        *[_probe_headers(path, b_status) for path, b_status in probe_jobs],
+        return_exceptions=True)
+    for pres in probe_results:
+        if isinstance(pres, BaseException) or pres is None:
+            continue
+        path, b_status, hdr, r = pres
+        hdr_name = list(hdr.keys())[0]
+        suspect.append({"path": path, "header": hdr_name, "baseline_status": b_status, "bypass_status": 200})
+        findings.append(wrap_finding(
+            f"Privilege escalation - {hdr_name} header bypasses access control on {path}",
+            "CRITICAL",
+            cvss="9.8", cwe="CWE-285",
+            cwe_name="Improper Authorization",
+            owasp="A01:2021",
+            remediation=("Never trust user-controllable headers for authorization. Derive the "
+                         "user's role from a server-validated session/JWT, not from request "
+                         "headers. If a reverse proxy injects auth headers, strip them at "
+                         "the proxy before passing to the application."),
+            evidence_marker=f"GET {path} baseline {b_status}; GET {path} with '{hdr_name}: admin' -> 200 ({len(r.content)} bytes)",
+        ))
 
     return standard_response(
         tool="privilege_escalation", target=req.target,

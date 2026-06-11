@@ -1,4 +1,5 @@
 """postman_api_discovery — leaked Postman docs / OpenAPI spec discovery."""
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -19,19 +20,28 @@ DOC_PATHS = [
 @vl_verify()
 def scan_postman_api_discovery(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    leaks = []
-    for path in DOC_PATHS:
+
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0",
                       "Accept": "application/json"},
             req=req, timeout=6, allow_redirects=False)
-        if r is None or r.status_code != 200: continue
+        if r is None or r.status_code != 200: return None
         body = (r.text or "")[:50000]
         markers = ["postman_collection", "swagger", "openapi", "schemes"]
         if any(m in body.lower() for m in markers):
-            leaks.append({"path": path, "size": len(body),
-                          "kind": "postman" if "postman_collection" in body.lower()
-                          else "openapi"})
+            return {"path": path, "size": len(body),
+                    "kind": "postman" if "postman_collection" in body.lower()
+                    else "openapi"}
+        return None
+
+    leaks = []
+    # VL-TURBO deep: parallelize 11 probes via pool(10).
+    # Was ~66s sequential, now ~6s parallel.
+    with ThreadPoolExecutor(max_workers=min(10, len(DOC_PATHS))) as pool:
+        for result in pool.map(_probe, DOC_PATHS, timeout=17):
+            if result is not None:
+                leaks.append(result)
     findings = []
     if leaks:
         findings.append(wrap_finding(

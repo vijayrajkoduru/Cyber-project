@@ -1,5 +1,6 @@
 """k8s_serviceaccount_token_leak — K8s SA token + env var leak in HTTP responses."""
 import re
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -24,18 +25,29 @@ PATTERNS = [
 @vl_verify()
 def scan_k8s_serviceaccount_token_leak(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    hits = []
-    for path in LEAK_PROBES:
+
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code == 404: continue
+        if r is None or r.status_code == 404: return None
         content = r.content[:200_000]
+        local_hits = []
         for name, pat in PATTERNS:
             for m in pat.finditer(content):
-                hits.append({"path": path, "type": name,
-                              "preview": m.group(0).decode(errors="ignore")[:60]})
+                local_hits.append({"path": path, "type": name,
+                                   "preview": m.group(0).decode(errors="ignore")[:60]})
+        return local_hits
+
+    hits = []
+    # VL-TURBO deep: parallelize 7 path probes via pool(7).
+    # Was ~56s sequential, now ~8s parallel. Preserves 10-hit cap.
+    with ThreadPoolExecutor(max_workers=min(7, len(LEAK_PROBES))) as pool:
+        for result in pool.map(_probe, LEAK_PROBES, timeout=21):
+            if result is None: continue
+            for h in result:
                 if len(hits) >= 10: break
+                hits.append(h)
             if len(hits) >= 10: break
     findings = []
     if hits:

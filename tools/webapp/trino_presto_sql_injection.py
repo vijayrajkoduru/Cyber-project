@@ -1,5 +1,6 @@
 """trino_presto_sql_injection — Trino/Presto SQL endpoint detection + injection."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -17,14 +18,23 @@ def scan_trino_presto_sql_injection(req: ScanRequest, payload=Depends(verify_sca
     base = web_url(req.target).rstrip("/")
     is_trino = False
     sql_exec_works = False
-    for path in TRINO_PATHS:
+
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0", "Accept": "application/json"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None: continue
+        if r is None: return False
         body = (r.text or "")[:5000]
         if "trino" in body.lower() or "presto" in body.lower() or "nodeId" in body:
-            is_trino = True
+            return True
+        return False
+
+    # VL-TURBO deep: parallelize 4 detection probes via pool(4).
+    # Was ~32s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(4, len(TRINO_PATHS))) as pool:
+        for result in pool.map(_probe, TRINO_PATHS, timeout=21):
+            if result:
+                is_trino = True
 
     if is_trino:
         # Try executing a benign SQL statement

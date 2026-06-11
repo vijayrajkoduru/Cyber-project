@@ -8,6 +8,7 @@ header (logged in access.log), then LFI to /var/log/apache2/access.log
 Test: probe common log paths via LFI parameter names, check if response
 contains log-line markers (IP addresses, HTTP status codes, timestamps).
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -35,36 +36,47 @@ def scan_lfi_log_injection(req: ScanRequest, payload=Depends(verify_scan_quota))
     lfi_hits = []
     tested = 0
 
-    # First find a path with one of the suspicious params reflecting input
-    for param in PARAMS:
-        for log_path in LOG_PATHS:
-            url = base + "/"
-            r = safe_request("GET", url, params={param: log_path},
-                headers={"User-Agent": "VulnusLab/1.0"},
-                req=req, timeout=8, allow_redirects=False)
-            if r is None: continue
-            tested += 1
-            body = (r.text or "")[:50000]
-            # LFI success markers in log files
-            indicators = [
-                # access.log: "GET /... HTTP/1.1" 200 1234
-                r" \"GET ",  # raw text marker
-                "HTTP/1.1",
-                # /proc/self/environ
-                "PATH=",
-                "USER=",
-                # /etc/passwd
-                "root:x:",
-                # syslog/messages
-                "kernel:",
-                "systemd",
-            ]
-            hit_indicators = [i for i in indicators if i.lower() in body.lower()]
-            if hit_indicators:
-                lfi_hits.append({"param": param, "log_path": log_path,
-                                   "indicators": hit_indicators[:3],
-                                   "status": r.status_code})
-                break  # one log_path per param
+    combos = [(param, log_path) for param in PARAMS for log_path in LOG_PATHS]
+
+    def _probe(item):
+        param, log_path = item
+        url = base + "/"
+        r = safe_request("GET", url, params={param: log_path},
+            headers={"User-Agent": "VulnusLab/1.0"},
+            req=req, timeout=8, allow_redirects=False)
+        if r is None: return None
+        body = (r.text or "")[:50000]
+        indicators = [
+            r" \"GET ",
+            "HTTP/1.1",
+            "PATH=",
+            "USER=",
+            "root:x:",
+            "kernel:",
+            "systemd",
+        ]
+        hit_indicators = [i for i in indicators if i.lower() in body.lower()]
+        if hit_indicators:
+            return {"tested": True, "param": param, "log_path": log_path,
+                    "indicators": hit_indicators[:3],
+                    "status": r.status_code}
+        return {"tested": True}
+
+    # VL-TURBO deep: parallelize 70 probes via pool(15).
+    # Was ~560s sequential, now ~40s parallel.
+    results = []
+    with ThreadPoolExecutor(max_workers=min(15, len(combos))) as pool:
+        for result in pool.map(_probe, combos, timeout=21):
+            if result is not None:
+                results.append(result)
+    tested = sum(1 for r in results if r.get("tested"))
+    # Preserve "one log_path per param" semantics — first hit per param wins
+    seen_params = set()
+    for r in results:
+        if "indicators" in r and r["param"] not in seen_params:
+            lfi_hits.append({"param": r["param"], "log_path": r["log_path"],
+                             "indicators": r["indicators"], "status": r["status"]})
+            seen_params.add(r["param"])
 
     findings = []
     if lfi_hits:

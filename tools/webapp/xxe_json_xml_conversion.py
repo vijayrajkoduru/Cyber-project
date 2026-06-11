@@ -5,6 +5,7 @@ endpoint and use a generic deserializer. Attacker POSTs XML body with
 Content-Type: application/json → if the server falls through to XML
 parser AND DOCTYPE is processed → XXE.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -28,18 +29,35 @@ def scan_xxe_json_xml_conversion(req: ScanRequest, payload=Depends(verify_scan_q
     base = web_url(req.target).rstrip("/")
     hits = []
     tested = 0
-    for path in PROBE_PATHS:
+    combos = [(path, ct) for path in PROBE_PATHS
+              for ct in ("application/json", "application/xml", "text/xml")]
+
+    def _probe(item):
+        path, ct = item
         url = base + path
-        for ct in ("application/json", "application/xml", "text/xml"):
-            r = safe_request("POST", url,
-                headers={"Content-Type": ct, "User-Agent": "VulnusLab/1.0"},
-                data=XXE_PAYLOAD, req=req, timeout=8, allow_redirects=False)
-            if r is None: continue
-            tested += 1
-            body = (r.text or "")[:5000]
-            if "root:x:" in body or "root:!" in body:
-                hits.append({"path": path, "content_type": ct})
-                break
+        r = safe_request("POST", url,
+            headers={"Content-Type": ct, "User-Agent": "VulnusLab/1.0"},
+            data=XXE_PAYLOAD, req=req, timeout=8, allow_redirects=False)
+        if r is None: return None
+        body = (r.text or "")[:5000]
+        if "root:x:" in body or "root:!" in body:
+            return {"tested": True, "path": path, "content_type": ct}
+        return {"tested": True}
+
+    # VL-TURBO deep: parallelize 15 (path × CT) probes via pool(15).
+    # Was ~120s sequential, now ~8s parallel.
+    results = []
+    with ThreadPoolExecutor(max_workers=min(15, len(combos))) as pool:
+        for result in pool.map(_probe, combos, timeout=21):
+            if result is not None:
+                results.append(result)
+    tested = sum(1 for r in results if r.get("tested"))
+    # Preserve "one hit per path" semantics
+    seen_paths = set()
+    for r in results:
+        if "content_type" in r and r["path"] not in seen_paths:
+            hits.append({"path": r["path"], "content_type": r["content_type"]})
+            seen_paths.add(r["path"])
     findings = []
     if hits:
         findings.append(wrap_finding(

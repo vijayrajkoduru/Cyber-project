@@ -12,6 +12,7 @@ presence of SAML SP endpoints AND known-vulnerable library versions
 import re
 import base64
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -64,25 +65,33 @@ def scan_saml_xml_signature_wrap(req: ScanRequest, payload=Depends(verify_scan_q
     metadata_endpoints = []
     banner_hits = []
 
-    for path in SAML_PATHS:
+    def _probe(path):
         url = base + path
         r = safe_request("GET", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code == 404: continue
-
+        if r is None or r.status_code == 404: return None
         body = (r.text or "")[:50000]
-        # Classify
+        local = {"endpoints": [], "metadata": [], "banners": []}
         if "SAMLRequest" in body or "AuthnRequest" in body or "samlp:" in body:
-            found_endpoints.append({"path": path, "status": r.status_code,
-                                      "type": "SP-AuthnRequest"})
+            local["endpoints"].append({"path": path, "status": r.status_code,
+                                       "type": "SP-AuthnRequest"})
         if "EntityDescriptor" in body or "md:SPSSODescriptor" in body:
-            metadata_endpoints.append({"path": path, "status": r.status_code,
-                                         "type": "SP-Metadata"})
-        # Check banner
+            local["metadata"].append({"path": path, "status": r.status_code,
+                                      "type": "SP-Metadata"})
         for desc, marker in VULN_BANNERS:
             if marker in body or marker in str(r.headers):
-                banner_hits.append({"path": path, "banner": desc})
+                local["banners"].append({"path": path, "banner": desc})
+        return local
+
+    # VL-TURBO deep: parallelize 14 probes via pool(10).
+    # Was ~112s sequential, now ~16s parallel.
+    with ThreadPoolExecutor(max_workers=min(10, len(SAML_PATHS))) as pool:
+        for result in pool.map(_probe, SAML_PATHS, timeout=21):
+            if result is None: continue
+            found_endpoints.extend(result["endpoints"])
+            metadata_endpoints.extend(result["metadata"])
+            banner_hits.extend(result["banners"])
 
     findings = []
     if banner_hits:

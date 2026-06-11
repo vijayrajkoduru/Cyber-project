@@ -8,6 +8,7 @@ This scanner fetches the doc and flags risky configs:
   - jwks_uri loadable + has reasonable keys
   - revocation_endpoint missing
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -33,18 +34,29 @@ def scan_oidc_discovery_audit(req: ScanRequest, payload=Depends(verify_scan_quot
 
     discovery = None
     discovery_url = None
-    for path in WELL_KNOWN_PATHS:
+
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0", "Accept": "application/json"},
             req=req, timeout=8, allow_redirects=True)
-        if r is None or r.status_code != 200: continue
+        if r is None or r.status_code != 200: return None
         try:
             data = r.json()
         except Exception:
-            continue
+            return None
         if "issuer" in data and "authorization_endpoint" in data:
-            discovery = data
-            discovery_url = base + path
+            return (base + path, data)
+        return None
+
+    # VL-TURBO deep: parallelize 5 discovery probes via pool(5).
+    # Was ~40s sequential, now ~8s parallel. First-match priority preserved.
+    disc_results = []
+    with ThreadPoolExecutor(max_workers=min(5, len(WELL_KNOWN_PATHS))) as pool:
+        for result in pool.map(_probe, WELL_KNOWN_PATHS, timeout=21):
+            disc_results.append(result)
+    for r in disc_results:
+        if r is not None:
+            discovery_url, discovery = r
             break
 
     if not discovery:

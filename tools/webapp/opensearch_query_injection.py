@@ -1,5 +1,6 @@
 """opensearch_query_injection — OpenSearch/Elasticsearch query DSL injection."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -18,20 +19,32 @@ def scan_opensearch_query_injection(req: ScanRequest, payload=Depends(verify_sca
     base = web_url(req.target).rstrip("/")
     is_es = False
     cluster_info = None
-    for path in ES_PATHS:
+
+    def _probe(path):
         r = safe_request("GET", base + path,
             headers={"User-Agent": "VulnusLab/1.0",
                       "Accept": "application/json"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None: continue
+        if r is None: return None
         body = (r.text or "")[:5000]
         if r.status_code == 200 and ("cluster_name" in body or
                                        "elasticsearch" in body.lower() or
                                        "opensearch" in body.lower()):
-            is_es = True
-            if path == "/" and not cluster_info:
-                try: cluster_info = r.json()
-                except Exception: pass
+            ci = None
+            if path == "/":
+                try: ci = r.json()
+                except Exception: ci = None
+            return {"path": path, "cluster_info": ci}
+        return None
+
+    # VL-TURBO deep: parallelize 5 probes via pool(5).
+    # Was ~40s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(5, len(ES_PATHS))) as pool:
+        for result in pool.map(_probe, ES_PATHS, timeout=21):
+            if result is not None:
+                is_es = True
+                if result["cluster_info"] and not cluster_info:
+                    cluster_info = result["cluster_info"]
 
     findings = []
     if is_es:

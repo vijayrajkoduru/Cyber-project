@@ -10,6 +10,7 @@ defense-in-depth gap, not a vuln per se.
 """
 import socket
 import ssl
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -91,18 +92,22 @@ def scan_mtls_audit(req: ScanRequest, payload=Depends(verify_scan_quota)):
     # Test 2: sensitive paths via standard HTTPS GET
     sensitive_findings = []
     accessible_sensitive = []
-    for path in SENSITIVE_PATHS:
+
+    def _path_probe(path):
         r = safe_request("GET", f"https://{host}:{port}{path}",
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None: continue
-        # 200 / 401 / 403 = endpoint exists; 404 = doesn't
+        if r is None: return None
         if r.status_code != 404:
-            # mTLS would reject at TLS layer (we'd see no response). If we got
-            # ANY response, mTLS is not enforced at the TLS layer.
-            accessible_sensitive.append({
-                "path": path, "status": r.status_code,
-            })
+            return {"path": path, "status": r.status_code}
+        return None
+
+    # VL-TURBO deep: parallelize 8 sensitive-path probes via pool(8).
+    # Was ~64s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(8, len(SENSITIVE_PATHS))) as pool:
+        for result in pool.map(_path_probe, SENSITIVE_PATHS, timeout=21):
+            if result is not None:
+                accessible_sensitive.append(result)
 
     findings = []
     if main_mtls:

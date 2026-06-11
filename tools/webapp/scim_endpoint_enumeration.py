@@ -6,6 +6,7 @@ Common bug: SCIM requires Bearer auth, but path is exposed without
 authentication enforcement → attacker enumerates user list with PII.
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -32,36 +33,39 @@ def scan_scim_endpoint_enumeration(req: ScanRequest, payload=Depends(verify_scan
     unauth_exposed = []
     user_count = None
 
-    for path in SCIM_PATHS:
+    def _probe(path):
         url = base + path
-        # Unauth probe
         r = safe_request("GET", url,
             headers={"User-Agent": "VulnusLab/1.0",
                       "Accept": "application/scim+json,application/json"},
             req=req, timeout=8, allow_redirects=False)
-        if r is None or r.status_code == 404: continue
-
-        # Did we get a SCIM-style response?
+        if r is None or r.status_code == 404: return None
         try:
             data = r.json()
         except Exception:
             data = {}
-
         is_scim = (isinstance(data, dict) and
                     ("schemas" in data or "Resources" in data or
                      "totalResults" in data))
-        if is_scim:
-            discovered.append({"path": path, "status": r.status_code})
-            # Unauth + 200 = bug
-            if r.status_code == 200:
-                unauth_exposed.append({"path": path,
-                                         "total_results": data.get("totalResults", 0)})
-                if path.endswith("/Users") and "totalResults" in data:
-                    user_count = data["totalResults"]
-        elif r.status_code in (401, 403):
-            # SCIM with auth required (good)
-            discovered.append({"path": path, "status": r.status_code,
-                                 "note": "auth-required"})
+        out = {"path": path, "status": r.status_code, "is_scim": is_scim, "data": data}
+        return out
+
+    # VL-TURBO deep: parallelize 8 probes via pool(8).
+    # Was ~64s sequential, now ~8s parallel.
+    with ThreadPoolExecutor(max_workers=min(8, len(SCIM_PATHS))) as pool:
+        for result in pool.map(_probe, SCIM_PATHS, timeout=21):
+            if result is None: continue
+            path = result["path"]
+            if result["is_scim"]:
+                discovered.append({"path": path, "status": result["status"]})
+                if result["status"] == 200:
+                    unauth_exposed.append({"path": path,
+                                            "total_results": result["data"].get("totalResults", 0)})
+                    if path.endswith("/Users") and "totalResults" in result["data"]:
+                        user_count = result["data"]["totalResults"]
+            elif result["status"] in (401, 403):
+                discovered.append({"path": path, "status": result["status"],
+                                    "note": "auth-required"})
 
     findings = []
     if unauth_exposed:

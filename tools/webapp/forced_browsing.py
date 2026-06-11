@@ -1,4 +1,5 @@
 """Webapp: Forced browsing - find admin/restricted paths reachable without auth."""
+import asyncio
 import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
@@ -39,9 +40,19 @@ async def webapp_forced_browsing(req: ScanRequest, payload=Depends(verify_scan_q
         spa_baseline = {"size": len(br.content), "head": (br.text or "")[:300]}
 
     
-    for path in _ADMIN_PATHS:
-        tests += 1
-        r = safe_get(base + path, req=req, allow_redirects=False, timeout=6)
+    tests += len(_ADMIN_PATHS)
+
+    async def _probe(path):
+        r = await asyncio.to_thread(safe_get, base + path, req=req, allow_redirects=False, timeout=6)
+        return (path, r)
+
+    results = await asyncio.gather(
+        *[_probe(path) for path in _ADMIN_PATHS],
+        return_exceptions=True)
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        path, r = res
         if r is None:
             continue
         if spa_baseline and r.status_code == 200 and abs(len(r.content) - spa_baseline["size"]) < 50 and (r.text or "")[:300] == spa_baseline["head"]:

@@ -10,6 +10,7 @@ without a login form. 6-stage flow:
                  finding stays CONFIRMED only if both responses 200 without login
   privilege_check - admin panel access is "guest" privilege (no auth)
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core.verify import vl_verify
@@ -86,11 +87,21 @@ class HiddenAdminBypass(MethodologyScanner):
         spa = ctx.state.get("_spa") or {}
         spa_is = spa.get("is_spa", False)
         canary_body = spa.get("canary_body", "")
-        exposed, auth_protected, login_page = [], [], []
-        for path in paths:
+
+        async def _probe(path):
             r = await http_get_async(f"{base_url}{path}", timeout=6, read=8000)
             kind = _classify(r, canary_body, spa_is)
             status = (r or {}).get("status", 0)
+            return (path, kind, status)
+
+        results = await asyncio.gather(
+            *[_probe(path) for path in paths],
+            return_exceptions=True)
+        exposed, auth_protected, login_page = [], [], []
+        for res in results:
+            if isinstance(res, BaseException) or res is None:
+                continue
+            path, kind, status = res
             if kind == "exposed":
                 exposed.append({"path": path, "status": status,
                                  "evidence": "200 OK without login form"})

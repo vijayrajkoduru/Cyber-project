@@ -5,6 +5,7 @@ page once more - cookie hygiene flags are static facts about the response,
 so a stable refetch CONFIRMS them and a flaky refetch (status flip,
 disappearing form) downgrades to SUSPECTED.
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
@@ -44,19 +45,30 @@ def _audit_response(url, r):
 
 
 async def _scan_paths(base_url, paths):
-    login_found, all_issues = [], []
-    for path in paths:
+    async def _probe(path):
         url = f"{base_url}{path}"
         r = await http_get_async(url, timeout=8, read=20000)
         if not r or r.get("status", 0) >= 400:
-            continue
+            return None
         issues = _audit_response(url, r)
         if not issues and "<form" not in (r.get("body", "") or "").lower():
+            return None
+        return (path, issues)
+
+    results = await asyncio.gather(
+        *[_probe(path) for path in paths],
+        return_exceptions=True)
+    # Preserve original "one login page is enough per pass" by keeping first hit
+    login_found, all_issues = [], []
+    # results align with paths order; iterate in original order and stop on first
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
             continue
+        path, issues = res
         login_found.append(path)
         for i in issues:
             all_issues.append({"path": path, **i})
-        break       # one login page is enough per pass
+        break
     return login_found, all_issues
 
 

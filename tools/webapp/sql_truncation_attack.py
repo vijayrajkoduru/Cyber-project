@@ -9,6 +9,7 @@ Probe: try registering with overlong usernames containing existing-admin
 prefixes; success indicator is HTTP 200/201 vs 409/400 conflict.
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -32,12 +33,15 @@ def scan_sql_truncation_attack(req: ScanRequest, payload=Depends(verify_scan_quo
     base = web_url(req.target).rstrip("/")
     suspicious = []
     tested = 0
-    for path in SIGNUP_PATHS:
+
+    def _probe(path):
         url = base + path
         r0 = safe_request("OPTIONS", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=6, allow_redirects=False)
-        if r0 is None or r0.status_code == 404: continue
+        if r0 is None or r0.status_code == 404: return None
+        local_tested = 0
+        local_hit = None
         for name in LONG_NAMES:
             r = safe_request("POST", url,
                 headers={"Content-Type": "application/json",
@@ -47,12 +51,21 @@ def scan_sql_truncation_attack(req: ScanRequest, payload=Depends(verify_scan_quo
                                    "password": "Vu1nuslab!Pass"}),
                 req=req, timeout=8, allow_redirects=False)
             if r is None: continue
-            tested += 1
-            # Success indicator: registration accepted (200/201)
+            local_tested += 1
             if r.status_code in (200, 201):
-                suspicious.append({"path": path, "name": name[:30] + "...",
-                                     "status": r.status_code})
+                local_hit = {"path": path, "name": name[:30] + "...",
+                             "status": r.status_code}
                 break
+        return {"tested": local_tested, "hit": local_hit}
+
+    # VL-TURBO deep: parallelize 5 signup paths via pool(5); each path serially tries 3 names.
+    # Was ~150s sequential, now ~30s parallel.
+    with ThreadPoolExecutor(max_workers=min(5, len(SIGNUP_PATHS))) as pool:
+        for result in pool.map(_probe, SIGNUP_PATHS, timeout=21):
+            if result is None: continue
+            tested += result["tested"]
+            if result["hit"]:
+                suspicious.append(result["hit"])
     findings = []
     if suspicious:
         findings.append(wrap_finding(

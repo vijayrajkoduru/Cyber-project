@@ -4,6 +4,7 @@ Refactored 2026-06-09 to MethodologyScanner. Verify re-fires with a SECOND
 external host (example.com instead of example.org) so we confirm dynamic
 URL-input handling rather than a hardcoded redirect to example.org.
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
@@ -22,16 +23,25 @@ PROBE_PARAMS_DEEP  = ["returnTo", "continue", "goto", "destination",
 
 
 async def _fire(base_url, params, payload, host):
-    hits = []
-    for p in params:
+    async def _probe(p):
         url = f"{base_url}?{p}={payload}"
         r = await http_get_async(url, timeout=8)
         if not r:
-            continue
+            return None
         loc = (r.get("headers") or {}).get("location", "") or ""
         if host in loc.lower():
-            hits.append({"param": p, "location": loc[:120],
-                         "status": r.get("status")})
+            return {"param": p, "location": loc[:120],
+                    "status": r.get("status")}
+        return None
+
+    results = await asyncio.gather(
+        *[_probe(p) for p in params],
+        return_exceptions=True)
+    hits = []
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        hits.append(res)
     return hits
 
 

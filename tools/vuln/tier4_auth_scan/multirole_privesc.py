@@ -10,6 +10,7 @@ role names without auth. 6 stages:
                   returns JSON AND role keywords appear in JSON, not in HTML shell
   privilege_check - role info-leak = "guest" privilege exposure
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core.verify import vl_verify
@@ -69,9 +70,19 @@ class MultiRolePrivesc(MethodologyScanner):
         spa = ctx.state.get("_spa") or {}
         spa_is = spa.get("is_spa", False)
         canary_body = spa.get("canary_body", "")
-        leaks, suppressed = [], []
-        for path in paths:
+
+        async def _probe(path):
             r = await http_get_async(f"{base_url}{path}", timeout=6, read=12000)
+            return (path, r)
+
+        results = await asyncio.gather(
+            *[_probe(path) for path in paths],
+            return_exceptions=True)
+        leaks, suppressed = [], []
+        for res in results:
+            if isinstance(res, BaseException) or res is None:
+                continue
+            path, r = res
             if not r or r.get("status") != 200:
                 continue
             body = r.get("body", "") or ""

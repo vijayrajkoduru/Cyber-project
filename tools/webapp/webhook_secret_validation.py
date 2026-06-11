@@ -9,6 +9,7 @@ Test: POST a benign payload to common webhook paths WITHOUT sig header,
 flag if 200/201 accepted.
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -44,32 +45,36 @@ def scan_webhook_secret_validation(req: ScanRequest, payload=Depends(verify_scan
     discovered = []
     accepted_unsigned = []
 
-    for path in WEBHOOK_PATHS:
+    def _probe(path):
         url = base + path
-        # Try GET first to see if endpoint exists
         r0 = safe_request("GET", url,
             headers={"User-Agent": "VulnusLab/1.0"},
             req=req, timeout=6, allow_redirects=False)
-        if r0 is None or r0.status_code == 404: continue
-        discovered.append(path)
-
-        # POST unsigned payload — try each provider shape
+        if r0 is None or r0.status_code == 404: return None
+        local_hit = None
         for prov, body in PAYLOADS.items():
             r = safe_request("POST", url,
                 headers={"Content-Type": "application/json",
                           "User-Agent": "VulnusLab/1.0",
-                          # NO signature header on purpose
                           "X-GitHub-Event": "pull_request" if prov == "github" else ""},
                 data=json.dumps(body), req=req, timeout=8, allow_redirects=False)
             if r is None: continue
-            # Success indicator: 200/201/202/204 without explicit "invalid signature" error
             if r.status_code in (200, 201, 202, 204):
                 body_resp = (r.text or "")[:1000].lower()
                 if not any(k in body_resp for k in ("invalid signature", "missing signature",
                                                       "sig", "unauthorized", "x-hub-signature")):
-                    accepted_unsigned.append({"path": path, "provider": prov,
-                                                "status": r.status_code})
-                    break  # one per path
+                    local_hit = {"path": path, "provider": prov, "status": r.status_code}
+                    break
+        return {"path": path, "hit": local_hit}
+
+    # VL-TURBO deep: parallelize 11 paths via pool(10); each path serially tries 4 providers.
+    # Was ~660s sequential, now ~64s parallel.
+    with ThreadPoolExecutor(max_workers=min(10, len(WEBHOOK_PATHS))) as pool:
+        for result in pool.map(_probe, WEBHOOK_PATHS, timeout=21):
+            if result is None: continue
+            discovered.append(result["path"])
+            if result["hit"]:
+                accepted_unsigned.append(result["hit"])
 
     findings = []
     if accepted_unsigned:

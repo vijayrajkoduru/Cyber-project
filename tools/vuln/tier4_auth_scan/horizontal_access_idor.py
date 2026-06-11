@@ -10,6 +10,7 @@ flag pairs that return distinct 200 JSON bodies without auth. 6 stages:
                   three distinct bodies; SPA shell would return identical)
   privilege_check - IDOR access = "guest" privilege
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core.verify import vl_verify
@@ -82,13 +83,27 @@ class HorizontalAccessIdor(MethodologyScanner):
         spa = ctx.state.get("_spa") or {}
         spa_is = spa.get("is_spa", False)
         canary_body = spa.get("canary_body", "")
+
+        async def _probe(path):
+            alt = path[:-1] + "2"
+            r1, r2 = await asyncio.gather(
+                http_get_async(f"{base_url}{path}", timeout=6, read=12000),
+                http_get_async(f"{base_url}{alt}", timeout=6, read=12000),
+                return_exceptions=True)
+            if isinstance(r1, BaseException): r1 = None
+            if isinstance(r2, BaseException): r2 = None
+            verdict = _classify_pair(r1, r2, spa_is, canary_body)
+            return (path, verdict)
+
+        results = await asyncio.gather(
+            *[_probe(path) for path in paths],
+            return_exceptions=True)
         suspects = []
         spa_suppressed = []
-        for path in paths:
-            r1 = await http_get_async(f"{base_url}{path}", timeout=6, read=12000)
-            alt = path[:-1] + "2"
-            r2 = await http_get_async(f"{base_url}{alt}", timeout=6, read=12000)
-            verdict = _classify_pair(r1, r2, spa_is, canary_body)
+        for res in results:
+            if isinstance(res, BaseException) or res is None:
+                continue
+            path, verdict = res
             if verdict == "suspect":
                 suspects.append({"path": path,
                                   "evidence": "id=1 and id=2 return different 200 JSON bodies without auth"})

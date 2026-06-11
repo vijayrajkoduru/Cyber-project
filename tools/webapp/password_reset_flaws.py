@@ -1,4 +1,5 @@
 """Webapp: Password reset flaw scanner - email enum, weak token, no rate limit."""
+import asyncio
 import re
 import time
 import requests
@@ -21,15 +22,25 @@ async def webapp_password_reset_flaws(req: ScanRequest, payload=Depends(verify_s
     findings = []
     tests = 0
     reset_url = None
-    for p in _RESET_PATHS:
-        tests += 1
-        r = safe_get(base + p, req=req, allow_redirects=True, timeout=6)
+    tests += len(_RESET_PATHS)
+
+    async def _discover(p):
+        r = await asyncio.to_thread(safe_get, base + p, req=req, allow_redirects=True, timeout=6)
         if r is None or r.status_code == 404:
-            continue
+            return None
         body = (r.text or "")[:30000]
         if not re.search(r'<input[^>]*(?:name|type)=["\']?(?:email|mail)', body, re.I):
+            return None
+        return p
+
+    discover_results = await asyncio.gather(
+        *[_discover(p) for p in _RESET_PATHS],
+        return_exceptions=True)
+    # Preserve original "first match wins" ordering by walking results in order
+    for res in discover_results:
+        if isinstance(res, BaseException) or res is None:
             continue
-        reset_url = base + p
+        reset_url = base + res
         break
     if not reset_url:
         return standard_response(
@@ -42,14 +53,19 @@ async def webapp_password_reset_flaws(req: ScanRequest, payload=Depends(verify_s
     common_email = "admin@" + base.replace("https://","").replace("http://","").split("/")[0]
     
     try:
-        tests += 1
-        r1 = requests.post(reset_url, data={"email": fake_email},
-                           headers={"User-Agent":"VulnusLab/1.0"},
-                           timeout=8, allow_redirects=False, verify=False)
-        tests += 1
-        r2 = requests.post(reset_url, data={"email": common_email},
-                           headers={"User-Agent":"VulnusLab/1.0"},
-                           timeout=8, allow_redirects=False, verify=False)
+        tests += 2
+
+        def _post(email):
+            return requests.post(reset_url, data={"email": email},
+                                 headers={"User-Agent":"VulnusLab/1.0"},
+                                 timeout=8, allow_redirects=False, verify=False)
+
+        r1, r2 = await asyncio.gather(
+            asyncio.to_thread(_post, fake_email),
+            asyncio.to_thread(_post, common_email),
+            return_exceptions=True)
+        if isinstance(r1, BaseException) or isinstance(r2, BaseException):
+            raise r1 if isinstance(r1, BaseException) else r2
         t1 = (r1.text or "")[:2000].lower()
         t2 = (r2.text or "")[:2000].lower()
         # Look for distinctive error messages

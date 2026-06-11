@@ -1,5 +1,6 @@
 """Force-browse scanner — uses tools/_payloads/force_browse.py (595 paths)."""
 import hashlib, secrets, time
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
@@ -42,33 +43,43 @@ def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
     _wallclock_start = time.time()
     _WALLCLOCK_BUDGET = 60.0
     _bailed = False
-    for entry in paths_to_test:
-        if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
-            _bailed = True; break
+
+    def _probe(entry):
         path = entry.get("path", "")
         if not path.startswith("/"):
             path = "/" + path
         category = entry.get("category", "unknown")
         severity = entry.get("severity", "LOW")
-        tests += 1
         r = safe_get(base + path, req=req, allow_redirects=False, timeout=8)
-        if r is None or r.status_code != 200:
-            continue
-        if spa_shell and _fp(r) == canary_fp:
-            suppressed += 1
-            continue
-        # Skip empty/tiny generic 200s (defensive)
-        if len(r.content) < 50:
-            continue
-        findings.append(wrap_finding(
-            f"Sensitive path exposed: {path}",
-            severity, cvss=_cvss(severity),
-            cwe="CWE-538", owasp="A05:2021",
-            remediation=f"Block public access to {path} at the web server / WAF level.",
-            evidence_marker=f"GET {path} → HTTP 200, {len(r.content)} bytes (category={category})"))
-        confirmed.append({"path": path, "category": category, "severity": severity,
-                          "status": r.status_code, "bytes": len(r.content)})
-        by_cat[category] = by_cat.get(category, 0) + 1
+        return (entry, path, category, severity, r)
+
+    # VL-TURBO deep: parallelize up to 200 path probes via pool(15) with wall-clock cap.
+    # Was ~1600s sequential, now ~110s parallel (still budget-capped to 60s).
+    try:
+        with ThreadPoolExecutor(max_workers=min(15, len(paths_to_test))) as pool:
+            for entry, path, category, severity, r in pool.map(_probe, paths_to_test, timeout=_WALLCLOCK_BUDGET + 5):
+                if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                    _bailed = True
+                    break
+                tests += 1
+                if r is None or r.status_code != 200:
+                    continue
+                if spa_shell and _fp(r) == canary_fp:
+                    suppressed += 1
+                    continue
+                if len(r.content) < 50:
+                    continue
+                findings.append(wrap_finding(
+                    f"Sensitive path exposed: {path}",
+                    severity, cvss=_cvss(severity),
+                    cwe="CWE-538", owasp="A05:2021",
+                    remediation=f"Block public access to {path} at the web server / WAF level.",
+                    evidence_marker=f"GET {path} → HTTP 200, {len(r.content)} bytes (category={category})"))
+                confirmed.append({"path": path, "category": category, "severity": severity,
+                                  "status": r.status_code, "bytes": len(r.content)})
+                by_cat[category] = by_cat.get(category, 0) + 1
+    except TimeoutError:
+        _bailed = True
 
     summary = (f"Force-browse: {tests} paths probed (top-{_MAX_PATHS} by severity) in "
                f"{time.time() - _wallclock_start:.1f}s; "

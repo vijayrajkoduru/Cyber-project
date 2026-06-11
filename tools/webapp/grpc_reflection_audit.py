@@ -9,6 +9,7 @@ Tests gRPC-Web (HTTP/JSON wrapper of gRPC) reflection endpoint AND
 raw HTTP/2 gRPC. Most apps put gRPC at :443 with TLS so this checks
 via standard HTTP path.
 """
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -30,26 +31,29 @@ REFLECTION_PATHS = [
 def scan_grpc_reflection_audit(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
 
-    reflection_hits = []
-    for path in REFLECTION_PATHS:
+    def _probe(path):
         url = base + path
-        # Send a minimal gRPC-Web request: ListServices via reflection
-        # gRPC-Web frame: 0x00 (compressed=0) + 4-byte length + protobuf body
-        # ListServices: {"list_services": ""} → protobuf 0x32 0x00
         body = bytes([0x00, 0x00, 0x00, 0x00, 0x02, 0x32, 0x00])
         r = safe_request("POST", url,
             headers={"Content-Type": "application/grpc-web+proto",
                       "X-User-Agent": "grpc-web-javascript/0.1",
                       "User-Agent": "VulnusLab/1.0"},
             data=body, req=req, timeout=10, allow_redirects=False)
-        if r is None: continue
-        # gRPC-Web success: HTTP 200 + grpc-status header + content
+        if r is None: return None
         grpc_status = r.headers.get("grpc-status") or r.headers.get("Grpc-Status")
-        # Reflection enabled if we get a non-empty response with grpc-status=0
         if r.status_code == 200 and grpc_status == "0" and len(r.content) > 5:
-            reflection_hits.append({"path": path,
-                                      "response_size": len(r.content),
-                                      "grpc_status": grpc_status})
+            return {"path": path,
+                    "response_size": len(r.content),
+                    "grpc_status": grpc_status}
+        return None
+
+    reflection_hits = []
+    # VL-TURBO deep: parallelize 3 probes via pool(3).
+    # Was ~30s sequential, now ~10s parallel.
+    with ThreadPoolExecutor(max_workers=min(3, len(REFLECTION_PATHS))) as pool:
+        for result in pool.map(_probe, REFLECTION_PATHS, timeout=25):
+            if result is not None:
+                reflection_hits.append(result)
 
     findings = []
     if reflection_hits:

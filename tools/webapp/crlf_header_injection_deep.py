@@ -8,6 +8,7 @@ attacker can inject \\r\\n into a header response, they can:
   - Set arbitrary response headers (CORS spoof, CSP bypass)
   - Split response (legacy attack but still works on naive backends)
 """
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
@@ -36,28 +37,41 @@ PROBE_PATHS = [
 @vl_verify()
 def scan_crlf_header_injection_deep(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
-    confirmed = []
-    tested = 0
+    combos = [(path, desc, pl) for path in PROBE_PATHS for desc, pl in PAYLOADS]
 
-    for path in PROBE_PATHS:
-        for desc, pl in PAYLOADS:
-            # Append payload as path/query suffix
-            url = base + path + pl
-            r = safe_request("GET", url,
-                headers={"User-Agent": "VulnusLab/1.0"},
-                req=req, timeout=8, allow_redirects=False)
-            if r is None: continue
-            tested += 1
-            # Check if our injected Set-Cookie made it into response
-            try:
-                cookies_raw = r.headers.get("set-cookie", "")
-            except Exception:
-                cookies_raw = ""
-            if "vulnuslab=injected" in cookies_raw:
-                confirmed.append({"path": path, "payload_type": desc,
-                                    "payload": pl[:60],
-                                    "injected_header": "Set-Cookie"})
-                break  # one per path
+    def _probe(item):
+        path, desc, pl = item
+        url = base + path + pl
+        r = safe_request("GET", url,
+            headers={"User-Agent": "VulnusLab/1.0"},
+            req=req, timeout=8, allow_redirects=False)
+        if r is None: return None
+        try:
+            cookies_raw = r.headers.get("set-cookie", "")
+        except Exception:
+            cookies_raw = ""
+        if "vulnuslab=injected" in cookies_raw:
+            return {"path": path, "payload_type": desc,
+                    "payload": pl[:60],
+                    "injected_header": "Set-Cookie", "tested": True}
+        return {"tested": True}
+
+    results = []
+    # VL-TURBO deep: parallelize 35 probes via pool(15).
+    # Was ~280s sequential, now ~24s parallel.
+    with ThreadPoolExecutor(max_workers=min(15, len(combos))) as pool:
+        for result in pool.map(_probe, combos, timeout=21):
+            if result is not None:
+                results.append(result)
+    tested = sum(1 for r in results if r.get("tested"))
+    # Preserve "one per path" semantics
+    confirmed = []
+    seen_paths = set()
+    for r in results:
+        if r.get("injected_header") and r["path"] not in seen_paths:
+            confirmed.append({"path": r["path"], "payload_type": r["payload_type"],
+                              "payload": r["payload"], "injected_header": r["injected_header"]})
+            seen_paths.add(r["path"])
 
     findings = []
     if confirmed:
