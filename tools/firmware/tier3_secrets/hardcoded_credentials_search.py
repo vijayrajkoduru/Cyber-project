@@ -5,7 +5,7 @@ Reads firmware as bytes (capped 256 MB) and runs strict regex passes for:
   - AWS secret-like      (40-char base64 in env-var assignment)
   - Google API keys      (AIza + 35 base64 chars)
   - GitHub tokens        (ghp_/gho_/ghu_/ghs_/github_pat_)
-  - Slack tokens         (xox[abprs]-[0-9a-zA-Z\-]+)
+  - Slack tokens         (xox[abprs]-[0-9a-zA-Z\\-]+)
   - bcrypt hashes        ($2[abxy]$NN$...)
   - shadow hashes        ($1$, $5$, $6$, $y$)
   - JWT tokens           (eyJ... base64 dot-segment)
