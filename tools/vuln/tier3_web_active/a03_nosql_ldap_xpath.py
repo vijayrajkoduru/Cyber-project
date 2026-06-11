@@ -4,6 +4,7 @@ Refactored 2026-06-09 to MethodologyScanner. Same shape as the Wave 1 payload
 scanners. Verify step re-fires with a SECOND payload variant to confirm the
 backend is reflecting real parser errors rather than echoing static content.
 """
+import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
@@ -22,21 +23,34 @@ PROBE_PARAMS_QUICK    = ["q", "user", "id"]
 PROBE_PARAMS_DEEP     = ["filter", "name", "email"]
 
 
+async def _probe_one(base_url, param, payload):
+    url = f"{base_url}?{param}={payload}"
+    r = await http_get_async(url, timeout=8)
+    if not r:
+        return None
+    body_lower = r.get("body", "").lower()
+    for fp in ERROR_FINGERPRINTS:
+        if fp in body_lower:
+            return {"param": param, "error": fp, "payload": payload}
+    return None
+
+
 async def _fire(base_url, params, payloads):
-    hits = []
-    for p in params:
-        for payload in payloads:
-            url = f"{base_url}?{p}={payload}"
-            r = await http_get_async(url, timeout=8)
-            if not r:
-                continue
-            body_lower = r.get("body", "").lower()
-            for fp in ERROR_FINGERPRINTS:
-                if fp in body_lower:
-                    hits.append({"param": p, "error": fp, "payload": payload})
-                    break
-            if hits and hits[-1].get("param") == p:
-                break
+    # VL-TURBO deep: fire all (param, payload) probes concurrently.
+    # Was 3 params * 2 payloads = 6 sequential * 8s = ~48s worst case.
+    # Now ~8s. First hit per param wins (keep original semantics).
+    jobs = [(p, pl) for p in params for pl in payloads]
+    results = await asyncio.gather(
+        *[_probe_one(base_url, p, pl) for p, pl in jobs],
+        return_exceptions=True)
+    hits, seen_params = [], set()
+    for res in results:
+        if isinstance(res, BaseException) or res is None:
+            continue
+        if res["param"] in seen_params:
+            continue
+        hits.append(res)
+        seen_params.add(res["param"])
     return hits
 
 

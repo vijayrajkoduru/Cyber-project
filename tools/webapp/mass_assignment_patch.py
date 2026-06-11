@@ -6,6 +6,7 @@ emailVerified, deleted_at) and checks if the server accepts the mutation.
 Requires auth_bearer (normal user token).
 """
 import json
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
@@ -35,41 +36,52 @@ def scan_mass_assignment_patch(req: ScanRequest, payload=Depends(verify_scan_quo
             "Content-Type": "application/json",
             "User-Agent": "VulnusLab/1.0"}
 
-    bugs = []
-    tested = 0
-    for path in PROFILE_PATHS:
+    # VL-TURBO deep: parallelize across (path, method) combinations.
+    # Was 5 paths * 3 probes (GET+PATCH+GET) = 15 sequential probes per
+    # path = 75s worst case across 5 paths. Now ~15s parallel.
+
+    body = {f: True for f in PRIV_FIELDS}
+    body["role"] = "admin"
+    body["balance"] = 999999
+    body["tier"] = "platinum"
+    body_str = json.dumps(body)
+
+    def _probe(path):
         url = base + path
-        # First confirm endpoint exists for this user
         r0 = safe_request("GET", url, headers=hdrs, req=req, timeout=6,
                             allow_redirects=False)
-        if r0 is None or r0.status_code != 200: continue
-        tested += 1
-
-        # Send PATCH with privileged fields
-        body = {f: True for f in PRIV_FIELDS}
-        body["role"] = "admin"
-        body["balance"] = 999999
-        body["tier"] = "platinum"
-
+        if r0 is None or r0.status_code != 200:
+            return ("unreachable", path, None)
         for method in ("PATCH", "PUT"):
             r = safe_request(method, url, headers=hdrs,
-                data=json.dumps(body), req=req, timeout=8, allow_redirects=False)
-            if r is None: continue
-            if r.status_code not in (200, 204): continue
-            # Now re-fetch /me and check if any privileged field stuck
+                data=body_str, req=req, timeout=8, allow_redirects=False)
+            if r is None or r.status_code not in (200, 204):
+                continue
             r_check = safe_request("GET", url, headers=hdrs, req=req,
                 timeout=6, allow_redirects=False)
-            if r_check is None: continue
+            if r_check is None:
+                continue
             try:
                 cur = r_check.json()
-            except Exception: continue
-            stuck = []
-            for f in PRIV_FIELDS:
-                if f in cur and cur[f] in (True, "admin", "platinum", 999999):
-                    stuck.append(f)
+            except Exception:
+                continue
+            stuck = [f for f in PRIV_FIELDS if f in cur
+                      and cur[f] in (True, "admin", "platinum", 999999)]
             if stuck:
-                bugs.append({"path": path, "method": method, "stuck_fields": stuck})
-                break
+                return ("exploitable", path,
+                        {"method": method, "stuck_fields": stuck})
+        return ("rejected", path, None)
+
+    bugs = []
+    tested = 0
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for verdict, path, extra in pool.map(_probe, PROFILE_PATHS, timeout=45):
+            if verdict == "unreachable":
+                continue
+            tested += 1
+            if verdict == "exploitable":
+                bugs.append({"path": path, "method": extra["method"],
+                              "stuck_fields": extra["stuck_fields"]})
 
     findings = []
     if bugs:
