@@ -28,7 +28,7 @@ def _g(u):
     try:
         return requests.get(u,timeout=10,verify=False,allow_redirects=True,
             headers={"User-Agent":"VulnusLab/1.0"})
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     r=await asyncio.to_thread(_g,web_url(ctx.host))
     if not r: ctx.state["reachable"]=False; return

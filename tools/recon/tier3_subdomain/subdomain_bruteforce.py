@@ -13,13 +13,13 @@ async def _q(h):
         r=dns.asyncresolver.Resolver();r.timeout=3;r.lifetime=4
         ans=await r.resolve(h,"A")
         return [str(x).rstrip(".") for x in ans]
-    except: return []
+    except Exception: return []
 def _load(cap=300):
     try:
         if _PAYLOAD.exists():
             return [l.strip().lower() for l in _PAYLOAD.read_text(encoding="utf-8").splitlines()
                     if l.strip() and not l.startswith("#")][:cap]
-    except: pass
+    except Exception: pass
     return _TOP
 async def gather(ctx):
     words=_load()

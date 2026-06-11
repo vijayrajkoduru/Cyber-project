@@ -8,7 +8,7 @@ async def _q(h,rt="CAA"):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return [str(x) for x in await r.resolve(h,rt)]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     caa=await _q(ctx.host,"CAA")
     if not caa:

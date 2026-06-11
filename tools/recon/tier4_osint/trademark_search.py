@@ -16,7 +16,7 @@ async def gather(ctx):
             ctx.source("uspto")
             ctx.state["uspto_result"]=d
             ctx.state["uspto_found"]=bool(d)
-    except: pass
+    except Exception: pass
     # OpenCorporates as fallback (free) — query company name
     try:
         r=await asyncio.to_thread(requests.get,
@@ -29,7 +29,7 @@ async def gather(ctx):
                 "jurisdiction":c["company"].get("jurisdiction_code"),
                 "status":c["company"].get("current_status")} for c in companies[:5]]
             if companies: ctx.source(f"opencorporates-{len(companies)}")
-    except: pass
+    except Exception: pass
 def _r_oc(s):
     matches=s.get("opencorporates_matches") or []
     if not matches: return None

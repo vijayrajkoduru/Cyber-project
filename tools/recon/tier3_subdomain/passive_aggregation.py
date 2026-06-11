@@ -8,7 +8,7 @@ def _g(u,t=12):
     try:
         r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     h=ctx.host
@@ -24,7 +24,7 @@ async def gather(ctx):
                 for n in (e.get("name_value","") or "").split("\n"):
                     n=n.strip().lower()
                     if n.endswith(h) and "*" not in n and n!=h: subs.add(n)
-        except: pass
+        except Exception: pass
     if hackertarget:
         ctx.source("hackertarget")
         for line in hackertarget.splitlines():
@@ -39,7 +39,7 @@ async def gather(ctx):
                 if len(parts)>=2:
                     host=parts[-1].strip().lower()
                     if host.endswith(h) and host!=h: subs.add(host)
-        except: pass
+        except Exception: pass
     ctx.state.update({"subdomains":sorted(subs)[:100],"count":len(subs),
         "sources_count":sum(1 for x in [crt,hackertarget,bufferover] if x)})
 def _r_many(s):

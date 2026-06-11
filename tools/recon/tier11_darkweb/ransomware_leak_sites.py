@@ -63,7 +63,7 @@ async def gather(ctx):
             # Surface the rejected count so an analyst can audit
             if raw_victims and not verified:
                 ctx.state["skipped_substring_matches"]=len(raw_victims)
-    except: pass
+    except Exception: pass
 def _r_hit(s):
     n=s.get("victim_count",0)
     if n==0: return None

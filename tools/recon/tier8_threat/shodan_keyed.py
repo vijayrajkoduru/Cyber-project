@@ -9,7 +9,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     key=os.environ.get("SHODAN_API_KEY","")
     ctx.state["api_key_configured"]=bool(key)
@@ -31,7 +31,7 @@ async def gather(ctx):
                 "os":d.get("os"),"org":d.get("org")})
         elif r.status_code==401: ctx.state["auth_error"]=True
         elif r.status_code==404: ctx.state["not_in_shodan"]=True
-    except: pass
+    except Exception: pass
 def _r_vulns(s):
     v=s.get("vulns") or []
     if not v: return None

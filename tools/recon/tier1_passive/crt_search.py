@@ -8,7 +8,7 @@ def _g(u,t=15):
     try:
         r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     host=ctx.host
@@ -20,7 +20,7 @@ async def gather(ctx):
     for txt in [t1,t2]:
         if not txt: continue
         try: data=json.loads(txt)
-        except: continue
+        except Exception: continue
         ctx.source("crt.sh")
         for e in data[:500]:
             nv=(e.get("name_value","") or "").strip()

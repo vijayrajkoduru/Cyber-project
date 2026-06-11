@@ -10,7 +10,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _sip_probe(ip,port,timeout=3):
     msg=(f"OPTIONS sip:test@{ip} SIP/2.0\r\nVia: SIP/2.0/UDP {ip}:{port}\r\n"
          f"From: <sip:test@vulnuslab>\r\nTo: <sip:test@{ip}>\r\n"
@@ -20,7 +20,7 @@ def _sip_probe(ip,port,timeout=3):
             s.settimeout(timeout); s.sendto(msg,(ip,port))
             data,_=s.recvfrom(2048)
             return data.decode("utf-8",errors="ignore")[:500] if data else None
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

@@ -13,7 +13,7 @@ def _g(u,h=None):
     try:
         r=requests.get(u,timeout=12,headers={"User-Agent":"VulnusLab/1.0",**(h or {})})
         if r.status_code==200: return r.json()
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     if not can_do_osint(ctx.host):

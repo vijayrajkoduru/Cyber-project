@@ -41,7 +41,7 @@ def _raw_request(host, port, use_ssl, request_bytes, timeout=10):
                 break
     finally:
         try: s.close()
-        except: pass
+        except Exception: pass
     return time.time() - t0, data
 
 

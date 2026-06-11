@@ -2,7 +2,7 @@
 import asyncio, requests
 from datetime import datetime
 try: import whois as pywhois
-except: pywhois=None
+except Exception: pywhois=None
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
@@ -11,12 +11,12 @@ def _rdap(h):
     try:
         r=requests.get(f"https://rdap.org/domain/{h}",timeout=10,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.json()
-    except: pass
+    except Exception: pass
     return None
 def _pyw(h):
     if not pywhois: return None
     try: return pywhois.whois(h)
-    except: return None
+    except Exception: return None
 def _parse(v):
     if not v: return None
     if isinstance(v,datetime): return v
@@ -24,7 +24,7 @@ def _parse(v):
     if isinstance(v,str):
         for fmt in ("%Y-%m-%dT%H:%M:%S","%Y-%m-%d %H:%M:%S","%Y-%m-%dT%H:%M:%SZ","%d-%b-%Y","%Y-%m-%d"):
             try: return datetime.strptime(v[:19],fmt)
-            except: continue
+            except Exception: continue
     return None
 async def gather(ctx):
     host=ctx.host

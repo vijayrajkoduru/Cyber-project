@@ -21,7 +21,7 @@ async def gather(ctx):
                 "email_count":len(d.get("emails",[]))})
         elif r.status_code in (401,403): ctx.state["auth_error"]=True
         elif r.status_code==429: ctx.state["rate_limited"]=True
-    except: pass
+    except Exception: pass
 def _r_pattern(s):
     p=s.get("pattern")
     if not p: return None

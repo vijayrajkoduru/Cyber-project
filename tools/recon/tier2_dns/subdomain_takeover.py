@@ -25,12 +25,12 @@ async def _resolve_cname(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return [str(x).rstrip(".") for x in await r.resolve(h,"CNAME")]
-    except: return []
+    except Exception: return []
 def _check(url,sig):
     try:
         r=requests.get(url,timeout=8,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
         return sig in (r.text or "")[:8192]
-    except: return False
+    except Exception: return False
 async def gather(ctx):
     cname=await _resolve_cname(ctx.host)
     if not cname: ctx.state["reachable"]=False; return

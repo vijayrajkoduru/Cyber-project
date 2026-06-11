@@ -9,7 +9,7 @@ def _check(url):
         r=requests.get(url,timeout=6,headers={"User-Agent":"VulnusLab/1.0"})
         return {"status":r.status_code,"body_len":len(r.content),
             "open":r.status_code==200 and (r.text or "")!="null"}
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     org=ctx.host.split(".")[0]
     cands=[f"https://{org}.firebaseio.com/.json",f"https://{org}-prod.firebaseio.com/.json",

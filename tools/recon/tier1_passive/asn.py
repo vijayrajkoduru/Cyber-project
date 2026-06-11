@@ -19,14 +19,14 @@ async def _cymru(ip):
             p=[x.strip() for x in line.split("|")]
             if len(p)>=7 and p[0].isdigit():
                 return {"asn":"AS"+p[0],"prefix":p[2],"country":p[3],"registry":p[4],"org":p[6]}
-    except: pass
+    except Exception: pass
     return None
 async def _resolve(host):
     try:
         r=dns.asyncresolver.Resolver(); r.timeout=4; r.lifetime=6
         ans=await r.resolve(host,"A")
         return [str(x).rstrip(".") for x in ans]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

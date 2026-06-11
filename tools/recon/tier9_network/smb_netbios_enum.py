@@ -9,13 +9,13 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _tcp(ip,port,timeout=3):
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             return s.connect_ex((ip,port))==0
-    except: return False
+    except Exception: return False
 def _nbns(ip,timeout=3):
     payload=b"\x12\x34\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00 CKAAAAAAAAAAAAAAAAAAAAAAAAAAAA\x00\x00\x21\x00\x01"
     try:
@@ -23,7 +23,7 @@ def _nbns(ip,timeout=3):
             s.settimeout(timeout); s.sendto(payload,(ip,137))
             data,_=s.recvfrom(2048)
             return len(data)>0
-    except: return False
+    except Exception: return False
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

@@ -10,7 +10,7 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 async def _nmap_run(ip):
     if not _NMAP: return None
     try:
@@ -19,7 +19,7 @@ async def _nmap_run(ip):
             stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL)
         out,_=await asyncio.wait_for(proc.communicate(),timeout=120)
         return out.decode("utf-8",errors="ignore")
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

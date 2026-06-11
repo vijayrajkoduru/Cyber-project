@@ -8,7 +8,7 @@ async def _q(h,rt):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return [str(x) for x in await r.resolve(h,rt)]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     nsec=await _q(ctx.host,"NSEC")
     nsec3=await _q(ctx.host,"NSEC3")
@@ -24,7 +24,7 @@ async def gather(ctx):
             try:
                 iter_count=int(parts[2])
                 salt=parts[3]
-            except: pass
+            except Exception: pass
     ctx.state.update({"nsec_records":nsec,"nsec3_records":nsec3,
         "nsec3param":nsec3param,"nsec3_iterations":iter_count,"nsec3_salt":salt,
         "reachable":bool(nsec or nsec3 or nsec3param)})

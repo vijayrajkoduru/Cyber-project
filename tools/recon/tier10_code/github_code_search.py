@@ -16,7 +16,7 @@ async def gather(ctx):
             d=r.json(); ctx.source("github-code")
             ctx.state["matches"]=d.get("total_count",0)
             ctx.state["repos"]=[i.get("repository",{}).get("full_name") for i in d.get("items",[])][:10]
-    except: pass
+    except Exception: pass
 def _r_leaked(s):
     n=s.get("matches",0)
     if n==0: return None

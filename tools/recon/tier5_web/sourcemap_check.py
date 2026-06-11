@@ -15,7 +15,7 @@ _PATHS=["/static/js/main.js.map","/static/js/bundle.js.map","/js/app.js.map","/d
     "/build/static/js/main.js.map","/assets/main.js.map","/app.bundle.js.map","/vendor.js.map"]
 def _g(u):
     try: return requests.get(u,timeout=6,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
-    except: return None
+    except Exception: return None
 def _is_real_sourcemap(body):
     """Real sourcemaps are JSON with 'mappings' field per Source Map Spec v3."""
     if not body: return False

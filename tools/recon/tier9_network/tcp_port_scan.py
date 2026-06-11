@@ -19,14 +19,14 @@ async def _resolve(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _probe(ip,port,timeout=2):
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             r=s.connect_ex((ip,port))
             return port if r==0 else None
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     ips=await _resolve(ctx.host)
     if not ips: ctx.state["reachable"]=False; return

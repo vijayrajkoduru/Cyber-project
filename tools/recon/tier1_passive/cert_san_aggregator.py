@@ -14,7 +14,7 @@ def _live_cert(host):
             with c.wrap_socket(s,server_hostname=host) as ss:
                 cert=ss.getpeercert()
                 return [x[1] for x in (cert.get("subjectAltName") or []) if x[0]=="DNS"]
-    except: return []
+    except Exception: return []
 def _ct_sans(host):
     try:
         r=requests.get(f"https://crt.sh/?q={host}&output=json",timeout=15)
@@ -27,7 +27,7 @@ def _ct_sans(host):
                     n=n.strip().lower()
                     if n and "*" not in n: sans.add(n)
             return sorted(sans)
-    except: pass
+    except Exception: pass
     return []
 async def gather(ctx):
     host=ctx.host

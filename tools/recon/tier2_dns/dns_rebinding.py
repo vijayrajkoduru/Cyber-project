@@ -11,7 +11,7 @@ async def _q(h,rt="A"):
         ans=await r.resolve(h,rt)
         ttl=ans.rrset.ttl
         return [str(x).rstrip(".") for x in ans], ttl
-    except: return [],None
+    except Exception: return [],None
 async def gather(ctx):
     a,ttl=await _q(ctx.host)
     if not a: ctx.state["reachable"]=False; return
@@ -23,7 +23,7 @@ async def gather(ctx):
             ipa=ipaddress.ip_address(ip)
             if ipa.is_private or ipa.is_loopback or ipa.is_link_local:
                 private_ips.append(ip)
-        except: pass
+        except Exception: pass
     ctx.state.update({"private_ips":private_ips,"low_ttl":ttl is not None and ttl<60,
         "rebinding_risk":bool(private_ips) and (ttl is not None and ttl<60)})
 def _r_active_rebind(s):

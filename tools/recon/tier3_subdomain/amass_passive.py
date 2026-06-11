@@ -12,12 +12,12 @@ async def _amass_cli(host):
             stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL)
         out,_=await asyncio.wait_for(proc.communicate(),timeout=60)
         return [l.strip().lower() for l in out.decode("utf-8",errors="ignore").splitlines() if host in l]
-    except: return []
+    except Exception: return []
 def _g(u):
     try:
         r=requests.get(u,timeout=15,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     h=ctx.host; subs=set(); used_amass=False
@@ -35,7 +35,7 @@ async def gather(ctx):
                     for n in (e.get("name_value","") or "").split("\n"):
                         n=n.strip().lower()
                         if n.endswith(h) and "*" not in n and n!=h: subs.add(n)
-            except: pass
+            except Exception: pass
     ctx.state.update({"amass_binary_available":bool(_AMASS),"used_amass":used_amass,
         "subdomains":sorted(subs)[:100],"count":len(subs)})
 def _r_no_amass(s):

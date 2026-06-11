@@ -41,7 +41,7 @@ async def gather(ctx):
                 "company":h["_source"].get("display_names",[""])[0][:60]} for h in verified[:5]]
             ctx.state["filing_count"]=len(verified)
             ctx.state["raw_hit_count"]=len(hits)
-    except: pass
+    except Exception: pass
 def _r_public(s):
     n=s.get("filing_count",0)
     if n==0: return None

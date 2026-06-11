@@ -1,24 +1,26 @@
 """AI Wordlist Subdomain v2 — VL-FORGE. Curated AI wordlist."""
-import asyncio
+import asyncio, logging
 from pathlib import Path
 import dns.asyncresolver
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
 router=APIRouter()
+log=logging.getLogger("vulnuslab.recon")
 _PAYLOAD=Path(__file__).resolve().parent.parent.parent/"_payloads"/"recon"/"ai_subs.txt"
 _FB=["api","admin","app","portal","staging","dev","beta","internal","corp","vpn","mail","cdn","graphql","gql","auth","sso","webhook","grafana","jenkins","kibana"]
 async def _q(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=3;r.lifetime=4
         return [str(x).rstrip(".") for x in await r.resolve(h,"A")]
-    except: return []
+    except Exception: return []
 def _load(cap=1000):
     try:
         if _PAYLOAD.exists():
             return [l.strip().lower() for l in _PAYLOAD.read_text(encoding="utf-8").splitlines()
                     if l.strip() and not l.startswith("#")][:cap]
-    except: pass
+    except Exception as e:
+        log.warning("ai_wordlist_subdomain: failed to load %s (%s); using %d-word built-in fallback", _PAYLOAD, e, len(_FB))
     return _FB
 async def gather(ctx):
     words=_load()

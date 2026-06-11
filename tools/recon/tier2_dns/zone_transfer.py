@@ -9,7 +9,7 @@ async def _ns(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return sorted(str(x).rstrip(".") for x in await r.resolve(h,"NS"))
-    except: return []
+    except Exception: return []
 def _axfr(host,ns):
     try:
         xfr=dns.query.xfr(ns,host,timeout=6,lifetime=10)

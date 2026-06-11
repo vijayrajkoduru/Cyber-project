@@ -22,7 +22,7 @@ async def gather(ctx: ScanContext):
                 exposed = True
                 import json
                 try: repos = json.loads(b.decode("utf-8","ignore")).get("repositories",[])[:10]
-                except: pass
+                except Exception: pass
                 break
     ctx.state["registry_exposed"] = exposed
     ctx.state["repositories"] = repos

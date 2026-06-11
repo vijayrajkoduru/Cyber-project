@@ -9,7 +9,7 @@ async def _q(h,rt):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4;r.lifetime=6
         return [str(x).rstrip(".") for x in await r.resolve(h,rt)]
-    except: return []
+    except Exception: return []
 async def gather(ctx):
     a=await _q(ctx.host,"A")
     if not a: ctx.state["reachable"]=False; return
@@ -20,7 +20,7 @@ async def gather(ctx):
         try:
             rev=dns.reversename.from_address(ip)
             ptr_tasks.append(_q(rev,"PTR"))
-        except: ptr_tasks.append(None)
+        except Exception: ptr_tasks.append(None)
     ptr_results=await asyncio.gather(*[t if t else asyncio.sleep(0,result=[]) for t in ptr_tasks])
     ptr_map={ip:p for ip,p in zip(a[:5],ptr_results)}
     # Forward-confirmed check (FCrDNS)

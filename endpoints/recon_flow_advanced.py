@@ -127,7 +127,7 @@ async def brand_list(_=Depends(verify_scan_quota)):
     out = []
     for f in (_BASE/"brands").glob("*.json"):
         try: out.append(json.loads(f.read_text(encoding="utf-8")))
-        except: pass
+        except Exception: pass
     return {"count":len(out),"brands":out}
 
 # ═════════════════════════════════════════════════════════════
@@ -264,7 +264,7 @@ async def rule_list(_=Depends(verify_scan_quota)):
     out=[]
     for f in (_BASE/"rules").glob("*.json"):
         try: out.append(json.loads(f.read_text(encoding="utf-8")))
-        except: pass
+        except Exception: pass
     return {"count":len(out),"rules":out}
 
 @router.delete("/api/recon/rules/{rule_id}")

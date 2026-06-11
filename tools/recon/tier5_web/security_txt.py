@@ -12,7 +12,7 @@ from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canar
 router=APIRouter()
 def _g(u):
     try: return requests.get(u,timeout=8,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
-    except: return None
+    except Exception: return None
 def _is_real_security_txt(body):
     """RFC 9116 requires Contact: field. Without it, body is not security.txt."""
     if not body: return False
@@ -66,7 +66,7 @@ def _r_expired(s):
         if dt < datetime.now(dt.tzinfo):
             return {"name":"security.txt has EXPIRED","severity":"LOW","cwe":"CWE-1059",
                 "evidence":f"Expires: {exp}","remediation":"Update Expires: in security.txt."}
-    except: pass
+    except Exception: pass
 FINDING_RULES=[_r_missing,_r_expired,_r_present]
 INTEL_FIELDS=[("Found","found"),("Contact","contact"),("Expires","expires"),
     ("Encryption","encryption"),("Policy","policy")]

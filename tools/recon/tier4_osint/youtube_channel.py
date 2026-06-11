@@ -19,7 +19,7 @@ async def gather(ctx):
                 "description":(i["snippet"].get("description") or "")[:200]} for i in d.get("items",[])]
             ctx.state["channels"]=channels; ctx.state["channel_count"]=len(channels)
             if channels: ctx.source(f"yt-{len(channels)}")
-    except: pass
+    except Exception: pass
 def _r_unkeyed(s):
     if s.get("api_key_configured"): return None
     return {"name":"YOUTUBE_API_KEY not set","severity":"INFO",

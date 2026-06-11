@@ -14,7 +14,7 @@ async def get_json(url, headers=None, timeout=8):
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
             try: return e.code, json.loads(e.read())
-            except: return e.code, {}
+            except Exception: return e.code, {}
         except Exception as e: return 0, {"_error": str(e)[:120]}
     return await asyncio.to_thread(_do)
 
@@ -28,6 +28,6 @@ async def get_text(url, headers=None, timeout=8):
                 return r.status, r.read(64*1024).decode("utf-8","ignore")
         except urllib.error.HTTPError as e:
             try: return e.code, e.read(64*1024).decode("utf-8","ignore")
-            except: return e.code, ""
+            except Exception: return e.code, ""
         except Exception: return 0, ""
     return await asyncio.to_thread(_do)

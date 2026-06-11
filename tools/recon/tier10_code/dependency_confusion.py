@@ -6,10 +6,10 @@ from tools._vl_core import run_scanner
 router=APIRouter()
 def _npm(n):
     try: return requests.get(f"https://registry.npmjs.org/{n}",timeout=6).status_code==200
-    except: return None
+    except Exception: return None
 def _pypi(n):
     try: return requests.get(f"https://pypi.org/pypi/{n}/json",timeout=6).status_code==200
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     org=ctx.host.split(".")[0]
     cands=[f"{org}-internal",f"{org}-shared",f"{org}-utils",f"{org}-common",f"{org}-core",

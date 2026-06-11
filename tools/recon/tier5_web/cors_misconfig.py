@@ -8,7 +8,7 @@ def _g(u,origin):
     try:
         return requests.get(u,timeout=8,verify=False,allow_redirects=False,
             headers={"User-Agent":"VulnusLab/1.0","Origin":origin})
-    except: return None
+    except Exception: return None
 async def gather(ctx):
     base=web_url(ctx.host)
     evil="https://attacker.example.com"

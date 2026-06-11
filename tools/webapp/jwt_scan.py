@@ -38,7 +38,7 @@ def _parse(t):
     try:
         return (json.loads(_b64d(parts[0])), json.loads(_b64d(parts[1])),
                 _b64d(parts[2]), (parts[0]+"."+parts[1]).encode())
-    except: return None
+    except Exception: return None
 def _crack(si, sig, alg):
     fn = {"HS256": hashlib.sha256, "HS384": hashlib.sha384, "HS512": hashlib.sha512}.get(alg)
     if not fn: return None

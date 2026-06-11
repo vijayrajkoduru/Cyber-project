@@ -9,7 +9,7 @@ async def _mx(h):
     try:
         r=dns.asyncresolver.Resolver();r.timeout=4
         return [str(x).split()[-1].rstrip(".") for x in await r.resolve(h,"MX")]
-    except: return []
+    except Exception: return []
 def _smtp_probe(mx_host,timeout=6):
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as s:

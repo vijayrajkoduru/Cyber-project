@@ -8,7 +8,7 @@ def _g(u,t=20):
     try:
         r=requests.get(u,timeout=t,headers={"User-Agent":"VulnusLab/1.0"})
         if r.status_code==200: return r.text
-    except: pass
+    except Exception: pass
     return None
 async def gather(ctx):
     h=ctx.host
@@ -24,7 +24,7 @@ async def gather(ctx):
                 if row and len(row)>=1:
                     for m in pat.findall(row[0]):
                         subs.add(m.lower())
-        except: pass
+        except Exception: pass
     ctx.state.update({"subdomains":sorted(subs)[:100],"count":len(subs)})
 def _r_found(s):
     n=s.get("count",0)

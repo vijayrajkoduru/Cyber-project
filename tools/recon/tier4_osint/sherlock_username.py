@@ -56,7 +56,7 @@ async def gather(ctx):
                 if "http" in line:
                     raw_profiles.append({"username":u,"url":line.strip()})
             ctx.source(f"sherlock-{u}")
-        except: pass
+        except Exception: pass
     # FP guard: reject any URL whose path/host doesn't contain the full brand stem
     verified=[p for p in raw_profiles if _url_contains_stem(p.get("url",""), stem)]
     ctx.state["raw_profile_count"]=len(raw_profiles)

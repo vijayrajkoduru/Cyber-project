@@ -149,7 +149,7 @@ async def webhook_list(_=Depends(verify_scan_quota)):
     out = []
     for f in _HOOKS.glob("*.json"):
         try: out.append(json.loads(f.read_text(encoding="utf-8")))
-        except: pass
+        except Exception: pass
     return {"count": len(out), "webhooks": out}
 
 @router.delete("/api/recon/webhook/{webhook_id}")
@@ -227,7 +227,7 @@ async def schedule_list(_=Depends(verify_scan_quota)):
     out = []
     for f in _SCHED.glob("*.json"):
         try: out.append(json.loads(f.read_text(encoding="utf-8")))
-        except: pass
+        except Exception: pass
     return {"count":len(out), "schedules":out}
 
 @router.delete("/api/recon/schedule/{schedule_id}")
