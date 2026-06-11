@@ -68,6 +68,8 @@ from typing import AsyncIterator, Optional
 
 import httpx
 
+from tools._shared import INTERNAL_FANOUT_HEADER, INTERNAL_FANOUT_TOKEN
+
 
 # Backend dispatch — talk to OUR OWN routes via localhost so each tool's
 # existing handler runs unchanged. uvicorn handles localhost calls in-process
@@ -172,7 +174,7 @@ async def run_module_parallel(
     # the same Authorization header the user sent to /api/recon/run_all.
     # VL-PRIME marker — exempts fan-out from per-plan quota counting.
     internal_headers: dict = {
-        "x-vl-internal-fanout": os.environ.get("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal"),
+        INTERNAL_FANOUT_HEADER: INTERNAL_FANOUT_TOKEN,
     }
     if jwt_token:
         internal_headers["Authorization"] = f"Bearer {jwt_token}"
@@ -287,7 +289,7 @@ async def run_module_streaming(
 
     # VL-PRIME marker — exempts fan-out from per-plan quota counting.
     internal_headers: dict = {
-        "x-vl-internal-fanout": os.environ.get("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal"),
+        INTERNAL_FANOUT_HEADER: INTERNAL_FANOUT_TOKEN,
     }
     if jwt_token:
         internal_headers["Authorization"] = f"Bearer {jwt_token}"

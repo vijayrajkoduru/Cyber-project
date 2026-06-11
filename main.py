@@ -41,9 +41,23 @@ app = FastAPI(
 )
 
 # ── CORS ────────────────────────────────────────────────────────────
-# Production: comma-separated origins in .env (e.g. https://app.vulnuslab.com)
-# Dev: defaults to "*" so the React dev server on :3000 can talk to us
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+# allow_credentials=True with a wildcard origin is rejected by browsers AND
+# unsafe — it would let ANY site make authenticated requests with a logged-in
+# user's session. So we never pair "*" with credentials:
+#   - CORS_ORIGINS = explicit comma-separated origins → use them (credentials on)
+#   - CORS_ORIGINS unset or "*"                        → fall back to localhost
+#     dev origins (credentials on) and warn loudly
+# Production MUST set CORS_ORIGINS in .env, e.g. https://app.vulnuslab.com
+_cors_raw = os.getenv("CORS_ORIGINS", "").strip()
+if _cors_raw and _cors_raw != "*":
+    CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+else:
+    CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    log.warning(
+        "CORS_ORIGINS not set (or '*') — falling back to localhost dev origins. "
+        "Set CORS_ORIGINS to your real origin(s) in production (e.g. "
+        "https://app.vulnuslab.com); never serve '*' with credentials."
+    )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
