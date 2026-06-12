@@ -1,8 +1,20 @@
 """§14 Pivot — 60 endpoints under /api/pivot/<tool>.
 
-Mostly post-compromise primitives — rendered as structured advisories
-with detection guidance + remediation. Live probes where externally
-observable (SSH banner / SMB / RDP port / kubernetes API).
+Pivoting / lateral movement is a POST-COMPROMISE discipline: every technique
+presupposes the attacker already has a foothold on an internal host. None of
+it is observable from a black-box public-surface scan. Therefore:
+
+  - Technique catalogue entries are emitted as INFO advisory-by-design via
+    _adv() — NEVER as graded CRITICAL/HIGH "findings" (that fabricates
+    exposures that were never detected, inflates the risk score, and pollutes
+    the compliance mapping — a hard false-positive that breaks customer trust).
+  - The ONLY graded findings come from real live probes (_live_port_advisory)
+    that detect an externally-reachable management port (SMB 445 / RDP 3389 /
+    WinRM 5985) or an SSH banner. Those return POSITIVE when the port is closed.
+
+Fixed 2026-06-12: _adv() previously emitted the playbook's planned severity
+(e.g. docker_socket_pivot as CRITICAL) on a black-box scan where nothing was
+detected — see VL-PIVOT report regression. Now forced to INFO advisory-by-design.
 """
 import socket
 from contextlib import closing
@@ -31,12 +43,28 @@ def _resp(tool, target, findings, tested=1, what=""):
             "raw_data": {}}
 
 
-def _adv(tool, target, title, *, sev="MEDIUM", cvss="5.0", cwe="CWE-1395",
+def _adv(tool, target, title, *, sev="INFO", cvss="0.0", cwe="CWE-1395",
          remediation="EDR + NSM detection — see module_playbooks/14_pivot.md",
          evidence="Advisory — post-compromise primitive."):
-    return _resp(tool, target, [wrap_finding(title, sev, cvss=cvss, cwe=cwe,
-        owasp="A05:2021", remediation=remediation, evidence_marker=evidence)],
+    """Pivoting / lateral-movement techniques are POST-COMPROMISE primitives:
+    they presuppose an attacker ALREADY has a foothold on an internal host, so
+    they cannot be observed on a black-box public-surface scan. They are emitted
+    as INFO advisory-by-design — NEVER as graded CRITICAL/HIGH findings, which
+    would be a false positive (the engine did not detect them on the target).
+    The playbook's planned severity is preserved in raw_data for context only and
+    does NOT drive the risk score, compliance mapping, or 'verified' status."""
+    planned = str(sev).upper()
+    r = _resp(tool, target, [wrap_finding(
+        f"[ADVISORY-BY-DESIGN] {title}",
+        "INFO", cvss="0.0", cwe=cwe, owasp="N/A",
+        remediation=remediation,
+        evidence_marker=(
+            "Post-compromise primitive — presupposes an existing foothold; not "
+            "detectable on an external black-box scan. Informational only, NOT a "
+            "confirmed exposure on this target. " + evidence))],
         tested=1, what=title[:80])
+    r["raw_data"] = {"advisory_by_design": True, "planned_severity": planned}
+    return r
 
 
 def _tcp_open(host, port, timeout=2.5):
