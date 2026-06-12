@@ -12392,8 +12392,9 @@ function ReconModule({token, onRunningChange, activeSections}) {
   // "vl-open-scan" with detail="recon" after the panel is shown). Esc /
   // click-outside / X close it; "Configure & Scan" reopens it.
   const [showScanModal, setShowScanModal] = useState(false);
+  const [authConfirmed, setAuthConfirmed] = useState(false);
   useEffect(() => {
-    const onOpen = (e) => { if (e && e.detail === "recon") setShowScanModal(true); };
+    const onOpen = (e) => { if (e && e.detail === "recon") { setShowScanModal(true); setAuthConfirmed(false); } };
     window.addEventListener("vl-open-scan", onOpen);
     return () => window.removeEventListener("vl-open-scan", onOpen);
   }, []);
@@ -13066,7 +13067,8 @@ function ReconModule({token, onRunningChange, activeSections}) {
                 <button onClick={() => setShowScanModal(false)} title="Close (Esc)"
                   style={{background:"none", border:"1px solid #1c2435", borderRadius:6, padding:"3px 11px", color:"#8a94a8", fontSize:16, fontWeight:700, cursor:"pointer", lineHeight:1}}>×</button>
               </div>
-        {/* RECON-TT-AUTH-V1 — auth-aware test targets; clicking a lab pre-fills creds */}
+        {/* Bespoke test-targets dropdown + auth panel stripped — replaced by the clean form below (real target chips + authorization). */}
+        {false && (<>
         <TestTargets onSelect={async (t, lab) => {
           setTarget(t);
           const LAB_CREDS = {
@@ -13198,13 +13200,28 @@ function ReconModule({token, onRunningChange, activeSections}) {
             </div>
           )}
         </div>
+        </>)}
+        {(MODULE_TARGET_EXAMPLES.recon || []).length > 0 && (
+          <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:10, flexWrap:"wrap"}}>
+            <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
+            {(MODULE_TARGET_EXAMPLES.recon || []).map((ex, idx) => (
+              <button key={idx} onClick={()=>setTarget(ex)} disabled={running}
+                style={{background:"#0c1424", border:"1px solid #0e3a55", color:"#7fdcff", borderRadius:12, padding:"3px 10px", fontSize:11, fontFamily:"JetBrains Mono, monospace", cursor: running?"not-allowed":"pointer", opacity: running?0.5:1}}>{ex}</button>
+            ))}
+          </div>
+        )}
+        <label style={{display:"flex", alignItems:"flex-start", gap:8, marginBottom:12, cursor:"pointer"}}>
+          <input type="checkbox" checked={authConfirmed} onChange={e=>setAuthConfirmed(e.target.checked)} style={{width:15, height:15, marginTop:1, cursor:"pointer", accentColor:"#3b9eff"}}/>
+          <span style={{fontSize:11.5, color:"#c3ccda", lineHeight:1.5}}>I own this target or am authorized to test it, and understand active scanning may generate traffic and alerts on it.</span>
+        </label>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
             placeholder="domain.com  or  192.168.1.1  or  192.168.1.0/24"
             style={{flex:3,minWidth:240,background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}/>
-          <button onClick={() => { setShowScanModal(false); run(); }} disabled={running||!target.trim()}
-            style={{background:running?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
+          <button onClick={() => { setShowScanModal(false); run(); }} disabled={running||!target.trim()||!authConfirmed}
+            title={!authConfirmed ? "Confirm authorization to enable scanning" : ""}
+            style={{background:(running||!authConfirmed)?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:(running||!authConfirmed)?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:(running||!authConfirmed)?"not-allowed":"pointer"}}>
             {running?"Running...":"Start Scan"}
           </button>
           {running && (
@@ -20552,15 +20569,26 @@ const MODULE_ADVANCED_INPUTS = {
 // input. Pre-vetted public scan-friendly targets that a customer can use to
 // test a module without scanning their own infra first.
 const MODULE_TARGET_EXAMPLES = {
-  vuln:    ["scanme.nmap.org", "testphp.vulnweb.com", "https://demo.testfire.net"],
-  recon:   ["scanme.nmap.org", "example.com", "github.com"],
-  webapp:  ["https://testphp.vulnweb.com", "http://demo.testfire.net", "https://juice-shop.herokuapp.com"],
-  osint:   ["example.com", "user@example.com", "@torvalds"],
-  apisec:  ["https://petstore.swagger.io/v2", "https://api.restful-api.dev"],
-  network: ["scanme.nmap.org", "192.168.1.0/24"],
-  password:["scanme.nmap.org:22"],
-  cloud:   ["example.com", "https://github.com/aws-samples/aws-iam-permissions-guardrails"],
-  ai_llm:  ["https://api.openai.com", "https://api.anthropic.com"],
+  vuln:           ["scanme.nmap.org", "testphp.vulnweb.com", "https://demo.testfire.net"],
+  recon:          ["scanme.nmap.org", "example.com", "github.com"],
+  webapp:         ["https://testphp.vulnweb.com", "http://demo.testfire.net", "https://juice-shop.herokuapp.com"],
+  osint:          ["example.com", "user@example.com", "@torvalds"],
+  apisec:         ["https://petstore.swagger.io/v2", "https://api.restful-api.dev"],
+  network:        ["scanme.nmap.org", "192.168.1.0/24"],
+  password:       ["scanme.nmap.org:22"],
+  cloud:          ["example.com", "https://github.com/aws-samples/aws-iam-permissions-guardrails"],
+  ai_llm:         ["https://api.openai.com", "https://api.anthropic.com"],
+  exploit:        ["scanme.nmap.org", "testphp.vulnweb.com"],
+  system_exploit: ["scanme.nmap.org", "testphp.vulnweb.com"],
+  metasploit:     ["scanme.nmap.org"],
+  tunnel:         ["scanme.nmap.org"],
+  pivot:          ["scanme.nmap.org"],
+  client_side:    ["https://testphp.vulnweb.com", "https://demo.testfire.net"],
+  auth_attacks:   ["https://demo.testfire.net"],
+  phishing:       ["example.com"],
+  sspm:           ["example.com"],
+  supply_chain:   ["https://github.com/OWASP/NodeGoat", "nginx:latest"],
+  container_k8s:  ["nginx:latest", "alpine:3.18"],
 };
 
 // MODULE_OPTIONS_INPUTS — fields that go into the {options: {}} dict of the
