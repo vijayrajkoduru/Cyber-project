@@ -20575,6 +20575,33 @@ const MODULE_OPTIONS_INPUTS = {
     "form_url", "user_field", "pass_field", "fail_string",  // patator http
     "always_deep", "show_plaintext",  // global behaviour flags
   ],
+  ad:              ["userlist", "password", "domain", "dc_ip", "port"],
+  hybrid_identity: ["username_list", "tenant_id", "client_id", "client_secret", "adfs_server_url"],
+  auth_attacks:    ["jwt_token", "public_key", "weak_secret_list", "oauth_authorize_url", "redirect_uri", "saml_metadata_url", "mfa_method"],
+  privesc:         ["username", "password", "ssh_key", "port", "timeout_sec"],
+  post_exploit:    ["username", "password", "ssh_key", "os", "port", "use_ssl"],
+  av_evasion:      ["username", "password", "port", "use_ssl", "timeout_sec"],
+  red_team:        ["atomic_user", "atomic_password", "atomic_ssh_key", "c2_callback_url", "exfil_dns_domain", "lateral_target", "atomic_os"],
+  sspm:            ["tenant_id", "client_id", "client_secret", "gcp_service_account_json", "delegated_admin", "sf_domain", "sf_access_token", "slack_bot_token", "github_token", "github_org"],
+  system_exploit:  ["tags", "severity", "exclude_tags", "rate_limit", "timeout_sec"],
+  metasploit:      ["module", "RHOSTS", "RPORT", "timeout_sec"],
+  ai_llm:          ["prompt_field", "response_field"],
+  phishing:        ["dkim_selectors", "target_url", "redirect_url"],
+  client_side:     ["user_agent", "extra_params"],
+  wireless:        ["scan_duration", "port"],
+};
+
+// Which option keys are REQUIRED for a module (rendered in a highlighted
+// "Required for this module" block; the rest go under "Optional"). Blank
+// required fields produce a soft warning, not a hard block (partial scans
+// are valid). Mirrors the per-module form spec.
+const MODULE_REQUIRED_INPUTS = {
+  password:     [],   // per-scanner (hashes OR userlist+passlist) — all optional at module level
+  ad:           ["userlist", "password"],
+  auth_attacks: ["jwt_token"],
+  av_evasion:   ["username", "password"],
+  privesc:      ["username", "password"],
+  hybrid_identity: ["username_list"],
 };
 
 const OPTIONS_INPUT_DEFS = {
@@ -20588,6 +20615,62 @@ const OPTIONS_INPUT_DEFS = {
   fail_string:   {label:"Failure string", ph:"Invalid credentials | Login failed | error", type:"text", hint:"Text in response body when login FAILS. Used to detect successful logins (their absence = success)."},
   always_deep:   {label:"Always run deep_scan", type:"checkbox", hint:"Force deep_scan even if quick_probe found nothing. Default: gated (only runs if quick_probe hits)."},
   show_plaintext:{label:"Show passwords in plaintext", type:"checkbox", default:true, hint:"Display actual cracked passwords in PDF (default ON — customer scans own infra). Disable when sharing with external auditor."},
+  // ── Identity / AD ──
+  domain:        {label:"AD / Entra domain", type:"text", ph:"CONTOSO.COM", hint:"Unlocks domain-qualified SMB/Kerberos spray + Entra federation checks."},
+  dc_ip:         {label:"Domain Controller IP", type:"text", ph:"10.0.0.10", hint:"Explicit DC IP for Kerberos/LDAP enumeration when hostname resolution is unreliable."},
+  port:          {label:"Port override", type:"text", ph:"22 / 445 / 3389 / 5985", hint:"Service port override (default depends on protocol/scanner)."},
+  username_list: {label:"Username list (UPNs)", type:"textarea", rows:5, ph:"user@contoso.com\nadmin@contoso.com", hint:"One UPN per line — unlocks unauthenticated Entra user enumeration."},
+  tenant_id:     {label:"Tenant ID", type:"text", ph:"00000000-0000-0000-0000-000000000000", hint:"Entra/Azure tenant GUID — unlocks Graph-authenticated audits (PHS, Secure Score)."},
+  client_id:     {label:"App client ID", type:"text", hint:"App-registration client ID for the Graph/OAuth client-credentials flow."},
+  client_secret: {label:"App client secret", type:"text", secret:true, hint:"App-registration secret — unlocks Graph / SaaS authenticated posture audits."},
+  adfs_server_url:{label:"ADFS server URL", type:"text", ph:"https://sts.contoso.com", hint:"Legacy WS-Trust / federation signing + metadata audits."},
+  // ── Auth attacks ──
+  jwt_token:     {label:"JWT token", type:"textarea", rows:3, ph:"eyJhbGciOiJIUzI1NiJ9...", hint:"A JWT from the app — unlocks alg=none / weak-secret brute / RS256->HS256 / kid-injection audits."},
+  public_key:    {label:"Public key (PEM)", type:"textarea", rows:4, hint:"PEM public key — unlocks the RS256->HS256 algorithm-confusion test."},
+  weak_secret_list:{label:"Custom weak-secret list", type:"textarea", rows:4, hint:"One secret per line — overrides the built-in top-100 HS256 brute list.", secret:true},
+  oauth_authorize_url:{label:"OAuth /authorize URL", type:"text", hint:"Unlocks redirect_uri open-redirect + token-leak tests."},
+  redirect_uri:  {label:"Known valid redirect_uri", type:"text", hint:"Baseline for OAuth open-redirect bypass comparison."},
+  saml_metadata_url:{label:"SAML metadata URL", type:"text", hint:"SAML metadata XML endpoint — signature / cert-expiry / XXE audit."},
+  mfa_method:    {label:"MFA method", type:"text", ph:"TOTP / SMS / push / passwordless", hint:"Unlocks method-specific MFA-bypass tests."},
+  // ── Host / credentialed audits (privesc / post-exploit / av-evasion / red-team) ──
+  username:      {label:"Username", type:"text", hint:"SSH / WinRM / AD username for credentialed audits."},
+  password:      {label:"Password", type:"text", secret:true, hint:"Password for credentialed audits (or supply an SSH key / NT hash instead)."},
+  ssh_key:       {label:"SSH private key (PEM)", type:"textarea", rows:5, secret:true, hint:"OpenSSH/PEM key — alternative to password for SSH auth."},
+  timeout_sec:   {label:"Timeout (sec)", type:"text", hint:"Per-scanner wall-clock cap."},
+  os:            {label:"Target OS", type:"text", ph:"linux / windows", hint:"Selects the right persistence / enumeration checks."},
+  use_ssl:       {label:"Use SSL (WinRM 5986)", type:"checkbox", hint:"HTTPS WinRM (port 5986) instead of HTTP (5985)."},
+  atomic_user:   {label:"Atomic SSH/WinRM user", type:"text", hint:"Enables Atomic Red Team test execution on the target."},
+  atomic_password:{label:"Atomic password", type:"text", secret:true, hint:"Credential for Atomic Red Team (Windows)."},
+  atomic_ssh_key:{label:"Atomic SSH key (PEM)", type:"textarea", rows:4, secret:true, hint:"Key for Atomic Red Team (Linux)."},
+  c2_callback_url:{label:"C2 callback URL", type:"text", hint:"Customer-owned HTTPS receiver for the beacon-signal test."},
+  exfil_dns_domain:{label:"Exfil DNS zone", type:"text", hint:"Customer-owned DNS zone for exfil-simulation queries."},
+  lateral_target:{label:"Lateral target IP", type:"text", hint:"Internal Windows IP for Pass-the-Hash lateral-movement signal test."},
+  atomic_os:     {label:"Atomic OS", type:"text", ph:"linux / windows", hint:"OS for the Atomic Red Team runner."},
+  // ── SaaS posture (SSPM) ──
+  gcp_service_account_json:{label:"GCP service-account JSON", type:"textarea", rows:5, secret:true, hint:"Google Workspace admin audit (domain-wide delegation)."},
+  delegated_admin:{label:"Delegated admin email", type:"text", hint:"Admin to impersonate for the Workspace API."},
+  sf_domain:     {label:"Salesforce domain", type:"text", hint:"Salesforce org domain (with token) — posture audit."},
+  sf_access_token:{label:"Salesforce access token", type:"text", secret:true, hint:"Salesforce OAuth token — org security audit."},
+  slack_bot_token:{label:"Slack bot token", type:"text", secret:true, hint:"Slack workspace admin audit (2FA / retention / apps)."},
+  github_token:  {label:"GitHub token (PAT)", type:"text", secret:true, hint:"GitHub org audit (branch protection / org secrets / OIDC)."},
+  github_org:    {label:"GitHub org", type:"text", hint:"GitHub organization name (used with the token)."},
+  // ── System exploit / Metasploit ──
+  tags:          {label:"Nuclei tags", type:"text", ph:"cve", hint:"Template tag filter (default 'cve')."},
+  severity:      {label:"Nuclei severity", type:"text", ph:"critical,high", hint:"Severity filter (default 'critical,high')."},
+  exclude_tags:  {label:"Nuclei exclude tags", type:"text", ph:"dos,fuzz,intrusive", hint:"Tags to skip."},
+  rate_limit:    {label:"Rate limit (req/s)", type:"text", hint:"Nuclei request cap (10..200, default 50)."},
+  module:        {label:"Auxiliary module", type:"text", ph:"auxiliary/scanner/smb/smb_version", hint:"Metasploit auxiliary/* module path."},
+  RHOSTS:        {label:"RHOSTS", type:"text", hint:"Metasploit target-list override (default = target)."},
+  RPORT:         {label:"RPORT", type:"text", hint:"Metasploit module port override."},
+  // ── AI / LLM, phishing, client-side, wireless ──
+  prompt_field:  {label:"Prompt field name", type:"text", ph:"message", hint:"JSON request field carrying the prompt (default 'message')."},
+  response_field:{label:"Response field name", type:"text", ph:"response", hint:"JSON response field with the LLM answer (default 'response')."},
+  dkim_selectors:{label:"DKIM selectors", type:"textarea", rows:3, hint:"Custom DKIM selectors (one per line) for the SPF/DKIM/DMARC audit."},
+  target_url:    {label:"Login page URL", type:"text", hint:"Full URL — clone / framing / BitB analysis."},
+  redirect_url:  {label:"Redirect URL (with VL_REDIR)", type:"text", hint:"Endpoint with a VL_REDIR placeholder for the open-redirect probe."},
+  user_agent:    {label:"User-Agent", type:"text", hint:"Custom UA string for CSP / redirect checks."},
+  extra_params:  {label:"Extra redirect params", type:"textarea", rows:2, hint:"Additional redirect-parameter names to test (one per line)."},
+  scan_duration: {label:"BLE scan duration (sec)", type:"text", hint:"BLE enumeration window (5-60, default 15)."},
 };
 
 // Curated wordlist presets for Password module — one-click to load common
@@ -20841,6 +20924,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   // modal). Esc / click-outside / X all close it; "Configure & Scan"
   // reopens it.
   const [showScanModal, setShowScanModal] = useState(false);
+  const [authConfirmed, setAuthConfirmed] = useState(false);
+  const [scanDepth, setScanDepth] = useState("quick");
   useEffect(() => {
     const onOpen = (e) => { if (e && e.detail === moduleKey) setShowScanModal(true); };
     window.addEventListener("vl-open-scan", onOpen);
@@ -21139,6 +21224,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         });
         if (Object.keys(opts).length > 0) runBody.options = opts;
       }
+      // Universal scan-depth toggle: "deep" forces the deep stage on every scanner.
+      if (scanDepth === "deep") runBody.options = {...(runBody.options || {}), always_deep: true};
       const runPath = (moduleKey === "webapp")
         ? `${apiUrl}/api/webapp/scan/run_all`
         : `${apiUrl}/api/${moduleKey}/run_all`;
@@ -22242,7 +22329,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 
             {optionsFields.length > 0 && (
               <div style={{marginBottom:16}}>
-                <div style={{fontSize:10, color:"#00d4ff", marginBottom:10, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>Module inputs — what each scanner tries against the target</div>
+                <div style={{fontSize:10, color:"#00d4ff", marginBottom:4, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>Module inputs — what each scanner tries against the target</div>
+                {(MODULE_REQUIRED_INPUTS[moduleKey] || []).length > 0 && (
+                  <div style={{fontSize:10, color:"#ffb454", marginBottom:10}}>Required for a meaningful scan: {(MODULE_REQUIRED_INPUTS[moduleKey] || []).map(k => (OPTIONS_INPUT_DEFS[k] || {}).label || k).join(", ")}</div>
+                )}
                 <div style={{display:"flex", flexDirection:"column", gap:12}}>
                   {optionsFields.map(k => {
                     const def = OPTIONS_INPUT_DEFS[k];
@@ -22346,14 +22436,32 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               </div>
             </div>
 
-            <div style={{display:"flex", gap:10, justifyContent:"flex-end", borderTop:"1px solid #1c2435", paddingTop:16}}>
-              <button onClick={() => setShowScanModal(false)}
-                style={{background:"transparent", border:"1px solid #1c2435", borderRadius:6, padding:"9px 16px", color:"#8a94a8", fontWeight:600, fontSize:13, cursor:"pointer"}}>Close</button>
-              <button onClick={() => { setShowScanModal(false); runAll(); }} disabled={!canRun}
-                title={!canRun ? (_containerMode ? "Fill at least one input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input") : ""}
-                style={{background: canRun ? (color || "#3b9eff") : "#1c2435", border:"none", borderRadius:6, padding:"9px 20px", color:"#fff", fontWeight:700, fontSize:13, cursor: canRun ? "pointer" : "not-allowed"}}>
-                {running ? "Scanning..." : `Start Scan (${totalTools})`}
-              </button>
+            <div style={{borderTop:"1px solid #1c2435", paddingTop:14, marginTop:4}}>
+              <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:12, flexWrap:"wrap"}}>
+                <span style={{fontSize:10, color:"#8a94a8", fontWeight:700, textTransform:"uppercase", letterSpacing:1.2}}>Scan depth:</span>
+                {["quick","deep"].map(d => (
+                  <button key={d} onClick={() => setScanDepth(d)} disabled={running}
+                    style={{background: scanDepth===d ? (color||"#3b9eff") : "#0d1320", border:`1px solid ${scanDepth===d ? (color||"#3b9eff") : "#1c2435"}`, borderRadius:5, padding:"4px 12px", color: scanDepth===d ? "#fff" : "#8a94a8", fontSize:11, fontWeight:600, cursor:"pointer"}}>
+                    {d==="quick" ? "Quick (gated)" : "Deep (force deep stage)"}
+                  </button>
+                ))}
+              </div>
+              <label style={{display:"flex", alignItems:"flex-start", gap:8, marginBottom:14, cursor:"pointer"}}>
+                <input type="checkbox" checked={authConfirmed} onChange={e => setAuthConfirmed(e.target.checked)}
+                  style={{width:15, height:15, marginTop:1, cursor:"pointer", accentColor: color||"#3b9eff"}}/>
+                <span style={{fontSize:11.5, color:"#c3ccda", lineHeight:1.5}}>
+                  I own this target or am authorized to test it, and understand active scanning may generate traffic and alerts on it.
+                </span>
+              </label>
+              <div style={{display:"flex", gap:10, justifyContent:"flex-end"}}>
+                <button onClick={() => setShowScanModal(false)}
+                  style={{background:"transparent", border:"1px solid #1c2435", borderRadius:6, padding:"9px 16px", color:"#8a94a8", fontWeight:600, fontSize:13, cursor:"pointer"}}>Close</button>
+                <button onClick={() => { setShowScanModal(false); runAll(); }} disabled={!canRun || !authConfirmed}
+                  title={!authConfirmed ? "Confirm authorization to enable scanning" : (!canRun ? (_containerMode ? "Fill at least one input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one input") : "")}
+                  style={{background: (canRun && authConfirmed) ? (color || "#3b9eff") : "#1c2435", border:"none", borderRadius:6, padding:"9px 20px", color:"#fff", fontWeight:700, fontSize:13, cursor: (canRun && authConfirmed) ? "pointer" : "not-allowed"}}>
+                  {running ? "Scanning..." : `Start Scan (${totalTools})`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
