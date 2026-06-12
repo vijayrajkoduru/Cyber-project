@@ -4,7 +4,7 @@ Route: /api/recon/ssl_tls_audit
 import asyncio
 import ssl
 import socket
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import ScanContext, run_scanner
@@ -32,12 +32,72 @@ def _connect_get_cert(host, port=443):
                 der = ssock.getpeercert(binary_form=True)
                 return {
                     "cert": cert,
+                    "der": der,
                     "der_size": len(der),
                     "protocol": ssock.version(),
                     "cipher": ssock.cipher(),
                 }
     except Exception as e:
         return {"error": str(e)[:200]}
+
+
+def _host_matches(host, names):
+    """Wildcard-aware hostname vs cert CN/SAN match."""
+    host = (host or "").lower().strip(".")
+    for n in names:
+        n = (n or "").lower().strip(".")
+        if not n:
+            continue
+        if n == host:
+            return True
+        if n.startswith("*.") and host.endswith(n[1:]) and host.count(".") == n.count("."):
+            return True
+    return False
+
+
+def _parse_der_cert(host, der):
+    """Parse the DER certificate (returned even under verify_mode=CERT_NONE,
+    where getpeercert() yields {}) so an EXPIRED or HOSTNAME-MISMATCHED cert is
+    actually detected instead of mis-graded 'A'. Returns state fields; {} on any
+    failure — never raises, never a false finding."""
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.backends import default_backend
+        c = x509.load_der_x509_certificate(der, default_backend())
+        try:
+            na, nb = c.not_valid_after_utc, c.not_valid_before_utc
+            now = datetime.now(timezone.utc)
+        except AttributeError:
+            na, nb = c.not_valid_after, c.not_valid_before
+            now = datetime.utcnow()
+        out = {
+            "cert_not_after": na.strftime("%b %d %H:%M:%S %Y GMT"),
+            "cert_not_before": nb.strftime("%b %d %H:%M:%S %Y GMT"),
+            "cert_days_to_expiry": (na - now).days,
+        }
+        try:
+            cn = c.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+            out["cert_subject_cn"] = cn[0].value if cn else None
+        except Exception:
+            out["cert_subject_cn"] = None
+        try:
+            io = (c.issuer.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME)
+                  or c.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME))
+            out["cert_issuer"] = io[0].value if io else None
+        except Exception:
+            out["cert_issuer"] = None
+        try:
+            ext = c.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            out["cert_san"] = ext.value.get_values_for_type(x509.DNSName)[:10]
+        except Exception:
+            out["cert_san"] = []
+        names = list(out.get("cert_san") or [])
+        if out.get("cert_subject_cn"):
+            names.append(out["cert_subject_cn"])
+        out["cert_hostname_match"] = _host_matches(host, names)
+        return out
+    except Exception:
+        return {}
 
 def _test_protocol(host, version_enum, port=443):
     """Test specific TLS version support."""
@@ -79,15 +139,36 @@ async def gather(ctx: ScanContext):
         except Exception:
             pass
 
+    # CERT_NONE makes getpeercert() return {} (so notAfter/SAN are empty and an
+    # expired/mismatched cert was mis-graded 'A'). The DER is still available —
+    # parse it so expiry + hostname-mismatch are actually detected.
+    cert_hostname_match = None
+    cert_issuer_cn = issuer.get("commonName")
+    if days_to_expiry is None and primary.get("der"):
+        parsed = _parse_der_cert(host, primary["der"])
+        if parsed:
+            not_after = parsed.get("cert_not_after") or not_after
+            not_before = parsed.get("cert_not_before") or not_before
+            days_to_expiry = parsed.get("cert_days_to_expiry")
+            if parsed.get("cert_subject_cn"):
+                subject = {"commonName": parsed["cert_subject_cn"]}
+            if parsed.get("cert_issuer"):
+                issuer = {"organizationName": parsed["cert_issuer"]}
+                cert_issuer_cn = parsed["cert_issuer"]
+            if parsed.get("cert_san"):
+                san = parsed["cert_san"]
+            cert_hostname_match = parsed.get("cert_hostname_match")
+
     ctx.state.update({
         "tls_version_negotiated": primary.get("protocol"),
         "cipher_negotiated": primary.get("cipher",["?"])[0] if primary.get("cipher") else None,
-        "cert_issuer": issuer.get("organizationName") or issuer.get("commonName"),
+        "cert_issuer": issuer.get("organizationName") or cert_issuer_cn,
         "cert_subject_cn": subject.get("commonName"),
         "cert_san": san[:10],
         "cert_not_before": not_before,
         "cert_not_after": not_after,
         "cert_days_to_expiry": days_to_expiry,
+        "cert_hostname_match": cert_hostname_match,
     })
     if days_to_expiry is not None: ctx.source(f"cert-expiry-{days_to_expiry}d")
 
@@ -185,13 +266,25 @@ def r_long_runway(s):
     return {"name":f"TLS cert has {d} days runway","severity":"POSITIVE",
             "evidence":f"notAfter: {s.get('cert_not_after')}"}
 
+def r_hostname_mismatch(s):
+    # Only flag when we actually parsed the cert and it does NOT cover the host
+    # (None = not determinable -> skip, never a false finding).
+    if s.get("cert_hostname_match") is not False:
+        return None
+    cn = s.get("cert_subject_cn") or "?"
+    san = s.get("cert_san") or []
+    return {"name":"TLS certificate hostname mismatch","severity":"HIGH","cvss":7.4,
+            "cwe":"CWE-295","owasp":"A07:2021",
+            "evidence":f"Scanned host not covered by cert CN '{cn}' or SAN {san[:5]}",
+            "remediation":"Serve a certificate whose CN or a SAN entry matches the hostname."}
+
 def r_unreach(s):
     if s.get("target_reachable"): return None
     return {"name":"TLS endpoint unreachable","severity":"INFO",
             "evidence":s.get("error","Connection failed")}
 
-FINDING_RULES = [r_expired, r_expires_soon, r_old_tls, r_no_tls13, r_weak_cipher,
-                 r_self_signed, r_grade, r_long_runway, r_unreach]
+FINDING_RULES = [r_expired, r_expires_soon, r_hostname_mismatch, r_old_tls, r_no_tls13,
+                 r_weak_cipher, r_self_signed, r_grade, r_long_runway, r_unreach]
 
 INTEL_FIELDS = [("Target reachable","target_reachable"),("TLS version","tls_version_negotiated"),
                 ("Cipher","cipher_negotiated"),("Issuer","cert_issuer"),
