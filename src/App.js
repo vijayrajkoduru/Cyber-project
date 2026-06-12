@@ -3100,18 +3100,6 @@ function WebAppModule(props) {
   const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
   const [showHistory, setShowHistory]       = useState(false);
   const [authorized, setAuthorized]         = useState(false);
-  const [showScanModal, setShowScanModal]   = useState(false);
-  useEffect(() => {
-    const onOpen = (e) => { if (e && e.detail === "webapp") setShowScanModal(true); };
-    window.addEventListener("vl-open-scan", onOpen);
-    return () => window.removeEventListener("vl-open-scan", onOpen);
-  }, []);
-  useEffect(() => {
-    if (!showScanModal) return;
-    const onKey = (e) => { if (e.key === "Escape") setShowScanModal(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showScanModal]);
   // Which tile (phase index) is currently expanded showing its result details.
   // Click "Details" on any finished tile to inspect error message + findings;
   // saves the customer from opening DevTools to debug a failed scan.
@@ -3939,17 +3927,6 @@ function WebAppModule(props) {
           </div>
         )}
 
-        {!running && (
-          <button onClick={() => setShowScanModal(true)}
-            style={{background:"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"11px 28px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:12}}>Configure &amp; Scan</button>
-        )}
-        {showScanModal && (
-          <div onClick={()=>setShowScanModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:14,width:"100%",maxWidth:800,maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.6)"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <div style={{fontSize:15,fontWeight:700,color:"#e6edf6"}}>Web Application Pentest — Scan Setup</div>
-                <button onClick={()=>setShowScanModal(false)} title="Close (Esc)" style={{background:"none",border:"1px solid #1c2435",borderRadius:6,padding:"3px 11px",color:"#8a94a8",fontSize:16,fontWeight:700,cursor:"pointer",lineHeight:1}}>×</button>
-              </div>
         {/* Login-verified targets only. Each chip auto-fills working
             credentials. WebGoat removed — upstream image keeps renaming
             login routes between versions, breaking auto-login. */}
@@ -4091,7 +4068,7 @@ function WebAppModule(props) {
               </div>
             )}
             {!running ? (
-              <button onClick={() => { setShowScanModal(false); run(); }} disabled={!target.trim()}
+              <button onClick={run} disabled={!target.trim()}
                 style={{background:target.trim()?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
                 ▶ Start Full Pentest
               </button>
@@ -4101,11 +4078,6 @@ function WebAppModule(props) {
                 Scanning...
               </button>
             )}
-          </div>
-            </div>
-          </div>
-        )}
-          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {running && (
               <button onClick={stop} disabled={stopped}
                 style={{background:"linear-gradient(135deg,#e02347,#991b1b)",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
