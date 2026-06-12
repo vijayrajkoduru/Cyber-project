@@ -3051,13 +3051,13 @@ function AuthPanel({ target, token, authCookie, setAuthCookie, authBearer, setAu
   const [status, setStatus]       = useState(null);
   const _setCookie = (v) => { setAuthCookie(v); if (persist) { try { localStorage.setItem("cyberAuthCookie", v || ""); } catch(e){} } };
   const _setBearer = (v) => { setAuthBearer(v); if (persist) { try { localStorage.setItem("cyberAuthBearer", v || ""); } catch(e){} } };
-  const doLogin = async (tgt, lu, uu, pp) => {
+  const doLogin = async (tgt, lu, uu, pp, at) => {
     const _t = ((tgt !== undefined ? tgt : target) || "").trim();
     if (!_t) { setStatus("Enter a target first"); return; }
     if (!lu || !uu || !pp) { setStatus("Login URL + username + password are all required"); return; }
     setBusy(true); setStatus(null);
     try {
-      const lr = await api("/api/scan/login", "POST", { target: _t, login_url: lu, username: uu, password: pp, auth_type: "form" }, token, { timeoutMs: 35000 });
+      const lr = await api("/api/scan/login", "POST", { target: _t, login_url: lu, username: uu, password: pp, auth_type: at || "form" }, token);
       const got = (lr && (lr.auth_cookie || lr.auth_bearer));
       if (lr && (lr.login_verified || got)) {
         _setCookie(lr.auth_cookie || "");
@@ -3073,7 +3073,7 @@ function AuthPanel({ target, token, authCookie, setAuthCookie, authBearer, setAu
       if (d.login_url !== undefined || d.username !== undefined || d.password !== undefined) {
         setLoginUrl(d.login_url || ""); setLoginUser(d.username || ""); setLoginPass(d.password || "");
         setOpen(true);
-        if (d.auto && d.login_url && d.username && d.password) doLogin(d.target, d.login_url, d.username, d.password);
+        if (d.auto && d.login_url && d.username && d.password) doLogin(d.target, d.login_url, d.username, d.password, d.auth_type);
       }
       if (d.auth_cookie !== undefined) _setCookie(d.auth_cookie || "");
       if (d.auth_bearer !== undefined) _setBearer(d.auth_bearer || "");
@@ -3105,7 +3105,7 @@ function AuthPanel({ target, token, authCookie, setAuthCookie, authBearer, setAu
                 style={{background:"#0d1320", border:"1px solid #0e3a55", borderRadius:4, padding:"7px 10px", color:"#d8deea", fontFamily:"JetBrains Mono,monospace", fontSize:11, outline:"none", boxSizing:"border-box"}}/>
             </div>
             <div style={{display:"flex", gap:10, alignItems:"center", flexWrap:"wrap"}}>
-              <button onClick={()=>doLogin(undefined, loginUrl.trim(), loginUser.trim(), loginPass.trim())} disabled={busy}
+              <button onClick={()=>doLogin(undefined, loginUrl.trim(), loginUser.trim(), loginPass.trim(), "form")} disabled={busy}
                 style={{background:busy?"#1c2435":"linear-gradient(135deg,#00ff88,#0bd673)", border:"none", borderRadius:4, padding:"7px 14px", color:busy?"#5a6478":"#0d1320", fontSize:11, fontWeight:700, cursor:busy?"not-allowed":"pointer"}}>
                 {busy?"Logging in...":"Auto-login & capture cookie"}
               </button>
@@ -3153,7 +3153,7 @@ function TestChips({ moduleKey, setTarget, running }) {
           <button key={idx} disabled={running}
             onClick={() => {
               setTarget(t.value);
-              if (hasCreds) window.dispatchEvent(new CustomEvent("vl-fill-creds", { detail: { target: t.value, login_url: t.login_url, username: t.username, password: t.password, auto: true } }));
+              if (hasCreds) window.dispatchEvent(new CustomEvent("vl-fill-creds", { detail: { target: t.value, login_url: t.login_url, username: t.username, password: t.password, auth_type: t.auth_type, auto: true } }));
               else window.dispatchEvent(new CustomEvent("vl-fill-creds", { detail: { login_url: "", username: "", password: "" } }));
             }}
             title={hasCreds ? ("Auto-login as " + t.username) : t.value}
@@ -10151,7 +10151,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     }
   }
 
-  chk(80);
+  chk(34);
   y = sHead("Compliance Mapping", y);
   doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
   doc.text("Each finding mapped to the framework control(s) it impacts. Automated mapping - validate with your auditor.", margin+2, y);
@@ -13962,6 +13962,10 @@ function generateUniversalVLReport(opts) {
   };
   const chk = n => { if (y + n > 278) { doc.addPage(); y = 18; drawHeader(); } };
   const sHead = (title, yy) => {
+    // Orphan guard: a section header must never land in the last sliver of a
+    // page with its body pushed onto the next page. If under ~24mm remains,
+    // break first so the header sits with at least its opening content.
+    if (yy + 24 > 278) { doc.addPage(); y = 18; drawHeader(); yy = y; }
     _secN++;
     fillR(margin, yy, contentW, 9, LBLUE);
     txt(_secN + ". " + title, margin + 4, yy + 6.2, 10, BLUE, true);
@@ -14404,8 +14408,6 @@ function generateUniversalVLReport(opts) {
     y += _rh;
   });
   y += 6;
-
-  doc.addPage(); y = 18; drawHeader();
 
   // ── EXECUTIVE SUMMARY ──
   {
@@ -15133,8 +15135,6 @@ function generateUniversalVLReport(opts) {
     y += _ih + 6;
   }
 
-  doc.addPage(); y = 18; drawHeader();
-
   // ── SCAN COVERAGE ──
   const _phaseDefs = Object.keys(r).map(toolKey => ({
     tool: toolKey,
@@ -15191,7 +15191,7 @@ function generateUniversalVLReport(opts) {
   y += 6;
 
   // ── COMPLIANCE MAPPING ──
-  chk(80);
+  chk(34);
   y = sHead("Compliance Mapping", y);
   doc.setFont("Arial","italic"); doc.setFontSize(7); doc.setTextColor(...GRAY);
   doc.text("Each finding mapped to the framework control(s) it impacts. Automated mapping - validate with your auditor.", margin + 2, y);
@@ -20845,21 +20845,23 @@ const ADVANCED_INPUT_PRESETS = {
 // a syntactic format example. Click on one to populate the target input.
 const MODULE_TEST_TARGETS = {
   recon: [
-    {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Nmap's official authorized scan target"},
-    {label:"hackerone.com",       value:"hackerone.com",                         desc:"Bug-bounty platform (public surface)"},
-    {label:"example.com",         value:"example.com",                           desc:"IANA reserved demo domain"},
-    {label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com", login_url:"http://testphp.vulnweb.com/login.php", username:"test", password:"test", desc:"Acunetix Acuart - authenticated crawl (auto-login test/test)"},
+    {label:"lab_juiceshop",       value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab — authenticated crawl (auto-login)"},
+    {label:"lab_dvwa",            value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab — authenticated crawl (auto-login admin/password)"},
+    {label:"lab_metasploitable",  value:"lab_metasploitable",                    desc:"Your Docker Metasploitable2 lab — services + CVEs"},
+    {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Nmap's authorized target (no-setup baseline)"},
   ],
   vuln: [
-    {label:"demo.testfire.net",     value:"http://demo.testfire.net", login_url:"http://demo.testfire.net/login.jsp", username:"admin", password:"admin", desc:"IBM AltoroMutual - Java/Tomcat 5.5 CVEs (auto-login admin/admin)"},
-    {label:"lab_metasploitable",    value:"lab_metasploitable",                  desc:"Internal lab - many real CVEs (Samba/vsftpd/etc)"},
-    {label:"scanme.nmap.org",       value:"scanme.nmap.org",                     desc:"Nmap's official authorized test target"},
+    {label:"lab_metasploitable",  value:"lab_metasploitable",                    desc:"Your Docker Metasploitable2 lab — many real CVEs (Samba/vsftpd/etc)"},
+    {label:"lab_dvwa",            value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab (auto-login admin/password)"},
+    {label:"lab_juiceshop",       value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab (auto-login)"},
+    {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Nmap's authorized target (no-setup baseline)"},
   ],
   webapp: [
-    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com/listproducts.php?cat=1", login_url:"http://testphp.vulnweb.com/login.php", username:"test", password:"test", desc:"Acunetix Acuart - SQLi on cat param (auto-login test/test)"},
-    {label:"lab_dvwa",              value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Internal DVWA lab (auto-login admin/password)"},
-    {label:"lab_juiceshop",         value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", desc:"Internal OWASP Juice Shop (auto-login admin@juice-sh.op)"},
-    {label:"demo.testfire.net",     value:"http://demo.testfire.net", login_url:"http://demo.testfire.net/login.jsp", username:"admin", password:"admin", desc:"IBM AltoroMutual demo (auto-login admin/admin)"},
+    {label:"lab_dvwa",        value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab (auto-login admin/password)"},
+    {label:"lab_juiceshop",   value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab (auto-login)"},
+    {label:"lab_bwapp",       value:"http://lab_bwapp/bWAPP/", login_url:"http://lab_bwapp/bWAPP/login.php", username:"bee", password:"bug", desc:"Your Docker bWAPP lab (auto-login bee/bug; run install.php once)"},
+    {label:"lab_mutillidae",  value:"http://lab_mutillidae", login_url:"http://lab_mutillidae/index.php?page=login.php", username:"admin", password:"admin", desc:"Your Docker Mutillidae lab (auto-login admin/admin)"},
+    {label:"lab_webgoat",     value:"http://lab_webgoat:8080/WebGoat", login_url:"http://lab_webgoat:8080/WebGoat/login", username:"guest", password:"guest", desc:"Your Docker WebGoat lab (auto-login guest/guest)"},
   ],
   osint: [
     {label:"example.com",                value:"example.com",                desc:"Domain — passive DNS / cert / OSINT"},
@@ -20885,9 +20887,8 @@ const MODULE_TEST_TARGETS = {
     {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"External-style target (msfadmin/msfadmin)"},
   ],
   client_side: [
-    {label:"juice-shop.herokuapp", value:"https://juice-shop.herokuapp.com", login_url:"https://juice-shop.herokuapp.com", username:"admin@juice-sh.op", password:"admin123", desc:"OWASP Juice Shop (auto-login admin@juice-sh.op)"},
-    {label:"testphp.vulnweb.com",  value:"http://testphp.vulnweb.com", login_url:"http://testphp.vulnweb.com/login.php", username:"test", password:"test", desc:"Acunetix legal pentest app (auto-login test/test)"},
-    {label:"google-gruyere",       value:"https://google-gruyere.appspot.com",    desc:"Google's vulnerable lab"},
+    {label:"lab_juiceshop",   value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab — DOM XSS / clickjack (auto-login)"},
+    {label:"lab_dvwa",        value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab (auto-login admin/password)"},
   ],
   system_exploit: [
     {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Internal Metasploitable - verified CVEs"},
@@ -20920,9 +20921,9 @@ const MODULE_TEST_TARGETS = {
     {label:"your /24",             value:"192.168.1.0/24",                        desc:"Your own LAN range (authorization required)"},
   ],
   auth_attacks: [
-    {label:"demo.testfire.net",    value:"http://demo.testfire.net/login.jsp", login_url:"http://demo.testfire.net/login.jsp", username:"admin", password:"admin", desc:"IBM AltoroMutual - session + JWT (auto-login admin/admin)"},
-    {label:"lab_juiceshop",        value:"http://lab_juiceshop:3000/#/login", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", desc:"Internal Juice Shop - modern JWT (auto-login admin@juice-sh.op)"},
-    {label:"lab_pwd_oauth",        value:"http://lab_pwd_oauth:8080",                desc:"Internal Keycloak lab (opt-in)"},
+    {label:"lab_juiceshop",   value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab — modern JWT (auto-login)"},
+    {label:"lab_dvwa",        value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab — session/cookie tests (auto-login admin/password)"},
+    {label:"lab_pwd_web",     value:"http://lab_pwd_web:5000", login_url:"http://lab_pwd_web:5000/login", username:"admin", password:"admin", desc:"Your Docker form-login lab (auto-login admin/admin)"},
   ],
   wireless: [
     {label:"sample BSSID",         value:"AA:BB:CC:DD:EE:FF",                     desc:"Example BSSID format"},
@@ -20946,10 +20947,9 @@ const MODULE_TEST_TARGETS = {
     {label:"Azure subscription",   value:"sub-00000000-0000-0000-0000-000000000000", desc:"Your own Azure subscription ID"},
   ],
   apisec: [
-    {label:"crapi.apisec.ai",      value:"https://crapi.apisec.ai",               desc:"OWASP crAPI demo (vulnerable API)"},
-    {label:"httpbin.org",          value:"https://httpbin.org",                   desc:"HTTP request echo / introspection"},
-    {label:"reqres.in",            value:"https://reqres.in/api/",                desc:"Test REST API"},
-    {label:"swapi.dev",            value:"https://swapi.dev/api/",                desc:"Star Wars test REST API"},
+    {label:"lab_juiceshop API", value:"http://lab_juiceshop:3000/rest", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop REST API (auto-login)"},
+    {label:"crapi.apisec.ai",   value:"https://crapi.apisec.ai",               desc:"OWASP crAPI demo (public, optional)"},
+    {label:"httpbin.org",       value:"https://httpbin.org",                   desc:"HTTP request echo / introspection"},
   ],
   ai_llm: [
     {label:"gandalf.lakera.ai",    value:"https://gandalf.lakera.ai",             desc:"Lakera's official prompt-injection challenge"},
