@@ -15920,7 +15920,12 @@ function generateUniversalVLReport(opts) {
         const _imgH = _imgW * (680 / 1024);
         chk(_imgH + 10);
         txt(String(f.name || f.detail || "Captured surface"), margin + 2, y, 8, [185,28,28], true);
-        y += 4.5;
+        y += 4.2;
+        if (typeof f.screenshot_caption === "string" && f.screenshot_caption) {
+          var _capL = doc.splitTextToSize(_ascii(f.screenshot_caption), contentW - 4).slice(0, 2);
+          _capL.forEach(function(ln, li){ txt(ln, margin + 2, y + (li * 3.3), 6.5, GRAY); });
+          y += _capL.length * 3.3 + 1.5;
+        }
         try { doc.addImage(f.screenshot, "JPEG", margin + 2, y, _imgW, _imgH); } catch (e) {}
         doc.setDrawColor(203, 213, 225); doc.rect(margin + 2, y, _imgW, _imgH);
         y += _imgH + 6;
@@ -21144,6 +21149,8 @@ const MODULE_TEST_TARGETS = {
     {label:"lab_juiceshop",   value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab — modern JWT (auto-login)"},
     {label:"lab_dvwa",        value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab — session/cookie tests (auto-login admin/password)"},
     {label:"lab_pwd_web",     value:"http://lab_pwd_web:5000", login_url:"http://lab_pwd_web:5000/login", username:"admin", password:"admin", desc:"Your Docker form-login lab (auto-login admin/admin)"},
+    {label:"lab_pwd_oauth (Keycloak)", value:"http://lab_pwd_oauth:8080", desc:"Your Docker Keycloak OIDC lab — OAuth/token tier (realm vl-test-realm, alice/Password1!)"},
+    {label:"lab_pwd_saml",    value:"http://lab_pwd_saml:8080/simplesaml", desc:"Your Docker SimpleSAMLphp lab — SAML signature tier (user1/user1pass)"},
   ],
   wireless: [
     {label:"sample BSSID",         value:"AA:BB:CC:DD:EE:FF",                     desc:"Example BSSID format"},
@@ -21196,9 +21203,9 @@ const MODULE_TEST_TARGETS = {
     {label:"your Slack",           value:"yourorg.slack.com",                     desc:"Your own Slack workspace"},
   ],
   iot_ot: [
-    {label:"local Modbus",         value:"192.168.1.50:502",                      desc:"Your own Modbus device (default port 502)"},
-    {label:"BACnet",               value:"192.168.1.51:47808",                    desc:"Your own BACnet device (default port 47808)"},
-    {label:"local pymodbus sim",   value:"127.0.0.1:5020",                        desc:"Run: pip install pymodbus && python -m pymodbus.examples.server"},
+    {label:"lab_modbus",           value:"lab_modbus:502",                        desc:"Your Docker Modbus/TCP lab — unauthenticated ICS exposure (port 502)"},
+    {label:"your Modbus device",   value:"192.168.1.50:502",                      desc:"Your own Modbus device (default port 502)"},
+    {label:"your BACnet device",   value:"192.168.1.51:47808",                    desc:"Your own BACnet device (default port 47808)"},
   ],
   firmware: [
     {label:"DVRF",                 value:"https://github.com/praetorian-inc/DVRF", desc:"Damn Vulnerable Router Firmware"},
