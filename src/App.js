@@ -4011,14 +4011,10 @@ function WebAppModule(props) {
                     style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               </div>
-              <label style={{display:"flex",alignItems:"flex-start",gap:8,marginTop:14,marginBottom:14,cursor:"pointer"}}>
-                <input type="checkbox" checked={authConfirmed} onChange={e=>setAuthConfirmed(e.target.checked)} style={{width:15,height:15,marginTop:1,cursor:"pointer",accentColor:"#3b9eff"}}/>
-                <span style={{fontSize:11.5,color:"#c3ccda",lineHeight:1.5}}>I own this target or am authorized to test it, and understand active scanning may generate traffic and alerts on it.</span>
-              </label>
-              <div style={{display:"flex",gap:10,justifyContent:"flex-end",borderTop:"1px solid #1c2435",paddingTop:14}}>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end",borderTop:"1px solid #1c2435",paddingTop:14,marginTop:14}}>
                 <button onClick={()=>setShowScanModal(false)} style={{background:"transparent",border:"1px solid #1c2435",borderRadius:6,padding:"9px 16px",color:"#8a94a8",fontWeight:600,fontSize:13,cursor:"pointer"}}>Close</button>
-                <button onClick={()=>{ if(target.trim()&&authConfirmed){ setShowScanModal(false); run(); } }} disabled={!target.trim()||!authConfirmed}
-                  style={{background:(target.trim()&&authConfirmed)?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"9px 22px",color:(target.trim()&&authConfirmed)?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:(target.trim()&&authConfirmed)?"pointer":"not-allowed"}}>
+                <button onClick={()=>{ if(target.trim()){ setShowScanModal(false); run(); } }} disabled={!target.trim()}
+                  style={{background:target.trim()?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"9px 22px",color:target.trim()?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed"}}>
                   ▶ Start Full Pentest
                 </button>
               </div>
@@ -13270,18 +13266,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
             ))}
           </div>
         )}
-        <label style={{display:"flex", alignItems:"flex-start", gap:8, marginBottom:12, cursor:"pointer"}}>
-          <input type="checkbox" checked={authConfirmed} onChange={e=>setAuthConfirmed(e.target.checked)} style={{width:15, height:15, marginTop:1, cursor:"pointer", accentColor:"#3b9eff"}}/>
-          <span style={{fontSize:11.5, color:"#c3ccda", lineHeight:1.5}}>I own this target or am authorized to test it, and understand active scanning may generate traffic and alerts on it.</span>
-        </label>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
             placeholder="domain.com  or  192.168.1.1  or  192.168.1.0/24"
             style={{flex:3,minWidth:240,background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}/>
-          <button onClick={() => { setShowScanModal(false); run(); }} disabled={running||!target.trim()||!authConfirmed}
-            title={!authConfirmed ? "Confirm authorization to enable scanning" : ""}
-            style={{background:(running||!authConfirmed)?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:(running||!authConfirmed)?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:(running||!authConfirmed)?"not-allowed":"pointer"}}>
+          <button onClick={() => { setShowScanModal(false); run(); }} disabled={running||!target.trim()}
+            style={{background:running?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
             {running?"Running...":"Start Scan"}
           </button>
           {running && (
@@ -22534,19 +22525,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   </button>
                 ))}
               </div>
-              <label style={{display:"flex", alignItems:"flex-start", gap:8, marginBottom:14, cursor:"pointer"}}>
-                <input type="checkbox" checked={authConfirmed} onChange={e => setAuthConfirmed(e.target.checked)}
-                  style={{width:15, height:15, marginTop:1, cursor:"pointer", accentColor: color||"#3b9eff"}}/>
-                <span style={{fontSize:11.5, color:"#c3ccda", lineHeight:1.5}}>
-                  I own this target or am authorized to test it, and understand active scanning may generate traffic and alerts on it.
-                </span>
-              </label>
               <div style={{display:"flex", gap:10, justifyContent:"flex-end"}}>
                 <button onClick={() => setShowScanModal(false)}
                   style={{background:"transparent", border:"1px solid #1c2435", borderRadius:6, padding:"9px 16px", color:"#8a94a8", fontWeight:600, fontSize:13, cursor:"pointer"}}>Close</button>
-                <button onClick={() => { setShowScanModal(false); runAll(); }} disabled={!canRun || !authConfirmed}
-                  title={!authConfirmed ? "Confirm authorization to enable scanning" : (!canRun ? (_containerMode ? "Fill at least one input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one input") : "")}
-                  style={{background: (canRun && authConfirmed) ? (color || "#3b9eff") : "#1c2435", border:"none", borderRadius:6, padding:"9px 20px", color:"#fff", fontWeight:700, fontSize:13, cursor: (canRun && authConfirmed) ? "pointer" : "not-allowed"}}>
+                <button onClick={() => { setShowScanModal(false); runAll(); }} disabled={!canRun}
+                  title={!canRun ? (_containerMode ? "Fill at least one input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one input") : ""}
+                  style={{background: canRun ? (color || "#3b9eff") : "#1c2435", border:"none", borderRadius:6, padding:"9px 20px", color:"#fff", fontWeight:700, fontSize:13, cursor: canRun ? "pointer" : "not-allowed"}}>
                   {running ? "Scanning..." : `Start Scan (${totalTools})`}
                 </button>
               </div>
