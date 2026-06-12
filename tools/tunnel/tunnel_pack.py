@@ -1,5 +1,11 @@
 """§15 Tunneling — 48 endpoints (live probes + advisories).
 
+Fixed 2026-06-12: _adv() previously emitted the playbook's planned severity
+(HIGH/CRITICAL) for post-compromise tunnel primitives that were never detected
+on a black-box scan — same false-positive regression as the Pivot module. _adv()
+now forces INFO advisory-by-design; only live tunnel/port fingerprints (via
+_resp) keep a real detection-based severity.
+
 Section layout:
   §1 SSH Tunnel Primitives           (10 endpoints — ssh banner / config posture)
   §2 Reverse Tunneling Tools         (12 endpoints — chisel/ligolo/frp fingerprints)
@@ -43,14 +49,27 @@ def _resp(tool: str, target: str, findings: list, tested: int = 1,
     }
 
 
-def _adv(tool: str, target: str, title: str, *, sev: str = "MEDIUM",
-         cvss: str = "5.0", cwe: str = "CWE-1395", remediation: str = "",
+def _adv(tool: str, target: str, title: str, *, sev: str = "INFO",
+         cvss: str = "0.0", cwe: str = "CWE-1395", remediation: str = "",
          evidence: str = "") -> dict:
-    return _resp(tool, target, findings=[wrap_finding(
-        title, sev, cvss=cvss, cwe=cwe, owasp="A05:2021",
+    """Tunneling primitives are POST-COMPROMISE: they presuppose an existing
+    foothold and cannot be observed on a black-box scan. Emit as INFO
+    advisory-by-design — NEVER the playbook's graded severity (that fabricates an
+    exposure that was never detected, inflating the risk score / compliance map).
+    The planned severity is kept in raw_data for context only. Live tunnel/port
+    fingerprints that actually detect something emit via _resp() directly and
+    keep their real (detection-based) severity."""
+    planned = str(sev).upper()
+    r = _resp(tool, target, findings=[wrap_finding(
+        f"[ADVISORY-BY-DESIGN] {title}", "INFO", cvss="0.0", cwe=cwe, owasp="N/A",
         remediation=remediation or "Detect via host EDR + NSM. See module_playbooks/15_tunnel.md.",
-        evidence_marker=evidence or "Advisory — post-compromise primitive; verify against EDR/NSM logs."
+        evidence_marker=(
+            "Post-compromise primitive — presupposes an existing foothold; not "
+            "detectable on an external black-box scan. Informational only, NOT a "
+            "confirmed exposure. " + (evidence or "Verify against EDR/NSM logs."))
     )], tested=1, what_checked=title[:80])
+    r["raw_data"] = {"advisory_by_design": True, "planned_severity": planned}
+    return r
 
 
 def _udp_listen(host: str, port: int, timeout: float = 2.0) -> bool:
