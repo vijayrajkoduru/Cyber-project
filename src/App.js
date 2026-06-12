@@ -12388,6 +12388,21 @@ function ReconModule({token, onRunningChange, activeSections}) {
   const [authStatus,setAuthStatus]               = useState(null);
   const [rAutoLoginBusy,setRAutoLoginBusy]       = useState(false);
   const [rAutoLoginStatus,setRAutoLoginStatus]   = useState(null);
+  // Scan Setup modal — opens when Recon is selected (parent dispatches
+  // "vl-open-scan" with detail="recon" after the panel is shown). Esc /
+  // click-outside / X close it; "Configure & Scan" reopens it.
+  const [showScanModal, setShowScanModal] = useState(false);
+  useEffect(() => {
+    const onOpen = (e) => { if (e && e.detail === "recon") setShowScanModal(true); };
+    window.addEventListener("vl-open-scan", onOpen);
+    return () => window.removeEventListener("vl-open-scan", onOpen);
+  }, []);
+  useEffect(() => {
+    if (!showScanModal) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowScanModal(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showScanModal]);
   const stopRef = useRef(false);
   const logRef  = useRef(null);
 
@@ -13029,7 +13044,28 @@ function ReconModule({token, onRunningChange, activeSections}) {
           WHOIS · DNS · subdomains · cert transparency · OSINT · Shodan · port scan · service detection · OS fingerprinting · banners · directory enum
         </p>
 
-        {/* Target + controls */}
+        {/* Target + controls — moved into the Scan Setup modal (opens on select) */}
+        {running ? (
+          <button onClick={stop} disabled={stopped}
+            style={{background:"linear-gradient(135deg,#e02347,#991b1b)",border:"none",borderRadius:6,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",opacity:stopped?0.5:1}}>
+            ■ Stop
+          </button>
+        ) : (
+          <button onClick={() => setShowScanModal(true)}
+            style={{background:"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            Configure &amp; Scan
+          </button>
+        )}
+        {showScanModal && (
+          <div onClick={() => setShowScanModal(false)}
+               style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20}}>
+            <div onClick={e => e.stopPropagation()}
+                 style={{background:"#0d1320", border:"1px solid #0e3a55", borderRadius:14, width:"100%", maxWidth:760, maxHeight:"90vh", overflowY:"auto", padding:24, boxShadow:"0 20px 60px rgba(0,0,0,0.6)"}}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14}}>
+                <div style={{fontSize:15, fontWeight:700, color:"#e6edf6"}}>Information Gathering &amp; Recon — Scan Setup</div>
+                <button onClick={() => setShowScanModal(false)} title="Close (Esc)"
+                  style={{background:"none", border:"1px solid #1c2435", borderRadius:6, padding:"3px 11px", color:"#8a94a8", fontSize:16, fontWeight:700, cursor:"pointer", lineHeight:1}}>×</button>
+              </div>
         {/* RECON-TT-AUTH-V1 — auth-aware test targets; clicking a lab pre-fills creds */}
         <TestTargets onSelect={async (t, lab) => {
           setTarget(t);
@@ -13167,9 +13203,9 @@ function ReconModule({token, onRunningChange, activeSections}) {
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
             placeholder="domain.com  or  192.168.1.1  or  192.168.1.0/24"
             style={{flex:3,minWidth:240,background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}/>
-          <button onClick={run} disabled={running||!target.trim()}
+          <button onClick={() => { setShowScanModal(false); run(); }} disabled={running||!target.trim()}
             style={{background:running?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
-            {running?"Running...":"Start Recon"}
+            {running?"Running...":"Start Scan"}
           </button>
           {running && (
             <button onClick={stop} disabled={stopped}
@@ -13178,6 +13214,9 @@ function ReconModule({token, onRunningChange, activeSections}) {
             </button>
           )}
         </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Badge Legend — explains the tile status colors */}
