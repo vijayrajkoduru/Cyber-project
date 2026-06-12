@@ -7,8 +7,9 @@ Sessions 1-5 in one file:
   4. Scheduled recurring scans (in-process asyncio loop)
   5. Multi-target batch + CSV/JSON export
 """
-import asyncio, json, os, hashlib, time, csv, io, uuid, hmac, requests
+import asyncio, json, os, hashlib, time, csv, io, uuid, hmac, re, socket, ipaddress, requests
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from fastapi.responses import StreamingResponse, PlainTextResponse
@@ -28,6 +29,39 @@ def _safe(s): return "".join(c for c in s if c.isalnum() or c in ".-_")
 def _target_dir(t):
     d = _HIST / _safe(t); d.mkdir(parents=True, exist_ok=True); return d
 def _scan_id(target, ts): return hashlib.sha1(f"{target}-{ts}".encode()).hexdigest()[:12]
+
+_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+def _valid_id(s): return bool(_ID_RE.match(s or ""))
+
+def _url_is_safe(url):
+    """Return (ok, reason). Blocks non-http(s) schemes and any URL that
+    resolves to a private / loopback / link-local / reserved / multicast IP.
+    Stops the webhook + scheduler fire paths from being used as an SSRF
+    primitive against cloud metadata (169.254.169.254), localhost, or RFC1918
+    hosts. Re-checked at fire time for DNS-rebind safety."""
+    try:
+        p = urlparse(url or "")
+    except Exception:
+        return False, "unparseable URL"
+    if p.scheme not in ("http", "https"):
+        return False, f"scheme '{p.scheme or ''}' not allowed (use http/https)"
+    host = p.hostname
+    if not host:
+        return False, "URL has no host"
+    try:
+        infos = socket.getaddrinfo(host, p.port or (443 if p.scheme == "https" else 80),
+                                   proto=socket.IPPROTO_TCP)
+    except Exception as e:
+        return False, f"DNS resolution failed: {e}"
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except Exception:
+            return False, "unresolvable address"
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+                or ip.is_multicast or ip.is_unspecified):
+            return False, f"host resolves to non-public IP {ip}"
+    return True, "ok"
 
 # ═════════════════════════════════════════════════════════════
 # SESSION 1: Scan history + diff
@@ -136,26 +170,44 @@ class WebhookConfig(BaseModel):
 _SEV_ORDER = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
 
 @router.post("/api/recon/webhook/configure")
-async def webhook_configure(cfg: WebhookConfig, _=Depends(verify_scan_quota)):
+async def webhook_configure(cfg: WebhookConfig, payload=Depends(verify_scan_quota)):
+    ok, reason = _url_is_safe(cfg.url)
+    if not ok:
+        raise HTTPException(400, f"Webhook URL rejected: {reason}")
     wid = uuid.uuid4().hex[:12]
     rec = cfg.dict()
     rec["webhook_id"] = wid
+    rec["owner"] = str(payload.get("sub", ""))
     rec["created"] = int(time.time())
     (_HOOKS / f"{wid}.json").write_text(json.dumps(rec), encoding="utf-8")
     return {"ok": True, "webhook_id": wid}
 
 @router.get("/api/recon/webhook/list")
-async def webhook_list(_=Depends(verify_scan_quota)):
+async def webhook_list(payload=Depends(verify_scan_quota)):
+    sub = str(payload.get("sub", ""))
     out = []
     for f in _HOOKS.glob("*.json"):
-        try: out.append(json.loads(f.read_text(encoding="utf-8")))
-        except Exception: pass
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if str(rec.get("owner", "")) != sub:        # only the owner's webhooks
+            continue
+        rec.pop("secret", None)                      # never expose the HMAC secret
+        out.append(rec)
     return {"count": len(out), "webhooks": out}
 
 @router.delete("/api/recon/webhook/{webhook_id}")
-async def webhook_delete(webhook_id: str, _=Depends(verify_scan_quota)):
+async def webhook_delete(webhook_id: str, payload=Depends(verify_scan_quota)):
+    if not _valid_id(webhook_id): raise HTTPException(400, "invalid webhook_id")
     f = _HOOKS / f"{webhook_id}.json"
     if not f.exists(): raise HTTPException(404)
+    try:
+        rec = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        rec = {}
+    if str(rec.get("owner", "")) != str(payload.get("sub", "")):
+        raise HTTPException(403, "not your webhook")
     f.unlink()
     return {"ok": True}
 
@@ -172,15 +224,21 @@ async def _fire_webhooks(target: str, scan_record: dict):
             min_sev = _SEV_ORDER.get((cfg.get("min_severity") or "MEDIUM").upper(), 2)
             filtered = [f for f in findings if _SEV_ORDER.get(f["severity"], 0) >= min_sev]
             if not filtered: continue
+            # SSRF guard — re-validate the destination at fire time (DNS-rebind safe).
+            ok, reason = _url_is_safe(cfg.get("url", ""))
+            if not ok:
+                print(f"[webhook] {hf.name} skipped: unsafe URL ({reason})")
+                continue
             # Format
             payload = _format_webhook(cfg.get("format", "generic"), target,
                                       scan_record["scan_id"], filtered)
-            # HMAC signature if secret set
+            # Sign the EXACT bytes we transmit so the receiver's HMAC verifies.
+            body = json.dumps(payload, separators=(",", ":")).encode()
             headers = {"Content-Type":"application/json","User-Agent":"VulnusLab-Webhook/1.0"}
             if cfg.get("secret"):
-                sig = hmac.new(cfg["secret"].encode(), json.dumps(payload).encode(), hashlib.sha256).hexdigest()
+                sig = hmac.new(cfg["secret"].encode(), body, hashlib.sha256).hexdigest()
                 headers["X-VulnusLab-Signature"] = f"sha256={sig}"
-            await asyncio.to_thread(requests.post, cfg["url"], json=payload,
+            await asyncio.to_thread(requests.post, cfg["url"], data=body,
                                      headers=headers, timeout=8)
         except Exception as e:
             print(f"[webhook] {hf.name} failed: {e}")
@@ -210,11 +268,27 @@ class ScheduleReq(BaseModel):
     interval_hours: int   # 1 = hourly, 24 = daily, 168 = weekly
     tiers: Optional[List[str]] = None  # subset of tier subdirs to scan
 
+_MAX_SCHEDULES_PER_USER = 20
+
 @router.post("/api/recon/schedule/create")
-async def schedule_create(req: ScheduleReq, _=Depends(verify_scan_quota)):
+async def schedule_create(req: ScheduleReq, payload=Depends(verify_scan_quota)):
+    if req.interval_hours < 1:
+        raise HTTPException(400, "interval_hours must be >= 1")
+    sub = str(payload.get("sub", ""))
+    # Per-user cap — stops one account registering unbounded recurring fan-out.
+    mine = 0
+    for f in _SCHED.glob("*.json"):
+        try:
+            if str(json.loads(f.read_text(encoding="utf-8")).get("owner", "")) == sub:
+                mine += 1
+        except Exception:
+            continue
+    if mine >= _MAX_SCHEDULES_PER_USER:
+        raise HTTPException(429, f"schedule limit reached ({_MAX_SCHEDULES_PER_USER})")
     sid = uuid.uuid4().hex[:12]
     rec = req.dict()
     rec["schedule_id"] = sid
+    rec["owner"] = sub
     rec["created"] = int(time.time())
     rec["next_run"] = int(time.time()) + req.interval_hours * 3600
     rec["last_run"] = None
@@ -223,17 +297,29 @@ async def schedule_create(req: ScheduleReq, _=Depends(verify_scan_quota)):
     return {"ok": True, "schedule_id": sid, "next_run": rec["next_run"]}
 
 @router.get("/api/recon/schedule/list")
-async def schedule_list(_=Depends(verify_scan_quota)):
+async def schedule_list(payload=Depends(verify_scan_quota)):
+    sub = str(payload.get("sub", ""))
     out = []
     for f in _SCHED.glob("*.json"):
-        try: out.append(json.loads(f.read_text(encoding="utf-8")))
-        except Exception: pass
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if str(rec.get("owner", "")) == sub:
+            out.append(rec)
     return {"count":len(out), "schedules":out}
 
 @router.delete("/api/recon/schedule/{schedule_id}")
-async def schedule_delete(schedule_id: str, _=Depends(verify_scan_quota)):
+async def schedule_delete(schedule_id: str, payload=Depends(verify_scan_quota)):
+    if not _valid_id(schedule_id): raise HTTPException(400, "invalid schedule_id")
     f = _SCHED / f"{schedule_id}.json"
     if not f.exists(): raise HTTPException(404)
+    try:
+        rec = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        rec = {}
+    if str(rec.get("owner", "")) != str(payload.get("sub", "")):
+        raise HTTPException(403, "not your schedule")
     f.unlink()
     return {"ok": True}
 
