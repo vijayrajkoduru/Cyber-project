@@ -1,17 +1,35 @@
 """wireless module orchestrator - 802.11 Wi-Fi + Bluetooth audit probes.
 
 Per module_playbooks/18_wireless.md - 8 sections, 84 techniques.
-Starter set (5 probes) covers:
-  - §1 Recon:   monitor_mode_capability_audit
-  - §2 WPA/2:   wpa_handshake_capture_audit, wps_pin_audit
-  - §6 BT/BLE:  ble_scan_audit, bluetooth_classic_pair_audit
-More scanners will be added per playbook section in subsequent commits.
 
-NOTE: Wireless probes typically require --privileged + USB adapter
-passthrough at runtime. The probes gracefully return INFO/HIGH findings
-when no hardware is available, so the module is safe to expose from a
-hardware-less VPS — but real coverage requires an agent deployed on a
-host with a monitor-mode WiFi NIC + BT adapter.
+Coverage model (honest VA, zero false positives):
+  tier1_wifi:
+    - wireless_mgmt_exposure_audit  REAL SaaS-safe probe: detects an
+      internet-exposed Wi-Fi AP / WLAN-controller admin plane and fingerprints
+      the vendor panel. Grades HIGH/MEDIUM ONLY on a confirmed live signature.
+    - wireless_mgmt_tls_audit       REAL SaaS-safe probe: inspects the served
+      certificate + negotiated TLS on the exposed mgmt plane (expired / default
+      vendor cert / deprecated TLS), all actively confirmed.
+    - monitor_mode_capability_audit / wpa_handshake_capture_audit / wps_pin_audit
+      hardware-dependent local probes (degrade to INFO without a monitor-mode NIC).
+  tier2_bluetooth:
+    - ble_scan_audit / bluetooth_classic_pair_audit  passive BT/BLE enumeration
+      (degrade to INFO without a BT adapter).
+  tier3_advisory (INFO-only, advisory-by-design):
+    - wifi_recon_advisory / wpa_active_advisory / wpa3_sae_advisory /
+      enterprise_eap_advisory / rogue_ap_advisory / bluetooth_active_advisory /
+      nfc_rfid_advisory / cellular_sdr_advisory — the RF / hardware /
+      LAN-adjacent / physical-layer technique families that genuinely cannot be
+      probed from external SaaS. Each emits [ADVISORY-BY-DESIGN] INFO findings
+      (one per playbook technique) with manual/on-agent test guidance. The
+      planned playbook severity is documented in remediation text but NEVER
+      passed through as a finding severity.
+
+NOTE: the hardware-dependent probes require --privileged + USB adapter
+passthrough at runtime; they gracefully return INFO when no hardware is
+available, so the module is safe to expose from a hardware-less VPS. The two
+mgmt-plane probes work from any host. Full RF coverage requires an agent
+deployed on a host with a monitor-mode WiFi NIC + BT adapter on the target LAN.
 
 Concurrency is intentionally LOW (2) — wireless probes contend for the
 same physical interface and channel; running them in parallel produces
@@ -29,6 +47,10 @@ router = APIRouter()
 
 WIRELESS_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_wifi": [
+        # Real, SaaS-safe remote probes (no RF hardware required):
+        ("wireless_mgmt_exposure_audit",  "/api/wireless/wireless_mgmt_exposure_audit"),
+        ("wireless_mgmt_tls_audit",       "/api/wireless/wireless_mgmt_tls_audit"),
+        # Hardware-dependent local probes (degrade to INFO without a NIC):
         ("monitor_mode_capability_audit", "/api/wireless/monitor_mode_capability_audit"),
         ("wpa_handshake_capture_audit",   "/api/wireless/wpa_handshake_capture_audit"),
         ("wps_pin_audit",                 "/api/wireless/wps_pin_audit"),
@@ -36,6 +58,18 @@ WIRELESS_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier2_bluetooth": [
         ("ble_scan_audit",                 "/api/wireless/ble_scan_audit"),
         ("bluetooth_classic_pair_audit",   "/api/wireless/bluetooth_classic_pair_audit"),
+    ],
+    # Advisory-by-design tier: RF / hardware / LAN-adjacent technique families
+    # that CANNOT be probed from external SaaS. INFO-only, vulnerable:false.
+    "tier3_advisory": [
+        ("wifi_recon_advisory",            "/api/wireless/wifi_recon_advisory"),
+        ("wpa_active_advisory",            "/api/wireless/wpa_active_advisory"),
+        ("wpa3_sae_advisory",              "/api/wireless/wpa3_sae_advisory"),
+        ("enterprise_eap_advisory",        "/api/wireless/enterprise_eap_advisory"),
+        ("rogue_ap_advisory",              "/api/wireless/rogue_ap_advisory"),
+        ("bluetooth_active_advisory",      "/api/wireless/bluetooth_active_advisory"),
+        ("nfc_rfid_advisory",              "/api/wireless/nfc_rfid_advisory"),
+        ("cellular_sdr_advisory",          "/api/wireless/cellular_sdr_advisory"),
     ],
 }
 

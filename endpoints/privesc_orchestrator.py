@@ -26,13 +26,26 @@ router = APIRouter()
 
 PRIVESC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_linux": [
-        ("linpeas_remote_audit",  "/api/privesc/linpeas_remote_audit"),
-        ("suid_binary_audit",     "/api/privesc/suid_binary_audit"),
-        ("sudo_misconfig_audit",  "/api/privesc/sudo_misconfig_audit"),
-        ("kernel_exploit_check",  "/api/privesc/kernel_exploit_check"),
+        ("linpeas_remote_audit",       "/api/privesc/linpeas_remote_audit"),
+        ("suid_binary_audit",          "/api/privesc/suid_binary_audit"),
+        ("sudo_misconfig_audit",       "/api/privesc/sudo_misconfig_audit"),
+        ("kernel_exploit_check",       "/api/privesc/kernel_exploit_check"),
+        # Credential-less remote probe: SSH banner -> OpenSSH EOL +
+        # §1/§4/§7 advisory-by-design catalogue.
+        ("ssh_privesc_surface_probe",  "/api/privesc/ssh_privesc_surface_probe"),
     ],
     "tier2_windows": [
-        ("winpeas_check",         "/api/privesc/winpeas_check"),
+        ("winpeas_check",              "/api/privesc/winpeas_check"),
+        # Credential-less remote probe: HTTP OS fingerprint -> §2/§3/§5/§6
+        # advisory-by-design catalogue keyed to the inferred OS family.
+        ("os_fingerprint_privesc_advisory",
+         "/api/privesc/os_fingerprint_privesc_advisory"),
+    ],
+    "tier3_container": [
+        # Credential-less remote probe: exposed Docker API / kubelet / k8s API
+        # (graded only when answering UNAUTHENTICATED) + §7 advisory catalogue.
+        ("container_privesc_surface_probe",
+         "/api/privesc/container_privesc_surface_probe"),
     ],
 }
 

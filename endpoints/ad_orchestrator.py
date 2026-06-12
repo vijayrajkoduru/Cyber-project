@@ -1,10 +1,24 @@
 """ad module orchestrator - Active Directory attacks.
 
 Per module_playbooks/19_ad.md - 11 sections, 132 techniques.
-Starter set (5 scanners, no-creds + AD CS) covers:
-  - §1 Discovery: ldap_anon_enum, smb_signing_check, dc_discovery, enum4linux_ng_audit
-  - §6 AD CS: certipy_find
-More scanners will be added per playbook section in subsequent commits.
+
+VA-not-PT: scanners DETECT conditions; they never exploit, relay, coerce, or
+chain. Graded severities are emitted only when a probe actually observed the
+condition on the live target. Techniques that cannot be honestly probed from an
+external SaaS (domain creds / on-host / LAN adjacency / active exploitation /
+destructive) are surfaced as honest INFO advisories by the offensive_advisory
+scanner.
+
+Live-probe scanners (real detection, no exploitation):
+  - §1 Discovery: ldap_anon_enum, smb_signing_check, dc_discovery,
+                  enum4linux_ng_audit, smb_os_fingerprint (SMBv1 + OS),
+                  smb_null_session (null-session SMB/RPC),
+                  ldap_signing_check (LDAPS / cleartext-LDAP downgrade surface)
+  - §2/§3 Cred:   netexec_smb_spray (input-driven), asrep_roast (AS-REP
+                  roastable detection), kerberos_userenum (KDC username enum)
+  - §6 AD CS:     certipy_find (templates, creds optional),
+                  adcs_web_enrollment (ESC8 HTTP-NTLM relay surface, no creds)
+Advisory-by-design (honest INFO catalogue): offensive_advisory.
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
@@ -22,12 +36,21 @@ AD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("smb_signing_check",      "/api/ad/smb_signing_check"),
         ("dc_discovery",           "/api/ad/dc_discovery"),
         ("enum4linux_ng_audit",    "/api/ad/enum4linux_ng_audit"),
+        ("smb_os_fingerprint",     "/api/ad/smb_os_fingerprint"),
+        ("smb_null_session",       "/api/ad/smb_null_session"),
+        ("ldap_signing_check",     "/api/ad/ldap_signing_check"),
+        ("offensive_advisory",     "/api/ad/offensive_advisory"),
     ],
     "tier2_cred_access": [
         ("netexec_smb_spray",      "/api/ad/netexec_smb_spray"),
+        ("asrep_roast",            "/api/ad/asrep_roast"),
+    ],
+    "tier3_kerberoast": [
+        ("kerberos_userenum",      "/api/ad/kerberos_userenum"),
     ],
     "tier6_adcs": [
         ("certipy_find",           "/api/ad/certipy_find"),
+        ("adcs_web_enrollment",    "/api/ad/adcs_web_enrollment"),
     ],
 }
 

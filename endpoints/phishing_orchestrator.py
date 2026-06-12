@@ -1,36 +1,49 @@
-"""phishing module orchestrator - Phishing-LITE: email security posture
-+ template + landing-page-clone audit.
+"""phishing module orchestrator - email-security posture + impersonation
+exposure + landing-page surface audit, plus honest advisory-by-design INFO
+for the attacker-tradecraft techniques a SaaS scanner cannot probe.
 
-Per module_playbooks/26_phishing.md - 7 sections / 70 techniques.
-This LITE starter (5 scanners) covers the safe, customer-self-service
-surface that requires NO outbound email and NO attacker infrastructure:
+Per module_playbooks/26_phishing.md - 7 sections / 70 techniques. The module
+implements every technique that is externally OBSERVABLE as a real, safe
+detection probe (VA, not PT) and emits the rest as honest INFO.
 
-  - tier1_posture (email security posture for the target domain):
-        spf_dkim_dmarc_audit   (DNS TXT records — playbook §1 #5/#6)
-        lookalike_domain_scan  (typosquat / homoglyph / TLD-swap A —
-                                playbook §2 #19/#20)
-        mailbox_security_audit (STARTTLS + cipher + cert on MX —
-                                playbook §1 #4 cross-ref + §2)
+  - tier1_posture (email-security + impersonation exposure for the domain):
+        spf_dkim_dmarc_audit   (SPF/DKIM/DMARC DNS TXT — §1 #5/#6) [REAL]
+        lookalike_domain_scan  (typosquat / homoglyph / TLD-swap A — §2
+                                #19/#20) [REAL]
+        mailbox_security_audit (STARTTLS + cipher + cert on MX — §1 #4 +
+                                §2) [REAL]
+        mta_sts_tls_audit      (MTA-STS / TLS-RPT / DANE transport fence —
+                                §1 cross-ref) [REAL]
+        ct_log_lookalike_scan  (Certificate-Transparency lookalike-cert
+                                detection — §2 #19/#20, §6) [REAL]
+        oauth_tenant_exposure  (public M365/Entra OAuth + device-code
+                                surface — §5 #43/#47) [REAL metadata]
 
-  - tier2_simulation (artifact generation — NO sending, NO deployment):
-        phishing_template_generate (HTML email template — §1 #7)
-        landing_page_clone_test    (HTML clone of login page — §2 #15/#17/#18)
+  - tier2_simulation (login-page surface probes + inert artifacts):
+        phishing_template_generate (inert HTML email template — §1 #7)
+        landing_page_clone_test    (structural login-page clone — §2
+                                    #15/#17/#18)
+        bitb_frameability_check    (X-Frame-Options / CSP frame-ancestors —
+                                    §3 #26 BitB) [REAL]
+        open_redirect_probe        (off-site redirect capability via inert
+                                    .invalid canary — §2 #21) [REAL]
 
-GoPhish / EvilGinx2 / SET / Modlishka wrappers are NOT shipped here —
-they require attacker infrastructure (sending IP, callback collector,
-TLS cert for spoof domain) the customer must stand up themselves. The
-LITE module ships the audit + the artifact; deployment is the
-customer's call on their own controlled simulation infrastructure.
+  - tier3_advisory (honest [ADVISORY-BY-DESIGN] INFO, vulnerable:false):
+        social_eng_advisory        (§1 send / §3 AiTM / §4 smish-vish-quish
+                                    / §5 consent-lure delivery / §6 deepfake
+                                    / §7 campaign console)
 
-Concurrency held at 3 (per task brief): two probes do DNS fan-out
-(spf_dkim_dmarc_audit ~20 lookups, lookalike_domain_scan ~60), one
-runs a blocking STARTTLS handshake, and two produce in-process
-artifacts only. Three concurrent scanners is the sweet spot — five
-in parallel can saturate a single DNS resolver.
+GoPhish / EvilGinx2 / SET / Modlishka wrappers are NOT shipped — they need
+attacker infrastructure (sending IP, callback collector, spoof-domain TLS
+cert) and a victim to act against. Those live as the tier3_advisory INFO
+findings: the honest boundary of an external assessment, not a forge gap.
 
-More scanners will be added per playbook section in subsequent commits
-(Phase next: §3 AiTM EvilGinx wrapper, §5 OAuth consent phishing
-detector, §4 SMS/voice probe via Twilio sandbox).
+Concurrency hard-clamped to 4: the tier1 probes do DNS fan-out
+(spf_dkim_dmarc_audit ~20 lookups, lookalike_domain_scan ~60) plus a few
+HTTP GETs (MTA-STS well-known, crt.sh, OAuth metadata) and one blocking
+STARTTLS handshake. Four concurrent scanners keeps wall-clock reasonable
+without saturating a single DNS resolver; the open/HTTP probes are not
+DNS-heavy so a small bump over the original 3 is safe.
 """
 from typing import Optional
 
@@ -49,10 +62,23 @@ PHISHING_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("spf_dkim_dmarc_audit",       "/api/phishing/spf_dkim_dmarc_audit"),
         ("lookalike_domain_scan",      "/api/phishing/lookalike_domain_scan"),
         ("mailbox_security_audit",     "/api/phishing/mailbox_security_audit"),
+        # Real external probes added in the deepening pass:
+        ("mta_sts_tls_audit",          "/api/phishing/mta_sts_tls_audit"),
+        ("ct_log_lookalike_scan",      "/api/phishing/ct_log_lookalike_scan"),
+        ("oauth_tenant_exposure",      "/api/phishing/oauth_tenant_exposure"),
     ],
     "tier2_simulation": [
         ("phishing_template_generate", "/api/phishing/phishing_template_generate"),
         ("landing_page_clone_test",    "/api/phishing/landing_page_clone_test"),
+        # Real external probes against a customer-supplied login/redirect URL:
+        ("bitb_frameability_check",    "/api/phishing/bitb_frameability_check"),
+        ("open_redirect_probe",        "/api/phishing/open_redirect_probe"),
+    ],
+    "tier3_advisory": [
+        # Honest advisory-by-design INFO for techniques a SaaS scanner
+        # cannot probe (attacker infra / outbound send / post-compromise /
+        # deepfake media / campaign console). All findings are INFO.
+        ("social_eng_advisory",        "/api/phishing/social_eng_advisory"),
     ],
 }
 
@@ -67,10 +93,11 @@ def _all_tools():
 class PhishingRunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
-    # Default fan-out concurrency = 3 (per playbook rule — two probes
-    # do DNS fan-out which can saturate a single resolver if all five
-    # run in parallel).
-    concurrency: Optional[int] = 3
+    # Default fan-out concurrency = 4. The DNS-heavy tier1 probes
+    # (spf_dkim_dmarc_audit, lookalike_domain_scan) can saturate a single
+    # resolver if too many run at once; 4 keeps wall-clock reasonable for
+    # the now-larger scanner set without overrunning the resolver.
+    concurrency: Optional[int] = 4
     # Per-tool body extras (forwarded into req.options of each scanner)
     options: Optional[dict] = None
 
@@ -97,8 +124,8 @@ def _resolve(req: PhishingRunAllRequest, request: Request):
 async def phishing_run_all(req: PhishingRunAllRequest, request: Request,
                             _=Depends(verify_scan_quota)):
     tools, extra, jwt = _resolve(req, request)
-    # Hard-clamp concurrency to 3 (Phishing module rule).
-    concurrency = max(1, min(req.concurrency or 3, 3))
+    # Hard-clamp concurrency to 4 (Phishing module rule — DNS-resolver safe).
+    concurrency = max(1, min(req.concurrency or 4, 4))
     gen = run_module_streaming(
         target=req.target, tools=tools, module_name="phishing",
         concurrency=concurrency, extra_body=extra, jwt_token=jwt,
@@ -118,7 +145,7 @@ async def phishing_run_all(req: PhishingRunAllRequest, request: Request,
 async def phishing_run_all_buffered(req: PhishingRunAllRequest, request: Request,
                                       _=Depends(verify_scan_quota)):
     tools, extra, jwt = _resolve(req, request)
-    concurrency = max(1, min(req.concurrency or 3, 3))
+    concurrency = max(1, min(req.concurrency or 4, 4))
     return await run_module_parallel(
         target=req.target, tools=tools, module_name="phishing",
         concurrency=concurrency, extra_body=extra, jwt_token=jwt,

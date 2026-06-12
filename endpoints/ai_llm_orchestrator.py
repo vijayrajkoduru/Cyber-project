@@ -1,19 +1,30 @@
 """ai_llm module orchestrator - OWASP LLM Top 10 (2025) security testing.
 
 Per module_playbooks/23_ai_llm.md - 10 sections, 114 techniques.
-Starter set (5 scanners) covers:
-  - §1 OWASP LLM Top 10:
+
+Live-probe + advisory coverage:
+  - tier1_owasp_llm (active prompt-level probes):
       * prompt_injection_audit  (LLM01)
       * jailbreak_resistance_test (LLM02)
       * pii_leak_test  (LLM06)
   - tier2_defenses (defensive baseline):
       * llm_guard_input_scan  (open-source input guardrails P/R/F1)
       * garak_owasp_test_suite (Garak DAN-11 / Base64 / GTPhish probes)
+  - tier3_infra (REAL read-only remote exposure probes — §6 #68, §9):
+      * model_serving_fingerprint      (vLLM/TGI/Triton/Ollama/Ray FP)
+      * vector_db_exposure             (unauth Chroma/Qdrant/Weaviate/Milvus)
+      * llm_ops_exposure               (LiteLLM/Portkey gateways + Langfuse/
+                                        Helicone/Phoenix observability)
+      * inference_endpoint_auth_audit  (unauthenticated inference serving)
+      * llm_output_handling_headers    (LLM05 XSS-via-LLM + CORS/transport)
+  - tier4_advisory (honest advisory-by-design — §4 #48-49, §5, §7, §8, §10,
+    multi-modal/white-box, manual red-team):
+      * ai_redteam_advisory            (INFO-only, vulnerable:false)
 
-Concurrency defaulted to 2 because production LLM endpoints rate-limit
-aggressively. More scanners will be added per playbook section in
-subsequent commits (Phase L-2 = §2-§3 prompt injection + jailbreak corpus
-expansion; Phase L-3 = §4 data extraction; etc.).
+Severity discipline: every tier3 graded finding is emitted ONLY when the
+condition was actually observed on the live target. Everything advisory or
+undetected is INFO. Concurrency defaulted to 2 because production LLM
+endpoints rate-limit aggressively.
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
@@ -34,6 +45,23 @@ AI_LLM_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier2_defenses": [
         ("llm_guard_input_scan",       "/api/ai_llm/llm_guard_input_scan"),
         ("garak_owasp_test_suite",     "/api/ai_llm/garak_owasp_test_suite"),
+    ],
+    # tier3_infra — REAL read-only remote exposure probes against the LLM
+    # endpoint/host. Each emits a graded finding ONLY when the condition is
+    # actually observed on the live target (zero false positives).
+    "tier3_infra": [
+        ("model_serving_fingerprint",      "/api/ai_llm/model_serving_fingerprint"),
+        ("vector_db_exposure",             "/api/ai_llm/vector_db_exposure"),
+        ("llm_ops_exposure",               "/api/ai_llm/llm_ops_exposure"),
+        ("inference_endpoint_auth_audit",  "/api/ai_llm/inference_endpoint_auth_audit"),
+        ("llm_output_handling_headers",    "/api/ai_llm/llm_output_handling_headers"),
+    ],
+    # tier4_advisory — honest advisory-by-design coverage for playbook
+    # techniques that cannot be detected from an external SaaS scanner
+    # (model theft, supply-chain artifacts, agent toolchain, white-box /
+    # multi-modal, compliance, manual red-team). All INFO, vulnerable:false.
+    "tier4_advisory": [
+        ("ai_redteam_advisory",        "/api/ai_llm/ai_redteam_advisory"),
     ],
 }
 

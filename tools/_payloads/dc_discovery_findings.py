@@ -38,9 +38,10 @@ def rule_multi_forest_hint(s):
 def rule_kdc_exposed(s):
     rec = s.get("dc_discovery_records") or {}
     if rec.get("kdc"):
-        return {"name": f"Kerberos KDC reachable for password spray / kerberoast",
-                "severity": "MEDIUM",
-                "evidence": f"{len(rec.get('kdc', []))} KDC SRV record(s) — attacker can target with kerbrute",
+        return {"name": "KDC SRV records present (standard AD infrastructure — not confirmed reachable/exploitable)",
+                "severity": "INFO",
+                "evidence": (f"{len(rec.get('kdc', []))} KDC SRV record(s) present in DNS — standard, "
+                             f"by-design AD infrastructure; reachability/exploitability NOT confirmed"),
                 "remediation": ("Monitor KDC for unusual TGT/TGS request patterns (event 4768/4769). "
                                 "Implement account lockout policy + smart-card auth for privileged users."),
                 "cwe": "CWE-307", "owasp": "A07:2021"}

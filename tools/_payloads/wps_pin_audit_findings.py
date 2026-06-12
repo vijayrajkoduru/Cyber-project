@@ -79,14 +79,16 @@ def rule_wps_enabled(s):
 
 def rule_pixie_dust_indicator(s):
     a = s.get("wps_audit") or {}
+    if a.get("pin_recovered"):
+        return None
     if not a.get("pixie_dust_indicator"):
         return None
     return {"name": "AP appears vulnerable to Pixie Dust offline WPS attack",
-            "severity": "HIGH", "cvss": "8.1",
+            "severity": "MEDIUM", "cvss": "8.1",
             "cwe": "CWE-330", "owasp": "A02:2021",
-            "evidence": ("reaver output references Pixie Dust / pixiewps for BSSID "
-                         + str(s.get("bssid", "")) +
-                         " — the AP leaked E-S1/E-S2 nonces"),
+            "evidence": ("reaver mentioned Pixie-Dust but vulnerability NOT confirmed by "
+                         "successful nonce/PIN recovery for BSSID "
+                         + str(s.get("bssid", ""))),
             "remediation": ("Pixie Dust exploits weak random-number generation in "
                             "Ralink/Broadcom/Realtek WPS chipsets — the registrar "
                             "nonces are predictable, allowing offline PIN recovery. "

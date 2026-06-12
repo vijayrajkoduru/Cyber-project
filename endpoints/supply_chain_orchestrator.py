@@ -32,6 +32,42 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier3_sbom": [
         ("syft_sbom_generate",     "/api/supply_chain/syft_sbom_generate"),
     ],
+    # ── Real remote probes (read-only, zero-FP, VA-only) ──
+    "tier4_registry": [
+        ("registry_exposure_probe", "/api/supply_chain/registry_exposure_probe"),
+    ],
+    "tier5_oss_health": [
+        ("github_repo_health",      "/api/supply_chain/github_repo_health"),
+    ],
+    "tier6_cicd": [
+        ("cicd_exposure_probe",     "/api/supply_chain/cicd_exposure_probe"),
+    ],
+    "tier7_dep_confusion": [
+        ("npm_dependency_confusion", "/api/supply_chain/npm_dependency_confusion"),
+    ],
+    # ── Honest advisory-by-design techniques (INFO only; cannot be SaaS-probed) ──
+    "tier8_advisory": [
+        ("sbom_signing_attest",        "/api/supply_chain/sbom_signing_attest"),
+        ("sbom_rekor_transparency",    "/api/supply_chain/sbom_rekor_transparency"),
+        ("sbom_vex_audit",             "/api/supply_chain/sbom_vex_audit"),
+        ("gha_oidc_cloud_trust",       "/api/supply_chain/gha_oidc_cloud_trust"),
+        ("branch_protection_audit",    "/api/supply_chain/branch_protection_audit"),
+        ("pwn_request_audit",          "/api/supply_chain/pwn_request_audit"),
+        ("self_hosted_runner_audit",   "/api/supply_chain/self_hosted_runner_audit"),
+        ("slsa_provenance_verify",     "/api/supply_chain/slsa_provenance_verify"),
+        ("cosign_signature_verify",    "/api/supply_chain/cosign_signature_verify"),
+        ("intoto_attestation_validate", "/api/supply_chain/intoto_attestation_validate"),
+        ("reproducible_build_verify",  "/api/supply_chain/reproducible_build_verify"),
+        ("commit_signing_audit",       "/api/supply_chain/commit_signing_audit"),
+        ("npm_2fa_enforcement",        "/api/supply_chain/npm_2fa_enforcement"),
+        ("pypi_2fa_enforcement",       "/api/supply_chain/pypi_2fa_enforcement"),
+        ("install_script_behavior",    "/api/supply_chain/install_script_behavior"),
+        ("image_pull_policy_audit",    "/api/supply_chain/image_pull_policy_audit"),
+        ("registry_mirror_audit",      "/api/supply_chain/registry_mirror_audit"),
+        ("policy_controller_audit",    "/api/supply_chain/policy_controller_audit"),
+        ("image_promotion_integrity",  "/api/supply_chain/image_promotion_integrity"),
+        ("maintainer_due_diligence",   "/api/supply_chain/maintainer_due_diligence"),
+    ],
 }
 
 

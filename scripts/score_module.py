@@ -95,6 +95,12 @@ def find_scanners(module_path: Path) -> list[Path]:
             continue
         if p.name.startswith("_"):
             continue
+        # *_findings.py are findings-RULE companion modules (the recon-style
+        # split: scanner.py + scanner_findings.py), not scanners themselves —
+        # they carry no probe/precheck/timeout, so counting them as scanners
+        # wrongly drags the 7-check average down. The owning scanner is scored.
+        if p.name.endswith("_findings.py"):
+            continue
         out.append(p)
     return sorted(out)
 
