@@ -13468,20 +13468,14 @@ function generateUniversalVLReport(opts) {
   Object.keys(r).forEach(toolKey => {
     const d = r[toolKey];
     if (!d || !Array.isArray(d.findings)) return;
-    // Advisory-by-design tools run NO live probe (SaaS cannot reach the surface)
-    // and the backend buckets them as "skipped". Exclude their canned INFO rows
-    // from the findings total + severity math, exactly like scaffolds — they are
-    // still listed in Per-Tool Intelligence for coverage transparency.
-    const _isAdvisoryTool = d._skipped === true || !!d.skipped_reason
-      || (d.raw_data && d.raw_data.advisory_by_design === true);
-    if (_isAdvisoryTool) return;
+    // NOTE: advisory-by-design / skipped tools are intentionally KEPT here.
+    // The PARTIAL SCAN feature (Required Inputs + partial headline) relies on
+    // their INFO findings being present in _sevCount.INFO to detect partial
+    // coverage and list "require inputs" scanners. Do not exclude them.
     d.findings.forEach(f => {
       const nm = String(f && f.name || "").toLowerCase();
       const ev = String(f && f.evidence || "").toLowerCase();
-      const dt = String(f && f.detail || "").toLowerCase();
       if (ev.includes("scaffold") || nm.startsWith("scaffold:")) return;
-      if (nm.startsWith("[advisory-by-design]") || dt.startsWith("[advisory-by-design]")
-          || ev.includes("no live scan possible from external saas")) return;
       _allFindings.push(Object.assign({_tool: toolKey}, f));
     });
   });
@@ -14099,13 +14093,13 @@ function generateUniversalVLReport(opts) {
       const m = ev.match(/(?:Missing options?|requires options?|requires|needs)[:\s]+([^.]+?)(?:\.|$)/i);
       let missing;
       if (m && m[1]) {
-        missing = m[1].trim().substring(0, 100);
+        missing = _clip(m[1].trim(), 100);
       } else if (ev) {
-        // Fall back to the evidence string itself (first 100 chars)
-        missing = ev.substring(0, 100);
+        // Fall back to the evidence string itself (word-boundary clipped)
+        missing = _clip(ev, 100);
       } else {
         // Last resort: the finding name (skips the leading "Hydra SSH spray ")
-        missing = nm.substring(0, 100);
+        missing = _clip(nm, 100);
       }
       _missingInputs.push({tool: toolKey.replace(/_/g, " "), missing});
     });
@@ -14115,7 +14109,7 @@ function generateUniversalVLReport(opts) {
       // example.com scan). Cap at 25 just to prevent runaway PDFs.
       const _maxShow = Math.min(_missingInputs.length, 25);
       const _ilines = _missingInputs.slice(0, _maxShow).map(m =>
-        `  - ${(m.tool||"").substring(0,28).padEnd(28)} needs: ${m.missing}`);
+        `  - ${_clip(m.tool||"", 28).padEnd(28)} needs: ${m.missing}`);
       const _hiddenCount = _missingInputs.length - _maxShow;
       const _blockHeight = 6 + _ilines.length * 5 + (_hiddenCount > 0 ? 5 : 0);
       // Page-break if block won't fit
@@ -15713,10 +15707,10 @@ function generateUniversalVLReport(opts) {
         // "POSI"/"MEDI". Center the label inside the wider badge.
         rrect(margin + 2, y + 1.8, 22, 4.5, 1, sc);
         txt(sev, margin + 13, y + 5, 6.5, WHITE, true, "center");
-        const det = _dedupCodes(String(f.detail||f.name||f.title||"")).substring(0,110);
+        const det = _clip(_dedupCodes(String(f.detail||f.name||f.title||"")), 110);
         txt(det, margin + 27, y + 4.5, 7.5, DARK);
         if (f.evidence_marker) {
-          txt("Evidence: " + String(f.evidence_marker).substring(0,90), margin + 27, y + 7.2, 6.5, GRAY);
+          txt("Evidence: " + _clip(String(f.evidence_marker), 90), margin + 27, y + 7.2, 6.5, GRAY);
         }
         y += 8;
       });
@@ -15785,7 +15779,9 @@ function generateUniversalVLReport(opts) {
                        || null;
   const _chainScans = _chainSummary && _chainSummary.chained_scanners || [];
   const _chainRegistered = _chainSummary && _chainSummary.registered_chain_scanners || [];
-  if (_chainSummary && (_chainScans.length > 0 || _chainRegistered.length > 0)) {
+  // Attack Chain section DISABLED: cross-scanner auto-chaining is off
+  // (VA-not-PT, user directive). The report must not advertise chaining.
+  if (false && _chainSummary && (_chainScans.length > 0 || _chainRegistered.length > 0)) {
     // Local helper - _prettyName is declared inside Per-Tool block scope,
     // not visible here. Re-define for the chain section.
     const _chainPretty = (k) => String(k || "").replace(/_/g, " ")
