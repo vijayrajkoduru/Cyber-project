@@ -159,13 +159,19 @@ class A03Xss(MethodologyScanner):
             }
 
     async def quick_probe(self, ctx):
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK, CANARY)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK, CANARY,
+                                  ctx.state.get("_spa"))
         ctx.state["quick_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         return [{"param": h["param"], "status": h["status"]} for h in hits]
 
     async def deep_scan(self, ctx):
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP, CANARY)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP, CANARY,
+                                  ctx.state.get("_spa"))
         ctx.state["deep_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         return [{"param": h["param"], "status": h["status"]} for h in hits]
 
     async def verify(self, ctx, finding):
@@ -173,7 +179,13 @@ class A03Xss(MethodologyScanner):
         # static page or canary-leak echoes only the first.
         url = f"{ctx.state['base_url']}?{finding['param']}={CANARY_VERIFY}"
         r = await http_get_async(url, timeout=8)
-        if not r or CANARY_VERIFY not in (r.get("body") or ""):
+        body = (r.get("body") or "") if r else ""
+        spa = ctx.state.get("_spa") or {}
+        if spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+            finding["confidence"] = "SUSPECTED"
+            finding["verification_method"] = "spa-shell-on-verify"
+            return finding
+        if not r or CANARY_VERIFY not in body:
             finding["confidence"] = "SUSPECTED"
             finding["verification_method"] = "alt-canary-not-reflected"
             return finding
