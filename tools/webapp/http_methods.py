@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding)
 from tools.webapp._webapp_common import vuln_response, precheck_target
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 router = APIRouter()
@@ -40,6 +41,10 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
     findings = []
     tested = []
     suppressed = []
+    spa_suppressed = []
+    # VL-VERIFY: detect SPA catch-all so we can drop method-honoured hits
+    # whose body is byte-identical to the SPA shell.
+    spa = detect_spa_catchall_sync(url)
     # VL-TURBO wall-clock cap: OPTIONS + GET + 5 methods × 10s × 3 retries = ~3.5 min worst.
     _wallclock_start = time.time()
     _WALLCLOCK_BUDGET = 30.0
@@ -132,6 +137,12 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                "body_size": body_size})
             continue
 
+        # VL-VERIFY: SPA shell — server returned the React/Vue index.html for
+        # this method; it didn't really process the verb.
+        if spa["is_spa"] and is_same_as_canary(r2.text or "", spa["canary_body"]):
+            spa_suppressed.append({"method": method, "reason": "spa_shell"})
+            continue
+
         findings.append(wrap_finding(
             f"{method} method honoured -- {detail}",
             sev, cvss=cvss, cwe="CWE-749", owasp="A05:2021",
@@ -146,6 +157,8 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
                     f"{_redirect_followed['from']} -> {_redirect_followed['to']}")
     if suppressed:
         summary += f"; {len(suppressed)} method(s) filtered as non-vulnerable (CDN/redirect/etc.)"
+    if spa_suppressed:
+        summary += f"; {len(spa_suppressed)} SPA-shell suppression(s)"
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
     return vuln_response(tool="http_methods", target=req.target,
@@ -156,6 +169,8 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                     "allowed_methods": sorted(allowed_methods),
                                     "methods_tested": tested,
                                     "suppressed_fps": suppressed,
+                                    "spa_catchall": spa["is_spa"],
+                                    "spa_suppressed": spa_suppressed,
                                     "redirect_followed": _redirect_followed,
                                     "wallclock_bailed": _bailed}})
 def register(app): app.include_router(router)

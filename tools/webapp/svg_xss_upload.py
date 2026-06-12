@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 
@@ -68,6 +69,10 @@ def _extract_url(body, base):
 @vl_verify()
 def scan_svg_xss_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    # VL-VERIFY: SPA-canary FP guard — if served URL fetch matches the SPA
+    # shell, the "upload" didn't actually serve a real file.
+    spa = detect_spa_catchall_sync(base)
+    spa_suppressed = []
     # VL-TURBO deep: parallel probe across 7 upload paths.
     # Each path requires GET + multipart POST + (optional) GET of served URL.
     # Sequential worst-case: 7 paths * 24s per path = ~170s killed at
@@ -100,6 +105,9 @@ def scan_svg_xss_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
             return ("accepted_no_fetch", path, r.status_code, served_url)
         ct = (rg.headers.get("content-type") or "").lower()
         body_g = (rg.text or "")[:5000]
+        # VL-VERIFY: SPA shell — served URL returned React index.html, not a real upload
+        if spa["is_spa"] and is_same_as_canary(rg.text or "", spa["canary_body"]):
+            return ("spa_shell", path, r.status_code, served_url)
         if "svg" in ct and "VULNUSLAB_SVG_XSS" in body_g:
             return ("xss_confirmed", path, r.status_code,
                     {"served_url": served_url, "content_type": ct})
@@ -113,6 +121,9 @@ def scan_svg_xss_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
             if verdict == "unreachable":
                 continue
             tested += 1
+            if verdict == "spa_shell":
+                spa_suppressed.append(path)
+                continue
             if verdict in ("accepted_no_url", "accepted_no_fetch",
                             "accepted_safe", "xss_confirmed"):
                 accepted.append({"path": path, "status": status})
@@ -158,11 +169,16 @@ def scan_svg_xss_upload(req: ScanRequest, payload=Depends(verify_scan_quota)):
             tests_performed=len(UPLOAD_PATHS), vulnerable=False,
             skipped_reason="No upload endpoints found")
 
+    summary = f"{len(accepted)} accepted, {len(served_inline)} XSS-confirmed"
+    if spa_suppressed:
+        summary += f"; {len(spa_suppressed)} SPA-shell suppression(s)"
     return standard_response(
         tool="svg_xss_upload", target=req.target, findings=findings,
         tests_performed=tested * 2, vulnerable=bool(served_inline),
-        tests_summary=f"{len(accepted)} accepted, {len(served_inline)} XSS-confirmed",
-        raw_data={"accepted_uploads": accepted, "served_inline": served_inline})
+        tests_summary=summary,
+        raw_data={"accepted_uploads": accepted, "served_inline": served_inline,
+                   "spa_catchall": spa["is_spa"],
+                   "spa_suppressed_paths": spa_suppressed})
 
 
 def register(app):

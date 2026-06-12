@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 
@@ -27,6 +28,9 @@ ODATA_PATHS = ["/odata/", "/api/odata/", "/odata/v4/",
 @vl_verify()
 def scan_odata_query_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target).rstrip("/")
+    # VL-VERIFY: SPA-canary FP guard — drop OData "hits" where body is React shell.
+    spa = detect_spa_catchall_sync(base)
+    spa_suppressed = []
 
     # 1. Discover OData service
     metadata = None
@@ -40,6 +44,9 @@ def scan_odata_query_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)
             req=req, timeout=8, allow_redirects=False)
         if r is None or r.status_code != 200: return None
         body = (r.text or "")[:50000]
+        # VL-VERIFY: SPA shell — drop OData discovery hit
+        if spa["is_spa"] and is_same_as_canary(r.text or "", spa["canary_body"]):
+            return ("spa", url)
         if "EntitySet" in body or "edmx:Edmx" in body or "DataServices" in body:
             return (url, body)
         return None
@@ -51,9 +58,13 @@ def scan_odata_query_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)
         for result in pool.map(_discover, ODATA_PATHS, timeout=21):
             disc_results.append(result)
     for r in disc_results:
-        if r is not None:
-            metadata_url, metadata = r
-            break
+        if r is None:
+            continue
+        if isinstance(r, tuple) and len(r) == 2 and r[0] == "spa":
+            spa_suppressed.append(r[1])
+            continue
+        metadata_url, metadata = r
+        break
 
     if not metadata:
         return standard_response(

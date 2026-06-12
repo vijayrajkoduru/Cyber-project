@@ -8,7 +8,10 @@ import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async
+from tools.vuln._vuln_common import (
+    probe_url_async, http_get_async,
+    detect_spa_catchall, is_same_as_canary,
+)
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -23,35 +26,41 @@ PROBE_PARAMS_QUICK    = ["q", "user", "id"]
 PROBE_PARAMS_DEEP     = ["filter", "name", "email"]
 
 
-async def _probe_one(base_url, param, payload):
+async def _probe_one(base_url, param, payload, spa=None):
     url = f"{base_url}?{param}={payload}"
     r = await http_get_async(url, timeout=8)
     if not r:
         return None
-    body_lower = r.get("body", "").lower()
+    body = r.get("body", "")
+    if spa and spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+        return {"_spa_suppressed": True, "param": param, "path": url}
+    body_lower = body.lower()
     for fp in ERROR_FINGERPRINTS:
         if fp in body_lower:
             return {"param": param, "error": fp, "payload": payload}
     return None
 
 
-async def _fire(base_url, params, payloads):
+async def _fire(base_url, params, payloads, spa=None):
     # VL-TURBO deep: fire all (param, payload) probes concurrently.
     # Was 3 params * 2 payloads = 6 sequential * 8s = ~48s worst case.
     # Now ~8s. First hit per param wins (keep original semantics).
     jobs = [(p, pl) for p in params for pl in payloads]
     results = await asyncio.gather(
-        *[_probe_one(base_url, p, pl) for p, pl in jobs],
+        *[_probe_one(base_url, p, pl, spa) for p, pl in jobs],
         return_exceptions=True)
-    hits, seen_params = [], set()
+    hits, seen_params, suppressed = [], set(), []
     for res in results:
         if isinstance(res, BaseException) or res is None:
+            continue
+        if res.get("_spa_suppressed"):
+            suppressed.append({"param": res["param"], "path": res["path"]})
             continue
         if res["param"] in seen_params:
             continue
         hits.append(res)
         seen_params.add(res["param"])
-    return hits
+    return hits, suppressed
 
 
 class A03NosqlLdapXpath(MethodologyScanner):
@@ -68,6 +77,8 @@ class A03NosqlLdapXpath(MethodologyScanner):
         ctx.state["base_url"] = base_url
         ctx.state["probes"] = (len(PROBE_PARAMS_QUICK) + len(PROBE_PARAMS_DEEP)) * \
                                (len(NOSQL_PAYLOADS_QUICK) + len(NOSQL_PAYLOADS_DEEP))
+        # VL-VERIFY deep: SPA catch-all detection.
+        ctx.state["_spa"] = await detect_spa_catchall(base_url)
         return True
 
     async def fingerprint(self, ctx):
@@ -80,15 +91,20 @@ class A03NosqlLdapXpath(MethodologyScanner):
             }
 
     async def quick_probe(self, ctx):
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK,
-                            NOSQL_PAYLOADS_QUICK)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK,
+                                  NOSQL_PAYLOADS_QUICK, ctx.state.get("_spa"))
         ctx.state["quick_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         return [dict(h) for h in hits]
 
     async def deep_scan(self, ctx):
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP,
-                            NOSQL_PAYLOADS_QUICK + NOSQL_PAYLOADS_DEEP)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP,
+                                  NOSQL_PAYLOADS_QUICK + NOSQL_PAYLOADS_DEEP,
+                                  ctx.state.get("_spa"))
         ctx.state["deep_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         return [dict(h) for h in hits]
 
     async def verify(self, ctx, finding):
@@ -98,7 +114,13 @@ class A03NosqlLdapXpath(MethodologyScanner):
             finding["confidence"] = "SUSPECTED"
             finding["verification_method"] = "verify-probe-failed"
             return finding
-        body_lower = r.get("body", "").lower()
+        body = r.get("body", "")
+        spa = ctx.state.get("_spa") or {}
+        if spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+            finding["confidence"] = "SUSPECTED"
+            finding["verification_method"] = "spa-shell-on-verify"
+            return finding
+        body_lower = body.lower()
         if any(fp in body_lower for fp in ERROR_FINGERPRINTS):
             finding["confidence"] = "CONFIRMED"
             finding["verification_method"] = f"alt-payload-{PAYLOAD_VERIFY}"

@@ -13,7 +13,10 @@ import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async
+from tools.vuln._vuln_common import (
+    probe_url_async, http_get_async,
+    detect_spa_catchall, is_same_as_canary,
+)
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -85,7 +88,7 @@ def _is_escaped(body: str, canary: str) -> bool:
     return raw_count == 0
 
 
-async def _fire(base_url, params, canary):
+async def _fire(base_url, params, canary, spa=None):
     """VL-VERIFY (zero-FP): the previous version flagged any canary reflection
     in an HTML response as XSS. That mis-fired on Google's /search?q=<canary>
     endpoint where the canary appears INSIDE __NEXT_DATA__ JSON islands or
@@ -94,6 +97,7 @@ async def _fire(base_url, params, canary):
          <title>, <style>, <textarea>, HTML comments.
       2. Only flag when the canary appears in a RAW text node between HTML
          tags (real exploitable XSS surface).
+      3. VL-VERIFY deep: if the body is the SPA catch-all shell, suppress.
     """
     async def _probe(p):
         url = f"{base_url}?{p}={canary}"
@@ -101,6 +105,8 @@ async def _fire(base_url, params, canary):
         if not r:
             return None
         body = r.get("body", "")
+        if spa and spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+            return {"_spa_suppressed": True, "param": p, "path": url}
         if canary not in body:
             return None
         ctype = (r.get("headers") or {}).get("content-type", "")
@@ -114,12 +120,15 @@ async def _fire(base_url, params, canary):
     results = await asyncio.gather(
         *[_probe(p) for p in params],
         return_exceptions=True)
-    reflected = []
+    reflected, suppressed = [], []
     for res in results:
         if isinstance(res, BaseException) or res is None:
             continue
+        if res.get("_spa_suppressed"):
+            suppressed.append({"param": res["param"], "path": res["path"]})
+            continue
         reflected.append(res)
-    return reflected
+    return reflected, suppressed
 
 
 class A03Xss(MethodologyScanner):
@@ -135,6 +144,8 @@ class A03Xss(MethodologyScanner):
         ctx.state["tested"] = 1
         ctx.state["base_url"] = base_url
         ctx.state["probed_params"] = len(PROBE_PARAMS_QUICK) + len(PROBE_PARAMS_DEEP)
+        # VL-VERIFY deep: SPA catch-all detection.
+        ctx.state["_spa"] = await detect_spa_catchall(base_url)
         return True
 
     async def fingerprint(self, ctx):
