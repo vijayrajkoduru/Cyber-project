@@ -11,7 +11,6 @@ The bundle includes users.db + .env + data/ + tools/ + src/ + docker/nginx confi
 — enough to fully restore the VPS from scratch.
 """
 import datetime
-import os
 import subprocess
 from pathlib import Path
 
@@ -139,11 +138,11 @@ def _write_manifest(out_path: Path, included: list) -> Path:
     """Sidecar manifest .txt next to each backup — auditable list of what's in it."""
     manifest = out_path.with_suffix("").with_suffix(".manifest.txt")
     lines = [
-        f"VulnusLab Backup Manifest",
+        "VulnusLab Backup Manifest",
         f"Created (UTC): {datetime.datetime.utcnow().isoformat()}Z",
         f"Bundle: {out_path.name}",
         f"Size: {_human(out_path.stat().st_size)}",
-        f"",
+        "",
         f"=== Included paths ({len(included)}) ===",
     ]
     for p in included:
@@ -154,7 +153,7 @@ def _write_manifest(out_path: Path, included: list) -> Path:
         else:
             lines.append(f"  {p}")
     lines.append("")
-    lines.append(f"=== Excluded patterns ===")
+    lines.append("=== Excluded patterns ===")
     for pat in EXCLUDE_PATTERNS:
         lines.append(f"  {pat}")
     manifest.write_text("\n".join(lines))
