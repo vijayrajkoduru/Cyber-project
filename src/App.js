@@ -260,6 +260,49 @@ const CSS = `
     line-height:1.7;
     color:#94a3b8;
   }
+
+  /* ════════════ VL-HUD v3.1 — motion foundation (Stage A) ════════════ */
+  :root{
+    --vl-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --vl-out:  cubic-bezier(0.33, 1, 0.68, 1);
+    --vl-cyan: #3b9eff;
+    --vl-cyan2:#00d4ff;
+  }
+
+  @keyframes vlGridDrift{ from{background-position:0 0,0 0} to{background-position:40px 40px,40px 40px} }
+  @keyframes vlBreathe{ 0%,100%{opacity:1} 50%{opacity:.45} }
+  @keyframes vlGlowPulse{ 0%,100%{box-shadow:0 0 6px rgba(0,212,255,.25)} 50%{box-shadow:0 0 16px rgba(0,212,255,.55)} }
+  @keyframes vlScanSweep{ 0%{transform:translateY(-100%);opacity:0} 8%{opacity:1} 92%{opacity:1} 100%{transform:translateY(100%);opacity:0} }
+  @keyframes vlDrawLine{ from{transform:scaleX(0)} to{transform:scaleX(1)} }
+  @keyframes vlSheen{ from{transform:translateX(-120%)} to{transform:translateX(220%)} }
+  @keyframes vlFadeUp{ from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Ambient HUD overlay — drifting grid + CRT scanlines + vignette (very subtle) */
+  .vl-ambient{ position:fixed; inset:0; pointer-events:none; z-index:40;
+    background:repeating-linear-gradient(0deg, rgba(148,163,184,0.022) 0 1px, transparent 1px 3px); }
+  .vl-ambient::before{ content:""; position:absolute; inset:0;
+    background-image:linear-gradient(rgba(59,130,246,0.06) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(59,130,246,0.06) 1px,transparent 1px);
+    background-size:40px 40px; opacity:.45; animation:vlGridDrift 40s linear infinite; }
+  .vl-ambient::after{ content:""; position:absolute; inset:0;
+    background:radial-gradient(ellipse at 50% 40%, transparent 58%, rgba(0,0,0,0.42) 100%); }
+
+  /* HUD utilities (reused by Stages B–E) */
+  .hud-glass{ backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    box-shadow:inset 0 0 0 1px rgba(59,158,255,0.10); }
+  .hud-corners{ position:relative; }
+  .hud-corners::before,.hud-corners::after{ content:""; position:absolute; width:14px; height:14px;
+    border-color:var(--vl-cyan); border-style:solid; opacity:.55; pointer-events:none; }
+  .hud-corners::before{ top:8px; left:8px; border-width:1px 0 0 1px; }
+  .hud-corners::after{ bottom:8px; right:8px; border-width:0 1px 1px 0; }
+  .glow-cyan{ box-shadow:0 0 14px rgba(0,212,255,0.35); }
+  .vl-breathe{ animation:vlBreathe 2s ease-in-out infinite; }
+
+  @media (prefers-reduced-motion: reduce){
+    .vl-ambient::before{ animation:none; }
+    *{ animation-duration:.001ms !important; animation-iteration-count:1 !important;
+       transition-duration:.001ms !important; scroll-behavior:auto !important; }
+  }
 `;
 
 // Tracks all in-flight AbortControllers so handleLogout can cancel them all
@@ -23896,6 +23939,7 @@ export default function App() {
   return (
     <div style={{display:"flex",height:"100vh",background:"#020617",overflow:"hidden",fontFamily:"DM Sans,sans-serif"}}>
       <style>{CSS}</style>
+      <div className="vl-ambient" aria-hidden="true"/>
 
       <div style={{width:280,background:"#0a0f1e",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
         <div style={{padding:"6px 0 8px",borderBottom:"1px solid #1e293b",flexShrink:0,background:"#0a0f1e"}}>
