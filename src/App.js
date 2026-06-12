@@ -163,8 +163,8 @@ const CSS = `
 
   body{
     font-family:'Inter',sans-serif;
-    background:#020617;
-    color:#e2e8f0;
+    background:#0a0e17;
+    color:#d8deea;
     font-size:14px;
     line-height:1.6;
     -webkit-font-smoothing:antialiased;
@@ -172,44 +172,44 @@ const CSS = `
   }
 
   /* Global text color improvements */
-  h1,h2,h3,h4,h5,h6 { color:#f1f5f9; font-weight:700; line-height:1.3; }
-  p { color:#cbd5e1; line-height:1.7; }
-  label { color:#94a3b8; font-size:13px; }
+  h1,h2,h3,h4,h5,h6 { color:#ffffff; font-weight:700; line-height:1.3; }
+  p { color:#c3ccda; line-height:1.7; }
+  label { color:#8a94a8; font-size:13px; }
   span { color:inherit; }
 
   /* Scrollbar */
   ::-webkit-scrollbar{width:5px;height:5px;}
-  ::-webkit-scrollbar-track{background:#0a0f1e;}
-  ::-webkit-scrollbar-thumb{background:#334155;border-radius:6px;}
-  ::-webkit-scrollbar-thumb:hover{background:#475569;}
+  ::-webkit-scrollbar-track{background:#0d1320;}
+  ::-webkit-scrollbar-thumb{background:#1c2435;border-radius:6px;}
+  ::-webkit-scrollbar-thumb:hover{background:#5a6478;}
 
   /* Animations */
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   @keyframes spin{to{transform:rotate(360deg)}}
-  @keyframes glow{0%,100%{box-shadow:0 0 8px rgba(59,130,246,0.3)}50%{box-shadow:0 0 20px rgba(59,130,246,0.6)}}
+  @keyframes glow{0%,100%{box-shadow:0 0 8px rgba(59,158,255,0.3)}50%{box-shadow:0 0 20px rgba(59,158,255,0.6)}}
 
   .fade{animation:fadeUp .3s ease;}
 
   /* Sidebar nav */
-  .nav-btn:hover{background:#1e293b!important;}
-  .nav-btn span{ font-size:13px !important; font-weight:500 !important; color:#94a3b8; letter-spacing:0.2px; }
+  .nav-btn:hover{background:#1c2435!important;}
+  .nav-btn span{ font-size:13px !important; font-weight:500 !important; color:#8a94a8; letter-spacing:0.2px; }
 
   /* Table rows */
-  .row:hover{background:#0f172a!important;}
+  .row:hover{background:#0d1320!important;}
 
   /* Tool cards */
-  .tool-card:hover{border-color:#3b82f680!important;transform:translateY(-1px);}
+  .tool-card:hover{border-color:#3b9eff80!important;transform:translateY(-1px);}
   .tool-card{transition:all .2s;}
 
   /* Global input styling */
   input, textarea, select {
     font-family:'Inter',sans-serif !important;
     font-size:13px !important;
-    color:#e2e8f0 !important;
+    color:#d8deea !important;
     letter-spacing:0.2px;
   }
-  input::placeholder, textarea::placeholder { color:#475569 !important; }
+  input::placeholder, textarea::placeholder { color:#5a6478 !important; }
 
   /* Section headers */
   .section-label {
@@ -217,14 +217,14 @@ const CSS = `
     font-weight:700;
     letter-spacing:1.5px;
     text-transform:uppercase;
-    color:#64748b;
+    color:#5a6478;
   }
 
   /* Monospace text */
   .mono {
     font-family:'JetBrains Mono',monospace;
     font-size:12px;
-    color:#94a3b8;
+    color:#8a94a8;
     letter-spacing:0.3px;
   }
 
@@ -232,14 +232,14 @@ const CSS = `
   .tool-name {
     font-size:13px;
     font-weight:600;
-    color:#cbd5e1;
+    color:#c3ccda;
     letter-spacing:0.1px;
   }
 
   /* Description text */
   .desc-text {
     font-size:12px;
-    color:#64748b;
+    color:#5a6478;
     line-height:1.5;
   }
 
@@ -258,7 +258,7 @@ const CSS = `
     font-family:'JetBrains Mono',monospace;
     font-size:12px;
     line-height:1.7;
-    color:#94a3b8;
+    color:#8a94a8;
   }
 
   /* ════════════ VL-HUD v3.1 — motion foundation (Stage A) ════════════ */
@@ -281,8 +281,8 @@ const CSS = `
   .vl-ambient{ position:fixed; inset:0; pointer-events:none; z-index:40;
     background:repeating-linear-gradient(0deg, rgba(148,163,184,0.022) 0 1px, transparent 1px 3px); }
   .vl-ambient::before{ content:""; position:absolute; inset:0;
-    background-image:linear-gradient(rgba(59,130,246,0.06) 1px,transparent 1px),
-                     linear-gradient(90deg,rgba(59,130,246,0.06) 1px,transparent 1px);
+    background-image:linear-gradient(rgba(59,158,255,0.06) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(59,158,255,0.06) 1px,transparent 1px);
     background-size:40px 40px; opacity:.45; animation:vlGridDrift 40s linear infinite; }
   .vl-ambient::after{ content:""; position:absolute; inset:0;
     background:radial-gradient(ellipse at 50% 40%, transparent 58%, rgba(0,0,0,0.42) 100%); }
@@ -385,12 +385,12 @@ function Badge(props) {
   const color = props.color || "blue";
   const size  = props.size || "sm";
   const colors = {
-    blue:   {bg:"#0c1a3d", b:"#1e40af", t:"#60a5fa"},
-    green:  {bg:"#052e16", b:"#166534", t:"#4ade80"},
-    red:    {bg:"#1c0000", b:"#991b1b", t:"#f87171"},
+    blue:   {bg:"#0d2436", b:"#1e40af", t:"#00d4ff"},
+    green:  {bg:"#052e16", b:"#166534", t:"#5dffa6"},
+    red:    {bg:"#1c0000", b:"#991b1b", t:"#ff6b82"},
     yellow: {bg:"#2d1f00", b:"#92400e", t:"#fbbf24"},
     purple: {bg:"#1a0a3d", b:"#5b21b6", t:"#a78bfa"},
-    gray:   {bg:"#0f172a", b:"#334155", t:"#94a3b8"},
+    gray:   {bg:"#0d1320", b:"#1c2435", t:"#8a94a8"},
     orange: {bg:"#2d1000", b:"#9a3412", t:"#fb923c"},
   };
   const c  = colors[color] || colors.blue;
@@ -455,8 +455,8 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
     <div data-tool-refresh={module} style={{
       display:"flex", alignItems:"center", gap:10,
       padding:"10px 14px",
-      background:"#0a0f1e",
-      border:"1px solid #1e3a8a",
+      background:"#0d1320",
+      border:"1px solid #0e3a55",
       borderRadius:8,
       marginBottom:12,
     }}>
@@ -465,9 +465,9 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
         disabled={_disabled}
         title={`Clear all scan results, cache, and history for the ${module} module (this user only)`}
         style={{
-          background: _disabled ? "#1e293b" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
-          border: "1px solid " + (_disabled ? "#334155" : "#a78bfa"),
-          color: _disabled ? "#64748b" : "#fff",
+          background: _disabled ? "#1c2435" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
+          border: "1px solid " + (_disabled ? "#1c2435" : "#a78bfa"),
+          color: _disabled ? "#5a6478" : "#fff",
           padding: "7px 16px",
           borderRadius: 6,
           fontSize: 12,
@@ -483,18 +483,18 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
         <span style={{fontSize:14}}>{busy ? "⟳" : "↻"}</span>
         {label || "Tool Refresh"}
       </button>
-      <span style={{fontSize:11, color:"#64748b", flex:1}}>
+      <span style={{fontSize:11, color:"#5a6478", flex:1}}>
         Wipe this module's scan history + tool cache before starting a fresh scan
       </span>
       {lastMsg && (
         <span style={{
           fontSize:11,
           fontFamily:"JetBrains Mono,monospace",
-          color: lastMsg.startsWith("") ? "#4ade80" : "#fb923c",
+          color: lastMsg.startsWith("") ? "#5dffa6" : "#fb923c",
           padding:"2px 8px",
-          background:"#020617",
+          background:"#0a0e17",
           borderRadius:4,
-          border:"1px solid #1e293b",
+          border:"1px solid #1c2435",
           whiteSpace:"nowrap",
         }}>{lastMsg}</span>
       )}
@@ -504,13 +504,13 @@ function ToolRefreshButton({module, token, disabled, onClear, label}) {
 
 const Tagline = ({size=10}) => (
   <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0}}>
-    <div style={{flex:1,height:1,background:"linear-gradient(90deg,transparent,#3b82f6)"}}/>
+    <div style={{flex:1,height:1,background:"linear-gradient(90deg,transparent,#3b9eff)"}}/>
     <span style={{fontSize:size,color:"#ffffff",letterSpacing:2,fontWeight:700,padding:"0 8px"}}>PROTECT</span>
-    <div style={{width:1,height:size+2,background:"#3b82f6",flexShrink:0}}/>
+    <div style={{width:1,height:size+2,background:"#3b9eff",flexShrink:0}}/>
     <span style={{fontSize:size,color:"#ffffff",letterSpacing:2,fontWeight:700,padding:"0 8px"}}>DETECT</span>
-    <div style={{width:1,height:size+2,background:"#3b82f6",flexShrink:0}}/>
+    <div style={{width:1,height:size+2,background:"#3b9eff",flexShrink:0}}/>
     <span style={{fontSize:size,color:"#ffffff",letterSpacing:2,fontWeight:700,padding:"0 8px"}}>RESPOND</span>
-    <div style={{flex:1,height:1,background:"linear-gradient(90deg,#3b82f6,transparent)"}}/>
+    <div style={{flex:1,height:1,background:"linear-gradient(90deg,#3b9eff,transparent)"}}/>
   </div>
 );
 function Login(props) {
@@ -549,11 +549,11 @@ function Login(props) {
 
   const box = (focused) => ({
     display:"flex", alignItems:"center", gap:12,
-    background: focused ? "rgba(59,130,246,0.07)" : "rgba(2,6,23,0.85)",
-    border: `1.5px solid ${focused ? "#3b82f6" : "rgba(51,65,85,0.7)"}`,
+    background: focused ? "rgba(59,158,255,0.07)" : "rgba(2,6,23,0.85)",
+    border: `1.5px solid ${focused ? "#3b9eff" : "rgba(51,65,85,0.7)"}`,
     borderRadius:12, padding:"13px 16px",
     boxShadow: focused
-      ? "0 0 0 4px rgba(59,130,246,0.12), inset 0 1px 3px rgba(0,0,0,0.4)"
+      ? "0 0 0 4px rgba(59,158,255,0.12), inset 0 1px 3px rgba(0,0,0,0.4)"
       : "inset 0 1px 3px rgba(0,0,0,0.4)",
     transition:"all 0.2s ease"
   });
@@ -569,12 +569,12 @@ function Login(props) {
     </svg>
   );
   const IconEye  = () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5a6478" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
     </svg>
   );
   const IconEyeOff = () => (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5a6478" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
       <line x1="1" y1="1" x2="23" y2="23"/>
     </svg>
@@ -585,17 +585,17 @@ function Login(props) {
       <style>{CSS}</style>
 
       {/* Dot-grid background */}
-      <div style={{position:"absolute",inset:0,backgroundImage:"radial-gradient(rgba(59,130,246,0.18) 1px,transparent 1px)",backgroundSize:"32px 32px",opacity:0.45,pointerEvents:"none"}}/>
+      <div style={{position:"absolute",inset:0,backgroundImage:"radial-gradient(rgba(59,158,255,0.18) 1px,transparent 1px)",backgroundSize:"32px 32px",opacity:0.45,pointerEvents:"none"}}/>
 
       {/* Ambient glow blobs */}
-      <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(59,130,246,0.12) 0%,transparent 70%)",top:"-10%",left:"5%",filter:"blur(50px)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(59,158,255,0.12) 0%,transparent 70%)",top:"-10%",left:"5%",filter:"blur(50px)",pointerEvents:"none"}}/>
       <div style={{position:"absolute",width:350,height:350,borderRadius:"50%",background:"radial-gradient(circle,rgba(139,92,246,0.09) 0%,transparent 70%)",bottom:"5%",right:"10%",filter:"blur(50px)",pointerEvents:"none"}}/>
 
       {/* Card */}
-      <div style={{position:"relative",zIndex:1,width:430,background:"rgba(8,12,28,0.96)",border:"1px solid rgba(59,130,246,0.2)",borderRadius:24,padding:"44px 40px 36px",boxShadow:"0 0 0 1px rgba(255,255,255,0.03) inset, 0 30px 70px rgba(0,0,0,0.7), 0 0 60px rgba(59,130,246,0.07)"}}>
+      <div style={{position:"relative",zIndex:1,width:430,background:"rgba(8,12,28,0.96)",border:"1px solid rgba(59,158,255,0.2)",borderRadius:24,padding:"44px 40px 36px",boxShadow:"0 0 0 1px rgba(255,255,255,0.03) inset, 0 30px 70px rgba(0,0,0,0.7), 0 0 60px rgba(59,158,255,0.07)"}}>
 
         {/* Top gradient accent */}
-        <div style={{position:"absolute",top:0,left:"15%",right:"15%",height:2,background:"linear-gradient(90deg,transparent,#3b82f6,#818cf8,#3b82f6,transparent)",borderRadius:2}}/>
+        <div style={{position:"absolute",top:0,left:"15%",right:"15%",height:2,background:"linear-gradient(90deg,transparent,#3b9eff,#818cf8,#3b9eff,transparent)",borderRadius:2}}/>
 
         {/* Logo */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
@@ -604,7 +604,7 @@ function Login(props) {
 
         {/* Brand */}
         <h1 style={{fontSize:26,fontWeight:900,letterSpacing:5,margin:"0 0 4px",textAlign:"center",lineHeight:1.1}}>
-          <span style={{color:"#f1f5f9"}}>VULNUS</span><span style={{color:"#3b82f6"}}>LAB</span>
+          <span style={{color:"#ffffff"}}>VULNUS</span><span style={{color:"#3b9eff"}}>LAB</span>
         </h1>
         <div style={{marginBottom:28,textAlign:"center"}}><Tagline size={10}/></div>
 
@@ -614,33 +614,33 @@ function Login(props) {
             <button key={m} onClick={()=>switchMode(m)} style={{
               flex:1,padding:"10px",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,
               letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",transition:"all 0.2s",
-              background: mode===m ? "linear-gradient(135deg,#1e40af,#3b82f6)" : "rgba(2,6,23,0.7)",
-              color: mode===m ? "#fff" : "#475569"
+              background: mode===m ? "linear-gradient(135deg,#1e40af,#3b9eff)" : "rgba(2,6,23,0.7)",
+              color: mode===m ? "#fff" : "#5a6478"
             }}>{m==="login"?"Sign In":"Register"}</button>
           ))}
         </div>
 
         {/* Username */}
         <div style={{marginBottom:14}}>
-          <label style={{fontSize:10,color:uFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Username</label>
+          <label style={{fontSize:10,color:uFocus?"#00d4ff":"#5a6478",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Username</label>
           <div style={box(uFocus)}>
-            <IconUser c={uFocus?"#3b82f6":"#334155"}/>
+            <IconUser c={uFocus?"#3b9eff":"#1c2435"}/>
             <input value={u} onChange={e=>setU(e.target.value)}
               onFocus={()=>setUF(true)} onBlur={()=>setUF(false)}
               onKeyDown={e=>e.key==="Enter"&&submit(e)}
               placeholder="Enter your username"
               autoComplete="off" name="vl-dashboard-username" data-form-type="other"
               autoCorrect="off" autoCapitalize="off" spellCheck={false} /*LOGIN-NO-AUTOFILL-V1*/
-              style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
+              style={{flex:1,background:"transparent",border:"none",color:"#d8deea",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
           </div>
         </div>
 
         {/* Email — register only */}
         {mode==="register" && (
           <div style={{marginBottom:14}}>
-            <label style={{fontSize:10,color:eFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Email</label>
+            <label style={{fontSize:10,color:eFocus?"#00d4ff":"#5a6478",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Email</label>
             <div style={box(eFocus)}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={eFocus?"#3b82f6":"#334155"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={eFocus?"#3b9eff":"#1c2435"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
               </svg>
               <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
@@ -648,22 +648,22 @@ function Login(props) {
                 onKeyDown={e=>e.key==="Enter"&&submit(e)}
                 placeholder="Enter your email"
                 autoComplete="email"
-                style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
+                style={{flex:1,background:"transparent",border:"none",color:"#d8deea",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
             </div>
           </div>
         )}
 
         {/* Password */}
         <div style={{marginBottom:mode==="register"?14:24}}>
-          <label style={{fontSize:10,color:pFocus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Password</label>
+          <label style={{fontSize:10,color:pFocus?"#00d4ff":"#5a6478",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Password</label>
           <div style={box(pFocus)}>
-            <IconLock c={pFocus?"#3b82f6":"#334155"}/>
+            <IconLock c={pFocus?"#3b9eff":"#1c2435"}/>
             <input type={showPw?"text":"password"} value={p} onChange={e=>setP(e.target.value)}
               onFocus={()=>setPF(true)} onBlur={()=>setPF(false)}
               onKeyDown={e=>e.key==="Enter"&&submit(e)}
               placeholder={mode==="register"?"Min 6 characters":"Enter your password"}
               autoComplete={mode==="register"?"new-password":"current-password"}
-              style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
+              style={{flex:1,background:"transparent",border:"none",color:"#d8deea",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
             <button onClick={()=>setShow(!showPw)} style={{background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center",opacity:0.7}} tabIndex={-1}>
               {showPw ? <IconEyeOff/> : <IconEye/>}
             </button>
@@ -673,23 +673,23 @@ function Login(props) {
         {/* Confirm Password — register only */}
         {mode==="register" && (
           <div style={{marginBottom:24}}>
-            <label style={{fontSize:10,color:p2Focus?"#60a5fa":"#475569",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Confirm Password</label>
+            <label style={{fontSize:10,color:p2Focus?"#00d4ff":"#5a6478",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace",transition:"color 0.2s"}}>Confirm Password</label>
             <div style={box(p2Focus)}>
-              <IconLock c={p2Focus?"#3b82f6":"#334155"}/>
+              <IconLock c={p2Focus?"#3b9eff":"#1c2435"}/>
               <input type="password" value={p2} onChange={e=>setP2(e.target.value)}
                 onFocus={()=>setP2F(true)} onBlur={()=>setP2F(false)}
                 onKeyDown={e=>e.key==="Enter"&&submit(e)}
                 placeholder="Repeat your password"
                 autoComplete="new-password"
-                style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
+                style={{flex:1,background:"transparent",border:"none",color:"#d8deea",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
             </div>
           </div>
         )}
 
         {/* Error */}
         {err && (
-          <div style={{background:"rgba(127,29,29,0.25)",border:"1px solid rgba(239,68,68,0.35)",borderRadius:10,padding:"11px 14px",color:"#fca5a5",fontSize:12,marginBottom:16,display:"flex",alignItems:"center",gap:9}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fca5a5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div style={{background:"rgba(127,29,29,0.25)",border:"1px solid rgba(255,62,94,0.35)",borderRadius:10,padding:"11px 14px",color:"#ffa3b0",fontSize:12,marginBottom:16,display:"flex",alignItems:"center",gap:9}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffa3b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
             {err}
@@ -699,17 +699,17 @@ function Login(props) {
         {/* Submit button */}
         <button onClick={submit} disabled={loading} style={{
           width:"100%", border:"none", borderRadius:12, padding:"15px",
-          background: loading ? "#1e293b" : "linear-gradient(135deg,#1e40af,#3b82f6,#6366f1)",
-          color: loading ? "#475569" : "#fff",
+          background: loading ? "#1c2435" : "linear-gradient(135deg,#1e40af,#3b9eff,#6366f1)",
+          color: loading ? "#5a6478" : "#fff",
           fontSize:13, fontWeight:700, cursor:loading?"not-allowed":"pointer",
           letterSpacing:3, textTransform:"uppercase",
-          boxShadow: loading ? "none" : "0 4px 28px rgba(59,130,246,0.45), inset 0 1px 0 rgba(255,255,255,0.12)",
+          boxShadow: loading ? "none" : "0 4px 28px rgba(59,158,255,0.45), inset 0 1px 0 rgba(255,255,255,0.12)",
           display:"flex", alignItems:"center", justifyContent:"center", gap:10,
           marginBottom:20, transition:"all 0.2s"
         }}>
           {loading ? (
             <>
-              <div style={{width:13,height:13,border:"2px solid #334155",borderTopColor:"#64748b",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
+              <div style={{width:13,height:13,border:"2px solid #1c2435",borderTopColor:"#5a6478",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
               {mode==="register"?"Creating Account...":"Authenticating..."}
             </>
           ) : (
@@ -725,25 +725,25 @@ function Login(props) {
         {/* Switch mode link */}
         <div style={{textAlign:"center",marginBottom:16}}>
           {mode==="login" ? (
-            <span style={{fontSize:12,color:"#475569"}}>Don't have an account?{" "}
-              <button onClick={()=>switchMode("register")} style={{background:"none",border:"none",color:"#3b82f6",cursor:"pointer",fontSize:12,fontWeight:700,padding:0}}>Register</button>
+            <span style={{fontSize:12,color:"#5a6478"}}>Don't have an account?{" "}
+              <button onClick={()=>switchMode("register")} style={{background:"none",border:"none",color:"#3b9eff",cursor:"pointer",fontSize:12,fontWeight:700,padding:0}}>Register</button>
             </span>
           ) : (
-            <span style={{fontSize:12,color:"#475569"}}>Already have an account?{" "}
-              <button onClick={()=>switchMode("login")} style={{background:"none",border:"none",color:"#3b82f6",cursor:"pointer",fontSize:12,fontWeight:700,padding:0}}>Sign In</button>
+            <span style={{fontSize:12,color:"#5a6478"}}>Already have an account?{" "}
+              <button onClick={()=>switchMode("login")} style={{background:"none",border:"none",color:"#3b9eff",cursor:"pointer",fontSize:12,fontWeight:700,padding:0}}>Sign In</button>
             </span>
           )}
         </div>
 
         {/* Footer badge */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1e293b" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span style={{fontSize:10,color:"#1e293b",fontFamily:"monospace",letterSpacing:2,fontWeight:600}}>AUTHORIZED PERSONNEL ONLY</span>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1e293b" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1c2435" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span style={{fontSize:10,color:"#1c2435",fontFamily:"monospace",letterSpacing:2,fontWeight:600}}>AUTHORIZED PERSONNEL ONLY</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1c2435" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         </div>
 
         {/* Bottom gradient accent */}
-        <div style={{position:"absolute",bottom:0,left:"30%",right:"30%",height:1,background:"linear-gradient(90deg,transparent,rgba(59,130,246,0.3),transparent)"}}/>
+        <div style={{position:"absolute",bottom:0,left:"30%",right:"30%",height:1,background:"linear-gradient(90deg,transparent,rgba(59,158,255,0.3),transparent)"}}/>
       </div>
     </div>
   );
@@ -755,24 +755,24 @@ function Terminal(props) {
   const ref = useRef();
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [lines]);
   return (
-    <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-      <div style={{background:"#0f172a",padding:"8px 14px",borderBottom:"1px solid #1e293b",display:"flex",alignItems:"center",gap:8}}>
+    <div style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:8,overflow:"hidden"}}>
+      <div style={{background:"#0d1320",padding:"8px 14px",borderBottom:"1px solid #1c2435",display:"flex",alignItems:"center",gap:8}}>
         <div style={{display:"flex",gap:5}}>
-          <div style={{width:9,height:9,borderRadius:"50%",background:"#ef4444",opacity:.8}}/>
+          <div style={{width:9,height:9,borderRadius:"50%",background:"#ff3e5e",opacity:.8}}/>
           <div style={{width:9,height:9,borderRadius:"50%",background:"#f59e0b",opacity:.8}}/>
-          <div style={{width:9,height:9,borderRadius:"50%",background:"#22c55e",opacity:.8}}/>
+          <div style={{width:9,height:9,borderRadius:"50%",background:"#00ff88",opacity:.8}}/>
         </div>
-        <span style={{fontSize:11,color:"#334155",fontFamily:"JetBrains Mono,monospace"}}>Terminal — kali@backend</span>
+        <span style={{fontSize:11,color:"#1c2435",fontFamily:"JetBrains Mono,monospace"}}>Terminal — kali@backend</span>
       </div>
       <div ref={ref} style={{padding:14,height:height,overflowY:"auto"}}>
         {lines.map((l,i) => {
           const isOk    = l.startsWith("");
           const isErr   = l.startsWith("");
           const isArrow = l.startsWith("->") || l.startsWith("[*]");
-          const color   = isOk?"#22c55e":isErr?"#ef4444":isArrow?"#60a5fa":"#64748b";
+          const color   = isOk?"#00ff88":isErr?"#ff3e5e":isArrow?"#00d4ff":"#5a6478";
           return (
             <div key={i} style={{display:"flex",gap:8,marginBottom:2}}>
-              <span style={{color:"#1e293b",fontFamily:"JetBrains Mono,monospace",fontSize:10,flexShrink:0}}>{String(i+1).padStart(3,"0")}</span>
+              <span style={{color:"#1c2435",fontFamily:"JetBrains Mono,monospace",fontSize:10,flexShrink:0}}>{String(i+1).padStart(3,"0")}</span>
               <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:12,color:color,lineHeight:1.7}}>{l}</span>
             </div>
           );
@@ -797,27 +797,27 @@ function TestTargets({targets, onSelect}) {
   return (
     <div style={{marginBottom:10}}>
       <button onClick={()=>open ? close() : setOpen(true)}
-        style={{background:"none",border:"1px solid #1e3a8a",borderRadius:5,padding:"4px 12px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+        style={{background:"none",border:"1px solid #0e3a55",borderRadius:5,padding:"4px 12px",color:"#00d4ff",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
         Test Targets {open?"▲":"▼"}
       </button>
       {open && (
-        <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,marginTop:6,overflow:"hidden",
+        <div style={{background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,marginTop:6,overflow:"hidden",
           animation: closing ? "fadeOut .3s ease forwards" : "fadeIn .2s ease"}}>
-          <div style={{background:"#0f172a",padding:"6px 12px",borderBottom:"1px solid #1e293b",fontSize:10,color:"#475569",fontWeight:600,letterSpacing:1}}>
+          <div style={{background:"#0d1320",padding:"6px 12px",borderBottom:"1px solid #1c2435",fontSize:10,color:"#5a6478",fontWeight:600,letterSpacing:1}}>
             INTENTIONALLY VULNERABLE — CREDENTIALS AUTO-FILL ON CLICK
           </div>
           {(targets || []).map((t, i) => (
             <div key={i} onClick={() => copy(t.value, t.lab || null, i)}
-              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid #0f172a",cursor:"pointer",background:copied===i?"#1e3a5f":"transparent",transition:"background .15s"}}>
+              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid #0d1320",cursor:"pointer",background:copied===i?"#103a52":"transparent",transition:"background .15s"}}>
               <span style={{fontSize:14}}>{t.icon}</span>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:11,fontWeight:600,color:"#f1f5f9"}}>{t.label}
-                  {t.lab && <span style={{fontSize:9,color:"#4ade80",marginLeft:8,fontWeight:700,background:"#052e16",padding:"1px 5px",borderRadius:3}}>AUTO-LOGIN </span>}
+                <div style={{fontSize:11,fontWeight:600,color:"#ffffff"}}>{t.label}
+                  {t.lab && <span style={{fontSize:9,color:"#5dffa6",marginLeft:8,fontWeight:700,background:"#052e16",padding:"1px 5px",borderRadius:3}}>AUTO-LOGIN </span>}
                 </div>
-                <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
-                {t.desc && <div style={{fontSize:9,color:"#64748b",marginTop:1}}>{t.desc}</div>}
+                <div style={{fontSize:10,color:"#8a94a8",fontFamily:"JetBrains Mono,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.value}</div>
+                {t.desc && <div style={{fontSize:9,color:"#5a6478",marginTop:1}}>{t.desc}</div>}
               </div>
-              <span style={{fontSize:10,color:copied===i?"#4ade80":"#334155",fontWeight:700,flexShrink:0}}>{copied===i?"Selected":"Click"}</span>
+              <span style={{fontSize:10,color:copied===i?"#5dffa6":"#1c2435",fontWeight:700,flexShrink:0}}>{copied===i?"Selected":"Click"}</span>
             </div>
           ))}
         </div>
@@ -2573,17 +2573,17 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
   if(!open) return null;
   const fld = (label,value,setKey,placeholder,extra) => (
     <div style={{marginBottom:14}}>
-      <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
+      <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
       <input value={value||""} onChange={e=>setCfg(p=>({...p,[setKey]:e.target.value}))}
         placeholder={placeholder} {...(extra||{})}
-        style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:extra&&extra.mono?"JetBrains Mono,monospace":"inherit"}}/>
+        style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:7,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:extra&&extra.mono?"JetBrains Mono,monospace":"inherit"}}/>
     </div>
   );
   const sel = (label,value,setKey,opts) => (
     <div style={{marginBottom:14}}>
-      <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
+      <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>{label}</label>
       <select value={value||""} onChange={e=>setCfg(p=>({...p,[setKey]:e.target.value}))}
-        style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}>
+        style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:7,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box"}}>
         {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
       </select>
     </div>
@@ -2595,18 +2595,18 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
     <div onClick={onClose}
       style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div onClick={e => e.stopPropagation()}
-        style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
+        style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:28}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div style={{color:"#e2e8f0",fontWeight:800,fontSize:17}}>Customize {moduleLabel||"Report"}</div>
+          <div style={{color:"#d8deea",fontWeight:800,fontSize:17}}>Customize {moduleLabel||"Report"}</div>
           <button onClick={onClose}
             title="Close (Esc)"
-            style={{background:"none",border:"1px solid #334155",borderRadius:6,padding:"3px 10px",color:"#94a3b8",fontSize:14,fontWeight:700,cursor:"pointer",lineHeight:1}}>×</button>
+            style={{background:"none",border:"1px solid #1c2435",borderRadius:6,padding:"3px 10px",color:"#8a94a8",fontSize:14,fontWeight:700,cursor:"pointer",lineHeight:1}}>×</button>
         </div>
-        <div style={{color:"#64748b",fontSize:11,marginBottom:14,fontStyle:"italic"}}>
+        <div style={{color:"#5a6478",fontSize:11,marginBottom:14,fontStyle:"italic"}}>
           All fields are optional — fill only what you need. Empty fields use sensible defaults.
         </div>
         <button onClick={()=>{ onClose(); setTimeout(()=>onGenerate({...cfg, encrypt:false}), 50); }}
-          style={{width:"100%",background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 14px",color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:16}}>
+          style={{width:"100%",background:"#1c2435",border:"1px dashed #1c2435",borderRadius:7,padding:"10px 14px",color:"#8a94a8",fontSize:12,fontWeight:600,cursor:"pointer",marginBottom:16}}>
           Skip & Generate with Defaults (no password, no watermark)
         </button>
         {fld("Company / Client Name (optional)", cfg.companyName, "companyName", "e.g. Acme Corporation")}
@@ -2617,9 +2617,9 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
         {fld("Report Date (optional)", cfg.date, "date", "")}
         {/* Logo */}
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
+          <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Company Logo (optional)</label>
           <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <label style={{background:"#1e293b",border:"1px dashed #334155",borderRadius:7,padding:"10px 18px",color:"#93c5fd",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            <label style={{background:"#1c2435",border:"1px dashed #1c2435",borderRadius:7,padding:"10px 18px",color:"#7fdcff",fontSize:12,fontWeight:600,cursor:"pointer"}}>
               Upload Logo
               <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
                 const file = e.target.files[0]; if(!file) return;
@@ -2631,9 +2631,9 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
             {cfg.customLogo
               ? <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <img src={cfg.customLogo} alt="logo" style={{height:36,objectFit:"contain",borderRadius:4,background:"#fff",padding:2}}/>
-                  <button onClick={()=>setCfg(p=>({...p,customLogo:null,logoName:null}))} style={{background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:11}}>Remove</button>
+                  <button onClick={()=>setCfg(p=>({...p,customLogo:null,logoName:null}))} style={{background:"none",border:"none",color:"#ff3e5e",cursor:"pointer",fontSize:11}}>Remove</button>
                 </div>
-              : <span style={{color:"#334155",fontSize:11}}>No logo — default badge used</span>
+              : <span style={{color:"#1c2435",fontSize:11}}>No logo — default badge used</span>
             }
           </div>
         </div>
@@ -2659,44 +2659,44 @@ function PDFConfigModal({open, onClose, onGenerate, moduleLabel}) {
           ])}
         </div>
         <div style={{marginBottom:14}}>
-          <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional — overrides default)</label>
+          <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Executive Summary (optional — overrides default)</label>
           <textarea value={cfg.customExecSummary||""} onChange={e=>setCfg(p=>({...p,customExecSummary:e.target.value}))}
             placeholder="Override the auto-generated executive summary."
             rows={3}
-            style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"10px 14px",color:"#e2e8f0",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+            style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:7,padding:"10px 14px",color:"#d8deea",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div style={{marginBottom:14}}>
-            <label style={{display:"block",color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer (optional)</label>
+            <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Custom Disclaimer (optional)</label>
             <textarea value={cfg.customDisclaimer||""} onChange={e=>setCfg(p=>({...p,customDisclaimer:e.target.value}))}
               placeholder="Legal/CYA text" rows={2}
-              style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:7,padding:"8px 12px",color:"#e2e8f0",fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+              style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:7,padding:"8px 12px",color:"#d8deea",fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
           </div>
           {fld("Custom Footer Text (optional)", cfg.customFooterText, "customFooterText", "Override default footer")}
         </div>
         {/* Password */}
-        <div style={{marginBottom:18,background:"#0a1224",border:"1px solid #1e3a8a",borderRadius:8,padding:14}}>
-          <label style={{display:"flex",alignItems:"center",gap:8,color:"#93c5fd",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
+        <div style={{marginBottom:18,background:"#0d1320",border:"1px solid #0e3a55",borderRadius:8,padding:14}}>
+          <label style={{display:"flex",alignItems:"center",gap:8,color:"#7fdcff",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:10,cursor:"pointer"}}>
             <input type="checkbox" checked={cfg.encrypt!==false} onChange={e=>setCfg(p=>({...p,encrypt:e.target.checked}))}
-              style={{accentColor:"#3b82f6",cursor:"pointer"}}/>
+              style={{accentColor:"#3b9eff",cursor:"pointer"}}/>
             PASSWORD-PROTECT THIS PDF (optional — uncheck to skip)
           </label>
           {cfg.encrypt!==false && (
             <>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <input value={cfg.password||""} onChange={e=>setCfg(p=>({...p,password:e.target.value}))}
-                  style={{flex:1,background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,padding:"8px 12px",color:"#fbbf24",fontFamily:"JetBrains Mono,monospace",fontSize:13,fontWeight:700,outline:"none",boxSizing:"border-box"}}/>
+                  style={{flex:1,background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"8px 12px",color:"#fbbf24",fontFamily:"JetBrains Mono,monospace",fontSize:13,fontWeight:700,outline:"none",boxSizing:"border-box"}}/>
                 <button onClick={()=>setCfg(p=>({...p,password:_genPwd()}))}
-                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#60a5fa",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Regenerate</button>
+                  style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:6,padding:"8px 14px",color:"#00d4ff",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Regenerate</button>
                 <button onClick={()=>navigator.clipboard.writeText(cfg.password).then(()=>alert("Password copied:\n\n"+cfg.password+"\n\nSave it — you'll need it to open the PDF."))}
-                  style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 14px",color:"#22c55e",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Copy</button>
+                  style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:6,padding:"8px 14px",color:"#00ff88",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Copy</button>
               </div>
-              <div style={{color:"#64748b",fontSize:10,marginTop:8,fontStyle:"italic"}}>Recipient prompted for this password when opening the PDF. Cannot be recovered if lost.</div>
+              <div style={{color:"#5a6478",fontSize:10,marginTop:8,fontStyle:"italic"}}>Recipient prompted for this password when opening the PDF. Cannot be recovered if lost.</div>
             </>
           )}
         </div>
         <button onClick={()=>{ onClose(); setTimeout(()=>onGenerate(cfg), 50); }}
-          style={{width:"100%",background:"#ef4444",border:"none",borderRadius:7,padding:"12px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+          style={{width:"100%",background:"#ff3e5e",border:"none",borderRadius:7,padding:"12px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
           Generate Report
         </button>
       </div>
@@ -3018,15 +3018,15 @@ const PHASES = [
 // Section header definitions — keyed by the first tool in each section.
 // Mirrors WEBAPP_TOOLS_BY_TIER in endpoints/webapp_orchestrator.py (13 tiers).
 const SECTION_HEADERS = {
-  "spa_crawler":           {label:"Section 1 — Discovery",                       sub:"Runs first • 1 scanner",     color:"#3b82f6"},
+  "spa_crawler":           {label:"Section 1 — Discovery",                       sub:"Runs first • 1 scanner",     color:"#3b9eff"},
   "cms":                   {label:"Section 2 — Reconnaissance & Fingerprinting", sub:"OSWA Phase 1 • 2 scanners",  color:"#06b6d4"},
-  "xss":                   {label:"Section 3 — Injection Attacks",               sub:"OSWA Core • 4 scanners",     color:"#ef4444"},
+  "xss":                   {label:"Section 3 — Injection Attacks",               sub:"OSWA Core • 4 scanners",     color:"#ff3e5e"},
   "headers":               {label:"Section 4 — Authentication & Session",        sub:"OSWA + OSWE • 4 scanners",   color:"#a855f7"},
   "lfi":                   {label:"Section 5 — File & Path Attacks",             sub:"OSWA • 2 scanners",          color:"#f97316"},
   "cors":                  {label:"Section 6 — Network & Protocol Attacks",      sub:"OSWA • 5 scanners",          color:"#0891b2"},
   "idor":                  {label:"Section 7 — Access Control & Modern API",     sub:"OWASP A01/A04 • 4 scanners", color:"#14b8a6"},
   "nikto":                 {label:"Section 8 — Framework-Specific & Heavy",      sub:"Kali-style • 9 scanners",    color:"#eab308"},
-  "param_discovery":       {label:"Section 9 — AI-Curated Discovery",            sub:"VL-FORGE • 3 scanners",      color:"#22c55e"},
+  "param_discovery":       {label:"Section 9 — AI-Curated Discovery",            sub:"VL-FORGE • 3 scanners",      color:"#00ff88"},
   "ldap_injection":        {label:"Section 10 — Modern Attack Surface",          sub:"AI payloads • 7 scanners",   color:"#84cc16"},
   "backup_files":          {label:"Section 11 — Deep Discovery",                 sub:"Auxiliary • 7 scanners",     color:"#0ea5e9"},
   "broken_auth":           {label:"Section 12 — Auth & Session (Extended)",      sub:"OWASP A07 • 6 scanners",     color:"#a855f7"},
@@ -3905,11 +3905,11 @@ function WebAppModule(props) {
 
   return (
     <div className="fade">
-      <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:8,padding:20,marginBottom:16}}>
+      <div style={{background:"linear-gradient(135deg,#0d2436,#0d1320)",border:"1px solid #0e3a55",borderRadius:8,padding:20,marginBottom:16}}>
         {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
           <span style={{fontSize:20}}></span>
-          <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",margin:0}}>Web Application Penetration Testing</h2>
+          <h2 style={{fontSize:16,fontWeight:700,color:"#ffffff",margin:0}}>Web Application Penetration Testing</h2>
           <Badge label={PHASES.length+" PHASES"} color="blue"/>
           <Badge label="REAL TOOLS" color="green"/>
           {running && <Badge label="LIVE SCAN" color="blue"/>}
@@ -3920,10 +3920,10 @@ function WebAppModule(props) {
             finished (rich SCANNING panel below covers the live progress). */}
         {finished && !running && (
           <div style={{marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:11,color:"#22c55e",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>
+            <span style={{fontSize:11,color:"#00ff88",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>
               {done.length} / {PHASES.length} phases complete
             </span>
-            <span style={{fontSize:11,color:"#22c55e",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>100%</span>
+            <span style={{fontSize:11,color:"#00ff88",fontFamily:"JetBrains Mono,monospace",fontWeight:700}}>100%</span>
           </div>
         )}
 
@@ -3931,10 +3931,10 @@ function WebAppModule(props) {
             credentials. WebGoat removed — upstream image keeps renaming
             login routes between versions, breaking auto-login. */}
         <TestTargets targets={[
-          {label:"DVWA",       value:"http://lab_dvwa",                   color:"#dc2626", lab:"dvwa"},
+          {label:"DVWA",       value:"http://lab_dvwa",                   color:"#e02347", lab:"dvwa"},
           {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
           {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
-          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#16a34a", lab:"juiceshop"},
+          {label:"Juice Shop", value:"http://lab_juiceshop:3000",         color:"#0bd673", lab:"juiceshop"},
         ]} onSelect={async (t, lab) => {
           setTarget(t);
           setAuthorized(false);
@@ -3971,41 +3971,41 @@ function WebAppModule(props) {
         {/* Target input row */}
         <div style={{marginTop:8}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-            <label style={{fontSize:11,color:"#64748b",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
-            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"2px 8px",color:"#60a5fa",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
+            <label style={{fontSize:11,color:"#5a6478",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
+            {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:4,padding:"2px 8px",color:"#00d4ff",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
           </div>
           {showHistory && targetHistory.length>0 && !running && (
-            <div style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
+            <div style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:6,marginBottom:8,overflow:"hidden"}}>
               {targetHistory.map((t,i)=>(
-                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid #1e293b":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#93c5fd",fontFamily:"JetBrains Mono,monospace"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <span style={{color:"#334155",fontSize:10}}>{i+1}</span>{t}
+                <div key={i} onClick={()=>{setTarget(t);setShowHistory(false);}} style={{padding:"7px 14px",cursor:"pointer",borderBottom:i<targetHistory.length-1?"1px solid #1c2435":"none",display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#7fdcff",fontFamily:"JetBrains Mono,monospace"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#1c2435"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <span style={{color:"#1c2435",fontSize:10}}>{i+1}</span>{t}
                 </div>
               ))}
             </div>
           )}
 
           {/* WAP-AUTH-PANEL-V5 — compact Recon-style */}
-          <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+          <div style={{marginBottom:10,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6}}>
             <div onClick={()=>setShowAuthPanel(o=>!o)} style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <span style={{fontSize:11}}>{showAuthPanel?"▼":"▶"}</span>
-                <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Authenticated scan (optional)</span>
-                <span style={{fontSize:10,color:"#64748b"}}>— behind-login: IDOR, stored XSS, mass-assignment</span>
+                <span style={{fontSize:12,fontWeight:600,color:"#d8deea"}}>Authenticated scan (optional)</span>
+                <span style={{fontSize:10,color:"#5a6478"}}>— behind-login: IDOR, stored XSS, mass-assignment</span>
               </div>
-              {(authCookie||authBearer) && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
+              {(authCookie||authBearer) && <span style={{background:"#052e16",color:"#5dffa6",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
             </div>
             {showAuthPanel && (
-              <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
-                <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
-                  <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
+              <div style={{padding:"12px",borderTop:"1px solid #1c2435",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{fontSize:10,color:"#c3ccda",lineHeight:1.6,background:"#0d2436",padding:"8px 10px",borderRadius:5,border:"1px solid #0e3a55"}}>
+                  <b style={{color:"#7dffc0"}}>Most customers should leave this empty.</b> Only fill in if your target has a login system AND you want behind-login pages tested.
                 </div>
-                <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
-                  <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>Auto-login (recommended)</div>
+                <div style={{background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"10px 12px"}}>
+                  <div style={{fontSize:11,color:"#7dffc0",fontWeight:700,marginBottom:6}}>Auto-login (recommended)</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-wap-u" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-wap-p" style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off" style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-wap-u" style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-wap-p" style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
                     <button onClick={async ()=>{
@@ -4025,26 +4025,26 @@ function WebAppModule(props) {
                         } catch(e){ setAutoLoginStatus("Login request failed: "+(e.message||e)); }
                         finally { setAutoLoginBusy(false); }
                       }} disabled={autoLoginBusy}
-                      style={{background:autoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
+                      style={{background:autoLoginBusy?"#1c2435":"linear-gradient(135deg,#00ff88,#0bd673)",border:"none",borderRadius:4,padding:"7px 14px",color:autoLoginBusy?"#5a6478":"#0d1320",fontSize:11,fontWeight:700,cursor:autoLoginBusy?"not-allowed":"pointer"}}>
                       {autoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
                     </button>
-                    {(autoLoginStatus && autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>Logged in — cookie captured</span>}
-                    {(autoLoginStatus && !autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>{autoLoginStatus}</span>}
+                    {(autoLoginStatus && autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#5dffa6",fontWeight:600}}>Logged in — cookie captured</span>}
+                    {(autoLoginStatus && !autoLoginStatus.startsWith("ok")) && <span style={{fontSize:11,color:"#ff6b82",fontWeight:600}}>{autoLoginStatus}</span>}
                   </div>
                 </div>
-                <div style={{fontSize:10,color:"#475569",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
+                <div style={{fontSize:10,color:"#5a6478",textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   <div style={{flex:1,minWidth:240}}>
-                    <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{flex:1,minWidth:240}}>
-                    <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token</div>
-                    <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Bearer Token</div>
+                    <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                 </div>
                 {(authCookie||authBearer) && (
-                  <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAutoLoginStatus(null);localStorage.removeItem("cyberAuthCookie");localStorage.removeItem("cyberAuthBearer");}} style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
+                  <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAutoLoginStatus(null);localStorage.removeItem("cyberAuthCookie");localStorage.removeItem("cyberAuthBearer");}} style={{alignSelf:"flex-start",background:"#1c2435",border:"1px solid #1c2435",borderRadius:4,padding:"4px 10px",color:"#ff3e5e",fontSize:10,cursor:"pointer",fontWeight:600}}>Clear auth credentials</button>
                 )}
               </div>
             )}
@@ -4061,7 +4061,7 @@ function WebAppModule(props) {
               placeholder="example.com  or  http://192.168.1.1:8080"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
-              style={{flex:3,minWidth:220,background:"#020617",border:"1px solid "+(running?"#3b82f6":"#1e3a8a"),borderRadius:6,padding:"11px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
+              style={{flex:3,minWidth:220,background:"#0a0e17",border:"1px solid "+(running?"#3b9eff":"#0e3a55"),borderRadius:6,padding:"11px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
             {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
               <div style={{background:"#451a03",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"#fb923c",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
                 Auth required — click the target button to auto-login first
@@ -4069,18 +4069,18 @@ function WebAppModule(props) {
             )}
             {!running ? (
               <button onClick={run} disabled={!target.trim()}
-                style={{background:target.trim()?"linear-gradient(135deg,#3b82f6,#06b6d4)":"#1e293b",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"#475569",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
+                style={{background:target.trim()?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
                 ▶ Start Full Pentest
               </button>
             ) : (
-              <button disabled style={{background:"#0f172a",border:"1px solid #3b82f6",borderRadius:6,padding:"11px 24px",color:"#60a5fa",fontSize:13,fontWeight:700,cursor:"not-allowed",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
-                <div style={{width:12,height:12,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+              <button disabled style={{background:"#0d1320",border:"1px solid #3b9eff",borderRadius:6,padding:"11px 24px",color:"#00d4ff",fontSize:13,fontWeight:700,cursor:"not-allowed",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+                <div style={{width:12,height:12,border:"2px solid #3b9eff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
                 Scanning...
               </button>
             )}
             {running && (
               <button onClick={stop} disabled={stopped}
-                style={{background:"linear-gradient(135deg,#dc2626,#991b1b)",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
+                style={{background:"linear-gradient(135deg,#e02347,#991b1b)",border:"none",borderRadius:6,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:7,opacity:stopped?0.5:1,transition:"opacity 0.2s",whiteSpace:"nowrap"}}>
                 ■ Stop Scan
               </button>
             )}
@@ -4093,36 +4093,36 @@ function WebAppModule(props) {
               const _pen=allF.reduce((s,f)=>s+({CRITICAL:15,HIGH:8,MEDIUM:3,LOW:1}[f.severity]||0),0);
               const sc=Math.max(0,100-_pen);
               const lb=sc<40?"CRITICAL":sc<70?"HIGH":sc<90?"MEDIUM":sc<100?"LOW":"SAFE";
-              const col={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",SAFE:"#16a34a"}[lb];
+              const col={CRITICAL:"#e02347",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#0bd673",SAFE:"#0bd673"}[lb];
               return <>
                 <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
-                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Report</button>
+                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ff3e5e",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Report</button>
                 <div style={{position:"relative"}}>
-                  <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"11px 16px",color:"#cbd5e1",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:6,padding:"11px 16px",color:"#c3ccda",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                     Export <span style={{fontSize:10,opacity:0.8}}>{showExportMenu?"▴":"▾"}</span>
                   </button>
                   {showExportMenu && (
                     <>
                       <div onClick={()=>setShowExportMenu(false)} style={{position:"fixed",inset:0,zIndex:50}}/>
-                      <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"#0f172a",border:"1px solid #334155",borderRadius:6,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",zIndex:51,overflow:"hidden"}}>
+                      <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,boxShadow:"0 10px 30px rgba(0,0,0,0.5)",zIndex:51,overflow:"hidden"}}>
                         <button onClick={()=>{setShowExportMenu(false);dlCSV();}}
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1e293b"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#ffffff",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1c2435"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1c2435"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                           <span>CSV</span>
-                          <span style={{fontSize:10,color:"#64748b"}}>spreadsheet</span>
+                          <span style={{fontSize:10,color:"#5a6478"}}>spreadsheet</span>
                         </button>
                         <button onClick={()=>{setShowExportMenu(false);dlJSON();}}
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1e293b"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#ffffff",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left",borderBottom:"1px solid #1c2435"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1c2435"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                           <span>JSON</span>
-                          <span style={{fontSize:10,color:"#64748b"}}>API / scripts</span>
+                          <span style={{fontSize:10,color:"#5a6478"}}>API / scripts</span>
                         </button>
                         <button onClick={()=>{setShowExportMenu(false);dlSARIF();}}
                           title="GitHub Code Scanning / GitLab SAST / Defender for Cloud compatible"
-                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#f1f5f9",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
-                          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                          style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"transparent",border:"none",padding:"10px 14px",color:"#ffffff",fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#1c2435"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                           <span>SARIF</span>
-                          <span style={{fontSize:10,color:"#64748b"}}>GitHub / SIEM</span>
+                          <span style={{fontSize:10,color:"#5a6478"}}>GitHub / SIEM</span>
                         </button>
                       </div>
                     </>
@@ -4145,7 +4145,7 @@ function WebAppModule(props) {
           {id:"methodology",label:"Methodology"},
         ].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{background:tab===t.id?"#1e3a8a":"#0f172a",border:"1px solid "+(tab===t.id?"#3b82f6":"#1e293b"),borderRadius:6,padding:"7px 14px",color:tab===t.id?"#fff":"#64748b",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            style={{background:tab===t.id?"#0e3a55":"#0d1320",border:"1px solid "+(tab===t.id?"#3b9eff":"#1c2435"),borderRadius:6,padding:"7px 14px",color:tab===t.id?"#fff":"#5a6478",fontSize:12,fontWeight:600,cursor:"pointer"}}>
             {t.label}
           </button>
         ))}
@@ -4167,17 +4167,17 @@ function WebAppModule(props) {
         />
 
         {/* Badge Legend */}
-        <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,flexWrap:"wrap"}}>
-          <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
+        <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"#5a6478",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
           {[
-            {label:"SECURE",     color:"#4ade80", bg:"#052e16", desc:"No vulnerability found"},
-            {label:"VULNERABLE", color:"#f87171", bg:"#1c0000", desc:"Security issue detected"},
+            {label:"SECURE",     color:"#5dffa6", bg:"#052e16", desc:"No vulnerability found"},
+            {label:"VULNERABLE", color:"#ff6b82", bg:"#1c0000", desc:"Security issue detected"},
             {label:"SKIPPED",    color:"#fb923c", bg:"#1c0a00", desc:"Not applicable for this target"},
-            {label:"ERROR",      color:"#f87171", bg:"#1c0000", desc:"Tool had a problem"},
+            {label:"ERROR",      color:"#ff6b82", bg:"#1c0000", desc:"Tool had a problem"},
           ].map((b,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:5}}>
               <span style={{background:b.bg,border:`1px solid ${b.color}50`,color:b.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4}}>{b.label}</span>
-              <span style={{fontSize:10,color:"#475569"}}>{b.desc}</span>
+              <span style={{fontSize:10,color:"#5a6478"}}>{b.desc}</span>
             </div>
           ))}
         </div>
@@ -4196,40 +4196,40 @@ function WebAppModule(props) {
           const currentPhase = curPhase >= 0 ? PHASES[curPhase] : null;
           const totalFindings = liveCounts.CRITICAL + liveCounts.HIGH + liveCounts.MEDIUM + liveCounts.LOW;
           return (
-            <div style={{background:"linear-gradient(180deg,#0a0f1e 0%,#0f172a 100%)",border:"1px solid #1e3a8a",borderRadius:10,padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{background:"linear-gradient(180deg,#0d1320 0%,#0d1320 100%)",border:"1px solid #0e3a55",borderRadius:10,padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
               {/* Row 1: progress + current phase + timing */}
               <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 280px",minWidth:240}}>
-                  <span style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1}}>SCANNING</span>
-                  <span style={{fontSize:13,color:"#e2e8f0",fontWeight:600,fontFamily:"monospace"}}>
+                  <span style={{fontSize:11,color:"#5a6478",fontWeight:700,letterSpacing:1}}>SCANNING</span>
+                  <span style={{fontSize:13,color:"#d8deea",fontWeight:600,fontFamily:"monospace"}}>
                     {currentPhase ? `${currentPhase.icon||""} ${currentPhase.name}` : "Initializing..."}
                   </span>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:14,fontSize:11,fontFamily:"monospace",color:"#94a3b8"}}>
-                  <span>Phase <b style={{color:"#3b82f6"}}>{doneCount}</b>/<b style={{color:"#e2e8f0"}}>{totalCount}</b></span>
-                  <span>Elapsed <b style={{color:"#22c55e"}}>{fmt(elapsed)}</b></span>
+                <div style={{display:"flex",alignItems:"center",gap:14,fontSize:11,fontFamily:"monospace",color:"#8a94a8"}}>
+                  <span>Phase <b style={{color:"#3b9eff"}}>{doneCount}</b>/<b style={{color:"#d8deea"}}>{totalCount}</b></span>
+                  <span>Elapsed <b style={{color:"#00ff88"}}>{fmt(elapsed)}</b></span>
                   {eta !== null && <span>ETA <b style={{color:"#f59e0b"}}>~{fmt(eta)}</b></span>}
                 </div>
               </div>
               {/* Row 2: progress bar */}
-              <div style={{height:6,background:"#0a0f1e",borderRadius:3,overflow:"hidden",border:"1px solid #1e293b"}}>
-                <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#3b82f6 0%,#22c55e 100%)",transition:"width 0.6s ease",borderRadius:3}}/>
+              <div style={{height:6,background:"#0d1320",borderRadius:3,overflow:"hidden",border:"1px solid #1c2435"}}>
+                <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#3b9eff 0%,#00ff88 100%)",transition:"width 0.6s ease",borderRadius:3}}/>
               </div>
               {/* Row 3: live finding counter */}
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>FINDINGS SO FAR:</span>
+                <span style={{fontSize:11,color:"#5a6478",fontWeight:700,letterSpacing:1}}>FINDINGS SO FAR:</span>
                 {[
-                  {label:"CRITICAL", n:liveCounts.CRITICAL, color:"#f87171", bg:"#1c0000"},
+                  {label:"CRITICAL", n:liveCounts.CRITICAL, color:"#ff6b82", bg:"#1c0000"},
                   {label:"HIGH",     n:liveCounts.HIGH,     color:"#fb923c", bg:"#1c0a00"},
                   {label:"MEDIUM",   n:liveCounts.MEDIUM,   color:"#fbbf24", bg:"#1c1500"},
-                  {label:"LOW",      n:liveCounts.LOW,      color:"#4ade80", bg:"#052e16"},
+                  {label:"LOW",      n:liveCounts.LOW,      color:"#5dffa6", bg:"#052e16"},
                 ].map(s=>(
                   <span key={s.label} style={{background:s.bg,border:`1px solid ${s.color}50`,color:s.color,fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:5,fontFamily:"monospace"}}>
                     {s.n} {s.label}
                   </span>
                 ))}
                 {totalFindings === 0 && (
-                  <span style={{fontSize:11,color:"#475569",fontStyle:"italic"}}>No issues found yet — scan in progress...</span>
+                  <span style={{fontSize:11,color:"#5a6478",fontStyle:"italic"}}>No issues found yet — scan in progress...</span>
                 )}
               </div>
             </div>
@@ -4239,13 +4239,13 @@ function WebAppModule(props) {
         {/* Phase selection controls */}
         {!running && (
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-            <span style={{color:"#64748b",fontSize:12,fontFamily:"monospace"}}>{selectedPhases.size}/{PHASES.length} phases selected</span>
+            <span style={{color:"#5a6478",fontSize:12,fontFamily:"monospace"}}>{selectedPhases.size}/{PHASES.length} phases selected</span>
             <button onClick={()=>setSelectedPhases(new Set(PHASES.map((_,i)=>i)))}
-              style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 12px",color:"#22c55e",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+              style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:5,padding:"4px 12px",color:"#00ff88",fontSize:11,fontWeight:700,cursor:"pointer"}}>
               Select All
             </button>
             <button onClick={()=>setSelectedPhases(new Set())}
-              style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+              style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:5,padding:"4px 12px",color:"#ff3e5e",fontSize:11,fontWeight:700,cursor:"pointer"}}>
               Clear All
             </button>
             {[
@@ -4254,13 +4254,13 @@ function WebAppModule(props) {
               {label:`Full (All ${PHASES.length})`,  phases:PHASES.map((_,i)=>i)},
             ].map(preset=>(
               <button key={preset.label} onClick={()=>setSelectedPhases(new Set(preset.phases))}
-                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:5,padding:"4px 12px",color:"#93c5fd",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:5,padding:"4px 12px",color:"#7fdcff",fontSize:11,fontWeight:600,cursor:"pointer"}}>
                 {preset.label}
               </button>
             ))}
           </div>
         )}
-        <div style={{border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
+        <div style={{border:"1px solid #1c2435",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
         {PHASES.map((ph,i) => {
           const isActive   = curPhase === i;
           const isDone     = done.includes(i);
@@ -4272,7 +4272,7 @@ function WebAppModule(props) {
           const isSelected   = selectedPhases.has(i);
           const toolLocked   = isTrial && !TRIAL_TOOLS.has(ph.tool) && !isSuperAdmin;
           const secHdr       = SECTION_HEADERS[ph.tool];
-          const statusCol = isActive?"#3b82f6":isFailed?"#ef4444":isSQLi||isVuln?"#ef4444":isSkipped?"#f59e0b":isDone?"#10b981":"#334155";
+          const statusCol = isActive?"#3b9eff":isFailed?"#ff3e5e":isSQLi||isVuln?"#ff3e5e":isSkipped?"#f59e0b":isDone?"#10b981":"#1c2435";
           const statusLabel = isActive?"RUNNING":isFailed?"ERROR":isSQLi||isVuln?"VULNERABLE":isSkipped?"SKIPPED":isDone?"SECURE":toolLocked?"LOCKED":isSelected?"QUEUED":"DISABLED";
           const _failDetail = (res && (res.skipped_reason || res.error || res.detail)) || "scan failed";
           const detail = !isDone||!res?"":isFailed?String(_failDetail).substring(0,48):isSkipped?"not applicable":(
@@ -4284,11 +4284,11 @@ function WebAppModule(props) {
           return (
             <React.Fragment key={i}>
             {secHdr && (
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px 6px",borderTop:i===0?"none":"1px solid #1e293b",background:"#0a0f1c"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px 6px",borderTop:i===0?"none":"1px solid #1c2435",background:"#0a0f1c"}}>
                 <div style={{width:3,height:18,background:secHdr.color,borderRadius:2,flexShrink:0}}/>
                 <div style={{flex:1}}>
                   <div style={{fontSize:10,fontWeight:700,color:secHdr.color,letterSpacing:"0.1em",textTransform:"uppercase"}}>{secHdr.label}</div>
-                  <div style={{fontSize:10,color:"#64748b"}}>{secHdr.sub}</div>
+                  <div style={{fontSize:10,color:"#5a6478"}}>{secHdr.sub}</div>
                 </div>
                 {isTrial && secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>TRIAL</span>}
                 {isTrial && !secHdr.label.includes("Section 1") && <span style={{fontSize:9,color:"#6b7280",fontWeight:700,background:"rgba(107,114,128,0.1)",padding:"2px 6px",borderRadius:3,letterSpacing:"0.05em"}}>PRO</span>}
@@ -4301,27 +4301,27 @@ function WebAppModule(props) {
               }}
               onMouseEnter={e=>{ if(!toolLocked&&!running) e.currentTarget.style.background="#111c33"; }}
               onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
-              style={{background:"transparent",borderTop:(i===0||secHdr)?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.45:isSelected?1:0.5,transition:"background 0.12s,opacity 0.12s"}}>
+              style={{background:"transparent",borderTop:(i===0||secHdr)?"none":"1px solid #1c2435",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.45:isSelected?1:0.5,transition:"background 0.12s,opacity 0.12s"}}>
               <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
               {isActive ? (
-                <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+                <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b9eff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
               ) : (
-                <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
+                <span style={{fontSize:11,color:isDone?statusCol:"#5a6478",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
                   {isDone?(isSkipped?"":isFailed?"":isSQLi||isVuln?"!":""):"○"}
                 </span>
               )}
-              <span style={{fontSize:13,fontWeight:500,color:toolLocked?"#64748b":"#f1f5f9",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
+              <span style={{fontSize:13,fontWeight:500,color:toolLocked?"#5a6478":"#ffffff",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
               <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
-              <span style={{fontSize:11,color:"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
+              <span style={{fontSize:11,color:"#8a94a8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
               {isDone && res && (
                 <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
-                  style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 10px",color:"#94a3b8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                  style={{background:expandedTile===i?"#0e3a55":"transparent",border:"1px solid "+(expandedTile===i?"#3b9eff":"#1c2435"),borderRadius:4,padding:"3px 10px",color:"#8a94a8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
                   {expandedTile===i?"Hide":"Details"}
                 </button>
               )}
               {!running && target && (
                 <button onClick={e=>{e.stopPropagation();runSingle(ph,i);}}
-                  style={{background:"transparent",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#94a3b8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                  style={{background:"transparent",border:"1px solid #1c2435",borderRadius:4,padding:"3px 10px",color:"#8a94a8",fontSize:10,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
                   {isDone?"Re-run":"Run"}
                 </button>
               )}
@@ -4330,11 +4330,11 @@ function WebAppModule(props) {
                 so the customer never has to crack open DevTools or SSH into
                 the VPS to figure out why a scan failed. */}
             {expandedTile === i && isDone && res && (
-              <div style={{marginTop:-4,marginBottom:8,padding:"14px 18px",background:"#0a1224",border:"1px solid "+(isFailed?"#7f1d1d":isVuln||isSQLi?"#7c2d12":"#14532d"),borderLeft:"3px solid "+(isFailed?"#ef4444":isVuln||isSQLi?"#f97316":"#22c55e"),borderRadius:"0 8px 8px 0",fontSize:12,lineHeight:1.55}}>
+              <div style={{marginTop:-4,marginBottom:8,padding:"14px 18px",background:"#0d1320",border:"1px solid "+(isFailed?"#7f1d1d":isVuln||isSQLi?"#7c2d12":"#14532d"),borderLeft:"3px solid "+(isFailed?"#ff3e5e":isVuln||isSQLi?"#f97316":"#00ff88"),borderRadius:"0 8px 8px 0",fontSize:12,lineHeight:1.55}}>
                 {/* Header */}
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                   <span style={{fontSize:14}}>{isFailed?"":isVuln||isSQLi?"":""}</span>
-                  <span style={{fontSize:12,fontWeight:800,letterSpacing:1.2,color:isFailed?"#fca5a5":isVuln||isSQLi?"#fdba74":"#86efac"}}>
+                  <span style={{fontSize:12,fontWeight:800,letterSpacing:1.2,color:isFailed?"#ffa3b0":isVuln||isSQLi?"#fdba74":"#7dffc0"}}>
                     {isFailed?"SCAN FAILED — DETAILS":isVuln||isSQLi?"FINDINGS — REVIEW":"SCAN COMPLETE — NO ISSUES"}
                   </span>
                 </div>
@@ -4342,7 +4342,7 @@ function WebAppModule(props) {
                 {/* Error message (from {error: ...} in response) */}
                 {(res.error || res.detail) && (
                   <div style={{padding:"10px 12px",marginBottom:10,background:"rgba(220,38,38,0.08)",border:"1px solid rgba(220,38,38,0.35)",borderRadius:6,color:"#fecaca"}}>
-                    <div style={{fontSize:10,fontWeight:800,color:"#f87171",letterSpacing:1.5,marginBottom:4}}>ERROR</div>
+                    <div style={{fontSize:10,fontWeight:800,color:"#ff6b82",letterSpacing:1.5,marginBottom:4}}>ERROR</div>
                     <div style={{wordBreak:"break-word"}}>{res.error || res.detail}</div>
                   </div>
                 )}
@@ -4358,23 +4358,23 @@ function WebAppModule(props) {
                 {/* Findings list (when scan succeeded and found issues) */}
                 {Array.isArray(res.findings) && res.findings.length > 0 && (
                   <div style={{marginBottom:10}}>
-                    <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",letterSpacing:1.5,marginBottom:6}}>
+                    <div style={{fontSize:10,fontWeight:800,color:"#8a94a8",letterSpacing:1.5,marginBottom:6}}>
                       FINDINGS ({res.findings.length})
                     </div>
                     <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
                       {res.findings.slice(0,50).map((f,fi)=>{
                         const sev = String(f.severity||"INFO").toUpperCase();
-                        const sevColor = sev==="CRITICAL"?"#dc2626":sev==="HIGH"?"#f97316":sev==="MEDIUM"?"#eab308":sev==="LOW"?"#22c55e":"#94a3b8";
+                        const sevColor = sev==="CRITICAL"?"#e02347":sev==="HIGH"?"#f97316":sev==="MEDIUM"?"#eab308":sev==="LOW"?"#00ff88":"#8a94a8";
                         return (
-                          <div key={fi} style={{padding:"8px 10px",background:"#020617",border:"1px solid #1e293b",borderRadius:5,borderLeft:`3px solid ${sevColor}`}}>
+                          <div key={fi} style={{padding:"8px 10px",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:5,borderLeft:`3px solid ${sevColor}`}}>
                             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
                               <span style={{fontSize:9,fontWeight:800,color:sevColor,background:sevColor+"22",padding:"1px 6px",borderRadius:3,letterSpacing:1}}>{sev}</span>
-                              {f.cvss && <span style={{fontSize:9,color:"#94a3b8"}}>CVSS {f.cvss}</span>}
-                              {f.cve && f.cve !== "N/A" && <span style={{fontSize:9,color:"#60a5fa",fontFamily:"monospace"}}>{f.cve}</span>}
+                              {f.cvss && <span style={{fontSize:9,color:"#8a94a8"}}>CVSS {f.cvss}</span>}
+                              {f.cve && f.cve !== "N/A" && <span style={{fontSize:9,color:"#00d4ff",fontFamily:"monospace"}}>{f.cve}</span>}
                             </div>
-                            <div style={{fontSize:11,color:"#cbd5e1"}}>{f.detail}</div>
+                            <div style={{fontSize:11,color:"#c3ccda"}}>{f.detail}</div>
                             {f.remediation && (
-                              <div style={{fontSize:10,color:"#86efac",marginTop:4,fontStyle:"italic"}}>
+                              <div style={{fontSize:10,color:"#7dffc0",marginTop:4,fontStyle:"italic"}}>
                                 Fix: {f.remediation}
                               </div>
                             )}
@@ -4382,7 +4382,7 @@ function WebAppModule(props) {
                         );
                       })}
                       {res.findings.length > 50 && (
-                        <div style={{fontSize:10,color:"#64748b",textAlign:"center",padding:6,fontStyle:"italic"}}>
+                        <div style={{fontSize:10,color:"#5a6478",textAlign:"center",padding:6,fontStyle:"italic"}}>
                           ... and {res.findings.length - 50} more findings (download full PDF report)
                         </div>
                       )}
@@ -4392,7 +4392,7 @@ function WebAppModule(props) {
 
                 {/* Plain-success — no error, no findings, no vuln flag */}
                 {!res.error && !res.detail && (!res.findings || res.findings.length === 0) && !res.vulnerable && (
-                  <div style={{padding:"10px 12px",background:"rgba(34,197,94,0.08)",border:"1px solid rgba(34,197,94,0.30)",borderRadius:6,color:"#bbf7d0"}}>
+                  <div style={{padding:"10px 12px",background:"rgba(0,255,136,0.08)",border:"1px solid rgba(0,255,136,0.30)",borderRadius:6,color:"#bbf7d0"}}>
                     Scan completed cleanly — no issues detected for this target.
                   </div>
                 )}
@@ -4402,10 +4402,10 @@ function WebAppModule(props) {
                     there if they want to see what the scanner printed. */}
                 {res.raw_output && (
                   <details style={{marginTop:8}}>
-                    <summary style={{fontSize:10,color:"#64748b",cursor:"pointer",userSelect:"none"}}>
+                    <summary style={{fontSize:10,color:"#5a6478",cursor:"pointer",userSelect:"none"}}>
                       Show raw output ({String(res.raw_output).length} chars)
                     </summary>
-                    <pre style={{marginTop:6,padding:"8px 10px",background:"#020617",border:"1px solid #1e293b",borderRadius:5,color:"#94a3b8",fontSize:10,maxHeight:200,overflow:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
+                    <pre style={{marginTop:6,padding:"8px 10px",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:5,color:"#8a94a8",fontSize:10,maxHeight:200,overflow:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
                       {String(res.raw_output).substring(0,3000)}
                     </pre>
                   </details>
@@ -4422,7 +4422,7 @@ function WebAppModule(props) {
             tools that produced it. INSIDE the outer phases-tab container so
             the ternary remains a single expression. */}
         <div style={{marginTop:18}}>
-          <div style={{fontSize:11,color:"#64748b",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
+          <div style={{fontSize:11,color:"#5a6478",fontWeight:700,letterSpacing:1,marginBottom:6,textTransform:"uppercase"}}>
             Live Scan Terminal
           </div>
           <Terminal lines={lines} height={160}/>
@@ -4442,21 +4442,21 @@ function WebAppModule(props) {
             <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
               {["CRITICAL","HIGH","MEDIUM","LOW"].map(s=>{
                 const cnt=allF.filter(f=>f.severity===s).length;
-                const c={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a"}[s];
+                const c={CRITICAL:"#e02347",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#0bd673"}[s];
                 return <div key={s} style={{background:c+"15",border:`1px solid ${c}`,borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:70}}>
                   <div style={{fontSize:22,fontWeight:700,color:c}}>{cnt}</div>
                   <div style={{fontSize:9,color:c,fontWeight:600}}>{s}</div>
                 </div>;
               })}
-              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:70}}>
-                <div style={{fontSize:22,fontWeight:700,color:"#64748b"}}>{allF.length}</div>
-                <div style={{fontSize:9,color:"#64748b",fontWeight:600}}>TOTAL</div>
+              <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:70}}>
+                <div style={{fontSize:22,fontWeight:700,color:"#5a6478"}}>{allF.length}</div>
+                <div style={{fontSize:9,color:"#5a6478",fontWeight:600}}>TOTAL</div>
               </div>
-              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
-                <div style={{fontSize:22,fontWeight:700,color:"#3b82f6"}}>{toolsRan}/{WEBAPP_TOOL_KEYS.length}</div>
-                <div style={{fontSize:9,color:"#3b82f6",fontWeight:600}}>TOOLS RAN</div>
+              <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
+                <div style={{fontSize:22,fontWeight:700,color:"#3b9eff"}}>{toolsRan}/{WEBAPP_TOOL_KEYS.length}</div>
+                <div style={{fontSize:9,color:"#3b9eff",fontWeight:600}}>TOOLS RAN</div>
               </div>
-              <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
+              <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 16px",textAlign:"center",minWidth:90}}>
                 <div style={{fontSize:22,fontWeight:700,color:"#a855f7"}}>{toolsFlagged}</div>
                 <div style={{fontSize:9,color:"#a855f7",fontWeight:600}}>TOOLS FLAGGED</div>
               </div>
@@ -4465,10 +4465,10 @@ function WebAppModule(props) {
             {/* Per-tier coverage strip */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6,marginBottom:14}}>
               {coverage.map(t => {
-                const color = t.flagged > 0 ? "#dc2626" : (t.ran === t.total ? "#22c55e" : "#64748b");
+                const color = t.flagged > 0 ? "#e02347" : (t.ran === t.total ? "#00ff88" : "#5a6478");
                 return (
-                  <div key={t.id} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 10px",borderLeft:`3px solid ${color}`}}>
-                    <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:2}}>{t.label}</div>
+                  <div key={t.id} style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",borderLeft:`3px solid ${color}`}}>
+                    <div style={{fontSize:10,color:"#8a94a8",fontWeight:600,marginBottom:2}}>{t.label}</div>
                     <div style={{fontSize:11,color:color,fontWeight:700}}>{t.ran}/{t.total} ran · {t.flagged} flagged</div>
                   </div>
                 );
@@ -4476,22 +4476,22 @@ function WebAppModule(props) {
             </div>
 
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {allF.length===0 && <div style={{textAlign:"center",padding:40,color:"#334155"}}>No findings — clean scan or no tools ran yet.</div>}
+              {allF.length===0 && <div style={{textAlign:"center",padding:40,color:"#1c2435"}}>No findings — clean scan or no tools ran yet.</div>}
               {allF.map((f,i)=>{
-                const c={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",INFO:"#64748b"}[f.severity]||"#64748b";
+                const c={CRITICAL:"#e02347",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#0bd673",INFO:"#5a6478"}[f.severity]||"#5a6478";
                 return (
-                  <div key={i} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:"14px 16px",borderLeft:`3px solid ${c}`}}>
+                  <div key={i} style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:"14px 16px",borderLeft:`3px solid ${c}`}}>
                     <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap",alignItems:"center"}}>
                       <span style={{background:c+"20",color:c,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.severity}</span>
-                      {f.cve&&f.cve!=="N/A"&&<span style={{background:"#fef2f2",color:"#dc2626",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>CVE: {f.cve}</span>}
+                      {f.cve&&f.cve!=="N/A"&&<span style={{background:"#fef2f2",color:"#e02347",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>CVE: {f.cve}</span>}
                       {f.cwe&&f.cwe!=="N/A"&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{f.cwe}</span>}
-                      <span style={{fontSize:9,color:"#64748b"}}>CVSS: {f.cvss||"N/A"}</span>
-                      {f.owasp&&f.owasp!=="N/A"&&<span style={{fontSize:9,color:"#475569",background:"#020617",padding:"2px 6px",borderRadius:3,border:"1px solid #1e293b"}}>{f.owasp}</span>}
-                      <span style={{marginLeft:"auto",fontSize:9,color:"#3b82f6",fontFamily:"monospace"}}>via {f.source}</span>
+                      <span style={{fontSize:9,color:"#5a6478"}}>CVSS: {f.cvss||"N/A"}</span>
+                      {f.owasp&&f.owasp!=="N/A"&&<span style={{fontSize:9,color:"#5a6478",background:"#0a0e17",padding:"2px 6px",borderRadius:3,border:"1px solid #1c2435"}}>{f.owasp}</span>}
+                      <span style={{marginLeft:"auto",fontSize:9,color:"#3b9eff",fontFamily:"monospace"}}>via {f.source}</span>
                     </div>
-                    <div style={{fontSize:12,color:"#e2e8f0",marginBottom:8}}>{f.detail}</div>
-                    {f.evidence && <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"4px 8px",fontSize:10,color:"#94a3b8",fontFamily:"monospace",marginBottom:6}}><strong style={{color:"#cbd5e1"}}>Evidence:</strong> {f.evidence}</div>}
-                    {f.remediation && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"6px 10px",fontSize:11,color:"#4ade80"}}>
+                    <div style={{fontSize:12,color:"#d8deea",marginBottom:8}}>{f.detail}</div>
+                    {f.evidence && <div style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:4,padding:"4px 8px",fontSize:10,color:"#8a94a8",fontFamily:"monospace",marginBottom:6}}><strong style={{color:"#c3ccda"}}>Evidence:</strong> {f.evidence}</div>}
+                    {f.remediation && <div style={{background:"#052e16",border:"1px solid #166534",borderRadius:4,padding:"6px 10px",fontSize:11,color:"#5dffa6"}}>
                       <strong>Fix:</strong> {f.remediation}
                     </div>}
                   </div>
@@ -4501,24 +4501,24 @@ function WebAppModule(props) {
           </div>
         );
       })()}
-      {tab==="findings" && !finished && <div style={{textAlign:"center",padding:60,color:"#334155",fontSize:13}}>Run a pentest first to see findings here.</div>}
+      {tab==="findings" && !finished && <div style={{textAlign:"center",padding:60,color:"#1c2435",fontSize:13}}>Run a pentest first to see findings here.</div>}
 
       {/* METHODOLOGY TAB */}
       {tab==="methodology" && (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{background:"#0c1a3d",border:"1px solid #1e3a8a",borderRadius:8,padding:"12px 16px",marginBottom:4}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#93c5fd",marginBottom:4}}>WAPT Methodology — 15 Categories</div>
-            <div style={{fontSize:11,color:"#475569"}}>= Tool available in your platform | = Partially covered | = Manual/external tool needed</div>
+          <div style={{background:"#0d2436",border:"1px solid #0e3a55",borderRadius:8,padding:"12px 16px",marginBottom:4}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#7fdcff",marginBottom:4}}>WAPT Methodology — 15 Categories</div>
+            <div style={{fontSize:11,color:"#5a6478"}}>= Tool available in your platform | = Partially covered | = Manual/external tool needed</div>
           </div>
           {[
-            {num:"01",cat:"Web Fundamentals",icon:"",color:"#3b82f6",tools:[
+            {num:"01",cat:"Web Fundamentals",icon:"",color:"#3b9eff",tools:[
               {name:"HTTP/HTTPS Headers Analysis",tool:"curl",status:"",desc:"Security headers check — Phase 6"},
               {name:"TLS/SSL Misconfigurations",tool:"sslscan",status:"",desc:"SSL/TLS scan — Phase 5"},
               {name:"CORS Bypass Testing",tool:"curl",status:"",desc:"CORS test — Phase 8"},
               {name:"Cookie & Session Analysis",tool:"curl",status:"",desc:"Cookie flags check — Phase 7"},
               {name:"JWT Token Analysis",tool:"manual",status:"",desc:"Use jwt.io or Burp Suite manually"},
             ]},
-            {num:"02",cat:"Recon & Enumeration",icon:"",color:"#22c55e",tools:[
+            {num:"02",cat:"Recon & Enumeration",icon:"",color:"#00ff88",tools:[
               {name:"Subdomain Enumeration",tool:"sublist3r",status:"",desc:"Subdomain discovery — Phase 10"},
               {name:"Directory Brute-Force",tool:"gobuster",status:"",desc:"Dir enumeration — Phase 9"},
               {name:"Technology Fingerprinting",tool:"whatweb",status:"",desc:"Tech stack — Phase 2"},
@@ -4532,7 +4532,7 @@ function WebAppModule(props) {
               {name:"Nuclei Templates",tool:"nuclei",status:"",desc:"nuclei 3.8.0 — template-based scanning"},
               {name:"Custom Python Scripts",tool:"python",status:"",desc:"Use Kali terminal for custom scripts"},
             ]},
-            {num:"04",cat:"Injection Attacks",icon:"",color:"#dc2626",tools:[
+            {num:"04",cat:"Injection Attacks",icon:"",color:"#e02347",tools:[
               {name:"SQL Injection (Error-based)",tool:"sqlmap",status:"",desc:"SQLMap auto — Phase 13"},
               {name:"Blind SQL Injection",tool:"sqlmap",status:"",desc:"SQLMap --level=2 flag enabled"},
               {name:"Time-based SQLi",tool:"sqlmap",status:"",desc:"SQLMap handles time-based automatically"},
@@ -4602,7 +4602,7 @@ function WebAppModule(props) {
               {name:"WAF Bypass Payloads",tool:"sqlmap",status:"",desc:"sqlmap --tamper scripts available"},
               {name:"IP Spoofing Headers",tool:"curl",status:"",desc:"Manual X-Forwarded-For header test"},
             ]},
-            {num:"14",cat:"Reporting & Methodology",icon:"",color:"#22c55e",tools:[
+            {num:"14",cat:"Reporting & Methodology",icon:"",color:"#00ff88",tools:[
               {name:"PDF Report Generation",tool:"built-in",status:"",desc:"One-click PDF with CVSS/CWE/OWASP"},
               {name:"CSV Export",tool:"built-in",status:"",desc:"Export findings to spreadsheet"},
               {name:"Risk Score (0-100)",tool:"built-in",status:"",desc:"Auto-calculated risk score"},
@@ -4610,7 +4610,7 @@ function WebAppModule(props) {
               {name:"OWASP Mapping",tool:"built-in",status:"",desc:"Each finding mapped to OWASP Top 10"},
               {name:"CVE References",tool:"built-in",status:"",desc:"CVE IDs extracted from nikto output"},
             ]},
-            {num:"15",cat:"Real-World Exploitation",icon:"",color:"#dc2626",tools:[
+            {num:"15",cat:"Real-World Exploitation",icon:"",color:"#e02347",tools:[
               {name:"Full DVWA Pentest",tool:"all-phases",status:"",desc:"Target: any web application"},
               {name:"SQL Injection on DVWA",tool:"sqlmap",status:"",desc:"Auto-tests SQLi on target"},
               {name:"XSS on DVWA",tool:"xsser",status:"",desc:"Auto-tests XSS on target"},
@@ -4618,31 +4618,31 @@ function WebAppModule(props) {
               {name:"Post-Exploitation",tool:"manual",status:"",desc:"Use Metasploit Framework module"},
             ]},
           ].map((cat,ci)=>(
-            <div key={ci} style={{background:"#0f172a",border:`1px solid ${cat.color}30`,borderRadius:8,overflow:"hidden"}}>
+            <div key={ci} style={{background:"#0d1320",border:`1px solid ${cat.color}30`,borderRadius:8,overflow:"hidden"}}>
               <div style={{background:cat.color+"15",padding:"10px 16px",borderBottom:`1px solid ${cat.color}30`,display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:16}}>{cat.icon}</span>
                 <span style={{fontSize:11,fontWeight:700,color:cat.color,letterSpacing:1}}>{cat.num}</span>
-                <span style={{fontSize:13,fontWeight:700,color:"#f1f5f9"}}>{cat.cat}</span>
+                <span style={{fontSize:13,fontWeight:700,color:"#ffffff"}}>{cat.cat}</span>
                 <div style={{marginLeft:"auto",display:"flex",gap:4}}>
-                  <span style={{fontSize:9,background:"#052e1650",color:"#22c55e",padding:"2px 6px",borderRadius:3}}>
+                  <span style={{fontSize:9,background:"#052e1650",color:"#00ff88",padding:"2px 6px",borderRadius:3}}>
                     {cat.tools.filter(t=>t.status==="").length}
                   </span>
                   <span style={{fontSize:9,background:"#78350f50",color:"#f59e0b",padding:"2px 6px",borderRadius:3}}>
                     {cat.tools.filter(t=>t.status==="").length}
                   </span>
-                  <span style={{fontSize:9,background:"#7f1d1d50",color:"#f87171",padding:"2px 6px",borderRadius:3}}>
+                  <span style={{fontSize:9,background:"#7f1d1d50",color:"#ff6b82",padding:"2px 6px",borderRadius:3}}>
                     {cat.tools.filter(t=>t.status==="").length}
                   </span>
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
                 {cat.tools.map((t,ti)=>(
-                  <div key={ti} style={{padding:"8px 16px",borderBottom:"1px solid #0f172a",borderRight:ti%2===0?"1px solid #0f172a":"none",display:"flex",alignItems:"flex-start",gap:8}}>
+                  <div key={ti} style={{padding:"8px 16px",borderBottom:"1px solid #0d1320",borderRight:ti%2===0?"1px solid #0d1320":"none",display:"flex",alignItems:"flex-start",gap:8}}>
                     <span style={{fontSize:14,flexShrink:0,marginTop:1}}>{t.status}</span>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:11,fontWeight:600,color:"#e2e8f0",marginBottom:2}}>{t.name}</div>
-                      <div style={{fontSize:9,color:"#3b82f6",fontFamily:"monospace",marginBottom:1}}>{t.tool}</div>
-                      <div style={{fontSize:9,color:"#475569"}}>{t.desc}</div>
+                      <div style={{fontSize:11,fontWeight:600,color:"#d8deea",marginBottom:2}}>{t.name}</div>
+                      <div style={{fontSize:9,color:"#3b9eff",fontFamily:"monospace",marginBottom:1}}>{t.tool}</div>
+                      <div style={{fontSize:9,color:"#5a6478"}}>{t.desc}</div>
                     </div>
                   </div>
                 ))}
@@ -4666,17 +4666,17 @@ function SystemHealth() {
   useEffect(() => {
     api("/api/health").then(d => { setHealth(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
-  if (loading) return <div style={{textAlign:"center",padding:40,color:"#475569",fontSize:13}}>Checking system health...</div>;
-  if (!health)  return <div style={{textAlign:"center",padding:40,color:"#ef4444"}}>Cannot connect to backend</div>;
+  if (loading) return <div style={{textAlign:"center",padding:40,color:"#5a6478",fontSize:13}}>Checking system health...</div>;
+  if (!health)  return <div style={{textAlign:"center",padding:40,color:"#ff3e5e"}}>Cannot connect to backend</div>;
   const available = Object.values(health.free_tools).filter(t=>t.available).length;
   const total     = Object.keys(health.free_tools).length;
   return (
     <div className="fade">
-      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:20}}>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:20,marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div>
-            <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:2}}>System Health</h2>
-            <p style={{fontSize:12,color:"#64748b"}}>Real-time tool availability on Kali backend</p>
+            <h2 style={{fontSize:16,fontWeight:700,color:"#ffffff",marginBottom:2}}>System Health</h2>
+            <p style={{fontSize:12,color:"#5a6478"}}>Real-time tool availability on Kali backend</p>
           </div>
           <div style={{display:"flex",gap:8}}>
             <Badge label={available+"/"+total+" Available"} color="green"/>
@@ -4685,12 +4685,12 @@ function SystemHealth() {
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
           {Object.entries(health.free_tools).map(([name,info]) => (
-            <div key={name} style={{background:"#020617",border:"1px solid "+(info.available?"#166534":"#7f1d1d"),borderRadius:6,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div key={name} style={{background:"#0a0e17",border:"1px solid "+(info.available?"#166534":"#7f1d1d"),borderRadius:6,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
-                <div style={{fontSize:12,fontWeight:600,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",marginBottom:2}}>{name}</div>
-                <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{info.path||"not found"}</div>
+                <div style={{fontSize:12,fontWeight:600,color:"#d8deea",fontFamily:"JetBrains Mono,monospace",marginBottom:2}}>{name}</div>
+                <div style={{fontSize:10,color:"#8a94a8",fontFamily:"JetBrains Mono,monospace"}}>{info.path||"not found"}</div>
               </div>
-              <div style={{width:8,height:8,borderRadius:"50%",background:info.available?"#22c55e":"#ef4444",flexShrink:0}}/>
+              <div style={{width:8,height:8,borderRadius:"50%",background:info.available?"#00ff88":"#ff3e5e",flexShrink:0}}/>
             </div>
           ))}
         </div>
@@ -4727,15 +4727,15 @@ function ScanHistory(props) {
 
   return (
     <div className="fade">
-      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-        <div style={{padding:"14px 20px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-          <h2 style={{fontSize:15,fontWeight:600,color:"#f1f5f9"}}>Scan History</h2>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,overflow:"hidden"}}>
+        <div style={{padding:"14px 20px",borderBottom:"1px solid #1c2435",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+          <h2 style={{fontSize:15,fontWeight:600,color:"#ffffff"}}>Scan History</h2>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <Badge label={scans.length+" scans"} color="gray"/>
             {scans.length > 0 && (
               <button onClick={clearHistory} disabled={clearing}
                 style={{padding:"6px 14px",fontSize:11,fontWeight:600,
-                  background:clearing?"#374151":"#dc2626",color:"#fff",
+                  background:clearing?"#374151":"#e02347",color:"#fff",
                   border:"none",borderRadius:6,cursor:clearing?"wait":"pointer",
                   letterSpacing:.3}}>
                 {clearing ? "Clearing..." : "Clear All"}
@@ -4746,24 +4746,24 @@ function ScanHistory(props) {
         {scans.length > 0 ? (
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
-              <tr style={{borderBottom:"1px solid #1e293b"}}>
+              <tr style={{borderBottom:"1px solid #1c2435"}}>
                 {["Tool","Target","Status","Time"].map(h => (
-                  <th key={h} style={{padding:"8px 16px",textAlign:"left",fontSize:10,color:"#475569",fontWeight:600,letterSpacing:.5}}>{h}</th>
+                  <th key={h} style={{padding:"8px 16px",textAlign:"left",fontSize:10,color:"#5a6478",fontWeight:600,letterSpacing:.5}}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {scans.map((s,i) => (
-                <tr key={i} className="row" style={{borderBottom:"1px solid #0f172a",background:i%2===0?"#020617":"transparent"}}>
-                  <td style={{padding:"10px 16px",fontSize:12,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{s.tool}</td>
-                  <td style={{padding:"10px 16px",fontSize:12,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace"}}>{s.target}</td>
+                <tr key={i} className="row" style={{borderBottom:"1px solid #0d1320",background:i%2===0?"#0a0e17":"transparent"}}>
+                  <td style={{padding:"10px 16px",fontSize:12,color:"#00d4ff",fontFamily:"JetBrains Mono,monospace"}}>{s.tool}</td>
+                  <td style={{padding:"10px 16px",fontSize:12,color:"#d8deea",fontFamily:"JetBrains Mono,monospace"}}>{s.target}</td>
                   <td style={{padding:"10px 16px"}}><Badge label={s.status} color={s.status==="complete"?"green":"red"} size="xs"/></td>
-                  <td style={{padding:"10px 16px",fontSize:11,color:"#475569"}}>{new Date(s.timestamp).toLocaleString()}</td>
+                  <td style={{padding:"10px 16px",fontSize:11,color:"#5a6478"}}>{new Date(s.timestamp).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : <div style={{textAlign:"center",padding:40,color:"#334155",fontSize:13}}>No scans yet</div>}
+        ) : <div style={{textAlign:"center",padding:40,color:"#1c2435",fontSize:13}}>No scans yet</div>}
       </div>
     </div>
   );
@@ -4783,13 +4783,13 @@ function GuideModule() {
     });
   };
 
-  const G = "#22c55e"; const DIM = "#64748b"; const BG = "#0f172a"; const CARD = "#0a1628";
-  const BORDER = "#1e293b";
+  const G = "#00ff88"; const DIM = "#5a6478"; const BG = "#0d1320"; const CARD = "#0d1320";
+  const BORDER = "#1c2435";
 
   const tabBtn = (id, label, icon) => (
     <button onClick={() => setTab(id)} style={{
       padding:"9px 20px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:700,
-      background: tab===id ? "#22c55e22" : "transparent",
+      background: tab===id ? "#00ff8822" : "transparent",
       color: tab===id ? G : DIM,
       borderBottom: tab===id ? `2px solid ${G}` : "2px solid transparent",
       transition:"all 0.2s", fontFamily:"monospace", letterSpacing:1
@@ -4798,9 +4798,9 @@ function GuideModule() {
 
   const CopyBtn = ({text, id}) => (
     <button onClick={() => copy(text, id)} style={{
-      background: copied===id ? "#22c55e33" : "#1e293b",
-      border: `1px solid ${copied===id ? G : "#334155"}`,
-      color: copied===id ? G : "#94a3b8",
+      background: copied===id ? "#00ff8833" : "#1c2435",
+      border: `1px solid ${copied===id ? G : "#1c2435"}`,
+      color: copied===id ? G : "#8a94a8",
       borderRadius:6, padding:"4px 12px", fontSize:11, cursor:"pointer",
       fontFamily:"monospace", fontWeight:700, transition:"all 0.2s", whiteSpace:"nowrap"
     }}>{copied===id ? "COPIED" : "COPY"}</button>
@@ -4812,10 +4812,10 @@ function GuideModule() {
         <span style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", letterSpacing:1}}>{label}</span>
         <CopyBtn text={code} id={id}/>
       </div>
-      {comment && <div style={{color:"#475569", fontSize:11, fontFamily:"monospace", marginBottom:6}}># {comment}</div>}
+      {comment && <div style={{color:"#5a6478", fontSize:11, fontFamily:"monospace", marginBottom:6}}># {comment}</div>}
       <pre style={{
-        background:"#020617", border:"1px solid #1e293b", borderRadius:8, padding:"14px 16px",
-        color:"#e2e8f0", fontSize:12, fontFamily:"'Courier New',monospace", margin:0,
+        background:"#0a0e17", border:"1px solid #1c2435", borderRadius:8, padding:"14px 16px",
+        color:"#d8deea", fontSize:12, fontFamily:"'Courier New',monospace", margin:0,
         overflowX:"auto", lineHeight:1.7, whiteSpace:"pre-wrap", wordBreak:"break-word"
       }}>{code}</pre>
     </div>
@@ -4828,7 +4828,7 @@ function GuideModule() {
     }}>
       <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6}}>
         <div>
-          <span style={{color:"#e2e8f0", fontWeight:700, fontSize:13}}>{name}</span>
+          <span style={{color:"#d8deea", fontWeight:700, fontSize:13}}>{name}</span>
           <span style={{
             marginLeft:10, background:`${color||G}22`, color:color||G,
             borderRadius:4, padding:"2px 8px", fontSize:10, fontWeight:700, fontFamily:"monospace"
@@ -4836,8 +4836,8 @@ function GuideModule() {
         </div>
         <CopyBtn text={url} id={name}/>
       </div>
-      <div style={{color:"#94a3b8", fontSize:12, marginBottom:8}}>{desc}</div>
-      <code style={{color:G, fontSize:12, fontFamily:"monospace", background:"#020617", padding:"4px 10px", borderRadius:5}}>{url}</code>
+      <div style={{color:"#8a94a8", fontSize:12, marginBottom:8}}>{desc}</div>
+      <code style={{color:G, fontSize:12, fontFamily:"monospace", background:"#0a0e17", padding:"4px 10px", borderRadius:5}}>{url}</code>
     </div>
   );
 
@@ -4875,19 +4875,19 @@ journalctl -u uvicorn -n 50
 # Or check terminal where uvicorn is running`;
 
   const labs = [
-    { name:"DVWA",                   url:"http://lab_dvwa",                    type:"LIVE", desc:"Damn Vulnerable Web App — login admin/password. SQLi, XSS, CSRF, File Upload, LFI.", color:"#22c55e" },
-    { name:"WebGoat",               url:"http://lab_webgoat:8080/WebGoat",       type:"LIVE", desc:"OWASP WebGoat — guided lessons for all OWASP Top 10 vulnerabilities.", color:"#22c55e" },
-    { name:"Juice Shop",            url:"http://lab_juiceshop:3000",               type:"LIVE", desc:"OWASP Juice Shop — 100+ challenges: JWT, SQLi, IDOR, XSS, SSRF. Login admin@juice-sh.op/admin123.", color:"#22c55e" },
-    { name:"Mutillidae II",         url:"http://lab_mutillidae",                  type:"LIVE", desc:"OWASP Mutillidae — SQLi, XXE, CSRF, Clickjacking. Login admin/adminpass.", color:"#22c55e" },
-    { name:"bWAPP",                 url:"http://lab_bwapp/bWAPP/login.php",       type:"LIVE", desc:"Buggy Web App — 100+ web vulnerabilities. Login bee/bug.", color:"#22c55e" },
+    { name:"DVWA",                   url:"http://lab_dvwa",                    type:"LIVE", desc:"Damn Vulnerable Web App — login admin/password. SQLi, XSS, CSRF, File Upload, LFI.", color:"#00ff88" },
+    { name:"WebGoat",               url:"http://lab_webgoat:8080/WebGoat",       type:"LIVE", desc:"OWASP WebGoat — guided lessons for all OWASP Top 10 vulnerabilities.", color:"#00ff88" },
+    { name:"Juice Shop",            url:"http://lab_juiceshop:3000",               type:"LIVE", desc:"OWASP Juice Shop — 100+ challenges: JWT, SQLi, IDOR, XSS, SSRF. Login admin@juice-sh.op/admin123.", color:"#00ff88" },
+    { name:"Mutillidae II",         url:"http://lab_mutillidae",                  type:"LIVE", desc:"OWASP Mutillidae — SQLi, XXE, CSRF, Clickjacking. Login admin/adminpass.", color:"#00ff88" },
+    { name:"bWAPP",                 url:"http://lab_bwapp/bWAPP/login.php",       type:"LIVE", desc:"Buggy Web App — 100+ web vulnerabilities. Login bee/bug.", color:"#00ff88" },
     { name:"HackTheBox",             url:"https://www.hackthebox.com",                    type:"ONLINE",   desc:"Professional CTF platform. Real-world machines. Highly recommended for OSCP prep.", color:"#a855f7" },
-    { name:"TryHackMe",              url:"https://tryhackme.com",                         type:"ONLINE",   desc:"Beginner-friendly guided rooms. Great learning path for web app pentesting.", color:"#3b82f6" },
+    { name:"TryHackMe",              url:"https://tryhackme.com",                         type:"ONLINE",   desc:"Beginner-friendly guided rooms. Great learning path for web app pentesting.", color:"#3b9eff" },
     { name:"PentesterLab",           url:"https://pentesterlab.com",                      type:"ONLINE",   desc:"Web app security exercises. Excellent for SQLi, XSS, JWT attacks.", color:"#f59e0b" },
-    { name:"PortSwigger Web Academy",url:"https://portswigger.net/web-security",          type:"ONLINE",   desc:"Free Burp Suite labs. Industry standard for web vulnerability learning.", color:"#ef4444" },
-    { name:"VulnHub",                url:"https://www.vulnhub.com",                       type:"DOWNLOAD", desc:"Downloadable VMs. Import into VirtualBox/VMware. Great offline practice.", color:"#64748b" },
+    { name:"PortSwigger Web Academy",url:"https://portswigger.net/web-security",          type:"ONLINE",   desc:"Free Burp Suite labs. Industry standard for web vulnerability learning.", color:"#ff3e5e" },
+    { name:"VulnHub",                url:"https://www.vulnhub.com",                       type:"DOWNLOAD", desc:"Downloadable VMs. Import into VirtualBox/VMware. Great offline practice.", color:"#5a6478" },
     { name:"OWASP Juice Shop",       url:"https://juice-shop.herokuapp.com",              type:"ONLINE",   desc:"Modern vulnerable app (Node.js). Covers OWASP Top 10 2021. Has scoreboard.", color:"#f97316" },
-    { name:"Metasploitable 2",       url:"http://192.168.56.101",                         type:"LOCAL VM", desc:"Classic vulnerable Linux VM — many services exposed. Run alongside Kali.", color:"#22c55e" },
-    { name:"OWASP WebGoat (Online)", url:"https://github.com/WebGoat/WebGoat/releases",   type:"DOWNLOAD", desc:"Download .jar and run locally: java -jar webgoat.jar", color:"#64748b" },
+    { name:"Metasploitable 2",       url:"http://192.168.56.101",                         type:"LOCAL VM", desc:"Classic vulnerable Linux VM — many services exposed. Run alongside Kali.", color:"#00ff88" },
+    { name:"OWASP WebGoat (Online)", url:"https://github.com/WebGoat/WebGoat/releases",   type:"DOWNLOAD", desc:"Download .jar and run locally: java -jar webgoat.jar", color:"#5a6478" },
     { name:"HackTheBox Academy",     url:"https://academy.hackthebox.com",               type:"ONLINE",   desc:"Structured learning — Web Application Pentesting path directly maps to OSCP.", color:"#a855f7" },
   ];
 
@@ -4909,7 +4909,7 @@ journalctl -u uvicorn -n 50
 
       {tab === "startup" && (
         <div>
-          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"#8a94a8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#0a0e17", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             Run STEP 1 (Kali) first, then STEP 2 (Windows). Always in this order.
           </div>
           <Block id="step1" label="STEP 1 — KALI TERMINAL" code={startupKali} comment="Paste all at once into Kali terminal. Leave it running." />
@@ -4917,11 +4917,11 @@ journalctl -u uvicorn -n 50
           <Block id="kill"  label="FIX: PORT 8000 ALREADY IN USE" code={killPort} comment="Run on Kali if uvicorn says address already in use" />
           <Block id="scp"   label="TRANSFER FILES TO KALI (Windows)" code={scpFiles} comment="Run from oscp-dashboard folder on Windows when backend files are updated" />
           <Block id="logs"  label="CHECK BACKEND ERRORS" code={checkLogs} />
-          <div style={{background:"#0a1628", border:"1px solid #1e293b", borderRadius:10, padding:"14px 16px", marginTop:8}}>
+          <div style={{background:"#0d1320", border:"1px solid #1c2435", borderRadius:10, padding:"14px 16px", marginTop:8}}>
             <div style={{color:G, fontWeight:700, fontSize:12, fontFamily:"monospace", marginBottom:10}}>LOGIN CREDENTIALS</div>
             <div style={{display:"flex", gap:24}}>
-              <div><span style={{color:DIM, fontSize:12}}>Username: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin</code></div>
-              <div><span style={{color:DIM, fontSize:12}}>Password: </span><code style={{color:"#e2e8f0", fontSize:13}}>admin123</code></div>
+              <div><span style={{color:DIM, fontSize:12}}>Username: </span><code style={{color:"#d8deea", fontSize:13}}>admin</code></div>
+              <div><span style={{color:DIM, fontSize:12}}>Password: </span><code style={{color:"#d8deea", fontSize:13}}>admin123</code></div>
               <div><span style={{color:DIM, fontSize:12}}>API URL: </span><code style={{color:G, fontSize:13}}>{getApiUrl() || (window.location.origin + "/api")}</code></div>
             </div>
           </div>
@@ -4930,7 +4930,7 @@ journalctl -u uvicorn -n 50
 
       {tab === "fix" && (
         <div>
-          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"#8a94a8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#0a0e17", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             If any scan phase shows ERROR — endpoint missing, use these commands on Kali.
           </div>
           <Block id="fix1" label="CHECK & FIX MISSING ENDPOINTS (KALI)" code={fixEndpoints} comment="Run on Kali. Checks what's in main.py then appends missing endpoints." />
@@ -4948,7 +4948,7 @@ journalctl -u uvicorn -n 50
                 ["xxe","backend_additions2.py"],["clickjacking","backend_additions2.py"],["verbtamper","backend_additions2.py"],
                 ["pollution","backend_additions2.py"],
               ].map(([ep, file]) => (
-                <div key={ep} style={{display:"flex", justifyContent:"space-between", padding:"5px 10px", background:"#020617", borderRadius:6, fontSize:11, fontFamily:"monospace"}}>
+                <div key={ep} style={{display:"flex", justifyContent:"space-between", padding:"5px 10px", background:"#0a0e17", borderRadius:6, fontSize:11, fontFamily:"monospace"}}>
                   <span style={{color:G}}>/{ep}</span>
                   <span style={{color:DIM}}>{file}</span>
                 </div>
@@ -4960,11 +4960,11 @@ journalctl -u uvicorn -n 50
 
       {tab === "labs" && (
         <div>
-          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"#8a94a8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#0a0e17", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             Click COPY next to any URL then paste into the scanner target field. Local targets need Kali VM running.
           </div>
           <div style={{display:"flex", gap:10, marginBottom:16, flexWrap:"wrap"}}>
-            {[["LOCAL","#22c55e"],["ONLINE","#a855f7"],["DOWNLOAD","#64748b"],["LOCAL VM","#22c55e"]].map(([t,c])=>(
+            {[["LOCAL","#00ff88"],["ONLINE","#a855f7"],["DOWNLOAD","#5a6478"],["LOCAL VM","#00ff88"]].map(([t,c])=>(
               <div key={t} style={{background:`${c}22`, color:c, borderRadius:6, padding:"3px 12px", fontSize:11, fontWeight:700, fontFamily:"monospace"}}>{t}</div>
             ))}
             <div style={{color:DIM, fontSize:11, alignSelf:"center", fontFamily:"monospace"}}>— color legend</div>
@@ -4975,7 +4975,7 @@ journalctl -u uvicorn -n 50
 
       {tab === "checklist" && (
         <div>
-          <div style={{color:"#94a3b8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#020617", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
+          <div style={{color:"#8a94a8", fontSize:12, marginBottom:20, fontFamily:"monospace", background:"#0a0e17", padding:"12px 16px", borderRadius:8, border:`1px solid ${BORDER}`}}>
             Run through this every session before scanning.
           </div>
           {[
@@ -4996,15 +4996,15 @@ journalctl -u uvicorn -n 50
               padding:"14px 18px", marginBottom:10, display:"flex", gap:14, alignItems:"flex-start"
             }}>
               <div style={{
-                width:32, height:32, borderRadius:8, background:"#22c55e22", border:`1px solid ${G}`,
+                width:32, height:32, borderRadius:8, background:"#00ff8822", border:`1px solid ${G}`,
                 display:"flex", alignItems:"center", justifyContent:"center",
                 color:G, fontWeight:800, fontSize:12, fontFamily:"monospace", flexShrink:0
               }}>{step}</div>
               <div style={{flex:1}}>
-                <div style={{color:"#e2e8f0", fontWeight:700, fontSize:13, marginBottom:4}}>{title}</div>
+                <div style={{color:"#d8deea", fontWeight:700, fontSize:13, marginBottom:4}}>{title}</div>
                 {code
                   ? <div style={{display:"flex", gap:10, alignItems:"center"}}>
-                      <code style={{color:G, fontSize:11, fontFamily:"monospace", background:"#020617", padding:"4px 10px", borderRadius:5, flex:1}}>{detail}</code>
+                      <code style={{color:G, fontSize:11, fontFamily:"monospace", background:"#0a0e17", padding:"4px 10px", borderRadius:5, flex:1}}>{detail}</code>
                       <CopyBtn text={detail} id={`c${step}`}/>
                     </div>
                   : <div style={{color:DIM, fontSize:12}}>{detail}</div>
@@ -5024,8 +5024,8 @@ function ComingSoon(props) {
   return (
     <div className="fade" style={{textAlign:"center",padding:"80px 20px"}}>
       <div style={{fontSize:48,marginBottom:12}}>{topic.icon}</div>
-      <h2 style={{fontSize:20,fontWeight:700,color:"#f1f5f9",marginBottom:6}}>{topic.label}</h2>
-      <p style={{fontSize:13,color:"#475569",marginBottom:30}}>Module under development</p>
+      <h2 style={{fontSize:20,fontWeight:700,color:"#ffffff",marginBottom:6}}>{topic.label}</h2>
+      <p style={{fontSize:13,color:"#5a6478",marginBottom:30}}>Module under development</p>
     </div>
   );
 }
@@ -5323,7 +5323,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
       else generateShellReport(args);
     } catch(e) { alert("PDF error: " + (e.message || e)); }
   };
-  const sevColor = s => s==="CRITICAL"?"#ef4444":s==="HIGH"?"#f97316":s==="MEDIUM"?"#eab308":s==="LOW"?"#22c55e":"#64748b";
+  const sevColor = s => s==="CRITICAL"?"#ff3e5e":s==="HIGH"?"#f97316":s==="MEDIUM"?"#eab308":s==="LOW"?"#00ff88":"#5a6478";
   const hasResults = attacks.some(a => results[a.id]);
 
   const run = async (atk) => {
@@ -5356,33 +5356,33 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
         (hasResults && (
           <div style={{display:"flex", justifyContent:"flex-end", gap:8, padding:"10px 24px 0"}}>
             <button onClick={()=>setGuide(g=>!g)}
-              style={{background:guide?"#1e3a5f":"#0f172a",border:`1px solid ${guide?"#3b82f6":"#334155"}`,borderRadius:6,padding:"6px 12px",color:guide?"#93c5fd":"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+              style={{background:guide?"#103a52":"#0d1320",border:`1px solid ${guide?"#3b9eff":"#1c2435"}`,borderRadius:6,padding:"6px 12px",color:guide?"#7fdcff":"#8a94a8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
               {guide?"Hide Guide":"How to Use"}
             </button>
             <button onClick={() => setShowPDFModal(true)}
-              style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              style={{background:"#ff3e5e",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               Report
             </button>
           </div>
         ))
       ) : (
-        <div style={{background:`linear-gradient(135deg,${color}18,transparent)`,borderBottom:"1px solid #1e293b",padding:"16px 24px 14px"}}>
+        <div style={{background:`linear-gradient(135deg,${color}18,transparent)`,borderBottom:"1px solid #1c2435",padding:"16px 24px 14px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:24}}>{icon}</span>
               <div>
-                <h2 style={{fontSize:17,fontWeight:700,color:"#f1f5f9",margin:0}}>{title}</h2>
-                <p style={{fontSize:12,color:"#64748b",margin:0}}>{desc}</p>
+                <h2 style={{fontSize:17,fontWeight:700,color:"#ffffff",margin:0}}>{title}</h2>
+                <p style={{fontSize:12,color:"#5a6478",margin:0}}>{desc}</p>
               </div>
             </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setGuide(g=>!g)}
-                style={{background:guide?"#1e3a5f":"#0f172a",border:`1px solid ${guide?"#3b82f6":"#334155"}`,borderRadius:6,padding:"6px 12px",color:guide?"#93c5fd":"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                style={{background:guide?"#103a52":"#0d1320",border:`1px solid ${guide?"#3b9eff":"#1c2435"}`,borderRadius:6,padding:"6px 12px",color:guide?"#7fdcff":"#8a94a8",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                 {guide?"Hide Guide":"How to Use"}
               </button>
               {hasResults && (
                 <button onClick={() => setShowPDFModal(true)}
-                  style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  style={{background:"#ff3e5e",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
                   Report
                 </button>
               )}
@@ -5393,32 +5393,32 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
 
       {/* How To Use Guide */}
       {guide && (
-        <div style={{margin:"12px 24px 0",background:"#0a1628",border:"1px solid #1e3a5f",borderRadius:8,padding:"14px 16px"}}>
-          <div style={{fontSize:12,fontWeight:700,color:"#93c5fd",marginBottom:10}}>How to Run This Module</div>
+        <div style={{margin:"12px 24px 0",background:"#0d1320",border:"1px solid #103a52",borderRadius:8,padding:"14px 16px"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#7fdcff",marginBottom:10}}>How to Run This Module</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
             {attacks.map(atk=>(
-              <div key={atk.id} style={{background:"#0d1f35",borderRadius:6,padding:"10px 12px",border:"1px solid #1e3a5f"}}>
+              <div key={atk.id} style={{background:"#0d1f35",borderRadius:6,padding:"10px 12px",border:"1px solid #103a52"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                   <span style={{fontSize:14}}>{atk.icon}</span>
-                  <span style={{fontSize:11,fontWeight:700,color:"#f1f5f9"}}>{atk.label}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:"#ffffff"}}>{atk.label}</span>
                 </div>
                 {atk.target_type && <div style={{fontSize:9,color:"#fbbf24",marginBottom:4}}>Target: {atk.target_type}</div>}
-                {atk.howto && <div style={{fontSize:10,color:"#94a3b8",marginBottom:5,lineHeight:1.5}}>{atk.howto}</div>}
+                {atk.howto && <div style={{fontSize:10,color:"#8a94a8",marginBottom:5,lineHeight:1.5}}>{atk.howto}</div>}
                 {atk.requires && <div style={{fontSize:9,color:"#f97316",marginBottom:5}}>Requires: {atk.requires}</div>}
                 {atk.vulns && atk.vulns.length>0 && (
                   <div style={{marginBottom:5}}>
-                    <div style={{fontSize:9,color:"#64748b",marginBottom:3,textTransform:"uppercase",fontWeight:700}}>Vulnerabilities Detected:</div>
+                    <div style={{fontSize:9,color:"#5a6478",marginBottom:3,textTransform:"uppercase",fontWeight:700}}>Vulnerabilities Detected:</div>
                     {atk.vulns.map((v,i)=>(
-                      <div key={i} style={{fontSize:9,color:"#4ade80",display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
-                        <span style={{color:"#22c55e",flexShrink:0}}></span>{v}
+                      <div key={i} style={{fontSize:9,color:"#5dffa6",display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
+                        <span style={{color:"#00ff88",flexShrink:0}}></span>{v}
                       </div>
                     ))}
                   </div>
                 )}
                 {atk.hackerImpact && (
                   <div style={{background:"#1a0505",border:"1px solid #7f1d1d",borderRadius:4,padding:"6px 8px",marginTop:4}}>
-                    <div style={{fontSize:9,color:"#f87171",fontWeight:700,marginBottom:3}}>Hacker Impact:</div>
-                    <div style={{fontSize:9,color:"#fca5a5",lineHeight:1.5}}>{atk.hackerImpact}</div>
+                    <div style={{fontSize:9,color:"#ff6b82",fontWeight:700,marginBottom:3}}>Hacker Impact:</div>
+                    <div style={{fontSize:9,color:"#ffa3b0",lineHeight:1.5}}>{atk.hackerImpact}</div>
                   </div>
                 )}
               </div>
@@ -5441,7 +5441,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
             placeholder="Target IP / Domain / URL"
             autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
             name="moduleshell-target" data-form-type="other" aria-autocomplete="none"
-            style={{flex:1,minWidth:220,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 12px",color:"#f1f5f9",fontSize:13,outline:"none"}}/>
+            style={{flex:1,minWidth:220,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 12px",color:"#ffffff",fontSize:13,outline:"none"}}/>
           {extraInputs && extraInputs(opts, setOpts)}
         </div>
 
@@ -5462,41 +5462,41 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
             const isLoading = loading === atk.id;
             const findings = res?.findings || [];
             const hasCrit = findings.some(f=>["CRITICAL","HIGH"].includes(f.severity));
-            const borderCol = res?.error?"#ef4444":hasCrit?"#dc2626":res?"#1e40af":"#1e293b";
+            const borderCol = res?.error?"#ff3e5e":hasCrit?"#e02347":res?"#1e40af":"#1c2435";
             return (
-              <div key={atk.id} style={{background:"#0a0f1e",border:`1px solid ${borderCol}`,borderRadius:8,overflow:"hidden"}}>
+              <div key={atk.id} style={{background:"#0d1320",border:`1px solid ${borderCol}`,borderRadius:8,overflow:"hidden"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:"#0d1526"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:16}}>{atk.icon}</span>
                     <div>
-                      <div style={{fontSize:12,fontWeight:700,color:"#f1f5f9"}}>{atk.label}</div>
-                      <div style={{fontSize:10,color:"#475569"}}>{atk.desc}</div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#ffffff"}}>{atk.label}</div>
+                      <div style={{fontSize:10,color:"#5a6478"}}>{atk.desc}</div>
                     </div>
                   </div>
                   <button onClick={()=>run(atk)} disabled={isLoading||!target}
-                    style={{background:isLoading?"#1e293b":color,border:"none",borderRadius:4,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:isLoading||!target?"not-allowed":"pointer",opacity:!target?0.4:1,flexShrink:0}}>
+                    style={{background:isLoading?"#1c2435":color,border:"none",borderRadius:4,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:isLoading||!target?"not-allowed":"pointer",opacity:!target?0.4:1,flexShrink:0}}>
                     {isLoading?"…":"Run"}
                   </button>
                 </div>
                 {res && (
                   <div style={{padding:"10px 14px",maxHeight:240,overflowY:"auto"}}>
-                    {res.error && <div style={{color:"#ef4444",fontSize:11,marginBottom:4}}>{res.error}</div>}
+                    {res.error && <div style={{color:"#ff3e5e",fontSize:11,marginBottom:4}}>{res.error}</div>}
                     {res.message && (
-                      <div style={{color:res.message.includes("")?"#f87171":res.message.includes("")?"#4ade80":"#94a3b8",fontSize:11,marginBottom:6,fontWeight:600}}>{res.message}</div>
+                      <div style={{color:res.message.includes("")?"#ff6b82":res.message.includes("")?"#5dffa6":"#8a94a8",fontSize:11,marginBottom:6,fontWeight:600}}>{res.message}</div>
                     )}
                     {findings.length>0 && findings.slice(0,12).map((f,i)=>(
                       <div key={i} style={{display:"flex",gap:6,alignItems:"flex-start",marginBottom:4,fontSize:11}}>
                         <span style={{background:sevColor(f.severity),color:"#fff",borderRadius:3,padding:"1px 5px",fontSize:9,fontWeight:700,flexShrink:0,marginTop:1}}>{f.severity||"INFO"}</span>
-                        <span style={{color:"#cbd5e1"}}>{f.title||""}{f.detail?" — "+String(f.detail).slice(0,80):""}</span>
+                        <span style={{color:"#c3ccda"}}>{f.title||""}{f.detail?" — "+String(f.detail).slice(0,80):""}</span>
                       </div>
                     ))}
                     {findings.length===0 && !res.error && !res.message && res.raw_output && (
-                      <pre style={{fontSize:9,color:"#64748b",margin:0,whiteSpace:"pre-wrap",maxHeight:140,overflow:"auto"}}>{String(res.raw_output).slice(0,800)}</pre>
+                      <pre style={{fontSize:9,color:"#5a6478",margin:0,whiteSpace:"pre-wrap",maxHeight:140,overflow:"auto"}}>{String(res.raw_output).slice(0,800)}</pre>
                     )}
                     {res.commands && Object.entries(res.commands).slice(0,5).map(([k,v])=>(
                       <div key={k} style={{marginBottom:6}}>
-                        <div style={{fontSize:9,color:"#94a3b8",marginBottom:2,textTransform:"uppercase",fontWeight:700}}>{k}</div>
-                        <pre style={{fontSize:9,color:"#4ade80",background:"#020617",borderRadius:4,padding:"5px 8px",margin:0,whiteSpace:"pre-wrap",overflowX:"auto"}}>{String(v).slice(0,200)}</pre>
+                        <div style={{fontSize:9,color:"#8a94a8",marginBottom:2,textTransform:"uppercase",fontWeight:700}}>{k}</div>
+                        <pre style={{fontSize:9,color:"#5dffa6",background:"#0a0e17",borderRadius:4,padding:"5px 8px",margin:0,whiteSpace:"pre-wrap",overflowX:"auto"}}>{String(v).slice(0,200)}</pre>
                       </div>
                     ))}
                   </div>
@@ -6393,9 +6393,9 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
   const totalCount = (tests || []).length;
   const requiredCount = (tests||[]).filter(t => t.required).length;
   const pct = totalCount ? Math.round(100 * completedCount / totalCount) : 0;
-  const SEV_COLORS = {HIGH:"#ef4444", MEDIUM:"#f59e0b", LOW:"#22c55e", "no-finding":"#22c55e", na:"#64748b", not_run:"#475569", required:"#fbbf24", all:"#7c3aed"};
-  const SECTION_COLORS = {"§1":"#3b82f6","§2":"#06b6d4","§3":"#8b5cf6","§4":"#ec4899","§5":"#f97316","§6":"#84cc16","§7":"#eab308","§8":"#10b981","§9":"#ef4444","§10":"#a855f7","§11":"#0ea5e9","§12":"#f472b6","§13":"#facc15","§14":"#fb923c","§15":"#22d3ee"};
-  const DIFF_BADGES = {easy:{emoji:"",label:"Easy",color:"#22c55e"},medium:{emoji:"",label:"Med",color:"#f59e0b"},hard:{emoji:"",label:"Hard",color:"#ef4444"},expert:{emoji:"",label:"Expert",color:"#64748b"}};
+  const SEV_COLORS = {HIGH:"#ff3e5e", MEDIUM:"#f59e0b", LOW:"#00ff88", "no-finding":"#00ff88", na:"#5a6478", not_run:"#5a6478", required:"#fbbf24", all:"#7c3aed"};
+  const SECTION_COLORS = {"§1":"#3b9eff","§2":"#06b6d4","§3":"#8b5cf6","§4":"#ec4899","§5":"#f97316","§6":"#84cc16","§7":"#eab308","§8":"#10b981","§9":"#ff3e5e","§10":"#a855f7","§11":"#0ea5e9","§12":"#f472b6","§13":"#facc15","§14":"#fb923c","§15":"#22d3ee"};
+  const DIFF_BADGES = {easy:{emoji:"",label:"Easy",color:"#00ff88"},medium:{emoji:"",label:"Med",color:"#f59e0b"},hard:{emoji:"",label:"Hard",color:"#ff3e5e"},expert:{emoji:"",label:"Expert",color:"#5a6478"}};
   const matches = (t) => {
     if (search) {
       const q = search.toLowerCase();
@@ -6412,14 +6412,14 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
   };
   if (!tests || tests.length === 0) return null;
   return (
-    <div style={{background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:10, overflow:"hidden"}}>
+    <div style={{background:"#0d1320", border:"1px solid #103a52", borderRadius:10, overflow:"hidden"}}>
       {!onbDismissed && (
-        <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
+        <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", borderBottom:"1px solid #103a52", padding:"14px 16px"}}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8}}>
             <div style={{fontSize:13, fontWeight:700, color:"#fbbf24"}}>First time? Here is the 5-step workflow</div>
-            <button onClick={dismissOnb} style={{background:"none", border:"none", color:"#94a3b8", cursor:"pointer", fontSize:14, padding:0, lineHeight:1}}></button>
+            <button onClick={dismissOnb} style={{background:"none", border:"none", color:"#8a94a8", cursor:"pointer", fontSize:14, padding:0, lineHeight:1}}></button>
           </div>
-          <ol style={{margin:"0 0 8px 0", paddingLeft:18, fontSize:11, color:"#cbd5e1", lineHeight:1.7}}>
+          <ol style={{margin:"0 0 8px 0", paddingLeft:18, fontSize:11, color:"#c3ccda", lineHeight:1.7}}>
             <li>Click a card to expand it</li>
             <li>Read <b>What customer needs</b> + <b>Steps</b></li>
             <li>Run the steps locally (or on the target with authorization)</li>
@@ -6431,22 +6431,22 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
           )}
         </div>
       )}
-      <div style={{position:"sticky", top:0, zIndex:5, background:"#0a1628", borderBottom:"1px solid #1e3a5f", padding:"14px 16px"}}>
+      <div style={{position:"sticky", top:0, zIndex:5, background:"#0d1320", borderBottom:"1px solid #103a52", padding:"14px 16px"}}>
         <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, gap:12}}>
           <div style={{minWidth:0}}>
             <div style={{fontSize:14, fontWeight:700, color:"#fbbf24"}}>Manual Tests — {moduleLabel}</div>
-            <div style={{fontSize:10, color:"#94a3b8", marginTop:2}}>{totalCount} techniques{requiredCount ? (" · " + requiredCount + " required") : ""} · run locally · paste evidence for the PDF</div>
+            <div style={{fontSize:10, color:"#8a94a8", marginTop:2}}>{totalCount} techniques{requiredCount ? (" · " + requiredCount + " required") : ""} · run locally · paste evidence for the PDF</div>
           </div>
           <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "#374151" : "#7c3aed", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>Export PDF</button>
         </div>
-        <div style={{height:5, background:"#1e293b", borderRadius:3, overflow:"hidden", marginBottom:8}}>
-          <div style={{height:"100%", width:`${pct}%`, background: pct === 100 ? "#22c55e" : "#7c3aed", transition:"width 0.3s"}}/>
+        <div style={{height:5, background:"#1c2435", borderRadius:3, overflow:"hidden", marginBottom:8}}>
+          <div style={{height:"100%", width:`${pct}%`, background: pct === 100 ? "#00ff88" : "#7c3aed", transition:"width 0.3s"}}/>
         </div>
-        <div style={{fontSize:10, color:"#94a3b8", marginBottom:10}}><span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>{completedCount}/{totalCount}</span> covered · {pct}%</div>
+        <div style={{fontSize:10, color:"#8a94a8", marginBottom:10}}><span style={{color: completedCount===totalCount ? "#00ff88" : "#fbbf24", fontWeight:700}}>{completedCount}/{totalCount}</span> covered · {pct}%</div>
         <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
-          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search title / ref / tool…" style={{flex:"1 1 160px", minWidth:120, background:"#020617", border:"1px solid #334155", borderRadius:6, color:"#cbd5e1", fontSize:11, padding:"6px 10px", outline:"none"}}/>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search title / ref / tool…" style={{flex:"1 1 160px", minWidth:120, background:"#0a0e17", border:"1px solid #1c2435", borderRadius:6, color:"#c3ccda", fontSize:11, padding:"6px 10px", outline:"none"}}/>
           {[["all","All"],["required","Required"],["not_run","Not Run"],["no-finding","OK"],["LOW","Low"],["MEDIUM","Med"],["HIGH","High"],["na","N/A"]].map(([val,label])=>(
-            <button key={val} onClick={()=>setStatusFilter(val)} style={{background: statusFilter===val ? (SEV_COLORS[val] || "#7c3aed") : "transparent", color: statusFilter===val ? "#fff" : (SEV_COLORS[val] || "#94a3b8"), border:`1px solid ${SEV_COLORS[val] || "#475569"}`, borderRadius:4, padding:"4px 9px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>
+            <button key={val} onClick={()=>setStatusFilter(val)} style={{background: statusFilter===val ? (SEV_COLORS[val] || "#7c3aed") : "transparent", color: statusFilter===val ? "#fff" : (SEV_COLORS[val] || "#8a94a8"), border:`1px solid ${SEV_COLORS[val] || "#5a6478"}`, borderRadius:4, padding:"4px 9px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>
           ))}
         </div>
       </div>
@@ -6461,7 +6461,7 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
               <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8, paddingBottom:6, borderBottom:`1px solid ${groupColor}33`}}>
                 <div style={{width:3, height:14, background: groupColor, borderRadius:2}}/>
                 <div style={{fontSize:11, fontWeight:700, color: groupColor, textTransform:"uppercase", letterSpacing:0.5}}>{gk}</div>
-                <div style={{fontSize:10, color:"#64748b"}}>{groupTests.length} technique{groupTests.length>1?"s":""}{groupReq ? (" · " + groupReq + " ") : ""}</div>
+                <div style={{fontSize:10, color:"#5a6478"}}>{groupTests.length} technique{groupTests.length>1?"s":""}{groupReq ? (" · " + groupReq + " ") : ""}</div>
               </div>
               <div style={{display:"grid", gap:8}}>
                 {groupTests.map(t => {
@@ -6470,51 +6470,51 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
                   const status = f.status || "not_run";
                   const sev = f.severity || "no-finding";
                   const isNA = status === "na";
-                  const statusColor = isNA ? "#64748b" : (status === "not_run" ? "#475569" : (SEV_COLORS[sev] || "#64748b"));
+                  const statusColor = isNA ? "#5a6478" : (status === "not_run" ? "#5a6478" : (SEV_COLORS[sev] || "#5a6478"));
                   const flashing = !!saveFlash[t.id];
                   const diff = t.difficulty && DIFF_BADGES[t.difficulty];
                   return (
-                    <div key={t.id} style={{background:"#0f172a", border:`1px solid ${isOpen ? groupColor : "#1e293b"}`, borderRadius:8, overflow:"hidden"}}>
+                    <div key={t.id} style={{background:"#0d1320", border:`1px solid ${isOpen ? groupColor : "#1c2435"}`, borderRadius:8, overflow:"hidden"}}>
                       <div onClick={() => setExpanded(p => ({...p, [t.id]: !p[t.id]}))} style={{display:"flex", alignItems:"center", padding:"10px 14px", cursor:"pointer", gap:10, background: isOpen ? `${groupColor}11` : "transparent"}}>
                         <div style={{width:8, height:8, borderRadius:4, background: statusColor, flexShrink:0}}/>
                         <div style={{flex:1, minWidth:0}}>
-                          <div style={{fontSize:13, fontWeight:600, color:"#e2e8f0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{t.required && <span style={{color:"#fbbf24", marginRight:5}}></span>}{t.title}</div>
+                          <div style={{fontSize:13, fontWeight:600, color:"#d8deea", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{t.required && <span style={{color:"#fbbf24", marginRight:5}}></span>}{t.title}</div>
                           <div style={{display:"flex", gap:4, flexWrap:"wrap", marginTop:3, alignItems:"center"}}>
-                            <span style={{fontSize:9, color:"#64748b", padding:"1px 5px", border:"1px solid #334155", borderRadius:3}}>{t.ref}</span>
-                            {diff && (<span style={{fontSize:9, color:diff.color, padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{diff.emoji} {diff.label}</span>)}
-                            {t.time && (<span style={{fontSize:9, color:"#94a3b8", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{t.time}</span>)}
-                            {t.cost && (<span style={{fontSize:9, color: t.cost === "free" ? "#22c55e" : "#f59e0b", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{t.cost === "free" ? "Free" : "Paid"}</span>)}
-                            {(t.tools_required||[]).slice(0,2).map((tool,i)=>(<span key={i} style={{fontSize:9, color:"#94a3b8", padding:"1px 5px", background:"#1e293b", borderRadius:3, whiteSpace:"nowrap"}}>{tool}</span>))}
-                            {(t.tools_required||[]).length > 2 && (<span style={{fontSize:9, color:"#64748b"}}>+{(t.tools_required||[]).length-2}</span>)}
+                            <span style={{fontSize:9, color:"#5a6478", padding:"1px 5px", border:"1px solid #1c2435", borderRadius:3}}>{t.ref}</span>
+                            {diff && (<span style={{fontSize:9, color:diff.color, padding:"1px 5px", background:"#1c2435", borderRadius:3, whiteSpace:"nowrap"}}>{diff.emoji} {diff.label}</span>)}
+                            {t.time && (<span style={{fontSize:9, color:"#8a94a8", padding:"1px 5px", background:"#1c2435", borderRadius:3, whiteSpace:"nowrap"}}>{t.time}</span>)}
+                            {t.cost && (<span style={{fontSize:9, color: t.cost === "free" ? "#00ff88" : "#f59e0b", padding:"1px 5px", background:"#1c2435", borderRadius:3, whiteSpace:"nowrap"}}>{t.cost === "free" ? "Free" : "Paid"}</span>)}
+                            {(t.tools_required||[]).slice(0,2).map((tool,i)=>(<span key={i} style={{fontSize:9, color:"#8a94a8", padding:"1px 5px", background:"#1c2435", borderRadius:3, whiteSpace:"nowrap"}}>{tool}</span>))}
+                            {(t.tools_required||[]).length > 2 && (<span style={{fontSize:9, color:"#5a6478"}}>+{(t.tools_required||[]).length-2}</span>)}
                           </div>
                         </div>
                         {status !== "not_run" && (<span style={{background: statusColor, color:"#fff", padding:"2px 8px", borderRadius:4, fontSize:9, fontWeight:700, textTransform:"uppercase", flexShrink:0}}>{isNA ? "N/A" : (sev === "no-finding" ? "OK" : sev)}</span>)}
-                        <span style={{color:"#64748b", fontSize:11, flexShrink:0}}>{isOpen ? "▼" : "▶"}</span>
+                        <span style={{color:"#5a6478", fontSize:11, flexShrink:0}}>{isOpen ? "▼" : "▶"}</span>
                       </div>
                       {isOpen && (
-                        <div style={{padding:"4px 14px 14px", borderTop:"1px solid #1e293b"}}>
+                        <div style={{padding:"4px 14px 14px", borderTop:"1px solid #1c2435"}}>
                           <div style={{display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:14, marginTop:12}}>
                             <div>
                               <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>What customer needs</div>
-                              <ul style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>{(t.customer_prereqs||[]).map((p,i)=><li key={i}>{p}</li>)}</ul>
+                              <ul style={{margin:0, paddingLeft:16, fontSize:11, color:"#c3ccda", lineHeight:1.6}}>{(t.customer_prereqs||[]).map((p,i)=><li key={i}>{p}</li>)}</ul>
                               <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginTop:12, marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>Steps</div>
-                              <ol style={{margin:0, paddingLeft:16, fontSize:11, color:"#cbd5e1", lineHeight:1.6}}>{(t.steps||[]).map((s,i)=>(<li key={i} style={{marginBottom:4}}>{s.startsWith("$") ? (<code style={{background:"#020617", color:"#4ade80", padding:"2px 6px", borderRadius:3, fontSize:10, fontFamily:"monospace"}}>{s.slice(1).trim()}</code>) : s}</li>))}</ol>
+                              <ol style={{margin:0, paddingLeft:16, fontSize:11, color:"#c3ccda", lineHeight:1.6}}>{(t.steps||[]).map((s,i)=>(<li key={i} style={{marginBottom:4}}>{s.startsWith("$") ? (<code style={{background:"#0a0e17", color:"#5dffa6", padding:"2px 6px", borderRadius:3, fontSize:10, fontFamily:"monospace"}}>{s.slice(1).trim()}</code>) : s}</li>))}</ol>
                             </div>
                             <div>
                               <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", marginBottom:6, textTransform:"uppercase", letterSpacing:0.4}}>What to look for</div>
-                              <div style={{fontSize:11, color:"#cbd5e1", lineHeight:1.5, marginBottom:12, padding:8, background:"#020617", borderRadius:4, border:"1px solid #1e293b"}}>{t.what_to_look_for}</div>
+                              <div style={{fontSize:11, color:"#c3ccda", lineHeight:1.5, marginBottom:12, padding:8, background:"#0a0e17", borderRadius:4, border:"1px solid #1c2435"}}>{t.what_to_look_for}</div>
                               <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:6}}>
                                 <div style={{fontSize:11, fontWeight:700, color:"#fbbf24", textTransform:"uppercase", letterSpacing:0.4}}>Your findings</div>
-                                {flashing && <span style={{fontSize:9, color:"#22c55e", fontWeight:700}}>saved</span>}
+                                {flashing && <span style={{fontSize:9, color:"#00ff88", fontWeight:700}}>saved</span>}
                               </div>
-                              <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})} placeholder="Paste output / screenshot link / describe what happened…" style={{width:"100%", minHeight:90, background:"#020617", color:"#cbd5e1", border:"1px solid #334155", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"monospace", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
+                              <textarea value={f.evidence||""} onChange={e=>update(t.id, {evidence: e.target.value})} placeholder="Paste output / screenshot link / describe what happened…" style={{width:"100%", minHeight:90, background:"#0a0e17", color:"#c3ccda", border:"1px solid #1c2435", borderRadius:4, padding:"6px 8px", fontSize:11, fontFamily:"monospace", resize:"vertical", outline:"none", boxSizing:"border-box"}}/>
                               <div style={{display:"flex", gap:4, marginTop:8, flexWrap:"wrap"}}>
-                                {[["not_run","Not Run","#475569"],["no-finding","OK","#22c55e"],["LOW","Low","#22c55e"],["MEDIUM","Med","#f59e0b"],["HIGH","High","#ef4444"],["na","N/A","#64748b"]].map(([val,label,c])=>{
+                                {[["not_run","Not Run","#5a6478"],["no-finding","OK","#00ff88"],["LOW","Low","#00ff88"],["MEDIUM","Med","#f59e0b"],["HIGH","High","#ff3e5e"],["na","N/A","#5a6478"]].map(([val,label,c])=>{
                                   const active = (val==="not_run" && status==="not_run") || (val==="na" && status==="na") || (val!=="not_run" && val!=="na" && f.severity===val);
                                   return (<button key={val} onClick={()=>update(t.id, val==="not_run" ? {status:"not_run", severity:undefined} : val==="na" ? {status:"na", severity:undefined} : {status:"done", severity:val})} style={{background: active?c:"transparent", color: active?"#fff":c, border:`1px solid ${c}`, borderRadius:4, padding:"4px 10px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>);
                                 })}
                               </div>
-                              {t.owasp_masvs && (<div style={{marginTop:10, fontSize:10, color:"#64748b", paddingTop:8, borderTop:"1px solid #1e293b"}}><span style={{color:"#94a3b8", fontWeight:700}}>Standard:</span> {t.owasp_masvs}</div>)}
+                              {t.owasp_masvs && (<div style={{marginTop:10, fontSize:10, color:"#5a6478", paddingTop:8, borderTop:"1px solid #1c2435"}}><span style={{color:"#8a94a8", fontWeight:700}}>Standard:</span> {t.owasp_masvs}</div>)}
                             </div>
                           </div>
                         </div>
@@ -6822,9 +6822,9 @@ function SocialEngineeringModule({token, apiUrl}) {
   ];
   const extra = (opts,setOpts) => (<>
     <input placeholder="Org name (for lure)" value={opts.org_name||""} onChange={e=>setOpts(p=>({...p,org_name:e.target.value}))}
-      style={{width:155,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
+      style={{width:155,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#ffffff",fontSize:12,outline:"none"}}/>
     <select value={opts.method||"hta"} onChange={e=>setOpts(p=>({...p,method:e.target.value}))}
-      style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}>
+      style={{width:90,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#ffffff",fontSize:12,outline:"none"}}>
       <option value="hta">HTA</option><option value="vbs">VBScript</option><option value="ps1">PS1</option><option value="doc">DOC</option>
     </select>
   </>);
@@ -6865,9 +6865,9 @@ function MalwareModule({token, apiUrl}) {
   ];
   const extra = (opts,setOpts) => (
     <input placeholder="File path on Kali (/tmp/sample.exe)" value={opts.filepath||""} onChange={e=>setOpts(p=>({...p,filepath:e.target.value}))}
-      style={{flex:1,minWidth:260,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
+      style={{flex:1,minWidth:260,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#ffffff",fontSize:12,outline:"none"}}/>
   );
-  return <ModuleShell title="Malware Analysis" moduleKey="malware" icon="" color="#dc2626" desc="Static analysis, string extraction, YARA scanning, hash lookup — no sandbox required" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
+  return <ModuleShell title="Malware Analysis" moduleKey="malware" icon="" color="#e02347" desc="Static analysis, string extraction, YARA scanning, hash lookup — no sandbox required" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
 
 // ── SUPPLY CHAIN ─────────────────────────────────────────────
@@ -6897,9 +6897,9 @@ function SupplyChainModule({token, apiUrl}) {
   ];
   const extra = (opts,setOpts) => (<>
     <input placeholder="Project path (/opt/app)" value={opts.path||""} onChange={e=>setOpts(p=>({...p,path:e.target.value}))}
-      style={{width:190,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
+      style={{width:190,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#ffffff",fontSize:12,outline:"none"}}/>
     <select value={opts.type||"npm"} onChange={e=>setOpts(p=>({...p,type:e.target.value}))}
-      style={{width:80,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}>
+      style={{width:80,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#ffffff",fontSize:12,outline:"none"}}>
       <option value="npm">npm</option><option value="pip">pip</option>
     </select>
   </>);
@@ -6940,9 +6940,9 @@ function PersistenceModule({token, apiUrl}) {
   ];
   const extra = (opts,setOpts) => (<>
     <input placeholder="LHOST" value={opts.lhost||""} onChange={e=>setOpts(p=>({...p,lhost:e.target.value}))}
-      style={{width:140,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
+      style={{width:140,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#ffffff",fontSize:12,outline:"none"}}/>
     <input placeholder="LPORT" value={opts.lport||"4444"} onChange={e=>setOpts(p=>({...p,lport:e.target.value}))}
-      style={{width:90,background:"#0f172a",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#f1f5f9",fontSize:12,outline:"none"}}/>
+      style={{width:90,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#ffffff",fontSize:12,outline:"none"}}/>
   </>);
   return <ModuleShell title="Advanced Persistence" moduleKey="persistence" icon="" color="#7c3aed" desc="Rootkit detection, cron/systemd backdoors, persistence IoC hunting — offensive + defensive" token={token} apiUrl={apiUrl} attacks={attacks} extraInputs={extra} bodyFn={(t,o)=>({target:t,options:o})}/>;
 }
@@ -7341,18 +7341,18 @@ function OsintModule({token, apiUrl}) {
   };
 
   const C = {
-    wrap:    {background:"#020617",minHeight:"100vh",padding:"24px",fontFamily:"monospace"},
-    card:    {background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:10,padding:"16px",marginBottom:14},
-    label:   {fontSize:10,color:"#60a5fa",fontWeight:700,letterSpacing:2,textTransform:"uppercase",display:"block",marginBottom:6},
-    input:   {width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"9px 12px",color:"#e2e8f0",fontSize:13,boxSizing:"border-box"},
-    btn:     {background:running?"#1e3a8a":"#2563eb",color:"#fff",border:"none",borderRadius:8,padding:"10px 28px",fontSize:14,fontWeight:700,cursor:running?"not-allowed":"pointer",marginTop:10},
+    wrap:    {background:"#0a0e17",minHeight:"100vh",padding:"24px",fontFamily:"monospace"},
+    card:    {background:"#0d1320",border:"1px solid #0e3a55",borderRadius:10,padding:"16px",marginBottom:14},
+    label:   {fontSize:10,color:"#00d4ff",fontWeight:700,letterSpacing:2,textTransform:"uppercase",display:"block",marginBottom:6},
+    input:   {width:"100%",background:"#1c2435",border:"1px solid #1c2435",borderRadius:6,padding:"9px 12px",color:"#d8deea",fontSize:13,boxSizing:"border-box"},
+    btn:     {background:running?"#0e3a55":"#2563eb",color:"#fff",border:"none",borderRadius:8,padding:"10px 28px",fontSize:14,fontWeight:700,cursor:running?"not-allowed":"pointer",marginTop:10},
     tag:     (c)=>({background:c,color:"#fff",borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700,marginRight:4,display:"inline-block"}),
     row:     {display:"flex",gap:12,flexWrap:"wrap"},
-    secHdr:  {fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10,borderBottom:"1px solid #1e3a8a",paddingBottom:6},
-    val:     {color:"#e2e8f0",fontSize:12},
-    gray:    {color:"#64748b",fontSize:11},
-    red:     {color:"#ef4444",fontWeight:700},
-    green:   {color:"#22c55e",fontWeight:700},
+    secHdr:  {fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10,borderBottom:"1px solid #0e3a55",paddingBottom:6},
+    val:     {color:"#d8deea",fontSize:12},
+    gray:    {color:"#5a6478",fontSize:11},
+    red:     {color:"#ff3e5e",fontWeight:700},
+    green:   {color:"#00ff88",fontWeight:700},
   };
 
   const geo  = results.geoip       || {};
@@ -7377,8 +7377,8 @@ function OsintModule({token, apiUrl}) {
 
 
       <div style={{marginBottom:20}}>
-        <div style={{fontSize:22,fontWeight:900,color:"#60a5fa",letterSpacing:4,marginBottom:4}}>OSINT & THREAT INTEL</div>
-        <div style={{color:"#475569",fontSize:12}}>Email harvesting · GeoIP · VirusTotal · AbuseIPDB · Sherlock · Recon-ng · SpiderFoot</div>
+        <div style={{fontSize:22,fontWeight:900,color:"#00d4ff",letterSpacing:4,marginBottom:4}}>OSINT & THREAT INTEL</div>
+        <div style={{color:"#5a6478",fontSize:12}}>Email harvesting · GeoIP · VirusTotal · AbuseIPDB · Sherlock · Recon-ng · SpiderFoot</div>
       </div>
 
       {/* Config */}
@@ -7404,14 +7404,14 @@ function OsintModule({token, apiUrl}) {
             {running ? `Running... ${progress}%` : "Run All OSINT Tools"}
           </button>
           {Object.keys(results).length>0 && !running && (
-            <button style={{...C.btn,background:"#ef4444",marginTop:0}} onClick={() => setShowPDFModal(true)}>
+            <button style={{...C.btn,background:"#ff3e5e",marginTop:0}} onClick={() => setShowPDFModal(true)}>
               Report
             </button>
           )}
         </div>
         {running && (
-          <div style={{marginTop:10,background:"#0f172a",borderRadius:6,padding:8,maxHeight:90,overflowY:"auto"}}>
-            {log.map((l,i)=><div key={i} style={{fontSize:10,color:"#64748b"}}>{l}</div>)}
+          <div style={{marginTop:10,background:"#0d1320",borderRadius:6,padding:8,maxHeight:90,overflowY:"auto"}}>
+            {log.map((l,i)=><div key={i} style={{fontSize:10,color:"#5a6478"}}>{l}</div>)}
           </div>
         )}
       </div>
@@ -7434,15 +7434,15 @@ function OsintModule({token, apiUrl}) {
             <div style={{...C.card,flex:1}}>
               <div style={C.secHdr}>VirusTotal Reputation</div>
               {vt.error ? <div style={C.red}>{vt.error}</div> : (<>
-                <div style={{fontSize:28,fontWeight:900,color:vt.malicious>0?"#ef4444":"#22c55e",marginBottom:8}}>
+                <div style={{fontSize:28,fontWeight:900,color:vt.malicious>0?"#ff3e5e":"#00ff88",marginBottom:8}}>
                   {vt.malicious}/{vt.total_engines} <span style={{fontSize:13,fontWeight:400}}>engines flagged</span>
                 </div>
-                {[["Malicious",vt.malicious,"#ef4444"],["Suspicious",vt.suspicious,"#f59e0b"],["Harmless",vt.harmless,"#22c55e"]].map(([k,v,c])=>(
+                {[["Malicious",vt.malicious,"#ff3e5e"],["Suspicious",vt.suspicious,"#f59e0b"],["Harmless",vt.harmless,"#00ff88"]].map(([k,v,c])=>(
                   <div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                     <span style={C.gray}>{k}</span><span style={{color:c,fontWeight:700}}>{v}</span>
                   </div>
                 ))}
-                {vt.categories?.length>0 && <div style={{marginTop:8}}>{vt.categories.map((c,i)=><span key={i} style={C.tag("#1e3a8a")}>{c}</span>)}</div>}
+                {vt.categories?.length>0 && <div style={{marginTop:8}}>{vt.categories.map((c,i)=><span key={i} style={C.tag("#0e3a55")}>{c}</span>)}</div>}
               </>)}
             </div>
           )}
@@ -7450,7 +7450,7 @@ function OsintModule({token, apiUrl}) {
             <div style={{...C.card,flex:1}}>
               <div style={C.secHdr}>AbuseIPDB</div>
               {ab.error ? <div style={C.red}>{ab.error}</div> : (<>
-                <div style={{fontSize:28,fontWeight:900,color:ab.abuse_score>25?"#ef4444":ab.abuse_score>0?"#f59e0b":"#22c55e",marginBottom:8}}>
+                <div style={{fontSize:28,fontWeight:900,color:ab.abuse_score>25?"#ff3e5e":ab.abuse_score>0?"#f59e0b":"#00ff88",marginBottom:8}}>
                   {ab.abuse_score}% <span style={{fontSize:13,fontWeight:400}}>confidence score</span>
                 </div>
                 {[["IP",ab.ip],["Reports",ab.total_reports],["Country",ab.country],["ISP",ab.isp],["Whitelisted",ab.is_whitelisted?"Yes":"No"]].filter(([,v])=>v!==undefined&&v!=="").map(([k,v])=>(
@@ -7468,7 +7468,7 @@ function OsintModule({token, apiUrl}) {
           <div style={C.card}>
             <div style={C.secHdr}>Email Addresses Found ({allEmails.length})</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {allEmails.map((e,i)=><span key={i} style={{...C.tag("#1e3a8a"),fontFamily:"monospace"}}>{e}</span>)}
+              {allEmails.map((e,i)=><span key={i} style={{...C.tag("#0e3a55"),fontFamily:"monospace"}}>{e}</span>)}
             </div>
           </div>
         )}
@@ -7478,7 +7478,7 @@ function OsintModule({token, apiUrl}) {
           <div style={C.card}>
             <div style={C.secHdr}>Subdomains / Hosts Discovered ({allHosts.length})</div>
             <div style={{columns:3,columnGap:12}}>
-              {allHosts.map((h,i)=><div key={i} style={{color:"#60a5fa",fontSize:12,marginBottom:3,breakInside:"avoid"}}>{h}</div>)}
+              {allHosts.map((h,i)=><div key={i} style={{color:"#00d4ff",fontSize:12,marginBottom:3,breakInside:"avoid"}}>{h}</div>)}
             </div>
           </div>
         )}
@@ -7505,7 +7505,7 @@ function OsintModule({token, apiUrl}) {
             <div style={C.secHdr}>HaveIBeenPwned — Data Breaches</div>
             {results.hibp.error ? <div style={C.red}>{results.hibp.error}</div> :
              results.hibp.breaches?.length>0 ? (<>
-              <div style={{...C.tag("#ef4444"),marginBottom:10,fontSize:13}}>{results.hibp.breaches.length} BREACH(ES) FOUND</div>
+              <div style={{...C.tag("#ff3e5e"),marginBottom:10,fontSize:13}}>{results.hibp.breaches.length} BREACH(ES) FOUND</div>
               <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
                 {results.hibp.breaches.map((b,i)=><span key={i} style={C.tag("#7f1d1d")}>{b}</span>)}
               </div>
@@ -7519,16 +7519,16 @@ function OsintModule({token, apiUrl}) {
             <div style={C.secHdr}>DNSTwist — Potential Phishing Domains ({results.dnstwist.domains.length} found)</div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                <thead><tr style={{background:"#1e293b"}}>
-                  {["Domain","Type","IP","Registered"].map(h=><th key={h} style={{padding:"5px 8px",color:"#94a3b8",textAlign:"left",fontWeight:700}}>{h}</th>)}
+                <thead><tr style={{background:"#1c2435"}}>
+                  {["Domain","Type","IP","Registered"].map(h=><th key={h} style={{padding:"5px 8px",color:"#8a94a8",textAlign:"left",fontWeight:700}}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {results.dnstwist.domains.slice(0,30).map((d,i)=>(
-                    <tr key={i} style={{background:i%2===0?"#0f172a":"#1e293b"}}>
-                      <td style={{padding:"4px 8px",color:"#60a5fa"}}>{d.domain}</td>
-                      <td style={{padding:"4px 8px",color:"#94a3b8"}}>{d.fuzzer}</td>
-                      <td style={{padding:"4px 8px",color:"#e2e8f0"}}>{d.dns_a?.[0]||"—"}</td>
-                      <td style={{padding:"4px 8px",color:d.dns_a?"#ef4444":"#22c55e"}}>{d.dns_a?"Yes":"No"}</td>
+                    <tr key={i} style={{background:i%2===0?"#0d1320":"#1c2435"}}>
+                      <td style={{padding:"4px 8px",color:"#00d4ff"}}>{d.domain}</td>
+                      <td style={{padding:"4px 8px",color:"#8a94a8"}}>{d.fuzzer}</td>
+                      <td style={{padding:"4px 8px",color:"#d8deea"}}>{d.dns_a?.[0]||"—"}</td>
+                      <td style={{padding:"4px 8px",color:d.dns_a?"#ff3e5e":"#00ff88"}}>{d.dns_a?"Yes":"No"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -7542,7 +7542,7 @@ function OsintModule({token, apiUrl}) {
           <div style={C.card}>
             <div style={C.secHdr}>Google Dorks — Copy & paste into Google</div>
             {results.googledorks.dorks.map((d,i)=>(
-              <div key={i} style={{background:"#1e293b",borderRadius:6,padding:"6px 10px",marginBottom:6,fontFamily:"monospace",fontSize:11,color:"#60a5fa",cursor:"pointer",wordBreak:"break-all"}}
+              <div key={i} style={{background:"#1c2435",borderRadius:6,padding:"6px 10px",marginBottom:6,fontFamily:"monospace",fontSize:11,color:"#00d4ff",cursor:"pointer",wordBreak:"break-all"}}
                 onClick={()=>window.open("https://www.google.com/search?q="+encodeURIComponent(d),"_blank")}>
                 {d}
               </div>
@@ -7554,15 +7554,15 @@ function OsintModule({token, apiUrl}) {
         {malt.guide && (
           <div style={C.card}>
             <div style={C.secHdr}>Maltego Guide</div>
-            <pre style={{color:"#94a3b8",fontSize:11,whiteSpace:"pre-wrap",margin:0}}>{malt.guide}</pre>
+            <pre style={{color:"#8a94a8",fontSize:11,whiteSpace:"pre-wrap",margin:0}}>{malt.guide}</pre>
           </div>
         )}
 
         {/* Raw outputs */}
         {[["theHarvester Raw",mail.raw_output],["SpiderFoot Raw",sf.raw_output],["Recon-ng Raw",rng.raw_output],["Sherlock Raw",sher.raw_output]].filter(([,v])=>v).map(([label,raw])=>(
           <details key={label} style={{marginBottom:8}}>
-            <summary style={{color:"#475569",fontSize:11,cursor:"pointer",padding:"6px 0"}}>{label}</summary>
-            <pre style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:10,color:"#64748b",fontSize:10,whiteSpace:"pre-wrap",maxHeight:200,overflowY:"auto",margin:0}}>{raw}</pre>
+            <summary style={{color:"#5a6478",fontSize:11,cursor:"pointer",padding:"6px 0"}}>{label}</summary>
+            <pre style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:10,color:"#5a6478",fontSize:10,whiteSpace:"pre-wrap",maxHeight:200,overflowY:"auto",margin:0}}>{raw}</pre>
           </details>
         ))}
 
@@ -7824,12 +7824,12 @@ function MobileStaticModule({token, apiUrl}) {
   // Custom upload bar rendered ABOVE the standard ModuleShell tile grid
   const extra = () => (
     <div style={{
-      background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+      background:"#0d1320", border:"1px solid #1c2435", borderRadius:8,
       padding:"12px 16px", marginBottom:12, display:"flex",
       alignItems:"center", gap:12, flexWrap:"wrap",
     }}>
       <label style={{
-        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        background: uploading ? "#374151" : "#3b9eff", color:"#fff",
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
@@ -7843,8 +7843,8 @@ function MobileStaticModule({token, apiUrl}) {
                   if (s) pickSample(s);
                   e.target.value = "";
                 }}
-                style={{background:"#1e293b", color:"#f1f5f9",
-                        border:"1px solid #475569", borderRadius:6,
+                style={{background:"#1c2435", color:"#ffffff",
+                        border:"1px solid #5a6478", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
           <option value="">Try Sample APK ▼</option>
@@ -7857,12 +7857,12 @@ function MobileStaticModule({token, apiUrl}) {
       )}
       {uploadedPath && (
         <input value={uploadedPath} readOnly
-               style={{flex:1, minWidth:240, background:"#020617",
-                       border:"1px solid #1e3a8a", borderRadius:6,
-                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+               style={{flex:1, minWidth:240, background:"#0a0e17",
+                       border:"1px solid #0e3a55", borderRadius:6,
+                       padding:"8px 10px", color:"#8a94a8", fontSize:11,
                        fontFamily:"monospace"}}/>
       )}
-      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+      <div style={{color:"#c3ccda", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
           ? "Upload your own binary OR pick a sample APK above — then click Run on any scanner."
           : "Upload a binary first. Then enter its path in the Target field below + click Run on any scanner.")}
@@ -7965,12 +7965,12 @@ function MobileStorageModule({token, apiUrl}) {
 
   const extra = () => (
     <div style={{
-      background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+      background:"#0d1320", border:"1px solid #1c2435", borderRadius:8,
       padding:"12px 16px", marginBottom:12, display:"flex",
       alignItems:"center", gap:12, flexWrap:"wrap",
     }}>
       <label style={{
-        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        background: uploading ? "#374151" : "#3b9eff", color:"#fff",
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
@@ -7984,8 +7984,8 @@ function MobileStorageModule({token, apiUrl}) {
                   if (s) pickSample(s);
                   e.target.value = "";
                 }}
-                style={{background:"#1e293b", color:"#f1f5f9",
-                        border:"1px solid #475569", borderRadius:6,
+                style={{background:"#1c2435", color:"#ffffff",
+                        border:"1px solid #5a6478", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
           <option value="">Try Sample APK ▼</option>
@@ -7998,12 +7998,12 @@ function MobileStorageModule({token, apiUrl}) {
       )}
       {uploadedPath && (
         <input value={uploadedPath} readOnly
-               style={{flex:1, minWidth:240, background:"#020617",
-                       border:"1px solid #1e3a8a", borderRadius:6,
-                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+               style={{flex:1, minWidth:240, background:"#0a0e17",
+                       border:"1px solid #0e3a55", borderRadius:6,
+                       padding:"8px 10px", color:"#8a94a8", fontSize:11,
                        fontFamily:"monospace"}}/>
       )}
-      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+      <div style={{color:"#c3ccda", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
           ? "Upload your own APK OR pick a sample - then click Run on any scanner."
           : "Upload an APK first. Then click Run on any scanner.")}
@@ -8105,12 +8105,12 @@ function MobileRuntimeModule({token, apiUrl}) {
 
   const extra = () => (
     <div style={{
-      background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+      background:"#0d1320", border:"1px solid #1c2435", borderRadius:8,
       padding:"12px 16px", marginBottom:12, display:"flex",
       alignItems:"center", gap:12, flexWrap:"wrap",
     }}>
       <label style={{
-        background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+        background: uploading ? "#374151" : "#3b9eff", color:"#fff",
         padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
         cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap",
       }}>
@@ -8124,8 +8124,8 @@ function MobileRuntimeModule({token, apiUrl}) {
                   if (s) pickSample(s);
                   e.target.value = "";
                 }}
-                style={{background:"#1e293b", color:"#f1f5f9",
-                        border:"1px solid #475569", borderRadius:6,
+                style={{background:"#1c2435", color:"#ffffff",
+                        border:"1px solid #5a6478", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
           <option value="">Try Sample APK ▼</option>
@@ -8136,12 +8136,12 @@ function MobileRuntimeModule({token, apiUrl}) {
       )}
       {uploadedPath && (
         <input value={uploadedPath} readOnly
-               style={{flex:1, minWidth:240, background:"#020617",
-                       border:"1px solid #1e3a8a", borderRadius:6,
-                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+               style={{flex:1, minWidth:240, background:"#0a0e17",
+                       border:"1px solid #0e3a55", borderRadius:6,
+                       padding:"8px 10px", color:"#8a94a8", fontSize:11,
                        fontFamily:"monospace"}}/>
       )}
-      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+      <div style={{color:"#c3ccda", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
           ? "Upload your own APK OR pick a sample - then click Run on any scanner."
           : "Upload an APK first. Then click Run on any scanner.")}
@@ -8153,7 +8153,7 @@ function MobileRuntimeModule({token, apiUrl}) {
     title="Mobile Runtime / Anti-Tamper"
     moduleKey="mobile_runtime"
     icon=""
-    color="#dc2626"
+    color="#e02347"
     desc="§2 RUNTIME - 6 anti-tamper detection scanners. Catalogs root detection, anti-debug, anti-Frida, emulator detection, Play Integrity attestation, and iOS jailbreak detection mechanisms in the binary."
     hideHeader={true}
     token={token}
@@ -8237,10 +8237,10 @@ function MobileCryptoModule({token, apiUrl}) {
   }));
 
   const extra = () => (
-    <div style={{background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+    <div style={{background:"#0d1320", border:"1px solid #1c2435", borderRadius:8,
                  padding:"12px 16px", marginBottom:12, display:"flex",
                  alignItems:"center", gap:12, flexWrap:"wrap"}}>
-      <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+      <label style={{background: uploading ? "#374151" : "#3b9eff", color:"#fff",
                      padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
                      cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
         {uploading ? "Uploading..." : "Upload APK / IPA"}
@@ -8253,8 +8253,8 @@ function MobileCryptoModule({token, apiUrl}) {
                   if (s) pickSample(s);
                   e.target.value = "";
                 }}
-                style={{background:"#1e293b", color:"#f1f5f9",
-                        border:"1px solid #475569", borderRadius:6,
+                style={{background:"#1c2435", color:"#ffffff",
+                        border:"1px solid #5a6478", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
           <option value="">Try Sample APK ▼</option>
@@ -8263,12 +8263,12 @@ function MobileCryptoModule({token, apiUrl}) {
       )}
       {uploadedPath && (
         <input value={uploadedPath} readOnly
-               style={{flex:1, minWidth:240, background:"#020617",
-                       border:"1px solid #1e3a8a", borderRadius:6,
-                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+               style={{flex:1, minWidth:240, background:"#0a0e17",
+                       border:"1px solid #0e3a55", borderRadius:6,
+                       padding:"8px 10px", color:"#8a94a8", fontSize:11,
                        fontFamily:"monospace"}}/>
       )}
-      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+      <div style={{color:"#c3ccda", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
           ? "Upload your own APK OR pick a sample - then click Run on any scanner."
           : "Upload an APK first. Then click Run on any scanner.")}
@@ -8364,10 +8364,10 @@ function MobileNetworkModule({token, apiUrl}) {
   }));
 
   const extra = () => (
-    <div style={{background:"#0f172a", border:"1px solid #334155", borderRadius:8,
+    <div style={{background:"#0d1320", border:"1px solid #1c2435", borderRadius:8,
                  padding:"12px 16px", marginBottom:12, display:"flex",
                  alignItems:"center", gap:12, flexWrap:"wrap"}}>
-      <label style={{background: uploading ? "#374151" : "#3b82f6", color:"#fff",
+      <label style={{background: uploading ? "#374151" : "#3b9eff", color:"#fff",
                      padding:"8px 14px", borderRadius:6, fontWeight:600, fontSize:13,
                      cursor: uploading ? "wait" : "pointer", whiteSpace:"nowrap"}}>
         {uploading ? "Uploading..." : "Upload APK / IPA"}
@@ -8380,8 +8380,8 @@ function MobileNetworkModule({token, apiUrl}) {
                   if (s) pickSample(s);
                   e.target.value = "";
                 }}
-                style={{background:"#1e293b", color:"#f1f5f9",
-                        border:"1px solid #475569", borderRadius:6,
+                style={{background:"#1c2435", color:"#ffffff",
+                        border:"1px solid #5a6478", borderRadius:6,
                         padding:"8px 10px", fontSize:12, cursor:"pointer",
                         maxWidth:280}}>
           <option value="">Try Sample APK ▼</option>
@@ -8390,12 +8390,12 @@ function MobileNetworkModule({token, apiUrl}) {
       )}
       {uploadedPath && (
         <input value={uploadedPath} readOnly
-               style={{flex:1, minWidth:240, background:"#020617",
-                       border:"1px solid #1e3a8a", borderRadius:6,
-                       padding:"8px 10px", color:"#94a3b8", fontSize:11,
+               style={{flex:1, minWidth:240, background:"#0a0e17",
+                       border:"1px solid #0e3a55", borderRadius:6,
+                       padding:"8px 10px", color:"#8a94a8", fontSize:11,
                        fontFamily:"monospace"}}/>
       )}
-      <div style={{color:"#cbd5e1", fontSize:12, flex:"1 1 100%"}}>
+      <div style={{color:"#c3ccda", fontSize:12, flex:"1 1 100%"}}>
         {uploadStatus || (samples.length > 0
           ? "Upload your own APK OR pick a sample - then click Run on any scanner."
           : "Upload an APK first. Then click Run on any scanner.")}
@@ -8446,7 +8446,7 @@ function ReportModule({token, apiUrl}) {
   const [extra,  setExtra]      = useState([]);
   const [loading,setLoading]    = useState(false);
 
-  const sev = {CRITICAL:"#ef4444",HIGH:"#f97316",MEDIUM:"#f59e0b",LOW:"#22c55e",INFO:"#60a5fa"};
+  const sev = {CRITICAL:"#ff3e5e",HIGH:"#f97316",MEDIUM:"#f59e0b",LOW:"#00ff88",INFO:"#00d4ff"};
 
   const addFinding = () => setFindings(p=>[...p,{title:"",severity:"HIGH",desc:"",remediation:""}]);
   const updF = (i,k,v) => setFindings(p=>p.map((f,idx)=>idx===i?{...f,[k]:v}:f));
@@ -8516,65 +8516,65 @@ function ReportModule({token, apiUrl}) {
   return (
     <div style={{padding:24,maxWidth:900,margin:"0 auto"}}>
       <div style={{marginBottom:20}}>
-        <h2 style={{color:"#e2e8f0",margin:0,fontSize:22,fontWeight:800}}>Report Writing</h2>
-        <p style={{color:"#64748b",fontSize:13,marginTop:6}}>Build your penetration test report, add findings, and export a professional PDF.</p>
+        <h2 style={{color:"#d8deea",margin:0,fontSize:22,fontWeight:800}}>Report Writing</h2>
+        <p style={{color:"#5a6478",fontSize:13,marginTop:6}}>Build your penetration test report, add findings, and export a professional PDF.</p>
       </div>
 
       {/* Report metadata */}
-      <div style={{background:"#0a1628",border:"1px solid #1e293b",borderRadius:10,padding:18,marginBottom:16}}>
-        <div style={{color:"#60a5fa",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:1}}>REPORT DETAILS</div>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:18,marginBottom:16}}>
+        <div style={{color:"#00d4ff",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:1}}>REPORT DETAILS</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           {[["Report Title",title,setTitle],["Client / Company",client,setClient],["Tester Name",tester,setTester],["Target System",target,setTarget]].map(([lbl,val,set])=>(
             <div key={lbl}>
-              <div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>{lbl}</div>
-              <input value={val} onChange={e=>set(e.target.value)} style={{width:"100%",background:"#020617",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              <div style={{color:"#8a94a8",fontSize:11,marginBottom:4}}>{lbl}</div>
+              <input value={val} onChange={e=>set(e.target.value)} style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
             </div>
           ))}
         </div>
         <div style={{marginTop:10}}>
-          <div style={{color:"#94a3b8",fontSize:11,marginBottom:4}}>Executive Summary</div>
+          <div style={{color:"#8a94a8",fontSize:11,marginBottom:4}}>Executive Summary</div>
           <textarea value={exec} onChange={e=>setExec(e.target.value)} rows={4} placeholder="Summarise the engagement scope, key risks, and recommendations..."
-            style={{width:"100%",background:"#020617",border:"1px solid #334155",borderRadius:6,padding:"8px 10px",color:"#e2e8f0",fontSize:13,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+            style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"8px 10px",color:"#d8deea",fontSize:13,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
         </div>
       </div>
 
       {/* Risk overview */}
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {SEVS.map(s=>({ s, n:findings.filter(f=>f.severity===s).length })).map(({s,n})=>(
-          <div key={s} style={{background:"#0a1628",border:`1px solid ${sev[s]}33`,borderRadius:8,padding:"10px",textAlign:"center"}}>
+          <div key={s} style={{background:"#0d1320",border:`1px solid ${sev[s]}33`,borderRadius:8,padding:"10px",textAlign:"center"}}>
             <div style={{fontSize:20,fontWeight:800,color:sev[s]}}>{n}</div>
-            <div style={{fontSize:10,color:"#94a3b8",fontWeight:700}}>{s}</div>
+            <div style={{fontSize:10,color:"#8a94a8",fontWeight:700}}>{s}</div>
           </div>
         ))}
       </div>
 
       {/* Findings list */}
-      <div style={{background:"#0a1628",border:"1px solid #1e293b",borderRadius:10,padding:18,marginBottom:16}}>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:18,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <span style={{color:"#60a5fa",fontWeight:700,fontSize:12,letterSpacing:1}}>FINDINGS ({findings.length})</span>
+          <span style={{color:"#00d4ff",fontWeight:700,fontSize:12,letterSpacing:1}}>FINDINGS ({findings.length})</span>
           <button onClick={addFinding} style={{background:"#1d4ed8",border:"none",borderRadius:6,padding:"7px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Add Finding</button>
         </div>
-        {findings.length===0 && <div style={{color:"#475569",fontSize:13,textAlign:"center",padding:"24px 0"}}>No findings yet — click "Add Finding" to start</div>}
+        {findings.length===0 && <div style={{color:"#5a6478",fontSize:13,textAlign:"center",padding:"24px 0"}}>No findings yet — click "Add Finding" to start</div>}
         {findings.map((f,i)=>(
-          <div key={i} style={{background:"#020617",border:`1px solid ${sev[f.severity]||"#334155"}44`,borderRadius:8,padding:14,marginBottom:10}}>
+          <div key={i} style={{background:"#0a0e17",border:`1px solid ${sev[f.severity]||"#1c2435"}44`,borderRadius:8,padding:14,marginBottom:10}}>
             <div style={{display:"flex",gap:8,marginBottom:10,alignItems:"center"}}>
               <input value={f.title} onChange={e=>updF(i,"title",e.target.value)} placeholder="Finding title (e.g. SQL Injection in login form)"
-                style={{flex:1,background:"#0a1628",border:"1px solid #334155",borderRadius:6,padding:"7px 10px",color:"#e2e8f0",fontSize:13,outline:"none"}}/>
+                style={{flex:1,background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"7px 10px",color:"#d8deea",fontSize:13,outline:"none"}}/>
               <select value={f.severity} onChange={e=>updF(i,"severity",e.target.value)}
-                style={{background:"#0a1628",border:`1px solid ${sev[f.severity]}`,borderRadius:6,padding:"7px 10px",color:sev[f.severity],fontSize:12,fontWeight:700,outline:"none"}}>
+                style={{background:"#0d1320",border:`1px solid ${sev[f.severity]}`,borderRadius:6,padding:"7px 10px",color:sev[f.severity],fontSize:12,fontWeight:700,outline:"none"}}>
                 {SEVS.map(s=><option key={s} value={s}>{s}</option>)}
               </select>
-              <button onClick={()=>delF(i)} style={{background:"#7f1d1d",border:"none",borderRadius:6,padding:"7px 12px",color:"#fca5a5",fontSize:12,cursor:"pointer"}}></button>
+              <button onClick={()=>delF(i)} style={{background:"#7f1d1d",border:"none",borderRadius:6,padding:"7px 12px",color:"#ffa3b0",fontSize:12,cursor:"pointer"}}></button>
             </div>
             <textarea value={f.desc} onChange={e=>updF(i,"desc",e.target.value)} rows={2} placeholder="Description — what was found, how to reproduce..."
-              style={{width:"100%",background:"#0a1628",border:"1px solid #1e293b",borderRadius:6,padding:"7px 10px",color:"#cbd5e1",fontSize:12,outline:"none",resize:"vertical",marginBottom:6,boxSizing:"border-box"}}/>
+              style={{width:"100%",background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:"7px 10px",color:"#c3ccda",fontSize:12,outline:"none",resize:"vertical",marginBottom:6,boxSizing:"border-box"}}/>
             <textarea value={f.remediation} onChange={e=>updF(i,"remediation",e.target.value)} rows={1} placeholder="Remediation recommendation..."
-              style={{width:"100%",background:"#0a1628",border:"1px solid #14532d",borderRadius:6,padding:"7px 10px",color:"#86efac",fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+              style={{width:"100%",background:"#0d1320",border:"1px solid #14532d",borderRadius:6,padding:"7px 10px",color:"#7dffc0",fontSize:12,outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
           </div>
         ))}
       </div>
 
-      <button onClick={exportPDF} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+      <button onClick={exportPDF} style={{background:"#ff3e5e",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
         Report
       </button>
     </div>
@@ -8636,16 +8636,16 @@ function ToolManagerModule({token}) {
 
   useEffect(()=>{ checkStatus(); },[]);
 
-  const sevColor = s => s==="ok"?"#22c55e":s==="missing"?"#ef4444":"#f59e0b";
+  const sevColor = s => s==="ok"?"#00ff88":s==="missing"?"#ff3e5e":"#f59e0b";
 
   return (
     <div style={{padding:24,maxWidth:1000,margin:"0 auto"}}>
       <div style={{marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div>
-          <h2 style={{color:"#e2e8f0",margin:0,fontSize:22,fontWeight:800}}>Tool Manager & Updater</h2>
-          <p style={{color:"#64748b",fontSize:13,marginTop:4}}>Update Kali, install/upgrade all pentesting tools including GitHub projects</p>
+          <h2 style={{color:"#d8deea",margin:0,fontSize:22,fontWeight:800}}>Tool Manager & Updater</h2>
+          <p style={{color:"#5a6478",fontSize:13,marginTop:4}}>Update Kali, install/upgrade all pentesting tools including GitHub projects</p>
         </div>
-        <button onClick={checkStatus} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"8px 16px",color:"#94a3b8",fontSize:12,cursor:"pointer"}}>
+        <button onClick={checkStatus} style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:6,padding:"8px 16px",color:"#8a94a8",fontSize:12,cursor:"pointer"}}>
           Check Status
         </button>
       </div>
@@ -8662,21 +8662,21 @@ function ToolManagerModule({token}) {
             style={{background:b.color+"22",border:`1px solid ${b.color}66`,borderRadius:10,padding:"14px 10px",
               cursor:running?"not-allowed":"pointer",textAlign:"center",opacity:running?0.6:1}}>
             <div style={{fontSize:24,marginBottom:6}}>{b.icon}</div>
-            <div style={{color:"#e2e8f0",fontSize:12,fontWeight:700}}>{b.label}</div>
-            <div style={{color:"#64748b",fontSize:10,marginTop:3}}>{b.desc}</div>
+            <div style={{color:"#d8deea",fontSize:12,fontWeight:700}}>{b.label}</div>
+            <div style={{color:"#5a6478",fontSize:10,marginTop:3}}>{b.desc}</div>
           </button>
         ))}
       </div>
 
       {/* Tool Status Grid */}
       {Object.keys(status).length > 0 && (
-        <div style={{background:"#0a1628",border:"1px solid #1e293b",borderRadius:10,padding:16,marginBottom:16}}>
-          <div style={{color:"#60a5fa",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:1}}>TOOL STATUS</div>
+        <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16,marginBottom:16}}>
+          <div style={{color:"#00d4ff",fontWeight:700,fontSize:12,marginBottom:12,letterSpacing:1}}>TOOL STATUS</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:6}}>
             {Object.entries(status).map(([tool,s])=>(
-              <div key={tool} style={{display:"flex",alignItems:"center",gap:6,background:"#020617",borderRadius:6,padding:"5px 8px"}}>
+              <div key={tool} style={{display:"flex",alignItems:"center",gap:6,background:"#0a0e17",borderRadius:6,padding:"5px 8px"}}>
                 <div style={{width:7,height:7,borderRadius:"50%",background:sevColor(s),flexShrink:0}}/>
-                <span style={{color:"#cbd5e1",fontSize:11,fontFamily:"monospace"}}>{tool}</span>
+                <span style={{color:"#c3ccda",fontSize:11,fontFamily:"monospace"}}>{tool}</span>
               </div>
             ))}
           </div>
@@ -8686,12 +8686,12 @@ function ToolManagerModule({token}) {
       {/* Tool Categories */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
         {TOOLS.map(cat=>(
-          <div key={cat.cat} style={{background:"#0a1628",border:"1px solid #1e293b",borderRadius:8,padding:12}}>
-            <div style={{color:"#60a5fa",fontSize:11,fontWeight:700,marginBottom:8}}>{cat.cat}</div>
+          <div key={cat.cat} style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:12}}>
+            <div style={{color:"#00d4ff",fontSize:11,fontWeight:700,marginBottom:8}}>{cat.cat}</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
               {cat.tools.map(t=>(
-                <span key={t} style={{background:status[t]==="ok"?"#14532d":status[t]==="missing"?"#450a0a":"#1e293b",
-                  color:status[t]==="ok"?"#86efac":status[t]==="missing"?"#fca5a5":"#94a3b8",
+                <span key={t} style={{background:status[t]==="ok"?"#14532d":status[t]==="missing"?"#450a0a":"#1c2435",
+                  color:status[t]==="ok"?"#7dffc0":status[t]==="missing"?"#ffa3b0":"#8a94a8",
                   padding:"2px 7px",borderRadius:4,fontSize:10,fontFamily:"monospace"}}>
                   {status[t]==="ok"?"":status[t]==="missing"?"":""}{t}
                 </span>
@@ -8703,16 +8703,16 @@ function ToolManagerModule({token}) {
 
       {/* Log Output */}
       {log.length > 0 && (
-        <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+        <div style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-            <span style={{color:"#60a5fa",fontWeight:700,fontSize:12}}>INSTALL LOG</span>
-            <button onClick={()=>setLog([])} style={{background:"none",border:"none",color:"#475569",fontSize:11,cursor:"pointer"}}>Clear</button>
+            <span style={{color:"#00d4ff",fontWeight:700,fontSize:12}}>INSTALL LOG</span>
+            <button onClick={()=>setLog([])} style={{background:"none",border:"none",color:"#5a6478",fontSize:11,cursor:"pointer"}}>Clear</button>
           </div>
           <div style={{maxHeight:300,overflowY:"auto",fontFamily:"monospace",fontSize:11}}>
             {log.map((l,i)=>(
-              <div key={i} style={{color:l.startsWith("")?"#ef4444":l.startsWith("")?"#22c55e":l.startsWith("")?"#60a5fa":"#94a3b8",marginBottom:2,lineHeight:1.5}}>{l}</div>
+              <div key={i} style={{color:l.startsWith("")?"#ff3e5e":l.startsWith("")?"#00ff88":l.startsWith("")?"#00d4ff":"#8a94a8",marginBottom:2,lineHeight:1.5}}>{l}</div>
             ))}
-            {running && <div style={{color:"#60a5fa",animation:"pulse 1s infinite"}}>▌ Running...</div>}
+            {running && <div style={{color:"#00d4ff",animation:"pulse 1s infinite"}}>▌ Running...</div>}
           </div>
         </div>
       )}
@@ -8734,8 +8734,8 @@ function Dashboard(props) {
   },[token]);
 
   const cards = [
-    {label:"Total Scans",    val:stats?.total||0,         icon:"", color:"#3b82f6"},
-    {label:"Tools Available",val:health?Object.keys(health.free_tools||{}).length:0, icon:"", color:"#22c55e"},
+    {label:"Total Scans",    val:stats?.total||0,         icon:"", color:"#3b9eff"},
+    {label:"Tools Available",val:health?Object.keys(health.free_tools||{}).length:0, icon:"", color:"#00ff88"},
     {label:"Modules",        val:20,                       icon:"", color:"#a855f7"},
     {label:"Platform Version",val:"v3.1",                  icon:"", color:"#f59e0b"},
   ];
@@ -8747,60 +8747,60 @@ function Dashboard(props) {
   return (
     <div className="fade">
       {/* Welcome */}
-      <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:10,padding:"20px 24px",marginBottom:20,display:"flex",alignItems:"center",gap:16}}>
+      <div style={{background:"linear-gradient(135deg,#0d2436,#0d1320)",border:"1px solid #0e3a55",borderRadius:10,padding:"20px 24px",marginBottom:20,display:"flex",alignItems:"center",gap:16}}>
         <div style={{fontSize:40}}></div>
         <div>
-          <h1 style={{fontSize:20,fontWeight:700,color:"#f1f5f9",margin:"0 0 2px"}}>Welcome to VulnusLab v3.1</h1>
-          <p style={{fontSize:12,color:"#64748b",margin:0}}>Production Penetration Testing Suite — {new Date().toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</p>
+          <h1 style={{fontSize:20,fontWeight:700,color:"#ffffff",margin:"0 0 2px"}}>Welcome to VulnusLab v3.1</h1>
+          <p style={{fontSize:12,color:"#5a6478",margin:0}}>Production Penetration Testing Suite — {new Date().toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</p>
         </div>
         <div style={{marginLeft:"auto",textAlign:"right"}}>
-          <div style={{fontSize:11,color:"#22c55e",fontWeight:600}}>● System Online</div>
-          <div style={{fontSize:10,color:"#475569"}}>Kali Linux Backend</div>
+          <div style={{fontSize:11,color:"#00ff88",fontWeight:600}}>● System Online</div>
+          <div style={{fontSize:10,color:"#5a6478"}}>Kali Linux Backend</div>
         </div>
       </div>
 
       {/* Stats cards */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
         {cards.map((c,i)=>(
-          <div key={i} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:16,borderTop:`3px solid ${c.color}`}}>
+          <div key={i} style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:16,borderTop:`3px solid ${c.color}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
               <span style={{fontSize:22}}>{c.icon}</span>
               <span style={{fontSize:10,color:c.color,fontWeight:700,background:c.color+"20",padding:"2px 8px",borderRadius:4}}>LIVE</span>
             </div>
             <div style={{fontSize:28,fontWeight:700,color:c.color,marginBottom:2}}>{c.val}</div>
-            <div style={{fontSize:11,color:"#64748b"}}>{c.label}</div>
+            <div style={{fontSize:11,color:"#5a6478"}}>{c.label}</div>
           </div>
         ))}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
         {/* Recent Scans */}
-        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:13,fontWeight:600,color:"#f1f5f9"}}>Recent Scans</span>
-            <span style={{fontSize:10,color:"#475569"}}>{stats?.total||0} total</span>
+        <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1c2435",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:13,fontWeight:600,color:"#ffffff"}}>Recent Scans</span>
+            <span style={{fontSize:10,color:"#5a6478"}}>{stats?.total||0} total</span>
           </div>
           {recentScans.length>0 ? recentScans.map((s,i)=>(
-            <div key={i} style={{padding:"10px 16px",borderBottom:"1px solid #0f172a",background:i%2===0?"#020617":"transparent",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:11,color:"#3b82f6",fontFamily:"monospace",fontWeight:600,minWidth:80}}>{s.tool}</span>
-              <span style={{fontSize:10,color:"#64748b",fontFamily:"monospace",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.target}</span>
-              <span style={{fontSize:9,background:s.status==="complete"?"#052e16":"#1c0a0a",color:s.status==="complete"?"#22c55e":"#ef4444",padding:"2px 6px",borderRadius:3,fontWeight:600}}>{s.status}</span>
+            <div key={i} style={{padding:"10px 16px",borderBottom:"1px solid #0d1320",background:i%2===0?"#0a0e17":"transparent",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:11,color:"#3b9eff",fontFamily:"monospace",fontWeight:600,minWidth:80}}>{s.tool}</span>
+              <span style={{fontSize:10,color:"#5a6478",fontFamily:"monospace",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.target}</span>
+              <span style={{fontSize:9,background:s.status==="complete"?"#052e16":"#1c0a0a",color:s.status==="complete"?"#00ff88":"#ff3e5e",padding:"2px 6px",borderRadius:3,fontWeight:600}}>{s.status}</span>
             </div>
-          )) : <div style={{padding:24,textAlign:"center",color:"#334155",fontSize:12}}>No scans yet — run your first scan!</div>}
+          )) : <div style={{padding:24,textAlign:"center",color:"#1c2435",fontSize:12}}>No scans yet — run your first scan!</div>}
         </div>
 
         {/* Tools Status */}
-        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:13,fontWeight:600,color:"#f1f5f9"}}>Tools Status</span>
-            <span style={{fontSize:10,color:"#22c55e",fontWeight:600}}>{available}/{freeTools.length} available</span>
+        <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1c2435",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:13,fontWeight:600,color:"#ffffff"}}>Tools Status</span>
+            <span style={{fontSize:10,color:"#00ff88",fontWeight:600}}>{available}/{freeTools.length} available</span>
           </div>
           <div style={{maxHeight:200,overflowY:"auto"}}>
             {freeTools.slice(0,12).map(([name,info],i)=>(
-              <div key={i} style={{padding:"7px 16px",borderBottom:"1px solid #0f172a",background:i%2===0?"#020617":"transparent",display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:6,height:6,borderRadius:"50%",background:info.available?"#22c55e":"#ef4444",flexShrink:0}}/>
-                <span style={{fontSize:11,color:"#e2e8f0",fontFamily:"monospace",flex:1}}>{name}</span>
-                <span style={{fontSize:9,color:info.available?"#22c55e":"#ef4444"}}>{info.available?"OK":"MISSING"}</span>
+              <div key={i} style={{padding:"7px 16px",borderBottom:"1px solid #0d1320",background:i%2===0?"#0a0e17":"transparent",display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:info.available?"#00ff88":"#ff3e5e",flexShrink:0}}/>
+                <span style={{fontSize:11,color:"#d8deea",fontFamily:"monospace",flex:1}}>{name}</span>
+                <span style={{fontSize:9,color:info.available?"#00ff88":"#ff3e5e"}}>{info.available?"OK":"MISSING"}</span>
               </div>
             ))}
           </div>
@@ -8808,21 +8808,21 @@ function Dashboard(props) {
       </div>
 
       {/* Quick Launch */}
-      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:16}}>
-        <div style={{fontSize:13,fontWeight:600,color:"#f1f5f9",marginBottom:12}}>Quick Launch</div>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:16}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#ffffff",marginBottom:12}}>Quick Launch</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
           {[
-            {label:"Web App Pentest",  icon:"", mod:"webapp",  color:"#3b82f6"},
-            {label:"Recon & OSINT",    icon:"", mod:"recon",   color:"#22c55e"},
+            {label:"Web App Pentest",  icon:"", mod:"webapp",  color:"#3b9eff"},
+            {label:"Recon & OSINT",    icon:"", mod:"recon",   color:"#00ff88"},
             {label:"Vuln Scanning",    icon:"", mod:"vuln",    color:"#f59e0b"},
             {label:"Password Attacks", icon:"", mod:"password",color:"#a855f7"},
           ].map((q,i)=>(
             <button key={i} onClick={()=>props.setActive(q.mod)}
-              style={{background:"#020617",border:`1px solid ${q.color}30`,borderRadius:6,padding:"12px 8px",cursor:"pointer",textAlign:"center",transition:"all .2s"}}
+              style={{background:"#0a0e17",border:`1px solid ${q.color}30`,borderRadius:6,padding:"12px 8px",cursor:"pointer",textAlign:"center",transition:"all .2s"}}
               onMouseOver={e=>e.currentTarget.style.background=q.color+"15"}
-              onMouseOut={e=>e.currentTarget.style.background="#020617"}>
+              onMouseOut={e=>e.currentTarget.style.background="#0a0e17"}>
               <div style={{fontSize:22,marginBottom:6}}>{q.icon}</div>
-              <div style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>{q.label}</div>
+              <div style={{fontSize:11,color:"#8a94a8",fontWeight:500}}>{q.label}</div>
             </button>
           ))}
         </div>
@@ -12686,21 +12686,21 @@ function ReconModule({token, onRunningChange, activeSections}) {
   };
 
   const S = {
-    card:    {background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:16,marginBottom:12},
-    label:   {fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4},
-    val:     {fontSize:13,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace"},
-    th:      {background:"#1e293b",padding:"7px 10px",fontSize:11,color:"#94a3b8",fontWeight:700,textAlign:"left"},
-    td:      {padding:"6px 10px",fontSize:12,color:"#e2e8f0",borderBottom:"1px solid #0f172a"},
-    tdMono:  {padding:"6px 10px",fontSize:11,color:"#38bdf8",fontFamily:"JetBrains Mono,monospace",borderBottom:"1px solid #0f172a"},
+    card:    {background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:16,marginBottom:12},
+    label:   {fontSize:11,color:"#5a6478",fontWeight:600,marginBottom:4},
+    val:     {fontSize:13,color:"#d8deea",fontFamily:"JetBrains Mono,monospace"},
+    th:      {background:"#1c2435",padding:"7px 10px",fontSize:11,color:"#8a94a8",fontWeight:700,textAlign:"left"},
+    td:      {padding:"6px 10px",fontSize:12,color:"#d8deea",borderBottom:"1px solid #0d1320"},
+    tdMono:  {padding:"6px 10px",fontSize:11,color:"#38bdf8",fontFamily:"JetBrains Mono,monospace",borderBottom:"1px solid #0d1320"},
     badge:   (c) => ({background:c+"22",color:c,border:"1px solid "+c+"55",borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:700}),
-    tabBtn:  (active) => ({background:active?"#1e3a8a":"transparent",border:"none",borderBottom:active?"2px solid #3b82f6":"2px solid transparent",color:active?"#60a5fa":"#64748b",padding:"8px 16px",fontSize:12,fontWeight:active?700:400,cursor:"pointer"}),
-    section: {background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:6,padding:14,marginBottom:10},
+    tabBtn:  (active) => ({background:active?"#0e3a55":"transparent",border:"none",borderBottom:active?"2px solid #3b9eff":"2px solid transparent",color:active?"#00d4ff":"#5a6478",padding:"8px 16px",fontSize:12,fontWeight:active?700:400,cursor:"pointer"}),
+    section: {background:"#0d1320",border:"1px solid #1c2435",borderRadius:6,padding:14,marginBottom:10},
   };
 
   // ── Results renderer ───────────────────────────────────────────
   const renderResults = () => {
     if (!finished && Object.keys(allResults).length===0) return (
-      <div style={{color:"#475569",fontSize:13,padding:24,textAlign:"center"}}>Run a scan to see results here.</div>
+      <div style={{color:"#5a6478",fontSize:13,padding:24,textAlign:"center"}}>Run a scan to see results here.</div>
     );
     const r = allResults;
     const findings = synthesizeReconFindings(r);
@@ -12709,7 +12709,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Findings — severity-ranked actionable risks */}
         {findings.length > 0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#fca5a5",marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#ffa3b0",marginBottom:10}}>
               Findings — {findings.length} risk{findings.length>1?"s":""} (
               {findings.filter(f=>f.severity==="CRITICAL").length} critical,{" "}
               {findings.filter(f=>f.severity==="HIGH").length} high,{" "}
@@ -12717,32 +12717,32 @@ function ReconModule({token, onRunningChange, activeSections}) {
               {findings.filter(f=>f.severity==="LOW").length} low)
             </div>
             {findings.slice(0,25).map((f,i)=>{
-              const sevColor = f.severity==="CRITICAL"?"#dc2626":f.severity==="HIGH"?"#ea580c":f.severity==="MEDIUM"?"#ca8a04":"#64748b";
+              const sevColor = f.severity==="CRITICAL"?"#e02347":f.severity==="HIGH"?"#ea580c":f.severity==="MEDIUM"?"#ca8a04":"#5a6478";
               return (
-                <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderLeft:`3px solid ${sevColor}`,borderRadius:5,padding:"10px 12px",marginBottom:8}}>
+                <div key={i} style={{background:"#0a0e17",border:"1px solid #1c2435",borderLeft:`3px solid ${sevColor}`,borderRadius:5,padding:"10px 12px",marginBottom:8}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,gap:10}}>
-                    <span style={{fontSize:12,fontWeight:700,color:"#e2e8f0",lineHeight:1.3}}>{i+1}. {f.title}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:"#d8deea",lineHeight:1.3}}>{i+1}. {f.title}</span>
                     <span style={S.badge(sevColor)}>{f.severity} · CVSS {f.cvss||"?"}</span>
                   </div>
-                  <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.4,marginBottom:6}}>{f.description}</div>
+                  <div style={{fontSize:11,color:"#8a94a8",lineHeight:1.4,marginBottom:6}}>{f.description}</div>
                   {f.evidence && (
-                    <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",marginBottom:4}}>
-                      <span style={{color:"#94a3b8",fontWeight:700}}>Evidence: </span>{f.evidence}
+                    <div style={{fontSize:10,color:"#8a94a8",fontFamily:"JetBrains Mono,monospace",marginBottom:4}}>
+                      <span style={{color:"#8a94a8",fontWeight:700}}>Evidence: </span>{f.evidence}
                     </div>
                   )}
                   {f.remediation && (
-                    <div style={{fontSize:10,color:"#86efac",marginBottom:4}}>
+                    <div style={{fontSize:10,color:"#7dffc0",marginBottom:4}}>
                       <span style={{fontWeight:700}}>Fix: </span>{f.remediation}
                     </div>
                   )}
                   {f.references && (
-                    <div style={{fontSize:9,color:"#475569",fontStyle:"italic"}}>Refs: {f.references}</div>
+                    <div style={{fontSize:9,color:"#5a6478",fontStyle:"italic"}}>Refs: {f.references}</div>
                   )}
                 </div>
               );
             })}
             {findings.length > 25 && (
-              <div style={{fontSize:11,color:"#475569",textAlign:"center",marginTop:6}}>... and {findings.length-25} more findings (top 25 shown)</div>
+              <div style={{fontSize:11,color:"#5a6478",textAlign:"center",marginTop:6}}>... and {findings.length-25} more findings (top 25 shown)</div>
             )}
           </div>
         )}
@@ -12750,7 +12750,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* WHOIS */}
         {r.whois && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>WHOIS</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>WHOIS</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               {[["Domain",r.whois.domain],["Registrar",r.whois.registrar],["Created",r.whois.created],["Expires",r.whois.expires],["Updated",r.whois.updated],["Name Servers",(r.whois.name_servers||[]).join(", ")],["Registrant",r.whois.registrant],["Country",r.whois.country]].filter(([,v])=>v).map(([k,v],i)=>(
                 <div key={i} style={S.card}>
@@ -12765,14 +12765,14 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* DNS Records */}
         {r.dns && r.dns.records && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>DNS Records</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>DNS Records</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>TYPE</th><th style={S.th}>RECORD</th></tr></thead>
               <tbody>
                 {Object.entries(r.dns.records).flatMap(([type,vals])=>
                   (Array.isArray(vals)?vals:[vals]).map((v,i)=>(
                     <tr key={type+i}>
-                      <td style={{...S.td,width:60}}><span style={S.badge("#3b82f6")}>{type}</span></td>
+                      <td style={{...S.td,width:60}}><span style={S.badge("#3b9eff")}>{type}</span></td>
                       <td style={S.tdMono}>{String(v)}</td>
                     </tr>
                   ))
@@ -12785,7 +12785,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* DNS Recon */}
         {r.dnsrecon && r.dnsrecon.records && r.dnsrecon.records.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>DNS Recon</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>DNS Recon</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>TYPE</th><th style={S.th}>NAME</th><th style={S.th}>VALUE</th></tr></thead>
               <tbody>
@@ -12804,10 +12804,10 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Subdomains */}
         {r.subdomains && r.subdomains.subdomains && r.subdomains.subdomains.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Subdomains ({r.subdomains.subdomains.length})</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>Subdomains ({r.subdomains.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.subdomains.subdomains.slice(0,60).map((s,i)=>(
-                <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#38bdf8",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
+                <div key={i} style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#38bdf8",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
               ))}
             </div>
           </div>
@@ -12816,10 +12816,10 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* TheHarvester */}
         {r.harvester && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>OSINT Harvester</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>OSINT Harvester</div>
             {(r.harvester.emails||[]).length>0 && (
               <>
-                <div style={{fontSize:11,color:"#94a3b8",fontWeight:700,marginBottom:6}}>EMAILS FOUND</div>
+                <div style={{fontSize:11,color:"#8a94a8",fontWeight:700,marginBottom:6}}>EMAILS FOUND</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:10}}>
                   {r.harvester.emails.map((e,i)=><span key={i} style={S.badge("#f59e0b")}>{e}</span>)}
                 </div>
@@ -12827,14 +12827,14 @@ function ReconModule({token, onRunningChange, activeSections}) {
             )}
             {(r.harvester.hosts||[]).length>0 && (
               <>
-                <div style={{fontSize:11,color:"#94a3b8",fontWeight:700,marginBottom:6}}>HOSTS / IPs</div>
+                <div style={{fontSize:11,color:"#8a94a8",fontWeight:700,marginBottom:6}}>HOSTS / IPs</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                  {r.harvester.hosts.map((h,i)=><span key={i} style={S.badge("#22c55e")}>{h}</span>)}
+                  {r.harvester.hosts.map((h,i)=><span key={i} style={S.badge("#00ff88")}>{h}</span>)}
                 </div>
               </>
             )}
             {(r.harvester.emails||[]).length===0 && (r.harvester.hosts||[]).length===0 && (
-              <div style={{color:"#475569",fontSize:12}}>No emails or hosts found.</div>
+              <div style={{color:"#5a6478",fontSize:12}}>No emails or hosts found.</div>
             )}
           </div>
         )}
@@ -12842,7 +12842,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Ports — masscan + nmap combined */}
         {(r.masscan||r.nmap) && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Open Ports</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>Open Ports</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>PORT</th><th style={S.th}>PROTO</th><th style={S.th}>STATE</th><th style={S.th}>SOURCE</th></tr></thead>
               <tbody>
@@ -12851,7 +12851,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   <tr key={i}>
                     <td style={{...S.tdMono,fontWeight:700}}>{p.port}</td>
                     <td style={S.td}>{p.proto||p.protocol||"tcp"}</td>
-                    <td style={S.td}><span style={S.badge(p.state==="open"?"#22c55e":"#64748b")}>{p.state||"open"}</span></td>
+                    <td style={S.td}><span style={S.badge(p.state==="open"?"#00ff88":"#5a6478")}>{p.state||"open"}</span></td>
                     <td style={S.td}>{p.src}</td>
                   </tr>
                 ))}
@@ -12863,7 +12863,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Services */}
         {r.services && r.services.ports && r.services.ports.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Services & Versions</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>Services & Versions</div>
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead><tr><th style={S.th}>PORT</th><th style={S.th}>SERVICE</th><th style={S.th}>VERSION</th></tr></thead>
               <tbody>
@@ -12871,7 +12871,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   <tr key={i}>
                     <td style={S.tdMono}>{p.port}</td>
                     <td style={S.td}>{p.service||"—"}</td>
-                    <td style={{...S.td,color:"#94a3b8"}}>{p.version||p.product||"—"}</td>
+                    <td style={{...S.td,color:"#8a94a8"}}>{p.version||p.product||"—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -12882,13 +12882,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* OS */}
         {r.os && (r.os.os||r.os.matches) && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>OS Fingerprinting</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>OS Fingerprinting</div>
             {r.os.os && <div style={{...S.val,fontSize:15,marginBottom:8}}>{r.os.os}</div>}
             {r.os.accuracy && <div style={{...S.label}}>Confidence: {r.os.accuracy}%</div>}
             {(r.os.matches||[]).slice(0,5).map((m,i)=>(
               <div key={i} style={{...S.card,marginBottom:6,padding:"8px 12px"}}>
-                <span style={{color:"#e2e8f0",fontSize:12}}>{m.name||m}</span>
-                {m.accuracy && <span style={{...S.badge("#3b82f6"),marginLeft:8}}>{m.accuracy}%</span>}
+                <span style={{color:"#d8deea",fontSize:12}}>{m.name||m}</span>
+                {m.accuracy && <span style={{...S.badge("#3b9eff"),marginLeft:8}}>{m.accuracy}%</span>}
               </div>
             ))}
           </div>
@@ -12897,11 +12897,11 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Banners */}
         {r.banner && r.banner.banners && Object.keys(r.banner.banners).length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Service Banners</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>Service Banners</div>
             {Object.entries(r.banner.banners).map(([port,banner],i)=>(
               <div key={i} style={{marginBottom:8}}>
                 <div style={{...S.badge("#8b5cf6"),display:"inline-block",marginBottom:4}}>Port {port}</div>
-                <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"8px 10px",fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#a3e635",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{String(banner).substring(0,200)}</div>
+                <div style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:4,padding:"8px 10px",fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#a3e635",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{String(banner).substring(0,200)}</div>
               </div>
             ))}
           </div>
@@ -12910,10 +12910,10 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* crt.sh */}
         {r.crtsh && r.crtsh.subdomains && r.crtsh.subdomains.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Certificate Transparency — crt.sh ({r.crtsh.subdomains.length})</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>Certificate Transparency — crt.sh ({r.crtsh.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.crtsh.subdomains.slice(0,60).map((s,i)=>(
-                <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#a78bfa",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
+                <div key={i} style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#a78bfa",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
               ))}
             </div>
           </div>
@@ -12922,10 +12922,10 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Amass */}
         {r.amass && r.amass.subdomains && r.amass.subdomains.length>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Amass — Deep Subdomain Recon ({r.amass.subdomains.length})</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>Amass — Deep Subdomain Recon ({r.amass.subdomains.length})</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {r.amass.subdomains.slice(0,60).map((s,i)=>(
-                <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#34d399",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
+                <div key={i} style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:4,padding:"5px 8px",fontSize:11,color:"#34d399",fontFamily:"JetBrains Mono,monospace"}}>{s}</div>
               ))}
             </div>
           </div>
@@ -12934,7 +12934,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* Shodan */}
         {r.shodan && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#60a5fa",marginBottom:10}}>Shodan Intelligence</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00d4ff",marginBottom:10}}>Shodan Intelligence</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
               {[["IP",r.shodan.ip],["Organization",r.shodan.org],["ISP",r.shodan.isp],["Country",r.shodan.country],["City",r.shodan.city],["OS",r.shodan.os]].filter(([,v])=>v).map(([k,v],i)=>(
                 <div key={i} style={S.card}><div style={S.label}>{k}</div><div style={S.val}>{String(v)}</div></div>
@@ -12942,7 +12942,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             </div>
             {r.shodan.ports && r.shodan.ports.length>0 && (
               <>
-                <div style={{fontSize:11,color:"#94a3b8",fontWeight:700,marginBottom:6}}>OPEN PORTS</div>
+                <div style={{fontSize:11,color:"#8a94a8",fontWeight:700,marginBottom:6}}>OPEN PORTS</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
                   {r.shodan.ports.map((p,i)=><span key={i} style={S.badge("#f59e0b")}>{p}</span>)}
                 </div>
@@ -12950,15 +12950,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
             )}
             {r.shodan.vulns && r.shodan.vulns.length>0 && (
               <>
-                <div style={{fontSize:11,color:"#f87171",fontWeight:700,marginBottom:6}}>KNOWN VULNERABILITIES</div>
+                <div style={{fontSize:11,color:"#ff6b82",fontWeight:700,marginBottom:6}}>KNOWN VULNERABILITIES</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {r.shodan.vulns.map((v,i)=><span key={i} style={S.badge("#ef4444")}>{v}</span>)}
+                  {r.shodan.vulns.map((v,i)=><span key={i} style={S.badge("#ff3e5e")}>{v}</span>)}
                 </div>
               </>
             )}
             {r.shodan.tags && r.shodan.tags.length>0 && (
               <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>
-                {r.shodan.tags.map((t,i)=><span key={i} style={S.badge("#3b82f6")}>{t}</span>)}
+                {r.shodan.tags.map((t,i)=><span key={i} style={S.badge("#3b9eff")}>{t}</span>)}
               </div>
             )}
           </div>
@@ -12967,23 +12967,23 @@ function ReconModule({token, onRunningChange, activeSections}) {
         {/* CVE Matches (NVD) */}
         {r.cve_match && r.cve_match.summary && (r.cve_match.summary.total_cves||0)>0 && (
           <div style={S.section}>
-            <div style={{fontSize:13,fontWeight:700,color:"#ef4444",marginBottom:10}}>CVE Matches — {r.cve_match.summary.total_cves} found ({r.cve_match.summary.critical_cves} critical, {r.cve_match.summary.high_cves} high, {r.cve_match.summary.medium_cves||0} medium)</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#ff3e5e",marginBottom:10}}>CVE Matches — {r.cve_match.summary.total_cves} found ({r.cve_match.summary.critical_cves} critical, {r.cve_match.summary.high_cves} high, {r.cve_match.summary.medium_cves||0} medium)</div>
             {(r.cve_match.services_detected||[]).length>0 && (
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:10}}>
+              <div style={{fontSize:11,color:"#8a94a8",marginBottom:10}}>
                 Services: {(r.cve_match.services_detected||[]).map(s=>`${s.vendor}/${s.product} ${s.version}`).join(", ")}
               </div>
             )}
             {(r.cve_match.cves||[]).slice(0,20).map((c,i)=>(
-              <div key={i} style={{background:"#020617",border:"1px solid #1e293b",borderRadius:5,padding:"8px 12px",marginBottom:6}}>
+              <div key={i} style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:5,padding:"8px 12px",marginBottom:6}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#fca5a5",fontWeight:700}}>{c.id}</span>
-                  <span style={S.badge(c.cvss_severity==="CRITICAL"?"#dc2626":c.cvss_severity==="HIGH"?"#ea580c":c.cvss_severity==="MEDIUM"?"#ca8a04":"#64748b")}>{c.cvss_severity} · CVSS {c.cvss_score ?? "?"}</span>
+                  <span style={{fontFamily:"JetBrains Mono,monospace",fontSize:11,color:"#ffa3b0",fontWeight:700}}>{c.id}</span>
+                  <span style={S.badge(c.cvss_severity==="CRITICAL"?"#e02347":c.cvss_severity==="HIGH"?"#ea580c":c.cvss_severity==="MEDIUM"?"#ca8a04":"#5a6478")}>{c.cvss_severity} · CVSS {c.cvss_score ?? "?"}</span>
                 </div>
-                <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.4}}>{String(c.description||"").substring(0,200)}</div>
+                <div style={{fontSize:11,color:"#8a94a8",lineHeight:1.4}}>{String(c.description||"").substring(0,200)}</div>
               </div>
             ))}
             {(r.cve_match.cves||[]).length>20 && (
-              <div style={{fontSize:11,color:"#475569",marginTop:8,textAlign:"center"}}>... and {r.cve_match.cves.length-20} more CVEs (top 20 shown)</div>
+              <div style={{fontSize:11,color:"#5a6478",marginTop:8,textAlign:"center"}}>... and {r.cve_match.cves.length-20} more CVEs (top 20 shown)</div>
             )}
           </div>
         )}
@@ -13017,15 +13017,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
   return (
     <div className="fade">
       {/* Header */}
-      <div style={{background:"linear-gradient(135deg,#0c1a3d,#0f172a)",border:"1px solid #1e3a8a",borderRadius:8,padding:20,marginBottom:16}}>
+      <div style={{background:"linear-gradient(135deg,#0d2436,#0d1320)",border:"1px solid #0e3a55",borderRadius:8,padding:20,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
           <span style={{fontSize:20}}></span>
-          <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9"}}>Information Gathering & Recon</h2>
+          <h2 style={{fontSize:16,fontWeight:700,color:"#ffffff"}}>Information Gathering & Recon</h2>
           <Badge label={RECON_PHASES.length+" PHASES"} color="blue"/>
           <Badge label="PASSIVE + ACTIVE" color="green"/>
           {finished && <Badge label="DONE" color="green"/>}
         </div>
-        <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>
+        <p style={{fontSize:12,color:"#5a6478",marginBottom:16}}>
           WHOIS · DNS · subdomains · cert transparency · OSINT · Shodan · port scan · service detection · OS fingerprinting · banners · directory enum
         </p>
 
@@ -13056,39 +13056,39 @@ function ReconModule({token, onRunningChange, activeSections}) {
           {icon:"",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",     desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
-        <div style={{marginBottom:10,background:"#020617",border:"1px solid #1e293b",borderRadius:6}}>
+        <div style={{marginBottom:10,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6}}>
           <div onClick={()=>setAuthOpen(o=>!o)}
             style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
-              <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Authenticated recon (optional)</span>
-              <span style={{fontSize:10,color:"#64748b"}}>— lets crawl/gobuster/jsendpoints/params see behind-login URLs</span>
+              <span style={{fontSize:12,fontWeight:600,color:"#d8deea"}}>Authenticated recon (optional)</span>
+              <span style={{fontSize:10,color:"#5a6478"}}>— lets crawl/gobuster/jsendpoints/params see behind-login URLs</span>
             </div>
-            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>session captured</span>}
-            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#f87171",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>login failed</span>}
-            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"#052e16",color:"#4ade80",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
+            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#5dffa6",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>session captured</span>}
+            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#ff6b82",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>login failed</span>}
+            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"#052e16",color:"#5dffa6",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
           </div>
           {authOpen && (
-            <div style={{padding:"12px",borderTop:"1px solid #1e293b",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{fontSize:10,color:"#cbd5e1",lineHeight:1.6,background:"#0c1a3d",padding:"8px 10px",borderRadius:5,border:"1px solid #1e3a8a"}}>
-                <b style={{color:"#86efac"}}>Most customers should leave this empty.</b> External recon (WHOIS, DNS, crt.sh, Shodan, OSINT) doesn't need login. Only fill this in if your target has a login system AND you want the crawler / directory enum / secrets scanner to walk behind-login pages.
+            <div style={{padding:"12px",borderTop:"1px solid #1c2435",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:10,color:"#c3ccda",lineHeight:1.6,background:"#0d2436",padding:"8px 10px",borderRadius:5,border:"1px solid #0e3a55"}}>
+                <b style={{color:"#7dffc0"}}>Most customers should leave this empty.</b> External recon (WHOIS, DNS, crt.sh, Shodan, OSINT) doesn't need login. Only fill this in if your target has a login system AND you want the crawler / directory enum / secrets scanner to walk behind-login pages.
               </div>
-              <div style={{background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"10px 12px"}}>
-                <div style={{fontSize:11,color:"#86efac",fontWeight:700,marginBottom:6}}>
+              <div style={{background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"10px 12px"}}>
+                <div style={{fontSize:11,color:"#7dffc0",fontWeight:700,marginBottom:6}}>
                   Auto-login (recommended)
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                   <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
                     placeholder="Login URL (e.g. /login)" autoComplete="off"
-                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
                     placeholder="Username / email" autoComplete="off"
                     name="vl-recon-login-user" data-form-type="other"
-                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
                     type="password" placeholder="Password" autoComplete="new-password"
                     name="vl-recon-login-pass" data-form-type="other"
-                    style={{background:"#0f172a",border:"1px solid #1e3a8a",borderRadius:4,padding:"7px 10px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
                 <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
                   <button
@@ -13124,39 +13124,39 @@ function ReconModule({token, onRunningChange, activeSections}) {
                       }
                     }}
                     disabled={rAutoLoginBusy}
-                    style={{background:rAutoLoginBusy?"#1e293b":"linear-gradient(135deg,#22c55e,#16a34a)",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"#475569":"#0f172a",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
+                    style={{background:rAutoLoginBusy?"#1c2435":"linear-gradient(135deg,#00ff88,#0bd673)",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"#5a6478":"#0d1320",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
                     {rAutoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
                   </button>
                   {rAutoLoginStatus && rAutoLoginStatus.startsWith("ok") && (
-                    <span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>Logged in — cookie captured</span>
+                    <span style={{fontSize:11,color:"#5dffa6",fontWeight:600}}>Logged in — cookie captured</span>
                   )}
                   {rAutoLoginStatus && !rAutoLoginStatus.startsWith("ok") && (
-                    <span style={{fontSize:11,color:"#f87171",fontWeight:600}}>{rAutoLoginStatus}</span>
+                    <span style={{fontSize:11,color:"#ff6b82",fontWeight:600}}>{rAutoLoginStatus}</span>
                   )}
                 </div>
               </div>
-              <div style={{fontSize:10,color:"#475569",textAlign:"center",margin:"2px 0"}}>— OR paste cookie / bearer manually —</div>
+              <div style={{fontSize:10,color:"#5a6478",textAlign:"center",margin:"2px 0"}}>— OR paste cookie / bearer manually —</div>
               <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                 <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Session Cookie</div>
                   <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)}
                     placeholder="PHPSESSID=abc123; sid=xyz"
-                    style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
                 <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
+                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
                   <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)}
                     placeholder="eyJhbGciOiJIUzI1NiJ9..."
-                    style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               </div>
               {(authCookie||authBearer) && (
                 <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAuthStatus(null);setRAutoLoginStatus(null);}}
-                  style={{alignSelf:"flex-start",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"4px 10px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:600}}>
+                  style={{alignSelf:"flex-start",background:"#1c2435",border:"1px solid #1c2435",borderRadius:4,padding:"4px 10px",color:"#ff3e5e",fontSize:10,cursor:"pointer",fontWeight:600}}>
                   Clear auth credentials
                 </button>
               )}
-              <div style={{fontSize:10,color:"#64748b",marginTop:2}}>
+              <div style={{fontSize:10,color:"#5a6478",marginTop:2}}>
                 Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.
               </div>
             </div>
@@ -13166,14 +13166,14 @@ function ReconModule({token, onRunningChange, activeSections}) {
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
             placeholder="domain.com  or  192.168.1.1  or  192.168.1.0/24"
-            style={{flex:3,minWidth:240,background:"#020617",border:"1px solid #1e3a8a",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}/>
+            style={{flex:3,minWidth:240,background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}/>
           <button onClick={run} disabled={running||!target.trim()}
-            style={{background:running?"#1e293b":"linear-gradient(135deg,#3b82f6,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#475569":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
+            style={{background:running?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
             {running?"Running...":"Start Recon"}
           </button>
           {running && (
             <button onClick={stop} disabled={stopped}
-              style={{background:"linear-gradient(135deg,#dc2626,#991b1b)",border:"none",borderRadius:6,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",opacity:stopped?0.5:1}}>
+              style={{background:"linear-gradient(135deg,#e02347,#991b1b)",border:"none",borderRadius:6,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:stopped?"not-allowed":"pointer",opacity:stopped?0.5:1}}>
               ■ Stop
             </button>
           )}
@@ -13181,17 +13181,17 @@ function ReconModule({token, onRunningChange, activeSections}) {
       </div>
 
       {/* Badge Legend — explains the tile status colors */}
-      <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,flexWrap:"wrap",marginBottom:10}}>
-        <span style={{fontSize:11,color:"#475569",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
+      <div style={{display:"flex",alignItems:"center",gap:16,padding:"8px 14px",background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,flexWrap:"wrap",marginBottom:10}}>
+        <span style={{fontSize:11,color:"#5a6478",fontWeight:700,letterSpacing:1}}>RESULTS:</span>
         {[
-          {label:"DATA",       color:"#4ade80", bg:"#052e16", desc:"Tool returned findings"},
-          {label:"EMPTY",      color:"#94a3b8", bg:"#0f172a", desc:"Ran cleanly — no data for this target"},
+          {label:"DATA",       color:"#5dffa6", bg:"#052e16", desc:"Tool returned findings"},
+          {label:"EMPTY",      color:"#8a94a8", bg:"#0d1320", desc:"Ran cleanly — no data for this target"},
           {label:"SKIPPED",    color:"#fb923c", bg:"#1c0a00", desc:"Not applicable for this target"},
-          {label:"ERROR",      color:"#f87171", bg:"#1c0000", desc:"Tool had a problem"},
+          {label:"ERROR",      color:"#ff6b82", bg:"#1c0000", desc:"Tool had a problem"},
         ].map((b,i)=>(
           <div key={i} style={{display:"flex",alignItems:"center",gap:5}}>
             <span style={{background:b.bg,border:`1px solid ${b.color}`,color:b.color,fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:4,letterSpacing:0.5}}>{b.label}</span>
-            <span style={{fontSize:11,color:"#64748b"}}>{b.desc}</span>
+            <span style={{fontSize:11,color:"#5a6478"}}>{b.desc}</span>
           </div>
         ))}
       </div>
@@ -13208,15 +13208,15 @@ function ReconModule({token, onRunningChange, activeSections}) {
         }}
       />
 
-      <div style={{background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,padding:14,marginBottom:16}}>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:14,marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <span style={{fontSize:11,fontWeight:700,color:"#64748b",letterSpacing:1,textTransform:"uppercase"}}>Select Phases</span>
+          <span style={{fontSize:11,fontWeight:700,color:"#5a6478",letterSpacing:1,textTransform:"uppercase"}}>Select Phases</span>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setSelected(new Set(RECON_PHASES.map((_,i)=>i)))} style={{background:"none",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#60a5fa",fontSize:11,cursor:"pointer"}}>All</button>
-            <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"1px solid #1e293b",borderRadius:4,padding:"3px 10px",color:"#64748b",fontSize:11,cursor:"pointer"}}>None</button>
+            <button onClick={()=>setSelected(new Set(RECON_PHASES.map((_,i)=>i)))} style={{background:"none",border:"1px solid #1c2435",borderRadius:4,padding:"3px 10px",color:"#00d4ff",fontSize:11,cursor:"pointer"}}>All</button>
+            <button onClick={()=>setSelected(new Set())} style={{background:"none",border:"1px solid #1c2435",borderRadius:4,padding:"3px 10px",color:"#5a6478",fontSize:11,cursor:"pointer"}}>None</button>
           </div>
         </div>
-        <div style={{width:"100%",border:"1px solid #1e293b",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
+        <div style={{width:"100%",border:"1px solid #1c2435",borderRadius:6,overflow:"hidden",background:"#0a0f1c"}}>
           {(()=>{
             const _ordered = RECON_PHASES.map((ph,i)=>({ph,i,_sec:SECTION_OF[ph.tool]||99})).filter(o=>!activeSections||activeSections.size===0||activeSections.has(o._sec)).sort((a,b)=>a._sec-b._sec);
             let _lastSec = null;
@@ -13228,7 +13228,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             const isFailed  = failed.includes(i);
             const isActive  = curPhase===i;
             const res       = allResults[ph.tool];
-            const statusCol = isActive?"#3b82f6":isFailed?"#ef4444":isDone?"#10b981":"#334155";
+            const statusCol = isActive?"#3b9eff":isFailed?"#ff3e5e":isDone?"#10b981":"#1c2435";
             const statusLabel = isActive?"RUNNING":isFailed?"ERROR":isDone?"COMPLETE":sel?"QUEUED":"DISABLED";
             // Compute items count (varies per recon tool — be flexible about shape)
             let itemsCount = 0;
@@ -13244,45 +13244,45 @@ function ReconModule({token, onRunningChange, activeSections}) {
             return (
               <React.Fragment key={i}>
               {_showHeader && (
-                <div style={{padding:"14px 16px 10px",background:"#0f172a",borderTop:"2px solid #1e293b",fontSize:11,fontWeight:700,color:"#60a5fa",letterSpacing:1.5,textTransform:"uppercase",fontFamily:"ui-monospace,SFMono-Regular,monospace"}}>
+                <div style={{padding:"14px 16px 10px",background:"#0d1320",borderTop:"2px solid #1c2435",fontSize:11,fontWeight:700,color:"#00d4ff",letterSpacing:1.5,textTransform:"uppercase",fontFamily:"ui-monospace,SFMono-Regular,monospace"}}>
                   {_secMeta.label}
                 </div>
               )}
               <div onClick={()=>!running&&togglePhase(i)}
                 onMouseEnter={e=>{ if(!running) e.currentTarget.style.background="#111c33"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
-                style={{background:"transparent",borderTop:i===0?"none":"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.45,transition:"background 0.12s,opacity 0.12s",boxSizing:"border-box"}}>
+                style={{background:"transparent",borderTop:i===0?"none":"1px solid #1c2435",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.45,transition:"background 0.12s,opacity 0.12s",boxSizing:"border-box"}}>
                 <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
                 {isActive ? (
-                  <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b82f6",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
+                  <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b9eff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
                 ) : (
-                  <span style={{fontSize:11,color:isDone?statusCol:"#475569",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
+                  <span style={{fontSize:11,color:isDone?statusCol:"#5a6478",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
                     {isDone?(isFailed?"":""):"○"}
                   </span>
                 )}
-                <span style={{flex:1,fontSize:13,fontWeight:500,color:"#f1f5f9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
+                <span style={{flex:1,fontSize:13,fontWeight:500,color:"#ffffff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
                 <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:90,textAlign:"right"}}>{statusLabel}</span>
-                <span style={{fontSize:11,color:isFailed?"#f87171":itemsCount>0?"#60a5fa":"#94a3b8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
+                <span style={{fontSize:11,color:isFailed?"#ff6b82":itemsCount>0?"#00d4ff":"#8a94a8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
                 {isDone && (
                   <button onClick={e=>{e.stopPropagation(); setExpandedTile(expandedTile===i?null:i);}}
-                    style={{background:expandedTile===i?"#1e3a8a":"transparent",border:"1px solid "+(expandedTile===i?"#3b82f6":"#1e293b"),borderRadius:4,padding:"3px 12px",color:"#94a3b8",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
+                    style={{background:expandedTile===i?"#0e3a55":"transparent",border:"1px solid "+(expandedTile===i?"#3b9eff":"#1c2435"),borderRadius:4,padding:"3px 12px",color:"#8a94a8",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap",letterSpacing:"0.03em"}}>
                     {expandedTile===i?"Hide":"Details"}
                   </button>
                 )}
               </div>
               {expandedTile === i && isDone && (
-                <div style={{padding:"14px 18px",background:"#0a1224",borderTop:"1px solid #1e293b",borderLeft:`3px solid ${statusCol}`,fontSize:12,lineHeight:1.55,color:"#cbd5e1"}}>
+                <div style={{padding:"14px 18px",background:"#0d1320",borderTop:"1px solid #1c2435",borderLeft:`3px solid ${statusCol}`,fontSize:12,lineHeight:1.55,color:"#c3ccda"}}>
                   {isFailed ? (
                     <div>
-                      <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:6,fontWeight:600}}>ERROR REASON</div>
-                      <div style={{color:"#fca5a5",fontFamily:"ui-monospace,SFMono-Regular,monospace",fontSize:11}}>{String(_failReason).substring(0,300)}</div>
+                      <div style={{fontSize:11,color:"#8a94a8",letterSpacing:1,marginBottom:6,fontWeight:600}}>ERROR REASON</div>
+                      <div style={{color:"#ffa3b0",fontFamily:"ui-monospace,SFMono-Regular,monospace",fontSize:11}}>{String(_failReason).substring(0,300)}</div>
                     </div>
                   ) : itemsCount === 0 ? (
-                    <div style={{color:"#86efac"}}>{ph.name} completed. No data discovered for this target.</div>
+                    <div style={{color:"#7dffc0"}}>{ph.name} completed. No data discovered for this target.</div>
                   ) : (
                     <div>
-                      <div style={{fontSize:11,color:"#94a3b8",letterSpacing:1,marginBottom:8,fontWeight:600}}>{itemsCount} ITEM{itemsCount===1?"":"S"} DISCOVERED</div>
-                      <pre style={{margin:0,padding:10,background:"#020617",border:"1px solid #1e293b",borderRadius:4,fontSize:10,color:"#cbd5e1",fontFamily:"ui-monospace,SFMono-Regular,monospace",maxHeight:240,overflowY:"auto",whiteSpace:"pre-wrap"}}>
+                      <div style={{fontSize:11,color:"#8a94a8",letterSpacing:1,marginBottom:8,fontWeight:600}}>{itemsCount} ITEM{itemsCount===1?"":"S"} DISCOVERED</div>
+                      <pre style={{margin:0,padding:10,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:4,fontSize:10,color:"#c3ccda",fontFamily:"ui-monospace,SFMono-Regular,monospace",maxHeight:240,overflowY:"auto",whiteSpace:"pre-wrap"}}>
                         {JSON.stringify(res, null, 2).substring(0, 2000)}{JSON.stringify(res).length > 2000 ? "\n\n... (truncated — click row for full results)" : ""}
                       </pre>
                     </div>
@@ -13296,13 +13296,13 @@ function ReconModule({token, onRunningChange, activeSections}) {
       </div>
 
       {/* Tabs */}
-      <div style={{background:"#0a0f1e",border:"1px solid #1e293b",borderRadius:8,overflow:"hidden"}}>
-        <div style={{display:"flex",borderBottom:"1px solid #1e293b",alignItems:"center"}}>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,overflow:"hidden"}}>
+        <div style={{display:"flex",borderBottom:"1px solid #1c2435",alignItems:"center"}}>
           {[["phases","Live Log"],["results","Results"]].map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)} style={S.tabBtn(tab===t)}>{l}</button>
           ))}
           {finished && (
-            <button onClick={dlReconPDF} style={{marginLeft:"auto",marginRight:12,background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            <button onClick={dlReconPDF} style={{marginLeft:"auto",marginRight:12,background:"#ff3e5e",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               Report
             </button>
           )}
@@ -13311,12 +13311,12 @@ function ReconModule({token, onRunningChange, activeSections}) {
         <div style={{padding:16}}>
           {/* Live log */}
           {tab==="phases" && (
-            <div ref={logRef} style={{background:"#020617",borderRadius:6,padding:12,height:320,overflowY:"auto",fontFamily:"JetBrains Mono,monospace",fontSize:11}}>
+            <div ref={logRef} style={{background:"#0a0e17",borderRadius:6,padding:12,height:320,overflowY:"auto",fontFamily:"JetBrains Mono,monospace",fontSize:11}}>
               {lines.map((l,i)=>{
-                const c = l.startsWith("")?"#f87171":l.startsWith("")?"#4ade80":l.startsWith("[!")?"#fbbf24":"#94a3b8";
+                const c = l.startsWith("")?"#ff6b82":l.startsWith("")?"#5dffa6":l.startsWith("[!")?"#fbbf24":"#8a94a8";
                 return <div key={i} style={{color:c,marginBottom:2,lineHeight:1.5}}>{l}</div>;
               })}
-              {running && <div style={{color:"#60a5fa",animation:"pulse 1s infinite"}}>▌</div>}
+              {running && <div style={{color:"#00d4ff",animation:"pulse 1s infinite"}}>▌</div>}
             </div>
           )}
 
@@ -16212,9 +16212,9 @@ const OSINT_PHASES = [
 ];
 
 const OSINT_SECTION_HEADERS = {
-  "tier1_passive_domain":  {label:"Tier 1 — Passive Domain Surface",  color:"#3b82f6"},
+  "tier1_passive_domain":  {label:"Tier 1 — Passive Domain Surface",  color:"#3b9eff"},
   "tier2_people_identity": {label:"Tier 2 — People & Identity",       color:"#8b5cf6"},
-  "tier3_leaks_code":      {label:"Tier 3 — Leaks & Code",            color:"#ef4444"},
+  "tier3_leaks_code":      {label:"Tier 3 — Leaks & Code",            color:"#ff3e5e"},
   "tier4_metadata_dorking":{label:"Tier 4 — Metadata & Dorking",      color:"#06b6d4"},
 };
 
@@ -16237,9 +16237,9 @@ const MOBILE_PHASES = [
 ];
 
 const MOBILE_SECTION_HEADERS = {
-  "tier1_app_store_presence":                {label:"Tier 1 — App Store Presence & Metadata",       color:"#3b82f6"},
+  "tier1_app_store_presence":                {label:"Tier 1 — App Store Presence & Metadata",       color:"#3b9eff"},
   "tier2_binary_secret_exposure":            {label:"Tier 2 — Binary & Source Secret Exposure",     color:"#8b5cf6"},
-  "tier3_tls_and_api_exposure":              {label:"Tier 3 — TLS Configuration & API Surface",     color:"#ef4444"},
+  "tier3_tls_and_api_exposure":              {label:"Tier 3 — TLS Configuration & API Surface",     color:"#ff3e5e"},
   "tier4_threat_intelligence_and_reputation":{label:"Tier 4 — Threat Intelligence & Reputation",    color:"#06b6d4"},
 };
 
@@ -16285,9 +16285,9 @@ const MOBILE_STATIC_PHASES = [
 ];
 
 const MOBILE_STATIC_SECTION_HEADERS = {
-  "tier1_manifest_and_config":       {label:"Tier 1 — Manifest & Configuration", color:"#3b82f6"},
+  "tier1_manifest_and_config":       {label:"Tier 1 — Manifest & Configuration", color:"#3b9eff"},
   "tier2_secret_and_crypto":         {label:"Tier 2 — Secrets & Cryptography",   color:"#8b5cf6"},
-  "tier3_binary_hardening":          {label:"Tier 3 — Native Binary Hardening",  color:"#ef4444"},
+  "tier3_binary_hardening":          {label:"Tier 3 — Native Binary Hardening",  color:"#ff3e5e"},
   "tier4_behavioral_and_aggregate":  {label:"Tier 4 — Behavioral & Aggregate",   color:"#06b6d4"},
 };
 
@@ -17213,13 +17213,13 @@ function generateMobileNetworkReport(opts) {
 //  BUFFER OVERFLOW MODULE
 // ═══════════════════════════════════════════════════════════════
 const BOF_PHASES = [
-  {id:1, name:"Fuzzing",        icon:"", color:"#3b82f6", desc:"Send increasing payloads to find the crash point"},
+  {id:1, name:"Fuzzing",        icon:"", color:"#3b9eff", desc:"Send increasing payloads to find the crash point"},
   {id:2, name:"EIP Offset",     icon:"", color:"#8b5cf6", desc:"Use cyclic pattern to find exact bytes to EIP"},
   {id:3, name:"EIP Control",    icon:"", color:"#06b6d4", desc:"Confirm you control EIP with BBBB (0x42424242)"},
   {id:4, name:"Bad Characters", icon:"", color:"#f59e0b", desc:"Find bytes rejected by the application"},
   {id:5, name:"JMP ESP",        icon:"", color:"#10b981", desc:"Locate JMP ESP gadget in unprotected module"},
-  {id:6, name:"Shellcode",      icon:"", color:"#ef4444", desc:"Generate reverse shell payload with msfvenom"},
-  {id:7, name:"Final Exploit",  icon:"", color:"#22c55e", desc:"Assemble and deliver the complete exploit"},
+  {id:6, name:"Shellcode",      icon:"", color:"#ff3e5e", desc:"Generate reverse shell payload with msfvenom"},
+  {id:7, name:"Final Exploit",  icon:"", color:"#00ff88", desc:"Assemble and deliver the complete exploit"},
 ];
 
 
@@ -17506,7 +17506,7 @@ function generateExploitReport({results, date, pdfConfig}) {
      computedFrom (entry) => string — derived display value
 */
 function ShellPanel({
-  title, subtitle, icon = "", color = "#dc2626",
+  title, subtitle, icon = "", color = "#e02347",
   catalogFetchUrl, catalogKey = "items",
   configFields = [], phases = [],
   runEndpoint, buildRunBody,
@@ -17549,7 +17549,7 @@ function ShellPanel({
   const setField = (key, value) =>
     setValuesById(prev => ({...prev, [selectedId]: {...(prev[selectedId] || {}), [key]: value}}));
 
-  const sevColor = (cvss) => cvss >= 9 ? "#dc2626" : cvss >= 7 ? "#f59e0b" : "#10b981";
+  const sevColor = (cvss) => cvss >= 9 ? "#e02347" : cvss >= 7 ? "#f59e0b" : "#10b981";
 
   // Bootstrap: catalog fetch + session-storage reconnect
   useEffect(() => {
@@ -17658,7 +17658,7 @@ function ShellPanel({
     // eslint-disable-next-line
   }, [activeShell?.sid]);
 
-  const appendLog = (text, c = "#cbd5e1") => {
+  const appendLog = (text, c = "#c3ccda") => {
     setLogLines(prev => [...prev, {
       ts: new Date().toLocaleTimeString([], {hour12: false}),
       text, color: c,
@@ -17670,8 +17670,8 @@ function ShellPanel({
     setLogLines([]); setActiveTab("log");
     appendLog(`▶ Module:   ${selected.id}`, "#fbbf24");
     if (selected.cve) appendLog(`▶ CVE:      ${selected.cve}  ·  CVSS ${selected.cvss ?? "?"}  ·  ${selected.category ?? ""}`, "#fbbf24");
-    appendLog("", "#94a3b8");
-    appendLog(phases.length ? "Phase 1: Pre-flight (DNS + port reachability) ..." : "Sending request ...", "#60a5fa");
+    appendLog("", "#8a94a8");
+    appendLog(phases.length ? "Phase 1: Pre-flight (DNS + port reachability) ..." : "Sending request ...", "#00d4ff");
 
     setRunning(p => ({...p, [selected.id]: true}));
     setResults(p => ({...p, [selected.id]: null}));
@@ -17688,23 +17688,23 @@ function ShellPanel({
       setResults(p => ({...p, [selected.id]: r}));
 
       if (r.ok === false && r.error && /resolve|not accepting/i.test(r.error)) {
-        appendLog("Phase 1: " + r.error, "#f87171");
+        appendLog("Phase 1: " + r.error, "#ff6b82");
       } else if (r.ok === false) {
-        appendLog("" + (r.error || "Failed"), "#f87171");
+        appendLog("" + (r.error || "Failed"), "#ff6b82");
       } else if (phases.length) {
-        appendLog("Phase 1: target reachable", "#4ade80");
-        appendLog("Phase 2: Sending exploit trigger ...", "#60a5fa");
-        appendLog("Phase 2: trigger accepted by target", "#4ade80");
-        appendLog(`Phase 3: Verifying ${isInteractive ? "shell session" : "data extraction"} ...`, "#60a5fa");
-        appendLog("Phase 3: " + (r.evidence || "compromise verified"), "#4ade80");
+        appendLog("Phase 1: target reachable", "#5dffa6");
+        appendLog("Phase 2: Sending exploit trigger ...", "#00d4ff");
+        appendLog("Phase 2: trigger accepted by target", "#5dffa6");
+        appendLog(`Phase 3: Verifying ${isInteractive ? "shell session" : "data extraction"} ...`, "#00d4ff");
+        appendLog("Phase 3: " + (r.evidence || "compromise verified"), "#5dffa6");
         if (r.shell_id) {
-          appendLog(`Phase 4: Opening ${isInteractive ? "interactive shell" : "data view"} ...`, "#60a5fa");
-          appendLog(`Phase 4: session sid=${r.shell_id} ready`, "#4ade80");
+          appendLog(`Phase 4: Opening ${isInteractive ? "interactive shell" : "data view"} ...`, "#00d4ff");
+          appendLog(`Phase 4: session sid=${r.shell_id} ready`, "#5dffa6");
         }
-        appendLog("", "#94a3b8");
-        appendLog("AUTO-RUN COMPLETE — see Results / Shell tab", "#22c55e");
+        appendLog("", "#8a94a8");
+        appendLog("AUTO-RUN COMPLETE — see Results / Shell tab", "#00ff88");
       } else {
-        appendLog("Complete", "#4ade80");
+        appendLog("Complete", "#5dffa6");
       }
 
       if (r.ok && r.shell_id && shellEndpoints) {
@@ -17724,7 +17724,7 @@ function ShellPanel({
           suggested_action: "The backend may still complete in the background. " +
                              "Refresh the page in ~30s to see if a session opened."}}));
       } else {
-        appendLog("Network error: " + String(err), "#f87171");
+        appendLog("Network error: " + String(err), "#ff6b82");
         setResults(p => ({...p, [selected.id]: {ok: false, error: String(err)}}));
       }
     }
@@ -17787,16 +17787,16 @@ function ShellPanel({
   const notRunCount  = catalog.length - Object.keys(results).length;
 
   // Styles (shared with the original Exploitation look)
-  const labelStyle = {fontSize: 10, fontWeight: 700, color: "#94a3b8",
+  const labelStyle = {fontSize: 10, fontWeight: 700, color: "#8a94a8",
     letterSpacing: 1, marginBottom: 5, display: "block"};
   const inputStyle = {width: "100%", padding: "8px 10px",
-    background: "#020617", color: "#e2e8f0", border: "1px solid #1e293b",
+    background: "#0a0e17", color: "#d8deea", border: "1px solid #1c2435",
     borderRadius: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
     outline: "none"};
-  const panelStyle = {background: "#0f172a", border: "1px solid #1e293b",
+  const panelStyle = {background: "#0d1320", border: "1px solid #1c2435",
     borderRadius: 10, padding: 16, marginBottom: 14};
   const panelHead  = {fontSize: 11, fontWeight: 800, letterSpacing: 1.5,
-    color: "#fca5a5", marginBottom: 12, display: "flex", alignItems: "center", gap: 8};
+    color: "#ffa3b0", marginBottom: 12, display: "flex", alignItems: "center", gap: 8};
 
   const renderField = (f) => {
     const value = fieldValues[f.id] ?? "";
@@ -17804,7 +17804,7 @@ function ShellPanel({
     // CVSS gets severity coloring automatically
     const dynamicColor = (f.id === "cvss" && selected) ? sevColor(selected.cvss) : f.color;
     const fieldStyle = {...inputStyle,
-      ...(f.readOnly ? {background: "#0a1224"} : {}),
+      ...(f.readOnly ? {background: "#0d1320"} : {}),
       ...(dynamicColor ? {color: dynamicColor} : {}),
       ...(f.id === "cvss" ? {fontWeight: 800} : {}),
       ...(disabled ? {opacity: 0.5} : {}),
@@ -17850,10 +17850,10 @@ function ShellPanel({
       <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between",
         marginBottom: 18, gap: 14, flexWrap: "wrap"}}>
         <div>
-          <div style={{fontSize: 22, fontWeight: 900, color: "#f1f5f9", lineHeight: 1.1}}>
+          <div style={{fontSize: 22, fontWeight: 900, color: "#ffffff", lineHeight: 1.1}}>
             {title}
           </div>
-          {subtitle && <div style={{fontSize: 11, color: "#64748b", marginTop: 4}}>{subtitle}</div>}
+          {subtitle && <div style={{fontSize: 11, color: "#5a6478", marginTop: 4}}>{subtitle}</div>}
         </div>
         {onDownloadReport && (
           <button onClick={downloadReport}
@@ -17891,10 +17891,10 @@ function ShellPanel({
             {renderFieldRows()}
 
             {selected && (selected.service || selected.category) && (
-              <div style={{marginTop: 10, fontSize: 10, color: "#64748b"}}>
-                {selected.service && <>Service: <span style={{color: "#e2e8f0"}}>{selected.service}</span></>}
+              <div style={{marginTop: 10, fontSize: 10, color: "#5a6478"}}>
+                {selected.service && <>Service: <span style={{color: "#d8deea"}}>{selected.service}</span></>}
                 {selected.service && selected.category && <span style={{margin: "0 6px"}}>·</span>}
-                {selected.category && <>Category: <span style={{color: "#e2e8f0"}}>{selected.category}</span></>}
+                {selected.category && <>Category: <span style={{color: "#d8deea"}}>{selected.category}</span></>}
               </div>
             )}
           </div>
@@ -17904,13 +17904,13 @@ function ShellPanel({
               <div style={{...panelHead, marginBottom: 6}}>
                 <span></span> <span>Phases (auto-run in sequence)</span>
               </div>
-              <div style={{fontSize: 10, color: "#64748b", marginBottom: 10, lineHeight: 1.5}}>
+              <div style={{fontSize: 10, color: "#5a6478", marginBottom: 10, lineHeight: 1.5}}>
                 Clicking AUTO-RUN fires all phases below in order.
               </div>
               {phases.map(p => (
                 <div key={p.n}
                   style={{padding: "10px 12px", marginBottom: 8, borderRadius: 6,
-                    background: "#020617", border: "1px solid #1e293b",
+                    background: "#0a0e17", border: "1px solid #1c2435",
                     display: "flex", alignItems: "center", gap: 10}}>
                   <div style={{width: 24, height: 24, borderRadius: "50%",
                     background: `linear-gradient(135deg, ${color}, #7f1d1d)`,
@@ -17919,8 +17919,8 @@ function ShellPanel({
                     {p.n}
                   </div>
                   <div style={{flex: 1, minWidth: 0}}>
-                    <div style={{fontSize: 12, fontWeight: 700, color: "#f1f5f9"}}>{p.name}</div>
-                    <div style={{fontSize: 10, color: "#64748b"}}>{p.tool}</div>
+                    <div style={{fontSize: 12, fontWeight: 700, color: "#ffffff"}}>{p.name}</div>
+                    <div style={{fontSize: 10, color: "#5a6478"}}>{p.tool}</div>
                   </div>
                 </div>
               ))}
@@ -17949,8 +17949,8 @@ function ShellPanel({
         {/* RIGHT: Tabs */}
         <div>
           <div style={{display: "flex", gap: 2, marginBottom: 0,
-            background: "#0f172a", borderRadius: "10px 10px 0 0",
-            border: "1px solid #1e293b", borderBottom: "none", padding: "4px 4px 0"}}>
+            background: "#0d1320", borderRadius: "10px 10px 0 0",
+            border: "1px solid #1c2435", borderBottom: "none", padding: "4px 4px 0"}}>
             {[
               {id: "log",    label: "Auto-Run LOG"},
               {id: "result", label: "Results"},
@@ -17959,14 +17959,14 @@ function ShellPanel({
               <button key={t.id} onClick={() => setActiveTab(t.id)}
                 style={{padding: "10px 18px", fontSize: 11, fontWeight: 800, letterSpacing: 1,
                   background: activeTab === t.id ? "#2563eb" : "transparent",
-                  color: activeTab === t.id ? "#fff" : "#94a3b8",
+                  color: activeTab === t.id ? "#fff" : "#8a94a8",
                   border: "none", borderRadius: "6px 6px 0 0", cursor: "pointer"}}>
                 {t.label}
               </button>
             ))}
           </div>
 
-          <div style={{background: "#0a1224", border: "1px solid #1e293b",
+          <div style={{background: "#0d1320", border: "1px solid #1c2435",
             borderRadius: "0 10px 10px 10px", marginBottom: 14, padding: 0, overflow: "hidden"}}>
 
             {/* LOG */}
@@ -17975,12 +17975,12 @@ function ShellPanel({
                 fontFamily: "'JetBrains Mono', Consolas, monospace",
                 fontSize: 12, minHeight: 340, maxHeight: 520, overflowY: "auto", lineHeight: 1.7}}>
                 {logLines.length === 0 ? (
-                  <div style={{color: "#64748b", fontStyle: "italic"}}>
+                  <div style={{color: "#5a6478", fontStyle: "italic"}}>
                     Click <strong style={{color}}>AUTO-RUN</strong> to fire the selected module and watch phase progress here.
                   </div>
                 ) : logLines.map((line, i) => (
                   <div key={i} style={{color: line.color, whiteSpace: "pre-wrap", wordBreak: "break-word"}}>
-                    <span style={{color: "#475569", marginRight: 8}}>{line.ts}</span>{line.text}
+                    <span style={{color: "#5a6478", marginRight: 8}}>{line.ts}</span>{line.text}
                   </div>
                 ))}
               </div>
@@ -17990,7 +17990,7 @@ function ShellPanel({
             {activeTab === "result" && (
               <div style={{padding: "18px 22px", minHeight: 340, maxHeight: 520, overflowY: "auto"}}>
                 {!r ? (
-                  <div style={{color: "#64748b", fontStyle: "italic"}}>
+                  <div style={{color: "#5a6478", fontStyle: "italic"}}>
                     No results yet — run the selected module to populate this tab.
                   </div>
                 ) : (
@@ -17998,14 +17998,14 @@ function ShellPanel({
                     <div style={{display: "flex", alignItems: "center", gap: 10, marginBottom: 14}}>
                       <span style={{fontSize: 18}}>{r.ok ? "" : ""}</span>
                       <span style={{fontSize: 14, fontWeight: 900, letterSpacing: 1.5,
-                        color: r.ok ? "#4ade80" : "#f87171"}}>
+                        color: r.ok ? "#5dffa6" : "#ff6b82"}}>
                         {r.ok ? "EVIDENCE OF COMPROMISE" : "FAILURE REASON"}
                       </span>
                     </div>
                     <div style={{padding: "12px 14px", borderRadius: 8, marginBottom: 14,
-                      background: r.ok ? "rgba(34,197,94,0.08)" : "rgba(220,38,38,0.08)",
-                      border: `1px solid ${r.ok ? "rgba(34,197,94,0.35)" : "rgba(220,38,38,0.35)"}`,
-                      fontSize: 13, color: "#cbd5e1", lineHeight: 1.6}}>
+                      background: r.ok ? "rgba(0,255,136,0.08)" : "rgba(220,38,38,0.08)",
+                      border: `1px solid ${r.ok ? "rgba(0,255,136,0.35)" : "rgba(220,38,38,0.35)"}`,
+                      fontSize: 13, color: "#c3ccda", lineHeight: 1.6}}>
                       {r.ok ? (r.evidence || "Success") : r.error}
                     </div>
 
@@ -18024,17 +18024,17 @@ function ShellPanel({
 
                     {r.auto_recovered && (
                       <div style={{padding: "9px 12px", borderRadius: 8, marginBottom: 14,
-                        background: "rgba(59,130,246,0.10)",
-                        border: "1px solid rgba(59,130,246,0.35)",
+                        background: "rgba(59,158,255,0.10)",
+                        border: "1px solid rgba(59,158,255,0.35)",
                         fontSize: 11, color: "#bfdbfe", lineHeight: 1.5}}>
-                        <span style={{color: "#60a5fa", fontWeight: 800, marginRight: 6}}>Auto-recovery:</span>
+                        <span style={{color: "#00d4ff", fontWeight: 800, marginRight: 6}}>Auto-recovery:</span>
                         We detected a stuck lab container and restarted it automatically before retrying.
                       </div>
                     )}
 
                     {r.payload && (
                       <div style={{marginBottom: 14}}>
-                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#5a6478",
                           letterSpacing: 1.5, marginBottom: 6}}>PAYLOAD</div>
                         <div style={{padding: "10px 12px", background: "#000",
                           borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
@@ -18046,19 +18046,19 @@ function ShellPanel({
 
                     {r.ok && r.rows && Array.isArray(r.rows) && r.rows.length > 0 && (
                       <div style={{marginBottom: 14}}>
-                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#5a6478",
                           letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED RECORDS ({r.rows.length})</div>
                         <div style={{background: "#000", borderRadius: 6, padding: "10px 12px",
                           fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
                           color: "#bfdbfe", maxHeight: 240, overflowY: "auto"}}>
                           {r.rows.slice(0, 30).map((row, i) => (
                             <div key={i} style={{padding: "3px 0"}}>
-                              <span style={{color: "#86efac"}}>{String(row[0] || "").padEnd(22)}</span>
+                              <span style={{color: "#7dffc0"}}>{String(row[0] || "").padEnd(22)}</span>
                               <span style={{color: "#fbbf24"}}>{row[1] || ""}</span>
                             </div>
                           ))}
                           {r.rows.length > 30 && (
-                            <div style={{color: "#64748b", marginTop: 6, fontStyle: "italic"}}>
+                            <div style={{color: "#5a6478", marginTop: 6, fontStyle: "italic"}}>
                               … and {r.rows.length - 30} more
                             </div>
                           )}
@@ -18068,7 +18068,7 @@ function ShellPanel({
 
                     {r.ok && r.jwt && (
                       <div style={{marginBottom: 14}}>
-                        <div style={{fontSize: 10, fontWeight: 800, color: "#64748b",
+                        <div style={{fontSize: 10, fontWeight: 800, color: "#5a6478",
                           letterSpacing: 1.5, marginBottom: 6}}>EXTRACTED JWT</div>
                         <div style={{padding: "10px 12px", background: "#000",
                           borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
@@ -18087,20 +18087,20 @@ function ShellPanel({
               <div>
                 <div style={{padding: "10px 16px",
                   background: isInteractive ? "#052e16" : "#0c1c3a",
-                  borderBottom: `1px solid ${isInteractive ? "#14532d" : "#1e3a8a"}`,
+                  borderBottom: `1px solid ${isInteractive ? "#14532d" : "#0e3a55"}`,
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   flexWrap: "wrap", gap: 8}}>
                   <div style={{display: "flex", alignItems: "center", gap: 10}}>
                     <span style={{fontSize: 14}}>{isInteractive ? "" : ""}</span>
                     <span style={{fontSize: 12, fontWeight: 800, letterSpacing: 1.2,
-                      color: isInteractive ? "#86efac" : "#93c5fd"}}>
+                      color: isInteractive ? "#7dffc0" : "#7fdcff"}}>
                       {activeShell ? (isInteractive ? "LIVE SHELL" : "EXTRACTED DATA") : "SHELL — Waiting for connection…"}
                     </span>
                     {activeShell && (
-                      <span style={{fontSize: 10, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace"}}>
+                      <span style={{fontSize: 10, color: "#8a94a8", fontFamily: "'JetBrains Mono', monospace"}}>
                         sid={activeShell.sid} ·
-                        <span style={{color: shellStatus === "live" ? "#4ade80"
-                          : shellStatus === "error" ? "#f87171" : "#fbbf24"}}>
+                        <span style={{color: shellStatus === "live" ? "#5dffa6"
+                          : shellStatus === "error" ? "#ff6b82" : "#fbbf24"}}>
                           {" "}{shellStatus}
                         </span>
                       </span>
@@ -18110,8 +18110,8 @@ function ShellPanel({
                     <div style={{display: "flex", gap: 6}}>
                       <button onClick={copyOutput}
                         style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
-                          background: "#1e293b", color: "#cbd5e1",
-                          border: "1px solid #334155", borderRadius: 4, cursor: "pointer"}}>COPY</button>
+                          background: "#1c2435", color: "#c3ccda",
+                          border: "1px solid #1c2435", borderRadius: 4, cursor: "pointer"}}>COPY</button>
                       <button onClick={closeShell}
                         style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
                           background: "#7f1d1d", color: "#fff", border: "none",
@@ -18120,7 +18120,7 @@ function ShellPanel({
                   )}
                 </div>
                 <div ref={outRef} style={{padding: "18px 22px", background: "#000",
-                  color: isInteractive ? "#4ade80" : "#bfdbfe",
+                  color: isInteractive ? "#5dffa6" : "#bfdbfe",
                   fontFamily: "'JetBrains Mono', Consolas, monospace",
                   fontSize: 13, minHeight: 300, maxHeight: 440, overflowY: "auto",
                   whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.65}}>
@@ -18129,7 +18129,7 @@ function ShellPanel({
                     : "Waiting for reverse shell connection…")}
                 </div>
                 <div style={{padding: 12, background: "#050a16",
-                  borderTop: "1px solid #1e293b",
+                  borderTop: "1px solid #1c2435",
                   display: "flex", gap: 8, alignItems: "center"}}>
                   {isInteractive && activeShell ? (
                     <>
@@ -18140,7 +18140,7 @@ function ShellPanel({
                         <input type="text"     name="username" tabIndex={-1} autoComplete="username"          defaultValue=""/>
                         <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue=""/>
                       </div>
-                      <span style={{color: "#4ade80", fontFamily: "monospace", fontSize: 15, fontWeight: 800}}>$</span>
+                      <span style={{color: "#5dffa6", fontFamily: "monospace", fontSize: 15, fontWeight: 800}}>$</span>
                       <input ref={inputRef}
                         value={shellCmd} onChange={ev => setShellCmd(ev.target.value)}
                         onKeyDown={onKeyDown}
@@ -18155,17 +18155,17 @@ function ShellPanel({
                         data-1p-ignore="true"
                         spellCheck={false}
                         style={{flex: 1, padding: "9px 11px", background: "#000",
-                          color: "#4ade80", border: "1px solid #14532d", borderRadius: 5,
+                          color: "#5dffa6", border: "1px solid #14532d", borderRadius: 5,
                           fontFamily: "'JetBrains Mono', monospace", fontSize: 13, outline: "none"}}/>
                       <button onClick={sendCmd}
                         style={{padding: "9px 22px",
-                          background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                          background: "linear-gradient(135deg, #00ff88, #0bd673)",
                           color: "#000", fontWeight: 800, letterSpacing: 1.5,
                           border: "none", borderRadius: 5, cursor: "pointer", fontSize: 12,
-                          boxShadow: "0 2px 8px rgba(34,197,94,0.3)"}}>SEND</button>
+                          boxShadow: "0 2px 8px rgba(0,255,136,0.3)"}}>SEND</button>
                     </>
                   ) : (
-                    <span style={{fontSize: 11, color: "#94a3b8", fontStyle: "italic"}}>
+                    <span style={{fontSize: 11, color: "#8a94a8", fontStyle: "italic"}}>
                       {activeShell ? "One-shot data dump — no interactive shell" : "waiting for shell…"}
                     </span>
                   )}
@@ -18177,13 +18177,13 @@ function ShellPanel({
           {/* Status pills */}
           <div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
             <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
-              background: "rgba(34,197,94,0.12)", color: "#4ade80", borderRadius: 5,
-              border: "1px solid rgba(34,197,94,0.3)"}}>{successCount} success</span>
+              background: "rgba(0,255,136,0.12)", color: "#5dffa6", borderRadius: 5,
+              border: "1px solid rgba(0,255,136,0.3)"}}>{successCount} success</span>
             <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
-              background: "rgba(220,38,38,0.12)", color: "#f87171", borderRadius: 5,
+              background: "rgba(220,38,38,0.12)", color: "#ff6b82", borderRadius: 5,
               border: "1px solid rgba(220,38,38,0.3)"}}>{failedCount} failed</span>
             <span style={{padding: "5px 10px", fontSize: 10, fontWeight: 700,
-              background: "rgba(100,116,139,0.12)", color: "#94a3b8", borderRadius: 5,
+              background: "rgba(100,116,139,0.12)", color: "#8a94a8", borderRadius: 5,
               border: "1px solid rgba(100,116,139,0.3)"}}>○ {notRunCount} not run</span>
           </div>
         </div>
@@ -18472,20 +18472,20 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
     return ()=>{ if(pollRef.current) clearInterval(pollRef.current); };
   },[]);
 
-  const BC = "#020617"; const C = color||"#22c55e";
+  const BC = "#0a0e17"; const C = color||"#00ff88";
 
   return (
     <div style={{background:BC,border:`1px solid ${C}44`,borderRadius:10,display:"flex",flexDirection:"column",height:"100%",minHeight:280}}>
       {/* Title bar */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#0a0f1e",borderBottom:`1px solid ${C}33`,borderRadius:"10px 10px 0 0",flexShrink:0}}>
-        <div style={{width:8,height:8,borderRadius:"50%",background:sid?"#22c55e":"#ef4444"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#0d1320",borderBottom:`1px solid ${C}33`,borderRadius:"10px 10px 0 0",flexShrink:0}}>
+        <div style={{width:8,height:8,borderRadius:"50%",background:sid?"#00ff88":"#ff3e5e"}}/>
         <span style={{color:C,fontSize:11,fontWeight:700,fontFamily:"monospace",flex:1}}>{title}</span>
-        {onClose && <button onClick={onClose} style={{background:"none",border:"none",color:"#475569",cursor:"pointer",fontSize:13,padding:"0 4px"}}></button>}
+        {onClose && <button onClick={onClose} style={{background:"none",border:"none",color:"#5a6478",cursor:"pointer",fontSize:13,padding:"0 4px"}}></button>}
       </div>
 
       {/* Preset commands */}
       {presetCmds && presetCmds.length>0 && (
-        <div style={{display:"flex",flexWrap:"wrap",gap:4,padding:"6px 8px",borderBottom:`1px solid #1e293b`,flexShrink:0}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,padding:"6px 8px",borderBottom:`1px solid #1c2435`,flexShrink:0}}>
           {presetCmds.map((cmd,i)=>(
             <div key={i} style={{display:"flex",gap:2}}>
               <button onClick={async()=>{ if(cmd.pre){ await sendCmd(cmd.pre); await new Promise(r=>setTimeout(r,900)); } sendCmd(cmd.cmd); }}
@@ -18494,7 +18494,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
                 ▶ {cmd.label||cmd.cmd}
               </button>
               <button onClick={()=>navigator.clipboard.writeText(cmd.cmd)}
-                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"3px 6px",color:"#64748b",fontSize:10,cursor:"pointer"}}
+                style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:4,padding:"3px 6px",color:"#5a6478",fontSize:10,cursor:"pointer"}}
                 title="Copy"></button>
             </div>
           ))}
@@ -18502,14 +18502,14 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
       )}
 
       {/* Output */}
-      <div ref={outRef} style={{flex:1,overflowY:"auto",padding:"8px 10px",fontFamily:"monospace",fontSize:11,color:"#94a3b8",whiteSpace:"pre-wrap",wordBreak:"break-all",lineHeight:1.5}}>
-        {!sid && loading && <span style={{color:"#60a5fa"}}>Starting session...</span>}
-        {output || (sid ? <span style={{color:"#475569"}}>$ _</span> : "")}
+      <div ref={outRef} style={{flex:1,overflowY:"auto",padding:"8px 10px",fontFamily:"monospace",fontSize:11,color:"#8a94a8",whiteSpace:"pre-wrap",wordBreak:"break-all",lineHeight:1.5}}>
+        {!sid && loading && <span style={{color:"#00d4ff"}}>Starting session...</span>}
+        {output || (sid ? <span style={{color:"#5a6478"}}>$ _</span> : "")}
       </div>
 
       {/* Input */}
-      <div style={{display:"flex",gap:0,borderTop:`1px solid #1e293b`,flexShrink:0}}>
-        <span style={{color:C,padding:"6px 8px",fontFamily:"monospace",fontSize:12,background:"#0a0f1e",borderRadius:"0 0 0 10px"}}>$</span>
+      <div style={{display:"flex",gap:0,borderTop:`1px solid #1c2435`,flexShrink:0}}>
+        <span style={{color:C,padding:"6px 8px",fontFamily:"monospace",fontSize:12,background:"#0d1320",borderRadius:"0 0 0 10px"}}>$</span>
         <input value={input} onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>{
             if(e.key==="Enter") sendCmd(input);
@@ -18518,7 +18518,7 @@ function TerminalWidget({apiUrl, title, color, presetCmds, onClose}) {
             if(e.key==="c"&&e.ctrlKey) sendCmd("\x03");
           }}
           placeholder="type command..."
-          style={{flex:1,background:"#0a0f1e",border:"none",color:"#e2e8f0",fontFamily:"monospace",fontSize:11,padding:"6px 8px",outline:"none"}}/>
+          style={{flex:1,background:"#0d1320",border:"none",color:"#d8deea",fontFamily:"monospace",fontSize:11,padding:"6px 8px",outline:"none"}}/>
         <button onClick={()=>sendCmd(input)}
           style={{background:C+"22",border:"none",padding:"6px 10px",color:C,fontSize:11,cursor:"pointer",borderRadius:"0 0 10px 0",fontWeight:700}}>↵</button>
       </div>
@@ -18573,7 +18573,7 @@ function CloudAttacksModule({token}) {
     setLoading("");
   };
 
-  const sevColor=s=>({CRITICAL:"#ef4444",HIGH:"#f97316",MEDIUM:"#eab308",LOW:"#22c55e",INFO:"#60a5fa"}[s]||"#94a3b8");
+  const sevColor=s=>({CRITICAL:"#ff3e5e",HIGH:"#f97316",MEDIUM:"#eab308",LOW:"#00ff88",INFO:"#00d4ff"}[s]||"#8a94a8");
 
   return (
     <div style={{padding:24,maxWidth:1100,margin:"0 auto"}}>
@@ -18582,16 +18582,16 @@ function CloudAttacksModule({token}) {
 
 
 
-      <div style={{background:"#0f172a",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1e293b"}}>
+      <div style={{background:"#0d1320",borderRadius:12,padding:20,marginBottom:24,border:"1px solid #1c2435"}}>
         <div style={{fontSize:20,fontWeight:700,color:"#f8fafc",marginBottom:16}}>Cloud Attacks</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
           {[["TARGET (IP or URL)",target,setTarget,"192.168.56.101"],
             ["S3 BUCKET NAME",bucket,setBucket,"my-company-bucket"],
             ["AWS REGION",region,setRegion,"us-east-1"]].map(([label,val,set,ph])=>(
             <div key={label}>
-              <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{label}</div>
+              <div style={{fontSize:11,color:"#5a6478",marginBottom:4}}>{label}</div>
               <input value={val} onChange={e=>set(e.target.value)} placeholder={ph}
-                style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:6,
+                style={{width:"100%",background:"#1c2435",border:"1px solid #1c2435",borderRadius:6,
                   padding:"8px 12px",color:"#f8fafc",fontSize:12,boxSizing:"border-box"}}/>
             </div>
           ))}
@@ -18601,43 +18601,43 @@ function CloudAttacksModule({token}) {
         {attacks.map(atk=>{
           const res=results[atk.id]; const busy=loading===atk.id;
           return (
-            <div key={atk.id} style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:12,overflow:"hidden"}}>
-              <div style={{padding:"14px 18px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div key={atk.id} style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:12,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px",borderBottom:"1px solid #1c2435",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div style={{fontSize:14,fontWeight:700,color:"#f8fafc"}}>{atk.icon} {atk.label}</div>
-                  <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{atk.desc}</div>
+                  <div style={{fontSize:11,color:"#5a6478",marginTop:2}}>{atk.desc}</div>
                 </div>
                 <button onClick={()=>run(atk)} disabled={busy}
-                  style={{background:busy?"#1e293b":"#0369a1",color:"#f8fafc",border:"none",
+                  style={{background:busy?"#1c2435":"#0369a1",color:"#f8fafc",border:"none",
                     borderRadius:8,padding:"7px 14px",cursor:busy?"not-allowed":"pointer",fontSize:12,fontWeight:600}}>
                   {busy?"Running...":"Run"}
                 </button>
               </div>
               {res&&<div style={{padding:14}}>
-                {res.error&&<div style={{color:"#ef4444",fontSize:12}}>{res.error}</div>}
+                {res.error&&<div style={{color:"#ff3e5e",fontSize:12}}>{res.error}</div>}
                 {res.commands&&<div style={{marginBottom:8}}>
-                  <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>Commands:</div>
+                  <div style={{fontSize:11,color:"#5a6478",marginBottom:4}}>Commands:</div>
                   {Object.entries(res.commands).slice(0,4).map(([k,v])=>(
                     <div key={k} style={{marginBottom:4}}>
-                      <div style={{fontSize:10,color:"#94a3b8"}}>{k}:</div>
-                      <code style={{display:"block",background:"#020617",color:"#86efac",fontSize:10,
+                      <div style={{fontSize:10,color:"#8a94a8"}}>{k}:</div>
+                      <code style={{display:"block",background:"#0a0e17",color:"#7dffc0",fontSize:10,
                         padding:"4px 8px",borderRadius:4,overflowX:"auto",whiteSpace:"pre"}}>{v}</code>
                     </div>
                   ))}
                 </div>}
                 {res.files_found&&res.files_found.length>0&&<div style={{marginBottom:8}}>
-                  <div style={{fontSize:11,color:"#ef4444",fontWeight:700}}>Files in bucket:</div>
+                  <div style={{fontSize:11,color:"#ff3e5e",fontWeight:700}}>Files in bucket:</div>
                   {res.files_found.slice(0,10).map((f,i)=>(
                     <div key={i} style={{fontSize:11,color:"#fbbf24",fontFamily:"monospace"}}>{f}</div>
                   ))}
                 </div>}
                 {res.findings&&res.findings.map((f,i)=>(
-                  <div key={i} style={{background:"#1e293b",borderRadius:6,padding:10,marginBottom:6,
+                  <div key={i} style={{background:"#1c2435",borderRadius:6,padding:10,marginBottom:6,
                     borderLeft:`3px solid ${sevColor(f.severity)}`}}>
                     <span style={{background:sevColor(f.severity),color:"#000",fontSize:10,
                       fontWeight:700,padding:"1px 5px",borderRadius:3,marginRight:6}}>{f.severity}</span>
-                    <span style={{fontSize:11,color:"#e2e8f0"}}>{f.detail}</span>
-                    {f.remediation&&<div style={{fontSize:10,color:"#60a5fa",marginTop:4}}>Fix: {f.remediation}</div>}
+                    <span style={{fontSize:11,color:"#d8deea"}}>{f.detail}</span>
+                    {f.remediation&&<div style={{fontSize:10,color:"#00d4ff",marginTop:4}}>Fix: {f.remediation}</div>}
                   </div>
                 ))}
               </div>}
@@ -18670,11 +18670,11 @@ function CloudAttacksModule({token}) {
 // ═══════════════════════════════════════════════════════════════
 function ModuleWithTabs({moduleKey, moduleLabel, autoCount, manualTests, autoPanel, color}) {
   const [tab, setTab] = useState("auto");
-  const accent = color || "#3b82f6";
+  const accent = color || "#3b9eff";
   return (
     <div>
       <div style={{display:"flex", gap:0, padding:"0 24px",
-                    borderBottom:"1px solid #334155", background:"#0f172a"}}>
+                    borderBottom:"1px solid #1c2435", background:"#0d1320"}}>
         {[
           {id:"auto",   label:`AUTO SCAN · ${autoCount}`},
           {id:"manual", label:`MANUAL TESTS · ${(manualTests || []).length}`},
@@ -18682,7 +18682,7 @@ function ModuleWithTabs({moduleKey, moduleLabel, autoCount, manualTests, autoPan
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{background:"transparent", border:"none",
                     borderBottom: `2px solid ${tab === t.id ? accent : "transparent"}`,
-                    padding:"10px 18px", color: tab === t.id ? "#f1f5f9" : "#64748b",
+                    padding:"10px 18px", color: tab === t.id ? "#ffffff" : "#5a6478",
                     fontSize:11, fontWeight:700, cursor:"pointer",
                     textTransform:"uppercase", letterSpacing:1}}>
             {t.label}
@@ -20384,11 +20384,11 @@ const MODULE_TYPE = {
 function ModuleTypeBadge({moduleKey}) {
   const t = MODULE_TYPE[moduleKey] || "VA";
   const cfg = {
-    "VA":  { bg: "#1e3a8a", border: "#3b82f6", color: "#bfdbfe",
+    "VA":  { bg: "#0e3a55", border: "#3b9eff", color: "#bfdbfe",
              label: "VA",  tip: "Vulnerability Assessment - passive, safe to run on any target" },
     "VA+": { bg: "#78350f", border: "#f59e0b", color: "#fde68a",
              label: "VA+", tip: "Mostly passive but does light active probing (port scan, banner grab)" },
-    "PT":  { bg: "#7f1d1d", border: "#ef4444", color: "#fecaca",
+    "PT":  { bg: "#7f1d1d", border: "#ff3e5e", color: "#fecaca",
              label: "PT",  tip: "Penetration Testing - actively exploits target. Authorization required." },
   }[t] || {};
   return (
@@ -21126,13 +21126,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   };
 
   const sevColor = (s) => ({
-    CRITICAL:"#ef4444", HIGH:"#f97316", MEDIUM:"#eab308",
-    LOW:"#3b82f6", INFO:"#64748b", POSITIVE:"#22c55e"
-  }[String(s||"").toUpperCase()] || "#64748b");
+    CRITICAL:"#ff3e5e", HIGH:"#f97316", MEDIUM:"#eab308",
+    LOW:"#3b9eff", INFO:"#5a6478", POSITIVE:"#00ff88"
+  }[String(s||"").toUpperCase()] || "#5a6478");
 
   const dot = (r) => {
-    if (!r) return "#475569";
-    if (r.status === "queued") return "#475569";
+    if (!r) return "#5a6478";
+    if (r.status === "queued") return "#5a6478";
     if (r.status === "error")  return "#7f1d1d";
     return sevColor(r.severity);
   };
@@ -21194,7 +21194,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const generatePDF = () => setShowPDFModal(true);
 
   return (
-    <div style={{padding:24, color:"#f1f5f9"}}>
+    <div style={{padding:24, color:"#ffffff"}}>
       <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:8}}>
         <span style={{fontSize:28}}>{emoji}</span>
         <h1 style={{fontSize:22, fontWeight:700}}>{moduleLabel}</h1>
@@ -21218,23 +21218,23 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             type="text" placeholder={schema.ph} value={target}
             onChange={e => setTarget(e.target.value)}
             disabled={running}
-            style={{flex:1, background:"#0f172a", border:"1px solid #334155",
-                    borderRadius:6, padding:"10px 12px", color:"#f1f5f9",
+            style={{flex:1, background:"#0d1320", border:"1px solid #1c2435",
+                    borderRadius:6, padding:"10px 12px", color:"#ffffff",
                     fontSize:13, outline:"none"}}/>
         )}
         {_containerMode && (
-          <div style={{flex:1, background:"#0c1424", border:"1px dashed #1e3a8a",
-                       borderRadius:6, padding:"10px 14px", color:"#94a3b8",
+          <div style={{flex:1, background:"#0c1424", border:"1px dashed #0e3a55",
+                       borderRadius:6, padding:"10px 14px", color:"#8a94a8",
                        fontSize:12, display:"flex", alignItems:"center", gap:8}}>
-            <span style={{color:"#60a5fa", fontWeight:700, fontSize:10,
+            <span style={{color:"#00d4ff", fontWeight:700, fontSize:10,
                           textTransform:"uppercase", letterSpacing:1.2}}>Container scan</span>
-            <span>Provide an <b style={{color:"#cbd5e1"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
+            <span>Provide an <b style={{color:"#c3ccda"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
           </div>
         )}
         <button
           onClick={runAll} disabled={!canRun}
           title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
-          style={{background: running ? "#475569" : (color || "#3b82f6"),
+          style={{background: running ? "#5a6478" : (color || "#3b9eff"),
                   border:"none", borderRadius:6, padding:"10px 18px",
                   color:"#fff", fontWeight:600, fontSize:13,
                   cursor: !canRun ? "not-allowed" : "pointer"}}>
@@ -21248,7 +21248,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               ? "Run a scan or complete manual tests first"
               : `Download PDF (${completedCount} auto + ${Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length} manual)`
           }
-          style={{background: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "#334155" : "#10b981",
+          style={{background: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "#1c2435" : "#10b981",
                   border:"none", borderRadius:6, padding:"10px 14px",
                   color:"#fff", fontWeight:600, fontSize:13,
                   cursor: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "not-allowed" : "pointer"}}>
@@ -21260,13 +21260,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           on a safe public test target without having to scan their own infra. */}
       {!_containerMode && (MODULE_TARGET_EXAMPLES[moduleKey] || []).length > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap"}}>
-          <span style={{fontSize:10, color:"#64748b", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
+          <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
           {(MODULE_TARGET_EXAMPLES[moduleKey] || []).map((ex, idx) => (
             <button key={idx}
               onClick={() => setTarget(ex)}
               disabled={running}
               title={`Use ${ex} as the target (safe public test target)`}
-              style={{background:"#0c1424", border:"1px solid #1e3a8a", color:"#93c5fd",
+              style={{background:"#0c1424", border:"1px solid #0e3a55", color:"#7fdcff",
                        borderRadius:12, padding:"3px 10px", fontSize:11,
                        fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer",
                        opacity: running ? 0.5 : 1}}>
@@ -21279,23 +21279,23 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       {/* Per-module hint + optional auth toggle */}
       <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:14,
                     flexWrap:"wrap"}}>
-        <span style={{fontSize:11, color:"#64748b"}}>
-          <span style={{color: schema.needsUpload ? "#f59e0b" : "#94a3b8"}}>
+        <span style={{fontSize:11, color:"#5a6478"}}>
+          <span style={{color: schema.needsUpload ? "#f59e0b" : "#8a94a8"}}>
             {schema.needsUpload ? "📦 " : "💡 "}
           </span>
           {schema.hint}
         </span>
         <button onClick={() => setShowAuth(!showAuth)}
-          style={{background:"transparent", border:"1px solid #334155",
-                  borderRadius:4, padding:"3px 10px", color:"#94a3b8",
+          style={{background:"transparent", border:"1px solid #1c2435",
+                  borderRadius:4, padding:"3px 10px", color:"#8a94a8",
                   fontSize:10, cursor:"pointer", fontWeight:600,
                   textTransform:"uppercase", letterSpacing:1}}>
           {showAuth ? "▾" : "▸"} Auth headers {authBearer || authCookie ? "(set)" : "(optional)"}
         </button>
         {advancedFields.length > 0 && (
           <button onClick={() => setShowAdv(!showAdv)}
-            style={{background:"transparent", border:"1px solid #334155",
-                    borderRadius:4, padding:"3px 10px", color:"#94a3b8",
+            style={{background:"transparent", border:"1px solid #1c2435",
+                    borderRadius:4, padding:"3px 10px", color:"#8a94a8",
                     fontSize:10, cursor:"pointer", fontWeight:600,
                     textTransform:"uppercase", letterSpacing:1}}>
             {showAdv ? "▾" : "▸"} Advanced inputs {advFilledCount > 0 ? `(${advFilledCount}/${advancedFields.length} set)` : `(${advancedFields.length} optional)`}
@@ -21310,7 +21310,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             }}
             title="Clear all advanced inputs (image_ref, Dockerfile, pod-spec, kubeconfig, repo_url)"
             style={{background:"transparent", border:"1px solid #7f1d1d",
-                    borderRadius:4, padding:"3px 10px", color:"#fca5a5",
+                    borderRadius:4, padding:"3px 10px", color:"#ffa3b0",
                     fontSize:10, cursor:"pointer", fontWeight:600,
                     textTransform:"uppercase", letterSpacing:1}}>
             Clear ({advFilledCount})
@@ -21326,7 +21326,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       {showAuth && (
         <div style={{display:"flex", gap:8, marginBottom:14, flexWrap:"wrap"}}>
           <div style={{flex:1, minWidth:280}}>
-            <label style={{fontSize:10, color:"#64748b", fontWeight:600,
+            <label style={{fontSize:10, color:"#5a6478", fontWeight:600,
                             textTransform:"uppercase", letterSpacing:1.2,
                             display:"block", marginBottom:3}}>
               Authorization: Bearer
@@ -21334,12 +21334,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             <input type="text" placeholder="JWT / API key (paid OSINT, webapp auth, LLM, etc.)"
               value={authBearer} onChange={e => setAuthBearer(e.target.value)}
               disabled={running}
-              style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
-                      borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+              style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435",
+                      borderRadius:5, padding:"7px 10px", color:"#c3ccda",
                       fontSize:11, fontFamily:"monospace", outline:"none"}}/>
           </div>
           <div style={{flex:1, minWidth:280}}>
-            <label style={{fontSize:10, color:"#64748b", fontWeight:600,
+            <label style={{fontSize:10, color:"#5a6478", fontWeight:600,
                             textTransform:"uppercase", letterSpacing:1.2,
                             display:"block", marginBottom:3}}>
               Cookie (session)
@@ -21347,8 +21347,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             <input type="text" placeholder="session=abc123; csrf=xyz789  (webapp/auth_attacks)"
               value={authCookie} onChange={e => setAuthCookie(e.target.value)}
               disabled={running}
-              style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
-                      borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+              style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435",
+                      borderRadius:5, padding:"7px 10px", color:"#c3ccda",
                       fontSize:11, fontFamily:"monospace", outline:"none"}}/>
           </div>
         </div>
@@ -21361,8 +21361,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           the inputs relevant to the techniques they care about. */}
       {showAdv && advancedFields.length > 0 && (
         <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
-                      border:"1px solid #1e293b", borderRadius:6}}>
-          <div style={{fontSize:10, color:"#64748b", marginBottom:10,
+                      border:"1px solid #1c2435", borderRadius:6}}>
+          <div style={{fontSize:10, color:"#5a6478", marginBottom:10,
                         textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>
             Optional inputs — leave blank to skip the probes that need them
             {advancedFields.includes("kubeconfig") && (
@@ -21380,15 +21380,15 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               const presets = ADVANCED_INPUT_PRESETS[k] || [];
               return (
                 <div key={k}>
-                  <label style={{fontSize:10, color:"#94a3b8", fontWeight:600,
+                  <label style={{fontSize:10, color:"#8a94a8", fontWeight:600,
                                   textTransform:"uppercase", letterSpacing:1.2,
                                   display:"flex", justifyContent:"space-between",
                                   alignItems:"center", marginBottom:4}}>
-                    <span>{def.label} <span style={{color:"#475569", fontWeight:400, textTransform:"none", letterSpacing:0}}>· {def.hint}</span></span>
+                    <span>{def.label} <span style={{color:"#5a6478", fontWeight:400, textTransform:"none", letterSpacing:0}}>· {def.hint}</span></span>
                     {val && (
                       <button onClick={() => setAdvField(k, "")}
-                        style={{background:"transparent", border:"1px solid #334155",
-                                color:"#64748b", borderRadius:3, padding:"1px 6px",
+                        style={{background:"transparent", border:"1px solid #1c2435",
+                                color:"#5a6478", borderRadius:3, padding:"1px 6px",
                                 fontSize:9, cursor:"pointer", letterSpacing:1}}>
                         CLEAR
                       </button>
@@ -21399,10 +21399,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       {presets.map((p, i) => (
                         <button key={i} onClick={() => setAdvField(k, p.value)}
                           disabled={running} title={p.desc}
-                          style={{background: val === p.value ? "#1e3a5f" : "#0f172a",
-                                  border: `1px solid ${val === p.value ? "#3b82f6" : "#334155"}`,
+                          style={{background: val === p.value ? "#103a52" : "#0d1320",
+                                  border: `1px solid ${val === p.value ? "#3b9eff" : "#1c2435"}`,
                                   borderRadius:4, padding:"3px 8px",
-                                  color: val === p.value ? "#93c5fd" : "#94a3b8",
+                                  color: val === p.value ? "#7fdcff" : "#8a94a8",
                                   fontSize:10, cursor: running ? "not-allowed" : "pointer",
                                   fontFamily:"JetBrains Mono, ui-monospace, monospace"}}>
                           {p.label}
@@ -21414,15 +21414,15 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                     <textarea value={val} onChange={e => setAdvField(k, e.target.value)}
                       disabled={running} placeholder={def.ph} rows={def.rows || 6}
                       spellCheck={false}
-                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
-                              borderRadius:5, padding:"8px 10px", color:"#cbd5e1",
+                      style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435",
+                              borderRadius:5, padding:"8px 10px", color:"#c3ccda",
                               fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
                               outline:"none", resize:"vertical", lineHeight:1.5}}/>
                   ) : (
                     <input type="text" value={val} onChange={e => setAdvField(k, e.target.value)}
                       disabled={running} placeholder={def.ph}
-                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
-                              borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+                      style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435",
+                              borderRadius:5, padding:"7px 10px", color:"#c3ccda",
                               fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
                               outline:"none"}}/>
                   )}
@@ -21440,11 +21440,11 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           irrelevant fields are ignored by scanners that don't use them. */}
       {optionsFields.length > 0 && (
         <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
-                      border:"1px solid #1e3a5f", borderRadius:6}}>
-          <div style={{fontSize:10, color:"#60a5fa", marginBottom:10,
+                      border:"1px solid #103a52", borderRadius:6}}>
+          <div style={{fontSize:10, color:"#00d4ff", marginBottom:10,
                         textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>
             VL-METHOD inputs — what each scanner tries against the target
-            <span style={{color:"#64748b", marginLeft:8, textTransform:"none",
+            <span style={{color:"#5a6478", marginLeft:8, textTransform:"none",
                             letterSpacing:0, fontSize:10, fontWeight:500}}>
               · paste wordlists / hashes / form details — scanner picks what it needs
             </span>
@@ -21463,13 +21463,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                     <input type="checkbox" checked={!!val}
                       onChange={e => setOptField(k, e.target.checked)}
                       disabled={running}
-                      style={{width:14, height:14, cursor:"pointer", accentColor:"#3b82f6"}}/>
-                    <label style={{fontSize:11.5, color:"#cbd5e1", fontWeight:500, cursor:"pointer"}}
+                      style={{width:14, height:14, cursor:"pointer", accentColor:"#3b9eff"}}/>
+                    <label style={{fontSize:11.5, color:"#c3ccda", fontWeight:500, cursor:"pointer"}}
                       onClick={() => !running && setOptField(k, !val)}>
                       {def.label}
                     </label>
                     {def.hint && (
-                      <span style={{fontSize:10, color:"#64748b", marginLeft:4}}>
+                      <span style={{fontSize:10, color:"#5a6478", marginLeft:4}}>
                         — {def.hint}
                       </span>
                     )}
@@ -21480,7 +21480,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               // Text / textarea rendering
               return (
                 <div key={k}>
-                  <label style={{fontSize:10, color:"#94a3b8", fontWeight:600,
+                  <label style={{fontSize:10, color:"#8a94a8", fontWeight:600,
                                   textTransform:"uppercase", letterSpacing:1.2,
                                   display:"block", marginBottom:3}}>
                     {def.label}
@@ -21492,7 +21492,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                     )}
                   </label>
                   {def.hint && (
-                    <div style={{fontSize:10, color:"#64748b", marginBottom:4}}>{def.hint}</div>
+                    <div style={{fontSize:10, color:"#5a6478", marginBottom:4}}>{def.hint}</div>
                   )}
                   {presets.length > 0 && (
                     <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:6}}>
@@ -21500,8 +21500,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                         <button key={i} type="button" onClick={() => setOptField(k, p.value)}
                           disabled={running}
                           title={p.desc}
-                          style={{background:"#1e293b", border:"1px solid #334155",
-                                  borderRadius:4, padding:"3px 8px", color:"#94a3b8",
+                          style={{background:"#1c2435", border:"1px solid #1c2435",
+                                  borderRadius:4, padding:"3px 8px", color:"#8a94a8",
                                   fontSize:10, cursor:"pointer", fontWeight:500}}>
                           + {p.label}
                         </button>
@@ -21512,15 +21512,15 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                     <textarea value={val || ""} onChange={e => setOptField(k, e.target.value)}
                       disabled={running} placeholder={def.ph} rows={def.rows || 5}
                       spellCheck={false}
-                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
-                              borderRadius:5, padding:"8px 10px", color:"#cbd5e1",
+                      style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435",
+                              borderRadius:5, padding:"8px 10px", color:"#c3ccda",
                               fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
                               outline:"none", resize:"vertical", lineHeight:1.5}}/>
                   ) : (
                     <input type="text" value={val || ""} onChange={e => setOptField(k, e.target.value)}
                       disabled={running} placeholder={def.ph}
-                      style={{width:"100%", background:"#0f172a", border:"1px solid #334155",
-                              borderRadius:5, padding:"7px 10px", color:"#cbd5e1",
+                      style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435",
+                              borderRadius:5, padding:"7px 10px", color:"#c3ccda",
                               fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace",
                               outline:"none"}}/>
                   )}
@@ -21535,17 +21535,17 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       {history.length > 0 && (
         <div style={{marginBottom:12, position:"relative"}}>
           <button onClick={() => setShowHistory(!showHistory)}
-            style={{background:"#1e293b", border:"1px solid #334155",
-                    borderRadius:6, padding:"6px 12px", color:"#cbd5e1",
+            style={{background:"#1c2435", border:"1px solid #1c2435",
+                    borderRadius:6, padding:"6px 12px", color:"#c3ccda",
                     fontSize:11, cursor:"pointer", display:"flex",
                     alignItems:"center", gap:8}}>
             <span></span>
             <span>Recent scans ({history.length})</span>
-            <span style={{color:"#64748b"}}>{showHistory ? "▼" : "▶"}</span>
+            <span style={{color:"#5a6478"}}>{showHistory ? "▼" : "▶"}</span>
           </button>
           {showHistory && (
             <div style={{position:"absolute", top:"100%", left:0, marginTop:4,
-                          background:"#0f172a", border:"1px solid #334155",
+                          background:"#0d1320", border:"1px solid #1c2435",
                           borderRadius:6, minWidth:380, zIndex:100,
                           boxShadow:"0 4px 12px rgba(0,0,0,0.4)"}}>
               {history.map((entry, i) => {
@@ -21554,20 +21554,20 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 return (
                   <div key={i} onClick={() => loadFromHistory(entry)}
                        style={{padding:"10px 12px", cursor:"pointer",
-                                borderBottom: i < history.length-1 ? "1px solid #1e293b" : "none"}}
-                       onMouseEnter={e => e.currentTarget.style.background = "#1e293b"}
+                                borderBottom: i < history.length-1 ? "1px solid #1c2435" : "none"}}
+                       onMouseEnter={e => e.currentTarget.style.background = "#1c2435"}
                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     <div style={{display:"flex", justifyContent:"space-between",
                                   alignItems:"center", marginBottom:4}}>
-                      <span style={{color:"#f1f5f9", fontSize:12, fontWeight:600}}>
+                      <span style={{color:"#ffffff", fontSize:12, fontWeight:600}}>
                         {entry.target || "(no target)"}
                       </span>
-                      <span style={{color:"#64748b", fontSize:10}}>
+                      <span style={{color:"#5a6478", fontSize:10}}>
                         {date.toLocaleString()}
                       </span>
                     </div>
                     <div style={{display:"flex", gap:8, fontSize:10}}>
-                      <span style={{color:"#64748b"}}>{entry.executed}/{totalTools} executed</span>
+                      <span style={{color:"#5a6478"}}>{entry.executed}/{totalTools} executed</span>
                       {c.CRITICAL > 0 && <span style={{color:sevColor("CRITICAL"), fontWeight:600}}>● {c.CRITICAL} CRITICAL</span>}
                       {c.HIGH > 0     && <span style={{color:sevColor("HIGH"),     fontWeight:600}}>● {c.HIGH} HIGH</span>}
                       {c.MEDIUM > 0   && <span style={{color:sevColor("MEDIUM"),   fontWeight:600}}>● {c.MEDIUM} MEDIUM</span>}
@@ -21577,8 +21577,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 );
               })}
               <div onClick={clearHistory}
-                   style={{padding:"6px 12px", cursor:"pointer", borderTop:"1px solid #1e293b",
-                            color:"#ef4444", fontSize:10, textAlign:"center"}}>
+                   style={{padding:"6px 12px", cursor:"pointer", borderTop:"1px solid #1c2435",
+                            color:"#ff3e5e", fontSize:10, textAlign:"center"}}>
                 Clear history
               </div>
             </div>
@@ -21588,15 +21588,15 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 
       {/* Auto / Manual tabs */}
       {(MANUAL_TESTS_AUTO[moduleKey] || []).length > 0 && (
-        <div style={{display:"flex", gap:0, marginBottom:16, borderBottom:"1px solid #334155"}}>
+        <div style={{display:"flex", gap:0, marginBottom:16, borderBottom:"1px solid #1c2435"}}>
           {[
             {id:"auto",   label:`AUTO SCAN · ${totalTools}`},
             {id:"manual", label:`MANUAL TESTS · ${(MANUAL_TESTS_AUTO[moduleKey] || []).length}`},
           ].map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
               style={{background:"transparent", border:"none",
-                      borderBottom: `2px solid ${activeTab === t.id ? (color || "#3b82f6") : "transparent"}`,
-                      padding:"8px 16px", color: activeTab === t.id ? "#f1f5f9" : "#64748b",
+                      borderBottom: `2px solid ${activeTab === t.id ? (color || "#3b9eff") : "transparent"}`,
+                      padding:"8px 16px", color: activeTab === t.id ? "#ffffff" : "#5a6478",
                       fontSize:11, fontWeight:700, cursor:"pointer",
                       textTransform:"uppercase", letterSpacing:1}}>
               {t.label}
@@ -21608,21 +21608,21 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       {/* Delta banner — comparison to previous scan of same target */}
       {activeTab === "auto" && delta && (delta.newFindings + delta.fixed + delta.worsened) > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:14, padding:"10px 14px",
-                      marginBottom:12, background:"#0f172a", border:"1px solid #334155",
+                      marginBottom:12, background:"#0d1320", border:"1px solid #1c2435",
                       borderRadius:6}}>
           <span style={{fontSize:20}}></span>
-          <div style={{flex:1, fontSize:11, color:"#cbd5e1"}}>
+          <div style={{flex:1, fontSize:11, color:"#c3ccda"}}>
             <div style={{marginBottom:2}}>
               <strong>Delta</strong> vs scan from {new Date(delta.prevDate).toLocaleDateString()}:
             </div>
             <div style={{display:"flex", gap:14, fontSize:11}}>
               {delta.fixed > 0 && (
-                <span style={{color:"#22c55e", fontWeight:600}}>
+                <span style={{color:"#00ff88", fontWeight:600}}>
                   {delta.fixed} FIXED
                 </span>
               )}
               {delta.newFindings > 0 && (
-                <span style={{color:"#ef4444", fontWeight:600}}>
+                <span style={{color:"#ff3e5e", fontWeight:600}}>
                   ▲ {delta.newFindings} NEW
                 </span>
               )}
@@ -21632,7 +21632,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 </span>
               )}
               {delta.persisted > 0 && (
-                <span style={{color:"#94a3b8"}}>
+                <span style={{color:"#8a94a8"}}>
                   {delta.persisted} persisting
                 </span>
               )}
@@ -21653,9 +21653,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             const active = sevFilter === s;
             return (
               <button key={s} onClick={() => setSevFilter(active ? null : s)}
-                style={{background: active ? sevColor(s) : "#1e293b",
-                        border: `1px solid ${active ? sevColor(s) : "#334155"}`,
-                        borderRadius:4, padding:"4px 10px", color: active ? "#fff" : "#cbd5e1",
+                style={{background: active ? sevColor(s) : "#1c2435",
+                        border: `1px solid ${active ? sevColor(s) : "#1c2435"}`,
+                        borderRadius:4, padding:"4px 10px", color: active ? "#fff" : "#c3ccda",
                         fontSize:10, fontWeight:600, cursor:"pointer",
                         textTransform:"uppercase", letterSpacing:0.5}}>
                 {s} ({n})
@@ -21664,8 +21664,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           })}
           {sevFilter && (
             <button onClick={() => setSevFilter(null)}
-              style={{background:"transparent", border:"1px solid #334155",
-                      borderRadius:4, padding:"4px 8px", color:"#94a3b8",
+              style={{background:"transparent", border:"1px solid #1c2435",
+                      borderRadius:4, padding:"4px 8px", color:"#8a94a8",
                       fontSize:10, cursor:"pointer"}}>
               clear ×
             </button>
@@ -21675,30 +21675,30 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           {tiers.length > 1 && selectedTiers && (
             <div style={{position:"relative", marginLeft:"auto"}}>
               <button onClick={() => setTierMenuOpen(o => !o)}
-                style={{background: selectedTiers.size < tiers.length ? color : "#1e293b",
-                        border:`1px solid ${selectedTiers.size < tiers.length ? color : "#334155"}`,
+                style={{background: selectedTiers.size < tiers.length ? color : "#1c2435",
+                        border:`1px solid ${selectedTiers.size < tiers.length ? color : "#1c2435"}`,
                         borderRadius:4, padding:"4px 10px",
-                        color: selectedTiers.size < tiers.length ? "#fff" : "#cbd5e1",
+                        color: selectedTiers.size < tiers.length ? "#fff" : "#c3ccda",
                         fontSize:10, fontWeight:600, cursor:"pointer",
                         textTransform:"uppercase", letterSpacing:0.5}}>
                 Tiers {selectedTiers.size}/{tiers.length} {tierMenuOpen ? "▴" : "▾"}
               </button>
               {tierMenuOpen && (
                 <div style={{position:"absolute", top:"calc(100% + 4px)", right:0, zIndex:50,
-                              background:"#0f172a", border:"1px solid #334155",
+                              background:"#0d1320", border:"1px solid #1c2435",
                               borderRadius:6, padding:"8px 4px", minWidth:260,
                               maxHeight:300, overflowY:"auto",
                               boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}}>
                   <div style={{display:"flex", justifyContent:"space-between",
-                                padding:"4px 10px 8px", borderBottom:"1px solid #1e293b",
+                                padding:"4px 10px 8px", borderBottom:"1px solid #1c2435",
                                 marginBottom:4}}>
                     <button onClick={() => setSelectedTiers(new Set(tiers.map(t=>t.id)))}
-                      style={{background:"none", border:"none", color:"#94a3b8",
+                      style={{background:"none", border:"none", color:"#8a94a8",
                               fontSize:10, cursor:"pointer", textDecoration:"underline"}}>
                       select all
                     </button>
                     <button onClick={() => setSelectedTiers(new Set())}
-                      style={{background:"none", border:"none", color:"#94a3b8",
+                      style={{background:"none", border:"none", color:"#8a94a8",
                               fontSize:10, cursor:"pointer", textDecoration:"underline"}}>
                       clear all
                     </button>
@@ -21711,8 +21711,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       <label key={t.id}
                         style={{display:"flex", alignItems:"center", gap:8,
                                 padding:"5px 10px", cursor:"pointer", fontSize:11,
-                                color:active ? "#f1f5f9" : "#94a3b8"}}
-                        onMouseEnter={e => e.currentTarget.style.background = "#1e293b"}
+                                color:active ? "#ffffff" : "#8a94a8"}}
+                        onMouseEnter={e => e.currentTarget.style.background = "#1c2435"}
                         onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                         <input type="checkbox" checked={active}
                           onChange={() => {
@@ -21724,7 +21724,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                           }}
                           style={{accentColor: color}}/>
                         <span style={{flex:1, textTransform:"capitalize"}}>{lbl}</span>
-                        <span style={{color:"#64748b", fontSize:10, fontFamily:"monospace"}}>
+                        <span style={{color:"#5a6478", fontSize:10, fontFamily:"monospace"}}>
                           {t.count}
                         </span>
                       </label>
@@ -21736,16 +21736,16 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           )}
           <input type="text" placeholder="search tool name..." value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            style={{background:"#0f172a", border:"1px solid #334155",
-                    borderRadius:4, padding:"4px 8px", color:"#cbd5e1", fontSize:11,
+            style={{background:"#0d1320", border:"1px solid #1c2435",
+                    borderRadius:4, padding:"4px 8px", color:"#c3ccda", fontSize:11,
                     width:180, outline:"none"}}/>
         </div>
       )}
 
       {activeTab === "auto" && (() => {
         // Premium list-style UI with colored section headers + full-width scanner rows
-        const tierPalette = ["#8b5cf6","#06b6d4","#ef4444","#a855f7","#22c55e",
-                              "#f59e0b","#ec4899","#3b82f6","#10b981","#f97316",
+        const tierPalette = ["#8b5cf6","#06b6d4","#ff3e5e","#a855f7","#00ff88",
+                              "#f59e0b","#ec4899","#3b9eff","#10b981","#f97316",
                               "#0ea5e9","#84cc16"];
         const sectionTitle = (tierId, idx) => {
           // tier1_port_service_enum → "SECTION 1 — PORT SERVICE ENUM"
@@ -21764,9 +21764,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           return "DONE";
         };
         const statusColor = (r) => {
-          if (!r || !r.status || r.status === "queued") return "#64748b";
-          if (r.status === "error") return "#ef4444";
-          if (r.severity === "POSITIVE") return "#22c55e";
+          if (!r || !r.status || r.status === "queued") return "#5a6478";
+          if (r.status === "error") return "#ff3e5e";
+          if (r.severity === "POSITIVE") return "#00ff88";
           return sevColor(r.severity);
         };
         return tiers.map((tier, idx) => {
@@ -21790,7 +21790,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                               textTransform:"uppercase", letterSpacing:1.5}}>
                   {sectionTitle(tier.id, idx)}
                 </div>
-                <div style={{fontSize:10, color:"#64748b", marginTop:2}}>
+                <div style={{fontSize:10, color:"#5a6478", marginTop:2}}>
                   {filteredTools.length === tier.count
                     ? `${tier.count} scanner${tier.count !== 1 ? "s" : ""}`
                     : `${filteredTools.length} of ${tier.count} scanner${tier.count !== 1 ? "s" : ""}`}
@@ -21805,23 +21805,23 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   <div key={tool}>
                     <div onClick={() => hasData && setExpanded(isExp ? null : tool)}
                          style={{display:"flex", alignItems:"center", gap:14,
-                                  padding:"11px 14px", background:"#0f172a",
-                                  borderTop: ti === 0 ? "1px solid #1e293b" : "1px solid #1e293b",
-                                  borderBottom: ti === filteredTools.length - 1 ? "1px solid #1e293b" : "none",
+                                  padding:"11px 14px", background:"#0d1320",
+                                  borderTop: ti === 0 ? "1px solid #1c2435" : "1px solid #1c2435",
+                                  borderBottom: ti === filteredTools.length - 1 ? "1px solid #1c2435" : "none",
                                   borderLeft: isExp ? `2px solid ${statusColor(r)}` : "2px solid transparent",
                                   cursor: hasData ? "pointer" : "default",
                                   transition:"border-left 0.15s"}}>
                       <span style={{width:9, height:9, borderRadius:"50%",
                                     background:dot(r), flexShrink:0}}></span>
-                      <span style={{color:"#475569", fontSize:11, letterSpacing:-1,
+                      <span style={{color:"#5a6478", fontSize:11, letterSpacing:-1,
                                     fontFamily:"monospace", flexShrink:0}}>≡≡</span>
-                      <span style={{flex:1, color:"#f1f5f9", fontSize:13, fontWeight:500,
+                      <span style={{flex:1, color:"#ffffff", fontSize:13, fontWeight:500,
                                     overflow:"hidden", textOverflow:"ellipsis",
                                     whiteSpace:"nowrap"}}>{prettyName(tool)}</span>
                       {(() => {
                         const dm = tileDelta(tool);
                         if (!dm) return null;
-                        const dmCol = dm === "FIXED" ? "#22c55e" : dm === "WORSE" ? "#f97316" : "#ef4444";
+                        const dmCol = dm === "FIXED" ? "#00ff88" : dm === "WORSE" ? "#f97316" : "#ff3e5e";
                         const dmSym = dm === "FIXED" ? "" : dm === "WORSE" ? "↗" : "▲";
                         return (
                           <span style={{padding:"2px 7px", borderRadius:3, fontSize:9,
@@ -21832,12 +21832,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                         );
                       })()}
                       {typeof r.count === "number" && r.count > 0 && (
-                        <span style={{color:"#94a3b8", fontSize:11, fontWeight:600}}>
+                        <span style={{color:"#8a94a8", fontSize:11, fontWeight:600}}>
                           {r.count}
                         </span>
                       )}
                       {r.elapsed && (
-                        <span style={{color:"#475569", fontSize:10, fontFamily:"monospace"}}>
+                        <span style={{color:"#5a6478", fontSize:10, fontFamily:"monospace"}}>
                           {(r.elapsed/1000).toFixed(1)}s
                         </span>
                       )}
@@ -21847,47 +21847,47 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                         {statusLabel(r)}
                       </span>
                       {hasData && (
-                        <span style={{color:"#64748b", fontSize:10}}>
+                        <span style={{color:"#5a6478", fontSize:10}}>
                           {isExp ? "▼" : "▶"}
                         </span>
                       )}
                     </div>
                     {isExp && hasData && (
-                      <div style={{background:"#020617",
+                      <div style={{background:"#0a0e17",
                                     borderLeft:`2px solid ${statusColor(r)}`,
                                     padding:"12px 14px"}}>
                         {(r.data?.findings || []).map((f, i) => (
                           <div key={i} style={{marginBottom:10, paddingBottom:10,
-                                                borderBottom: i < r.data.findings.length-1 ? "1px solid #1e293b" : "none"}}>
+                                                borderBottom: i < r.data.findings.length-1 ? "1px solid #1c2435" : "none"}}>
                             <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:6}}>
                               <span style={{padding:"2px 8px", borderRadius:3, fontSize:10,
                                             fontWeight:700, background:sevColor(f.severity || r.severity),
                                             color:"#fff"}}>{f.severity || r.severity}</span>
-                              {f.cvss && <span style={{color:"#94a3b8", fontSize:11}}>CVSS {f.cvss}</span>}
-                              {f.cwe && f.cwe !== "N/A" && <span style={{color:"#94a3b8", fontSize:11}}>{f.cwe}</span>}
-                              {f.confidence && <span style={{color:"#22c55e", fontSize:10, fontWeight:600}}>{f.confidence}</span>}
+                              {f.cvss && <span style={{color:"#8a94a8", fontSize:11}}>CVSS {f.cvss}</span>}
+                              {f.cwe && f.cwe !== "N/A" && <span style={{color:"#8a94a8", fontSize:11}}>{f.cwe}</span>}
+                              {f.confidence && <span style={{color:"#00ff88", fontSize:10, fontWeight:600}}>{f.confidence}</span>}
                             </div>
                             {f.detail && (
-                              <div style={{color:"#f1f5f9", fontSize:12, marginBottom:6, lineHeight:1.5}}>
+                              <div style={{color:"#ffffff", fontSize:12, marginBottom:6, lineHeight:1.5}}>
                                 {f.detail}
                               </div>
                             )}
                             {f.evidence_marker && (
-                              <div style={{color:"#94a3b8", fontSize:11, marginBottom:6,
-                                            fontFamily:"monospace", background:"#0f172a",
+                              <div style={{color:"#8a94a8", fontSize:11, marginBottom:6,
+                                            fontFamily:"monospace", background:"#0d1320",
                                             padding:"6px 10px", borderRadius:3, wordBreak:"break-word"}}>
                                 {f.evidence_marker}
                               </div>
                             )}
                             {f.remediation && (
-                              <div style={{color:"#86efac", fontSize:11, lineHeight:1.5}}>
+                              <div style={{color:"#7dffc0", fontSize:11, lineHeight:1.5}}>
                                 {f.remediation}
                               </div>
                             )}
                           </div>
                         ))}
                         {r.data?.tests_summary && (
-                          <div style={{color:"#475569", fontSize:10, marginTop:4, fontStyle:"italic"}}>
+                          <div style={{color:"#5a6478", fontSize:10, marginTop:4, fontStyle:"italic"}}>
                             {r.data.tests_summary}
                           </div>
                         )}
@@ -21903,10 +21903,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 
       {activeTab === "auto" && !tiers.length && tiersStatus === "loading" && (
         <div style={{padding:"40px 20px", textAlign:"center"}}>
-          <div style={{display:"inline-block", width:32, height:32, border:"3px solid #1e293b",
+          <div style={{display:"inline-block", width:32, height:32, border:"3px solid #1c2435",
                         borderTop:`3px solid ${color}`, borderRadius:"50%",
                         animation:"spin 0.8s linear infinite", marginBottom:14}}/>
-          <p style={{color:"#94a3b8", fontSize:13, margin:0}}>
+          <p style={{color:"#8a94a8", fontSize:13, margin:0}}>
             Loading technique catalogue<span className="dots">...</span>
           </p>
           <style>{`@keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }`}</style>
@@ -21915,10 +21915,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       {activeTab === "auto" && !tiers.length && tiersStatus === "failed" && (
         <div style={{padding:"30px 20px", background:"#1e1b2e", border:"1px solid #5b21b6",
                       borderRadius:6, marginTop:16}}>
-          <div style={{color:"#fca5a5", fontSize:14, fontWeight:600, marginBottom:8}}>
+          <div style={{color:"#ffa3b0", fontSize:14, fontWeight:600, marginBottom:8}}>
             Could not load technique catalogue
           </div>
-          <div style={{color:"#94a3b8", fontSize:12, marginBottom:14, lineHeight:1.5}}>
+          <div style={{color:"#8a94a8", fontSize:12, marginBottom:14, lineHeight:1.5}}>
             The backend at <code>GET /api/{moduleKey}/run_all/tiers</code> did not respond after
             4 retries. Possible causes: backend cold-starting, network blip, or
             <code> tools/{moduleKey}/</code> not registered. The most common fix is
@@ -21945,7 +21945,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       {/* Manual Tests tab */}
       {activeTab === "manual" && (() => {
         const allTests = MANUAL_TESTS_AUTO[moduleKey] || [];
-        const DIFF_COLOR = {easy:"#22c55e", medium:"#f59e0b", hard:"#ef4444"};
+        const DIFF_COLOR = {easy:"#00ff88", medium:"#f59e0b", hard:"#ff3e5e"};
         const matches = t => {
           if (manualSearch) {
             const q = manualSearch.toLowerCase();
@@ -21966,26 +21966,26 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         }).length;
         return (
         <div>
-          <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", border:"1px solid #1e3a5f", borderRadius:8, padding:"14px 16px", marginBottom:14}}>
+          <div style={{background:"linear-gradient(135deg,#172554,#1e1b4b)", border:"1px solid #103a52", borderRadius:8, padding:"14px 16px", marginBottom:14}}>
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap"}}>
               <div style={{minWidth:0, flex:1}}>
                 <div style={{fontSize:13, fontWeight:700, color:"#fbbf24", marginBottom:4}}>
                   Analyst Manual Tests — {moduleLabel}
                 </div>
-                <div style={{fontSize:11, color:"#cbd5e1", lineHeight:1.5}}>
+                <div style={{fontSize:11, color:"#c3ccda", lineHeight:1.5}}>
                   {allTests.length} hands-on techniques from <code style={{color:"#a78bfa"}}>module_playbooks/{playbook}</code>.
                   Click <b>Details</b> for full steps + tools + prereqs. Mark <b>PASS</b>/<b>FAIL</b>/<b>N/A</b> with evidence, then Export PDF.
                 </div>
               </div>
-              <div style={{display:"flex", gap:14, fontSize:11, color:"#cbd5e1", flexShrink:0}}>
+              <div style={{display:"flex", gap:14, fontSize:11, color:"#c3ccda", flexShrink:0}}>
                 <div><b style={{color:"#fbbf24"}}>{reqCount}</b> required</div>
-                <div><b style={{color:"#22c55e"}}>{doneCount}</b> / {allTests.length} done</div>
+                <div><b style={{color:"#00ff88"}}>{doneCount}</b> / {allTests.length} done</div>
               </div>
             </div>
           </div>
           <div style={{display:"flex", gap:10, marginBottom:14, flexWrap:"wrap"}}>
             <input type="text" placeholder="Search tests, tools, refs..." value={manualSearch} onChange={e => setManualSearch(e.target.value)}
-              style={{flex:1, minWidth:220, background:"#0f172a", border:"1px solid #334155", borderRadius:6, padding:"7px 10px", color:"#cbd5e1", fontSize:12, outline:"none"}}/>
+              style={{flex:1, minWidth:220, background:"#0d1320", border:"1px solid #1c2435", borderRadius:6, padding:"7px 10px", color:"#c3ccda", fontSize:12, outline:"none"}}/>
             {[
               {k:"all", label:`All (${allTests.length})`},
               {k:"required", label:`Required (${reqCount})`},
@@ -21994,7 +21994,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               {k:"failed", label:"Failed"},
             ].map(f => (
               <button key={f.k} onClick={() => setManualFilter(f.k)}
-                style={{background: manualFilter === f.k ? "#7c3aed" : "#1e293b", border:"1px solid #334155", borderRadius:6,
+                style={{background: manualFilter === f.k ? "#7c3aed" : "#1c2435", border:"1px solid #1c2435", borderRadius:6,
                         padding:"6px 12px", color:"#fff", fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap"}}>
                 {f.label}
               </button>
@@ -22005,20 +22005,20 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               const state = manualState[test.id] || {};
               const sev = state.severity || "INFO";
               const isOpen = !!manualExpanded[test.id];
-              const diffC = DIFF_COLOR[test.difficulty] || "#64748b";
+              const diffC = DIFF_COLOR[test.difficulty] || "#5a6478";
               return (
-                <div key={test.id} style={{background:"#0f172a", border:`1px solid ${state.status === "FAIL" ? sevColor(sev) : (state.status === "PASS" ? "#22c55e" : "#1e293b")}`,
+                <div key={test.id} style={{background:"#0d1320", border:`1px solid ${state.status === "FAIL" ? sevColor(sev) : (state.status === "PASS" ? "#00ff88" : "#1c2435")}`,
                                              borderRadius:6, padding:14}}>
                   <div style={{display:"flex", justifyContent:"space-between", alignItems:"start", marginBottom:8, gap:8}}>
                     <div style={{flex:1, minWidth:0}}>
                       <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:4}}>
-                        <span style={{color:"#94a3b8", fontSize:10, fontFamily:"monospace"}}>{test.ref}</span>
+                        <span style={{color:"#8a94a8", fontSize:10, fontFamily:"monospace"}}>{test.ref}</span>
                         <span style={{background:diffC+"22", color:diffC, fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, textTransform:"uppercase"}}>{test.difficulty || "medium"}</span>
-                        {test.time && <span style={{background:"#1e293b", color:"#94a3b8", fontSize:9, padding:"1px 6px", borderRadius:3}}>{test.time}</span>}
-                        {test.cost && <span style={{background:test.cost === "paid" ? "#7c2d12" : "#0f3a1f", color:test.cost === "paid" ? "#fb923c" : "#22c55e", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, textTransform:"uppercase"}}>{test.cost}</span>}
+                        {test.time && <span style={{background:"#1c2435", color:"#8a94a8", fontSize:9, padding:"1px 6px", borderRadius:3}}>{test.time}</span>}
+                        {test.cost && <span style={{background:test.cost === "paid" ? "#7c2d12" : "#0f3a1f", color:test.cost === "paid" ? "#fb923c" : "#00ff88", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, textTransform:"uppercase"}}>{test.cost}</span>}
                         {test.required && <span style={{background:"#7c2d12", color:"#fbbf24", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, border:"1px solid #fbbf24"}}>REQUIRED</span>}
                       </div>
-                      <div style={{color:"#f1f5f9", fontSize:13, fontWeight:600, lineHeight:1.3}}>
+                      <div style={{color:"#ffffff", fontSize:13, fontWeight:600, lineHeight:1.3}}>
                         {test.title}
                       </div>
                     </div>
@@ -22026,9 +22026,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       {["NOT_RUN","PASS","FAIL","NA"].map(s => (
                         <button key={s} onClick={() => saveManual(test.id, {status:s})}
                           style={{background: state.status === s
-                                    ? (s === "PASS" ? "#22c55e" : s === "FAIL" ? "#ef4444" : s === "NA" ? "#475569" : "#334155")
-                                    : "#1e293b",
-                                  border:"1px solid #334155", borderRadius:3,
+                                    ? (s === "PASS" ? "#00ff88" : s === "FAIL" ? "#ff3e5e" : s === "NA" ? "#5a6478" : "#1c2435")
+                                    : "#1c2435",
+                                  border:"1px solid #1c2435", borderRadius:3,
                                   padding:"2px 6px", color:"#fff", fontSize:9, fontWeight:700,
                                   cursor:"pointer"}}>
                           {s.replace("_"," ")}
@@ -22036,46 +22036,46 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       ))}
                     </div>
                   </div>
-                  <div style={{color:"#cbd5e1", fontSize:11, marginBottom:8, lineHeight:1.5,
-                                background:"#020617", padding:"8px 10px", borderRadius:4, borderLeft:"3px solid #7c3aed"}}>
+                  <div style={{color:"#c3ccda", fontSize:11, marginBottom:8, lineHeight:1.5,
+                                background:"#0a0e17", padding:"8px 10px", borderRadius:4, borderLeft:"3px solid #7c3aed"}}>
                     <div style={{fontSize:9, color:"#a78bfa", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>What to look for</div>
                     {test.what_to_look_for}
                   </div>
                   {(test.steps || test.tools_required || test.customer_prereqs) && (
                     <button onClick={() => setManualExpanded(p => ({...p, [test.id]: !p[test.id]}))}
-                      style={{background:"none", border:"1px solid #334155", borderRadius:4, padding:"4px 10px", color:"#a78bfa", fontSize:10, fontWeight:600, cursor:"pointer", marginBottom:8}}>
+                      style={{background:"none", border:"1px solid #1c2435", borderRadius:4, padding:"4px 10px", color:"#a78bfa", fontSize:10, fontWeight:600, cursor:"pointer", marginBottom:8}}>
                       {isOpen ? "▾ Hide details" : "▸ Details (tools, prereqs, steps)"}
                     </button>
                   )}
                   {isOpen && (
-                    <div style={{background:"#020617", border:"1px solid #1e293b", borderRadius:4, padding:"10px 12px", marginBottom:8, fontSize:11, lineHeight:1.55}}>
+                    <div style={{background:"#0a0e17", border:"1px solid #1c2435", borderRadius:4, padding:"10px 12px", marginBottom:8, fontSize:11, lineHeight:1.55}}>
                       {test.tools_required && test.tools_required.length > 0 && (
                         <div style={{marginBottom:8}}>
-                          <div style={{fontSize:9, color:"#22c55e", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>Tools required</div>
-                          <div style={{color:"#cbd5e1"}}>
-                            {test.tools_required.map((t, i) => <span key={i} style={{display:"inline-block", background:"#0f172a", padding:"1px 7px", borderRadius:3, marginRight:5, marginBottom:3, color:"#22c55e", fontSize:10, fontFamily:"monospace"}}>{t}</span>)}
+                          <div style={{fontSize:9, color:"#00ff88", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>Tools required</div>
+                          <div style={{color:"#c3ccda"}}>
+                            {test.tools_required.map((t, i) => <span key={i} style={{display:"inline-block", background:"#0d1320", padding:"1px 7px", borderRadius:3, marginRight:5, marginBottom:3, color:"#00ff88", fontSize:10, fontFamily:"monospace"}}>{t}</span>)}
                           </div>
                         </div>
                       )}
                       {test.customer_prereqs && test.customer_prereqs.length > 0 && (
                         <div style={{marginBottom:8}}>
                           <div style={{fontSize:9, color:"#f59e0b", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>Customer prereqs</div>
-                          <ul style={{margin:0, paddingLeft:18, color:"#cbd5e1"}}>
+                          <ul style={{margin:0, paddingLeft:18, color:"#c3ccda"}}>
                             {test.customer_prereqs.map((p, i) => <li key={i}>{p}</li>)}
                           </ul>
                         </div>
                       )}
                       {test.steps && test.steps.length > 0 && (
                         <div style={{marginBottom:8}}>
-                          <div style={{fontSize:9, color:"#3b82f6", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>Steps</div>
-                          <ol style={{margin:0, paddingLeft:18, color:"#cbd5e1"}}>
+                          <div style={{fontSize:9, color:"#3b9eff", fontWeight:700, marginBottom:3, textTransform:"uppercase", letterSpacing:0.5}}>Steps</div>
+                          <ol style={{margin:0, paddingLeft:18, color:"#c3ccda"}}>
                             {test.steps.map((s, i) => <li key={i} style={{marginBottom:3, fontFamily: s.startsWith("$") ? "monospace" : "inherit", fontSize: s.startsWith("$") ? 10 : 11}}>{s}</li>)}
                           </ol>
                         </div>
                       )}
                       {test.owasp_masvs && (
-                        <div style={{borderTop:"1px solid #1e293b", paddingTop:6, marginTop:6, color:"#64748b", fontSize:9, fontFamily:"monospace"}}>
-                          <span style={{color:"#475569"}}>Standards:</span> {test.owasp_masvs}
+                        <div style={{borderTop:"1px solid #1c2435", paddingTop:6, marginTop:6, color:"#5a6478", fontSize:9, fontFamily:"monospace"}}>
+                          <span style={{color:"#5a6478"}}>Standards:</span> {test.owasp_masvs}
                         </div>
                       )}
                     </div>
@@ -22083,8 +22083,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   {state.status === "FAIL" && (
                     <div style={{display:"flex", gap:8, marginBottom:8}}>
                       <select value={sev} onChange={e => saveManual(test.id, {severity:e.target.value})}
-                        style={{background:"#0f172a", border:"1px solid #334155", borderRadius:3,
-                                color:"#cbd5e1", fontSize:10, padding:"3px 6px"}}>
+                        style={{background:"#0d1320", border:"1px solid #1c2435", borderRadius:3,
+                                color:"#c3ccda", fontSize:10, padding:"3px 6px"}}>
                         {["CRITICAL","HIGH","MEDIUM","LOW","INFO"].map(s =>
                           <option key={s} value={s}>{s}</option>
                         )}
@@ -22097,12 +22097,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                       value={state.evidence || ""}
                       onChange={e => saveManual(test.id, {evidence:e.target.value})}
                       rows={3}
-                      style={{width:"100%", background:"#020617", border:"1px solid #1e293b",
-                              borderRadius:3, padding:"6px 8px", color:"#cbd5e1", fontSize:10,
+                      style={{width:"100%", background:"#0a0e17", border:"1px solid #1c2435",
+                              borderRadius:3, padding:"6px 8px", color:"#c3ccda", fontSize:10,
                               fontFamily:"monospace", resize:"vertical", outline:"none"}}/>
                   )}
                   {state.updated_at && (
-                    <div style={{color:"#475569", fontSize:9, marginTop:6}}>
+                    <div style={{color:"#5a6478", fontSize:9, marginTop:6}}>
                       saved {new Date(state.updated_at).toLocaleString()}
                     </div>
                   )}
@@ -22110,7 +22110,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               );
             })}
             {filteredTests.length === 0 && (
-              <div style={{gridColumn:"1 / -1", textAlign:"center", padding:"40px 20px", color:"#64748b", fontSize:12}}>
+              <div style={{gridColumn:"1 / -1", textAlign:"center", padding:"40px 20px", color:"#5a6478", fontSize:12}}>
                 No tests match your search / filter.
               </div>
             )}
@@ -22133,7 +22133,7 @@ function _autoMod(props, args) {
   return <ModuleAutoPanel {...props} {...args}/>;
 }
 function ContainerK8sModule(p)   { return _autoMod(p, {moduleKey:"container_k8s",   moduleLabel:"Container / Kubernetes",       emoji:"", color:"#06b6d4", playbook:"24_container_k8s.md"}); }
-function IoTOTModule(p)          { return _autoMod(p, {moduleKey:"iot_ot",          moduleLabel:"IoT / OT / ICS Security",      emoji:"", color:"#ef4444", playbook:"30_iot_ot.md"}); }
+function IoTOTModule(p)          { return _autoMod(p, {moduleKey:"iot_ot",          moduleLabel:"IoT / OT / ICS Security",      emoji:"", color:"#ff3e5e", playbook:"30_iot_ot.md"}); }
 
 // ── Per-module ModuleAutoPanel wrappers ──
 function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"", color:"#06b6d4", playbook:"15_tunnel.md"}); }
@@ -22143,15 +22143,15 @@ function MobileStaticModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_stati
 function MobileStorageModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_storage",  moduleLabel:"Storage (Data-at-Rest)",          emoji:"", color:"#10b981", playbook:"33_mobile_storage.md"}); }
 function MobileRuntimeModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_runtime",  moduleLabel:"Runtime / Anti-Tamper",           emoji:"", color:"#f97316", playbook:"34_mobile_runtime.md"}); }
 function MobileCryptoModuleV2(p)   { return _autoMod(p, {moduleKey:"mobile_crypto",   moduleLabel:"Crypto (Algorithms & TLS)",       emoji:"", color:"#06b6d4", playbook:"35_mobile_crypto.md"}); }
-function MobileNetworkModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_network",  moduleLabel:"Network / Traffic",               emoji:"", color:"#3b82f6", playbook:"36_mobile_network.md"}); }
+function MobileNetworkModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_network",  moduleLabel:"Network / Traffic",               emoji:"", color:"#3b9eff", playbook:"36_mobile_network.md"}); }
 function MobileIpcModuleV2(p)      { return _autoMod(p, {moduleKey:"mobile_ipc",      moduleLabel:"IPC / Platform",                  emoji:"", color:"#0891b2", playbook:"05_mobile.md#6"}); }
 function MobileWebviewModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_webview",  moduleLabel:"WebView Security",                emoji:"", color:"#7c3aed", playbook:"05_mobile.md#7"}); }
 function MobilePrivacyModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_privacy",  moduleLabel:"Privacy (MASVS-PRIVACY)",         emoji:"", color:"#db2777", playbook:"05_mobile.md#13"}); }
-function MobilePaymentModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_payment",  moduleLabel:"Payment / IAP",                   emoji:"", color:"#16a34a", playbook:"05_mobile.md#14"}); }
+function MobilePaymentModuleV2(p)  { return _autoMod(p, {moduleKey:"mobile_payment",  moduleLabel:"Payment / IAP",                   emoji:"", color:"#0bd673", playbook:"05_mobile.md#14"}); }
 function MobileAimlModuleV2(p)     { return _autoMod(p, {moduleKey:"mobile_aiml",     moduleLabel:"AI/ML in App",                    emoji:"", color:"#ea580c", playbook:"05_mobile.md#15"}); }
-function AdModuleV2(p)             { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",        emoji:"", color:"#dc2626", playbook:"19_ad.md"}); }
+function AdModuleV2(p)             { return _autoMod(p, {moduleKey:"ad",              moduleLabel:"Active Directory Attacks",        emoji:"", color:"#e02347", playbook:"19_ad.md"}); }
 function PasswordModuleV2(p)       { return _autoMod(p, {moduleKey:"password",        moduleLabel:"Password Attacks",                emoji:"", color:"#f97316", playbook:"08_password.md"}); }
-function WirelessModuleV2(p)       { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Attacks",                emoji:"", color:"#22c55e", playbook:"18_wireless.md"}); }
+function WirelessModuleV2(p)       { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Attacks",                emoji:"", color:"#00ff88", playbook:"18_wireless.md"}); }
 function SupplyChainModuleV2(p)    { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",            emoji:"", color:"#a855f7", playbook:"25_supply_chain.md"}); }
 function AiLlmModuleV2(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",                emoji:"", color:"#ec4899", playbook:"23_ai_llm.md"}); }
 function FirmwareModuleV2(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware Analysis",                emoji:"", color:"#0891b2", playbook:"31_firmware.md"}); }
@@ -22165,10 +22165,10 @@ function AvEvasionModuleV2(p)      { return _autoMod(p, {moduleKey:"av_evasion",
 function SspmModuleV2(p)           { return _autoMod(p, {moduleKey:"sspm",            moduleLabel:"SaaS Security Posture (SSPM)",     emoji:"", color:"#9333ea", playbook:"29_sspm.md"}); }
 function BofModuleV2(p)            { return _autoMod(p, {moduleKey:"bof",             moduleLabel:"Binary Exploitation (BOF)",        emoji:"", color:"#84cc16", playbook:"07_bof.md"}); }
 function SystemExploitModuleV2(p)  { return _autoMod(p, {moduleKey:"system_exploit",  moduleLabel:"System Exploitation (CVE Verify)", emoji:"", color:"#f43f5e", playbook:"10_system_exploit.md"}); }
-function MetasploitModuleV2(p)     { return _autoMod(p, {moduleKey:"metasploit",      moduleLabel:"Metasploit Framework (Lite)",      emoji:"", color:"#dc2626", playbook:"11_metasploit.md"}); }
+function MetasploitModuleV2(p)     { return _autoMod(p, {moduleKey:"metasploit",      moduleLabel:"Metasploit Framework (Lite)",      emoji:"", color:"#e02347", playbook:"11_metasploit.md"}); }
 function PhishingModuleV2(p)       { return _autoMod(p, {moduleKey:"phishing",        moduleLabel:"Phishing & Email Posture",         emoji:"", color:"#f59e0b", playbook:"26_phishing.md"}); }
-function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ef4444", playbook:"06_exploit.md"}); }
-function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b82f6", playbook:"16_network.md"}); }
+function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",         moduleLabel:"Exploitation",                    emoji:"", color:"#ff3e5e", playbook:"06_exploit.md"}); }
+function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b9eff", playbook:"16_network.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
 function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"", color:"#10b981", playbook:"22_apisec.md"}); }
 
@@ -22207,12 +22207,12 @@ function SettingsModule() {
 
   return (
     <div className="fade" style={{maxWidth:680,margin:"0 auto",padding:24}}>
-      <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:28,marginBottom:16}}>
-        <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:4}}>Settings & Configuration</h2>
-        <p style={{fontSize:12,color:"#64748b",marginBottom:24}}>Configure your VulnusLab backend connection.</p>
+      <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:28,marginBottom:16}}>
+        <h2 style={{fontSize:16,fontWeight:700,color:"#ffffff",marginBottom:4}}>Settings & Configuration</h2>
+        <p style={{fontSize:12,color:"#5a6478",marginBottom:24}}>Configure your VulnusLab backend connection.</p>
 
         <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>
+          <label style={{fontSize:11,color:"#8a94a8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>
             Kali Backend API URL
           </label>
           <div style={{display:"flex",gap:8}}>
@@ -22220,52 +22220,52 @@ function SettingsModule() {
               value={apiUrl}
               onChange={e => setApiUrl(e.target.value)}
               placeholder="http://192.168.1.x:8000"
-              style={{flex:1,background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}
+              style={{flex:1,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}
             />
             <button onClick={save}
-              style={{background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              style={{background:"linear-gradient(135deg,#1d4ed8,#3b9eff)",border:"none",borderRadius:6,padding:"10px 20px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
               {saved ? "Saved " : "Save & Reload"}
             </button>
           </div>
-          <div style={{fontSize:11,color:"#475569",marginTop:6}}>
+          <div style={{fontSize:11,color:"#5a6478",marginTop:6}}>
             This is the IP:port of your Kali Linux machine running the backend API.
           </div>
         </div>
 
         {/* API Keys */}
         <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Shodan API Key <span style={{color:"#475569",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
+          <label style={{fontSize:11,color:"#8a94a8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Shodan API Key <span style={{color:"#5a6478",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
           <input value={shodanKey} onChange={e=>setShodanKey(e.target.value)}
             placeholder="Paste your Shodan API key — get free key at shodan.io"
-            style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+            style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
         </div>
         <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>VirusTotal API Key <span style={{color:"#475569",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
+          <label style={{fontSize:11,color:"#8a94a8",fontWeight:700,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>VirusTotal API Key <span style={{color:"#5a6478",fontWeight:400,textTransform:"none"}}>(for Recon module)</span></label>
           <input value={vtKey} onChange={e=>setVtKey(e.target.value)}
             placeholder="Paste your VirusTotal API key — get free key at virustotal.com"
-            style={{width:"100%",background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:"10px 14px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+            style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:12,outline:"none",boxSizing:"border-box"}}/>
         </div>
 
-        <div style={{background:"#020617",border:"1px solid #1e293b",borderRadius:8,padding:16,marginBottom:16}}>
-          <div style={{fontSize:12,fontWeight:600,color:"#94a3b8",marginBottom:10}}>Current Connection</div>
+        <div style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:8,padding:16,marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:600,color:"#8a94a8",marginBottom:10}}>Current Connection</div>
           <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
-            <div><div style={{fontSize:10,color:"#475569",marginBottom:3}}>API URL</div><div style={{fontSize:12,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{apiUrl}</div></div>
-            <div><div style={{fontSize:10,color:"#475569",marginBottom:3}}>Status</div><div style={{fontSize:12,color:"#22c55e",fontFamily:"JetBrains Mono,monospace"}}>Configured</div></div>
+            <div><div style={{fontSize:10,color:"#5a6478",marginBottom:3}}>API URL</div><div style={{fontSize:12,color:"#00d4ff",fontFamily:"JetBrains Mono,monospace"}}>{apiUrl}</div></div>
+            <div><div style={{fontSize:10,color:"#5a6478",marginBottom:3}}>Status</div><div style={{fontSize:12,color:"#00ff88",fontFamily:"JetBrains Mono,monospace"}}>Configured</div></div>
           </div>
         </div>
 
         <div style={{background:"#1c0a0a",border:"1px solid #7f1d1d",borderRadius:8,padding:14}}>
           <div style={{fontSize:11,color:"#d97706",fontWeight:700,marginBottom:6}}>Important</div>
-          <ul style={{fontSize:11,color:"#64748b",lineHeight:2,paddingLeft:16}}>
+          <ul style={{fontSize:11,color:"#5a6478",lineHeight:2,paddingLeft:16}}>
             <li>Only scan systems you own or have written permission to test.</li>
-            <li>The backend must be running on your Kali machine: <code style={{color:"#60a5fa"}}>uvicorn main:app --host 0.0.0.0 --port 8000</code></li>
+            <li>The backend must be running on your Kali machine: <code style={{color:"#00d4ff"}}>uvicorn main:app --host 0.0.0.0 --port 8000</code></li>
             <li>All scan results are real — generated by actual security tools installed on Kali.</li>
             <li>Change is applied immediately after save & reload.</li>
           </ul>
         </div>
 
         <div style={{marginTop:16,textAlign:"right"}}>
-          <button onClick={reset} style={{background:"none",border:"1px solid #334155",borderRadius:6,padding:"8px 16px",color:"#64748b",fontSize:12,cursor:"pointer"}}>
+          <button onClick={reset} style={{background:"none",border:"1px solid #1c2435",borderRadius:6,padding:"8px 16px",color:"#5a6478",fontSize:12,cursor:"pointer"}}>
             Reset to Default
           </button>
         </div>
@@ -22320,10 +22320,10 @@ function AdminPanel({ token }) {
   };
 
   const statusColor = (u) => {
-    if (u.status === "suspended") return "#ef4444";
-    if (u.expiry_status === "expired") return "#ef4444";
+    if (u.status === "suspended") return "#ff3e5e";
+    if (u.expiry_status === "expired") return "#ff3e5e";
     if (u.expiry_status === "expiring_soon") return "#f59e0b";
-    return "#22c55e";
+    return "#00ff88";
   };
 
   const statusLabel = (u) => {
@@ -22352,23 +22352,23 @@ function AdminPanel({ token }) {
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
         <span style={{fontSize:28}}></span>
         <div>
-          <h2 style={{fontSize:20,fontWeight:800,color:"#f1f5f9",margin:0}}>Admin Panel</h2>
-          <p style={{fontSize:12,color:"#64748b",margin:0}}>Manage users, subscriptions and access</p>
+          <h2 style={{fontSize:20,fontWeight:800,color:"#ffffff",margin:0}}>Admin Panel</h2>
+          <p style={{fontSize:12,color:"#5a6478",margin:0}}>Manage users, subscriptions and access</p>
         </div>
-        <button onClick={load} style={{marginLeft:"auto",background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>↻ Refresh</button>
+        <button onClick={load} style={{marginLeft:"auto",background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>↻ Refresh</button>
       </div>
 
       {/* Stats */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
         {[
-          {label:"Total Users",   val:stats.total,    color:"#3b82f6"},
-          {label:"Active",        val:stats.active,   color:"#22c55e"},
+          {label:"Total Users",   val:stats.total,    color:"#3b9eff"},
+          {label:"Active",        val:stats.active,   color:"#00ff88"},
           {label:"Expiring Soon", val:stats.expiring, color:"#f59e0b"},
-          {label:"Expired",       val:stats.expired,  color:"#ef4444"},
+          {label:"Expired",       val:stats.expired,  color:"#ff3e5e"},
         ].map((s,i)=>(
-          <div key={i} style={{background:"#0f172a",border:`1px solid ${s.color}30`,borderTop:`3px solid ${s.color}`,borderRadius:10,padding:16}}>
+          <div key={i} style={{background:"#0d1320",border:`1px solid ${s.color}30`,borderTop:`3px solid ${s.color}`,borderRadius:10,padding:16}}>
             <div style={{fontSize:28,fontWeight:800,color:s.color}}>{s.val}</div>
-            <div style={{fontSize:12,color:"#64748b",fontWeight:600,marginTop:4}}>{s.label}</div>
+            <div style={{fontSize:12,color:"#5a6478",fontWeight:600,marginTop:4}}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -22378,7 +22378,7 @@ function AdminPanel({ token }) {
         background: msgIsError ? "#450a0a" : "#052e16",
         border: msgIsError ? "1px solid #991b1b" : "1px solid #166534",
         borderRadius:8, padding:"10px 16px",
-        color: msgIsError ? "#fca5a5" : "#4ade80",
+        color: msgIsError ? "#ffa3b0" : "#5dffa6",
         fontSize:13, marginBottom:16,
         whiteSpace:"pre-wrap"
       }}>{msg}</div>}
@@ -22386,25 +22386,25 @@ function AdminPanel({ token }) {
       {/* Search */}
       <input value={search} onChange={e=>setSearch(e.target.value)}
         placeholder="Search by username or email..."
-        style={{width:"100%",background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:"10px 16px",color:"#e2e8f0",fontSize:13,outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
+        style={{width:"100%",background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:"10px 16px",color:"#d8deea",fontSize:13,outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
 
       {/* Users Table */}
-      {loading ? <div style={{textAlign:"center",padding:40,color:"#475569"}}>Loading users...</div> : (
+      {loading ? <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>Loading users...</div> : (
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {filtered.map(u=>(
-            <div key={u.id} style={{background:"#0a0f1e",border:`1px solid ${u.username==="ADMIN"?"#7c3aed30":"#1e293b"}`,borderLeft:`4px solid ${statusColor(u)}`,borderRadius:10,padding:"16px 20px"}}>
+            <div key={u.id} style={{background:"#0d1320",border:`1px solid ${u.username==="ADMIN"?"#7c3aed30":"#1c2435"}`,borderLeft:`4px solid ${statusColor(u)}`,borderRadius:10,padding:"16px 20px"}}>
               <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
 
                 {/* User info */}
                 <div style={{flex:1,minWidth:200}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                    <span style={{fontSize:15,fontWeight:700,color:"#f1f5f9"}}>{u.username}</span>
+                    <span style={{fontSize:15,fontWeight:700,color:"#ffffff"}}>{u.username}</span>
                     {u.username==="ADMIN" && <span style={{fontSize:10,color:"#a78bfa",fontWeight:700,background:"#3b0764",padding:"2px 8px",borderRadius:4}}>SUPERADMIN</span>}
-                    <span style={{fontSize:10,color:"#64748b",background:"#1e293b",padding:"2px 8px",borderRadius:4,fontWeight:600}}>{u.plan?.toUpperCase()}</span>
+                    <span style={{fontSize:10,color:"#5a6478",background:"#1c2435",padding:"2px 8px",borderRadius:4,fontWeight:600}}>{u.plan?.toUpperCase()}</span>
                     <span style={{fontSize:10,color:statusColor(u),fontWeight:700,background:statusColor(u)+"15",padding:"2px 8px",borderRadius:4}}>{statusLabel(u)}</span>
                   </div>
-                  <div style={{fontSize:12,color:"#64748b"}}>{u.email}</div>
-                  <div style={{fontSize:11,color:"#334155",marginTop:2,fontFamily:"JetBrains Mono,monospace"}}>
+                  <div style={{fontSize:12,color:"#5a6478"}}>{u.email}</div>
+                  <div style={{fontSize:11,color:"#1c2435",marginTop:2,fontFamily:"JetBrains Mono,monospace"}}>
                     Joined: {u.created_at?.slice(0,10)} &nbsp;|&nbsp; Scans: {u.scan_count||0}
                     {u.expires_at && <> &nbsp;|&nbsp; Expires: {u.expires_at?.slice(0,10)}</>}
                   </div>
@@ -22416,11 +22416,11 @@ function AdminPanel({ token }) {
                     {/* Extend */}
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>
                       <select value={extDays} onChange={e=>setExtDays(Number(e.target.value))}
-                        style={{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
+                        style={{background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
                         {[7,14,30,60,90,180,365].map(d=><option key={d} value={d}>{d} days</option>)}
                       </select>
                       <button onClick={()=>act(`/api/admin/users/${u.username}/extend`,"POST",{days:extDays,plan:selPlan})}
-                        style={{background:"#166534",border:"none",color:"#4ade80",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                        style={{background:"#166534",border:"none",color:"#5dffa6",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                         + Extend
                       </button>
                     </div>
@@ -22428,11 +22428,11 @@ function AdminPanel({ token }) {
                     {/* Plan */}
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>
                       <select value={selPlan} onChange={e=>setSelPlan(e.target.value)}
-                        style={{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
+                        style={{background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
                         {["trial","pro","enterprise","pro_lifetime"].map(p=><option key={p} value={p}>{p}</option>)}
                       </select>
                       <button onClick={()=>act(`/api/admin/users/${u.username}/plan`,"POST",{plan:selPlan})}
-                        style={{background:"#1e3a8a",border:"none",color:"#60a5fa",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                        style={{background:"#0e3a55",border:"none",color:"#00d4ff",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                         Set Plan
                       </button>
                     </div>
@@ -22444,12 +22444,12 @@ function AdminPanel({ token }) {
                           Suspend
                         </button>
                       : <button onClick={()=>act(`/api/admin/users/${u.username}/activate`)}
-                          style={{background:"#052e16",border:"none",color:"#22c55e",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                          style={{background:"#052e16",border:"none",color:"#00ff88",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                           Activate
                         </button>
                     }
                     <button onClick={()=>{ if(window.confirm(`Delete ${u.username}?`)) act(`/api/admin/users/${u.username}`,"DELETE"); }}
-                      style={{background:"#1c0000",border:"1px solid #7f1d1d",color:"#f87171",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
+                      style={{background:"#1c0000",border:"1px solid #7f1d1d",color:"#ff6b82",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                       Delete
                     </button>
                   </div>
@@ -22457,7 +22457,7 @@ function AdminPanel({ token }) {
               </div>
             </div>
           ))}
-          {filtered.length===0 && <div style={{textAlign:"center",padding:40,color:"#475569"}}>No users found</div>}
+          {filtered.length===0 && <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>No users found</div>}
         </div>
       )}
     </div>
@@ -22519,33 +22519,33 @@ function UserBackupsModule({token}) {
   const fmt = b => !b ? "0 B" : b < 1024 ? b+" B" : b < 1048576 ? (b/1024).toFixed(1)+" KB" : (b/1048576).toFixed(1)+" MB";
 
   return (
-    <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
+    <div style={{padding:"24px 32px",color:"#d8deea",minHeight:"100vh",overflow:"auto"}}>
       <div style={{maxWidth:1200, margin:"0 auto"}}>
         <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>My Backups</h1>
-        <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
+        <p style={{color:"#8a94a8",marginBottom:24,fontSize:14}}>
           Your data is private and auto-snapshotted. Take manual snapshots before risky changes; restore or delete any of them.
         </p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>SNAPSHOTS</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{snapshotCount}</div>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>SNAPSHOTS</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b9eff"}}>{snapshotCount}</div>
           </div>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>ZONE SIZE</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{fmt(zoneSize)}</div>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>ZONE SIZE</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b9eff"}}>{fmt(zoneSize)}</div>
           </div>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>RETENTION</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>10 max</div>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>RETENTION</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b9eff"}}>10 max</div>
           </div>
         </div>
         <div style={{display:"flex",gap:12,marginBottom:20}}>
           <button onClick={takeSnapshot} disabled={loading}
-            style={{padding:"10px 18px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:"#3b9eff",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
             {loading ? "Working..." : "+ Take Snapshot Now"}
           </button>
           <button onClick={refresh} disabled={loading}
-            style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:"#1c2435",color:"#d8deea",border:"1px solid #1c2435",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
             ↻ Refresh
           </button>
         </div>
@@ -22554,37 +22554,37 @@ function UserBackupsModule({token}) {
             {msg.text}
           </div>
         )}
-        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",fontWeight:600,fontSize:14}}>
+        <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1c2435",fontWeight:600,fontSize:14}}>
             Your Snapshots (newest first)
           </div>
           {snapshots.length === 0 ? (
-            <div style={{padding:32,color:"#94a3b8",textAlign:"center",fontSize:14}}>
+            <div style={{padding:32,color:"#8a94a8",textAlign:"center",fontSize:14}}>
               No snapshots yet. Click "+ Take Snapshot Now" to create your first one.
             </div>
           ) : (
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
-                <tr style={{background:"#1e293b"}}>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>NAME</th>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>CREATED (UTC)</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>SIZE</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ACTIONS</th>
+                <tr style={{background:"#1c2435"}}>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#8a94a8",letterSpacing:1}}>NAME</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#8a94a8",letterSpacing:1}}>CREATED (UTC)</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>SIZE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {snapshots.map(s => (
-                  <tr key={s.name} style={{borderTop:"1px solid #1e293b"}}>
+                  <tr key={s.name} style={{borderTop:"1px solid #1c2435"}}>
                     <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:13}}>{s.name}</td>
-                    <td style={{padding:"10px 16px",fontSize:13,color:"#94a3b8"}}>{s.created_iso}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,color:"#8a94a8"}}>{s.created_iso}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{fmt(s.size_bytes)}</td>
                     <td style={{padding:"10px 16px",textAlign:"right",whiteSpace:"nowrap"}}>
                       <button onClick={()=>restoreSnapshot(s.name)} disabled={loading}
-                        style={{padding:"6px 12px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",marginRight:6}}>
+                        style={{padding:"6px 12px",background:"#3b9eff",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",marginRight:6}}>
                         Restore
                       </button>
                       <button onClick={()=>deleteSnapshot(s.name)} disabled={loading}
-                        style={{padding:"6px 12px",background:"#dc2626",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                        style={{padding:"6px 12px",background:"#e02347",color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer"}}>
                         Delete
                       </button>
                     </td>
@@ -22633,35 +22633,35 @@ function AdminVaultModule({token}) {
   const fmt = b => !b ? "0 B" : b < 1024 ? b+" B" : b < 1048576 ? (b/1024).toFixed(1)+" KB" : (b/1048576).toFixed(1)+" MB";
 
   return (
-    <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
+    <div style={{padding:"24px 32px",color:"#d8deea",minHeight:"100vh",overflow:"auto"}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
         <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>VAULT — Master Archive</h1>
-        <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
+        <p style={{color:"#8a94a8",marginBottom:24,fontSize:14}}>
           Encrypted nightly archive of every user's snapshots + tool last-known-good + users.db. Auto-runs at 02:30 UTC. AES-128 + HMAC via Fernet.
         </p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>ARCHIVED DAYS</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{status?.archived_days ?? "—"}</div>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>ARCHIVED DAYS</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b9eff"}}>{status?.archived_days ?? "—"}</div>
           </div>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>VAULT SIZE</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{fmt(status?.total_size_bytes)}</div>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>VAULT SIZE</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b9eff"}}>{fmt(status?.total_size_bytes)}</div>
           </div>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>LAST SYNC (UTC)</div>
-            <div style={{fontSize:13,fontWeight:600,color:"#3b82f6",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>LAST SYNC (UTC)</div>
+            <div style={{fontSize:13,fontWeight:600,color:"#3b9eff",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
               {status?.last_sync_iso || "never"}
             </div>
           </div>
         </div>
         <div style={{display:"flex",gap:12,marginBottom:20}}>
           <button onClick={forceSync} disabled={loading}
-            style={{padding:"10px 18px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:"#3b9eff",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:loading?"wait":"pointer",fontSize:14}}>
             {loading ? "Syncing..." : "Sync VAULT Now"}
           </button>
           <button onClick={refresh}
-            style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:"#1c2435",color:"#d8deea",border:"1px solid #1c2435",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
             ↻ Refresh
           </button>
         </div>
@@ -22670,35 +22670,35 @@ function AdminVaultModule({token}) {
             {msg.text}
           </div>
         )}
-        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",fontWeight:600,fontSize:14}}>
+        <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1c2435",fontWeight:600,fontSize:14}}>
             Archive Days — kept 30 days, then auto-pruned
           </div>
           {days.length === 0 ? (
-            <div style={{padding:32,color:"#94a3b8",textAlign:"center",fontSize:14}}>
+            <div style={{padding:32,color:"#8a94a8",textAlign:"center",fontSize:14}}>
               No archives yet. Click "Sync VAULT Now" to create the first one.
             </div>
           ) : (
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
-                <tr style={{background:"#1e293b"}}>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>DATE</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>USERS</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>TOOLS</th>
-                  <th style={{padding:"10px 16px",textAlign:"center",fontSize:11,color:"#94a3b8",letterSpacing:1}}>DB</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ERRORS</th>
+                <tr style={{background:"#1c2435"}}>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#8a94a8",letterSpacing:1}}>DATE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>USERS</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>TOOLS</th>
+                  <th style={{padding:"10px 16px",textAlign:"center",fontSize:11,color:"#8a94a8",letterSpacing:1}}>DB</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>ERRORS</th>
                 </tr>
               </thead>
               <tbody>
                 {days.map(d => (
-                  <tr key={d.date} style={{borderTop:"1px solid #1e293b"}}>
+                  <tr key={d.date} style={{borderTop:"1px solid #1c2435"}}>
                     <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:13}}>{d.date}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.users?.length ?? 0}</td>
                     <td style={{padding:"10px 16px",fontSize:13,textAlign:"right"}}>{d.manifest?.tools?.length ?? 0}</td>
-                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"center",color:d.manifest?.db?"#22c55e":"#94a3b8"}}>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"center",color:d.manifest?.db?"#00ff88":"#8a94a8"}}>
                       {d.manifest?.db ? "" : "—"}
                     </td>
-                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:d.manifest?.errors?.length ? "#dc2626" : "#94a3b8"}}>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:d.manifest?.errors?.length ? "#e02347" : "#8a94a8"}}>
                       {d.manifest?.errors?.length ?? 0}
                     </td>
                   </tr>
@@ -22785,10 +22785,10 @@ function BackupOperationsModule({token}) {
   };
 
   return (
-    <div style={{padding:"24px 32px",color:"#e2e8f0",minHeight:"100vh",overflow:"auto"}}>
+    <div style={{padding:"24px 32px",color:"#d8deea",minHeight:"100vh",overflow:"auto"}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
         <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>BACKUP Operations</h1>
-        <p style={{color:"#94a3b8",marginBottom:24,fontSize:14}}>
+        <p style={{color:"#8a94a8",marginBottom:24,fontSize:14}}>
           On-demand backup of users.db + .env + data + tools + src + Docker/nginx config.
           Click <b>Take Backup Now</b> to snapshot the present state.
           Delete individual backups or wipe all old ones to free disk space.
@@ -22796,17 +22796,17 @@ function BackupOperationsModule({token}) {
 
         {/* Stat cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,marginBottom:20}}>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUPS ON DISK</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{data?.count ?? "—"}</div>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUPS ON DISK</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b9eff"}}>{data?.count ?? "—"}</div>
           </div>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>TOTAL SIZE</div>
-            <div style={{fontSize:28,fontWeight:700,color:"#3b82f6"}}>{data?.total_human ?? "—"}</div>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>TOTAL SIZE</div>
+            <div style={{fontSize:28,fontWeight:700,color:"#3b9eff"}}>{data?.total_human ?? "—"}</div>
           </div>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
-            <div style={{color:"#94a3b8",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUP DIR</div>
-            <div style={{fontSize:13,fontWeight:600,color:"#3b82f6",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:16}}>
+            <div style={{color:"#8a94a8",fontSize:11,letterSpacing:1,marginBottom:6}}>BACKUP DIR</div>
+            <div style={{fontSize:13,fontWeight:600,color:"#3b9eff",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>
               {data?.backup_dir || "/root/backups"}
             </div>
           </div>
@@ -22825,15 +22825,15 @@ function BackupOperationsModule({token}) {
               finally { setCreating(false); }
             }}
             disabled={creating}
-            style={{padding:"10px 18px",background:creating?"#1e293b":"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:creating?"#1c2435":"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:8,fontWeight:700,cursor:creating?"wait":"pointer",fontSize:14}}>
             {creating ? "Processing..." : "Reset to Present (wipe all + take new)"}
           </button>
           <button onClick={takeBackup} disabled={creating}
-            style={{padding:"10px 18px",background:creating?"#1e293b":"#3b82f6",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:creating?"wait":"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:creating?"#1c2435":"#3b9eff",color:"#fff",border:"none",borderRadius:8,fontWeight:600,cursor:creating?"wait":"pointer",fontSize:14}}>
             Take Backup Now
           </button>
           <button onClick={refresh}
-            style={{padding:"10px 18px",background:"#1e293b",color:"#e2e8f0",border:"1px solid #334155",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
+            style={{padding:"10px 18px",background:"#1c2435",color:"#d8deea",border:"1px solid #1c2435",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14}}>
             ↻ Refresh
           </button>
           {data?.count > 0 && (
@@ -22852,51 +22852,51 @@ function BackupOperationsModule({token}) {
         )}
 
         {/* Backup list table */}
-        <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid #1e293b",fontWeight:600,fontSize:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1c2435",fontWeight:600,fontSize:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>All Backups</span>
-            <span style={{color:"#64748b",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}>
+            <span style={{color:"#5a6478",fontSize:11,fontFamily:"JetBrains Mono,monospace"}}>
               {data?.count || 0} file(s)
             </span>
           </div>
           {loading ? (
-            <div style={{padding:40,textAlign:"center",color:"#94a3b8"}}>Loading…</div>
+            <div style={{padding:40,textAlign:"center",color:"#8a94a8"}}>Loading…</div>
           ) : !data || data.count === 0 ? (
-            <div style={{padding:40,color:"#94a3b8",textAlign:"center",fontSize:14}}>
+            <div style={{padding:40,color:"#8a94a8",textAlign:"center",fontSize:14}}>
               No backups yet. Click <b>Take Backup Now</b> to create the first one.
             </div>
           ) : (
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
-                <tr style={{background:"#1e293b"}}>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>FILE</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>SIZE</th>
-                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>MODIFIED (UTC)</th>
-                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>ACTIONS</th>
+                <tr style={{background:"#1c2435"}}>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#8a94a8",letterSpacing:1}}>FILE</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>SIZE</th>
+                  <th style={{padding:"10px 16px",textAlign:"left",fontSize:11,color:"#8a94a8",letterSpacing:1}}>MODIFIED (UTC)</th>
+                  <th style={{padding:"10px 16px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {data.files.map(f => (
-                  <tr key={f.name} style={{borderTop:"1px solid #1e293b"}}>
-                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"#e2e8f0"}}>
+                  <tr key={f.name} style={{borderTop:"1px solid #1c2435"}}>
+                    <td style={{padding:"10px 16px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"#d8deea"}}>
                       {f.is_archive && <span style={{marginRight:6}}></span>}
                       {f.name}
                     </td>
-                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{f.size_human}</td>
-                    <td style={{padding:"10px 16px",fontSize:12,fontFamily:"JetBrains Mono,monospace",color:"#64748b"}}>{f.modified_iso.replace("T"," ").substring(0,19)}</td>
+                    <td style={{padding:"10px 16px",fontSize:13,textAlign:"right",color:"#8a94a8",fontFamily:"JetBrains Mono,monospace"}}>{f.size_human}</td>
+                    <td style={{padding:"10px 16px",fontSize:12,fontFamily:"JetBrains Mono,monospace",color:"#5a6478"}}>{f.modified_iso.replace("T"," ").substring(0,19)}</td>
                     <td style={{padding:"10px 16px",textAlign:"right"}}>
                       {f.name.endsWith(".tar.gz") && (
                         <button onClick={()=>inspectOne(f.name)}
-                          style={{padding:"5px 12px",background:"#1e293b",color:"#a78bfa",border:"1px solid #334155",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
+                          style={{padding:"5px 12px",background:"#1c2435",color:"#a78bfa",border:"1px solid #1c2435",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
                           Inspect
                         </button>
                       )}
                       <button onClick={()=>downloadOne(f.name)}
-                        style={{padding:"5px 12px",background:"#1e293b",color:"#60a5fa",border:"1px solid #334155",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
+                        style={{padding:"5px 12px",background:"#1c2435",color:"#00d4ff",border:"1px solid #1c2435",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:6}}>
                         Download
                       </button>
                       <button onClick={()=>deleteOne(f.name)}
-                        style={{padding:"5px 12px",background:"#7f1d1d",color:"#fca5a5",border:"1px solid #991b1b",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                        style={{padding:"5px 12px",background:"#7f1d1d",color:"#ffa3b0",border:"1px solid #991b1b",borderRadius:6,fontSize:11,fontWeight:600,cursor:"pointer"}}>
                         Delete
                       </button>
                     </td>
@@ -22907,13 +22907,13 @@ function BackupOperationsModule({token}) {
           )}
         </div>
 
-        <div style={{marginTop:20,color:"#475569",fontSize:11,fontStyle:"italic",lineHeight:1.6}}>
+        <div style={{marginTop:20,color:"#5a6478",fontSize:11,fontStyle:"italic",lineHeight:1.6}}>
           <b>Each backup includes (end-to-end):</b><br/>
-          <span style={{color:"#94a3b8"}}>Backend</span>: main.py · tools/ (150 scanners) · endpoints/ · profiles/ · requirements.txt<br/>
-          <span style={{color:"#94a3b8"}}>Frontend</span>: src/ · public/ · package.json · package-lock.json<br/>
-          <span style={{color:"#94a3b8"}}>Data + secrets</span>: users.db · .env · data/ (scan history, consent log)<br/>
-          <span style={{color:"#94a3b8"}}>Infrastructure</span>: docker-compose.yml · Dockerfile · Dockerfile.frontend · nginx.conf · .gitignore<br/>
-          <span style={{color:"#94a3b8"}}>Excluded</span>: __pycache__ · node_modules · .git · build/ · *.bak (auto-regenerated on restore)<br/>
+          <span style={{color:"#8a94a8"}}>Backend</span>: main.py · tools/ (150 scanners) · endpoints/ · profiles/ · requirements.txt<br/>
+          <span style={{color:"#8a94a8"}}>Frontend</span>: src/ · public/ · package.json · package-lock.json<br/>
+          <span style={{color:"#8a94a8"}}>Data + secrets</span>: users.db · .env · data/ (scan history, consent log)<br/>
+          <span style={{color:"#8a94a8"}}>Infrastructure</span>: docker-compose.yml · Dockerfile · Dockerfile.frontend · nginx.conf · .gitignore<br/>
+          <span style={{color:"#8a94a8"}}>Excluded</span>: __pycache__ · node_modules · .git · build/ · *.bak (auto-regenerated on restore)<br/>
           <span style={{color:"#10b981"}}>Single bundle restores a fully working VPS</span>
         </div>
       </div>
@@ -22921,33 +22921,33 @@ function BackupOperationsModule({token}) {
       {/* Inspect modal — shows contents of a backup without extracting */}
       {inspectData && (
         <div onClick={()=>setInspectData(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#0a1628",border:"1px solid #1e3a8a",borderRadius:14,width:"100%",maxWidth:720,maxHeight:"85vh",overflowY:"auto",padding:24}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:14,width:"100%",maxWidth:720,maxHeight:"85vh",overflowY:"auto",padding:24}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{color:"#e2e8f0",fontWeight:700,fontSize:16}}>Inspecting: <span style={{fontFamily:"JetBrains Mono,monospace",color:"#a78bfa"}}>{inspectData.file}</span></div>
-              <button onClick={()=>setInspectData(null)} style={{background:"none",border:"none",color:"#64748b",fontSize:20,cursor:"pointer"}}></button>
+              <div style={{color:"#d8deea",fontWeight:700,fontSize:16}}>Inspecting: <span style={{fontFamily:"JetBrains Mono,monospace",color:"#a78bfa"}}>{inspectData.file}</span></div>
+              <button onClick={()=>setInspectData(null)} style={{background:"none",border:"none",color:"#5a6478",fontSize:20,cursor:"pointer"}}></button>
             </div>
-            <div style={{color:"#94a3b8",fontSize:12,marginBottom:14}}>
+            <div style={{color:"#8a94a8",fontSize:12,marginBottom:14}}>
               {inspectData.total_entries} total entries · grouped by top-level path
             </div>
             <table style={{width:"100%",borderCollapse:"collapse",marginBottom:14}}>
               <thead>
-                <tr style={{background:"#1e293b"}}>
-                  <th style={{padding:"8px 14px",textAlign:"left",fontSize:11,color:"#94a3b8",letterSpacing:1}}>PATH</th>
-                  <th style={{padding:"8px 14px",textAlign:"right",fontSize:11,color:"#94a3b8",letterSpacing:1}}>FILES</th>
+                <tr style={{background:"#1c2435"}}>
+                  <th style={{padding:"8px 14px",textAlign:"left",fontSize:11,color:"#8a94a8",letterSpacing:1}}>PATH</th>
+                  <th style={{padding:"8px 14px",textAlign:"right",fontSize:11,color:"#8a94a8",letterSpacing:1}}>FILES</th>
                 </tr>
               </thead>
               <tbody>
                 {inspectData.top_level.map(t => (
-                  <tr key={t.name} style={{borderTop:"1px solid #1e293b"}}>
-                    <td style={{padding:"7px 14px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"#e2e8f0"}}>{t.name}</td>
-                    <td style={{padding:"7px 14px",textAlign:"right",fontSize:12,color:"#60a5fa",fontFamily:"JetBrains Mono,monospace"}}>{t.files}</td>
+                  <tr key={t.name} style={{borderTop:"1px solid #1c2435"}}>
+                    <td style={{padding:"7px 14px",fontFamily:"JetBrains Mono,monospace",fontSize:12,color:"#d8deea"}}>{t.name}</td>
+                    <td style={{padding:"7px 14px",textAlign:"right",fontSize:12,color:"#00d4ff",fontFamily:"JetBrains Mono,monospace"}}>{t.files}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <details style={{color:"#94a3b8",fontSize:12}}>
-              <summary style={{cursor:"pointer",padding:"6px 0",color:"#60a5fa"}}>Show first 50 paths (raw)</summary>
-              <pre style={{background:"#020617",border:"1px solid #1e293b",borderRadius:6,padding:12,fontSize:10,lineHeight:1.4,fontFamily:"JetBrains Mono,monospace",color:"#cbd5e1",maxHeight:240,overflowY:"auto"}}>
+            <details style={{color:"#8a94a8",fontSize:12}}>
+              <summary style={{cursor:"pointer",padding:"6px 0",color:"#00d4ff"}}>Show first 50 paths (raw)</summary>
+              <pre style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:12,fontSize:10,lineHeight:1.4,fontFamily:"JetBrains Mono,monospace",color:"#c3ccda",maxHeight:240,overflowY:"auto"}}>
 {inspectData.first_50_paths.join("\n")}
               </pre>
             </details>
@@ -23042,56 +23042,56 @@ function ApiKeysModule({ token }) {
   const paidAPIs     = APIS.filter(a => a.tier === "paid");
 
   const styles = {
-    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#e2e8f0" },
-    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1e293b" },
-    title: { fontSize: 28, fontWeight: 800, color: "#f1f5f9", marginBottom: 6 },
-    subtitle: { fontSize: 14, color: "#94a3b8" },
+    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#d8deea" },
+    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1c2435" },
+    title: { fontSize: 28, fontWeight: 800, color: "#ffffff", marginBottom: 6 },
+    subtitle: { fontSize: 14, color: "#8a94a8" },
     dateBadge: { display: "inline-block", marginTop: 8, padding: "4px 12px",
-      background: "#1e293b", borderRadius: 6, fontSize: 12, color: "#64748b",
+      background: "#1c2435", borderRadius: 6, fontSize: 12, color: "#5a6478",
       fontFamily: "JetBrains Mono, monospace" },
     summary: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16,
       marginBottom: 28 },
-    summaryCard: { background: "#0a0f1e", border: "1px solid #1e293b",
+    summaryCard: { background: "#0d1320", border: "1px solid #1c2435",
       borderRadius: 8, padding: 18 },
-    summaryLabel: { fontSize: 11, color: "#64748b", textTransform: "uppercase",
+    summaryLabel: { fontSize: 11, color: "#5a6478", textTransform: "uppercase",
       letterSpacing: 1.2, marginBottom: 6, fontWeight: 700 },
-    summaryValue: { fontSize: 22, fontWeight: 800, color: "#f1f5f9" },
-    summarySub: { fontSize: 11, color: "#64748b", marginTop: 4 },
-    sectionTitle: { fontSize: 13, fontWeight: 700, color: "#64748b",
+    summaryValue: { fontSize: 22, fontWeight: 800, color: "#ffffff" },
+    summarySub: { fontSize: 11, color: "#5a6478", marginTop: 4 },
+    sectionTitle: { fontSize: 13, fontWeight: 700, color: "#5a6478",
       textTransform: "uppercase", letterSpacing: 1.4, marginBottom: 14,
       marginTop: 8, paddingLeft: 4 },
     grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
       gap: 16, marginBottom: 32 },
-    card: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+    card: { background: "#0d1320", border: "1px solid #1c2435", borderRadius: 10,
       padding: 20, display: "flex", flexDirection: "column", gap: 12 },
     cardHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
-    cardName: { fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
+    cardName: { fontSize: 16, fontWeight: 700, color: "#ffffff" },
     badgeFree: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
-      background: "rgba(34,197,94,0.15)", color: "#22c55e", letterSpacing: 1,
-      border: "1px solid rgba(34,197,94,0.3)" },
+      background: "rgba(0,255,136,0.15)", color: "#00ff88", letterSpacing: 1,
+      border: "1px solid rgba(0,255,136,0.3)" },
     badgeFreeTier: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
       background: "rgba(245,158,11,0.15)", color: "#f59e0b", letterSpacing: 1,
       border: "1px solid rgba(245,158,11,0.3)" },
     badgePaid: { padding: "3px 10px", borderRadius: 4, fontSize: 10, fontWeight: 800,
-      background: "rgba(239,68,68,0.15)", color: "#ef4444", letterSpacing: 1,
-      border: "1px solid rgba(239,68,68,0.3)" },
-    cost: { fontSize: 13, fontWeight: 600, color: "#cbd5e1" },
-    desc: { fontSize: 13, color: "#94a3b8", lineHeight: 1.55 },
+      background: "rgba(255,62,94,0.15)", color: "#ff3e5e", letterSpacing: 1,
+      border: "1px solid rgba(255,62,94,0.3)" },
+    cost: { fontSize: 13, fontWeight: 600, color: "#c3ccda" },
+    desc: { fontSize: 13, color: "#8a94a8", lineHeight: 1.55 },
     metaRow: { display: "flex", flexDirection: "column", gap: 6, paddingTop: 8,
-      borderTop: "1px solid #1e293b" },
+      borderTop: "1px solid #1c2435" },
     metaLine: { display: "flex", gap: 8, alignItems: "flex-start", fontSize: 11.5 },
-    metaLabel: { color: "#475569", minWidth: 65, fontWeight: 600 },
-    metaValue: { color: "#cbd5e1", fontFamily: "JetBrains Mono, monospace", flex: 1, wordBreak: "break-all" },
+    metaLabel: { color: "#5a6478", minWidth: 65, fontWeight: 600 },
+    metaValue: { color: "#c3ccda", fontFamily: "JetBrains Mono, monospace", flex: 1, wordBreak: "break-all" },
     usedBy: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 2 },
-    modChip: { padding: "2px 7px", fontSize: 10, background: "#1e293b",
-      borderRadius: 4, color: "#94a3b8" },
+    modChip: { padding: "2px 7px", fontSize: 10, background: "#1c2435",
+      borderRadius: 4, color: "#8a94a8" },
     btnRow: { display: "flex", gap: 10, marginTop: 12 },
-    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b82f6",
+    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b9eff",
       border: "none", borderRadius: 6, color: "#fff", fontSize: 13,
       fontWeight: 600, cursor: "pointer", textAlign: "center",
       textDecoration: "none", display: "inline-block" },
-    btnDisabled: { flex: 1, padding: "10px 14px", background: "#1e293b",
-      border: "none", borderRadius: 6, color: "#475569", fontSize: 13,
+    btnDisabled: { flex: 1, padding: "10px 14px", background: "#1c2435",
+      border: "none", borderRadius: 6, color: "#5a6478", fontSize: 13,
       fontWeight: 600, cursor: "default", textAlign: "center" },
   };
 
@@ -23110,9 +23110,9 @@ function ApiKeysModule({ token }) {
       </div>
 
       <div style={styles.summary}>
-        <div style={{...styles.summaryCard, borderColor:"rgba(34,197,94,0.3)"}}>
+        <div style={{...styles.summaryCard, borderColor:"rgba(0,255,136,0.3)"}}>
           <div style={styles.summaryLabel}>Truly FREE</div>
-          <div style={{...styles.summaryValue, color:"#22c55e"}}>{freeAPIs.length}</div>
+          <div style={{...styles.summaryValue, color:"#00ff88"}}>{freeAPIs.length}</div>
           <div style={styles.summarySub}>No quota, unlimited usage</div>
         </div>
         <div style={{...styles.summaryCard, borderColor:"rgba(245,158,11,0.3)"}}>
@@ -23120,9 +23120,9 @@ function ApiKeysModule({ token }) {
           <div style={{...styles.summaryValue, color:"#f59e0b"}}>{freeTierAPIs.length}</div>
           <div style={styles.summarySub}>Will hit limits at scale</div>
         </div>
-        <div style={{...styles.summaryCard, borderColor:"rgba(239,68,68,0.3)"}}>
+        <div style={{...styles.summaryCard, borderColor:"rgba(255,62,94,0.3)"}}>
           <div style={styles.summaryLabel}>PAID</div>
-          <div style={{...styles.summaryValue, color:"#ef4444"}}>{paidAPIs.length}</div>
+          <div style={{...styles.summaryValue, color:"#ff3e5e"}}>{paidAPIs.length}</div>
           <div style={styles.summarySub}>Defer until revenue</div>
         </div>
         <div style={styles.summaryCard}>
@@ -23245,7 +23245,7 @@ function ApiKeysModule({ token }) {
               {a.paidUpgrade && (
                 <div style={styles.metaLine}>
                   <span style={styles.metaLabel}>SCALE</span>
-                  <span style={{...styles.metaValue, color:"#ef4444"}}>{a.paidUpgrade}</span>
+                  <span style={{...styles.metaValue, color:"#ff3e5e"}}>{a.paidUpgrade}</span>
                 </div>
               )}
               <div style={styles.metaLine}>
@@ -23265,14 +23265,14 @@ function ApiKeysModule({ token }) {
         ))}
       </div>
 
-      <div style={{...styles.summaryCard, marginTop: 12, borderColor: "#3b82f6", background: "rgba(59,130,246,0.05)"}}>
-        <div style={{fontSize: 13, color: "#3b82f6", fontWeight: 700, marginBottom: 8, letterSpacing: 0.5}}>
+      <div style={{...styles.summaryCard, marginTop: 12, borderColor: "#3b9eff", background: "rgba(59,158,255,0.05)"}}>
+        <div style={{fontSize: 13, color: "#3b9eff", fontWeight: 700, marginBottom: 8, letterSpacing: 0.5}}>
           HOW TO ADD A KEY ONCE YOU HAVE IT
         </div>
-        <div style={{fontSize: 13, color: "#cbd5e1", lineHeight: 1.7}}>
-          On the VPS, edit <code style={{background: "#0a0f1e", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#22c55e"}}>~/Cyber-project/.env</code> and add the
-          line shown in the <strong style={{color:"#f1f5f9"}}>ENV VAR</strong> field above.
-          Then restart the backend: <code style={{background: "#0a0f1e", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#22c55e"}}>docker compose up -d --force-recreate backend</code>.
+        <div style={{fontSize: 13, color: "#c3ccda", lineHeight: 1.7}}>
+          On the VPS, edit <code style={{background: "#0d1320", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#00ff88"}}>~/Cyber-project/.env</code> and add the
+          line shown in the <strong style={{color:"#ffffff"}}>ENV VAR</strong> field above.
+          Then restart the backend: <code style={{background: "#0d1320", padding: "2px 6px", borderRadius: 3, fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#00ff88"}}>docker compose up -d --force-recreate backend</code>.
           Engines pick up the new key automatically. Customer-supplied creds
           (AWS, Azure, AD, K8s) go through a separate Credential Vault (coming next).
         </div>
@@ -23328,56 +23328,56 @@ function CredentialVaultModule({ token }) {
   };
 
   const styles = {
-    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#e2e8f0" },
-    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1e293b" },
-    title: { fontSize: 28, fontWeight: 800, color: "#f1f5f9", marginBottom: 6 },
-    subtitle: { fontSize: 14, color: "#94a3b8", lineHeight: 1.6 },
-    addBtn: { padding: "10px 18px", background: "#3b82f6", border: "none",
+    page: { padding: 28, maxWidth: 1400, margin: "0 auto", color: "#d8deea" },
+    header: { marginBottom: 24, paddingBottom: 18, borderBottom: "1px solid #1c2435" },
+    title: { fontSize: 28, fontWeight: 800, color: "#ffffff", marginBottom: 6 },
+    subtitle: { fontSize: 14, color: "#8a94a8", lineHeight: 1.6 },
+    addBtn: { padding: "10px 18px", background: "#3b9eff", border: "none",
       borderRadius: 6, color: "#fff", fontSize: 14, fontWeight: 600,
       cursor: "pointer", marginTop: 12 },
     grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
       gap: 16, marginTop: 20 },
-    card: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+    card: { background: "#0d1320", border: "1px solid #1c2435", borderRadius: 10,
       padding: 18, display: "flex", flexDirection: "column", gap: 10 },
-    cardName: { fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
+    cardName: { fontSize: 16, fontWeight: 700, color: "#ffffff" },
     cardType: { display: "inline-block", padding: "3px 10px", borderRadius: 4,
-      background: "rgba(59,130,246,0.15)", color: "#60a5fa", fontSize: 11,
+      background: "rgba(59,158,255,0.15)", color: "#00d4ff", fontSize: 11,
       fontWeight: 700, letterSpacing: 0.5 },
     cardMasked: { fontSize: 12, fontFamily: "JetBrains Mono, monospace",
-      color: "#94a3b8", background: "#020617", padding: "8px 10px", borderRadius: 4 },
-    cardMeta: { fontSize: 11, color: "#64748b", display: "flex", gap: 16 },
+      color: "#8a94a8", background: "#0a0e17", padding: "8px 10px", borderRadius: 4 },
+    cardMeta: { fontSize: 11, color: "#5a6478", display: "flex", gap: 16 },
     cardActions: { display: "flex", gap: 8, marginTop: 6 },
     btnEdit: { flex: 1, padding: "8px 12px", background: "transparent",
-      border: "1px solid #334155", borderRadius: 5, color: "#94a3b8",
+      border: "1px solid #1c2435", borderRadius: 5, color: "#8a94a8",
       fontSize: 12, fontWeight: 600, cursor: "pointer" },
     btnDelete: { flex: 1, padding: "8px 12px", background: "transparent",
-      border: "1px solid #7f1d1d", borderRadius: 5, color: "#f87171",
+      border: "1px solid #7f1d1d", borderRadius: 5, color: "#ff6b82",
       fontSize: 12, fontWeight: 600, cursor: "pointer" },
-    empty: { padding: 60, textAlign: "center", color: "#64748b" },
+    empty: { padding: 60, textAlign: "center", color: "#5a6478" },
     modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-    modal: { background: "#0a0f1e", border: "1px solid #1e293b", borderRadius: 10,
+    modal: { background: "#0d1320", border: "1px solid #1c2435", borderRadius: 10,
       padding: 28, maxWidth: 600, width: "92%", maxHeight: "90vh", overflowY: "auto" },
-    modalTitle: { fontSize: 20, fontWeight: 800, color: "#f1f5f9", marginBottom: 8 },
-    formLabel: { fontSize: 12, color: "#94a3b8", fontWeight: 600, marginTop: 14,
+    modalTitle: { fontSize: 20, fontWeight: 800, color: "#ffffff", marginBottom: 8 },
+    formLabel: { fontSize: 12, color: "#8a94a8", fontWeight: 600, marginTop: 14,
       marginBottom: 4, display: "block" },
-    formInput: { width: "100%", padding: "9px 12px", background: "#020617",
-      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0",
+    formInput: { width: "100%", padding: "9px 12px", background: "#0a0e17",
+      border: "1px solid #1c2435", borderRadius: 5, color: "#d8deea",
       fontSize: 13, fontFamily: "inherit" },
-    formTextarea: { width: "100%", padding: "9px 12px", background: "#020617",
-      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0",
+    formTextarea: { width: "100%", padding: "9px 12px", background: "#0a0e17",
+      border: "1px solid #1c2435", borderRadius: 5, color: "#d8deea",
       fontSize: 12, fontFamily: "JetBrains Mono, monospace", minHeight: 100, resize: "vertical" },
-    formSelect: { width: "100%", padding: "9px 12px", background: "#020617",
-      border: "1px solid #1e293b", borderRadius: 5, color: "#e2e8f0", fontSize: 13 },
+    formSelect: { width: "100%", padding: "9px 12px", background: "#0a0e17",
+      border: "1px solid #1c2435", borderRadius: 5, color: "#d8deea", fontSize: 13 },
     modalBtnRow: { display: "flex", gap: 10, marginTop: 22 },
-    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b82f6",
+    btnPrimary: { flex: 1, padding: "10px 14px", background: "#3b9eff",
       border: "none", borderRadius: 6, color: "#fff", fontSize: 13,
       fontWeight: 600, cursor: "pointer" },
     btnSecondary: { flex: 1, padding: "10px 14px", background: "transparent",
-      border: "1px solid #334155", borderRadius: 6, color: "#94a3b8",
+      border: "1px solid #1c2435", borderRadius: 6, color: "#8a94a8",
       fontSize: 13, fontWeight: 600, cursor: "pointer" },
     errorBox: { background: "rgba(220,38,38,0.1)", border: "1px solid #7f1d1d",
-      borderRadius: 5, padding: "10px 14px", color: "#fca5a5", fontSize: 13,
+      borderRadius: 5, padding: "10px 14px", color: "#ffa3b0", fontSize: 13,
       marginBottom: 12 },
   };
 
@@ -23451,13 +23451,13 @@ function CredentialVaultModule({ token }) {
         <div style={styles.modalOverlay} onClick={() => setConfirmDelete(null)}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
             <div style={styles.modalTitle}>Delete credential set?</div>
-            <div style={{color:"#94a3b8", fontSize:13, marginTop:8}}>
-              <strong style={{color:"#f1f5f9"}}>{confirmDelete.name}</strong> will be permanently
+            <div style={{color:"#8a94a8", fontSize:13, marginTop:8}}>
+              <strong style={{color:"#ffffff"}}>{confirmDelete.name}</strong> will be permanently
               deleted. All scans using this credential will fail until re-added. This cannot be undone.
             </div>
             <div style={styles.modalBtnRow}>
               <button style={styles.btnSecondary} onClick={() => setConfirmDelete(null)}>Cancel</button>
-              <button style={{...styles.btnPrimary, background:"#dc2626"}}
+              <button style={{...styles.btnPrimary, background:"#e02347"}}
                 onClick={() => doDelete(confirmDelete.id)}>
                 Delete permanently
               </button>
@@ -23540,8 +23540,8 @@ function CredentialFormModal({ types, token, editing, styles, onClose, onSaved }
           <div key={f.name}>
             <label style={styles.formLabel}>
               {f.label}
-              {f.required && <span style={{color:"#f87171"}}> *</span>}
-              {f.secret && <span style={{color:"#94a3b8", fontSize:10, marginLeft:6}}>[encrypted]</span>}
+              {f.required && <span style={{color:"#ff6b82"}}> *</span>}
+              {f.secret && <span style={{color:"#8a94a8", fontSize:10, marginLeft:6}}>[encrypted]</span>}
             </label>
             {f.multiline ? (
               <textarea style={styles.formTextarea} value={fields[f.name] || ""}
@@ -23557,7 +23557,7 @@ function CredentialFormModal({ types, token, editing, styles, onClose, onSaved }
         ))}
 
         {schema && schema.modules && (
-          <div style={{...styles.cardMeta, marginTop: 16, fontSize: 11, color:"#64748b"}}>
+          <div style={{...styles.cardMeta, marginTop: 16, fontSize: 11, color:"#5a6478"}}>
             Used by: {schema.modules.join(", ")}
           </div>
         )}
@@ -23569,7 +23569,7 @@ function CredentialFormModal({ types, token, editing, styles, onClose, onSaved }
           </button>
         </div>
 
-        <div style={{fontSize:11, color:"#64748b", marginTop:14, lineHeight:1.5}}>
+        <div style={{fontSize:11, color:"#5a6478", marginTop:14, lineHeight:1.5}}>
           Secrets are encrypted with AES-256-GCM using a per-tenant key. Plaintext
           is never logged. Every decrypt is recorded in the usage audit log.
         </div>
@@ -23706,15 +23706,15 @@ export default function App() {
 
   const SECTIONS = [
     { key:"recon",    label:"RECONNAISSANCE",    color:"#06b6d4" },
-    { key:"scan",     label:"SCANNING",          color:"#3b82f6" },
-    { key:"exploit",  label:"EXPLOITATION",      color:"#ef4444" },
+    { key:"scan",     label:"SCANNING",          color:"#3b9eff" },
+    { key:"exploit",  label:"EXPLOITATION",      color:"#ff3e5e" },
     { key:"post",     label:"POST-EXPLOITATION", color:"#f59e0b" },
-    { key:"network",  label:"NETWORK & INFRA",   color:"#22c55e" },
+    { key:"network",  label:"NETWORK & INFRA",   color:"#00ff88" },
     { key:"advanced", label:"ADVANCED",          color:"#a855f7" },
     { key:"mobile",   label:"MOBILE",            color:"#ec4899" },
     { key:"data",     label:"DATA PROTECTION",   color:"#10b981" },
-    { key:"admin",    label:"ADMIN",             color:"#dc2626" },
-    { key:"tools",    label:"TOOLS & REPORTS",   color:"#64748b" },
+    { key:"admin",    label:"ADMIN",             color:"#e02347" },
+    { key:"tools",    label:"TOOLS & REPORTS",   color:"#5a6478" },
   ];
 
   const handleNavClick = (m) => {
@@ -23732,20 +23732,20 @@ export default function App() {
         <div style={{padding:"60px 24px",maxWidth:720,margin:"0 auto",textAlign:"center"}}>
           <div style={{fontSize:64,marginBottom:16}}>{activeMod.icon}</div>
           <div style={{display:"inline-block",background:"rgba(139,92,246,0.15)",border:"1px solid rgba(139,92,246,0.4)",color:"#a78bfa",fontSize:11,fontWeight:800,padding:"5px 14px",borderRadius:20,letterSpacing:1.5,marginBottom:20}}>COMING SOON</div>
-          <h1 style={{fontSize:32,fontWeight:800,color:"#f1f5f9",marginBottom:14}}>{activeMod.label}</h1>
-          <p style={{fontSize:16,color:"#94a3b8",lineHeight:1.7,marginBottom:32}}>
+          <h1 style={{fontSize:32,fontWeight:800,color:"#ffffff",marginBottom:14}}>{activeMod.label}</h1>
+          <p style={{fontSize:16,color:"#8a94a8",lineHeight:1.7,marginBottom:32}}>
             This module is under active development. The frontend is built but the
             backend tooling integration is not yet complete.
           </p>
-          <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:12,padding:24,textAlign:"left",marginBottom:24}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#cbd5e1",marginBottom:10}}>What you can do:</div>
-            <ul style={{fontSize:13,color:"#94a3b8",lineHeight:2,paddingLeft:18,margin:0}}>
-              <li>Use the modules that are working today: <strong style={{color:"#3b82f6"}}>Web Application Pentesting</strong>, <strong style={{color:"#3b82f6"}}>Vulnerability Scanning</strong>, <strong style={{color:"#3b82f6"}}>Information Gathering</strong>, <strong style={{color:"#3b82f6"}}>Advanced OSINT</strong>, <strong style={{color:"#3b82f6"}}>Exploitation Techniques</strong>, <strong style={{color:"#3b82f6"}}>Buffer Overflow</strong>, <strong style={{color:"#3b82f6"}}>Password Attacks</strong></li>
-              <li>Email <a href="mailto:support@vulnuslab.com" style={{color:"#3b82f6"}}>support@vulnuslab.com</a> to request priority on this module — we build the ones customers ask for first</li>
+          <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:12,padding:24,textAlign:"left",marginBottom:24}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#c3ccda",marginBottom:10}}>What you can do:</div>
+            <ul style={{fontSize:13,color:"#8a94a8",lineHeight:2,paddingLeft:18,margin:0}}>
+              <li>Use the modules that are working today: <strong style={{color:"#3b9eff"}}>Web Application Pentesting</strong>, <strong style={{color:"#3b9eff"}}>Vulnerability Scanning</strong>, <strong style={{color:"#3b9eff"}}>Information Gathering</strong>, <strong style={{color:"#3b9eff"}}>Advanced OSINT</strong>, <strong style={{color:"#3b9eff"}}>Exploitation Techniques</strong>, <strong style={{color:"#3b9eff"}}>Buffer Overflow</strong>, <strong style={{color:"#3b9eff"}}>Password Attacks</strong></li>
+              <li>Email <a href="mailto:support@vulnuslab.com" style={{color:"#3b9eff"}}>support@vulnuslab.com</a> to request priority on this module — we build the ones customers ask for first</li>
             </ul>
           </div>
           <a href="mailto:support@vulnuslab.com?subject=Module%20Request%3A%20{encodeURIComponent(activeMod.label)}"
-             style={{display:"inline-block",background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",color:"#fff",padding:"12px 28px",borderRadius:10,fontSize:14,fontWeight:700,textDecoration:"none"}}>
+             style={{display:"inline-block",background:"linear-gradient(135deg,#1d4ed8,#3b9eff)",color:"#fff",padding:"12px 28px",borderRadius:10,fontSize:14,fontWeight:700,textDecoration:"none"}}>
             Request {activeMod.label}
           </a>
         </div>
@@ -23755,7 +23755,7 @@ export default function App() {
       <>
         {/* Always-mounted modules — scan survives tab switches */}
         <div style={{display: active==="webapp"   ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="webapp" moduleLabel="Webapp" autoCount={158} manualTests={MANUAL_TESTS_WEBAPP} color="#3b82f6"
+          <ModuleWithTabs moduleKey="webapp" moduleLabel="Webapp" autoCount={158} manualTests={MANUAL_TESTS_WEBAPP} color="#3b9eff"
             autoPanel={<WebAppModule token={token} onRunningChange={setWaptRunning} isTrial={isTrial} isSuperAdmin={isSuperAdmin}/>}/>
         </div>
         <div style={{display: active==="recon"    ? "block" : "none"}}>
@@ -23763,8 +23763,8 @@ export default function App() {
             autoPanel={<ReconModule token={token} onRunningChange={setReconRunning} activeSections={reconSections}/>}/>
         </div>
         <div style={{display: active==="vuln"     ? "block" : "none"}}>
-          <ModuleWithTabs moduleKey="vuln" moduleLabel="Vulnerability Scanning" autoCount={63} manualTests={MANUAL_TESTS_VULN} color="#ef4444"
-            autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="" color="#ef4444" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
+          <ModuleWithTabs moduleKey="vuln" moduleLabel="Vulnerability Scanning" autoCount={63} manualTests={MANUAL_TESTS_VULN} color="#ff3e5e"
+            autoPanel={<ModuleAutoPanel moduleKey="vuln" moduleLabel="Vulnerability Scanning" emoji="" color="#ff3e5e" playbook="02_vuln.md" token={token} apiUrl={API}/>}/>
         </div>
         <div style={{display: active==="network" ? "block" : "none"}}>
           <NetworkAttacksModule token={token} apiUrl={API}/>
@@ -23937,29 +23937,29 @@ export default function App() {
   };
 
   return (
-    <div style={{display:"flex",height:"100vh",background:"#020617",overflow:"hidden",fontFamily:"DM Sans,sans-serif"}}>
+    <div style={{display:"flex",height:"100vh",background:"#0a0e17",overflow:"hidden",fontFamily:"DM Sans,sans-serif"}}>
       <style>{CSS}</style>
       <div className="vl-ambient" aria-hidden="true"/>
 
-      <div style={{width:280,background:"#0a0f1e",borderRight:"1px solid #1e293b",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
-        <div style={{padding:"6px 0 8px",borderBottom:"1px solid #1e293b",flexShrink:0,background:"#0a0f1e"}}>
+      <div style={{width:280,background:"#0d1320",borderRight:"1px solid #1c2435",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
+        <div style={{padding:"6px 0 8px",borderBottom:"1px solid #1c2435",flexShrink:0,background:"#0d1320"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 12px"}}>
             <img src={LOGO} alt="logo" style={{width:48,height:48,objectFit:"contain",display:"block",flexShrink:0}}/>
             <div>
               <div style={{fontSize:15,fontWeight:900,letterSpacing:2,lineHeight:1.1}}>
-                <span style={{color:"#ffffff"}}>VULNUS</span><span style={{color:"#3b82f6"}}>LAB</span>
+                <span style={{color:"#ffffff"}}>VULNUS</span><span style={{color:"#3b9eff"}}>LAB</span>
               </div>
             </div>
           </div>
           {/* Tagline — one tab space below */}
           <div style={{marginBottom:4,paddingTop:0}}><Tagline size={9}/></div>
           <div style={{background:backendOk?"#052e16":"#1c0a0a",border:"1px solid "+(backendOk?"#166534":"#7f1d1d"),borderRadius:5,padding:"8px 10px",display:"flex",alignItems:"center",gap:7}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:backendOk===null?"#f59e0b":backendOk?"#22c55e":"#ef4444",animation:"pulse 2s infinite",flexShrink:0}}/>
+            <div style={{width:6,height:6,borderRadius:"50%",background:backendOk===null?"#f59e0b":backendOk?"#00ff88":"#ff3e5e",animation:"pulse 2s infinite",flexShrink:0}}/>
             <div>
-              <div style={{fontSize:12,color:backendOk?"#22c55e":"#f87171",fontWeight:600}}>
+              <div style={{fontSize:12,color:backendOk?"#00ff88":"#ff6b82",fontWeight:600}}>
                 {backendOk===null?"Connecting...":backendOk?"Kali Online":"Backend Offline"}
               </div>
-              <div style={{fontSize:10,color:"#475569",fontFamily:"JetBrains Mono,monospace"}}>{API}</div>
+              <div style={{fontSize:10,color:"#5a6478",fontFamily:"JetBrains Mono,monospace"}}>{API}</div>
             </div>
           </div>
         </div>
@@ -23968,13 +23968,13 @@ export default function App() {
 
           {/* Dashboard — always free */}
           <div style={{padding:"8px 8px 2px"}}>
-            <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Overview</span>
+            <span style={{fontSize:10,color:"#5a6478",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Overview</span>
           </div>
           {MODULES.filter(m=>m.id==="dashboard").map(m=>(
             <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
-              style={{width:"calc(100% - 16px)",background:active===m.id?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
+              style={{width:"calc(100% - 16px)",background:active===m.id?"#0e3a55":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",margin:"2px 8px"}}>
               <span style={{fontSize:17,width:24,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-              <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:400,flex:1}}>{m.label}</span>
+              <span style={{fontSize:13,color:active===m.id?"#ffffff":"#8a94a8",fontWeight:active===m.id?600:400,flex:1}}>{m.label}</span>
             </button>
           ))}
 
@@ -23989,7 +23989,7 @@ export default function App() {
             return (
               <div key={sec.key}>
                 <div style={{padding:"10px 8px 3px"}}>
-                  <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
+                  <span style={{fontSize:10,color:"#5a6478",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
                 </div>
                 {mods.map(m => {
                   const locked = !canAccess(m);
@@ -24000,20 +24000,20 @@ export default function App() {
                   // by section, making sidebar tier nav redundant.
                   return (
                     <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
-                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
+                      style={{width:"calc(100% - 16px)",background:isActive?"#0e3a55":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-                      <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
+                      <span style={{fontSize:13,color:isActive?"#ffffff":locked?"#5a6478":"#8a94a8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
                       {/* VA/PT badge — subtle tag, low-opacity, refined look */}
                       {MODULE_TYPE[m.id] && (() => {
                         const t = MODULE_TYPE[m.id];
                         // Pale, low-opacity backgrounds so they don't dominate
-                        const bg = t === "PT"  ? "rgba(239,68,68,0.08)"
+                        const bg = t === "PT"  ? "rgba(255,62,94,0.08)"
                                  : t === "VA+" ? "rgba(245,158,11,0.08)"
-                                 :                "rgba(59,130,246,0.08)";
+                                 :                "rgba(59,158,255,0.08)";
                         // Muted foreground (one shade lighter than before)
-                        const fg = t === "PT"  ? "#f87171"
+                        const fg = t === "PT"  ? "#ff6b82"
                                  : t === "VA+" ? "#fbbf24"
-                                 :                "#60a5fa";
+                                 :                "#00d4ff";
                         return <span title={t === "PT" ? "Penetration Test - active exploitation"
                                           : t === "VA+" ? "VA + light active probing"
                                           : "Vulnerability Assessment - passive"}
@@ -24024,9 +24024,9 @@ export default function App() {
                       {locked   && <span style={{fontSize:10}}></span>}
                       {m.comingSoon && !locked && <span style={{fontSize:8,color:"#8b5cf6",fontWeight:700,background:"rgba(139,92,246,0.15)",padding:"1px 5px",borderRadius:3,letterSpacing:0.5}}>SOON</span>}
                       {isTrial  && !locked && !m.comingSoon && <span style={{fontSize:8,color:"#f59e0b",fontWeight:700,background:"rgba(245,158,11,0.1)",padding:"1px 5px",borderRadius:3}}>TRIAL</span>}
-                      {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
-                      {!locked && m.id==="recon"   && reconRunning  && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
-                      {!locked && m.id==="vuln"    && vulnRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                      {!locked && m.id==="webapp"  && waptRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#00ff88",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                      {!locked && m.id==="recon"   && reconRunning  && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#00ff88",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
+                      {!locked && m.id==="vuln"    && vulnRunning   && !isActive && <span style={{width:6,height:6,borderRadius:"50%",background:"#00ff88",animation:"pulse 1s infinite",flexShrink:0,display:"inline-block"}}/>}
                     </button>
                   );
                 })}
@@ -24036,7 +24036,7 @@ export default function App() {
 
           {/* System — always accessible */}
           <div style={{padding:"10px 8px 3px"}}>
-            <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>System</span>
+            <span style={{fontSize:10,color:"#5a6478",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>System</span>
           </div>
           {[
             {id:"health",  icon:"", label:"System Health"},
@@ -24045,9 +24045,9 @@ export default function App() {
             ...(isSuperAdmin ? [{id:"adminpanel", icon:"", label:"Admin Panel"}] : []),
           ].map(m => (
             <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
-              style={{width:"calc(100% - 16px)",background:active===m.id?(m.id==="adminpanel"?"#3b0764":"#1e293b"):"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
+              style={{width:"calc(100% - 16px)",background:active===m.id?(m.id==="adminpanel"?"#3b0764":"#1c2435"):"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
               <span style={{fontSize:15,width:22,textAlign:"center"}}>{m.icon}</span>
-              <span style={{fontSize:13,color:active===m.id?"#f1f5f9":"#94a3b8",fontWeight:active===m.id?600:500,letterSpacing:"0.1px"}}>{m.label}</span>
+              <span style={{fontSize:13,color:active===m.id?"#ffffff":"#8a94a8",fontWeight:active===m.id?600:500,letterSpacing:"0.1px"}}>{m.label}</span>
             </button>
           ))}
 
@@ -24057,12 +24057,12 @@ export default function App() {
         {upgModal && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}
             onClick={()=>setUpgModal(false)}>
-            <div style={{background:"#0f172a",border:"1px solid #3b82f6",borderRadius:12,padding:32,maxWidth:380,width:"90%",textAlign:"center"}}
+            <div style={{background:"#0d1320",border:"1px solid #3b9eff",borderRadius:12,padding:32,maxWidth:380,width:"90%",textAlign:"center"}}
               onClick={e=>e.stopPropagation()}>
               <div style={{fontSize:36,marginBottom:12}}></div>
-              <div style={{fontSize:18,fontWeight:700,color:"#f1f5f9",marginBottom:8}}>Pro Feature</div>
-              <div style={{fontSize:13,color:"#94a3b8",marginBottom:24,lineHeight:1.6}}>
-                This module is available on the <strong style={{color:"#3b82f6"}}>Pro plan</strong>.<br/>
+              <div style={{fontSize:18,fontWeight:700,color:"#ffffff",marginBottom:8}}>Pro Feature</div>
+              <div style={{fontSize:13,color:"#8a94a8",marginBottom:24,lineHeight:1.6}}>
+                This module is available on the <strong style={{color:"#3b9eff"}}>Pro plan</strong>.<br/>
                 Upgrade to unlock all {MODULES.filter(m=>!m.free).length} advanced modules.
               </div>
               <a href="mailto:awsvijju5@gmail.com?subject=CyberSecurity Dashboard Pro License"
@@ -24070,18 +24070,18 @@ export default function App() {
                 Contact for Pro Access
               </a>
               <button onClick={()=>setUpgModal(false)}
-                style={{background:"none",border:"none",color:"#475569",fontSize:13,cursor:"pointer"}}>
+                style={{background:"none",border:"none",color:"#5a6478",fontSize:13,cursor:"pointer"}}>
                 Maybe later
               </button>
             </div>
           </div>
         )}
-        <div style={{padding:"10px 12px",borderTop:"1px solid #1e293b",flexShrink:0}}>
+        <div style={{padding:"10px 12px",borderTop:"1px solid #1c2435",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{fontSize:11,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{username} <span style={{color:"#334155"}}>·</span> <span style={{color:plan==="pro"?"#f59e0b":"#475569"}}>{plan}</span></div>
-            <button onClick={handleLogout} style={{background:"none",border:"none",color:"#475569",fontSize:10,cursor:"pointer",letterSpacing:1}}>Sign out</button>
+            <div style={{fontSize:11,color:"#8a94a8",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{username} <span style={{color:"#1c2435"}}>·</span> <span style={{color:plan==="pro"?"#f59e0b":"#5a6478"}}>{plan}</span></div>
+            <button onClick={handleLogout} style={{background:"none",border:"none",color:"#5a6478",fontSize:10,cursor:"pointer",letterSpacing:1}}>Sign out</button>
           </div>
-          <div style={{textAlign:"center",fontSize:11,color:"#334155",fontFamily:"JetBrains Mono,monospace",marginTop:4}}>{time}</div>
+          <div style={{textAlign:"center",fontSize:11,color:"#1c2435",fontFamily:"JetBrains Mono,monospace",marginTop:4}}>{time}</div>
         </div>
       </div>
 
@@ -24096,7 +24096,7 @@ export default function App() {
                 Your trial has ended. You have {billingInfo.grace_days_remaining} grace day{billingInfo.grace_days_remaining!==1?"s":""} of full access remaining — subscribe now to keep scanning.
               </span>
             </div>
-            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#dc2626,#ea580c)",border:"none",color:"#fff",padding:"7px 18px",borderRadius:6,fontSize:12,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#e02347,#ea580c)",border:"none",color:"#fff",padding:"7px 18px",borderRadius:6,fontSize:12,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
               {upgrading ? "Loading..." : "Subscribe — $29/mo"}
             </button>
           </div>
@@ -24107,10 +24107,10 @@ export default function App() {
           <div style={{background:"#1c0000",borderBottom:"2px solid #7f1d1d",padding:"14px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
             <span style={{fontSize:20}}></span>
             <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:800,color:"#fca5a5"}}>Trial expired</div>
+              <div style={{fontSize:14,fontWeight:800,color:"#ffa3b0"}}>Trial expired</div>
               <div style={{fontSize:12,color:"#fecaca",marginTop:2}}>Subscribe to VulnusLab Pro to continue running scans. Your past scans are still accessible.</div>
             </div>
-            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",color:"#fff",padding:"9px 22px",borderRadius:6,fontSize:13,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap",boxShadow:"0 0 16px #16a34a55"}}>
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#0bd673,#15803d)",border:"none",color:"#fff",padding:"9px 22px",borderRadius:6,fontSize:13,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap",boxShadow:"0 0 16px #0bd67355"}}>
               {upgrading ? "Loading..." : "Subscribe — $29/mo"}
             </button>
           </div>
@@ -24123,7 +24123,7 @@ export default function App() {
             padding:"8px 24px",display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
             <span style={{fontSize:16}}>{trialInfo.scans_remaining===0?"":(billingInfo.trial_days_remaining<=2?"":"")}</span>
             <div style={{flex:1}}>
-              <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#f87171":(billingInfo.trial_days_remaining<=2?"#fb923c":"#4ade80")}}>
+              <span style={{fontSize:12,fontWeight:700,color:trialInfo.scans_remaining===0?"#ff6b82":(billingInfo.trial_days_remaining<=2?"#fb923c":"#5dffa6")}}>
                 {trialInfo.scans_remaining===0
                   ? "Daily scan limit reached — upgrade to Pro for unlimited scans"
                   : `Trial: ${billingInfo.trial_days_remaining} day${billingInfo.trial_days_remaining!==1?"s":""} left  •  ${trialInfo.scans_remaining} scan${trialInfo.scans_remaining!==1?"s":""} remaining today`}
@@ -24132,35 +24132,35 @@ export default function App() {
             <div style={{display:"flex",gap:6}}>
               {[...Array(5)].map((_,i)=>(
                 <div key={i} style={{width:10,height:10,borderRadius:"50%",
-                  background:i<(5-trialInfo.scans_remaining)?"#1e293b":"#22c55e",
-                  border:"1px solid #334155"}}/>
+                  background:i<(5-trialInfo.scans_remaining)?"#1c2435":"#00ff88",
+                  border:"1px solid #1c2435"}}/>
               ))}
             </div>
-            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#1e40af,#3b82f6)",border:"none",color:"#fff",
+            <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#1e40af,#3b9eff)",border:"none",color:"#fff",
               padding:"5px 14px",borderRadius:6,fontSize:11,fontWeight:700,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
               {upgrading ? "..." : "Upgrade to Pro"}
             </button>
           </div>
         )}
 
-        <div style={{background:"#0a0f1e",borderBottom:"1px solid #1e293b",padding:"0 24px",display:"flex",alignItems:"center",height:50,flexShrink:0}}>
+        <div style={{background:"#0d1320",borderBottom:"1px solid #1c2435",padding:"0 24px",display:"flex",alignItems:"center",height:50,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:12,color:"#475569",fontWeight:500}}>VulnusLab</span>
-            <span style={{color:"#334155",fontSize:14}}>/</span>
-            <span style={{fontSize:13,color:"#cbd5e1",fontWeight:600,letterSpacing:"0.2px"}}>{topic?topic.label:active}</span>
+            <span style={{fontSize:12,color:"#5a6478",fontWeight:500}}>VulnusLab</span>
+            <span style={{color:"#1c2435",fontSize:14}}>/</span>
+            <span style={{fontSize:13,color:"#c3ccda",fontWeight:600,letterSpacing:"0.2px"}}>{topic?topic.label:active}</span>
           </div>
           <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:11,color:"#334155",fontFamily:"JetBrains Mono,monospace"}}>{new Date().toLocaleDateString()}</span>
+            <span style={{fontSize:11,color:"#1c2435",fontFamily:"JetBrains Mono,monospace"}}>{new Date().toLocaleDateString()}</span>
           </div>
         </div>
 
-        <div style={{padding:"18px 24px 10px",borderBottom:"1px solid #1e293b",background:"#0a0f1e",flexShrink:0}}>
+        <div style={{padding:"18px 24px 10px",borderBottom:"1px solid #1c2435",background:"#0d1320",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               <span style={{fontSize:24}}>{topic?topic.icon:""}</span>
               <div>
-                <h1 style={{fontSize:17,fontWeight:700,color:"#f1f5f9",marginBottom:2}}>{topic?topic.label:active}</h1>
-                <p style={{fontSize:11,color:"#475569"}}>Real Kali Linux tools | Module {topic?topic.num:"--"}</p>
+                <h1 style={{fontSize:17,fontWeight:700,color:"#ffffff",marginBottom:2}}>{topic?topic.label:active}</h1>
+                <p style={{fontSize:11,color:"#5a6478"}}>Real Kali Linux tools | Module {topic?topic.num:"--"}</p>
               </div>
             </div>
             <div style={{display:"flex",gap:6}}>
