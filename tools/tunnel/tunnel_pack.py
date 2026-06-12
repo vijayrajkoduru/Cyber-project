@@ -73,22 +73,26 @@ def _adv(tool: str, target: str, title: str, *, sev: str = "INFO",
 
 
 def _udp_listen(host: str, port: int, timeout: float = 2.0) -> bool:
-    """Probe UDP open by sending empty datagram and waiting briefly for ICMP unreachable.
+    """Send an empty UDP datagram; return True ONLY if a real datagram response
+    is received from the port.
 
-    UDP is connectionless; this is best-effort and treats no ICMP-error as "potentially open".
-    Used for WireGuard (51820), Tailscale (41641), ZeroTier (9993).
+    UDP is connectionless: silence/timeout = open|filtered (NOT confirmed open),
+    so it must NOT be treated as a positive detection. Returning True on timeout
+    fabricated a service from network silence (false positive on Cloudflare /
+    any host that simply drops the probe). Used for WireGuard (51820), ZeroTier
+    (9993). Only an actual datagram reply confirms a live UDP service.
     """
     try:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
             s.settimeout(timeout)
             s.sendto(b"\x00" * 8, (host, port))
             try:
-                s.recvfrom(1500)
-                return True
+                data, _ = s.recvfrom(1500)
+                return bool(data)  # confirmed: a real datagram came back
             except socket.timeout:
-                return True  # no ICMP-unreachable received → likely open or filtered
+                return False  # silence → open|filtered, service NOT confirmed
             except OSError:
-                return False
+                return False  # ICMP unreachable → closed
     except Exception:
         return False
 
@@ -569,19 +573,20 @@ def wireguard_userspace_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Probe UDP 51820 (WireGuard default)."""
     host = _host(req.target)
     findings = []
-    open51820 = _udp_listen(host, 51820, timeout=2.0)
-    if open51820:
+    responded = _udp_listen(host, 51820, timeout=2.0)
+    if responded:
         findings.append(wrap_finding(
-            "UDP/51820 (WireGuard default) is reachable — likely WireGuard endpoint exposed.",
+            "UDP/51820 (WireGuard default) returned a datagram — WireGuard endpoint confirmed exposed.",
             "MEDIUM", cvss="5.0", cwe="CWE-1395", owasp="A05:2021",
             remediation="If intentional, restrict source IPs; if not, close at firewall.",
-            evidence_marker="UDP/51820 sent → no ICMP unreachable (likely open or filtered)."))
+            evidence_marker="UDP/51820 sent → received a datagram response (service confirmed)."))
     else:
         findings.append(wrap_finding(
-            "UDP/51820 not reachable — WireGuard default port closed.",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue blocking non-essential UDP at edge.",
-            evidence_marker="UDP/51820 ICMP unreachable received."))
+            "UDP/51820 (WireGuard default) — no response. UDP open|filtered; WireGuard NOT confirmed.",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="UDP silence is inconclusive. If WireGuard is unexpected, verify host-side "
+                        "(wg show) and ensure non-essential UDP is blocked at the edge.",
+            evidence_marker="UDP/51820 sent → no datagram reply within timeout (open|filtered, service NOT confirmed)."))
     return _resp("wireguard_userspace_probe", req.target, findings,
                  tested=1, what_checked="WireGuard default UDP port 51820")
 
@@ -613,19 +618,20 @@ def zerotier_lateral_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Probe ZeroTier UDP 9993."""
     host = _host(req.target)
     findings = []
-    open9993 = _udp_listen(host, 9993, timeout=2.0)
-    if open9993:
+    responded = _udp_listen(host, 9993, timeout=2.0)
+    if responded:
         findings.append(wrap_finding(
-            "ZeroTier UDP/9993 reachable — mesh-VPN endpoint exposed.",
+            "ZeroTier UDP/9993 returned a datagram — mesh-VPN endpoint confirmed exposed.",
             "MEDIUM", cvss="5.0", cwe="CWE-1395",
             remediation="Audit ZeroTier network controllers + members; rotate network ID if compromised.",
-            evidence_marker="UDP/9993 likely open."))
+            evidence_marker="UDP/9993 sent → received a datagram response (service confirmed)."))
     else:
         findings.append(wrap_finding(
-            "ZeroTier UDP/9993 not reachable.",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue mesh-VPN inventory.",
-            evidence_marker="UDP/9993 closed."))
+            "ZeroTier UDP/9993 — no response. UDP open|filtered; ZeroTier NOT confirmed.",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="UDP silence is inconclusive. If ZeroTier is unexpected, verify host-side "
+                        "(zerotier-cli listnetworks) and block non-essential UDP at the edge.",
+            evidence_marker="UDP/9993 sent → no datagram reply within timeout (open|filtered, service NOT confirmed)."))
     return _resp("zerotier_lateral_probe", req.target, findings, tested=1,
                  what_checked="ZeroTier default port 9993")
 

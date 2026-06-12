@@ -335,12 +335,26 @@ def _probe_docker_hub_public_image(target, req):
     img = host.replace("hub.docker.com", "").replace("/r/", "").strip("/") or "library/alpine"
     url = f"https://hub.docker.com/v2/repositories/{img}/"
     code, body, _ = _http_get(url, timeout=4)
+    # Hub returns 200 + {"count":0,"results":[]} for any valid-length namespace even
+    # when no repo exists, so a bare 200 does NOT confirm a real public image.
+    # Only treat as public when the JSON body describes an actual repo.
+    is_public = False
+    if code == 200:
+        try:
+            j = json.loads(body) if body else {}
+        except (ValueError, TypeError):
+            j = {}
+        if isinstance(j, dict):
+            # Single-repo response carries real fields; search response carries count/results.
+            is_public = ("name" in j or "is_private" in j
+                         or (j.get("count") or 0) > 0
+                         or bool(j.get("results")))
     return {"tool": "docker_hub_public_image_secrets", "target": target, "scan_time": 0,
-            "vulnerable": code == 200,
-            "severity": "INFO" if code == 200 else "POSITIVE",
+            "vulnerable": is_public,
+            "severity": "INFO" if is_public else "POSITIVE",
             "findings": [wrap_finding(
-                f"Docker Hub image '{img}' {'is public' if code == 200 else 'not found / private'}",
-                "INFO" if code == 200 else "POSITIVE",
+                f"Docker Hub image '{img}' {'is public' if is_public else 'no matching public Docker Hub image'}",
+                "INFO" if is_public else "POSITIVE",
                 cvss="0.0", cwe="N/A",
                 remediation="Inventory public images for embedded secrets; consider private hub.",
                 evidence_marker=f"GET {url} -> {code}")],

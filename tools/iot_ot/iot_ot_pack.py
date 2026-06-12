@@ -584,13 +584,36 @@ def _probe_onvif(target, req):
         status, hdrs, body = _http_get(f"{scheme}://{host}:{port}{path}", timeout=4)
         if not status:
             continue
+        # Only a real 200 page can carry a genuine camera/ONVIF fingerprint.
+        # A non-200 (e.g. plain Apache 404) echoes the requested path back in
+        # its error body, which self-matches the 'onvif' keyword on a
+        # non-camera host — a reflected false positive.
+        if status != 200:
+            continue
+        # Exclude any keyword that is merely the requested path reflected back
+        # in the response (echoed-path self-match). Strip every echoed copy of
+        # the path from the headers+body, then require the keyword to still
+        # survive — a genuine fingerprint (Server header, product string, real
+        # camera markup) does; a reflected 'onvif' from the URL does not.
+        path_lower = path.lower()
         blob = (str(hdrs) + " " + body).lower()
-        if any(s in blob for s in ("onvif", "hikvision", "dahua", "axis", "rtsp", "network camera", "ipcamera", "webcamxp")):
+        non_echoed = blob.replace(path_lower, " ")
+        matched = None
+        for s in ("onvif", "hikvision", "dahua", "axis", "rtsp", "network camera", "ipcamera", "webcamxp"):
+            if s not in blob:
+                continue
+            # If the keyword only exists because it is part of the reflected
+            # request path, drop it as a self-match.
+            if s in path_lower and s not in non_echoed:
+                continue
+            matched = s
+            break
+        if matched:
             findings.append(wrap_finding(
                 "ONVIF / IP-camera web interface fingerprinted on HTTP (NOT protocol-confirmed)",
                 "INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
                 remediation="Remove camera web UI from the internet; place behind VPN and replace default credentials.",
-                evidence_marker=f"{scheme}://{host}:{port}{path} HTTP body/header matched an ONVIF/camera keyword (HTTP {status}) — fingerprint only, the ONVIF/RTSP service was NOT confirmed on this surface"))
+                evidence_marker=f"{scheme}://{host}:{port}{path} HTTP 200 body/header matched an ONVIF/camera keyword '{matched}' — fingerprint only, the ONVIF/RTSP service was NOT confirmed on this surface"))
             break
     if not findings:
         return _clean_pos("iot_onvif_camera_audit", target,

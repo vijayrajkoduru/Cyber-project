@@ -83,7 +83,12 @@ async def gather(ctx: ScanContext):
 
     resp_headers = {k.lower(): v for k, v in r.headers.items()}
     ctype = resp_headers.get("content-type", "")
-    is_html = "text/html" in ctype.lower()
+    # Only a HTTP 200 means a real, responding LLM endpoint. On non-200
+    # (404 SPA-fallback, 3xx, 5xx) a text/html body is an error/placeholder
+    # page, NOT model output — grading it as LLM05 XSS is a false positive
+    # (confirmed live on a Netlify 404 SPA-fallback for /api/chat).
+    is_responding = r.status_code == 200
+    is_html = is_responding and ("text/html" in ctype.lower())
     acao = resp_headers.get("access-control-allow-origin", "")
     acac = resp_headers.get("access-control-allow-credentials", "")
     is_plaintext = target.lower().startswith("http://")

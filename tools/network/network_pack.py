@@ -133,7 +133,9 @@ def _probe_nmap_udp_scan(target, req):
         return _adv_response("nmap_udp_scan", target, "DNS resolution failed",
                               "INFO", "0.0", evidence=host)
     udp_ports = [53, 67, 68, 123, 137, 161, 500, 514, 520, 1900, 4500, 5353]
-    open_count = 0
+    confirmed_open = 0       # actual UDP datagram reply received (real service)
+    open_or_filtered = 0     # timeout — no reply, cannot be confirmed
+    confirmed_ports = []
     for port in udp_ports:
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
@@ -141,25 +143,47 @@ def _probe_nmap_udp_scan(target, req):
                 s.sendto(b"\x00\x00", (ip, port))
                 try:
                     s.recvfrom(512)
-                    open_count += 1
+                    confirmed_open += 1        # got a real datagram reply
+                    confirmed_ports.append(port)
                 except socket.timeout:
-                    open_count += 1  # open or filtered
+                    open_or_filtered += 1      # open|filtered — UNCONFIRMED (silence)
                 except OSError:
-                    pass
+                    pass                       # ICMP unreachable -> port closed
         except Exception:
             pass
+    findings = []
+    # Confirmed-open: only an actual UDP reply may carry a graded severity.
+    if confirmed_open:
+        findings.append(wrap_finding(
+            f"UDP service replies confirmed on {confirmed_open}/{len(udp_ports)} ports on {host} ({ip})",
+            "LOW" if confirmed_open <= 3 else "MEDIUM",
+            cvss="3.0" if confirmed_open <= 3 else "5.0",
+            cwe="CWE-200",
+            remediation="UDP datagram replies confirm active services; close non-essential UDP at firewall.",
+            evidence_marker=f"Replied (confirmed open): {confirmed_ports}"))
+    # Timeouts are open|filtered and UNCONFIRMED — INFO only, never vulnerable=True.
+    if open_or_filtered:
+        findings.append(wrap_finding(
+            f"{open_or_filtered} UDP ports open|filtered (unconfirmed — no service reply)",
+            "INFO", cvss="0.0", cwe="CWE-200",
+            remediation="No UDP reply received — state cannot be confirmed (firewall drop or stateless service). No action required on this signal alone.",
+            evidence_marker=f"Probed: {udp_ports}; open|filtered (no reply): {open_or_filtered}"))
+    if not findings:
+        findings.append(wrap_finding(
+            f"No UDP service replies on {host}", "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue least-exposure posture.",
+            evidence_marker=f"Probed {len(udp_ports)} common UDP ports — no replies, no open|filtered"))
+    sev = "INFO"
+    if confirmed_open:
+        sev = "LOW" if confirmed_open <= 3 else "MEDIUM"
     return {"tool":"nmap_udp_scan","target":target,"scan_time":0,
-            "vulnerable": open_count > 3, "severity": "INFO",
-            "findings": [wrap_finding(
-                f"UDP probe — {open_count}/{len(udp_ports)} common UDP ports likely open/filtered",
-                "INFO" if open_count <= 3 else "LOW",
-                cvss="0.0" if open_count <= 3 else "3.0",
-                cwe="CWE-200",
-                remediation="UDP responses indicate active services; close non-essential UDP at firewall.",
-                evidence_marker=f"Probed: {udp_ports}; potentially open: {open_count}")],
+            "vulnerable": confirmed_open > 0, "severity": sev,
+            "findings": findings,
             "tests_performed": len(udp_ports),
             "tests_summary": f"UDP probe scan of {len(udp_ports)} ports",
-            "raw_data": {"ip": ip, "open_or_filtered_count": open_count}}
+            "raw_data": {"ip": ip, "confirmed_open_count": confirmed_open,
+                         "confirmed_open_ports": confirmed_ports,
+                         "open_or_filtered_count": open_or_filtered}}
 
 def _probe_nmap_version_detect(target, req):
     """Banner grab on top open ports to derive service version."""
