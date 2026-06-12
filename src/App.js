@@ -13452,15 +13452,36 @@ function generateUniversalVLReport(opts) {
     .replace(/[“”]/g, '"')
     .replace(/[·]/g, "-");
 
+  // Word-boundary clip: shorten to <= n chars but never mid-word; ends with
+  // "..." so a shortened name reads as intentional, not a broken/truncated
+  // render (pdf_industry_standard hard-rule: no mid-word truncation).
+  const _clip = (s, n) => {
+    s = String(s == null ? "" : s);
+    if (s.length <= n) return s;
+    const cut = s.slice(0, Math.max(1, n - 3));
+    const sp = cut.lastIndexOf(" ");
+    return (sp > (n - 3) * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s\-:,;]+$/, "") + "...";
+  };
+
   // ── Collect findings + risk math ──
   const _allFindings = [];
   Object.keys(r).forEach(toolKey => {
     const d = r[toolKey];
     if (!d || !Array.isArray(d.findings)) return;
+    // Advisory-by-design tools run NO live probe (SaaS cannot reach the surface)
+    // and the backend buckets them as "skipped". Exclude their canned INFO rows
+    // from the findings total + severity math, exactly like scaffolds — they are
+    // still listed in Per-Tool Intelligence for coverage transparency.
+    const _isAdvisoryTool = d._skipped === true || !!d.skipped_reason
+      || (d.raw_data && d.raw_data.advisory_by_design === true);
+    if (_isAdvisoryTool) return;
     d.findings.forEach(f => {
       const nm = String(f && f.name || "").toLowerCase();
       const ev = String(f && f.evidence || "").toLowerCase();
+      const dt = String(f && f.detail || "").toLowerCase();
       if (ev.includes("scaffold") || nm.startsWith("scaffold:")) return;
+      if (nm.startsWith("[advisory-by-design]") || dt.startsWith("[advisory-by-design]")
+          || ev.includes("no live scan possible from external saas")) return;
       _allFindings.push(Object.assign({_tool: toolKey}, f));
     });
   });
@@ -13750,6 +13771,16 @@ function generateUniversalVLReport(opts) {
   const _scaffoldCount = _scaffoldScanners.length;
   const _realCount = _realScanners.length;
   const _totalScanners = _scannerKeys.length;
+  // Execution coverage (distinct from implementation completeness): how many
+  // scanners actually ran a LIVE probe against this target, vs advisory-by-design
+  // / skipped tools that performed no network activity (SaaS can't reach the
+  // surface). Stops "100% complete" from implying full live coverage.
+  const _advisoryScanners = _realScanners.filter(k => {
+    const d = r[k];
+    return d && (d._skipped === true || !!d.skipped_reason
+      || (d.raw_data && d.raw_data.advisory_by_design === true));
+  });
+  const _liveRanCount = _realCount - _advisoryScanners.length;
   const _isAllScaffold = _totalScanners > 0 && _scaffoldCount === _totalScanners;
   const _isMostlyScaffold = _totalScanners > 0 && _scaffoldCount / _totalScanners >= 0.5;
   const _scaffoldPct = _totalScanners > 0 ? Math.round(100 * _scaffoldCount / _totalScanners) : 0;
@@ -13780,20 +13811,27 @@ function generateUniversalVLReport(opts) {
   // CRITICAL or HIGH finding exists (per pdf_industry_standard.md gap 6).
   // Scope-factor reduction can drag the raw score below the band that matches
   // the worst severity; floor it so the band always reflects worst impact.
-  const _sevFloor = _sevCount.CRITICAL > 0 ? 40 : _sevCount.HIGH > 0 ? 20 : 0;
-  const _riskScore = Math.max(_sevFloor, Math.round(_rawRiskScore * _scopeFactor));
+  // Worst-severity floor must land in the band that MATCHES the worst finding:
+  // CRITICAL -> HIGH band (60), HIGH -> MODERATE band (40). The old HIGH floor
+  // of 20 sat at the bottom of the LOW band, so a HIGH finding still read
+  // "LOW RISK" — defeating the floor's purpose (pdf_industry_standard gap 6).
+  const _scopeAdjusted = Math.round(_rawRiskScore * _scopeFactor);
+  const _sevFloor = _sevCount.CRITICAL > 0 ? 60 : _sevCount.HIGH > 0 ? 40 : 0;
+  const _riskScore = Math.max(_sevFloor, _scopeAdjusted);
   const _riskLabel = (_riskScore>=80&&_sevCount.CRITICAL>0)?"CRITICAL RISK":_riskScore>=60?"HIGH RISK":_riskScore>=40?"MODERATE RISK":_riskScore>=20?"LOW RISK":"MINIMAL RISK";
   const _riskColor = (_riskScore>=80&&_sevCount.CRITICAL>0)?[162,28,28]:_riskScore>=60?[194,65,12]:_riskScore>=40?[133,79,11]:_riskScore>=20?[202,138,4]:[15,118,82];
   // Footnote for the auditor: explain WHY the headline score isn't the raw.
   // Expanded to show the full formula breakdown so external readers can
   // reproduce the math instead of trusting an opaque single number.
   const _scopeNote = _scopeFactor < 1.0
-    ? `Scope-adjusted: raw severity score ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} input-coverage factor (${_inputsSupplied}/5 inputs provided)`
+    ? `Scope-adjusted: raw severity score ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} input-coverage factor = ${_scopeAdjusted} (${_inputsSupplied}/5 inputs provided)`
     : null;
   const _formulaNote = `Formula: raw = min(70, C*15 + H*8 + M*3 + L*1) + worst-severity cap (${_maxC}); `
-    + `then x scope factor [0.4..1.0 from input coverage]. `
+    + `then x scope factor [0.4..1.0 from input coverage]; then floored to the worst-severity band. `
     + `Inputs counted: ${_inputsSupplied}/5 (dockerfile, pod-spec, kubeconfig, repo, image). `
-    + `C=${_sevCount.CRITICAL} H=${_sevCount.HIGH} M=${_sevCount.MEDIUM} L=${_sevCount.LOW} -> raw ${_rawRiskScore} -> ${_riskScore}.`;
+    + `C=${_sevCount.CRITICAL} H=${_sevCount.HIGH} M=${_sevCount.MEDIUM} L=${_sevCount.LOW} `
+    + `-> raw ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} = ${_scopeAdjusted}`
+    + `${_sevFloor > _scopeAdjusted ? ` -> worst-severity floor ${_sevFloor}` : ""} -> ${_riskScore}.`;
 
   // Report ID + Content Hash (deterministic per (module, target, date, findings))
   const _genId = (pre, t, d) => {
@@ -14269,9 +14307,10 @@ function generateUniversalVLReport(opts) {
     // Auditor-facing language: avoid the word "forged" which to external
     // readers reads as "fabricated". Use "live probes implemented" instead.
     ["Scan Summary",
-      `${_realCount} live probe(s) implemented of ${_totalScanners} total `
-      + `(${_realPct}% complete). `
-      + `${_scaffoldCount} technique(s) currently scaffolded [NOT IMPLEMENTED].`],
+      `${_realCount} of ${_totalScanners} technique(s) implemented (${_realPct}%). `
+      + `${_liveRanCount} ran a live probe against this target`
+      + `${_advisoryScanners.length > 0 ? `; ${_advisoryScanners.length} advisory / out-of-scope (no live probe possible from SaaS)` : ""}`
+      + `${_scaffoldCount > 0 ? `; ${_scaffoldCount} scaffolded [NOT IMPLEMENTED]` : ""}.`],
     ["Distribution", "Internal - Security Team + Engineering Leads"],
     ["Retention", "Confidential - 90 days minimum"],
     ["Next Re-test", "After remediation + 90 days OR per Conclusion section"],
@@ -14328,10 +14367,10 @@ function generateUniversalVLReport(opts) {
     // style (pdf_industry_standard.md gap 15).
     {
       const _topName = _top3.length > 0
-        ? String(_top3[0].detail || _top3[0].name || _top3[0].title || "").substring(0, 90)
+        ? _clip(_top3[0].detail || _top3[0].name || _top3[0].title || "", 90)
         : "";
       const _topName2 = _top3.length > 1
-        ? String(_top3[1].detail || _top3[1].name || _top3[1].title || "").substring(0, 90)
+        ? _clip(_top3[1].detail || _top3[1].name || _top3[1].title || "", 90)
         : "";
       const _totalReal = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW;
       const _scannerCount = Object.keys(r).length;
@@ -14861,7 +14900,7 @@ function generateUniversalVLReport(opts) {
             doc.setFont("Arial","bold"); doc.setFontSize(6); doc.setTextColor.apply(doc, sFg);
             doc.text(sev, margin+43, y+3.2, {align:"center"});
             doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor.apply(doc, GRAY);
-            const nm = String(top.name||top.detail||top.title||"finding").substring(0, 90);
+            const nm = _clip(top.name||top.detail||top.title||"finding", 90);
             doc.text(`${fs.length} finding(s) - top: ${nm}`, margin+52, y+3.5);
             y += 5;
           });
@@ -14880,7 +14919,7 @@ function generateUniversalVLReport(opts) {
         fillR(margin, y, 4, 10, col);
         fillR(margin + 4, y, contentW - 4, 10, LIGHT);
         txt(`${idx+1}.`, margin + 8, y + 6.8, 9, col, true);
-        const nm = String(f.detail||f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||"Untitled finding").substring(0,85);
+        const nm = _clip(f.detail||f.name||f.title||f.heading||f.summary||f.description||f.issue||f.message||"Untitled finding", 85);
         txt(nm, margin + 15, y + 6.8, 8.5, DARK, true);
         txt(sev, margin + contentW - 20, y + 6.8, 7, col, true);
         y += 12;
@@ -15002,7 +15041,7 @@ function generateUniversalVLReport(opts) {
   doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
   doc.text(`${_covPct}%`, margin + 10, y + 11);
   doc.setFont("Arial","bold"); doc.setFontSize(11); doc.setTextColor(...DARK);
-  doc.text(`${_completeness}/${_phaseDefs.length} scanners completed cleanly`, margin + 30, y + 7);
+  doc.text(`${_completeness}/${_phaseDefs.length} scanners completed without error`, margin + 30, y + 7);
   { let _sx = margin + 30;
     const _seg = [[_ran,"DATA",[15,118,82]],[_empty,"EMPTY",[100,116,139]],[_skipped,"SKIPPED",[133,79,11]],[_failed,"ERROR",[162,28,28]]];
     _seg.forEach(function(g, gi){
@@ -15228,7 +15267,12 @@ function generateUniversalVLReport(opts) {
         // 2026-06-09 - pills on every row were visually noisy. The colour-coded
         // identification of frameworks lives in the top-of-report coverage bar.
         var cmpLines = doc.splitTextToSize(ob.cmp, 58).slice(0, 2);
-        var nmLines  = doc.splitTextToSize(ob.nm, 66).slice(0, 2);
+        var _nmAll = doc.splitTextToSize(ob.nm, 66);
+        var nmLines = _nmAll.slice(0, 2);
+        if (_nmAll.length > 2 && nmLines.length === 2) {
+          // word-boundary ellipsis so the 2-line cap never cuts mid-word
+          nmLines[1] = nmLines[1].replace(/\s*\S+$/, "") + " ...";
+        }
         var _rh = Math.max(6.5, 2.5 + 3.6 * Math.max(cmpLines.length, nmLines.length));
         chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
         cmpLines.forEach(function(ln, li){
@@ -15872,8 +15916,8 @@ function generateUniversalVLReport(opts) {
         _curSev = sev;
       }
       _recN++;
-      const nm = String(f.detail||f.name||f.title||"Untitled finding").substring(0, 100);
-      const rem = String(f.remediation || "See per-finding section above for evidence and remediation guidance.").substring(0, 200);
+      const nm = _clip(f.detail||f.name||f.title||"Untitled finding", 100);
+      const rem = _clip(f.remediation || "See per-finding section above for evidence and remediation guidance.", 200);
       const _remLines = doc.splitTextToSize(_ascii("Fix: " + rem), contentW - 16);
       const _cardH = Math.max(13, 6 + _remLines.length * 3.6 + 3);
       chk(_cardH + 2);
