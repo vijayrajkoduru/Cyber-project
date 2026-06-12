@@ -1,19 +1,32 @@
 """red_team module orchestrator - Adversary Emulation / detection-baseline.
 
 Per module_playbooks/27_red_team.md - 8 sections, 88 techniques.
-Starter set (5 scanners) covers detection-engineering validation:
-  - tier1_simulation (3 LOUD signal emitters):
+
+Scanner set (8 scanners across 4 tiers):
+  - tier1_simulation (3 LOUD signal emitters, customer-owned receivers):
         atomic_red_team_runner (SSH/WinRM Atomic Red Team subset),
         c2_beacon_test (jittered HTTPS + DNS C2 beacons),
         exfil_dns_simulation (chunked base32 DNS exfil)
   - tier2_detection (2 detection-test/rollup):
         lateral_pivot_signal_check (impacket PtH signals -> 4625),
         mitre_attack_simulation_summary (Navigator JSON layer)
+  - tier3_c2_infra (2 REAL, QUIET external-exposure probes — read-only HTTP
+        GET + passive TLS cert read; graded findings fire ONLY on a unique
+        product/C2 signature confirmed live on the target):
+        c2_framework_exposure (Cobalt Strike/Sliver/Mythic/Empire/Havoc/
+            Metasploit/Merlin/GoPhish exposed control planes),
+        detection_tooling_exposure (exposed Splunk/Kibana/Elastic/Grafana/
+            Graylog/Wazuh/CALDERA/Navigator consoles)
+  - tier4_advisory (1 honest advisory-by-design INFO pack):
+        red_team_advisory_pack (every playbook technique that genuinely
+            cannot be probed from an external VA scan — on-host emulation,
+            active C2 operation, threat-actor TTP chains, SIEM-internal
+            detection engineering, purple-team workflow, manual plans)
 
-Concurrency = 2 (each probe emits LOUD signals — running too many in
-parallel will flood the customer's SIEM and trigger rate-limited
-alerting). More scanners (Caldera ops, C2 framework wraps, threat-actor
-emulation) will be added per playbook section in subsequent commits.
+Concurrency = 2 (the tier1/tier2 probes emit LOUD signals — running too
+many in parallel floods the customer's SIEM and triggers rate-limited
+alerting; the clamp is module-wide and harmless for the quiet tier3/tier4
+read-only probes).
 
 Customer input pattern: ScanRequest.options.* carries all customer-owned
 targets (c2_callback_url, c2_dns_domain, exfil_dns_domain, lateral_target,
@@ -41,6 +54,20 @@ RED_TEAM_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier2_detection": [
         ("lateral_pivot_signal_check",     "/api/red_team/lateral_pivot_signal_check"),
         ("mitre_attack_simulation_summary","/api/red_team/mitre_attack_simulation_summary"),
+    ],
+    # tier3_c2_infra — REAL external exposure detection (read-only HTTP GET +
+    # passive TLS read). Graded findings only fire on a unique product/C2
+    # signature confirmed live on the target; otherwise INFO/POSITIVE.
+    "tier3_c2_infra": [
+        ("c2_framework_exposure",          "/api/red_team/c2_framework_exposure"),
+        ("detection_tooling_exposure",     "/api/red_team/detection_tooling_exposure"),
+    ],
+    # tier4_advisory — honest advisory-by-design INFO catalogue for the
+    # playbook techniques that genuinely cannot be probed from an external VA
+    # scan (on-host emulation, active C2 operation, threat-actor TTP chains,
+    # SIEM-internal detection engineering, purple-team workflow, manual plans).
+    "tier4_advisory": [
+        ("red_team_advisory_pack",         "/api/red_team/red_team_advisory_pack"),
     ],
 }
 

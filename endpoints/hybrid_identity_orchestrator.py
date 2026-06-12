@@ -1,16 +1,22 @@
 """hybrid_identity module orchestrator - Entra ID + on-prem AD bridge attacks.
 
 Per module_playbooks/28_hybrid_identity.md - 8 sections, 90 techniques.
-Starter set (5 scanners) covers the highest-impact items:
+Real unauthenticated/credentialed probes + an honest advisory-by-design
+pack for everything that needs on-host/LAN/post-compromise/social
+engineering/DoS (which an external SaaS scanner must NOT execute):
   - tier1_recon (§1 Entra ID Recon):
-        entra_user_enum_unauth, seamless_sso_audit
-  - tier2_sync  (§2 Hybrid AD Connect Attacks):
+        entra_user_enum_unauth, seamless_sso_audit,
+        openid_tenant_recon, tenant_domain_enum
+  - tier2_sync  (§2 Hybrid AD Connect Attacks, Graph-authenticated):
         password_hash_sync_audit, pta_agent_audit
-  - tier3_federation (§2 #20-26 + §8 modern CVE/TTPs):
-        adfs_extract_audit
+  - tier3_federation (§2 #20-26 + §3 #29/#36 + §8 modern CVE/TTPs):
+        adfs_extract_audit, legacy_wstrust_surface_audit
+  - tier4_advisory (everything not safely probeable externally):
+        hybrid_identity_advisory_pack  (all INFO, [ADVISORY-BY-DESIGN])
 
-More scanners will be added per playbook section in subsequent commits
-(ROADrecon, azurehound, MSOLSpray, TokenTactics, MFASweep, etc.).
+Every graded (LOW/MEDIUM/HIGH/CRITICAL) severity is emitted ONLY when the
+probe actually observed the condition on the target; advisory items are
+always INFO with vulnerable:false (zero false positives).
 
 Concurrency is intentionally LOW (3) because two of the scanners hit
 login.microsoftonline.com (Microsoft will throttle aggressive fan-out)
@@ -33,6 +39,8 @@ HYBRID_IDENTITY_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_recon": [
         ("entra_user_enum_unauth",   "/api/hybrid_identity/entra_user_enum_unauth"),
         ("seamless_sso_audit",       "/api/hybrid_identity/seamless_sso_audit"),
+        ("openid_tenant_recon",      "/api/hybrid_identity/openid_tenant_recon"),
+        ("tenant_domain_enum",       "/api/hybrid_identity/tenant_domain_enum"),
     ],
     "tier2_sync": [
         ("password_hash_sync_audit", "/api/hybrid_identity/password_hash_sync_audit"),
@@ -40,6 +48,12 @@ HYBRID_IDENTITY_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     ],
     "tier3_federation": [
         ("adfs_extract_audit",       "/api/hybrid_identity/adfs_extract_audit"),
+        ("legacy_wstrust_surface_audit",
+         "/api/hybrid_identity/legacy_wstrust_surface_audit"),
+    ],
+    "tier4_advisory": [
+        ("hybrid_identity_advisory_pack",
+         "/api/hybrid_identity/hybrid_identity_advisory_pack"),
     ],
 }
 

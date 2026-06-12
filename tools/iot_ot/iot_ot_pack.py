@@ -1,17 +1,51 @@
 """§30 IoT/OT/ICS Security — 58 endpoints per 30_iot_ot.md.
 
-VL-FORGE upgrade 2026-05-30: 6 live probes for externally-observable
-ICS/SCADA protocols on standard ports (Modbus 502, Siemens S7 102,
-EtherNet/IP 44818, BACnet 47808, DNP3 20000, Mirai-era IoT telnet 23/2323).
+VL-FORGE upgrade 2026-06-12: every technique in T now resolves to EITHER a
+real live probe OR an honest advisory-by-design INFO — ZERO bare
+[NOT IMPLEMENTED] scaffolds remain.
+
+Real live probes (externally-observable ICS/OT/IoT surfaces, detection-only):
+  - Modbus TCP/502, Siemens S7 TCP/102 (ISO-TSAP), EtherNet/IP TCP/44818,
+    DNP3 TCP/20000, BACnet UDP/47808, KNXnet/IP UDP/3671
+  - Schneider Modicon (Modbus + HTTP fingerprint), Rockwell/Allen-Bradley
+    (EtherNet/IP List Identity), PLCScan-style multi-protocol ICS sweep
+  - IoT telnet 23/2323 (Mirai), UPnP/SSDP UDP/1900, mDNS/DNS-SD UDP/5353,
+    RTSP TCP/554 (camera), ONVIF HTTP camera fingerprint
+
+Everything that genuinely cannot be checked from an external SaaS scanner
+(RF/Zigbee/Z-Wave/Thread/Matter radios, on-host forensics, engagement-scope
+methodology, vendor credential testing that requires authorization, DoS,
+active fuzzing/replay) is emitted as [ADVISORY-BY-DESIGN] INFO — vulnerable:
+False — via _advisory_by_design_response. NEVER a graded severity unless the
+condition was actually detected on the target.
+
+HARD RULE: a CRITICAL/HIGH/MEDIUM/LOW severity is emitted ONLY when the probe
+actually observed the condition. VA not PT: detection only, no exploitation,
+no writes, no replay, no flooding, no cross-scanner chaining.
 """
 import socket
+import struct
+import urllib.request
+import urllib.error
 from contextlib import closing
-from tools._pack_common import make_advisory_router, _adv_response
+from tools._pack_common import (
+    make_advisory_router, _adv_response, _advisory_by_design_response,
+)
 from tools._shared import wrap_finding
 
 
+# ─────────────────────────── helpers ───────────────────────────
+
 def _host(t):
     return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+
+
+def _resolve(host):
+    try:
+        return socket.gethostbyname(host)
+    except Exception:
+        return ""
+
 
 def _tcp_open(host, port, timeout=2.0):
     try:
@@ -21,179 +55,636 @@ def _tcp_open(host, port, timeout=2.0):
     except Exception:
         return False
 
-def _udp_probe(host, port, payload=b"\x00", timeout=1.5):
+
+def _tcp_send_recv(host, port, payload, timeout=3.0, recv=256):
+    """Connect, send a benign read/identify request, return raw response bytes.
+    Returns b'' on any failure — never raises, never a false finding."""
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.settimeout(timeout)
+            if s.connect_ex((host, port)) != 0:
+                return b""
+            if payload:
+                s.send(payload)
+            try:
+                return s.recv(recv)
+            except Exception:
+                return b""
+    except Exception:
+        return b""
+
+
+def _udp_probe(host, port, payload=b"\x00", timeout=2.0, recv=1024):
+    """Send a single benign UDP datagram; return (got_response, data)."""
     try:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
             s.settimeout(timeout)
             s.sendto(payload, (host, port))
             try:
-                data, _ = s.recvfrom(512)
+                data, _ = s.recvfrom(recv)
                 return True, data
             except socket.timeout:
+                return False, b""
+            except OSError:
                 return False, b""
     except Exception:
         return False, b""
 
-def _build(tool, target, findings, tested, summary):
-    sev_order = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
+
+def _http_get(url, timeout=4):
+    try:
+        r = urllib.request.Request(url, headers={"User-Agent": "VulnusLab/2.0"})
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            hdrs = {k.lower(): v for k, v in resp.headers.items()}
+            body = resp.read(4096).decode("utf-8", errors="ignore")
+            return resp.status, hdrs, body
+    except urllib.error.HTTPError as e:
+        try:
+            hdrs = {k.lower(): v for k, v in e.headers.items()} if e.headers else {}
+            body = e.read(4096).decode("utf-8", errors="ignore")
+        except Exception:
+            hdrs, body = {}, ""
+        return e.code, hdrs, body
+    except Exception:
+        return 0, {}, ""
+
+
+def _build(tool, target, findings, tested, summary, raw=None):
+    sev_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0, "POSITIVE": 0}
     top = "INFO"
     for f in findings:
-        if sev_order.get(f.get("severity","INFO"),0) > sev_order.get(top,0):
-            top = f.get("severity","INFO")
-    return {"tool":tool,"target":target,"scan_time":0,
-            "vulnerable": top in ("CRITICAL","HIGH","MEDIUM"),
+        if sev_order.get(f.get("severity", "INFO"), 0) > sev_order.get(top, 0):
+            top = f.get("severity", "INFO")
+    return {"tool": tool, "target": target, "scan_time": 0,
+            "vulnerable": top in ("CRITICAL", "HIGH", "MEDIUM"),
             "severity": top, "findings": findings,
-            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+            "tests_performed": tested, "tests_summary": summary,
+            "raw_data": raw or {}}
 
+
+def _clean_pos(tool, target, title, evidence, tested=1, summary=""):
+    """Honest POSITIVE (not-detected) response — never a false finding."""
+    return _build(tool, target, [wrap_finding(
+        title, "POSITIVE", cvss="0.0", cwe="N/A",
+        remediation="Continue OT-network segregation / least-exposure posture.",
+        evidence_marker=evidence)], tested, summary or title)
+
+
+def _abd(slug, title, reason, cwe="CWE-1395"):
+    """Factory: advisory-by-design probe (cannot be SaaS-probed over the
+    internet). Always emits a single INFO finding, vulnerable:False."""
+    def _p(target, req):
+        return _advisory_by_design_response(slug, target, title, reason=reason, cwe=cwe)
+    return _p
+
+
+# Reusable advisory-by-design reasons
+_RF = ("Requires a physical radio (Zigbee/Z-Wave/Thread/802.15.4 SDR) within RF "
+       "range of the target devices; an external SaaS scanner over the internet "
+       "has no over-the-air access to this attack surface.")
+_LAN = ("Requires Layer-2 adjacency on the target's OT/IoT LAN segment; an "
+        "external SaaS scanner over the internet cannot reach this surface.")
+_ACTIVE = ("This is an active write / replay / manipulation action against a "
+           "live industrial process — strictly out of Vulnerability-Assessment "
+           "scope and never run against a production target (safety risk).")
+_DOS = ("Confirming this needs flooding / disruptive load that is unsafe to run "
+        "against a production OT target (could trip a safety system).")
+_HOST = ("Requires on-host / engineering-workstation access (forensics, config "
+         "review, historian DB credentials) that a remote SaaS scanner does not "
+         "have.")
+_CREDS = ("Active credential testing against a live PLC/HMI/BMS requires explicit "
+          "engagement-scope authorization and a wordlist; it is intentionally not "
+          "auto-run by the VA scanner (lockout / safety risk). Reported as "
+          "advisory — verify default credentials manually under change control.")
+_INTEL = ("Requires a Shodan / Censys API key and is a third-party intelligence "
+          "lookup rather than a direct probe of the customer target; run it "
+          "manually with your own API key.")
+_METHOD = ("Methodology / governance review item — an analyst task performed "
+           "against documentation, network diagrams and change-control records, "
+           "not a network-observable condition.")
+_MANUAL = ("Manual / creative analyst task — requires interactive tooling, "
+           "firmware reverse-engineering or process knowledge, not a remote probe.")
+
+
+# ─────────────── REAL LIVE PROBES (detection-only) ───────────────
 
 def _probe_modbus(target, req):
+    """Modbus TCP/502 — send a benign Read-Coils (FC01) request and confirm a
+    valid Modbus response. Read-only; no writes."""
     host = _host(target)
     findings = []
-    if _tcp_open(host, 502):
-        # Send Modbus function code 0x01 (Read Coils)
-        try:
-            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-                s.settimeout(3.0)
-                if s.connect_ex((host, 502)) == 0:
-                    req_pkt = b"\x00\x01\x00\x00\x00\x06\x01\x01\x00\x00\x00\x01"
-                    s.send(req_pkt)
-                    resp = s.recv(256)
-                    if resp and len(resp) >= 8 and resp[7] == 0x01:
-                        findings.append(wrap_finding(
-                            "Modbus TCP/502 service responding — UNAUTH critical-control protocol exposed",
-                            "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
-                            remediation="NEVER expose Modbus to internet. Segregate OT network from corporate; use Modbus-Sec or VPN.",
-                            evidence_marker=f"TCP/502 open; Function 01 (Read Coils) accepted"))
-                    else:
-                        findings.append(wrap_finding(
-                            "TCP/502 open but no Modbus response",
-                            "HIGH", cvss="7.0", cwe="CWE-306",
-                            remediation="Verify what listens on 502; if Modbus, restrict immediately.",
-                            evidence_marker="TCP/502 open, no protocol confirm"))
-        except Exception as e:
-            findings.append(wrap_finding(
-                f"TCP/502 open but probe error: {str(e)[:50]}",
-                "MEDIUM", cvss="5.0", cwe="CWE-306",
-                remediation="Manual review.", evidence_marker=str(e)[:80]))
+    if not _tcp_open(host, 502):
+        return _clean_pos("modbus_502_probe", target,
+                          "Modbus TCP/502 not externally reachable",
+                          "TCP/502 closed/filtered", 1, "Modbus TCP/502 probe")
+    # FC01 Read Coils, 1 coil at addr 0 — a harmless read.
+    req_pkt = b"\x00\x01\x00\x00\x00\x06\x01\x01\x00\x00\x00\x01"
+    resp = _tcp_send_recv(host, 502, req_pkt, timeout=3.0, recv=256)
+    if resp and len(resp) >= 8 and resp[7] in (0x01, 0x81):
+        # 0x01 = valid Read-Coils reply; 0x81 = Modbus exception to FC01 — both
+        # confirm a real Modbus speaker is listening.
+        findings.append(wrap_finding(
+            "Modbus TCP/502 service responding — unauthenticated critical-control protocol exposed to the internet",
+            "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
+            remediation="NEVER expose Modbus to the internet. Segregate the OT network from corporate; place Modbus behind an industrial firewall + VPN.",
+            evidence_marker="TCP/502 open; valid Modbus reply to Read-Coils (FC01)"))
     else:
         findings.append(wrap_finding(
-            "Modbus TCP/502 not externally reachable",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue OT-network segregation.",
-            evidence_marker="TCP/502 closed"))
+            "TCP/502 reachable — port commonly used by Modbus (protocol NOT confirmed)",
+            "INFO", cvss="0.0", cwe="CWE-306",
+            remediation="Confirm what listens on TCP/502; if Modbus, restrict it to the OT network immediately.",
+            evidence_marker="TCP/502 open only — no valid Modbus reply to Read-Coils (FC01) was observed, so Modbus is NOT protocol-confirmed; any service on this port would match"))
     return _build("modbus_502_probe", target, findings, 1, "Modbus TCP/502 protocol probe")
 
 
 def _probe_siemens_s7(target, req):
+    """Siemens S7 / ISO-TSAP TCP/102 — confirm a COTP connection response.
+    Read-only handshake; no PLC commands."""
     host = _host(target)
-    findings = []
-    if _tcp_open(host, 102):
-        findings.append(wrap_finding(
-            "Siemens S7 TCP/102 (ISO-TSAP) reachable — likely PLC exposed",
-            "CRITICAL", cvss="9.5", cwe="CWE-306",
-            remediation="NEVER expose PLC management to internet. Use industrial firewall + VPN.",
-            evidence_marker="TCP/102 open"))
+    if not _tcp_open(host, 102):
+        return _clean_pos("siemens_s7_102_probe", target,
+                          "Siemens S7 TCP/102 (ISO-TSAP) not reachable",
+                          "TCP/102 closed/filtered", 1, "Siemens S7 PLC probe")
+    # COTP Connection Request (TPKT + COTP CR). Benign session setup.
+    cotp_cr = (b"\x03\x00\x00\x16\x11\xe0\x00\x00\x00\x01\x00\xc0\x01\x0a"
+               b"\xc1\x02\x01\x00\xc2\x02\x01\x02")
+    resp = _tcp_send_recv(host, 102, cotp_cr, timeout=3.0, recv=64)
+    if resp and len(resp) >= 6 and resp[0] == 0x03 and resp[5] == 0xd0:
+        # TPKT version 3 + COTP Connection Confirm (0xd0) = real S7/ISO-TSAP node.
+        findings = [wrap_finding(
+            "Siemens S7 / ISO-TSAP TCP/102 confirmed — PLC management exposed to the internet",
+            "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
+            remediation="NEVER expose PLC management (S7comm/ISO-TSAP) to the internet. Use an industrial firewall + VPN and restrict to the engineering VLAN.",
+            evidence_marker="TCP/102 open; COTP Connection Confirm (0xd0) returned")]
     else:
-        findings.append(wrap_finding(
-            "Siemens S7 TCP/102 not reachable",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue PLC network isolation.",
-            evidence_marker="TCP/102 closed"))
+        findings = [wrap_finding(
+            "TCP/102 reachable — port commonly used by Siemens S7 / ISO-TSAP (protocol NOT confirmed)",
+            "INFO", cvss="0.0", cwe="CWE-306",
+            remediation="Confirm the service on TCP/102; if it is a PLC, isolate it on the OT network.",
+            evidence_marker="TCP/102 open only — no COTP Connection Confirm (0xd0) was observed, so S7/ISO-TSAP is NOT protocol-confirmed; any service on this port would match")]
     return _build("siemens_s7_102_probe", target, findings, 1, "Siemens S7 PLC probe")
 
 
+def _enip_list_identity(host, timeout=3.0):
+    """Send an EtherNet/IP List Identity command (read-only discovery) and
+    return raw response bytes. Empty on failure."""
+    # ENIP encapsulation: command 0x0063 (List Identity), length 0, session 0.
+    pkt = struct.pack("<HHIIQ", 0x0063, 0, 0, 0, 0) + b"\x00\x00\x00\x00"
+    return _tcp_send_recv(host, 44818, pkt, timeout=timeout, recv=512)
+
+
 def _probe_ethernet_ip(target, req):
+    """EtherNet/IP CIP TCP/44818 — List Identity (read-only). Confirms a real
+    CIP device and extracts the product name string if present."""
     host = _host(target)
-    findings = []
-    if _tcp_open(host, 44818):
-        findings.append(wrap_finding(
-            "EtherNet/IP TCP/44818 reachable — Allen-Bradley/Rockwell PLC likely exposed",
-            "CRITICAL", cvss="9.5", cwe="CWE-306",
-            remediation="Block EtherNet/IP at corporate firewall; segregate OT.",
-            evidence_marker="TCP/44818 open"))
+    if not _tcp_open(host, 44818):
+        return _clean_pos("ethernet_ip_probe", target,
+                          "EtherNet/IP TCP/44818 not reachable",
+                          "TCP/44818 closed/filtered", 1, "EtherNet/IP probe")
+    resp = _enip_list_identity(host)
+    if resp and len(resp) >= 2 and resp[0] == 0x63 and resp[1] == 0x00:
+        # Try to recover the printable product-name tail (ASCII).
+        ascii_tail = "".join(chr(b) for b in resp[40:] if 32 <= b < 127).strip()
+        prod = ascii_tail[-48:] if ascii_tail else ""
+        findings = [wrap_finding(
+            "EtherNet/IP CIP TCP/44818 confirmed — Rockwell/Allen-Bradley class PLC exposed"
+            + (f" ({prod})" if prod else ""),
+            "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
+            remediation="Block EtherNet/IP (44818) at the corporate firewall; segregate the OT/ENIP network.",
+            evidence_marker="TCP/44818 open; List-Identity reply (0x0063) returned"
+                            + (f"; product='{prod}'" if prod else ""))]
     else:
-        findings.append(wrap_finding(
-            "EtherNet/IP TCP/44818 not reachable",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue OT segregation.",
-            evidence_marker="TCP/44818 closed"))
-    return _build("ethernet_ip_probe", target, findings, 1, "EtherNet/IP probe")
+        findings = [wrap_finding(
+            "TCP/44818 reachable — port used by EtherNet/IP CIP (protocol NOT confirmed)",
+            "INFO", cvss="0.0", cwe="CWE-306",
+            remediation="Identify the service on 44818; if it is EtherNet/IP, restrict it to the OT network and firewall internet exposure.",
+            evidence_marker="TCP/44818 open only — no CIP List-Identity reply (0x0063) was observed, so EtherNet/IP is NOT protocol-confirmed; any service on this port would match")]
+    return _build("ethernet_ip_probe", target, findings, 1, "EtherNet/IP List-Identity probe")
 
 
-def _probe_bacnet(target, req):
+def _probe_rockwell(target, req):
+    """Rockwell / Allen-Bradley ControlLogix — same EtherNet/IP surface,
+    reported under the vendor slug. List Identity, read-only."""
+    host = _host(target)
+    if not _tcp_open(host, 44818):
+        return _clean_pos("rockwell_allenbradley_probe", target,
+                          "Rockwell/Allen-Bradley EtherNet/IP (44818) not reachable",
+                          "TCP/44818 closed/filtered", 1, "Rockwell EtherNet/IP probe")
+    resp = _enip_list_identity(host)
+    if resp and len(resp) >= 2 and resp[0] == 0x63 and resp[1] == 0x00:
+        ascii_tail = "".join(chr(b) for b in resp[40:] if 32 <= b < 127).strip()
+        prod = ascii_tail[-48:] if ascii_tail else ""
+        findings = [wrap_finding(
+            "Rockwell/Allen-Bradley class CIP device exposed on EtherNet/IP 44818"
+            + (f" ({prod})" if prod else ""),
+            "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
+            remediation="Isolate ControlLogix/CompactLogix on the OT VLAN; never expose 44818 to the internet.",
+            evidence_marker="List-Identity reply (0x0063) returned"
+                            + (f"; product='{prod}'" if prod else ""))]
+    else:
+        findings = [wrap_finding(
+            "TCP/44818 reachable — port used by EtherNet/IP CIP (Rockwell/AB; protocol NOT confirmed)",
+            "INFO", cvss="0.0", cwe="CWE-306",
+            remediation="Identify the service on 44818; if it is EtherNet/IP, restrict it to the OT VLAN.",
+            evidence_marker="TCP/44818 open only — no CIP List-Identity reply (0x0063) was observed, so EtherNet/IP is NOT protocol-confirmed; any service on this port would match")]
+    return _build("rockwell_allenbradley_probe", target, findings, 1, "Rockwell EtherNet/IP probe")
+
+
+def _probe_schneider(target, req):
+    """Schneider Modicon — Modbus TCP/502 (read-only FC01) plus an HTTP banner
+    fingerprint for the Modicon web UI."""
     host = _host(target)
     findings = []
-    # BACnet/IP uses UDP/47808 with a Who-Is broadcast
-    bacnet_who_is = b"\x81\x0b\x00\x0c\x01\x20\xff\xff\x00\xff\x10\x08"
-    reachable, data = _udp_probe(host, 47808, bacnet_who_is, timeout=2.0)
-    if reachable or _tcp_open(host, 47808):
-        findings.append(wrap_finding(
-            "BACnet UDP/47808 reachable — building automation system exposed",
-            "HIGH", cvss="7.5", cwe="CWE-306",
-            remediation="Restrict BACnet to building network; firewall internet exposure.",
-            evidence_marker=f"UDP/47808 probe {'returned data' if reachable else 'no response (possibly filtered)'}"))
-    else:
-        findings.append(wrap_finding(
-            "BACnet UDP/47808 not reachable",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue BMS network segregation.",
-            evidence_marker="UDP/47808 silent"))
-    return _build("bacnet_47808_probe", target, findings, 1, "BACnet UDP/47808 probe")
+    modbus_up = False
+    if _tcp_open(host, 502):
+        req_pkt = b"\x00\x01\x00\x00\x00\x06\x01\x01\x00\x00\x00\x01"
+        resp = _tcp_send_recv(host, 502, req_pkt, timeout=3.0, recv=64)
+        if resp and len(resp) >= 8 and resp[7] in (0x01, 0x81):
+            modbus_up = True
+            findings.append(wrap_finding(
+                "Schneider Modicon Modbus TCP/502 responding — unauthenticated control protocol exposed",
+                "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
+                remediation="Segregate Modicon PLCs on the OT network; never expose Modbus to the internet.",
+                evidence_marker="TCP/502 open; valid Modbus reply (FC01)"))
+    # HTTP fingerprint (read-only GET) for Schneider/Modicon web UI.
+    for scheme, port in (("http", 80), ("https", 443)):
+        status, hdrs, body = _http_get(f"{scheme}://{host}:{port}/", timeout=4)
+        blob = (str(hdrs) + " " + body).lower()
+        if status and any(s in blob for s in ("schneider", "modicon", "unity", "m340", "m580", "quantum")):
+            findings.append(wrap_finding(
+                "Schneider Electric / Modicon web interface fingerprinted on HTTP (NOT protocol-confirmed)",
+                "INFO", cvss="0.0", cwe="CWE-200",
+                remediation="Remove internet exposure of the PLC web UI; place behind VPN + industrial firewall.",
+                evidence_marker=f"{scheme}://{host}:{port}/ HTTP body/header matched a Schneider/Modicon keyword (HTTP {status}) — fingerprint only, the Modbus control protocol was NOT confirmed on this surface"))
+            break
+    if not findings:
+        return _clean_pos("schneider_modicon_probe", target,
+                          "No Schneider/Modicon Modbus or web fingerprint observed",
+                          "TCP/502 + HTTP fingerprint negative", 2, "Schneider Modicon probe")
+    return _build("schneider_modicon_probe", target, findings, 2, "Schneider Modicon probe")
 
 
 def _probe_dnp3(target, req):
+    """DNP3 TCP/20000 — reachability of the SCADA outstation port (read-only
+    TCP connect; no DNP3 application data sent)."""
     host = _host(target)
-    findings = []
     if _tcp_open(host, 20000):
-        findings.append(wrap_finding(
-            "DNP3 TCP/20000 reachable — power/water SCADA likely exposed",
-            "CRITICAL", cvss="9.5", cwe="CWE-306",
-            remediation="DNP3 must be on isolated network; use DNP3-SA + VPN.",
-            evidence_marker="TCP/20000 open"))
-    else:
-        findings.append(wrap_finding(
-            "DNP3 TCP/20000 not reachable",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue SCADA isolation.",
-            evidence_marker="TCP/20000 closed"))
-    return _build("dnp3_unauth_advisory", target, findings, 1, "DNP3 TCP/20000 probe")
+        findings = [wrap_finding(
+            "TCP/20000 reachable — port commonly used by DNP3 SCADA outstations (protocol NOT confirmed)",
+            "INFO", cvss="0.0", cwe="CWE-306", owasp="A05:2021",
+            remediation="Identify what service listens on 20000. If it is a DNP3 outstation it must run on an isolated network with DNP3-SA (Secure Authentication) + VPN; never expose 20000 to the internet.",
+            evidence_marker="TCP/20000 open (read-only connect only; no DNP3 application data was sent, so DNP3 is NOT protocol-confirmed — any service on this port would match)")]
+        return _build("dnp3_unauth_advisory", target, findings, 1, "DNP3 TCP/20000 probe")
+    return _clean_pos("dnp3_unauth_advisory", target,
+                      "DNP3 TCP/20000 not externally reachable",
+                      "TCP/20000 closed/filtered", 1, "DNP3 TCP/20000 probe")
+
+
+def _probe_bacnet(target, req):
+    """BACnet/IP UDP/47808 — send a benign Who-Is and confirm a BVLC response.
+    Read-only discovery."""
+    host = _host(target)
+    # BVLC/NPDU Who-Is (global broadcast, unconfirmed). Read-only.
+    who_is = b"\x81\x0b\x00\x0c\x01\x20\xff\xff\x00\xff\x10\x08"
+    got, data = _udp_probe(host, 47808, who_is, timeout=2.5)
+    if got and data and len(data) >= 1 and data[0] == 0x81:
+        # BVLC type byte 0x81 = a real BACnet/IP speaker answered (I-Am etc.).
+        findings = [wrap_finding(
+            "BACnet/IP UDP/47808 confirmed — building automation system (BMS) exposed to the internet",
+            "HIGH", cvss="7.5", cwe="CWE-306", owasp="A05:2021",
+            remediation="Restrict BACnet to the building network; firewall internet exposure of UDP/47808.",
+            evidence_marker="UDP/47808 Who-Is answered with a BACnet/IP BVLC frame (0x81)")]
+        return _build("bacnet_47808_probe", target, findings, 1, "BACnet UDP/47808 probe")
+    if _tcp_open(host, 47808):
+        findings = [wrap_finding(
+            "TCP/47808 reachable — port commonly used by BACnet/IP (protocol NOT confirmed)",
+            "INFO", cvss="0.0", cwe="CWE-306",
+            remediation="Confirm and restrict BACnet exposure.",
+            evidence_marker="TCP/47808 open only — the UDP/47808 Who-Is was not answered with a BACnet/IP BVLC frame (0x81), so BACnet is NOT protocol-confirmed; any service on this port would match")]
+        return _build("bacnet_47808_probe", target, findings, 1, "BACnet UDP/47808 probe")
+    return _clean_pos("bacnet_47808_probe", target,
+                      "BACnet UDP/47808 not externally reachable",
+                      "UDP/47808 silent, TCP/47808 closed", 1, "BACnet UDP/47808 probe")
+
+
+def _probe_knx(target, req):
+    """KNXnet/IP UDP/3671 — send a benign SEARCH_REQUEST and confirm a
+    KNXnet/IP response (read-only building-bus discovery)."""
+    host = _host(target)
+    # KNXnet/IP SEARCH_REQUEST. HPAI carries 0.0.0.0:0 (discovery). Read-only.
+    search_req = (b"\x06\x10"           # header: 0x0610
+                  b"\x02\x01"           # service type SEARCH_REQUEST
+                  b"\x00\x0e"           # total length 14
+                  b"\x08\x01"           # HPAI: structure length 8, UDP
+                  b"\x00\x00\x00\x00"   # IP 0.0.0.0
+                  b"\x00\x00")          # port 0
+    got, data = _udp_probe(host, 3671, search_req, timeout=2.5)
+    if got and data and len(data) >= 2 and data[0] == 0x06 and data[1] == 0x10:
+        findings = [wrap_finding(
+            "KNXnet/IP UDP/3671 confirmed — KNX building-automation bus exposed to the internet",
+            "HIGH", cvss="7.5", cwe="CWE-306", owasp="A05:2021",
+            remediation="Restrict KNXnet/IP to the building LAN; firewall UDP/3671 from the internet (KNX has no native authentication).",
+            evidence_marker="UDP/3671 SEARCH_REQUEST answered with a KNXnet/IP frame (0x0610)")]
+        return _build("knx_3671_probe", target, findings, 1, "KNXnet/IP UDP/3671 probe")
+    if _tcp_open(host, 3671):
+        findings = [wrap_finding(
+            "TCP/3671 reachable — port commonly used by KNXnet/IP (protocol NOT confirmed)",
+            "INFO", cvss="0.0", cwe="CWE-306",
+            remediation="Confirm and restrict KNX exposure.",
+            evidence_marker="TCP/3671 open only — the UDP/3671 SEARCH_REQUEST was not answered with a KNXnet/IP frame (0x0610), so KNX is NOT protocol-confirmed; any service on this port would match")]
+        return _build("knx_3671_probe", target, findings, 1, "KNXnet/IP UDP/3671 probe")
+    return _clean_pos("knx_3671_probe", target,
+                      "KNXnet/IP UDP/3671 not externally reachable",
+                      "UDP/3671 silent, TCP/3671 closed", 1, "KNXnet/IP UDP/3671 probe")
+
+
+_ICS_PORTS = {
+    502:   "Modbus TCP",
+    102:   "Siemens S7 / ISO-TSAP",
+    44818: "EtherNet/IP (Rockwell/AB)",
+    20000: "DNP3 (power/water SCADA)",
+    47808: "BACnet/IP (BMS)",
+    1911:  "Tridium Niagara Fox",
+    4911:  "Niagara Fox (secure)",
+    2404:  "IEC 60870-5-104",
+    789:   "Red Lion Crimson",
+    9600:  "OMRON FINS",
+    1962:  "PCWorx (Phoenix Contact)",
+    5006:  "MELSEC-Q (Mitsubishi)",
+    5007:  "MELSEC-Q (Mitsubishi)",
+}
+
+
+def _probe_ics_sweep(target, req):
+    """PLCScan-style ICS port sweep — read-only TCP reachability across the
+    common ICS/SCADA service ports. Emits a graded finding ONLY for ports
+    actually observed open."""
+    host = _host(target)
+    open_ports = []
+    for port in _ICS_PORTS:
+        if _tcp_open(host, port, timeout=1.5):
+            open_ports.append(port)
+    if not open_ports:
+        return _clean_pos("ics_plcscan_discovery", target,
+                          "No common ICS/SCADA service ports reachable",
+                          f"Swept {len(_ICS_PORTS)} ICS ports — all closed/filtered",
+                          len(_ICS_PORTS), "PLCScan-style ICS port sweep")
+    labels = [f"{p} ({_ICS_PORTS[p]})" for p in sorted(open_ports)]
+    findings = [wrap_finding(
+        f"{len(open_ports)} ICS/SCADA-associated port(s) reachable (TCP connect only — protocols NOT confirmed on this sweep)",
+        "INFO", cvss="0.0", cwe="CWE-306", owasp="A05:2021",
+        remediation="Identify the service on each open port — the per-protocol probes (Modbus/S7/EtherNet-IP/BACnet/KNX) confirm the actual protocol. If any is a live ICS service, industrial protocols must never be internet-reachable: segregate the OT network (Purdue model) behind an industrial firewall + VPN.",
+        evidence_marker="Open ICS-associated ports (TCP reachability only — no ICS protocol was confirmed on this sweep; any service on these ports would match): " + ", ".join(labels))]
+    return _build("ics_plcscan_discovery", target, findings, len(_ICS_PORTS),
+                  "PLCScan-style ICS port sweep",
+                  raw={"open_ics_ports": sorted(open_ports)})
+
+
+def _probe_ics_nmap(target, req):
+    """nmap-ICS-NSE-equivalent — same read-only ICS port sweep, reported under
+    the nmap-scripts slug. Detection-only."""
+    res = _probe_ics_sweep(target, req)
+    res["tool"] = "ics_nmap_ics_scripts"
+    res["tests_summary"] = "nmap-ICS-NSE-equivalent ICS port sweep"
+    return res
 
 
 def _probe_iot_telnet(target, req):
+    """IoT telnet 23/2323 — Mirai-era exposure. Grabs the banner read-only; no
+    credential attempts."""
     host = _host(target)
     findings = []
-    for port in [23, 2323]:
-        if _tcp_open(host, port, timeout=2):
-            try:
-                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-                    s.settimeout(2)
-                    if s.connect_ex((host, port)) == 0:
-                        banner = s.recv(128).decode("utf-8", errors="ignore").strip()
-                        findings.append(wrap_finding(
-                            f"Telnet {port}/tcp open — IoT/Mirai-era backdoor risk",
-                            "HIGH", cvss="8.0", cwe="CWE-319",
-                            remediation="Disable telnet; use SSH + key auth; check for embedded default creds.",
-                            evidence_marker=f"TCP/{port} banner: {banner[:80] if banner else '(empty)'}"))
-            except Exception:
-                pass
+    for port in (23, 2323):
+        if not _tcp_open(host, port, timeout=2.0):
+            continue
+        banner = _tcp_send_recv(host, port, b"", timeout=2.0, recv=128)
+        btxt = banner.decode("utf-8", errors="ignore").strip()
+        bl = btxt.lower()
+        telnet_confirmed = (b"\xff" in banner) or ("login:" in bl) or ("password:" in bl) or ("telnet" in bl)
+        if telnet_confirmed:
+            findings.append(wrap_finding(
+                f"Telnet {port}/tcp open — IoT/Mirai-era exposure (cleartext, default-cred risk)",
+                "HIGH", cvss="8.1", cwe="CWE-319", owasp="A07:2021",
+                remediation="Disable telnet entirely; use SSH with key auth. Replace any embedded default credentials.",
+                evidence_marker=f"TCP/{port} banner: {btxt[:80] if btxt else '(empty)'}"))
+        else:
+            findings.append(wrap_finding(
+                f"TCP/{port} reachable — port commonly used by Telnet (protocol NOT confirmed)",
+                "INFO", cvss="0.0", cwe="CWE-319", owasp="A07:2021",
+                remediation="Disable telnet entirely; use SSH with key auth. Replace any embedded default credentials.",
+                evidence_marker=f"TCP/{port} open only — no Telnet IAC byte (0xff) or login:/password: prompt observed, so Telnet is NOT protocol-confirmed; any service on this port would match. Banner: {btxt[:80] if btxt else '(empty)'}"))
     if not findings:
-        findings.append(wrap_finding(
-            "Telnet 23/2323 not externally reachable",
-            "POSITIVE", cvss="0.0", cwe="N/A",
-            remediation="Continue.",
-            evidence_marker="Both ports closed"))
+        return _clean_pos("iot_telnet_2323_probe", target,
+                          "Telnet 23/2323 not externally reachable",
+                          "Both ports closed/filtered", 2, "IoT telnet port probe")
     return _build("iot_telnet_2323_probe", target, findings, 2, "IoT telnet port probe")
 
 
+def _probe_upnp(target, req):
+    """UPnP/SSDP UDP/1900 — send a benign M-SEARCH and confirm an SSDP reply.
+    Read-only discovery; extracts SERVER header if present."""
+    host = _host(target)
+    msearch = (b"M-SEARCH * HTTP/1.1\r\n"
+               b"HOST: 239.255.255.250:1900\r\n"
+               b'MAN: "ssdp:discover"\r\n'
+               b"MX: 1\r\n"
+               b"ST: ssdp:all\r\n\r\n")
+    got, data = _udp_probe(host, 1900, msearch, timeout=2.5, recv=1024)
+    if got and data and b"HTTP/1.1" in data[:16] or (got and b"USN" in data):
+        txt = data.decode("utf-8", errors="ignore")
+        server = ""
+        for line in txt.split("\r\n"):
+            if line.lower().startswith("server:"):
+                server = line[7:].strip()
+                break
+        findings = [wrap_finding(
+            "UPnP/SSDP UDP/1900 reachable from the internet — device discovery interface exposed",
+            "HIGH", cvss="7.5", cwe="CWE-200", owasp="A05:2021",
+            remediation="Disable UPnP/SSDP on the WAN interface; UPnP must never face the internet (used for NAT-pinhole and device enumeration abuse).",
+            evidence_marker=f"UDP/1900 M-SEARCH answered" + (f"; SERVER: {server[:80]}" if server else ""))]
+        return _build("iot_upnp_audit", target, findings, 1, "UPnP/SSDP discovery probe")
+    return _clean_pos("iot_upnp_audit", target,
+                      "UPnP/SSDP UDP/1900 not externally reachable",
+                      "UDP/1900 M-SEARCH silent", 1, "UPnP/SSDP discovery probe")
+
+
+def _probe_mdns(target, req):
+    """mDNS / DNS-SD UDP/5353 — send a benign service-enumeration query and
+    confirm a multicast-DNS response. Read-only."""
+    host = _host(target)
+    # mDNS query for _services._dns-sd._udp.local PTR (service enumeration).
+    qname = b"\x09_services\x07_dns-sd\x04_udp\x05local\x00"
+    query = b"\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00" + qname + b"\x00\x0c\x00\x01"
+    got, data = _udp_probe(host, 5353, query, timeout=2.5, recv=1024)
+    if got and data and len(data) >= 4:
+        # Validate the DNS header response (QR) bit before any graded severity:
+        # byte index 2 high bit (0x80) is set on a real multicast-DNS response.
+        mdns_confirmed = (data[2] & 0x80) != 0
+        if mdns_confirmed:
+            findings = [wrap_finding(
+                "mDNS / DNS-SD UDP/5353 reachable from the internet — service/device enumeration exposed",
+                "MEDIUM", cvss="5.3", cwe="CWE-200", owasp="A05:2021",
+                remediation="mDNS is a link-local protocol and must never be internet-reachable; filter UDP/5353 at the edge.",
+                evidence_marker="UDP/5353 query answered with a multicast-DNS response (DNS QR/response bit set)")]
+        else:
+            findings = [wrap_finding(
+                "UDP/5353 responded but mDNS format NOT confirmed",
+                "INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
+                remediation="mDNS is a link-local protocol and must never be internet-reachable; filter UDP/5353 at the edge.",
+                evidence_marker="UDP/5353 returned data but the DNS header QR/response bit was not set — not a confirmed mDNS response")]
+        return _build("iot_mdns_dnssd_audit", target, findings, 1, "mDNS/DNS-SD probe")
+    return _clean_pos("iot_mdns_dnssd_audit", target,
+                      "mDNS/DNS-SD UDP/5353 not externally reachable",
+                      "UDP/5353 silent", 1, "mDNS/DNS-SD probe")
+
+
+def _probe_rtsp(target, req):
+    """RTSP TCP/554 — IP camera / DVR exposure. Sends a benign OPTIONS request
+    (read-only); confirms an RTSP reply."""
+    host = _host(target)
+    findings = []
+    for port in (554, 8554):
+        if not _tcp_open(host, port, timeout=2.0):
+            continue
+        opts = (f"OPTIONS rtsp://{host}:{port}/ RTSP/1.0\r\nCSeq: 1\r\n"
+                f"User-Agent: VulnusLab/2.0\r\n\r\n").encode()
+        resp = _tcp_send_recv(host, port, opts, timeout=3.0, recv=512)
+        rtxt = resp.decode("utf-8", errors="ignore")
+        if rtxt.startswith("RTSP/"):
+            server = ""
+            for line in rtxt.split("\r\n"):
+                if line.lower().startswith("server:"):
+                    server = line[7:].strip()
+                    break
+            findings.append(wrap_finding(
+                f"RTSP camera/DVR stream interface exposed on TCP/{port}",
+                "HIGH", cvss="7.5", cwe="CWE-306", owasp="A05:2021",
+                remediation="Never expose RTSP to the internet; place cameras behind a VPN. Replace default camera credentials.",
+                evidence_marker=f"RTSP/{port} OPTIONS answered" + (f"; SERVER: {server[:60]}" if server else "")))
+            break
+    if not findings:
+        return _clean_pos("iot_rtsp_camera_probe", target,
+                          "RTSP 554/8554 not externally reachable",
+                          "RTSP ports closed/filtered", 2, "RTSP camera probe")
+    return _build("iot_rtsp_camera_probe", target, findings, 2, "RTSP camera probe")
+
+
+def _probe_onvif(target, req):
+    """ONVIF camera fingerprint — read-only HTTP GET of the ONVIF device
+    service path and common camera web markers."""
+    host = _host(target)
+    findings = []
+    candidates = [
+        ("http", 80, "/onvif/device_service"),
+        ("https", 443, "/onvif/device_service"),
+        ("http", 80, "/"),
+        ("http", 8080, "/"),
+    ]
+    for scheme, port, path in candidates:
+        status, hdrs, body = _http_get(f"{scheme}://{host}:{port}{path}", timeout=4)
+        if not status:
+            continue
+        blob = (str(hdrs) + " " + body).lower()
+        if any(s in blob for s in ("onvif", "hikvision", "dahua", "axis", "rtsp", "network camera", "ipcamera", "webcamxp")):
+            findings.append(wrap_finding(
+                "ONVIF / IP-camera web interface fingerprinted on HTTP (NOT protocol-confirmed)",
+                "INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
+                remediation="Remove camera web UI from the internet; place behind VPN and replace default credentials.",
+                evidence_marker=f"{scheme}://{host}:{port}{path} HTTP body/header matched an ONVIF/camera keyword (HTTP {status}) — fingerprint only, the ONVIF/RTSP service was NOT confirmed on this surface"))
+            break
+    if not findings:
+        return _clean_pos("iot_onvif_camera_audit", target,
+                          "No ONVIF/IP-camera HTTP fingerprint observed",
+                          "HTTP camera fingerprint negative", len(candidates),
+                          "ONVIF camera HTTP fingerprint")
+    return _build("iot_onvif_camera_audit", target, findings, len(candidates),
+                  "ONVIF camera HTTP fingerprint")
+
+
+# ─────────────────────────── PROBES map ───────────────────────────
+# Every slug in T below maps here — either a live probe (above) or an
+# advisory-by-design probe (_abd). NO bare scaffolds remain.
+
 PROBES = {
-    "modbus_502_probe":          _probe_modbus,
-    "siemens_s7_102_probe":      _probe_siemens_s7,
-    "ethernet_ip_probe":         _probe_ethernet_ip,
-    "bacnet_47808_probe":        _probe_bacnet,
-    "dnp3_unauth_advisory":      _probe_dnp3,
-    "iot_telnet_2323_probe":     _probe_iot_telnet,
+    # §1 ICS / SCADA Discovery
+    "ics_shodan_scada_query":      _abd("ics_shodan_scada_query", "Shodan SCADA intelligence query", _INTEL),
+    "ics_censys_scada_query":      _abd("ics_censys_scada_query", "Censys SCADA intelligence query", _INTEL),
+    "ics_grassmarlin_discovery":   _abd("ics_grassmarlin_discovery", "GRASSMARLIN passive ICS network mapping", _LAN),
+    "ics_nmap_ics_scripts":        _probe_ics_nmap,        # REAL
+    "ics_plcscan_discovery":       _probe_ics_sweep,       # REAL
+    "ics_pcap_protocol_inspect":   _abd("ics_pcap_protocol_inspect", "PCAP ICS-protocol inspection", _LAN),
+    "ics_asset_inventory":         _abd("ics_asset_inventory", "ICS asset-inventory reconciliation", _METHOD),
+    "ics_purdue_model_audit":      _abd("ics_purdue_model_audit", "Purdue-model zone/conduit segmentation audit", _METHOD),
+    "ics_dmz_audit":               _abd("ics_dmz_audit", "ICS/IT DMZ data-broker audit", _METHOD),
+    "ics_iec62443_compliance":     _abd("ics_iec62443_compliance", "IEC 62443 security-level (SL) compliance review", _METHOD),
+    "manual_ics_discovery":        _abd("manual_ics_discovery", "Manual creative ICS discovery", _MANUAL),
+
+    # §2 Modbus / DNP3 / EtherNet/IP
+    "modbus_502_probe":            _probe_modbus,          # REAL
+    "modbus_read_holding_registers": _abd("modbus_read_holding_registers", "Modbus holding-register read enumeration", _ACTIVE),
+    "modbus_write_coils_advisory": _abd("modbus_write_coils_advisory", "Modbus coil/register WRITE to a live process", _ACTIVE),
+    "dnp3_unauth_advisory":        _probe_dnp3,            # REAL
+    "ethernet_ip_probe":           _probe_ethernet_ip,     # REAL
+    "cip_attribute_audit":         _abd("cip_attribute_audit", "CIP attribute/object enumeration on a live PLC", _ACTIVE),
+    "modbus_flood_dos":            _abd("modbus_flood_dos", "Modbus flood / DoS against a live controller", _DOS),
+    "manual_modbus_review":        _abd("manual_modbus_review", "Manual Modbus register-map review", _MANUAL),
+
+    # §3 Siemens / Schneider / Rockwell
+    "siemens_s7_102_probe":        _probe_siemens_s7,      # REAL
+    "siemens_simatic_audit":       _abd("siemens_simatic_audit", "SIMATIC STEP7 / S7comm project audit", _ACTIVE),
+    "schneider_modicon_probe":     _probe_schneider,       # REAL
+    "rockwell_allenbradley_probe": _probe_rockwell,        # REAL
+    "rockwell_logix5000_advisory": _abd("rockwell_logix5000_advisory", "Logix5000 tag/program enumeration on a live PLC", _ACTIVE),
+    "siemens_default_creds":       _abd("siemens_default_creds", "Siemens PLC/HMI default-credential testing", _CREDS),
+    "manual_vendor_review":        _abd("manual_vendor_review", "Manual vendor-specific firmware reverse-engineering", _MANUAL),
+
+    # §4 BACnet / KNX / LonWorks
+    "bacnet_47808_probe":          _probe_bacnet,          # REAL
+    "bacnet_unauth_object_list":   _abd("bacnet_unauth_object_list", "BACnet unauthenticated object-list read/enumeration", _ACTIVE),
+    "knx_3671_probe":              _probe_knx,             # REAL
+    "lonworks_audit":              _abd("lonworks_audit", "LonWorks / LonTalk bus enumeration", _LAN),
+    "bms_default_creds":           _abd("bms_default_creds", "Building-management-system default-credential testing", _CREDS),
+    "manual_building_review":      _abd("manual_building_review", "Manual building-automation (HVAC/elevator/access) review", _MANUAL),
+
+    # §5 IoT Device Recon
+    "iot_shodan_query":            _abd("iot_shodan_query", "Shodan IoT intelligence query", _INTEL),
+    "iot_censys_query":            _abd("iot_censys_query", "Censys IoT intelligence query", _INTEL),
+    "iot_mac_oui_lookup":          _abd("iot_mac_oui_lookup", "MAC OUI vendor lookup", _LAN),
+    "iot_default_creds_check":     _abd("iot_default_creds_check", "IoT default-credential testing", _CREDS),
+    "iot_telnet_2323_probe":       _probe_iot_telnet,      # REAL
+    "iot_upnp_audit":              _probe_upnp,            # REAL
+    "iot_mdns_dnssd_audit":        _probe_mdns,            # REAL
+    "iot_rtsp_camera_probe":       _probe_rtsp,            # REAL
+    "iot_onvif_camera_audit":      _probe_onvif,           # REAL
+    "iot_router_firmware_audit":   _abd("iot_router_firmware_audit", "Router firmware version / CVE audit", _HOST),
+    "iot_dvr_default_creds":       _abd("iot_dvr_default_creds", "DVR/NVR default-credential testing", _CREDS),
+    "iot_printer_default_creds":   _abd("iot_printer_default_creds", "Network-printer default-credential testing", _CREDS),
+    "manual_iot_review":           _abd("manual_iot_review", "Manual creative IoT recon", _MANUAL),
+
+    # §6 Zigbee / Z-Wave / Thread
+    "zigbee_killerbee_audit":      _abd("zigbee_killerbee_audit", "Zigbee (KillerBee) RF audit", _RF),
+    "zwave_zforce_audit":          _abd("zwave_zforce_audit", "Z-Wave (Z-Force) RF audit", _RF),
+    "thread_audit":                _abd("thread_audit", "Thread (802.15.4) mesh-network audit", _RF),
+    "matter_audit":                _abd("matter_audit", "Matter protocol audit", _RF),
+    "manual_mesh_iot_review":      _abd("manual_mesh_iot_review", "Manual creative mesh-IoT / RF analysis", _MANUAL),
+
+    # §7 Matter / Smart Home (2024+)
+    "matter_commissioning_audit":  _abd("matter_commissioning_audit", "Matter commissioning (onboarding payload) audit", _RF),
+    "matter_pase_pake_audit":      _abd("matter_pase_pake_audit", "Matter PASE/PAKE secure-session audit", _RF),
+    "matter_otacert_audit":        _abd("matter_otacert_audit", "Matter OTA / device-attestation-certificate audit", _RF),
+    "manual_matter_review":        _abd("manual_matter_review", "Manual creative Matter abuse PoC", _MANUAL),
+
+    # §8 OT Pentest Methodology / Safety
+    "ot_safety_first_audit":       _abd("ot_safety_first_audit", "OT safety-first engagement-scope review", _METHOD),
+    "ot_lockout_procedure":        _abd("ot_lockout_procedure", "OT lockout/tagout (LOTO) procedure check", _METHOD),
+    "ot_change_management":        _abd("ot_change_management", "OT change-management / MOC audit", _METHOD),
+    "manual_ot_pentest_planning":  _abd("manual_ot_pentest_planning", "Manual OT pentest planning + IR-plan validation", _METHOD),
 }
 
+
+# ─── TECHNIQUE LIST (T) — DO NOT CHANGE ORDER/SLUGS/COUNT (orchestrator
+#     slices this by index; the planned severities here are display-only,
+#     the actual emitted severity comes from each probe above). ───
 T = [
     # §1 ICS/SCADA Discovery (11)
     ("ics_shodan_scada_query", "Shodan SCADA query.", "INFO", "0.0"),

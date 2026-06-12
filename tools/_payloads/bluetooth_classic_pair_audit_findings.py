@@ -17,8 +17,8 @@ def rule_no_adapter(s):
     if not s.get("no_bt_adapter"):
         return None
     return {"name": "No Bluetooth HCI adapter present on scanner host",
-            "severity": "HIGH",
-            "evidence": "hciconfig returned no hciN device",
+            "severity": "INFO",
+            "evidence": "hciconfig returned no hciN device — the SCANNER host has no Bluetooth NIC. This is a scanner-platform limitation, NOT a finding about the target.",
             "remediation": ("BT-Classic audit needs an HCI adapter that supports "
                             "inquiry mode. Deploy the VulnusLab agent on a "
                             "workstation with a BT 5.0 USB dongle."),

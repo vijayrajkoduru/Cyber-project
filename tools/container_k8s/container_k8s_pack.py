@@ -368,19 +368,48 @@ def _build_resp(tool, target, findings, tested, summary):
 
 
 def _probe_docker_daemon_exposed(target, req):
+    """Docker Engine API public-exposure probe.
+
+    Zero-FP rule: CRITICAL only when the Docker daemon /version endpoint
+    answers UNAUTHENTICATED with a real Docker fingerprint (ApiVersion /
+    GitCommit). An unauthenticated remote daemon == trivial host root
+    (mount / and chroot). A bare open port with no Docker fingerprint is
+    reported INFO, never HIGH.
+    """
     host = _host(target)
     findings = []
-    for port, label in [(2375, "Docker (insecure)"), (2376, "Docker TLS")]:
-        if _tcp_open(host, port):
-            # Try /version endpoint
-            code, body = _http_get(f"http://{host}:{port}/version", timeout=3)
-            sev = "CRITICAL" if code == 200 else "HIGH"
+    for port, label in [(2375, "Docker (plaintext)"), (2376, "Docker (TLS)")]:
+        if not _tcp_open(host, port):
+            continue
+        confirmed = False
+        for scheme in ("http", "https"):
+            code, _, body = _http_get_insecure(
+                f"{scheme}://{host}:{port}/version", timeout=3)
+            bl = (body or "").lower()
+            if code == 200 and ("apiversion" in bl or "gitcommit" in bl
+                                or '"os"' in bl):
+                confirmed = True
+                proto = scheme
+                break
+        if confirmed:
             findings.append(wrap_finding(
-                f"Docker daemon port {port}/tcp reachable — {label}",
-                sev, cvss="9.5" if sev == "CRITICAL" else "7.5",
-                cwe="CWE-732", owasp="A05:2021",
-                remediation="NEVER expose Docker daemon publicly. Bind to localhost + mTLS only.",
-                evidence_marker=f"TCP/{port} open; /version → {code}"))
+                f"Docker Engine API on {port}/tcp answers UNAUTHENTICATED ({label})",
+                "CRITICAL", cvss="9.5", cwe="CWE-732", owasp="A05:2021",
+                remediation="NEVER expose the Docker daemon API. An open remote "
+                            "daemon grants full host root (mount /, run "
+                            "privileged). Bind to the local socket only, or "
+                            "enforce mTLS (tlsverify) + firewall the port.",
+                evidence_marker=f"{proto}://{host}:{port}/version → 200 with "
+                                "Docker fingerprint (ApiVersion/GitCommit)"))
+        else:
+            findings.append(wrap_finding(
+                f"Port {port}/tcp open but no unauthenticated Docker fingerprint",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Confirm the listener. If this is dockerd, ensure "
+                            "tlsverify is enforced (anonymous /version was "
+                            "rejected here).",
+                evidence_marker=f"TCP/{port} open; /version returned no Docker "
+                                "version document"))
     if not findings:
         findings.append(wrap_finding("Docker daemon NOT externally exposed (good)",
             "POSITIVE", cvss="0.0", cwe="N/A",
@@ -390,23 +419,53 @@ def _probe_docker_daemon_exposed(target, req):
 
 
 def _probe_etcd_exposed(target, req):
+    """etcd public-exposure probe (CIS 2.x / NSA-CISA).
+
+    Zero-FP rule: CRITICAL only when an etcd fingerprint is actually
+    observed unauthenticated (/version returns etcd JSON, or /health
+    returns the etcd health document, or the v2 keyspace answers). A bare
+    open TCP port with no etcd fingerprint is reported INFO — never HIGH —
+    because many unrelated services bind 2379/2380.
+    """
     host = _host(target)
     findings = []
     for port in [2379, 2380]:
-        if _tcp_open(host, port):
-            code, body = _http_get(f"http://{host}:{port}/version", timeout=3)
-            if code == 200 and "etcd" in body.lower():
-                findings.append(wrap_finding(
-                    f"etcd {port}/tcp publicly reachable + responds on /version",
-                    "CRITICAL", cvss="9.5", cwe="CWE-306",
-                    remediation="etcd MUST NOT be exposed publicly. Require client-cert auth + bind to private subnet.",
-                    evidence_marker=f"TCP/{port} open; etcd version response"))
-            elif _tcp_open(host, port):
-                findings.append(wrap_finding(
-                    f"Port {port}/tcp open (etcd default), no /version response",
-                    "HIGH", cvss="7.5", cwe="CWE-306",
-                    remediation="Audit listener on this port; etcd port should not be public.",
-                    evidence_marker=f"TCP/{port} open, /version filtered"))
+        if not _tcp_open(host, port):
+            continue
+        confirmed = None
+        # /version (plaintext etcd) -> {"etcdserver":"...","etcdcluster":"..."}
+        for scheme in ("http", "https"):
+            code, _, body = _http_get_insecure(
+                f"{scheme}://{host}:{port}/version", timeout=3)
+            bl = (body or "").lower()
+            if code == 200 and ("etcdserver" in bl or "etcdcluster" in bl):
+                confirmed = (f"{scheme} /version", body[:120])
+                break
+            ch, _, hb = _http_get_insecure(
+                f"{scheme}://{host}:{port}/health", timeout=3)
+            if ch == 200 and '"health"' in (hb or "").lower():
+                confirmed = (f"{scheme} /health", hb[:120])
+                break
+        if confirmed:
+            ep, sample = confirmed
+            findings.append(wrap_finding(
+                f"etcd {port}/tcp publicly reachable + answers unauthenticated",
+                "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
+                remediation="etcd MUST NOT be exposed publicly. Require peer + "
+                            "client mTLS (--client-cert-auth=true) and bind to "
+                            "a private subnet. Unauthenticated etcd = full "
+                            "cluster secret/state disclosure.",
+                evidence_marker=f"TCP/{port} open; {ep} → etcd fingerprint: {sample}"))
+        else:
+            findings.append(wrap_finding(
+                f"Port {port}/tcp open (etcd default) but no unauthenticated "
+                "etcd fingerprint",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Confirm the listener. If this is etcd, ensure "
+                            "client-cert auth blocks anonymous access (this "
+                            "probe could not read it without credentials).",
+                evidence_marker=f"TCP/{port} open; /version + /health did not "
+                                "return an etcd document"))
     if not findings:
         findings.append(wrap_finding("etcd not externally reachable",
             "POSITIVE", cvss="0.0", cwe="N/A",
@@ -416,20 +475,57 @@ def _probe_etcd_exposed(target, req):
 
 
 def _probe_k8s_api(target, req):
+    """kube-apiserver external-exposure probe (CIS 1.2.x edge restriction).
+
+    Zero-FP rule: a graded severity requires a positive K8s fingerprint
+    (gitCommit / 'kubernetes' / a real *Status JSON). A bare open port that
+    does NOT answer as a K8s API is reported INFO, never HIGH — that avoids
+    flagging unrelated HTTPS services that happen to listen on 8443.
+    """
     host = _host(target)
     findings = []
     for port in [6443, 8080, 8443]:
-        if _tcp_open(host, port):
-            code, body = _http_get(f"https://{host}:{port}/version", timeout=3)
-            if code in (200, 401, 403):
-                is_k8s = "gitCommit" in body or "kubernetes" in body.lower()
-                sev = "CRITICAL" if code == 200 and is_k8s else "HIGH"
+        if not _tcp_open(host, port):
+            continue
+        scheme = "http" if port == 8080 else "https"
+        code, _, body = _http_get_insecure(
+            f"{scheme}://{host}:{port}/version", timeout=3)
+        bl = (body or "").lower()
+        is_k8s = ("gitcommit" in bl or "gitversion" in bl
+                  or ("kubernetes" in bl and "builddate" in bl))
+        if not is_k8s and code in (401, 403):
+            # /version blocked — try /healthz which returns plain 'ok' on K8s
+            c2, _, b2 = _http_get_insecure(
+                f"{scheme}://{host}:{port}/healthz", timeout=3)
+            is_k8s = (c2 == 200 and b2.strip().lower() == "ok") or is_k8s
+        if not is_k8s:
+            if code or _tcp_open(host, port):
                 findings.append(wrap_finding(
-                    f"K8s API server on {port}/tcp — {'anonymous /version' if code == 200 else 'auth required'}",
-                    sev, cvss="9.0" if sev == "CRITICAL" else "7.0",
-                    cwe="CWE-306",
-                    remediation="Restrict K8s API to bastion/VPN; require client-cert + RBAC; never anonymous.",
-                    evidence_marker=f"TCP/{port} open; /version → {code}"))
+                    f"Port {port}/tcp open but no kube-apiserver fingerprint",
+                    "INFO", cvss="0.0", cwe="N/A",
+                    remediation="Confirm what service listens here; not "
+                                "confirmed as a Kubernetes API server.",
+                    evidence_marker=f"{scheme}://{host}:{port}/version → {code}, "
+                                    "no K8s fingerprint"))
+            continue
+        if code == 200:
+            findings.append(wrap_finding(
+                f"kube-apiserver on {port}/tcp serves /version to anonymous "
+                "callers (public-info-viewer default) and is internet-reachable",
+                "MEDIUM", cvss="5.5", cwe="CWE-306", owasp="A05:2021",
+                remediation="Restrict the API server to a bastion/VPN/allow-list. "
+                            "The version string aids targeted CVE selection even "
+                            "when full auth is enforced.",
+                evidence_marker=f"TCP/{port} open; /version → 200 (K8s fingerprint)"))
+        else:
+            findings.append(wrap_finding(
+                f"kube-apiserver on {port}/tcp is internet-reachable "
+                "(auth required for /version)",
+                "MEDIUM", cvss="5.5", cwe="CWE-306", owasp="A05:2021",
+                remediation="Place the API server behind a private endpoint / "
+                            "allow-list. Edge reachability widens the attack "
+                            "surface even with RBAC enforced.",
+                evidence_marker=f"TCP/{port} open; /version → {code} (K8s fingerprint)"))
     if not findings:
         findings.append(wrap_finding("K8s API not externally reachable",
             "POSITIVE", cvss="0.0", cwe="N/A",
@@ -439,24 +535,82 @@ def _probe_k8s_api(target, req):
 
 
 def _probe_kubelet(target, req):
+    """kubelet anonymous-auth probe (CIS K8s 4.2.1).
+
+    Zero-FP rule: a graded severity is emitted ONLY when an anonymous
+    request to a kubelet endpoint actually SUCCEEDS with kubelet-shaped
+    content. A port that is merely open but answers 401/403 to anonymous
+    callers is the SECURE configuration and is reported POSITIVE — never
+    flagged HIGH for being reachable.
+
+    Endpoints probed per port:
+      10250 (HTTPS, authn/authz)  -> /pods, /runningpods/, /stats/summary
+      10255 (HTTP read-only port) -> /pods, /metrics/cadvisor, /stats/summary
+    A 200 with kubelet JSON/Prometheus content == anonymous access GRANTED.
+    """
     host = _host(target)
     findings = []
-    for port in [10250, 10255, 10256]:
-        if _tcp_open(host, port):
-            code, body = _http_get(f"https://{host}:{port}/pods", timeout=3)
-            sev = "CRITICAL" if code == 200 else "HIGH"
+    any_open = False
+
+    # (port, scheme, [endpoints], content-fingerprint tokens)
+    kubelet_ports = [
+        (10250, "https", ["/pods", "/runningpods/", "/stats/summary"],
+         ('"kind"', '"podlist"', '"items"', '"node"', '"podref"')),
+        (10255, "http", ["/pods", "/stats/summary", "/metrics/cadvisor"],
+         ('"kind"', '"podlist"', '"items"', "container_", "# help", "# type")),
+    ]
+
+    for port, scheme, endpoints, tokens in kubelet_ports:
+        if not _tcp_open(host, port):
+            continue
+        any_open = True
+        anon_hit = None
+        sample_code = None
+        for ep in endpoints:
+            code, _, body = _http_get_insecure(
+                f"{scheme}://{host}:{port}{ep}", timeout=3)
+            sample_code = code
+            bl = (body or "").lower()
+            if code == 200 and any(tok in bl for tok in tokens):
+                anon_hit = (ep, code)
+                break
+        if anon_hit:
+            ep, code = anon_hit
+            # 10255 read-only port being open at all is a finding; granted
+            # anonymous read on either port is the same critical exposure.
             findings.append(wrap_finding(
-                f"kubelet port {port}/tcp exposed — read-only-port + anonymous risk",
-                sev, cvss="9.0" if code == 200 else "7.0",
-                cwe="CWE-306",
-                remediation="Disable kubelet read-only-port (10255); require auth on 10250.",
-                evidence_marker=f"TCP/{port} open; /pods → {code}"))
-    if not findings:
+                f"kubelet on {port}/tcp grants ANONYMOUS read at {ep}",
+                "CRITICAL", cvss="9.0", cwe="CWE-306", owasp="A05:2021",
+                remediation=("Set kubelet --anonymous-auth=false and "
+                             "--authorization-mode=Webhook. Disable the "
+                             "read-only port entirely (--read-only-port=0). "
+                             "Anonymous kubelet read leaks every pod/secret "
+                             "mount path and node stats."),
+                evidence_marker=(f"GET {scheme}://{host}:{port}{ep} → {code} "
+                                 "with kubelet-shaped body (content fingerprint "
+                                 "matched)")))
+        elif sample_code in (401, 403):
+            findings.append(wrap_finding(
+                f"kubelet on {port}/tcp reachable but requires auth (good)",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation="Continue authn/authz-required kubelet posture.",
+                evidence_marker=f"Anonymous GET → {sample_code} on {port}"))
+        else:
+            findings.append(wrap_finding(
+                f"Port {port}/tcp open but does not answer as an "
+                "anonymous-readable kubelet",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Confirm what service listens here; no anonymous "
+                            "kubelet read was observed.",
+                evidence_marker=f"Probed kubelet endpoints; last code {sample_code}"))
+
+    if not any_open:
         findings.append(wrap_finding("kubelet not externally reachable",
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue kubelet restriction.",
-            evidence_marker="TCP/10250 + 10255 + 10256 closed"))
-    return _build_resp("k8s_kubelet_anonymous_auth", target, findings, 3, "kubelet exposure")
+            evidence_marker="TCP/10250 + 10255 closed/filtered"))
+    return _build_resp("k8s_kubelet_anonymous_auth", target, findings, 6,
+                       "kubelet anonymous-read probe (content-fingerprinted)")
 
 
 def _probe_harbor_registry(target, req):
@@ -545,35 +699,82 @@ def _probe_registry_public(target, req):
 
 
 def _probe_k8s_anonymous_auth(target, req):
-    """Test whether kube-apiserver allows anonymous requests to
-    sensitive endpoints. CIS K8s 1.2.1 control."""
+    """kube-apiserver anonymous-auth probe (CIS K8s 1.2.1).
+
+    Zero-FP rule: `/api`, `/version`, `/healthz` are readable by
+    `system:anonymous` on DEFAULT, correctly-hardened clusters via the
+    built-in `system:public-info-viewer` ClusterRole — so a 200 there is
+    NOT a finding (reported INFO only). The unambiguous misconfiguration
+    is when an anonymous caller can LIST a real resource collection
+    (`/api/v1/namespaces`, `/api/v1/pods`) and the body is a genuine
+    Kubernetes *List object. That means RBAC for system:anonymous is
+    broken — graded CRITICAL only on that signal.
+    """
     host = _host(target)
     findings = []
+    any_reachable = False
+
+    # Resource-list endpoints: a 200 List here == anonymous RBAC broken.
+    resource_eps = ("/api/v1/namespaces", "/api/v1/pods",
+                    "/api/v1/secrets", "/apis/apps/v1/deployments")
+
     for port in (6443, 8443):
         if not _tcp_open(host, port):
             continue
-        # Anonymous GET /api should be rejected (401/403). 200 = anon allowed.
+        any_reachable = True
+        leaked = None
+        for ep in resource_eps:
+            code, _, body = _http_get_insecure(
+                f"https://{host}:{port}{ep}", timeout=4)
+            bl = (body or "").lower()
+            # A real list object carries the *List kind + an items array.
+            if code == 200 and '"items"' in bl and (
+                    '"kind":"namespacelist"' in bl.replace(" ", "")
+                    or '"kind":"podlist"' in bl.replace(" ", "")
+                    or '"kind":"secretlist"' in bl.replace(" ", "")
+                    or '"kind":"deploymentlist"' in bl.replace(" ", "")):
+                leaked = (ep, code)
+                break
+        if leaked:
+            ep, code = leaked
+            findings.append(wrap_finding(
+                f"kube-apiserver on {port}/tcp returns a resource LIST to "
+                f"ANONYMOUS callers at {ep}",
+                "CRITICAL", cvss="9.0", cwe="CWE-306", owasp="A05:2021",
+                remediation=("Set --anonymous-auth=false on kube-apiserver and "
+                             "remove any ClusterRoleBinding granting list/get "
+                             "to system:anonymous or system:unauthenticated. "
+                             "An anonymous resource list means the whole "
+                             "cluster state is readable without credentials."),
+                evidence_marker=(f"GET https://{host}:{port}{ep} → {code} with a "
+                                 "genuine Kubernetes *List object (kind+items "
+                                 "fingerprint matched)")))
+            continue
+        # Fall back to the info-only public endpoints.
         code, _, body = _http_get_insecure(f"https://{host}:{port}/api", timeout=4)
         if code == 200 and "kind" in body.lower():
             findings.append(wrap_finding(
-                f"kube-apiserver on {port}/tcp allows ANONYMOUS access to /api",
-                "CRITICAL", cvss="9.0", cwe="CWE-306",
-                remediation="Set --anonymous-auth=false on kube-apiserver. "
-                            "Require client-cert or token auth for all endpoints.",
-                evidence_marker=f"GET https://{host}:{port}/api → 200; body contains 'kind'"))
+                f"kube-apiserver on {port}/tcp serves public discovery (/api) "
+                "to anonymous callers — expected default, not a finding",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation=("Default behaviour via system:public-info-viewer. "
+                             "Confirm no resource collections are anonymously "
+                             "listable (this probe verified they are not)."),
+                evidence_marker=f"GET /api → 200; resource lists denied/empty"))
         elif code in (401, 403):
             findings.append(wrap_finding(
                 f"kube-apiserver on {port}/tcp requires auth (good)",
                 "POSITIVE", cvss="0.0", cwe="N/A",
                 remediation="Continue auth-required posture.",
                 evidence_marker=f"GET /api → {code}"))
-    if not findings:
+
+    if not any_reachable:
         findings.append(wrap_finding("kube-apiserver not externally reachable on 6443/8443",
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue private API server access.",
             evidence_marker="TCP/6443 + 8443 closed/filtered"))
-    return _build_resp("k8s_anonymous_auth", target, findings, 2,
-                       "kube-apiserver anonymous-auth probe")
+    return _build_resp("k8s_anonymous_auth", target, findings, len(resource_eps) + 1,
+                       "kube-apiserver anonymous resource-list probe")
 
 
 def _probe_k8s_api_insecure_port(target, req):
@@ -1011,16 +1212,22 @@ def _probe_istio_audit(target, req):
                         "Restrict via NetworkPolicy or ServiceMesh interface.",
             evidence_marker=metrics_leak))
 
-    if exposed_ports:
+    if exposed_ports and not metrics_leak:
+        # No HTTP fingerprint confirmed (metrics_leak handles that case above).
+        # These ports are istiod-reserved; internet-reachability of them is the
+        # finding itself. Severity stays MEDIUM here (no positive istiod content
+        # confirmation) to honour zero-FP — we report the reachable reserved
+        # ports without asserting istiod is definitely running.
         labels = ", ".join(f"{p}/{lbl}" for p, lbl in exposed_ports)
         findings.append(wrap_finding(
-            f"Istio control-plane port(s) reachable externally: {labels}",
-            "HIGH" if any(p in (15010, 15017) for p, _ in exposed_ports) else "MEDIUM",
-            cvss="7.5" if any(p in (15010, 15017) for p, _ in exposed_ports) else "5.5",
-            cwe="CWE-306",
-            remediation="Istiod control-plane ports must be in-cluster only. "
-                        "Block 15010 (plaintext XDS) and 15017 (webhook) at the edge.",
-            evidence_marker=f"TCP open: {labels}"))
+            f"istiod-reserved control-plane port(s) reachable externally: {labels}",
+            "MEDIUM", cvss="5.5", cwe="CWE-306", owasp="A05:2021",
+            remediation="Istiod control-plane ports (15010 plaintext XDS, 15012 "
+                        "XDS mTLS, 15017 webhook) must be in-cluster only. Block "
+                        "them at the edge / NetworkPolicy. If these are not istiod, "
+                        "confirm what binds these reserved ports.",
+            evidence_marker=f"TCP open on istiod-reserved ports: {labels} "
+                            "(no positive HTTP istiod content confirmation)"))
 
     if not findings:
         findings.append(wrap_finding(

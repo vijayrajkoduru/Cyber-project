@@ -1,15 +1,23 @@
 """firmware module orchestrator - Embedded / IoT firmware static audit.
 
 Per module_playbooks/31_firmware.md - 8 sections, 76 techniques.
-Starter set (5 scanners) covers:
-  - tier1_extract  : binwalk_signature_scan + jefferson_jffs2_extract  (playbook §2 #11/12, §3 #24)
-  - tier2_analysis : radare2_strings_audit + binary_entropy_audit       (playbook §2 #20, §2 #19)
-  - tier3_secrets  : hardcoded_credentials_search                       (playbook §2 #20 byte-level)
+Tiered scanner set (real static probes + honest advisory-by-design):
+  - tier1_extract    : binwalk_signature_scan, jefferson_jffs2_extract,
+                       firmware_filetype_audit, cpio_archive_extract,
+                       squashfs_filesystem_audit               (playbook §2/§3)
+  - tier2_analysis   : radare2_strings_audit, binary_entropy_audit,
+                       firmware_emulation_audit, elf_section_security_audit,
+                       firmware_url_endpoint_audit             (playbook §2/§4)
+  - tier3_secrets    : hardcoded_credentials_search            (playbook §2 #20)
+  - tier4_bootloader : uboot_version_audit, secure_boot_chain_audit (playbook §5)
+  - tier5_modern     : uefi_firmware_audit, bmc_component_audit (playbook §8)
+  - tier6_hardware   : hardware_interface_advisory, sidechannel_fault_advisory,
+                       physical_acquisition_advisory  (advisory-by-design §1/§6/§7)
 
-Concurrency default = 2 (binwalk extraction is I/O heavy + memory-intensive).
+Concurrency default = 2 (binwalk/unsquashfs extraction is I/O + memory heavy).
 ScanRequest.target = path to firmware blob on disk (customer uploads to /tmp).
-More scanners (unblob, FACT, EMBA, firmwalker, CHIPSEC, UEFITool, BMC) will be
-added per playbook section in subsequent commits.
+The tier6 advisory scanners emit honest [ADVISORY-BY-DESIGN] INFO for the
+physical-access / lab-hardware techniques that an external SaaS cannot perform.
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
@@ -26,14 +34,31 @@ FIRMWARE_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("binwalk_signature_scan",       "/api/firmware/binwalk_signature_scan"),
         ("jefferson_jffs2_extract",      "/api/firmware/jefferson_jffs2_extract"),
         ("firmware_filetype_audit",      "/api/firmware/firmware_filetype_audit"),
+        ("cpio_archive_extract",         "/api/firmware/cpio_archive_extract"),
+        ("squashfs_filesystem_audit",    "/api/firmware/squashfs_filesystem_audit"),
     ],
     "tier2_analysis": [
         ("radare2_strings_audit",        "/api/firmware/radare2_strings_audit"),
         ("binary_entropy_audit",         "/api/firmware/binary_entropy_audit"),
         ("firmware_emulation_audit",     "/api/firmware/firmware_emulation_audit"),
+        ("elf_section_security_audit",   "/api/firmware/elf_section_security_audit"),
+        ("firmware_url_endpoint_audit",  "/api/firmware/firmware_url_endpoint_audit"),
     ],
     "tier3_secrets": [
         ("hardcoded_credentials_search", "/api/firmware/hardcoded_credentials_search"),
+    ],
+    "tier4_bootloader": [
+        ("uboot_version_audit",          "/api/firmware/uboot_version_audit"),
+        ("secure_boot_chain_audit",      "/api/firmware/secure_boot_chain_audit"),
+    ],
+    "tier5_modern": [
+        ("uefi_firmware_audit",          "/api/firmware/uefi_firmware_audit"),
+        ("bmc_component_audit",          "/api/firmware/bmc_component_audit"),
+    ],
+    "tier6_hardware": [
+        ("hardware_interface_advisory",   "/api/firmware/hardware_interface_advisory"),
+        ("sidechannel_fault_advisory",    "/api/firmware/sidechannel_fault_advisory"),
+        ("physical_acquisition_advisory", "/api/firmware/physical_acquisition_advisory"),
     ],
 }
 

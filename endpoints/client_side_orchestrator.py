@@ -1,25 +1,39 @@
 """client_side module orchestrator - modern frontend security probes.
 
 Per module_playbooks/09_client_side.md - 7 sections / 72 techniques.
-This starter set (5 scanners) covers the highest-impact DOM + JS
-attack surface that the basic Webapp module does NOT exercise:
+This set covers the live-probeable DOM + JS + browser-hardening attack
+surface (real graded detection against a remote target) plus an honest
+advisory-by-design tier for the payload-craft / red-team-infrastructure
+techniques that CANNOT be detected from an external SaaS VA scan.
 
-  - tier1_dom (Document Object Model surface):
-        csp_bypass_audit       (CSP weakness classes — playbook §5/§7)
-        xss_dom_sinks_audit    (source→sink dataflow — playbook §1/§5)
-        postmessage_audit      (window.message origin checks — §5/§7)
+  - tier1_dom (Document Object Model + browser-hardening surface):
+        csp_bypass_audit              (CSP weakness classes — §5/§7)
+        xss_dom_sinks_audit           (source->sink dataflow — §1/§5)
+        postmessage_audit             (window.message origin checks — §5/§7)
+        clickjacking_audit            (XFO + frame-ancestors — §5 #40)
+        cross_origin_isolation_audit  (COOP/COEP/CORP — §5 #41/#42, §7 #69)
+        permissions_policy_audit      (camera/usb/serial/hid — §1/§7 #66/#67)
 
-  - tier2_js (JS-runtime + cross-origin surface):
-        prototype_pollution_test  (Object.prototype contamination — §5)
-        cors_preflight_audit      (Access-Control-Allow-* misconfig — §5)
+  - tier2_js (JS-runtime + cross-origin + supply-chain surface):
+        prototype_pollution_test      (Object.prototype contamination — §5)
+        cors_preflight_audit          (Access-Control-Allow-* misconfig — §5)
+        subresource_integrity_audit   (third-party SRI / supply-chain — §5 #43)
+        service_worker_audit          (SW persistence / scope — §7 #65)
+        open_redirect_param_audit     (reflected open redirect — §6 #54)
 
-Concurrency is held at 3 because two of the probes (xss_dom_sinks_audit
-and prototype_pollution_test) crawl + fetch many sub-assets — running
-all five in parallel can hammer the customer's CDN.
+  - tier3_advisory (honest advisory-by-design, INFO-only):
+        clientside_advisory_surface   (BeEF/macro/HTA/LNK/browser-CVE/
+                                       phishing-infra/AiTM — §1-§7 PT-only)
 
-More scanners will be added per playbook section in subsequent commits
-(Phase C-2 = §1 BeEF hook hosting, §3 HTA gen; Phase C-3 = §4 LNK +
-§6 social-eng delivery probes; etc.).
+ZERO false positives: every graded (CRITICAL/HIGH/MEDIUM/LOW) finding is
+emitted ONLY when the live probe actually observed the condition on the
+target. Everything that needs operator-side payload delivery, victim
+execution, or red-team infrastructure is INFO [ADVISORY-BY-DESIGN].
+
+Concurrency is held at 3 because several probes (xss_dom_sinks_audit,
+prototype_pollution_test, subresource_integrity_audit, service_worker_audit)
+crawl + fetch many sub-assets — running them all in parallel can hammer
+the customer's CDN.
 """
 from typing import Optional
 
@@ -35,13 +49,22 @@ router = APIRouter()
 
 CLIENT_SIDE_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_dom": [
-        ("csp_bypass_audit",          "/api/client_side/csp_bypass_audit"),
-        ("xss_dom_sinks_audit",       "/api/client_side/xss_dom_sinks_audit"),
-        ("postmessage_audit",         "/api/client_side/postmessage_audit"),
+        ("csp_bypass_audit",              "/api/client_side/csp_bypass_audit"),
+        ("xss_dom_sinks_audit",           "/api/client_side/xss_dom_sinks_audit"),
+        ("postmessage_audit",             "/api/client_side/postmessage_audit"),
+        ("clickjacking_audit",            "/api/client_side/clickjacking_audit"),
+        ("cross_origin_isolation_audit",  "/api/client_side/cross_origin_isolation_audit"),
+        ("permissions_policy_audit",      "/api/client_side/permissions_policy_audit"),
     ],
     "tier2_js": [
-        ("prototype_pollution_test",  "/api/client_side/prototype_pollution_test"),
-        ("cors_preflight_audit",      "/api/client_side/cors_preflight_audit"),
+        ("prototype_pollution_test",      "/api/client_side/prototype_pollution_test"),
+        ("cors_preflight_audit",          "/api/client_side/cors_preflight_audit"),
+        ("subresource_integrity_audit",   "/api/client_side/subresource_integrity_audit"),
+        ("service_worker_audit",          "/api/client_side/service_worker_audit"),
+        ("open_redirect_param_audit",     "/api/client_side/open_redirect_param_audit"),
+    ],
+    "tier3_advisory": [
+        ("clientside_advisory_surface",   "/api/client_side/clientside_advisory_surface"),
     ],
 }
 

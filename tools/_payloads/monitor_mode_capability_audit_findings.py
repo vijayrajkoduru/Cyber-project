@@ -18,8 +18,8 @@ def rule_no_wireless_interface(s):
     if not s.get("no_wireless_interface"):
         return None
     return {"name": "No wireless interface available on scanner host",
-            "severity": "HIGH",
-            "evidence": "iw dev returned an empty interface list — VPS / container has no Wi-Fi NIC",
+            "severity": "INFO",
+            "evidence": "iw dev returned an empty interface list — the SCANNER host (VPS / container) has no Wi-Fi NIC. This is a scanner-platform limitation, NOT a finding about the target.",
             "remediation": ("Wireless attack surface CANNOT be audited from this host. "
                             "Deploy the VulnusLab agent on a workstation with a "
                             "monitor-mode capable adapter (Alfa AWUS036ACH, AWUS1900, "

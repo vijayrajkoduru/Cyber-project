@@ -209,7 +209,7 @@ async def _run(req: AdfsExtractRequest, ctx: ScanContext):
         wia_status, wia_body = await _http_post(client, wia_url, ua, "")
         ctx.state["adfs_audit_wia_status"] = wia_status
         # 401 = expected (challenge). 200/302 with no auth = bypass surface.
-        wia_bypass_surface = wia_status in (200, 302, 500)
+        wia_bypass_surface = wia_status in (200, 302)
         ctx.state["adfs_audit_wia_bypass_surface"] = wia_bypass_surface
         if wia_bypass_surface:
             cve_signals.append("CVE-2017-11774 WIA endpoint reachable without auth challenge")

@@ -37,6 +37,9 @@ PASSWORD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("mysql_brute",              "/api/password/mysql_brute"),
         ("postgres_brute",           "/api/password/postgres_brute"),
         ("ldap_brute",               "/api/password/ldap_brute"),
+        # Detection-only surface map (no brute): which remote-auth services
+        # are internet-reachable + which transmit credentials in cleartext.
+        ("auth_surface_audit",       "/api/password/auth_surface_audit"),
     ],
     "tier2_crack": [
         ("john_hash_audit",          "/api/password/john_hash_audit"),
@@ -50,12 +53,30 @@ PASSWORD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier4_discovery": [
         ("git_secrets_scan",         "/api/password/git_secrets_scan"),
         ("exposed_env_scan",         "/api/password/exposed_env_scan"),
+        # Live HIBP breach-by-domain lookup (read-only, no creds submitted).
+        ("breach_exposure_audit",    "/api/password/breach_exposure_audit"),
     ],
     "tier5_web": [
         ("jwt_forge_audit",          "/api/password/jwt_forge_audit"),
         ("session_predict_audit",    "/api/password/session_predict_audit"),
         ("oauth_token_audit",        "/api/password/oauth_token_audit"),
         ("saml_signature_audit",     "/api/password/saml_signature_audit"),
+        # Credential-stuffing resistance of the login form (no brute force).
+        ("login_hardening_audit",    "/api/password/login_hardening_audit"),
+        # Modern-auth (MFA/WebAuthn/passkey) surface detection (no bypass).
+        ("mfa_passkey_surface_audit","/api/password/mfa_passkey_surface_audit"),
+    ],
+    # Honest advisory-by-design coverage of the playbook sections that
+    # cannot be probed from an external SaaS scanner (offline cracking,
+    # hash ID, wordlist/rule gen, cloud cracking, on-host OS extraction,
+    # active MFA-bypass execution). All return INFO / vulnerable:false.
+    "tier6_advisory": [
+        ("offline_crack_advisory",            "/api/password/offline_crack_advisory"),
+        ("hash_identification_advisory",      "/api/password/hash_identification_advisory"),
+        ("wordlist_rulegen_advisory",         "/api/password/wordlist_rulegen_advisory"),
+        ("cloud_crack_advisory",              "/api/password/cloud_crack_advisory"),
+        ("os_credential_extraction_advisory", "/api/password/os_credential_extraction_advisory"),
+        ("mfa_bypass_advisory",               "/api/password/mfa_bypass_advisory"),
     ],
 }
 

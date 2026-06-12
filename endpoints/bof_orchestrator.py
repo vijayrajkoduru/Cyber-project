@@ -1,11 +1,27 @@
 """bof module orchestrator - Buffer Overflow / Binary Exploitation static audit.
 
 Per module_playbooks/07_bof.md - 8 sections, 80 techniques.
-Starter set (5 scanners) covers the highest-impact playbook items:
-  - tier1_protections     (§6 Mitigation Audit):
-        binary_protection_audit, dangerous_function_detect
-  - tier2_exploit_surface (§4 ROP / §7 Heap / §6 Format-String):
-        rop_gadget_finder, heap_metadata_audit, format_string_detect
+
+Static binary-analysis probes (REAL detection on an uploaded ELF / PE):
+  - tier1_protections     (§6 / §8 Mitigation Audit):
+        binary_protection_audit       NX/PIE/RELRO/Canary/Fortify
+        dangerous_function_detect     strcpy/gets/sprintf/system call sites
+        cfi_modern_mitigation_audit   Intel CET IBT/SHSTK + ARM PAC/BTI + PE CET
+        aslr_textrel_audit            PIE/ASLR/DT_TEXTREL/DYNAMICBASE/relocs-stripped
+  - tier2_exploit_surface (§2 / §4 / §6 / §7):
+        rop_gadget_finder             ROPgadget pop/ret + stack-pivot count
+        heap_metadata_audit           glibc allocator + safe-linking generation
+        format_string_detect          capstone non-immediate printf-arg flow
+        seh_overflow_audit            32-bit PE SafeSEH absence (SEH-overwrite)
+
+Advisory-by-design (CANNOT be SaaS-probed - dynamic execution, live debugger,
+weaponization, post-compromise foothold, specific silicon - emitted as honest
+INFO, never a graded severity):
+  - tier3_advisory        (§1 / §2-§5 / §7 / §6#60 / §8#75-80):
+        fuzzing_crash_triage_advisory   §1 fuzzing + crash dedup/triage
+        exploit_dev_primitive_advisory  §2-§5 offset/badchar/EIP/ROP-build/shellcode
+        heap_exploit_advisory           §7 heap / UAF / tcache / House-of
+        kernel_hw_mitigation_advisory   §6#60 KASLR + §8#75-80 PAC/MTE/hyperv/TEE
 
 Customer input: ScanRequest.target = absolute path to an ELF or PE binary
 that the customer has uploaded (dashboard upload widget stages files
@@ -13,9 +29,7 @@ under /tmp/vl_uploads/).
 
 Concurrency 3 (binary disassembly + ROPgadget are CPU/IO heavy; running
 more than three at once on a single uploaded binary saturates IO and the
-GIL on capstone passes).  More scanners (boofuzz, ret2libc auto-rop,
-CET/PAC audit, heap house-of-* primitives, exploitable / casr crash
-triage) will be added per playbook section in subsequent commits.
+GIL on capstone passes).
 """
 from typing import Optional
 
@@ -31,13 +45,22 @@ router = APIRouter()
 
 BOF_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_protections": [
-        ("binary_protection_audit",   "/api/bof/binary_protection_audit"),
-        ("dangerous_function_detect", "/api/bof/dangerous_function_detect"),
+        ("binary_protection_audit",    "/api/bof/binary_protection_audit"),
+        ("dangerous_function_detect",  "/api/bof/dangerous_function_detect"),
+        ("cfi_modern_mitigation_audit", "/api/bof/cfi_modern_mitigation_audit"),
+        ("aslr_textrel_audit",         "/api/bof/aslr_textrel_audit"),
     ],
     "tier2_exploit_surface": [
-        ("rop_gadget_finder",         "/api/bof/rop_gadget_finder"),
-        ("heap_metadata_audit",       "/api/bof/heap_metadata_audit"),
-        ("format_string_detect",      "/api/bof/format_string_detect"),
+        ("rop_gadget_finder",          "/api/bof/rop_gadget_finder"),
+        ("heap_metadata_audit",        "/api/bof/heap_metadata_audit"),
+        ("format_string_detect",       "/api/bof/format_string_detect"),
+        ("seh_overflow_audit",         "/api/bof/seh_overflow_audit"),
+    ],
+    "tier3_advisory": [
+        ("fuzzing_crash_triage_advisory",  "/api/bof/fuzzing_crash_triage_advisory"),
+        ("exploit_dev_primitive_advisory", "/api/bof/exploit_dev_primitive_advisory"),
+        ("heap_exploit_advisory",          "/api/bof/heap_exploit_advisory"),
+        ("kernel_hw_mitigation_advisory",  "/api/bof/kernel_hw_mitigation_advisory"),
     ],
 }
 
