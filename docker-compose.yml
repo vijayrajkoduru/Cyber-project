@@ -215,30 +215,30 @@ services:
   #          bloodhound_audit, ldap_brute (against AD)
   # Image ~1.5GB, boot ~90s. Hostname dc01.vlrange.local is resolvable
   # inside the vulnuslab bridge.
-  # lab_pwd_ad:
-  #   image: nowsci/samba-domain:latest
-  #   container_name: lab_pwd_ad
-  #   hostname: dc01.vlrange.local
-  #   environment:
-  #   - DOMAIN=VLRANGE
-  #   - DOMAIN_DC=dc=vlrange,dc=local
-  #   - DOMAIN_EMAIL=vlrange.local
-  #   - DOMAINPASS=VLrange_Admin_2026!
-  #   - DNSFORWARDER=1.1.1.1
-  #   - HOSTIP=
-  #   - INSECURELDAP=true
-  #   - NOCOMPLEXITY=true
-  #   networks:
-  #   - vulnuslab
-  #   extra_hosts:
-  #   - "dc01.vlrange.local:127.0.0.1"
-  #   volumes:
-  #   - lab_pwd_ad_data:/var/lib/samba
-  #   - lab_pwd_ad_conf:/etc/samba/external
-  #   - ./labs/vl_password_range/ad_bootstrap.sh:/bootstrap.sh:ro
-  #   cap_add:
-  #   - SYS_ADMIN
-  #   restart: unless-stopped
+  lab_pwd_ad:
+    image: nowsci/samba-domain:latest
+    container_name: lab_pwd_ad
+    hostname: dc01.vlrange.local
+    environment:
+    - DOMAIN=VLRANGE
+    - DOMAIN_DC=dc=vlrange,dc=local
+    - DOMAIN_EMAIL=vlrange.local
+    - DOMAINPASS=VLrange_Admin_2026!
+    - DNSFORWARDER=1.1.1.1
+    - HOSTIP=
+    - INSECURELDAP=true
+    - NOCOMPLEXITY=true
+    networks:
+    - vulnuslab
+    extra_hosts:
+    - "dc01.vlrange.local:127.0.0.1"
+    volumes:
+    - lab_pwd_ad_data:/var/lib/samba
+    - lab_pwd_ad_conf:/etc/samba/external
+    - ./labs/vl_password_range/ad_bootstrap.sh:/bootstrap.sh:ro
+    cap_add:
+    - SYS_ADMIN
+    restart: unless-stopped
   #   # Seeded users (run /bootstrap.sh once after first boot):
   #   #   Administrator / VLrange_Admin_2026!   (Domain Admin)
   #   #   svc_mssql     / Password123           (kerberoastable - MSSQLSvc SPN)
@@ -249,21 +249,21 @@ services:
   # lab_pwd_oauth — Keycloak OAuth/OIDC IdP
   # Targets: oauth_token_audit
   # Image ~600MB. Realm vl-test-realm is auto-imported on first boot.
-  # lab_pwd_oauth:
-  #   image: quay.io/keycloak/keycloak:24.0.5
-  #   container_name: lab_pwd_oauth
-  #   command: ["start-dev", "--import-realm"]
-  #   environment:
-  #   - KEYCLOAK_ADMIN=admin
-  #   - KEYCLOAK_ADMIN_PASSWORD=admin_VLrange_2026
-  #   - KC_HTTP_ENABLED=true
-  #   - KC_HOSTNAME_STRICT=false
-  #   - KC_HOSTNAME_STRICT_HTTPS=false
-  #   networks:
-  #   - vulnuslab
-  #   volumes:
-  #   - ./labs/vl_password_range/keycloak:/opt/keycloak/data/import:ro
-  #   restart: unless-stopped
+  lab_pwd_oauth:
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: lab_pwd_oauth
+    command: ["start-dev", "--import-realm"]
+    environment:
+    - KEYCLOAK_ADMIN=admin
+    - KEYCLOAK_ADMIN_PASSWORD=admin_VLrange_2026
+    - KC_HTTP_ENABLED=true
+    - KC_HOSTNAME_STRICT=false
+    - KC_HOSTNAME_STRICT_HTTPS=false
+    networks:
+    - vulnuslab
+    volumes:
+    - ./labs/vl_password_range/keycloak:/opt/keycloak/data/import:ro
+    restart: unless-stopped
   #   # Test users (in vl-test-realm):
   #   #   alice / Password1!
   #   #   bob   / Password2!
@@ -272,25 +272,57 @@ services:
   # lab_pwd_saml — SimpleSAMLphp IdP + SP for SAML attack testing
   # Targets: saml_signature_audit
   # Image ~400MB. Provides both IdP and SP endpoints on port 8080.
-  # lab_pwd_saml:
-  #   image: kristophjunge/test-saml-idp:latest
-  #   container_name: lab_pwd_saml
-  #   environment:
-  #   - SIMPLESAMLPHP_SP_ENTITY_ID=lab-saml-sp
-  #   - SIMPLESAMLPHP_SP_ASSERTION_CONSUMER_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-acs.php/default-sp
-  #   - SIMPLESAMLPHP_SP_SINGLE_LOGOUT_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-logout.php/default-sp
-  #   - SIMPLESAMLPHP_IDP_ENTITY_ID=http://lab_pwd_saml:8080/simplesaml/saml2/idp/metadata.php
-  #   networks:
-  #   - vulnuslab
-  #   restart: unless-stopped
+  lab_pwd_saml:
+    image: kristophjunge/test-saml-idp:latest
+    container_name: lab_pwd_saml
+    environment:
+    - SIMPLESAMLPHP_SP_ENTITY_ID=lab-saml-sp
+    - SIMPLESAMLPHP_SP_ASSERTION_CONSUMER_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-acs.php/default-sp
+    - SIMPLESAMLPHP_SP_SINGLE_LOGOUT_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-logout.php/default-sp
+    - SIMPLESAMLPHP_IDP_ENTITY_ID=http://lab_pwd_saml:8080/simplesaml/saml2/idp/metadata.php
+    networks:
+    - vulnuslab
+    restart: unless-stopped
   #   # Test users (image defaults):
   #   #   user1 / user1pass
   #   #   user2 / user2pass
+
+  # ── ICS / IoT Range ──────────────────────────────────────────────────
+  # Unauthenticated Modbus/TCP simulator (port 502) for the IoT/OT module
+  # + vuln tier15_wireless_iot. Internal only — backend reaches lab_modbus:502.
+  lab_modbus:
+    build:
+      context: ./labs/vl_ics_range/modbus
+      dockerfile: Dockerfile
+    container_name: lab_modbus
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  # ── Kubernetes Range ─────────────────────────────────────────────────
+  # Single-node k3s for the Container/Kubernetes module + vuln tier9/tier10
+  # live-cluster tiers. Writes a kubeconfig to ./labs/vl_k8s_range/; rewrite
+  # its server URL to https://lab_k3s:6443 (see labs/vl_k8s_range/README.md).
+  lab_k3s:
+    image: rancher/k3s:v1.29.6-k3s2
+    container_name: lab_k3s
+    command: server --tls-san lab_k3s --write-kubeconfig-mode 644 --write-kubeconfig /output/kubeconfig.yaml
+    privileged: true
+    networks:
+    - vulnuslab
+    volumes:
+    - ./labs/vl_k8s_range:/output
+    - lab_k3s_data:/var/lib/rancher/k3s
+    tmpfs:
+    - /run
+    - /var/run
+    restart: unless-stopped
 
 volumes:
   scan_data: null
   lab_pwd_ad_data: null
   lab_pwd_ad_conf: null
+  lab_k3s_data: null
 networks:
   vulnuslab:
     driver: bridge
