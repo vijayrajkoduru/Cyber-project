@@ -14643,50 +14643,94 @@ function generateUniversalVLReport(opts) {
     });
     y += 6;
 
-    // ── METHODOLOGY (two-column attack-class detail) ──
-    // Industry-style methodology page describing the attack vectors this
-    // module tests for. Two-column layout for readability.
-    // (pdf_industry_standard.md gap 17 - mirrors XBOW reference layout)
+    // ── WHAT THIS ASSESSMENT COVERS (per-module scope index) ──
+    // Customer-facing coverage index. Built from the ACTUAL scanners that ran
+    // (Object.keys(r)) plus a per-module purpose line, so it can NEVER claim
+    // coverage the module does not have. Replaces the old generic attack-class
+    // cards that wrongly described SQLi/XSS for every module (incl. ones that do
+    // not test them). (pdf_industry_standard.md - scope/coverage transparency)
     {
-      chk(50); y = sHead("Methodology", y);
-      const _intro = `${moduleLabel.replace(/\s+/g,' ')} aligns with the OWASP Top 10, NIST SP 800-115 testing principles, and PTES execution structure. Each scanner systematically probes one or more of the attack classes below. Probes use real network traffic against the live target - no template-only matches.`;
-      const _introLines = doc.splitTextToSize(_ascii(_intro), contentW - 4);
-      _introLines.forEach((ln, i) => txt(ln, margin + 2, y + (i * 4), 8, DARK));
-      y += _introLines.length * 4 + 3;
-      // 8 attack-class cards rendered in 2 columns x 4 rows
-      const _methodology = [
-        ["Injection", "Probes for SQL, NoSQL, OS command, and LDAP injection by submitting crafted payloads against input fields and API parameters. Detects backend errors, response-time anomalies, and data exfiltration patterns indicative of unsafe input handling."],
-        ["Broken Access Control", "Tests authorization enforcement by probing privileged endpoints without credentials, with low-privilege credentials, and via vertical/horizontal path traversal. Flags endpoints that return 200 OK without proper auth-role checks."],
-        ["Cryptographic Failures", "Audits TLS configuration (ciphers, DH params, certificate validity), session cookie attributes (Secure, HttpOnly, SameSite), and inspects for cleartext credential transmission or weak algorithm usage."],
-        ["Cross-Site Scripting (XSS)", "Injects reflected and stored XSS payloads into user-input contexts (forms, query strings, headers, JSON bodies). Detects response reflection, DOM-sink usage, and CSP bypass conditions."],
-        ["Security Misconfiguration", "Probes for default credentials, exposed admin panels, verbose error pages, missing security headers (CSP, HSTS, X-Frame-Options), and unrestricted directory listings. Identifies hardening gaps."],
-        ["Vulnerable Components (CVE)", "Fingerprints HTTP/SSH/SMTP/etc. banners to extract product + version, cross-references against NVD, EPSS, and CISA KEV catalogs. Reports known-exploited vulnerabilities with patch urgency."],
-        ["Server-Side Request Forgery (SSRF)", "Tests URL-input endpoints by attempting to redirect server-side requests to internal targets (169.254.169.254, localhost, internal subnets). Detects cloud-metadata exposure and internal-service reachability."],
-        ["Authentication & Session", "Audits authentication flows (OAuth/OIDC, JWT, session cookies, MFA enforcement), tests for credential-stuffing throttling, account enumeration via response-timing, and weak password policy."],
+      chk(45); y = sHead("What This Assessment Covers", y);
+      // Purpose — per-module one-liner, keyword-matched, with an honest fallback.
+      const _ml = (moduleLabel || "").toLowerCase();
+      const _purposeMap = [
+        ["phishing|email posture", "how easily an attacker could spoof email from this domain or impersonate the brand to phish staff and customers - email authentication (SPF/DKIM/DMARC), mail transport security, and lookalike-domain exposure."],
+        ["recon|information gathering", "the externally-visible footprint an attacker enumerates first - DNS, subdomains, open ports and services, technologies, TLS certificates, and leaked or exposed assets."],
+        ["web app|webapp|web application", "the web application's exposure to the OWASP Top 10 - injection, cross-site scripting, broken access control, security misconfiguration, and authentication/session weaknesses."],
+        ["vulnerability scan|vuln", "known and exploitable vulnerabilities on the target's exposed services - version/CVE matching (NVD/KEV/EPSS), web-active probes, and protocol weaknesses."],
+        ["osint", "publicly-available intelligence about the organization - exposed accounts, leaked credentials, metadata, and third-party footprint gathered without touching the target."],
+        ["api security|apisec", "the target's API exposure against the OWASP API Top 10 - broken authentication, security misconfiguration, excessive exposure, and discovery of undocumented endpoints."],
+        ["cloud", "the target's anonymously-reachable cloud exposure - public object storage, container registries, exposed Kubernetes endpoints, OIDC posture, and leaked IaC."],
+        ["network", "the externally-reachable network surface - open ports, service/version banners, and DNS exposures (zone transfer, open resolver, subdomain takeover)."],
+        ["exploitation|exploit", "whether the target exposes products/versions affected by known exploits - safe signature/version fingerprinting only; no exploit payload is sent."],
+        ["pivot|lateral", "lateral-movement / pivoting exposure. These are post-compromise techniques and are reported as advisory unless a primitive is externally observable."],
+        ["tunnel", "outbound tunneling / port-redirection exposure. Mostly post-compromise primitives, reported as advisory unless a live endpoint is observable."],
+        ["active directory|ad attack", "Active Directory exposure visible from outside - exposed domain controllers, LDAP/SMB/Kerberos services, and AD Certificate Services surfaces."],
+        ["password", "the target's resistance to credential attacks - exposed login surfaces, weak/leaked credential exposure, and authentication-throttling posture."],
+        ["authentication attack|auth attack", "weaknesses in the authentication and session layer - token handling, MFA enforcement signals, and OAuth/OIDC posture."],
+        ["wireless", "wireless attack surface. This requires a radio on-site, so most checks are advisory; reachable management interfaces are probed."],
+        ["mobile", "the mobile application's security posture against the OWASP MASVS - storage, cryptography, network, platform/IPC, and runtime protections."],
+        ["container|kubernetes|k8s", "container and Kubernetes exposure - public registries, exposed API/kubelet endpoints, and image / supply-chain hygiene."],
+        ["iot|ot|ics", "exposed industrial / IoT services - ICS/SCADA protocols (Modbus, S7, DNP3, BACnet) and IoT interfaces reachable from the internet."],
+        ["supply chain", "software-supply-chain exposure - dependency and registry hygiene, CI/CD exposure, and build-provenance posture."],
+        ["firmware", "firmware-image security - secure-boot markers, embedded secrets, and outdated or known-vulnerable components in a supplied image."],
+        ["ai|llm", "the AI/LLM application's exposure against the OWASP LLM Top 10 - prompt-injection surface, output handling, and exposed model / serving infrastructure."],
+        ["sspm|saas", "SaaS security posture. Most checks require a read-only connector and are reported as advisory until credentials are supplied."],
+        ["hybrid identity|entra", "hybrid-identity exposure across on-prem Active Directory and cloud identity (Entra / Azure AD) - federation and trust surfaces."],
+        ["red team", "adversary-emulation readiness. Command-and-control / tooling exposure is fingerprinted; offensive operations are advisory by design."],
+        ["evasion|av/edr", "defensive-control posture. Evasion techniques are advisory by design and are NOT executed against the target."],
       ];
-      const _colW = (contentW - 4) / 2;
-      for (let _mi = 0; _mi < _methodology.length; _mi += 2) {
-        const _left = _methodology[_mi];
-        const _right = _methodology[_mi + 1];
-        const _lt = doc.splitTextToSize(_ascii(_left[1]), _colW - 6);
-        const _rt = _right ? doc.splitTextToSize(_ascii(_right[1]), _colW - 6) : [];
-        const _rh = 6 + Math.max(_lt.length, _rt.length) * 3.4 + 2;
-        chk(_rh + 0.5);
-        // Left card
-        fillR(margin, y, _colW - 1, _rh, [248,250,252]);
-        fillR(margin, y, 2, _rh, BLUE);
-        txt(_left[0], margin + 4, y + 4.5, 8.5, BLUE, true);
-        _lt.forEach((ln, li) => txt(ln, margin + 4, y + 8.5 + (li * 3.4), 7.5, DARK));
-        // Right card
-        if (_right) {
-          fillR(margin + _colW + 1, y, _colW - 1, _rh, [248,250,252]);
-          fillR(margin + _colW + 1, y, 2, _rh, BLUE);
-          txt(_right[0], margin + _colW + 5, y + 4.5, 8.5, BLUE, true);
-          _rt.forEach((ln, li) => txt(ln, margin + _colW + 5, y + 8.5 + (li * 3.4), 7.5, DARK));
+      let _purpose = null;
+      for (const _pe of _purposeMap) { if (_pe[0].split("|").some(kw => _ml.includes(kw))) { _purpose = _pe[1]; break; } }
+      if (!_purpose) _purpose = `the ${(moduleLabel || "target").replace(/\s+/g, " ")} attack surface of the target, using detection-only probes (no exploitation).`;
+      const _pl = doc.splitTextToSize(_ascii("Purpose:  This assessment measures " + _purpose), contentW - 4);
+      _pl.forEach((ln, i) => txt(ln, margin + 2, y + (i * 4), 8, DARK));
+      y += _pl.length * 4 + 4;
+
+      // What it checks - humanized list of the scanners that ACTUALLY ran.
+      txt("This assessment checks:", margin + 2, y, 9, BLUE, true); y += 5.5;
+      const _hum = s => String(s).replace(/_/g, " ")
+        .replace(/\b([a-z])/g, (m, c) => c.toUpperCase())
+        .replace(/\bCve\b/g, "CVE").replace(/\bDns\b/g, "DNS").replace(/\bTls\b/g, "TLS")
+        .replace(/\bSpf\b/g, "SPF").replace(/\bDkim\b/g, "DKIM").replace(/\bDmarc\b/g, "DMARC")
+        .replace(/\bMta\b/g, "MTA").replace(/\bSts\b/g, "STS").replace(/\bOauth\b/g, "OAuth")
+        .replace(/\bApi\b/g, "API").replace(/\bSsrf\b/g, "SSRF").replace(/\bXss\b/g, "XSS")
+        .replace(/\bSql\b/g, "SQL").replace(/\bIot\b/g, "IoT").replace(/\bIam\b/g, "IAM")
+        .replace(/\bK8s\b/g, "K8s").replace(/\bUrl\b/g, "URL").replace(/\bCt\b/g, "CT")
+        .replace(/\bBitb\b/g, "BitB").replace(/\bSmb\b/g, "SMB").replace(/\bSsh\b/g, "SSH")
+        .replace(/\bRdp\b/g, "RDP").replace(/\bWaf\b/g, "WAF");
+      const _checks = Object.keys(r || {}).map(_hum).filter(Boolean).sort();
+      const _ccolW = (contentW - 4) / 2;
+      if (_checks.length === 0) {
+        chk(5); txt("- No scanner returned data for this run.", margin + 4, y, 7.8, GRAY); y += 5;
+      } else {
+        for (let _ci = 0; _ci < _checks.length; _ci += 2) {
+          chk(4.6);
+          const _ltL = doc.splitTextToSize(_ascii("- " + _checks[_ci]), _ccolW - 4);
+          txt(_ltL[0], margin + 4, y, 7.8, DARK);
+          if (_checks[_ci + 1]) {
+            const _rtL = doc.splitTextToSize(_ascii("- " + _checks[_ci + 1]), _ccolW - 4);
+            txt(_rtL[0], margin + _ccolW + 4, y, 7.8, DARK);
+          }
+          y += 4.4;
         }
-        y += _rh + 1.5;
       }
-      y += 2;
+      y += 3;
+
+      // The honest boundary - what it does NOT do.
+      txt("This assessment does NOT:", margin + 2, y, 9, BLUE, true); y += 5.5;
+      const _notList = [
+        "Send phishing, exploit, or attack traffic - it is detection-only (a Vulnerability Assessment, not a live attack).",
+        "Run credential-required, on-host, or input-required checks unless you supply those inputs - those are reported as [ADVISORY-BY-DESIGN] INFO, not gaps.",
+        "Claim exploitability - every graded finding is an independently re-confirmed detection on the live target, never a fabricated or weaponized result.",
+      ];
+      _notList.forEach(n => {
+        const _nl = doc.splitTextToSize(_ascii("- " + n), contentW - 6);
+        chk(_nl.length * 3.6 + 1);
+        _nl.forEach((ln, li) => txt(ln, margin + 4, y + (li * 3.6), 7.5, DARK));
+        y += _nl.length * 3.6 + 1.5;
+      });
+      y += 3;
     }
 
     // Findings distribution bars - 6 columns now:
