@@ -34,15 +34,18 @@ def _r_kev(s):
     if not m: return None
     lst = ", ".join(f"{x['cve']} ({x['product']})" for x in m[:4])
     ranso = any(x["ransomware"].lower() == "known" for x in m)
-    # Product-level fingerprint match is SUSPECTED, not confirmed. Cap at
-    # MEDIUM (not HIGH) until version is verified - aligns with industry VA
-    # severity conventions where unverified findings stay below HIGH.
-    # Ransomware-linked KEVs still escalate to HIGH because the impact
-    # justifies the operational urgency even on suspected matches.
-    sev, cvss = ("HIGH", 8.1) if ranso else ("MEDIUM", 5.8)
+    # Product-level fingerprint match is SUSPECTED, not confirmed (no version
+    # check, no exploit). Industry VA convention keeps unverified findings
+    # below HIGH. We do NOT escalate to HIGH on ransomware linkage alone: a
+    # single loose product token (e.g. the word 'ivanti' echoed in body text)
+    # would otherwise reach HIGH purely because Ivanti/Pulse KEVs are
+    # ransomware-linked -> exactly the false positive this scanner produced on
+    # a plain React+FastAPI site. Ransomware stays in the evidence as urgency
+    # context, and bumps cvss within the MEDIUM band only.
+    sev, cvss = ("MEDIUM", 6.5 if ranso else 5.8)
     return {"name": f"Detected tech matches {len(m)} CISA KEV entry(ies) - known-exploited class present",
             "severity": sev, "cvss": cvss, "cwe": "CWE-1395",
-            "evidence": f"KEV match (product-level, SUSPECTED - verify version): {lst}." + (" Ransomware-linked." if ranso else ""),
+            "evidence": f"KEV match (product-level, SUSPECTED - verify version): {lst}." + (" Ransomware-linked KEV class - confirm the version urgently." if ranso else ""),
             "remediation": "Confirm running version; if affected, patch immediately (CISA KEV / BOD 22-01)."}
 def _r_clean(s):
     if (s.get("tested") or 0) < 1 or (s.get("matches") or []): return None
