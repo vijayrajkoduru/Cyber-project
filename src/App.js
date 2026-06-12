@@ -21266,29 +21266,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           confused (mixing DVWA image_ref with prod hostname Target).
           For Container, the Run button alone sits next to a banner
           pointing at the Advanced Inputs panel below. */}
-      {!_containerMode && (
-        <TestTargets targets={MODULE_TEST_TARGETS[moduleKey] || []}
-          onSelect={(v) => setTarget(v)}/>
-      )}
+      {/* Inline target / test-targets / container hint removed — every input
+          now lives in the Scan Setup modal (opens on select / "Configure & Scan"). */}
       <div style={{display:"flex", gap:8, marginBottom:6}}>
-        {!_containerMode && (
-          <input
-            type="text" placeholder={schema.ph} value={target}
-            onChange={e => setTarget(e.target.value)}
-            disabled={running}
-            style={{flex:1, background:"#0d1320", border:"1px solid #1c2435",
-                    borderRadius:6, padding:"10px 12px", color:"#ffffff",
-                    fontSize:13, outline:"none"}}/>
-        )}
-        {_containerMode && (
-          <div style={{flex:1, background:"#0c1424", border:"1px dashed #0e3a55",
-                       borderRadius:6, padding:"10px 14px", color:"#8a94a8",
-                       fontSize:12, display:"flex", alignItems:"center", gap:8}}>
-            <span style={{color:"#00d4ff", fontWeight:700, fontSize:10,
-                          textTransform:"uppercase", letterSpacing:1.2}}>Container scan</span>
-            <span>Provide an <b style={{color:"#c3ccda"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
-          </div>
-        )}
         <button
           onClick={() => running ? null : setShowScanModal(true)} disabled={running}
           title={running ? "Scan in progress" : "Open scan setup (target, inputs, credentials) then start"}
@@ -21316,7 +21296,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
 
       {/* Example targets — clickable chips. Lets the customer try the module
           on a safe public test target without having to scan their own infra. */}
-      {!_containerMode && (MODULE_TARGET_EXAMPLES[moduleKey] || []).length > 0 && (
+      {false && (MODULE_TARGET_EXAMPLES[moduleKey] || []).length > 0 && (
         <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:8, flexWrap:"wrap"}}>
           <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
           {(MODULE_TARGET_EXAMPLES[moduleKey] || []).map((ex, idx) => (
@@ -21334,7 +21314,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         </div>
       )}
 
-      {/* Per-module hint + optional auth toggle */}
+      {/* Per-module hint + auth/adv toggles removed — inputs live in Scan Setup modal */}
+      {false && (
       <div style={{display:"flex", alignItems:"center", gap:14, marginBottom:14,
                     flexWrap:"wrap"}}>
         <span style={{fontSize:11, color:"#5a6478"}}>
@@ -21375,13 +21356,14 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           </button>
         )}
       </div>
+      )}
       {/* MISMATCH banner (target vs image_ref) was removed once the
           Target field itself was hidden for Container — image_ref is
           now the sole canonical "what am I scanning" field, so there's
           nothing to mismatch against. For other modules the Target
           field is still primary, so cross-input mismatch is not a
           concept that applies. */}
-      {showAuth && (
+      {false && (
         <div style={{display:"flex", gap:8, marginBottom:14, flexWrap:"wrap"}}>
           <div style={{flex:1, minWidth:280}}>
             <label style={{fontSize:10, color:"#5a6478", fontWeight:600,
@@ -21417,7 +21399,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           optional fields on ScanRequest; scanners gracefully NOT_APPLICABLE
           when the input they need is missing, so users only need to fill
           the inputs relevant to the techniques they care about. */}
-      {showAdv && advancedFields.length > 0 && (
+      {false && advancedFields.length > 0 && (
         <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
                       border:"1px solid #1c2435", borderRadius:6}}>
           <div style={{fontSize:10, color:"#5a6478", marginBottom:10,
@@ -21496,7 +21478,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           that get passed under the options{} dict of the scan request.
           Each scanner in the module reads only the fields it needs;
           irrelevant fields are ignored by scanners that don't use them. */}
-      {optionsFields.length > 0 && (
+      {false && optionsFields.length > 0 && (
         <div style={{marginBottom:14, padding:"12px 14px", background:"#0b1220",
                       border:"1px solid #103a52", borderRadius:6}}>
           <div style={{fontSize:10, color:"#00d4ff", marginBottom:10,
