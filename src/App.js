@@ -20795,6 +20795,18 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [authBearer,setAuthBearer]= useState("");   // optional: API key / JWT for some modules
   const [authCookie,setAuthCookie]= useState("");   // optional: session cookie (webapp / auth_attacks)
   const [showAuth,  setShowAuth]  = useState(false);
+  // Scan-setup intake modal. Opens when the module is selected: this panel is
+  // mounted but display:none until its sidebar entry is active, and a fixed
+  // modal inside a display:none ancestor stays hidden until that ancestor
+  // becomes visible — so initialising it open makes the form "appear on
+  // select" with ZERO parent wiring. Esc / click-outside / X all close it.
+  const [showScanModal, setShowScanModal] = useState(true);
+  useEffect(() => {
+    if (!showScanModal) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowScanModal(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showScanModal]);
   // Advanced inputs (per-module — see MODULE_ADVANCED_INPUTS).
   // Persist between sessions so a Dockerfile / kubeconfig pasted once
   // survives reloads of the dashboard. kubeconfig is the sensitive one;
@@ -21272,13 +21284,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           </div>
         )}
         <button
-          onClick={runAll} disabled={!canRun}
-          title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
+          onClick={() => running ? null : setShowScanModal(true)} disabled={running}
+          title={running ? "Scan in progress" : "Open scan setup (target, inputs, credentials) then start"}
           style={{background: running ? "#5a6478" : (color || "#3b9eff"),
                   border:"none", borderRadius:6, padding:"10px 18px",
                   color:"#fff", fontWeight:600, fontSize:13,
-                  cursor: !canRun ? "not-allowed" : "pointer"}}>
-          {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
+                  cursor: running ? "not-allowed" : "pointer"}}>
+          {running ? `Running ${progress.done}/${progress.total}` : `Configure & Scan (${totalTools})`}
         </button>
         <button
           onClick={generatePDF}
@@ -22161,6 +22173,164 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       <PDFConfigModal open={showPDFModal} onClose={() => setShowPDFModal(false)}
         moduleLabel={moduleLabel + " Report"}
         onGenerate={cfg => { try { runPDFExport(cfg); } catch(e){ alert("PDF error: "+(e.message||e)); } }}/>
+      {/* ── SCAN SETUP MODAL ── per-module intake form: target + module inputs
+          + credentials, opens on select, Esc / click-outside / X to close,
+          Start Scan runs the same runAll pipeline. */}
+      {showScanModal && (
+        <div onClick={() => setShowScanModal(false)}
+             style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:9999,
+                     display:"flex", alignItems:"center", justifyContent:"center", padding:20}}>
+          <div onClick={e => e.stopPropagation()}
+               style={{background:"#0d1320", border:`1px solid ${color || "#0e3a55"}`,
+                       borderRadius:14, width:"100%", maxWidth:660, maxHeight:"90vh",
+                       overflowY:"auto", padding:24, boxShadow:"0 20px 60px rgba(0,0,0,0.6)"}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4}}>
+              <div style={{fontSize:15, fontWeight:700, color:"#e6edf6"}}>{moduleLabel} — Scan Setup</div>
+              <button onClick={() => setShowScanModal(false)} title="Close (Esc)"
+                style={{background:"none", border:"1px solid #1c2435", borderRadius:6,
+                        padding:"3px 11px", color:"#8a94a8", fontSize:16, fontWeight:700,
+                        cursor:"pointer", lineHeight:1}}>×</button>
+            </div>
+            <div style={{fontSize:11, color:"#5a6478", marginBottom:18}}>
+              Fill what you want to test, then Start Scan. Blank fields are skipped (their probes report "needs input"). Press Esc or click outside to close.
+            </div>
+
+            {!_containerMode && (
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:10, color:"#8a94a8", fontWeight:700, textTransform:"uppercase", letterSpacing:1.2, display:"block", marginBottom:5}}>Target</label>
+                <input type="text" placeholder={schema.ph} value={target}
+                  onChange={e => setTarget(e.target.value)} disabled={running}
+                  style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:6, padding:"10px 12px", color:"#fff", fontSize:13, outline:"none"}}/>
+                {(MODULE_TARGET_EXAMPLES[moduleKey] || []).length > 0 && (
+                  <div style={{display:"flex", alignItems:"center", gap:6, marginTop:8, flexWrap:"wrap"}}>
+                    <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
+                    {(MODULE_TARGET_EXAMPLES[moduleKey] || []).map((ex, idx) => (
+                      <button key={idx} onClick={() => setTarget(ex)} disabled={running}
+                        style={{background:"#0c1424", border:"1px solid #0e3a55", color:"#7fdcff", borderRadius:12, padding:"3px 10px", fontSize:11, fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer", opacity: running ? 0.5 : 1}}>{ex}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {optionsFields.length > 0 && (
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:10, color:"#00d4ff", marginBottom:10, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>Module inputs — what each scanner tries against the target</div>
+                <div style={{display:"flex", flexDirection:"column", gap:12}}>
+                  {optionsFields.map(k => {
+                    const def = OPTIONS_INPUT_DEFS[k];
+                    if (!def) return null;
+                    const val = optInputs[k];
+                    const presets = OPTIONS_INPUT_PRESETS[k] || [];
+                    if (def.type === "checkbox") {
+                      return (
+                        <div key={k} style={{display:"flex", alignItems:"center", gap:8}}>
+                          <input type="checkbox" checked={!!val} onChange={e => setOptField(k, e.target.checked)} disabled={running}
+                            style={{width:14, height:14, cursor:"pointer", accentColor:"#3b9eff"}}/>
+                          <label style={{fontSize:11.5, color:"#c3ccda", fontWeight:500, cursor:"pointer"}} onClick={() => !running && setOptField(k, !val)}>{def.label}</label>
+                          {def.hint && (<span style={{fontSize:10, color:"#5a6478", marginLeft:4}}>— {def.hint}</span>)}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={k}>
+                        <label style={{fontSize:10, color:"#8a94a8", fontWeight:600, textTransform:"uppercase", letterSpacing:1.2, display:"block", marginBottom:3}}>
+                          {def.label}{def.secret && (<span style={{color:"#f59e0b", marginLeft:6, fontWeight:500, textTransform:"none", letterSpacing:0, fontSize:9}}>[sensitive]</span>)}
+                        </label>
+                        {def.hint && (<div style={{fontSize:10, color:"#5a6478", marginBottom:4}}>{def.hint}</div>)}
+                        {presets.length > 0 && (
+                          <div style={{display:"flex", gap:6, flexWrap:"wrap", marginBottom:6}}>
+                            {presets.map((p, i) => (
+                              <button key={i} type="button" onClick={() => setOptField(k, p.value)} disabled={running} title={p.desc}
+                                style={{background:"#1c2435", border:"1px solid #1c2435", borderRadius:4, padding:"3px 8px", color:"#8a94a8", fontSize:10, cursor:"pointer", fontWeight:500}}>+ {p.label}</button>
+                            ))}
+                          </div>
+                        )}
+                        {def.type === "textarea" ? (
+                          <textarea value={val || ""} onChange={e => setOptField(k, e.target.value)} disabled={running} placeholder={def.ph} rows={def.rows || 5} spellCheck={false}
+                            style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"8px 10px", color:"#c3ccda", fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace", outline:"none", resize:"vertical", lineHeight:1.5}}/>
+                        ) : (
+                          <input type="text" value={val || ""} onChange={e => setOptField(k, e.target.value)} disabled={running} placeholder={def.ph}
+                            style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"7px 10px", color:"#c3ccda", fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace", outline:"none"}}/>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {advancedFields.length > 0 && (
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:10, color:"#5a6478", marginBottom:10, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>Advanced inputs — leave blank to skip those probes</div>
+                <div style={{display:"flex", flexDirection:"column", gap:12}}>
+                  {advancedFields.map(k => {
+                    const def = ADVANCED_INPUT_DEFS[k];
+                    if (!def) return null;
+                    const val = advInputs[k] || "";
+                    const presets = ADVANCED_INPUT_PRESETS[k] || [];
+                    return (
+                      <div key={k}>
+                        <label style={{fontSize:10, color:"#8a94a8", fontWeight:600, textTransform:"uppercase", letterSpacing:1.2, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4}}>
+                          <span>{def.label} <span style={{color:"#5a6478", fontWeight:400, textTransform:"none", letterSpacing:0}}>· {def.hint}</span></span>
+                          {val && (<button onClick={() => setAdvField(k, "")} style={{background:"transparent", border:"1px solid #1c2435", color:"#5a6478", borderRadius:3, padding:"1px 6px", fontSize:9, cursor:"pointer", letterSpacing:1}}>CLEAR</button>)}
+                        </label>
+                        {presets.length > 0 && (
+                          <div style={{display:"flex", flexWrap:"wrap", gap:6, marginBottom:6}}>
+                            {presets.map((p, i) => (
+                              <button key={i} onClick={() => setAdvField(k, p.value)} disabled={running} title={p.desc}
+                                style={{background: val === p.value ? "#103a52" : "#0d1320", border: `1px solid ${val === p.value ? "#3b9eff" : "#1c2435"}`, borderRadius:4, padding:"3px 8px", color: val === p.value ? "#7fdcff" : "#8a94a8", fontSize:10, cursor: running ? "not-allowed" : "pointer", fontFamily:"JetBrains Mono, ui-monospace, monospace"}}>{p.label}</button>
+                            ))}
+                          </div>
+                        )}
+                        {def.type === "textarea" ? (
+                          <textarea value={val} onChange={e => setAdvField(k, e.target.value)} disabled={running} placeholder={def.ph} rows={def.rows || 6} spellCheck={false}
+                            style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"8px 10px", color:"#c3ccda", fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace", outline:"none", resize:"vertical", lineHeight:1.5}}/>
+                        ) : (
+                          <input type="text" value={val} onChange={e => setAdvField(k, e.target.value)} disabled={running} placeholder={def.ph}
+                            style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"7px 10px", color:"#c3ccda", fontSize:11, fontFamily:"JetBrains Mono, ui-monospace, monospace", outline:"none"}}/>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{marginBottom:18}}>
+              <div style={{fontSize:10, color:"#8a94a8", marginBottom:10, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>Authentication (optional)</div>
+              <div style={{display:"flex", flexDirection:"column", gap:10}}>
+                <div>
+                  <label style={{fontSize:10, color:"#5a6478", fontWeight:600, textTransform:"uppercase", letterSpacing:1.2, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3}}>
+                    <span>Authorization: Bearer / API key</span>
+                    {authBearer && (<button onClick={() => setAuthBearer("")} style={{background:"transparent", border:"1px solid #7f1d1d", color:"#ffa3b0", borderRadius:3, padding:"1px 6px", fontSize:9, cursor:"pointer", letterSpacing:1}}>REMOVE</button>)}
+                  </label>
+                  <input type="text" placeholder="JWT / API key (paid OSINT, webapp auth, LLM, etc.)" value={authBearer} onChange={e => setAuthBearer(e.target.value)} disabled={running}
+                    style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"7px 10px", color:"#c3ccda", fontSize:11, fontFamily:"monospace", outline:"none"}}/>
+                </div>
+                <div>
+                  <label style={{fontSize:10, color:"#5a6478", fontWeight:600, textTransform:"uppercase", letterSpacing:1.2, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3}}>
+                    <span>Cookie (session)</span>
+                    {authCookie && (<button onClick={() => setAuthCookie("")} style={{background:"transparent", border:"1px solid #7f1d1d", color:"#ffa3b0", borderRadius:3, padding:"1px 6px", fontSize:9, cursor:"pointer", letterSpacing:1}}>REMOVE</button>)}
+                  </label>
+                  <input type="text" placeholder="session=abc123; csrf=xyz789  (webapp/auth_attacks)" value={authCookie} onChange={e => setAuthCookie(e.target.value)} disabled={running}
+                    style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"7px 10px", color:"#c3ccda", fontSize:11, fontFamily:"monospace", outline:"none"}}/>
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex", gap:10, justifyContent:"flex-end", borderTop:"1px solid #1c2435", paddingTop:16}}>
+              <button onClick={() => setShowScanModal(false)}
+                style={{background:"transparent", border:"1px solid #1c2435", borderRadius:6, padding:"9px 16px", color:"#8a94a8", fontWeight:600, fontSize:13, cursor:"pointer"}}>Close</button>
+              <button onClick={() => { setShowScanModal(false); runAll(); }} disabled={!canRun}
+                title={!canRun ? (_containerMode ? "Fill at least one input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input") : ""}
+                style={{background: canRun ? (color || "#3b9eff") : "#1c2435", border:"none", borderRadius:6, padding:"9px 20px", color:"#fff", fontWeight:700, fontSize:13, cursor: canRun ? "pointer" : "not-allowed"}}>
+                {running ? "Scanning..." : `Start Scan (${totalTools})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
