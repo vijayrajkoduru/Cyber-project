@@ -124,6 +124,64 @@ services:
     - vulnuslab
     restart: unless-stopped
 
+  # ── Database / Service Range ─────────────────────────────────────────
+  # Real DB + service targets for the Password (brute), Network (port/
+  # service scan) and Vuln (version/CVE + exposure) modules. Creds match
+  # each brute scanner's quick_probe defaults so a scan HITS immediately.
+  # Internal only (no published ports) — reachable from the backend over
+  # the vulnuslab network, exactly like the web labs.
+  #   lab_mysql     root/root            (3306)  mysql_brute
+  #   lab_postgres  postgres/postgres    (5432)  postgres_brute
+  #   lab_ftp       admin/admin          (21)    ftp_brute
+  #   lab_redis     (no auth, exposed)   (6379)  network/vuln
+  #   lab_mongo     (no auth, exposed)   (27017) network/vuln
+  # Bring them up:
+  #   docker compose up -d lab_mysql lab_postgres lab_ftp lab_redis lab_mongo
+  # ─────────────────────────────────────────────────────────────────────
+  lab_mysql:
+    image: mysql:5.7
+    container_name: lab_mysql
+    environment:
+    - MYSQL_ROOT_PASSWORD=root
+    - MYSQL_DATABASE=appdb
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  lab_postgres:
+    image: postgres:15-alpine
+    container_name: lab_postgres
+    environment:
+    - POSTGRES_PASSWORD=postgres
+    - POSTGRES_DB=appdb
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  lab_ftp:
+    image: delfer/alpine-ftp-server:latest
+    container_name: lab_ftp
+    environment:
+    - USERS=admin|admin
+    - ADDRESS=lab_ftp
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  lab_redis:
+    image: redis:7-alpine
+    container_name: lab_redis
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  lab_mongo:
+    image: mongo:6
+    container_name: lab_mongo
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
   # Optional RDP target — uncomment to enable Ncrack full-stage testing.
   # Image is ~600MB so it's off by default. Default creds: admin/admin.
   # lab_pwd_rdp:

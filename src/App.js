@@ -3605,7 +3605,6 @@ function WebAppModule(props) {
     // dlPDF runs AFTER scan completes, so "vulnuslab_previousScan_<target>" is
     // the second-most-recent run (the one to diff against). On the first scan
     // this is null and the Remediation Progress section gracefully skips.
-    console.log("[VL] dlPDF entered. target=", target, "allResults keys=", Object.keys(allResults||{}));
     let _prevScan = null;
     try {
       const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)((target || "").trim());
@@ -14664,34 +14663,195 @@ function generateUniversalVLReport(opts) {
       _pl.forEach((ln, i) => txt(ln, margin + 2, y + (i * 4), 8, DARK));
       y += _pl.length * 4 + 4;
 
-      // What it checks - humanized list of the scanners that ACTUALLY ran.
-      txt("This assessment checks:", margin + 2, y, 9, BLUE, true); y += 5.5;
-      const _hum = s => String(s).replace(/_/g, " ")
-        .replace(/\b([a-z])/g, (m, c) => c.toUpperCase())
-        .replace(/\bCve\b/g, "CVE").replace(/\bDns\b/g, "DNS").replace(/\bTls\b/g, "TLS")
-        .replace(/\bSpf\b/g, "SPF").replace(/\bDkim\b/g, "DKIM").replace(/\bDmarc\b/g, "DMARC")
-        .replace(/\bMta\b/g, "MTA").replace(/\bSts\b/g, "STS").replace(/\bOauth\b/g, "OAuth")
-        .replace(/\bApi\b/g, "API").replace(/\bSsrf\b/g, "SSRF").replace(/\bXss\b/g, "XSS")
-        .replace(/\bSql\b/g, "SQL").replace(/\bIot\b/g, "IoT").replace(/\bIam\b/g, "IAM")
-        .replace(/\bK8s\b/g, "K8s").replace(/\bUrl\b/g, "URL").replace(/\bCt\b/g, "CT")
-        .replace(/\bBitb\b/g, "BitB").replace(/\bSmb\b/g, "SMB").replace(/\bSsh\b/g, "SSH")
-        .replace(/\bRdp\b/g, "RDP").replace(/\bWaf\b/g, "WAF");
-      const _checks = Object.keys(r || {}).map(_hum).filter(Boolean).sort();
-      const _ccolW = (contentW - 4) / 2;
-      if (_checks.length === 0) {
-        chk(5); txt("- No scanner returned data for this run.", margin + 4, y, 7.8, GRAY); y += 5;
-      } else {
-        for (let _ci = 0; _ci < _checks.length; _ci += 2) {
-          chk(4.6);
-          const _ltL = doc.splitTextToSize(_ascii("- " + _checks[_ci]), _ccolW - 4);
-          txt(_ltL[0], margin + 4, y, 7.8, DARK);
-          if (_checks[_ci + 1]) {
-            const _rtL = doc.splitTextToSize(_ascii("- " + _checks[_ci + 1]), _ccolW - 4);
-            txt(_rtL[0], margin + _ccolW + 4, y, 7.8, DARK);
-          }
-          y += 4.4;
-        }
-      }
+      // What it does + benefits - humanised capability summary (NOT a raw
+      // dump of internal scanner ids). Per-module 'does'/'benefits' so the
+      // customer sees what the module delivers and why it matters.
+      const _capMap = [
+        ["phishing|email posture", {
+          does: [
+            "Checks whether attackers can spoof email from your domain - SPF, DKIM, and DMARC enforcement.",
+            "Audits mail-transport security (STARTTLS, MTA-STS, DANE) for cleartext or downgrade exposure.",
+            "Hunts lookalike / typosquat domains and exposed OAuth tenant surfaces used in phishing.",
+          ],
+          benefits: [
+            "Quantifies how easily your brand can be impersonated to phish staff and customers.",
+            "Maps every finding to the email-auth controls auditors check (PCI, SOC 2, NIST).",
+          ],
+        }],
+        ["recon|information gathering", {
+          does: [
+            "Maps DNS, subdomains, and live hosts to surface every internet-facing asset tied to your domain.",
+            "Fingerprints open ports, services, technologies, and TLS / certificate posture.",
+            "Hunts exposed cloud storage, dev/staging hosts, source maps, and leaked credentials across OSINT and breach data.",
+          ],
+          benefits: [
+            "See your external attack surface exactly as an attacker enumerates it - before they do.",
+            "Catch shadow IT and forgotten assets that bypass your asset inventory.",
+          ],
+        }],
+        ["web app|webapp|web application", {
+          does: [
+            "Probes the OWASP Top 10 with real payloads - injection, XSS, broken access control, SSRF, and misconfiguration.",
+            "Audits authentication, session, and CSRF defences on live endpoints.",
+            "Checks security headers, cookie flags, and TLS hardening.",
+          ],
+          benefits: [
+            "Find exploitable web flaws before attackers or bug-bounty hunters do.",
+            "Get developer-ready, re-confirmed findings mapped to OWASP and CWE.",
+          ],
+        }],
+        ["vulnerability scan|vuln", {
+          does: [
+            "Fingerprints exposed services and matches versions against NVD, CISA KEV, and EPSS.",
+            "Runs safe web-active probes for known exploitable conditions.",
+            "Ranks by real-world exploitability, not just raw CVSS.",
+          ],
+          benefits: [
+            "Focus patching on the few CVEs actually being exploited in the wild.",
+            "Cut scanner noise with KEV/EPSS-ranked, evidence-backed findings.",
+          ],
+        }],
+        ["osint", {
+          does: [
+            "Gathers public intelligence - exposed accounts, leaked credentials, metadata, and third-party footprint - without touching the target.",
+            "Correlates breach corpora, paste sites, and social profiles tied to the organisation.",
+          ],
+          benefits: [
+            "Understand what an attacker can learn about you for free.",
+            "Surface credential leaks that fuel account-takeover before they are abused.",
+          ],
+        }],
+        ["api security|apisec", {
+          does: [
+            "Tests the OWASP API Top 10 - broken authentication, excessive data exposure, and misconfiguration.",
+            "Discovers undocumented and shadow API endpoints.",
+          ],
+          benefits: [
+            "Close the API gaps traditional web scanners miss.",
+            "Inventory every endpoint, documented or not.",
+          ],
+        }],
+        ["cloud", {
+          does: [
+            "Finds anonymously-reachable cloud exposure - public buckets, container registries, and Kubernetes endpoints.",
+            "Audits OIDC posture and leaked Infrastructure-as-Code.",
+          ],
+          benefits: [
+            "Stop public-storage and exposed-control-plane leaks before they become breaches.",
+            "Map cloud exposure to CIS and provider best-practice benchmarks.",
+          ],
+        }],
+        ["network", {
+          does: [
+            "Enumerates the externally-reachable network surface - open ports, service banners, and version exposure.",
+            "Checks DNS hygiene - zone transfer, open resolver, and subdomain-takeover risk.",
+          ],
+          benefits: [
+            "Shrink the reachable network footprint attackers scan first.",
+            "Catch misconfigured DNS and exposed management services.",
+          ],
+        }],
+        ["exploitation|exploit", {
+          does: [
+            "Safely fingerprints products and versions affected by known exploits - signature and version checks only.",
+            "Cross-references against public exploit and CISA KEV catalogues.",
+          ],
+          benefits: [
+            "Know which exposures have weaponised exploits available - no payloads are sent.",
+            "Prioritise remediation by real exploit availability.",
+          ],
+        }],
+        ["password", {
+          does: [
+            "Maps exposed login surfaces and authentication-throttling posture.",
+            "Checks for weak or leaked credential exposure tied to the target.",
+          ],
+          benefits: [
+            "Gauge resistance to credential-stuffing and brute-force attacks.",
+            "Surface reused or leaked credentials before attackers do.",
+          ],
+        }],
+        ["mobile", {
+          does: [
+            "Assesses the mobile app against the OWASP MASVS - storage, cryptography, network, and platform protections.",
+          ],
+          benefits: [
+            "Catch insecure storage and weak transport in your app build.",
+            "Ship to the stores with MASVS-mapped evidence.",
+          ],
+        }],
+        ["ai|llm", {
+          does: [
+            "Tests the AI/LLM application against the OWASP LLM Top 10 - prompt-injection surface and output handling.",
+            "Checks exposed model and serving infrastructure.",
+          ],
+          benefits: [
+            "Find prompt-injection and data-leakage paths unique to LLM apps.",
+            "Map AI risk to NIST AI RMF and ISO 42001.",
+          ],
+        }],
+        ["container|kubernetes|k8s", {
+          does: [
+            "Inspects container and Kubernetes exposure - public registries, exposed API/kubelet, and image hygiene.",
+          ],
+          benefits: [
+            "Stop exposed control-plane and leaky images before pod-to-host escape.",
+            "Benchmark against CIS Docker and Kubernetes guidance.",
+          ],
+        }],
+        ["active directory|ad attack", {
+          does: [
+            "Surfaces externally-visible Active Directory exposure - exposed domain controllers, LDAP/SMB/Kerberos, and AD Certificate Services.",
+          ],
+          benefits: [
+            "Spot the AD services attackers target for domain takeover.",
+            "Reduce the identity attack surface reachable from outside.",
+          ],
+        }],
+        ["supply chain", {
+          does: [
+            "Audits dependency and registry hygiene, CI/CD exposure, and build-provenance posture.",
+          ],
+          benefits: [
+            "Catch dependency-confusion and typosquat risk before a compromised build ships.",
+            "Map to SLSA build-integrity levels.",
+          ],
+        }],
+        ["iot|ot|ics", {
+          does: [
+            "Discovers internet-exposed industrial / IoT services - Modbus, S7, DNP3, and BACnet.",
+          ],
+          benefits: [
+            "Find OT/ICS that should never be reachable from the internet.",
+            "Prioritise segmentation for the riskiest protocols.",
+          ],
+        }],
+      ];
+      let _cap = null;
+      for (const _ce of _capMap) { if (_ce[0].split("|").some(function(kw){ return _ml.includes(kw); })) { _cap = _ce[1]; break; } }
+      const _scCount = Object.keys(r || {}).length;
+      if (!_cap) _cap = {
+        does: ["Runs " + _scCount + " automated, detection-only checks across this module's attack surface, each independently re-confirmed on the live target."],
+        benefits: [
+          "Turns a noisy attack surface into a prioritised, evidence-backed action list.",
+          "Re-runnable on demand so you can prove issues are actually fixed.",
+        ],
+      };
+      txt("What this assessment does:", margin + 2, y, 9, BLUE, true); y += 5.5;
+      _cap.does.forEach(function(b){
+        const _bl = doc.splitTextToSize(_ascii("- " + b), contentW - 6);
+        chk(_bl.length * 3.8 + 1);
+        _bl.forEach(function(ln, li){ txt(ln, margin + 4, y + (li * 3.8), 8, DARK); });
+        y += _bl.length * 3.8 + 1.5;
+      });
+      y += 2.5;
+      txt("Benefits:", margin + 2, y, 9, [15,118,82], true); y += 5.5;
+      _cap.benefits.forEach(function(b){
+        const _bl = doc.splitTextToSize(_ascii("- " + b), contentW - 6);
+        chk(_bl.length * 3.8 + 1);
+        _bl.forEach(function(ln, li){ txt(ln, margin + 4, y + (li * 3.8), 8, [15,118,82]); });
+        y += _bl.length * 3.8 + 1.5;
+      });
       y += 3;
 
       // The honest boundary - what it does NOT do.
@@ -15640,6 +15800,20 @@ function generateUniversalVLReport(opts) {
           return `# Re-run the scan: POST /api/${moduleKey}/${tool} { "target": "${host}" }`;
         return `# Re-run /api/${moduleKey}/<scanner> against ${host} to reproduce`;
       };
+      // Real vulnerabilities (graded exposures) are rendered as a full RED
+      // sentence so they stand out from informational rows. (user 2026-06-12)
+      const _vulnSentence = function(name, f){
+        let _s = String(name || "").trim();
+        const _ev = String(f.detail || f.evidence || "").trim();
+        if (_ev && _ev.length > 4) {
+          const _evShort = _ev.length > 110 ? _ev.slice(0, 107) + "..." : _ev;
+          if (_s.toLowerCase().slice(0, 28) !== _evShort.toLowerCase().slice(0, 28))
+            _s = _s + " - " + _evShort;
+        }
+        _s = _s.charAt(0).toUpperCase() + _s.slice(1);
+        if (!/[.!?]$/.test(_s)) _s += ".";
+        return _s;
+      };
       // 2 visual rows per finding (header + reproduce). Allow ~14 findings/page.
       const _DF_PER_PG = 20;
       const _dfPages = Math.max(1, Math.ceil(_df.length / _DF_PER_PG));
@@ -15683,13 +15857,18 @@ function generateUniversalVLReport(opts) {
         const nmWithSrc = nm + _srcLbl;
         // Wrap finding name to 2 lines max instead of hard ...-truncating
         // (pdf_industry_standard.md gap 12). Row height grows with name lines.
-        const _nmLines = doc.splitTextToSize(nmWithSrc, 96).slice(0, 2);
+        // Graded exposures (CRITICAL/HIGH/MEDIUM) = a real vulnerability: render
+        // the finding as a full RED sentence (up to 3 lines). LOW/INFO stay terse.
+        const _isRealVuln = ["CRITICAL","HIGH","MEDIUM"].includes(sev);
+        const _nmText = _isRealVuln ? (_vulnSentence(nm, f) + _srcLbl) : nmWithSrc;
+        const _RED = [185,28,28];
+        const _nmLines = doc.splitTextToSize(_nmText, 96).slice(0, _isRealVuln ? 3 : 2);
         const _topRowH = Math.max(7, 1.5 + (_nmLines.length * 3.4));
         const _rh = _topRowH + 7;   // top rows + meta + reproduce
         chk(_rh + 0.5); fillR(margin, y, contentW, _rh, i%2===0 ? LIGHT : WHITE);
-        // Top row (finding name spans up to 2 lines on the left)
+        // Top row (finding name spans up to 3 lines on the left)
         _nmLines.forEach(function(ln, li){
-          txt(ln, margin + 3, y + 4.2 + (li * 3.4), 7.5, DARK);
+          txt(ln, margin + 3, y + 4.2 + (li * 3.4), 7.5, _isRealVuln ? _RED : DARK, _isRealVuln);
         });
         txt(x.cve, margin + 102, y + 4.2, 6.8, x.cve !== "-" ? BLUE : GRAY, true);
         rrect(margin + 124, y + 1.4, 20, 4.6, 1, sc);
@@ -20855,6 +21034,10 @@ const MODULE_TEST_TARGETS = {
     {label:"lab_dvwa",            value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab (auto-login admin/password)"},
     {label:"lab_juiceshop",       value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab (auto-login)"},
     {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Nmap's authorized target (no-setup baseline)"},
+    {label:"lab_mysql",           value:"lab_mysql",                             desc:"Your Docker MySQL 5.7 lab — version/CVE + weak root (root/root)"},
+    {label:"lab_postgres",        value:"lab_postgres",                          desc:"Your Docker PostgreSQL 15 lab — version/CVE + weak login (postgres/postgres)"},
+    {label:"lab_redis",           value:"lab_redis",                             desc:"Your Docker Redis 7 lab — unauthenticated exposure (no password)"},
+    {label:"lab_mongo",           value:"lab_mongo",                             desc:"Your Docker MongoDB 6 lab — unauthenticated exposure (no auth)"},
   ],
   webapp: [
     {label:"lab_dvwa",        value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab (auto-login admin/password)"},
@@ -20881,10 +21064,13 @@ const MODULE_TEST_TARGETS = {
     {label:"vulnserver:9999",      value:"vulnserver.local:9999",                 desc:"Stephen Bradshaw vulnerable TCP server"},
   ],
   password: [
-    {label:"lab_pwd_ssh",          value:"lab_pwd_ssh",                           desc:"Internal SSH lab (admin/admin on port 2222)"},
-    {label:"lab_pwd_smb",          value:"lab_pwd_smb",                           desc:"Internal SMB lab (admin/admin)"},
-    {label:"lab_pwd_web",          value:"lab_pwd_web",                           desc:"Internal HTTP form lab (admin/admin on port 5000)"},
-    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"External-style target (msfadmin/msfadmin)"},
+    {label:"lab_pwd_ssh (admin/admin)",   value:"lab_pwd_ssh:2222",  username:"admin",    password:"admin",    desc:"Your Docker SSH lab — hydra_ssh_spray (admin/admin)"},
+    {label:"lab_pwd_smb (admin/admin)",   value:"lab_pwd_smb:445",   username:"admin",    password:"admin",    desc:"Your Docker SMB lab — medusa_smb_spray (admin/admin)"},
+    {label:"lab_pwd_web (admin/admin)",   value:"lab_pwd_web:5000",  username:"admin",    password:"admin",    desc:"Your Docker HTTP-form lab — patator_http_form_brute (admin/admin)"},
+    {label:"lab_mysql (root/root)",       value:"lab_mysql:3306",    username:"root",     password:"root",     desc:"Your Docker MySQL lab — mysql_brute (root/root)"},
+    {label:"lab_postgres (postgres/postgres)", value:"lab_postgres:5432", username:"postgres", password:"postgres", desc:"Your Docker PostgreSQL lab — postgres_brute (postgres/postgres)"},
+    {label:"lab_ftp (admin/admin)",       value:"lab_ftp:21",        username:"admin",    password:"admin",    desc:"Your Docker FTP lab — ftp_brute (admin/admin)"},
+    {label:"lab_metasploitable (msfadmin)", value:"lab_metasploitable", username:"msfadmin", password:"msfadmin", desc:"Your Docker Metasploitable2 lab — multi-service brute (msfadmin/msfadmin)"},
   ],
   client_side: [
     {label:"lab_juiceshop",   value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab — DOM XSS / clickjack (auto-login)"},
@@ -20917,7 +21103,11 @@ const MODULE_TEST_TARGETS = {
   ],
   network: [
     {label:"scanme.nmap.org",      value:"scanme.nmap.org",                       desc:"Nmap's authorized test target"},
-    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Internal lab - multiple open ports"},
+    {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Your Docker Metasploitable2 lab — multiple open ports"},
+    {label:"lab_mysql",            value:"lab_mysql",                             desc:"Your Docker MySQL lab — port/service scan (3306)"},
+    {label:"lab_postgres",         value:"lab_postgres",                          desc:"Your Docker PostgreSQL lab — port/service scan (5432)"},
+    {label:"lab_redis",            value:"lab_redis",                             desc:"Your Docker Redis lab — exposed service (6379)"},
+    {label:"lab_mongo",            value:"lab_mongo",                             desc:"Your Docker MongoDB lab — exposed service (27017)"},
     {label:"your /24",             value:"192.168.1.0/24",                        desc:"Your own LAN range (authorization required)"},
   ],
   auth_attacks: [
