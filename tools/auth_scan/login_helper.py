@@ -270,6 +270,18 @@ def _scrape_submit_inputs(html: str) -> dict:
         val_m  = re.search(r'\bvalue=["\']([^"\']*)["\']', tag, re.IGNORECASE)
         if name_m:
             out[name_m.group(1)] = val_m.group(1) if val_m else ""
+    # <button [type=submit] name=X value=Y> — bWAPP and others submit via a
+    # button, not <input type=submit>. Treat a button with no type (default
+    # submit) or type=submit as a submit control.
+    for m in re.finditer(r'<button\b[^>]*>', html, re.IGNORECASE):
+        tag = m.group(0)
+        typ_m = re.search(r'\btype=["\']([^"\']+)["\']', tag, re.IGNORECASE)
+        if typ_m and typ_m.group(1).lower() != "submit":
+            continue
+        name_m = re.search(r'\bname=["\']([^"\']+)["\']', tag, re.IGNORECASE)
+        val_m  = re.search(r'\bvalue=["\']([^"\']*)["\']', tag, re.IGNORECASE)
+        if name_m:
+            out[name_m.group(1)] = val_m.group(1) if val_m else ""
     return out
 
 
@@ -286,9 +298,13 @@ def _scrape_form_inputs(html: str) -> dict:
 
 
 @router.post("/api/scan/login")
-async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
+def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     """Authenticate against the target and return captured session.
     Hard 30-second wall-clock budget — login MUST complete or fail in 30s.
+
+    Sync def (NOT async): the body uses blocking `requests` calls, so FastAPI
+    runs it in the threadpool — running it as `async def` blocked the event
+    loop for the whole login and stalled every other request.
     """
     import time as _time
     deadline = _time.monotonic() + 30.0
@@ -370,6 +386,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         raise HTTPException(502, f"Login page returned HTTP {page.status_code}")
 
     hidden = _scrape_hidden_inputs(page.text or "")
+    submit = _scrape_submit_inputs(page.text or "")  # DVWA/bWAPP reject login without the submit button (Login=Login / form=submit)
     all_inputs = _scrape_form_inputs(page.text or "")
 
     if not all_inputs:
@@ -381,6 +398,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     p_field = req.password_field or _detect_field(all_inputs, _PASSWORD_FIELDS) or "password"
 
     payload = dict(hidden)
+    payload.update(submit)  # include submit-button name/value — DVWA/bWAPP reject login without it
     payload[u_field] = req.username
     payload[p_field] = req.password
     if req.extra_fields:

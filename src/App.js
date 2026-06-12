@@ -340,9 +340,13 @@ async function api(path, method, body, token) {
   method = method || "GET";
   const headers = { "Content-Type":"application/json" };
   if (token) headers["Authorization"] = "Bearer " + token;
-  const isScan = path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/");
-  const timeoutMs = isScan ? 300000 : 30000;  // 5 min for scans, 30s otherwise
-  if (isScan) await _scanAcquire();   // Wait if 6 scans already in flight
+  // /api/scan/login is a quick auth probe, NOT a heavy scan — it must NEVER
+  // queue behind the scan semaphore (that caused a permanent "Logging in...")
+  // and must time out fast (the backend has a 30s wall-clock budget).
+  const isLogin = path.includes("/scan/login");
+  const isScan = !isLogin && (path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/"));
+  const timeoutMs = isLogin ? 45000 : (isScan ? 300000 : 30000);  // login 45s; scans 5 min; else 30s
+  if (isScan) await _scanAcquire();   // Wait if 6 scans already in flight (login bypasses)
   const ctrl = new AbortController();
   _activeAborts.add(ctrl);
   const t = setTimeout(()=>ctrl.abort(), timeoutMs);
@@ -15896,6 +15900,32 @@ function generateUniversalVLReport(opts) {
         y += _rh + 0.5;
       });
       y += 6;
+    }
+  }
+
+  // ── VISUAL EVIDENCE (screenshot POC) ──
+  // Any finding carrying a base64 'screenshot' data-URL is rendered as a
+  // direct image - visual proof of the live surface, no exploitation. Only
+  // renders when at least one screenshot was captured.
+  {
+    const _shots = _allFindings.filter(function(f){
+      return f && typeof f.screenshot === "string" && f.screenshot.indexOf("data:image") === 0;
+    });
+    if (_shots.length > 0) {
+      chk(34); y = sHead("Visual Evidence (Proof-of-Concept)", y);
+      txt("Direct screenshots captured from the live target - visual proof only, no exploitation.",
+          margin + 2, y, 7, GRAY); y += 5;
+      _shots.slice(0, 6).forEach(function(f){
+        const _imgW = Math.min(contentW, 140);
+        const _imgH = _imgW * (680 / 1024);
+        chk(_imgH + 10);
+        txt(String(f.name || f.detail || "Captured surface"), margin + 2, y, 8, [185,28,28], true);
+        y += 4.5;
+        try { doc.addImage(f.screenshot, "JPEG", margin + 2, y, _imgW, _imgH); } catch (e) {}
+        doc.setDrawColor(203, 213, 225); doc.rect(margin + 2, y, _imgW, _imgH);
+        y += _imgH + 6;
+      });
+      y += 2;
     }
   }
 
