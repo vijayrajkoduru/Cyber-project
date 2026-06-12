@@ -3100,6 +3100,19 @@ function WebAppModule(props) {
   const [targetHistory, setTargetHistory]   = useState(() => { try { return JSON.parse(localStorage.getItem("cyberTargetHistory")||"[]"); } catch{return [];} });
   const [showHistory, setShowHistory]       = useState(false);
   const [authorized, setAuthorized]         = useState(false);
+  const [showScanModal, setShowScanModal]   = useState(false);
+  const [authConfirmed, setAuthConfirmed]   = useState(false);
+  useEffect(() => {
+    const onOpen = (e) => { if (e && e.detail === "webapp") { setShowScanModal(true); setAuthConfirmed(false); } };
+    window.addEventListener("vl-open-scan", onOpen);
+    return () => window.removeEventListener("vl-open-scan", onOpen);
+  }, []);
+  useEffect(() => {
+    if (!showScanModal) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowScanModal(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showScanModal]);
   // Which tile (phase index) is currently expanded showing its result details.
   // Click "Details" on any finished tile to inspect error message + findings;
   // saves the customer from opening DevTools to debug a failed scan.
@@ -3930,7 +3943,7 @@ function WebAppModule(props) {
         {/* Login-verified targets only. Each chip auto-fills working
             credentials. WebGoat removed — upstream image keeps renaming
             login routes between versions, breaking auto-login. */}
-        <TestTargets targets={[
+        {false && (<TestTargets targets={[
           {label:"DVWA",       value:"http://lab_dvwa",                   color:"#e02347", lab:"dvwa"},
           {label:"bWAPP",      value:"http://lab_bwapp/bWAPP/login.php",  color:"#ca8a04", lab:"bwapp"},
           {label:"Mutillidae", value:"http://lab_mutillidae",             color:"#a855f7", lab:"mutillidae"},
@@ -3966,10 +3979,56 @@ function WebAppModule(props) {
               }
             } catch(e) {}
           }
-        }}/>
+        }}/>)}
+        {showScanModal && (
+          <div onClick={()=>setShowScanModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:14,width:"100%",maxWidth:760,maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 60px rgba(0,0,0,0.6)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div style={{fontSize:15,fontWeight:700,color:"#e6edf6"}}>Web Application Pentest — Scan Setup</div>
+                <button onClick={()=>setShowScanModal(false)} title="Close (Esc)" style={{background:"none",border:"1px solid #1c2435",borderRadius:6,padding:"3px 11px",color:"#8a94a8",fontSize:16,fontWeight:700,cursor:"pointer",lineHeight:1}}>×</button>
+              </div>
+              <label style={{fontSize:10,color:"#8a94a8",fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,display:"block",marginBottom:5}}>Target URL or Domain</label>
+              <input value={target} onChange={e=>setTarget(e.target.value)} placeholder="example.com  or  http://192.168.1.1:8080"
+                style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              {(MODULE_TARGET_EXAMPLES.webapp || []).length > 0 && (
+                <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                  <span style={{fontSize:10,color:"#5a6478",fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Try:</span>
+                  {(MODULE_TARGET_EXAMPLES.webapp || []).map((ex,idx)=>(
+                    <button key={idx} onClick={()=>setTarget(ex)} style={{background:"#0c1424",border:"1px solid #0e3a55",color:"#7fdcff",borderRadius:12,padding:"3px 10px",fontSize:11,fontFamily:"JetBrains Mono, monospace",cursor:"pointer"}}>{ex}</button>
+                  ))}
+                </div>
+              )}
+              <div style={{marginTop:16,marginBottom:6,fontSize:10,color:"#8a94a8",fontWeight:700,textTransform:"uppercase",letterSpacing:1.2}}>Authentication (optional) — behind-login: IDOR, stored XSS, mass-assignment</div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:4}}>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Session Cookie</div>
+                  <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123; sid=xyz"
+                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{flex:1,minWidth:240}}>
+                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Bearer Token (JWT)</div>
+                  <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJI..."
+                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+              <label style={{display:"flex",alignItems:"flex-start",gap:8,marginTop:14,marginBottom:14,cursor:"pointer"}}>
+                <input type="checkbox" checked={authConfirmed} onChange={e=>setAuthConfirmed(e.target.checked)} style={{width:15,height:15,marginTop:1,cursor:"pointer",accentColor:"#3b9eff"}}/>
+                <span style={{fontSize:11.5,color:"#c3ccda",lineHeight:1.5}}>I own this target or am authorized to test it, and understand active scanning may generate traffic and alerts on it.</span>
+              </label>
+              <div style={{display:"flex",gap:10,justifyContent:"flex-end",borderTop:"1px solid #1c2435",paddingTop:14}}>
+                <button onClick={()=>setShowScanModal(false)} style={{background:"transparent",border:"1px solid #1c2435",borderRadius:6,padding:"9px 16px",color:"#8a94a8",fontWeight:600,fontSize:13,cursor:"pointer"}}>Close</button>
+                <button onClick={()=>{ if(target.trim()&&authConfirmed){ setShowScanModal(false); run(); } }} disabled={!target.trim()||!authConfirmed}
+                  style={{background:(target.trim()&&authConfirmed)?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"9px 22px",color:(target.trim()&&authConfirmed)?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:(target.trim()&&authConfirmed)?"pointer":"not-allowed"}}>
+                  ▶ Start Full Pentest
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Target input row */}
         <div style={{marginTop:8}}>
+          {false && (<>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
             <label style={{fontSize:11,color:"#5a6478",fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase"}}>Target URL or Domain</label>
             {targetHistory.length>0 && <button onClick={()=>setShowHistory(h=>!h)} style={{background:"#1c2435",border:"1px solid #1c2435",borderRadius:4,padding:"2px 8px",color:"#00d4ff",fontSize:10,cursor:"pointer"}}>History ({targetHistory.length})</button>}
@@ -4049,6 +4108,7 @@ function WebAppModule(props) {
               </div>
             )}
           </div>
+          </>)}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {/* Hidden honeypot inputs — Chrome fills these FIRST, leaving the
                 real target field alone. Combined with autoComplete="off" +
@@ -4057,20 +4117,20 @@ function WebAppModule(props) {
                 annoyance for good. */}
             <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
             <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}}/>
-            <input value={target} onChange={e=>setTarget(e.target.value)}
+            {false && (<input value={target} onChange={e=>setTarget(e.target.value)}
               placeholder="example.com  or  http://192.168.1.1:8080"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               name="webapp-pentest-target" data-form-type="other" aria-autocomplete="none"
-              style={{flex:3,minWidth:220,background:"#0a0e17",border:"1px solid "+(running?"#3b9eff":"#0e3a55"),borderRadius:6,padding:"11px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>
+              style={{flex:3,minWidth:220,background:"#0a0e17",border:"1px solid "+(running?"#3b9eff":"#0e3a55"),borderRadius:6,padding:"11px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",transition:"border-color 0.2s"}}/>)}
             {["lab_dvwa","lab_bwapp","lab_webgoat","lab_mutillidae"].some(l=>target.includes(l)) && !(authCookie||authBearer) && !running && (
               <div style={{background:"#451a03",border:"1px solid #f97316",borderRadius:6,padding:"8px 14px",color:"#fb923c",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
                 Auth required — click the target button to auto-login first
               </div>
             )}
             {!running ? (
-              <button onClick={run} disabled={!target.trim()}
-                style={{background:target.trim()?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"11px 28px",color:target.trim()?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed",whiteSpace:"nowrap",transition:"all 0.2s"}}>
-                ▶ Start Full Pentest
+              <button onClick={()=>setShowScanModal(true)}
+                style={{background:"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"11px 28px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.2s"}}>
+                Configure &amp; Scan
               </button>
             ) : (
               <button disabled style={{background:"#0d1320",border:"1px solid #3b9eff",borderRadius:6,padding:"11px 24px",color:"#00d4ff",fontSize:13,fontWeight:700,cursor:"not-allowed",display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
