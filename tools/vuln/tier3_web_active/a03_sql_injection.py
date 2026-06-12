@@ -19,7 +19,10 @@ import re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async, SQL_ERROR_PATTERNS
+from tools.vuln._vuln_common import (
+    probe_url_async, http_get_async, SQL_ERROR_PATTERNS,
+    detect_spa_catchall, is_same_as_canary,
+)
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -30,12 +33,16 @@ PAYLOAD            = "1'\""                                   # safe single-quot
 PAYLOAD_VERIFY     = "1)'"                                    # alt shape for verify step
 
 
-async def _probe_one(base_url, p, payload):
+async def _probe_one(base_url, p, payload, spa=None):
     url = f"{base_url}?{p}={payload}"
     r = await http_get_async(url, timeout=8)
     if not r:
         return None
-    body_lower = r.get("body", "").lower()
+    body = r.get("body", "")
+    # SPA-canary FP guard: skip if body is the SPA shell.
+    if spa and spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+        return {"_spa_suppressed": True, "param": p, "path": url}
+    body_lower = body.lower()
     for pattern in SQL_ERROR_PATTERNS:
         if re.search(pattern, body_lower):
             return {"param": p, "pattern": pattern,
@@ -43,19 +50,22 @@ async def _probe_one(base_url, p, payload):
     return None
 
 
-async def _fire(base_url, params, payload):
+async def _fire(base_url, params, payload, spa=None):
     """Fire `payload` against each param concurrently."""
     # VL-TURBO deep: parallel probe across all params.
     # Was N sequential GETs at 8s each. Now ~8s for all.
     results = await asyncio.gather(
-        *[_probe_one(base_url, p, payload) for p in params],
+        *[_probe_one(base_url, p, payload, spa) for p in params],
         return_exceptions=True)
-    hits = []
+    hits, suppressed = [], []
     for res in results:
         if isinstance(res, BaseException) or res is None:
             continue
+        if res.get("_spa_suppressed"):
+            suppressed.append({"param": res["param"], "path": res["path"]})
+            continue
         hits.append(res)
-    return hits
+    return hits, suppressed
 
 
 class A03SqlInjection(MethodologyScanner):
@@ -72,6 +82,9 @@ class A03SqlInjection(MethodologyScanner):
         ctx.state["base_url"] = base_url
         ctx.state["base_status"] = base.get("status")
         ctx.state["probed_params"] = len(PROBE_PARAMS_QUICK) + len(PROBE_PARAMS_DEEP)
+        # VL-VERIFY deep: detect SPA catch-all once so per-param probes can suppress
+        # SPA-shell echoes that would otherwise FP against React/Vue/Next.js sites.
+        ctx.state["_spa"] = await detect_spa_catchall(base_url)
         return True
 
     async def fingerprint(self, ctx):
@@ -85,8 +98,11 @@ class A03SqlInjection(MethodologyScanner):
             }
 
     async def quick_probe(self, ctx):
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK, PAYLOAD)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK, PAYLOAD,
+                                  ctx.state.get("_spa"))
         ctx.state["quick_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         # Return as preliminary findings (one per hit) so MethodologyScanner
         # routes them through verify+privilege_check stages.
         return [{"param": h["param"], "pattern": h["pattern"],
@@ -95,8 +111,11 @@ class A03SqlInjection(MethodologyScanner):
     async def deep_scan(self, ctx):
         # Only runs when quick_probe found something (gated by base class) OR
         # options.always_deep=True. So a clean quick_probe skips this entirely.
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP, PAYLOAD)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP, PAYLOAD,
+                                  ctx.state.get("_spa"))
         ctx.state["deep_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         return [{"param": h["param"], "pattern": h["pattern"],
                  "status": h["status"], "payload": h["payload"]} for h in hits]
 
@@ -111,7 +130,13 @@ class A03SqlInjection(MethodologyScanner):
             finding["confidence"] = "SUSPECTED"
             finding["verification_method"] = "verify-probe-failed"
             return finding
-        body_lower = r.get("body", "").lower()
+        body = r.get("body", "")
+        spa = ctx.state.get("_spa") or {}
+        if spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+            finding["confidence"] = "SUSPECTED"
+            finding["verification_method"] = "spa-shell-on-verify"
+            return finding
+        body_lower = body.lower()
         confirmed = any(re.search(pat, body_lower) for pat in SQL_ERROR_PATTERNS)
         finding["confidence"] = "CONFIRMED" if confirmed else "SUSPECTED"
         finding["verification_method"] = f"alt-payload-{PAYLOAD_VERIFY}"

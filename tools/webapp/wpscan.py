@@ -17,6 +17,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding)
 from tools.webapp._webapp_common import vuln_response
 from tools._payloads.webapp._loader import load_json
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 router = APIRouter()
@@ -88,19 +89,27 @@ def scan_wpscan(req: ScanRequest, payload=Depends(verify_scan_quota)):
         baseline = {"status": br.status_code, "size": len(br.content),
                     "body": (br.text or "")[:5000].lower()}
 
+    # VL-VERIFY: SPA-canary FP guard — SPA apps don't actually serve /wp-admin etc.
+    spa = detect_spa_catchall_sync(base)
+    spa_suppressed = []
+
     findings, tests = [], 0
 
     def _probe(entry):
         r = safe_get(base + entry["path"], req=req, allow_redirects=False, timeout=8)
         matched, evidence = _matches_entry(r, entry, baseline)
-        return (entry, matched, evidence)
+        return (entry, matched, evidence, r)
 
     # VL-TURBO deep: parallelize up to 52 WP path probes via pool(15).
     # Was ~416s sequential, now ~28s parallel.
     with ThreadPoolExecutor(max_workers=min(15, len(_WP_PATHS))) as pool:
-        for entry, matched, evidence in pool.map(_probe, _WP_PATHS, timeout=21):
+        for entry, matched, evidence, r in pool.map(_probe, _WP_PATHS, timeout=21):
             tests += 1
             if not matched:
+                continue
+            # VL-VERIFY: suppress if response body is the SPA shell
+            if spa["is_spa"] and r is not None and is_same_as_canary(r.text or "", spa["canary_body"]):
+                spa_suppressed.append(entry["path"])
                 continue
             findings.append(wrap_finding(
                 entry["title"],
@@ -127,11 +136,16 @@ def scan_wpscan(req: ScanRequest, payload=Depends(verify_scan_quota)):
         except Exception:
             pass
 
+    summary = f"WordPress scanner: {tests} active probes against {len(_WP_PATHS)}-entry wordlist"
+    if spa_suppressed:
+        summary += f"; {len(spa_suppressed)} SPA-shell suppression(s)"
     return vuln_response(tool="wpscan", target=req.target, findings=findings,
         tested=tests,
         what_checked=f"WordPress-specific paths ({len(_WP_PATHS)}-entry AI-curated wordlist: backup configs, xmlrpc, admin, themes, plugins, user-enum, debug logs)",
-        tests_summary=f"WordPress scanner: {tests} active probes against {len(_WP_PATHS)}-entry wordlist",
-        raw_data={"wpscan": {"is_wordpress": True, "wordlist_size": len(_WP_PATHS)}})
+        tests_summary=summary,
+        raw_data={"wpscan": {"is_wordpress": True, "wordlist_size": len(_WP_PATHS),
+                              "spa_catchall": spa["is_spa"],
+                              "spa_suppressed_paths": spa_suppressed}})
 
 
 def register(app): app.include_router(router)

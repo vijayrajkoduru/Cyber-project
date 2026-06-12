@@ -3,6 +3,7 @@ import asyncio
 import secrets
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -21,6 +22,10 @@ async def webapp_prototype_pollution(req: ScanRequest, payload=Depends(verify_sc
     findings = []
     tests = 0
     canary = secrets.token_hex(8)
+    # VL-VERIFY: SPA-canary FP guard — if /api/config returns the SPA shell,
+    # any "leak" is just the shell HTML, not real pollution.
+    spa = detect_spa_catchall_sync(base)
+    spa_suppressed = []
 
     payloads = [
         f"__proto__[ppMarker]={canary}",
@@ -65,6 +70,12 @@ async def webapp_prototype_pollution(req: ScanRequest, payload=Depends(verify_sc
         if isinstance(res, BaseException) or res is None:
             continue
         p, r2 = res
+        # VL-VERIFY: if the "leak" endpoint is just the SPA shell, the canary
+        # is in the response only because the SPA shell embeds the request URL
+        # — not because pollution actually persisted.
+        if spa["is_spa"] and is_same_as_canary(r2.text or "", spa["canary_body"]):
+            spa_suppressed.append(p)
+            continue
         suspect.append({"payload": p, "leaked_at": r2.url if hasattr(r2,"url") else "unknown"})
         findings.append(wrap_finding(
             f"Prototype Pollution confirmed via '{p}' - canary leaked to unrelated endpoint",
@@ -77,11 +88,16 @@ async def webapp_prototype_pollution(req: ScanRequest, payload=Depends(verify_sc
         ))
         break
 
+    summary = f"{tests} prototype pollution probes with unique canary"
+    if spa_suppressed:
+        summary += f"; {len(spa_suppressed)} SPA-shell suppression(s)"
     return standard_response(
         tool="prototype_pollution", target=req.target,
         findings=findings, tests_performed=tests,
-        tests_summary=f"{tests} prototype pollution probes with unique canary",
-        raw_data={"prototype_pollution": {"canary": canary, "suspect": suspect}},
+        tests_summary=summary,
+        raw_data={"prototype_pollution": {"canary": canary, "suspect": suspect,
+                                           "spa_catchall": spa["is_spa"],
+                                           "spa_suppressed_payloads": spa_suppressed}},
     )
 
 

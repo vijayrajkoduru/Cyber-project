@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 
@@ -46,6 +47,11 @@ def scan_request_forgery_origin(req: ScanRequest, payload=Depends(verify_scan_qu
     baseline_len = len(r0.content) if r0.content else 0
     baseline_status = r0.status_code
 
+    # VL-VERIFY: SPA-canary FP guard — evil-host responses that are just the
+    # React shell are not real proxy/host-confusion bugs.
+    spa = detect_spa_catchall_sync(base)
+    spa_suppressed = []
+
     findings = []
     accepted_evil = []
     reflected_origin = []
@@ -68,6 +74,9 @@ def scan_request_forgery_origin(req: ScanRequest, payload=Depends(verify_scan_qu
                 return None
             if abs((len(r.content) if r.content else 0) - baseline_len) <= 500:
                 return None
+            # VL-VERIFY: SPA shell — the response is just React index.html, not real proxy behavior
+            if spa["is_spa"] and is_same_as_canary(r.text or "", spa["canary_body"]):
+                return ("spa_host", {"host": evil})
             return ("host", {"host": evil, "status": r.status_code,
                               "size_delta": len(r.content or b"") - baseline_len})
         # kind == "origin"
@@ -78,6 +87,9 @@ def scan_request_forgery_origin(req: ScanRequest, payload=Depends(verify_scan_qu
             return None
         body = (r.text or "")[:20000]
         if evil in body or f"https://{evil}" in body:
+            # VL-VERIFY: if reflection is in the SPA shell, suppress
+            if spa["is_spa"] and is_same_as_canary(r.text or "", spa["canary_body"]):
+                return ("spa_origin", {"origin": f"https://{evil}"})
             return ("origin", {"origin": f"https://{evil}", "status": r.status_code})
         return None
 
@@ -88,8 +100,10 @@ def scan_request_forgery_origin(req: ScanRequest, payload=Depends(verify_scan_qu
             kind, payload_ = result
             if kind == "host":
                 accepted_evil.append(payload_)
-            else:
+            elif kind == "origin":
                 reflected_origin.append(payload_)
+            elif kind in ("spa_host", "spa_origin"):
+                spa_suppressed.append({"kind": kind, **payload_})
 
     if accepted_evil:
         findings.append(wrap_finding(
@@ -126,16 +140,21 @@ def scan_request_forgery_origin(req: ScanRequest, payload=Depends(verify_scan_qu
             remediation="Maintain. Continue Host-header allow-listing at server config.",
             evidence_marker=f"tested {len(EVIL_HOSTS)} evil hosts × 2 header attacks each"))
 
+    summary = (f"accepted_evil_host: {len(accepted_evil)}, "
+                f"reflected_origin: {len(reflected_origin)}")
+    if spa_suppressed:
+        summary += f"; {len(spa_suppressed)} SPA-shell suppression(s)"
     return standard_response(
         tool="request_forgery_origin", target=req.target, findings=findings,
         tests_performed=1 + 2 * len(EVIL_HOSTS),
         vulnerable=bool(accepted_evil or reflected_origin),
-        tests_summary=f"accepted_evil_host: {len(accepted_evil)}, "
-                       f"reflected_origin: {len(reflected_origin)}",
+        tests_summary=summary,
         raw_data={"baseline_status": baseline_status,
                    "baseline_len": baseline_len,
                    "accepted_evil": accepted_evil,
-                   "reflected_origin": reflected_origin})
+                   "reflected_origin": reflected_origin,
+                   "spa_catchall": spa["is_spa"],
+                   "spa_suppressed": spa_suppressed})
 
 
 def register(app):

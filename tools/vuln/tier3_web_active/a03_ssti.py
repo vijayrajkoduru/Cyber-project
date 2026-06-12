@@ -8,7 +8,10 @@ import asyncio
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._methodology import MethodologyScanner
-from tools.vuln._vuln_common import probe_url_async, http_get_async
+from tools.vuln._vuln_common import (
+    probe_url_async, http_get_async,
+    detect_spa_catchall, is_same_as_canary,
+)
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -22,13 +25,15 @@ PROBE_PARAMS_QUICK = ["q", "name", "msg"]
 PROBE_PARAMS_DEEP  = ["comment", "search", "template", "view"]
 
 
-async def _fire(base_url, params, payloads, marker):
+async def _fire(base_url, params, payloads, marker, spa=None):
     async def _probe(p, payload):
         url = f"{base_url}?{p}={payload}"
         r = await http_get_async(url, timeout=8)
         if not r:
             return None
         body = r.get("body", "")
+        if spa and spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+            return {"_spa_suppressed": True, "param": p, "path": url}
         # Marker must appear AND raw expression must NOT (template was evaluated)
         if marker in body and "7*7" not in body:
             return {"param": p, "payload": payload}
@@ -39,16 +44,19 @@ async def _fire(base_url, params, payloads, marker):
         *[_probe(p, payload) for p, payload in jobs],
         return_exceptions=True)
     # Preserve original break-on-first-hit-per-param semantics
-    hits = []
+    hits, suppressed = [], []
     seen_params = set()
     for res in results:
         if isinstance(res, BaseException) or res is None:
+            continue
+        if res.get("_spa_suppressed"):
+            suppressed.append({"param": res["param"], "path": res["path"]})
             continue
         if res["param"] in seen_params:
             continue
         seen_params.add(res["param"])
         hits.append(res)
-    return hits
+    return hits, suppressed
 
 
 class A03Ssti(MethodologyScanner):
@@ -65,6 +73,8 @@ class A03Ssti(MethodologyScanner):
         ctx.state["base_url"] = base_url
         ctx.state["probes"] = (len(PROBE_PARAMS_QUICK) + len(PROBE_PARAMS_DEEP)) * \
                                (len(PAYLOADS_QUICK) + len(PAYLOADS_DEEP))
+        # VL-VERIFY deep: SPA catch-all detection.
+        ctx.state["_spa"] = await detect_spa_catchall(base_url)
         return True
 
     async def fingerprint(self, ctx):
@@ -77,15 +87,20 @@ class A03Ssti(MethodologyScanner):
             }
 
     async def quick_probe(self, ctx):
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK,
-                            PAYLOADS_QUICK, MARKER_QUICK)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_QUICK,
+                                  PAYLOADS_QUICK, MARKER_QUICK, ctx.state.get("_spa"))
         ctx.state["quick_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         return [dict(h) for h in hits]
 
     async def deep_scan(self, ctx):
-        hits = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP,
-                            PAYLOADS_QUICK + PAYLOADS_DEEP, MARKER_QUICK)
+        hits, supp = await _fire(ctx.state["base_url"], PROBE_PARAMS_DEEP,
+                                  PAYLOADS_QUICK + PAYLOADS_DEEP, MARKER_QUICK,
+                                  ctx.state.get("_spa"))
         ctx.state["deep_hits"] = hits
+        if supp:
+            ctx.state.setdefault("spa_suppressed", []).extend(supp)
         return [dict(h) for h in hits]
 
     async def verify(self, ctx, finding):
@@ -98,6 +113,11 @@ class A03Ssti(MethodologyScanner):
             finding["verification_method"] = "verify-probe-failed"
             return finding
         body = r.get("body", "")
+        spa = ctx.state.get("_spa") or {}
+        if spa.get("is_spa") and body and is_same_as_canary(body, spa.get("canary_body", "")):
+            finding["confidence"] = "SUSPECTED"
+            finding["verification_method"] = "spa-shell-on-verify"
+            return finding
         if MARKER_VERIFY in body and "8*8" not in body:
             finding["confidence"] = "CONFIRMED"
             finding["verification_method"] = f"alt-math-{PAYLOAD_VERIFY}-evaluated"
