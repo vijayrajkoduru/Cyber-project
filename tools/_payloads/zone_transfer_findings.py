@@ -49,7 +49,6 @@ def rule_nameservers_count(s):
 ZONE_TRANSFER_FINDING_RULES = [
     rule_zone_transfer_allowed, rule_zone_transfer_blocked,
     rule_no_nameservers, rule_partial_transfer, rule_nameservers_count,
-    rule_positive_emit,
 ]
 
 def rule_positive_emit(s):
@@ -63,3 +62,5 @@ def rule_positive_emit(s):
         "remediation": "Maintain - zone transfers should be restricted to authorized secondary NS only.",
         "cwe": "CWE-200", "owasp": "N/A"
     }
+
+ZONE_TRANSFER_FINDING_RULES.append(rule_positive_emit)

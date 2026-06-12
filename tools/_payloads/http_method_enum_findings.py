@@ -15,7 +15,6 @@ def rule_safe(s):
             "remediation":"Maintain.",
             "cwe":"CWE-749","owasp":"M5:2023"}
 HTTP_METHOD_ENUM_FINDING_RULES = [rule_dangerous, rule_safe,
-    rule_positive_emit,
 ]
 
 def rule_positive_emit(s):
@@ -29,3 +28,5 @@ def rule_positive_emit(s):
         "remediation": "Maintain - dangerous methods (TRACE/PUT/DELETE) disabled.",
         "cwe": "CWE-200", "owasp": "N/A"
     }
+
+HTTP_METHOD_ENUM_FINDING_RULES.append(rule_positive_emit)

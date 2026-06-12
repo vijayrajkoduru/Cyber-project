@@ -34,7 +34,6 @@ def rule_secure(s):
             "cwe":"CWE-200","owasp":"M5:2023"}
 
 NSEC_WALKING_FINDING_RULES = [rule_nsec, rule_nsec3_opt_out, rule_nsec3_low_iter, rule_secure,
-    rule_positive_emit,
 ]
 
 def rule_positive_emit(s):
@@ -48,3 +47,5 @@ def rule_positive_emit(s):
         "remediation": "Maintain - NSEC3 (vs plain NSEC) prevents zone enumeration.",
         "cwe": "CWE-200", "owasp": "N/A"
     }
+
+NSEC_WALKING_FINDING_RULES.append(rule_positive_emit)

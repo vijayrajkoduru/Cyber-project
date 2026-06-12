@@ -24,7 +24,6 @@ def rule_secure(s):
             "cwe":"CWE-200","owasp":"M2:2023"}
 
 CACHE_SNOOPING_FINDING_RULES = [rule_open_recursion, rule_cache_leak, rule_secure,
-    rule_positive_emit,
 ]
 
 def rule_positive_emit(s):
@@ -38,3 +37,5 @@ def rule_positive_emit(s):
         "remediation": "Maintain - resolver configured to prevent unauthorized cache reads.",
         "cwe": "CWE-200", "owasp": "N/A"
     }
+
+CACHE_SNOOPING_FINDING_RULES.append(rule_positive_emit)
