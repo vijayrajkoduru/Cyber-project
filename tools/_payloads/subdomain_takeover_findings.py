@@ -14,7 +14,6 @@ def rule_safe(s):
             "cwe":"CWE-350","owasp":"M2:2023"}
 
 SUBDOMAIN_TAKEOVER_FINDING_RULES = [rule_vulnerable, rule_safe,
-    rule_positive_emit,
 ]
 
 def rule_positive_emit(s):
@@ -28,3 +27,5 @@ def rule_positive_emit(s):
         "remediation": "Maintain - inventory CNAMEs quarterly and remove dangling refs to decommissioned services.",
         "cwe": "CWE-200", "owasp": "N/A"
     }
+
+SUBDOMAIN_TAKEOVER_FINDING_RULES.append(rule_positive_emit)

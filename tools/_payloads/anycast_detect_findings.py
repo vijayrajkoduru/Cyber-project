@@ -15,7 +15,6 @@ def rule_unicast(s):
             "cwe":"CWE-200","owasp":"M5:2023"}
 
 ANYCAST_DETECT_FINDING_RULES = [rule_anycast, rule_unicast,
-    rule_positive_emit,
 ]
 
 def rule_positive_emit(s):
@@ -29,3 +28,5 @@ def rule_positive_emit(s):
         "remediation": "Anycast is optional - useful for latency reduction but not a security requirement.",
         "cwe": "CWE-200", "owasp": "N/A"
     }
+
+ANYCAST_DETECT_FINDING_RULES.append(rule_positive_emit)
