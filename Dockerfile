@@ -434,6 +434,14 @@ RUN set +e; \
     echo "=== CORE pip import sanity check (build fails if these miss) ===" ; \
     python -c "import impacket, ldap3, scapy.all, pymodbus, openai, anthropic, paramiko, winrm, jwt, pymysql, psycopg2; print('CORE PHASE 2 PIP OK')"
 
+# ── Playwright Chromium browser (web_screenshot visual-POC capture) ──
+# The `playwright` pip pkg above ships only the client; the actual Chromium
+# binary + its OS libraries must be fetched separately. Intentionally
+# non-fatal: if this step fails the recon web_screenshot probe degrades to
+# "no screenshot" instead of breaking the whole image build.
+RUN playwright install --with-deps chromium \
+ || echo "PHASE2_PLAYWRIGHT_CHROMIUM_FAILED (web_screenshot degrades gracefully)"
+
 # ── netexec (NetExec / nxc) - not on PyPI, install from GitHub ──
 # Provides the `nxc` binary used by AD module netexec_smb_spray probe.
 RUN pip install --no-cache-dir git+https://github.com/Pennyw0rth/NetExec.git \

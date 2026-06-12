@@ -6,10 +6,12 @@ Add SPA canary check + require sourcemap-shaped JSON (mappings field) to
 fully eliminate FPs.
 """
 import asyncio, requests, re
+from urllib.parse import urljoin
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
+from tools._vl_core.proof_capture import capture_proof
 router=APIRouter()
 _PATHS=["/static/js/main.js.map","/static/js/bundle.js.map","/js/app.js.map","/dist/main.js.map",
     "/build/static/js/main.js.map","/assets/main.js.map","/app.bundle.js.map","/vendor.js.map"]
@@ -51,19 +53,39 @@ async def gather(ctx):
             jr=await asyncio.to_thread(_g,js_url)
             if jr and "sourceMappingURL=" in (jr.text or "")[-500:]:
                 m=re.search(r"sourceMappingURL=([^\s\*/]+)",jr.text[-500:])
-                if m: found.append({"path":m.group(1)[:120],"source":"comment","size":0})
+                if m:
+                    # Resolve the .map relative to the JS file URL so the absolute
+                    # path is correct (the comment value is a bare filename), which
+                    # lets the VL-PROOF capture below fetch the real artifact.
+                    abs_map=urljoin(js_url, m.group(1))
+                    found.append({"path":abs_map[:200],"source":"comment","size":0})
     if found: ctx.source(f"maps-{len(found)}")
     ctx.state["maps_found"]=found
     ctx.state["maps_count"]=len(found)
     ctx.state["paths_probed"]=len(_PATHS)
     ctx.state["reachable"]=bool(home)
+    # VL-PROOF: screenshot the FIRST confirmed map as visual evidence. capture_proof
+    # re-verifies the source-map signal + SPA canary at capture time, so the image
+    # can only ever depict the already-confirmed exposure (never a new FP).
+    if found:
+        p0=found[0]["path"]
+        purl=p0 if p0.startswith("http") else base+(p0 if p0.startswith("/") else "/"+p0)
+        shot,cap=await asyncio.to_thread(capture_proof,purl,"sourcemap")
+        ctx.state["proof_shot"]=shot
+        ctx.state["proof_caption"]=cap
+        ctx.state["proof_url"]=purl
+        ctx.source("proof-captured" if shot else f"proof-skipped: {cap}")
 def _r_exposed(s):
     f=s.get("maps_found") or []
     if not f: return None
-    return {"name":f"JavaScript source maps exposed ({len(f)})","severity":"MEDIUM","cwe":"CWE-540",
+    out={"name":f"JavaScript source maps exposed ({len(f)})","severity":"MEDIUM","cwe":"CWE-540",
         "owasp":"A05:2021",
         "evidence":"; ".join(m["path"] for m in f[:3]),
         "remediation":"Don't ship .map files to production. Block at WAF/nginx or remove from build."}
+    if s.get("proof_shot"):
+        out["screenshot"]=s["proof_shot"]
+        out["screenshot_caption"]=s.get("proof_caption")
+    return out
 def _r_clean(s):
     if s.get("maps_count",0)>0: return None
     if not s.get("reachable"): return None
