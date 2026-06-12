@@ -108,6 +108,14 @@ class ChainExecutor:
                          current_depth: int = 0) -> list[dict]:
         """Walk primary_results, spawn downstream scanners for each
         finding with chain_next. Returns list of new result dicts."""
+        # VA-NOT-PT (user directive 2026-06-06): cross-scanner auto-exploitation
+        # is permanently DISABLED. VulnusLab finds vulnerabilities; it must never
+        # auto-spawn downstream scanners with inherited credentials ("hacking").
+        # This is the single chokepoint — returning [] here neutralises chaining
+        # for every module and every scanner that calls expand_all. Do NOT
+        # re-enable without explicit owner approval.
+        return []
+        # --- retained for reference only; unreachable while chaining is off ---
         if current_depth >= self.max_depth:
             return []
 
