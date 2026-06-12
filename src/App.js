@@ -3036,6 +3036,137 @@ const SECTION_HEADERS = {
 // Tools trial users can access in Web App Pentesting (Section 1 recon only)
 const TRIAL_TOOLS = new Set(["wafw00f","whatweb","cms","nmap","ssl"]);
 
+// AuthPanel — shared authenticated-scan UI used by EVERY module's Scan Setup
+// modal. Auto-login (capture session cookie / bearer via POST /api/scan/login)
+// OR paste a Session Cookie / Bearer (JWT) manually. Captured credentials flow
+// to all scanners through ScanRequest.auth_cookie / auth_bearer (tools/_shared.py
+// injects the Cookie + Authorization headers). Listens for the "vl-fill-creds"
+// window event so credentialed test-target chips can auto-fill + auto-login.
+function AuthPanel({ target, token, authCookie, setAuthCookie, authBearer, setAuthBearer, persist, defaultOpen }) {
+  const [open, setOpen]           = useState(defaultOpen === undefined ? true : defaultOpen);
+  const [loginUrl, setLoginUrl]   = useState("");
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const [busy, setBusy]           = useState(false);
+  const [status, setStatus]       = useState(null);
+  const _setCookie = (v) => { setAuthCookie(v); if (persist) { try { localStorage.setItem("cyberAuthCookie", v || ""); } catch(e){} } };
+  const _setBearer = (v) => { setAuthBearer(v); if (persist) { try { localStorage.setItem("cyberAuthBearer", v || ""); } catch(e){} } };
+  const doLogin = async (tgt, lu, uu, pp) => {
+    const _t = ((tgt !== undefined ? tgt : target) || "").trim();
+    if (!_t) { setStatus("Enter a target first"); return; }
+    if (!lu || !uu || !pp) { setStatus("Login URL + username + password are all required"); return; }
+    setBusy(true); setStatus(null);
+    try {
+      const lr = await api("/api/scan/login", "POST", { target: _t, login_url: lu, username: uu, password: pp, auth_type: "form" }, token, { timeoutMs: 35000 });
+      const got = (lr && (lr.auth_cookie || lr.auth_bearer));
+      if (lr && (lr.login_verified || got)) {
+        _setCookie(lr.auth_cookie || "");
+        if (lr.auth_bearer) _setBearer(lr.auth_bearer);
+        setStatus(lr.fallback ? ("ok (via " + lr.fallback + ")") : "ok");
+      } else { setStatus((lr && lr.hint) || "Login could not be verified"); }
+    } catch (e) { setStatus("Login request failed: " + (e.message || e)); }
+    finally { setBusy(false); }
+  };
+  useEffect(() => {
+    const h = (e) => {
+      const d = (e && e.detail) || {};
+      if (d.login_url !== undefined || d.username !== undefined || d.password !== undefined) {
+        setLoginUrl(d.login_url || ""); setLoginUser(d.username || ""); setLoginPass(d.password || "");
+        setOpen(true);
+        if (d.auto && d.login_url && d.username && d.password) doLogin(d.target, d.login_url, d.username, d.password);
+      }
+      if (d.auth_cookie !== undefined) _setCookie(d.auth_cookie || "");
+      if (d.auth_bearer !== undefined) _setBearer(d.auth_bearer || "");
+    };
+    window.addEventListener("vl-fill-creds", h);
+    return () => window.removeEventListener("vl-fill-creds", h);
+  });
+  const ok = status && status.indexOf("ok") === 0;
+  return (
+    <div style={{marginBottom:14, background:"#0a0e17", border:"1px solid #1c2435", borderRadius:6}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{padding:"8px 12px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", userSelect:"none"}}>
+        <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+          <span style={{fontSize:11}}>{open?"▼":"▶"}</span>
+          <span style={{fontSize:12, fontWeight:600, color:"#d8deea"}}>Authentication (optional)</span>
+          <span style={{fontSize:10, color:"#5a6478"}}>— auto-login, or paste a session cookie / JWT to scan behind login</span>
+        </div>
+        {(authCookie||authBearer) && <span style={{background:"#052e16", color:"#5dffa6", fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:3}}>credentials ready</span>}
+      </div>
+      {open && (
+        <div style={{padding:"12px", borderTop:"1px solid #1c2435", display:"flex", flexDirection:"column", gap:10}}>
+          <div style={{background:"#0a0e17", border:"1px solid #0e3a55", borderRadius:5, padding:"10px 12px"}}>
+            <div style={{fontSize:11, color:"#7dffc0", fontWeight:700, marginBottom:6}}>Auto-login (recommended)</div>
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8}}>
+              <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)} placeholder="Login URL (e.g. /login)" autoComplete="off"
+                style={{background:"#0d1320", border:"1px solid #0e3a55", borderRadius:4, padding:"7px 10px", color:"#d8deea", fontFamily:"JetBrains Mono,monospace", fontSize:11, outline:"none", boxSizing:"border-box"}}/>
+              <input value={loginUser} onChange={e=>setLoginUser(e.target.value)} placeholder="Username / email" autoComplete="off" name="vl-auth-u" data-form-type="other"
+                style={{background:"#0d1320", border:"1px solid #0e3a55", borderRadius:4, padding:"7px 10px", color:"#d8deea", fontFamily:"JetBrains Mono,monospace", fontSize:11, outline:"none", boxSizing:"border-box"}}/>
+              <input value={loginPass} onChange={e=>setLoginPass(e.target.value)} type="password" placeholder="Password" autoComplete="new-password" name="vl-auth-p" data-form-type="other"
+                style={{background:"#0d1320", border:"1px solid #0e3a55", borderRadius:4, padding:"7px 10px", color:"#d8deea", fontFamily:"JetBrains Mono,monospace", fontSize:11, outline:"none", boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex", gap:10, alignItems:"center", flexWrap:"wrap"}}>
+              <button onClick={()=>doLogin(undefined, loginUrl.trim(), loginUser.trim(), loginPass.trim())} disabled={busy}
+                style={{background:busy?"#1c2435":"linear-gradient(135deg,#00ff88,#0bd673)", border:"none", borderRadius:4, padding:"7px 14px", color:busy?"#5a6478":"#0d1320", fontSize:11, fontWeight:700, cursor:busy?"not-allowed":"pointer"}}>
+                {busy?"Logging in...":"Auto-login & capture cookie"}
+              </button>
+              {ok && <span style={{fontSize:11, color:"#5dffa6", fontWeight:600}}>Logged in — session captured</span>}
+              {status && !ok && <span style={{fontSize:11, color:"#ff6b82", fontWeight:600}}>{status}</span>}
+            </div>
+          </div>
+          <div style={{fontSize:10, color:"#5a6478", textAlign:"center"}}>— OR paste cookie / bearer manually —</div>
+          <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
+            <div style={{flex:1, minWidth:240}}>
+              <div style={{fontSize:10, color:"#5a6478", marginBottom:3, fontWeight:600}}>Session Cookie</div>
+              <input value={authCookie} onChange={e=>_setCookie(e.target.value)} placeholder="PHPSESSID=abc123; sid=xyz"
+                style={{width:"100%", background:"#0a0e17", border:"1px solid #0e3a55", borderRadius:5, padding:"8px 11px", color:"#d8deea", fontFamily:"JetBrains Mono,monospace", fontSize:11, outline:"none", boxSizing:"border-box"}}/>
+            </div>
+            <div style={{flex:1, minWidth:240}}>
+              <div style={{fontSize:10, color:"#5a6478", marginBottom:3, fontWeight:600}}>Bearer Token (JWT / API key)</div>
+              <input value={authBearer} onChange={e=>_setBearer(e.target.value)} placeholder="eyJhbGciOiJIUzI1NiJ9..."
+                style={{width:"100%", background:"#0a0e17", border:"1px solid #0e3a55", borderRadius:5, padding:"8px 11px", color:"#d8deea", fontFamily:"JetBrains Mono,monospace", fontSize:11, outline:"none", boxSizing:"border-box"}}/>
+            </div>
+          </div>
+          {(authCookie||authBearer) && (
+            <button onClick={()=>{_setCookie("");_setBearer("");setStatus(null);}}
+              style={{alignSelf:"flex-start", background:"#1c2435", border:"1px solid #1c2435", borderRadius:4, padding:"4px 10px", color:"#ff3e5e", fontSize:10, cursor:"pointer", fontWeight:600}}>Clear auth credentials</button>
+          )}
+          <div style={{fontSize:10, color:"#5a6478"}}>Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// TestChips — shared "Try:" target chips for a module's Scan Setup modal. Reads
+// MODULE_TEST_TARGETS (falls back to MODULE_TARGET_EXAMPLES). A chip with creds
+// shows an AUTH tag; clicking it sets the target AND dispatches "vl-fill-creds"
+// so the AuthPanel auto-fills + auto-authenticates. A plain chip clears creds.
+function TestChips({ moduleKey, setTarget, running }) {
+  const list = MODULE_TEST_TARGETS[moduleKey] || (MODULE_TARGET_EXAMPLES[moduleKey] || []).map(v => ({ value: v }));
+  if (!list.length) return null;
+  return (
+    <div style={{display:"flex", alignItems:"center", gap:6, marginTop:8, flexWrap:"wrap"}}>
+      <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
+      {list.map((t, idx) => {
+        const hasCreds = !!(t.login_url && t.username);
+        return (
+          <button key={idx} disabled={running}
+            onClick={() => {
+              setTarget(t.value);
+              if (hasCreds) window.dispatchEvent(new CustomEvent("vl-fill-creds", { detail: { target: t.value, login_url: t.login_url, username: t.username, password: t.password, auto: true } }));
+              else window.dispatchEvent(new CustomEvent("vl-fill-creds", { detail: { login_url: "", username: "", password: "" } }));
+            }}
+            title={hasCreds ? ("Auto-login as " + t.username) : t.value}
+            style={{display:"inline-flex", alignItems:"center", gap:5, background:"#0c1424", border:"1px solid " + (hasCreds ? "#0e5a3a" : "#0e3a55"), color:"#7fdcff", borderRadius:12, padding:"3px 10px", fontSize:11, fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer", opacity: running ? 0.5 : 1}}>
+            {t.label || t.value}
+            {hasCreds && <span style={{fontSize:8, color:"#5dffa6", fontWeight:800, letterSpacing:0.5}}>AUTH</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function WebAppModule(props) {
   const token = props.token;
   const isTrial      = props.isTrial || false;
@@ -3990,26 +4121,9 @@ function WebAppModule(props) {
               <label style={{fontSize:10,color:"#8a94a8",fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,display:"block",marginBottom:5}}>Target URL or Domain</label>
               <input value={target} onChange={e=>setTarget(e.target.value)} placeholder="example.com  or  http://192.168.1.1:8080"
                 style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
-              {(MODULE_TARGET_EXAMPLES.webapp || []).length > 0 && (
-                <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,flexWrap:"wrap"}}>
-                  <span style={{fontSize:10,color:"#5a6478",fontWeight:600,letterSpacing:0.5,textTransform:"uppercase"}}>Try:</span>
-                  {(MODULE_TARGET_EXAMPLES.webapp || []).map((ex,idx)=>(
-                    <button key={idx} onClick={()=>setTarget(ex)} style={{background:"#0c1424",border:"1px solid #0e3a55",color:"#7fdcff",borderRadius:12,padding:"3px 10px",fontSize:11,fontFamily:"JetBrains Mono, monospace",cursor:"pointer"}}>{ex}</button>
-                  ))}
-                </div>
-              )}
-              <div style={{marginTop:16,marginBottom:6,fontSize:10,color:"#8a94a8",fontWeight:700,textTransform:"uppercase",letterSpacing:1.2}}>Authentication (optional) — behind-login: IDOR, stored XSS, mass-assignment</div>
-              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:4}}>
-                <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                  <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123; sid=xyz"
-                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
-                <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Bearer Token (JWT)</div>
-                  <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJI..."
-                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
+              <TestChips moduleKey="webapp" setTarget={setTarget} running={running} />
+              <div style={{marginTop:16}}>
+                <AuthPanel target={target} token={token} authCookie={authCookie} setAuthCookie={setAuthCookie} authBearer={authBearer} setAuthBearer={setAuthBearer} persist={true} defaultOpen={true} />
               </div>
               <div style={{display:"flex",gap:10,justifyContent:"flex-end",borderTop:"1px solid #1c2435",paddingTop:14,marginTop:14}}>
                 <button onClick={()=>setShowScanModal(false)} style={{background:"transparent",border:"1px solid #1c2435",borderRadius:6,padding:"9px 16px",color:"#8a94a8",fontWeight:600,fontSize:13,cursor:"pointer"}}>Close</button>
@@ -9684,7 +9798,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     _renderP(_p3);
 
     // Engagement scope
-    chk(50); y = sHead("Engagement Scope", y);
+    chk(32); y = sHead("Engagement Scope", y);
     y = tHead(["FIELD","VALUE"],[45,135],y);
     const _scope = [
       ["Target", target],
@@ -9883,7 +9997,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
     // Top concerns
     if (_top3.length > 0) {
-      chk(50); y = sHead("Top Concerns", y);
+      chk(28); y = sHead("Top Concerns", y);
       _top3.forEach((f,idx)=>{
         chk(13);
         const sev = (f.severity||"INFO").toUpperCase();
@@ -9915,7 +10029,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
   doc.addPage(); y=18; drawHeader();
 
-  chk(85); y = sHead("Scan Coverage", y);
+  chk(46); y = sHead("Scan Coverage", y);
   fillR(margin, y, contentW, 20, LIGHT);
   fillR(margin, y, 4, 20, _covColor);
   doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
@@ -13150,122 +13264,8 @@ function ReconModule({token, onRunningChange, activeSections}) {
           {icon:"",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",     desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
         )}
-        {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
-        <div style={{marginBottom:10,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6}}>
-          <div onClick={()=>setAuthOpen(o=>!o)}
-            style={{padding:"8px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",userSelect:"none"}}>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <span style={{fontSize:11}}>{authOpen?"▼":"▶"}</span>
-              <span style={{fontSize:12,fontWeight:600,color:"#d8deea"}}>Authenticated recon (optional)</span>
-              <span style={{fontSize:10,color:"#5a6478"}}>— lets crawl/gobuster/jsendpoints/params see behind-login URLs</span>
-            </div>
-            {authStatus==="ok"   && <span style={{background:"#052e16",color:"#5dffa6",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>session captured</span>}
-            {authStatus==="fail" && <span style={{background:"#450a0a",color:"#ff6b82",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>login failed</span>}
-            {(authCookie||authBearer) && authStatus!=="ok" && <span style={{background:"#052e16",color:"#5dffa6",fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3}}>credentials ready</span>}
-          </div>
-          {authOpen && (
-            <div style={{padding:"12px",borderTop:"1px solid #1c2435",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{fontSize:10,color:"#c3ccda",lineHeight:1.6,background:"#0d2436",padding:"8px 10px",borderRadius:5,border:"1px solid #0e3a55"}}>
-                <b style={{color:"#7dffc0"}}>Most customers should leave this empty.</b> External recon (WHOIS, DNS, crt.sh, Shodan, OSINT) doesn't need login. Only fill this in if your target has a login system AND you want the crawler / directory enum / secrets scanner to walk behind-login pages.
-              </div>
-              <div style={{background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"10px 12px"}}>
-                <div style={{fontSize:11,color:"#7dffc0",fontWeight:700,marginBottom:6}}>
-                  Auto-login (recommended)
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                  <input value={loginUrl} onChange={e=>setLoginUrl(e.target.value)}
-                    placeholder="Login URL (e.g. /login)" autoComplete="off"
-                    style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                  <input value={loginUser} onChange={e=>setLoginUser(e.target.value)}
-                    placeholder="Username / email" autoComplete="off"
-                    name="vl-recon-login-user" data-form-type="other"
-                    style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                  <input value={loginPass} onChange={e=>setLoginPass(e.target.value)}
-                    type="password" placeholder="Password" autoComplete="new-password"
-                    name="vl-recon-login-pass" data-form-type="other"
-                    style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:4,padding:"7px 10px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
-                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-                  <button
-                    onClick={async ()=>{
-                      if(!target.trim()){ setRAutoLoginStatus("Enter a target first"); return; }
-                      if(!loginUrl.trim()||!loginUser.trim()||!loginPass.trim()){
-                        setRAutoLoginStatus("Login URL + username + password are all required"); return;
-                      }
-                      setRAutoLoginBusy(true); setRAutoLoginStatus(null);
-                      try {
-                        const lr = await api("/api/scan/login","POST",{
-                          target, login_url: loginUrl,
-                          username: loginUser, password: loginPass,
-                          auth_type: "form",
-                        }, token, { timeoutMs: 35000, signal: (window.__loginAbort = new AbortController()).signal });
-                        const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
-                        if (lr && (lr.login_verified || _got)) {
-                          // COOKIE-PRAGMATIC-V1 — if we got a session cookie/bearer, USE IT
-                          // even if verification was uncertain (Tomcat/WebGoat false-negatives)
-                          setAuthCookie(lr.auth_cookie || "");
-                          if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
-                          setAuthStatus("ok");
-                          setRAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
-                        } else {
-                          setAuthStatus("fail");
-                          setRAutoLoginStatus(lr?.hint || "Login could not be verified");
-                        }
-                      } catch(e){
-                        setAuthStatus("fail");
-                        setRAutoLoginStatus("Login request failed: "+(e.message||e));
-                      } finally {
-                        setRAutoLoginBusy(false);
-                      }
-                    }}
-                    disabled={rAutoLoginBusy}
-                    style={{background:rAutoLoginBusy?"#1c2435":"linear-gradient(135deg,#00ff88,#0bd673)",border:"none",borderRadius:4,padding:"7px 14px",color:rAutoLoginBusy?"#5a6478":"#0d1320",fontSize:11,fontWeight:700,cursor:rAutoLoginBusy?"not-allowed":"pointer"}}>
-                    {rAutoLoginBusy?"Logging in...":"Auto-login & capture cookie"}
-                  </button>
-                  {rAutoLoginStatus && rAutoLoginStatus.startsWith("ok") && (
-                    <span style={{fontSize:11,color:"#5dffa6",fontWeight:600}}>Logged in — cookie captured</span>
-                  )}
-                  {rAutoLoginStatus && !rAutoLoginStatus.startsWith("ok") && (
-                    <span style={{fontSize:11,color:"#ff6b82",fontWeight:600}}>{rAutoLoginStatus}</span>
-                  )}
-                </div>
-              </div>
-              <div style={{fontSize:10,color:"#5a6478",textAlign:"center",margin:"2px 0"}}>— OR paste cookie / bearer manually —</div>
-              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                  <input value={authCookie} onChange={e=>setAuthCookie(e.target.value)}
-                    placeholder="PHPSESSID=abc123; sid=xyz"
-                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
-                <div style={{flex:1,minWidth:240}}>
-                  <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Bearer Token (JWT / API key)</div>
-                  <input value={authBearer} onChange={e=>setAuthBearer(e.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiJ9..."
-                    style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
-                </div>
-              </div>
-              {(authCookie||authBearer) && (
-                <button onClick={()=>{setAuthCookie("");setAuthBearer("");setAuthStatus(null);setRAutoLoginStatus(null);}}
-                  style={{alignSelf:"flex-start",background:"#1c2435",border:"1px solid #1c2435",borderRadius:4,padding:"4px 10px",color:"#ff3e5e",fontSize:10,cursor:"pointer",fontWeight:600}}>
-                  Clear auth credentials
-                </button>
-              )}
-              <div style={{fontSize:10,color:"#5a6478",marginTop:2}}>
-                Credentials are sent to the scanner backend only, never stored. Session is discarded when this page reloads.
-              </div>
-            </div>
-          )}
-        </div>
-        {(MODULE_TARGET_EXAMPLES.recon || []).length > 0 && (
-          <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:10, flexWrap:"wrap"}}>
-            <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
-            {(MODULE_TARGET_EXAMPLES.recon || []).map((ex, idx) => (
-              <button key={idx} onClick={()=>setTarget(ex)} disabled={running}
-                style={{background:"#0c1424", border:"1px solid #0e3a55", color:"#7fdcff", borderRadius:12, padding:"3px 10px", fontSize:11, fontFamily:"JetBrains Mono, monospace", cursor: running?"not-allowed":"pointer", opacity: running?0.5:1}}>{ex}</button>
-            ))}
-          </div>
-        )}
+        <AuthPanel target={target} token={token} authCookie={authCookie} setAuthCookie={setAuthCookie} authBearer={authBearer} setAuthBearer={setAuthBearer} defaultOpen={true} />
+        <TestChips moduleKey="recon" setTarget={setTarget} running={running} />
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
@@ -13921,19 +13921,6 @@ function generateUniversalVLReport(opts) {
   const _riskScore = Math.max(_sevFloor, _scopeAdjusted);
   const _riskLabel = (_riskScore>=80&&_sevCount.CRITICAL>0)?"CRITICAL RISK":_riskScore>=60?"HIGH RISK":_riskScore>=40?"MODERATE RISK":_riskScore>=20?"LOW RISK":"MINIMAL RISK";
   const _riskColor = (_riskScore>=80&&_sevCount.CRITICAL>0)?[162,28,28]:_riskScore>=60?[194,65,12]:_riskScore>=40?[133,79,11]:_riskScore>=20?[202,138,4]:[15,118,82];
-  // Footnote for the auditor: explain WHY the headline score isn't the raw.
-  // Expanded to show the full formula breakdown so external readers can
-  // reproduce the math instead of trusting an opaque single number.
-  const _scopeNote = _scopeFactor < 1.0
-    ? `Scope-adjusted: raw severity score ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} input-coverage factor = ${_scopeAdjusted} (${_inputsSupplied}/5 inputs provided)`
-    : null;
-  const _formulaNote = `Formula: raw = min(70, C*15 + H*8 + M*3 + L*1) + worst-severity cap (${_maxC}); `
-    + `then x scope factor [0.4..1.0 from input coverage]; then floored to the worst-severity band. `
-    + `Inputs counted: ${_inputsSupplied}/5 (dockerfile, pod-spec, kubeconfig, repo, image). `
-    + `C=${_sevCount.CRITICAL} H=${_sevCount.HIGH} M=${_sevCount.MEDIUM} L=${_sevCount.LOW} `
-    + `-> raw ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} = ${_scopeAdjusted}`
-    + `${_sevFloor > _scopeAdjusted ? ` -> worst-severity floor ${_sevFloor}` : ""} -> ${_riskScore}.`;
-
   // Report ID + Content Hash (deterministic per (module, target, date, findings))
   const _genId = (pre, t, d) => {
     const s = String(pre)+"|"+String(t)+"|"+String(d)+"|"+Date.now();
@@ -14261,19 +14248,7 @@ function generateUniversalVLReport(opts) {
   chk(4);
   txt("Bands: 0-20 MINIMAL  -  20-40 LOW  -  40-60 MODERATE  -  60-80 HIGH  -  80-100 CRITICAL",
       margin, y, 6.5, GRAY);
-  y += 5;
-  // Scope-adjustment footnote — only renders when scope_factor < 1.0
-  if (_scopeNote) {
-    chk(4);
-    txt(_scopeNote, margin, y, 6.5, GRAY); y += 5;
-  }
-  // Always render the formula breakdown so the headline score is reproducible.
-  {
-    const _fLines = doc.splitTextToSize(_ascii(_formulaNote), contentW);
-    chk(4 + 3 * _fLines.length);
-    _fLines.forEach((ln, i) => txt(ln, margin, y + (i * 3.2), 6.3, GRAY));
-    y += 3.2 * _fLines.length + 2;
-  }
+  y += 7;
 
   // ── DELTA vs PRIOR SCAN (Gap 5) ──
   // Reads vl_scans:{moduleKey} array from localStorage and surfaces the
@@ -14380,7 +14355,7 @@ function generateUniversalVLReport(opts) {
   }
 
   // ── DOCUMENT CONTROL ──
-  chk(72); y = sHead("Document Control", y);
+  chk(40); y = sHead("Document Control", y);
   y = tHead(["FIELD","VALUE"], [55,125], y);
   // Auto-bump version from prior-scan count in localStorage. Was hardcoded
   // "1.0 (Initial)" which contradicted the DELTA card showing +29/-30 vs
@@ -14440,7 +14415,7 @@ function generateUniversalVLReport(opts) {
       .sort((a,b) => (_sevOrder[String(a.severity||"").toUpperCase()]||9) - (_sevOrder[String(b.severity||"").toUpperCase()]||9))
       .slice(0,3);
 
-    chk(70); y = sHead("Executive Summary", y);
+    chk(44); y = sHead("Executive Summary", y);
     let _posture, _pCol;
     if (_insufficientScan) {
       _posture = "INSUFFICIENT SCAN - POSTURE UNKNOWN"; _pCol = [202,138,4];
@@ -14613,7 +14588,7 @@ function generateUniversalVLReport(opts) {
       y += _barH + 4;
     }
 
-    chk(50); y = sHead("Engagement Scope", y);
+    chk(32); y = sHead("Engagement Scope", y);
     y = tHead(["FIELD","VALUE"], [45,135], y);
     const _scope = [
       ["Target (as supplied)", target || "(none)"],
@@ -14650,7 +14625,7 @@ function generateUniversalVLReport(opts) {
     // cards that wrongly described SQLi/XSS for every module (incl. ones that do
     // not test them). (pdf_industry_standard.md - scope/coverage transparency)
     {
-      chk(45); y = sHead("What This Assessment Covers", y);
+      chk(30); y = sHead("What This Assessment Covers", y);
       // Purpose — per-module one-liner, keyword-matched, with an honest fallback.
       const _ml = (moduleLabel || "").toLowerCase();
       const _purposeMap = [
@@ -15056,7 +15031,7 @@ function generateUniversalVLReport(opts) {
 
     // Top concerns
     if (_top3.length > 0) {
-      chk(50); y = sHead("Top Concerns", y);
+      chk(28); y = sHead("Top Concerns", y);
       _top3.forEach((f, idx) => {
         chk(13);
         const sev = String(f.severity||"INFO").toUpperCase();
@@ -15180,7 +15155,7 @@ function generateUniversalVLReport(opts) {
   const _covPct = _phaseDefs.length > 0 ? Math.round(_completeness / _phaseDefs.length * 100) : 0;
   const _covColor = _covPct >= 90 ? [15,118,82] : _covPct >= 70 ? [202,138,4] : [162,28,28];
 
-  chk(85); y = sHead("Scan Coverage", y);
+  chk(46); y = sHead("Scan Coverage", y);
   fillR(margin, y, contentW, 20, LIGHT);
   fillR(margin, y, 4, 20, _covColor);
   doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor(..._covColor);
@@ -16163,7 +16138,7 @@ function generateUniversalVLReport(opts) {
   // enumeration was duplicate detail with no extra signal.
 
   // ── APPENDIX ──
-  chk(50); y = sHead("Appendix", y);
+  chk(32); y = sHead("Appendix", y);
   txt("A. Methodology", margin, y + 5, 9, DARK, true); y += 8;
   // Use scaffold-aware methodology when 100% of findings are NOT IMPLEMENTED.
   // Default methodology language ("Every finding is independently triggered")
@@ -20873,17 +20848,18 @@ const MODULE_TEST_TARGETS = {
     {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Nmap's official authorized scan target"},
     {label:"hackerone.com",       value:"hackerone.com",                         desc:"Bug-bounty platform (public surface)"},
     {label:"example.com",         value:"example.com",                           desc:"IANA reserved demo domain"},
+    {label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com", login_url:"http://testphp.vulnweb.com/login.php", username:"test", password:"test", desc:"Acunetix Acuart - authenticated crawl (auto-login test/test)"},
   ],
   vuln: [
-    {label:"demo.testfire.net",     value:"http://demo.testfire.net",            desc:"IBM AltoroMutual - Java/Tomcat 5.5 CVEs"},
+    {label:"demo.testfire.net",     value:"http://demo.testfire.net", login_url:"http://demo.testfire.net/login.jsp", username:"admin", password:"admin", desc:"IBM AltoroMutual - Java/Tomcat 5.5 CVEs (auto-login admin/admin)"},
     {label:"lab_metasploitable",    value:"lab_metasploitable",                  desc:"Internal lab - many real CVEs (Samba/vsftpd/etc)"},
     {label:"scanme.nmap.org",       value:"scanme.nmap.org",                     desc:"Nmap's official authorized test target"},
   ],
   webapp: [
-    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com/listproducts.php?cat=1", desc:"Acunetix Acuart - SQLi on cat param"},
-    {label:"lab_dvwa",              value:"http://lab_dvwa",                     desc:"Internal DVWA lab (admin/password)"},
-    {label:"lab_juiceshop",         value:"http://lab_juiceshop:3000",           desc:"Internal OWASP Juice Shop"},
-    {label:"demo.testfire.net",     value:"http://demo.testfire.net",            desc:"IBM AltoroMutual demo"},
+    {label:"testphp.vulnweb.com",   value:"http://testphp.vulnweb.com/listproducts.php?cat=1", login_url:"http://testphp.vulnweb.com/login.php", username:"test", password:"test", desc:"Acunetix Acuart - SQLi on cat param (auto-login test/test)"},
+    {label:"lab_dvwa",              value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Internal DVWA lab (auto-login admin/password)"},
+    {label:"lab_juiceshop",         value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", desc:"Internal OWASP Juice Shop (auto-login admin@juice-sh.op)"},
+    {label:"demo.testfire.net",     value:"http://demo.testfire.net", login_url:"http://demo.testfire.net/login.jsp", username:"admin", password:"admin", desc:"IBM AltoroMutual demo (auto-login admin/admin)"},
   ],
   osint: [
     {label:"example.com",                value:"example.com",                desc:"Domain — passive DNS / cert / OSINT"},
@@ -20909,8 +20885,8 @@ const MODULE_TEST_TARGETS = {
     {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"External-style target (msfadmin/msfadmin)"},
   ],
   client_side: [
-    {label:"juice-shop.herokuapp", value:"https://juice-shop.herokuapp.com",      desc:"OWASP Juice Shop (XSS / clickjack)"},
-    {label:"testphp.vulnweb.com",  value:"http://testphp.vulnweb.com",            desc:"Acunetix legal pentest app"},
+    {label:"juice-shop.herokuapp", value:"https://juice-shop.herokuapp.com", login_url:"https://juice-shop.herokuapp.com", username:"admin@juice-sh.op", password:"admin123", desc:"OWASP Juice Shop (auto-login admin@juice-sh.op)"},
+    {label:"testphp.vulnweb.com",  value:"http://testphp.vulnweb.com", login_url:"http://testphp.vulnweb.com/login.php", username:"test", password:"test", desc:"Acunetix legal pentest app (auto-login test/test)"},
     {label:"google-gruyere",       value:"https://google-gruyere.appspot.com",    desc:"Google's vulnerable lab"},
   ],
   system_exploit: [
@@ -20944,8 +20920,8 @@ const MODULE_TEST_TARGETS = {
     {label:"your /24",             value:"192.168.1.0/24",                        desc:"Your own LAN range (authorization required)"},
   ],
   auth_attacks: [
-    {label:"demo.testfire.net",    value:"http://demo.testfire.net/login.jsp",       desc:"IBM AltoroMutual - session + JWT issues"},
-    {label:"lab_juiceshop",        value:"http://lab_juiceshop:3000/#/login",        desc:"Internal Juice Shop - modern JWT auth"},
+    {label:"demo.testfire.net",    value:"http://demo.testfire.net/login.jsp", login_url:"http://demo.testfire.net/login.jsp", username:"admin", password:"admin", desc:"IBM AltoroMutual - session + JWT (auto-login admin/admin)"},
+    {label:"lab_juiceshop",        value:"http://lab_juiceshop:3000/#/login", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", desc:"Internal Juice Shop - modern JWT (auto-login admin@juice-sh.op)"},
     {label:"lab_pwd_oauth",        value:"http://lab_pwd_oauth:8080",                desc:"Internal Keycloak lab (opt-in)"},
   ],
   wireless: [
@@ -22438,15 +22414,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 <input type="text" placeholder={schema.ph} value={target}
                   onChange={e => setTarget(e.target.value)} disabled={running}
                   style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:6, padding:"10px 12px", color:"#fff", fontSize:13, outline:"none"}}/>
-                {(MODULE_TARGET_EXAMPLES[moduleKey] || []).length > 0 && (
-                  <div style={{display:"flex", alignItems:"center", gap:6, marginTop:8, flexWrap:"wrap"}}>
-                    <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
-                    {(MODULE_TARGET_EXAMPLES[moduleKey] || []).map((ex, idx) => (
-                      <button key={idx} onClick={() => setTarget(ex)} disabled={running}
-                        style={{background:"#0c1424", border:"1px solid #0e3a55", color:"#7fdcff", borderRadius:12, padding:"3px 10px", fontSize:11, fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer", opacity: running ? 0.5 : 1}}>{ex}</button>
-                    ))}
-                  </div>
-                )}
+                <TestChips moduleKey={moduleKey} setTarget={setTarget} running={running} />
               </div>
             )}
 
@@ -22537,27 +22505,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
               </div>
             )}
 
-            <div style={{marginBottom:18}}>
-              <div style={{fontSize:10, color:"#8a94a8", marginBottom:10, textTransform:"uppercase", letterSpacing:1.2, fontWeight:700}}>Authentication (optional)</div>
-              <div style={{display:"flex", flexDirection:"column", gap:10}}>
-                <div>
-                  <label style={{fontSize:10, color:"#5a6478", fontWeight:600, textTransform:"uppercase", letterSpacing:1.2, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3}}>
-                    <span>Authorization: Bearer / API key</span>
-                    {authBearer && (<button onClick={() => setAuthBearer("")} style={{background:"transparent", border:"1px solid #7f1d1d", color:"#ffa3b0", borderRadius:3, padding:"1px 6px", fontSize:9, cursor:"pointer", letterSpacing:1}}>REMOVE</button>)}
-                  </label>
-                  <input type="text" placeholder="JWT / API key (paid OSINT, webapp auth, LLM, etc.)" value={authBearer} onChange={e => setAuthBearer(e.target.value)} disabled={running}
-                    style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"7px 10px", color:"#c3ccda", fontSize:11, fontFamily:"monospace", outline:"none"}}/>
-                </div>
-                <div>
-                  <label style={{fontSize:10, color:"#5a6478", fontWeight:600, textTransform:"uppercase", letterSpacing:1.2, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3}}>
-                    <span>Cookie (session)</span>
-                    {authCookie && (<button onClick={() => setAuthCookie("")} style={{background:"transparent", border:"1px solid #7f1d1d", color:"#ffa3b0", borderRadius:3, padding:"1px 6px", fontSize:9, cursor:"pointer", letterSpacing:1}}>REMOVE</button>)}
-                  </label>
-                  <input type="text" placeholder="session=abc123; csrf=xyz789  (webapp/auth_attacks)" value={authCookie} onChange={e => setAuthCookie(e.target.value)} disabled={running}
-                    style={{width:"100%", background:"#0d1320", border:"1px solid #1c2435", borderRadius:5, padding:"7px 10px", color:"#c3ccda", fontSize:11, fontFamily:"monospace", outline:"none"}}/>
-                </div>
-              </div>
-            </div>
+            <AuthPanel target={target} token={token} authCookie={authCookie} setAuthCookie={setAuthCookie} authBearer={authBearer} setAuthBearer={setAuthBearer} defaultOpen={true} />
 
             <div style={{borderTop:"1px solid #1c2435", paddingTop:14, marginTop:4}}>
               <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:12, flexWrap:"wrap"}}>
