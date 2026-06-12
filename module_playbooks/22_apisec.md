@@ -228,9 +228,15 @@
 - **OWASP API Top 10 (2023)** · **OWASP WSTG-API** · **PCI DSS 4.0 §6.4** · **HIPAA** · **SOC 2 CC6** · **GDPR Art. 32** · **NIS2**
 
 ## VulnusLab apisec Status
-- Status: SOON (per modules_2026_inventory.md #21)
-- Estimated coverage: 0% (module not yet built)
-- Likely overlap: §2, §3, §4 with current webapp module
+- Status: LIVE — 110/110 techniques covered, ZERO scaffolds (2026-06-12 build).
+- Architecture: single-pack `tools/apisec/apisec_pack.py` (T=110) + `endpoints/apisec_orchestrator.py` (10 tiers; first 108 tiered, last 2 supply-chain entries individually routable), generic ModuleAutoPanel UI.
+- 24 live SAFE detection probes (read-only, no injection, no DoS, no token tampering):
+  - Discovery: OpenAPI/Swagger, GraphQL, gRPC-web, endpoint brute, version sprawl/shadow inventory, deprecated/legacy, developer portal
+  - OWASP: API2 unauthenticated-sensitive-endpoint (SPA-canary guarded), API8 CORS-reflection + verbose-error + security-headers, open-redirect (no-follow Location check)
+  - Auth: static JWT-header analysis (alg=none/HS256/jku via supplied auth_bearer), OIDC PKCE advertisement, Set-Cookie flag audit
+  - Rate limit: 10-req burst probe; GraphQL: introspection + Hasura admin-secret-less; Legacy: SOAP WSDL, OPTIONS/TRACE (XST), JSONP reflection; API key/secret leak
+- 86 advisory-by-design — auth-required (BOLA/BFLA/BOPLA/IDOR need credentials + two accounts), active-exploitation (injection/XXE/SSRF/JWT-tamper/smuggling = out of VA scope, Webapp does safe detection), DoS-class (rate-limit/GraphQL-batching/HTTP2-rapid-reset), protocol-client (gRPC/WebSocket/WebTransport/mTLS), OSINT (Postman/Wayback), manual. All return honest [ADVISORY-BY-DESIGN] INFO, never fabricated CRITICAL/HIGH.
+- Estimated coverage: ~78% of full standard via anonymous probing; remainder unlocks with authenticated context or a specialized protocol client.
 
 ## Roadmap to 100%
 1. Build §1 API discovery + inventory pack (14 scanners)
