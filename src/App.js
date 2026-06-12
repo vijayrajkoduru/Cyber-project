@@ -20795,12 +20795,18 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [authBearer,setAuthBearer]= useState("");   // optional: API key / JWT for some modules
   const [authCookie,setAuthCookie]= useState("");   // optional: session cookie (webapp / auth_attacks)
   const [showAuth,  setShowAuth]  = useState(false);
-  // Scan-setup intake modal. Opens when the module is selected: this panel is
-  // mounted but display:none until its sidebar entry is active, and a fixed
-  // modal inside a display:none ancestor stays hidden until that ancestor
-  // becomes visible — so initialising it open makes the form "appear on
-  // select" with ZERO parent wiring. Esc / click-outside / X all close it.
-  const [showScanModal, setShowScanModal] = useState(true);
+  // Scan-setup intake modal. The parent dispatches "vl-open-scan"
+  // (detail = moduleKey) from its [active] effect whenever a module is
+  // selected — that effect runs AFTER the panel is shown, so the modal
+  // renders while the panel is visible (same reliable timing as the PDF
+  // modal). Esc / click-outside / X all close it; "Configure & Scan"
+  // reopens it.
+  const [showScanModal, setShowScanModal] = useState(false);
+  useEffect(() => {
+    const onOpen = (e) => { if (e && e.detail === moduleKey) setShowScanModal(true); };
+    window.addEventListener("vl-open-scan", onOpen);
+    return () => window.removeEventListener("vl-open-scan", onOpen);
+  }, [moduleKey]);
   useEffect(() => {
     if (!showScanModal) return;
     const onKey = (e) => { if (e.key === "Escape") setShowScanModal(false); };
@@ -23797,6 +23803,9 @@ export default function App() {
   useEffect(() => {
     const mod = MODULES.find(m => m.id === active);
     document.title = `VulnusLab — ${mod ? mod.label : "Dashboard"}`;
+    // Tell the now-active module's panel to open its scan-setup form. Runs
+    // after render (panel is visible), so the modal opens reliably on select.
+    window.dispatchEvent(new CustomEvent("vl-open-scan", {detail: active}));
   }, [active]);
   const [upgModal,setUpgModal] = useState(false);
   const [backendOk,setBE]      = useState(null);
