@@ -225,11 +225,18 @@ def _try_spa_login(target: str, username: str, password: str,
         {"login": username, "password": password},
     )
 
+    import time as _time
     for path in paths:
+        if deadline and _time.monotonic() > deadline:
+            break  # honour the 30s wall-clock budget — don't let the fallback
+                   # loop (paths x 4 body variants x timeout) blow past the
+                   # edge/proxy timeout and surface as a 502.
         url = _abs(target, path)
         for body in body_variants:
+            if deadline and _time.monotonic() > deadline:
+                break
             try:
-                r = sess.post(url, json=body, timeout=10, allow_redirects=False)
+                r = sess.post(url, json=body, timeout=6, allow_redirects=False)
             except Exception:
                 continue
             if r.status_code >= 400:
