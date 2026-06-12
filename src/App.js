@@ -12435,7 +12435,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
   const [expandedTile,   setExpandedTile] = useState(null);
   const [selectedPhases, setSelected] = useState(() => new Set(RECON_PHASES.map((_,i)=>i)));
   // RECON-AUTH-STATE-V1
-  const [authOpen,setAuthOpen]                   = useState(false);
+  const [authOpen,setAuthOpen]                   = useState(true);
   const [loginUrl,setLoginUrl]                   = useState("");
   const [loginUser,setLoginUser]                 = useState("");
   const [loginPass,setLoginPass]                 = useState("");
@@ -13123,8 +13123,8 @@ function ReconModule({token, onRunningChange, activeSections}) {
                 <button onClick={() => setShowScanModal(false)} title="Close (Esc)"
                   style={{background:"none", border:"1px solid #1c2435", borderRadius:6, padding:"3px 11px", color:"#8a94a8", fontSize:16, fontWeight:700, cursor:"pointer", lineHeight:1}}>×</button>
               </div>
-        {/* Bespoke test-targets dropdown + auth panel stripped — replaced by the clean form below (real target chips + authorization). */}
-        {false && (<>
+        {/* Test-targets dropdown stripped (replaced by real target chips). Authenticated-recon panel restored below. */}
+        {false && (
         <TestTargets onSelect={async (t, lab) => {
           setTarget(t);
           const LAB_CREDS = {
@@ -13149,6 +13149,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
           {icon:"",label:"Juice Shop",          value:"http://lab_juiceshop:3000",       desc:"Node/Express + /rest/* API + JS bundle. admin@juice-sh.op/admin123", lab:"juiceshop"},
           {icon:"",label:"testphp.vulnweb.com", value:"http://testphp.vulnweb.com",     desc:"Acunetix public PHP demo — Internet target",             lab:null},
         ]}/>
+        )}
         {/* RECON-AUTH-PANEL-V1 — WAP-style optional auth for behind-login recon (crawl/gobuster/jsendpoints/params/robotsmap/secrets) */}
         <div style={{marginBottom:10,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6}}>
           <div onClick={()=>setAuthOpen(o=>!o)}
@@ -13256,7 +13257,6 @@ function ReconModule({token, onRunningChange, activeSections}) {
             </div>
           )}
         </div>
-        </>)}
         {(MODULE_TARGET_EXAMPLES.recon || []).length > 0 && (
           <div style={{display:"flex", alignItems:"center", gap:6, marginBottom:10, flexWrap:"wrap"}}>
             <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
