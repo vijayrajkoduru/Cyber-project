@@ -396,11 +396,11 @@ class MethodologyScanner:
             p = await _timed(f"privcheck_{len(verified)}", self.privilege_check(ctx, v))
             verified.append(p or v)
 
-        # Step 7: chain hand-off suggestions
-        next_scanners = await _timed("chain_handoff", self.chain_handoff(ctx, verified)) or []
-        if next_scanners:
-            ctx.state["chain_next"] = next_scanners
-
+        # Step 7: chain hand-off suggestions — DISABLED (VA-not-PT, user
+        # directive 2026-06-06). chain_handoff is intentionally NOT invoked and
+        # chain_next is never stamped, so no downstream scanner is ever
+        # auto-triggered with inherited credentials. The chain_handoff method is
+        # retained for subclasses but stays inert. See chaining.py expand_all.
         ctx.state["methodology_findings"] = verified
         ctx.state["methodology_total"] = len(verified)
 
