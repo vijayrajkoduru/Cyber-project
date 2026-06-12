@@ -13,9 +13,13 @@ import shutil
 import socket
 import asyncio
 import subprocess
+import urllib.request
+import urllib.error
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
-from tools._pack_common import make_advisory_router, _adv_response
+from tools._pack_common import (
+    make_advisory_router, _adv_response, _advisory_by_design_response,
+)
 from tools._shared import wrap_finding
 
 
@@ -525,7 +529,177 @@ def _probe_dns_open_resolver(target, req):
             f"Resolver probe error: {str(e)[:80]}", "INFO", "0.0", evidence=str(e)[:120])
 
 
+# ─── HTTP helper + NEW live DNS probes ───
+def _http_get(url, timeout=4):
+    try:
+        r = urllib.request.Request(url, headers={"User-Agent": "VulnusLab/2.0"})
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            return resp.status, resp.read(4096).decode("utf-8", errors="ignore")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, e.read(4096).decode("utf-8", errors="ignore")
+        except Exception:
+            return e.code, ""
+    except Exception:
+        return 0, ""
+
+
+def _resp(tool, target, findings, tested, summary):
+    sev_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0, "POSITIVE": 0}
+    top = "INFO"
+    for f in findings:
+        if sev_order.get(f.get("severity", "INFO"), 0) > sev_order.get(top, 0):
+            top = f.get("severity", "INFO")
+    return {"tool": tool, "target": target, "scan_time": 0,
+            "vulnerable": top in ("CRITICAL", "HIGH", "MEDIUM"),
+            "severity": top, "findings": findings,
+            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+
+
+def _abd(slug, title, reason, cwe="CWE-1395"):
+    """Factory: advisory-by-design probe (cannot be SaaS-probed over the internet)."""
+    def _p(target, req):
+        return _advisory_by_design_response(slug, target, title, reason=reason, cwe=cwe)
+    return _p
+
+
+_TAKEOVER_SIGS = [
+    ("github.io", "there isn't a github pages site here"),
+    ("herokuapp.com", "no such app"),
+    ("s3.amazonaws.com", "nosuchbucket"),
+    ("azurewebsites.net", "404 web site not found"),
+    ("trafficmanager.net", "404 web site not found"),
+    ("fastly.net", "fastly error: unknown domain"),
+    ("pantheonsite.io", "404 error unknown site"),
+    ("wordpress.com", "do you want to register"),
+    ("ghost.io", "domain error"),
+    ("surge.sh", "project not found"),
+    ("bitbucket.io", "repository not found"),
+    ("readthedocs.io", "unknown to read the docs"),
+    ("statuspage.io", "you are being redirected"),
+    ("netlify.app", "not found - request id"),
+    ("myshopify.com", "sorry, this shop is currently unavailable"),
+    ("zendesk.com", "help center closed"),
+]
+
+
+def _probe_subdomain_takeover(target, req):
+    """Detect a dangling CNAME pointing to an unclaimed third-party service."""
+    host = _host(target)
+    try:
+        import dns.resolver
+        try:
+            cnames = [str(r.target).rstrip(".").lower() for r in dns.resolver.resolve(host, "CNAME")]
+        except Exception:
+            cnames = []
+    except ImportError:
+        return _adv_response("dns_subdomain_takeover_check", target,
+            "dnspython not installed — CNAME takeover probe skipped",
+            "INFO", "0.0", evidence="Install dnspython to enable the takeover check.")
+    sig_map = dict(_TAKEOVER_SIGS)
+    findings = []; flagged = []
+    for cn in cnames:
+        svc = next((s for s, _ in _TAKEOVER_SIGS if s in cn), None)
+        if not svc:
+            continue
+        body_all = ""
+        for scheme in ("https", "http"):
+            _, body = _http_get(f"{scheme}://{host}/", timeout=4)
+            body_all += " " + body.lower()
+        if sig_map[svc] in body_all:
+            flagged.append(f"{host} -> {cn} ({svc})")
+        else:
+            findings.append(wrap_finding(
+                f"CNAME to takeover-prone service '{svc}' — verify the target resource is still owned",
+                "LOW", cvss="3.1", cwe="CWE-350",
+                remediation="Remove dangling CNAMEs; confirm the third-party resource is claimed.",
+                evidence_marker=f"{host} -> {cn}"))
+    if flagged:
+        findings.insert(0, wrap_finding(
+            f"Subdomain takeover POSSIBLE — {len(flagged)} dangling CNAME(s) with unclaimed-resource fingerprint",
+            "HIGH", cvss="8.0", cwe="CWE-350",
+            remediation="Remove the dangling DNS record or immediately reclaim the third-party resource.",
+            evidence_marker="; ".join(flagged[:5])))
+    if not findings:
+        findings.append(wrap_finding(
+            "No dangling CNAME / subdomain-takeover indicator",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="No action for this check.",
+            evidence_marker=f"{len(cnames)} CNAME(s) checked" if cnames else "No CNAME records for this host"))
+    return _resp("dns_subdomain_takeover_check", target, findings, max(1, len(cnames)),
+                 "Subdomain-takeover dangling-CNAME probe")
+
+
+def _probe_nsec_walk(target, req):
+    """DNSSEC NSEC zone-walk — enumerate zone names if NSEC (not NSEC3) is used."""
+    host = _host(target)
+    try:
+        import dns.resolver, dns.message, dns.query, dns.rdatatype
+    except ImportError:
+        return _adv_response("dns_walk_nsec", target,
+            "dnspython not installed — NSEC walk skipped", "INFO", "0.0",
+            evidence="Install dnspython to enable the NSEC walk.")
+    ns_ip = None
+    try:
+        ns_list = [str(n.target).rstrip(".") for n in dns.resolver.resolve(host, "NS")]
+        if ns_list:
+            ns_ip = socket.gethostbyname(ns_list[0])
+    except Exception:
+        ns_ip = None
+    if not ns_ip:
+        return _adv_response("dns_walk_nsec", target,
+            "No authoritative nameserver resolved — NSEC walk not possible",
+            "INFO", "0.0", evidence=host)
+    names = []
+    cur = host
+    try:
+        for _ in range(20):
+            q = dns.message.make_query(cur, dns.rdatatype.NSEC, want_dnssec=True)
+            resp = dns.query.udp(q, ns_ip, timeout=4)
+            nxt = None
+            for rrset in list(resp.answer) + list(resp.authority):
+                if rrset.rdtype == dns.rdatatype.NSEC:
+                    nxt = str(rrset[0].next).rstrip(".")
+                    break
+            if not nxt or nxt in names or not nxt.endswith(host):
+                break
+            names.append(nxt); cur = nxt
+    except Exception:
+        pass
+    if len(names) > 1:
+        findings = [wrap_finding(
+            f"DNSSEC NSEC zone-walk enumerated {len(names)} record(s) — full zone contents disclosable",
+            "MEDIUM", cvss="5.3", cwe="CWE-200",
+            remediation="Migrate from NSEC to NSEC3 (adequate iterations / opt-out) to block zone walking.",
+            evidence_marker=", ".join(names[:8]) + (" ..." if len(names) > 8 else ""))]
+    else:
+        findings = [wrap_finding(
+            "No NSEC zone-walk possible (NSEC3 in use or DNSSEC not signed)",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="No action for this check.",
+            evidence_marker="NSEC chain not walkable")]
+    return _resp("dns_walk_nsec", target, findings, max(1, len(names)), "DNSSEC NSEC zone-walk probe")
+
+
+# Reusable advisory reasons
+_LAN = ("Requires Layer-2 adjacency on the target's local network; an external SaaS "
+        "scanner over the internet cannot reach this attack surface.")
+_ACTIVE = ("This is an active spoofing/poisoning/relay attack that intercepts or disrupts "
+           "live traffic — out of Vulnerability-Assessment scope and never run against a "
+           "production target.")
+_DOS = ("Confirming this needs flooding/amplification load that is unsafe to run against a "
+        "production target from a SaaS scanner.")
+_SNIFF = ("Requires local packet capture on the target network segment; a remote SaaS "
+          "scanner has no on-wire traffic to inspect.")
+_IPV6LAN = ("Requires IPv6 Layer-2 adjacency on the target LAN; cannot be performed remotely.")
+_FUZZ = ("Active protocol fuzzing can crash the target service; out of VA scope and not run "
+         "against production.")
+_RECON = ("Covered comprehensively by the Recon module's subdomain enumeration; run that module.")
+_MANUAL = "Analyst task — interactive proxy / manual operation."
+
+
 PROBES = {
+    # §1 Port & Service Enumeration (14 live)
     "nmap_syn_scan":          _probe_nmap_syn_scan,
     "nmap_udp_scan":          _probe_nmap_udp_scan,
     "nmap_version_detect":    _probe_nmap_version_detect,
@@ -540,8 +714,74 @@ PROBES = {
     "hping3_custom_packet":   _probe_hping3,
     "tcptraceroute_advisory": _probe_tcptraceroute,
     "netcat_banner_grab":     _probe_netcat_banner_grab,
+    # §6 DNS Attacks (4 live)
     "dns_zone_transfer_axfr": _probe_dns_zone_transfer,
-    "dns_open_resolver_check":_probe_dns_open_resolver,
+    "dns_open_resolver_check": _probe_dns_open_resolver,
+    "dns_subdomain_takeover_check": _probe_subdomain_takeover,
+    "dns_walk_nsec":          _probe_nsec_walk,
+
+    # §2 LAN Attacks (Layer 2) — require local network adjacency
+    "arp_spoofing":           _abd("arp_spoofing", "ARP spoofing", _ACTIVE),
+    "mac_flooding_macof":     _abd("mac_flooding_macof", "MAC flooding (CAM-table overflow)", _LAN),
+    "vlan_hopping_dtp":       _abd("vlan_hopping_dtp", "VLAN hopping (DTP/double-tag)", _LAN),
+    "stp_root_bridge":        _abd("stp_root_bridge", "STP root-bridge takeover", _LAN),
+    "dhcp_starvation":        _abd("dhcp_starvation", "DHCP starvation", _LAN),
+    "dhcp_rogue_server":      _abd("dhcp_rogue_server", "DHCP rogue server", _ACTIVE),
+    "cdp_lldp_enum":          _abd("cdp_lldp_enum", "CDP/LLDP enumeration", _LAN),
+    "hsrp_vrrp_takeover":     _abd("hsrp_vrrp_takeover", "HSRP/VRRP/GLBP hijack", _LAN),
+    "yersinia_advisory":      _abd("yersinia_advisory", "Yersinia L2 attack suite", _LAN),
+
+    # §3 MITM — active interception, require local position
+    "ettercap_mitm":          _abd("ettercap_mitm", "Ettercap MITM", _ACTIVE),
+    "bettercap_advisory":     _abd("bettercap_advisory", "bettercap automated MITM", _ACTIVE),
+    "mitmproxy_advisory":     _abd("mitmproxy_advisory", "mitmproxy interception", _ACTIVE),
+    "burp_intercept":         _abd("burp_intercept", "Burp Suite intercept", _MANUAL),
+    "ssl_strip":              _abd("ssl_strip", "SSLStrip / HSTS-bypass MITM", _ACTIVE),
+    "dns_spoof_local":        _abd("dns_spoof_local", "DNS spoofing (LAN)", _ACTIVE),
+    "icmp_redirect":          _abd("icmp_redirect", "ICMP redirect attack", _ACTIVE),
+
+    # §4 DoS / DDoS — disruptive load, unsafe against production
+    "syn_flood_advisory":     _abd("syn_flood_advisory", "TCP SYN flood", _DOS),
+    "udp_flood_advisory":     _abd("udp_flood_advisory", "UDP flood", _DOS),
+    "icmp_flood_advisory":    _abd("icmp_flood_advisory", "ICMP flood / smurf", _DOS),
+    "slowloris_http_advisory": _abd("slowloris_http_advisory", "Slowloris (slow-header DoS)", _DOS),
+    "http_get_post_flood":    _abd("http_get_post_flood", "HTTP GET/POST flood", _DOS),
+    "amplification_ntp_advisory": _abd("amplification_ntp_advisory", "NTP amplification", _DOS),
+    "amplification_dns_advisory": _abd("amplification_dns_advisory", "DNS amplification", _DOS),
+    "amplification_memcached_advisory": _abd("amplification_memcached_advisory", "Memcached amplification", _DOS),
+
+    # §5 Sniffing & Capture — require on-segment packet capture
+    "tcpdump_advisory":       _abd("tcpdump_advisory", "tcpdump capture", _SNIFF),
+    "wireshark_advisory":     _abd("wireshark_advisory", "Wireshark analysis", _SNIFF),
+    "dumpcap_advisory":       _abd("dumpcap_advisory", "dumpcap capture", _SNIFF),
+    "tshark_advisory":        _abd("tshark_advisory", "tshark capture", _SNIFF),
+    "ngrep_advisory":         _abd("ngrep_advisory", "ngrep capture", _SNIFF),
+    "p0f_passive_os":         _abd("p0f_passive_os", "p0f passive OS fingerprint", _SNIFF),
+    "net_creds_credential_extract": _abd("net_creds_credential_extract", "net-creds plaintext-cred harvest", _SNIFF),
+    "pcredz_credential_extract": _abd("pcredz_credential_extract", "PCredz NTLM/cred extraction", _SNIFF),
+
+    # §6 DNS Attacks — remaining (active / DoS / covered-by-Recon)
+    "dns_cache_poisoning":    _abd("dns_cache_poisoning", "DNS cache poisoning", _ACTIVE),
+    "dns_subdomain_enum_brute": _abd("dns_subdomain_enum_brute", "DNS subdomain brute-force", _RECON),
+    "dns_dnscat2_tunnel":     _abd("dns_dnscat2_tunnel", "DNS tunneling detection (dnscat2)", _SNIFF),
+    "dns_hijack_advisory":    _abd("dns_hijack_advisory", "DNS hijack", _ACTIVE),
+    "dns_random_subdomain_attack": _abd("dns_random_subdomain_attack", "Random-subdomain (water-torture) attack", _DOS),
+
+    # §7 IPv6 Attacks — require IPv6 LAN adjacency
+    "ipv6_router_advertisement_spoof": _abd("ipv6_router_advertisement_spoof", "IPv6 RA spoof (mitm6)", _IPV6LAN),
+    "ipv6_dhcpv6_spoof":      _abd("ipv6_dhcpv6_spoof", "DHCPv6 rogue server", _IPV6LAN),
+    "ipv6_smurf_advisory":    _abd("ipv6_smurf_advisory", "IPv6 Smurf", _DOS),
+    "ipv6_neighbor_discovery_spoof": _abd("ipv6_neighbor_discovery_spoof", "NDP spoof", _IPV6LAN),
+    "ipv6_packet_fragmentation_evasion": _abd("ipv6_packet_fragmentation_evasion", "IPv6 fragmentation evasion", _IPV6LAN),
+    "ipv6_slaac_attack":      _abd("ipv6_slaac_attack", "SLAAC attack", _IPV6LAN),
+    "ipv6_address_enum_thc_alive6": _abd("ipv6_address_enum_thc_alive6", "IPv6 address enum (THC alive6)", _IPV6LAN),
+
+    # §8 Protocol Fuzzing — active, can crash the service
+    "fuzzing_smb_advisory":   _abd("fuzzing_smb_advisory", "SMB protocol fuzzing", _FUZZ),
+    "fuzzing_rdp_advisory":   _abd("fuzzing_rdp_advisory", "RDP protocol fuzzing", _FUZZ),
+    "fuzzing_dns_advisory":   _abd("fuzzing_dns_advisory", "DNS protocol fuzzing", _FUZZ),
+    "fuzzing_http2_advisory": _abd("fuzzing_http2_advisory", "HTTP/2 protocol fuzzing", _FUZZ),
+    "fuzzing_quic_advisory":  _abd("fuzzing_quic_advisory", "QUIC protocol fuzzing", _FUZZ),
 }
 
 TECHNIQUES = [

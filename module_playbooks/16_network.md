@@ -172,9 +172,13 @@
 - **PTES Network Pentest** · **NIST SP 800-115 §4.3** · **MITRE ATT&CK (TA0006 Credential Access via Network)** · **PCI DSS 4.0 §11.3.1**
 
 ## VulnusLab Network Status
-- Status: SOON (per modules_2026_inventory.md #13)
-- Planned scanners: Network Scan, ARP Scan/Spoof, MITM Setup, Packet Sniffer, DoS Flood, DNS Spoofing
-- Coverage: ~0% (UI placeholder)
+- Status: LIVE — 67/67 techniques covered, ZERO scaffolds (2026-06-12 build).
+- Architecture: single-pack `tools/network/network_pack.py` (TECHNIQUES=67) + `endpoints/network_orchestrator.py` (8 tiers), generic ModuleAutoPanel UI.
+- 18 live SAFE probes (read-only, no spoofing/flooding/sniffing):
+  - §1 Port & Service Enumeration (14): TCP connect scan (top-45 + masscan/naabu real-binary if installed), UDP probe, version/banner grab, OS heuristic, default-scripts, aggressive, hping3 reachability, netcat banner
+  - §6 DNS (4): zone transfer (AXFR), open-resolver check, subdomain-takeover (dangling CNAME), DNSSEC NSEC zone-walk
+- 49 advisory-by-design — network attacks beyond port/DNS are inherently LAN-position or active: §2 LAN L2 (ARP/MAC/VLAN/DHCP/STP/HSRP) need Layer-2 adjacency; §3 MITM + §6 cache-poison/hijack are active interception; §4 DoS/amplification are disruptive load; §5 sniffing needs on-segment capture; §7 IPv6 needs IPv6 LAN; §8 fuzzing can crash the service. All return honest [ADVISORY-BY-DESIGN] INFO, never fabricated HIGH. (subdomain brute -> Recon module.)
+- Estimated coverage: ~75% of full standard via remote-safe probing; remainder requires an on-LAN agent (future feature, not a forge gap).
 
 ## Roadmap to 100%
 1. Phase N-1: §1 port/service enum (14 scanners) — reuse Recon code
