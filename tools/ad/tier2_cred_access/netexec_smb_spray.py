@@ -23,7 +23,6 @@ import shutil
 import tempfile
 from typing import Optional
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._payloads.netexec_smb_spray_findings import NETEXEC_SMB_SPRAY_FINDING_RULES

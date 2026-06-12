@@ -12,7 +12,6 @@ import datetime
 import json
 import os
 import threading
-from typing import Dict, List
 from urllib.parse import urlparse
 
 _LOCK = threading.Lock()

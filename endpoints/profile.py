@@ -8,11 +8,10 @@ compliance, etc.
 Customer hits: POST /api/profile/run?profile=quick-scan
 """
 import yaml
-import datetime
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 
-from tools._shared import ScanRequest, verify_scan_quota
+from tools._shared import verify_scan_quota
 
 router = APIRouter()
 
