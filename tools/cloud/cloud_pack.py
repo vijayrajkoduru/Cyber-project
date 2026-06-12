@@ -2,17 +2,38 @@
 12 sections: discovery, AWS, Azure, GCP, multi-cloud CIEM, serverless,
 container registry, storage, network/VPC, secrets/KMS, OIDC cross-cloud, compliance.
 
-VL-FORGE upgrade 2026-05-30: tier8 Cloud Storage (S3/Azure Blob/GCS public
-bucket checks) upgraded to LIVE PROBES. tier11 OIDC discovery upgraded to
-LIVE PROBES. Other tiers correctly remain advisory (AWS/Azure/GCP audits
-require provider credentials which external SaaS can't have).
+VulnusLab is a Vulnerability Assessment platform. Cloud posture (CSPM/CIEM)
+is fundamentally a CREDENTIALED domain: auditing IAM, CloudTrail, security
+groups, KMS, etc. requires a read-only cloud connector (an AWS audit role /
+Azure Reader / GCP Viewer) that an external SaaS scanner does not hold.
+
+This pack forges everything that CAN be checked anonymously from the
+internet — public object storage, public container registries, public
+Kubernetes API/kubelet endpoints, OIDC discovery posture, exposed IaC
+manifests, cloud-provider fingerprinting — as live SAFE probes (read-only,
+no exploitation). Every credential-required technique returns an honest
+[ADVISORY-BY-DESIGN] response stating it needs a cloud connector, rather
+than a fake CRITICAL/HIGH or a bare [NOT IMPLEMENTED] scaffold.
+
+Probe coverage 2026-06-12:
+  Live safe probes   : 15 (+1 orphan brute helper)
+  Advisory-by-design : 109 (credential / metadata-SSRF / image-pull / manual)
+  Scaffold (fake)    : 0
 """
 import socket
+import ssl
 import urllib.request
 import urllib.error
 import json
-from tools._pack_common import make_advisory_router, _adv_response
+from tools._pack_common import (
+    make_advisory_router, _adv_response, _advisory_by_design_response,
+)
 from tools._shared import wrap_finding
+
+
+_NOVERIFY = ssl.create_default_context()
+_NOVERIFY.check_hostname = False
+_NOVERIFY.verify_mode = ssl.CERT_NONE
 
 
 def _host(target: str) -> str:
@@ -20,11 +41,14 @@ def _host(target: str) -> str:
     return s.strip().lower() or target
 
 
-def _http_get(url: str, timeout: float = 5.0) -> tuple:
-    """Returns (status_code, body_first_2k, headers_dict)."""
+def _http_get(url: str, timeout: float = 5.0, insecure: bool = False) -> tuple:
+    """Returns (status_code, body_first_2k, headers_dict).
+    insecure=True disables TLS verification (for self-signed infra endpoints
+    such as a Kubernetes API server — we are checking exposure, not trust)."""
     try:
+        ctx = _NOVERIFY if insecure else None
         req = urllib.request.Request(url, headers={"User-Agent": "VulnusLab/2.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
             return r.status, r.read(2048).decode("utf-8", errors="ignore"), dict(r.headers)
     except urllib.error.HTTPError as e:
         try: body = e.read(2048).decode("utf-8", errors="ignore")
@@ -34,6 +58,42 @@ def _http_get(url: str, timeout: float = 5.0) -> tuple:
         return 0, "", {}
 
 
+def _resp(tool, target, findings, tested, summary):
+    sev_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0, "POSITIVE": 0}
+    top = "INFO"
+    for f in findings:
+        if sev_order.get(f.get("severity", "INFO"), 0) > sev_order.get(top, 0):
+            top = f.get("severity", "INFO")
+    return {"tool": tool, "target": target, "scan_time": 0,
+            "vulnerable": top in ("CRITICAL", "HIGH", "MEDIUM"),
+            "severity": top, "findings": findings,
+            "tests_performed": tested, "tests_summary": summary, "raw_data": {}}
+
+
+def _abd(slug, title, reason, cwe="CWE-1395"):
+    """Factory: advisory-by-design probe (cannot be SaaS-probed anonymously)."""
+    def _p(target, req):
+        return _advisory_by_design_response(slug, target, title, reason=reason, cwe=cwe)
+    return _p
+
+
+# Reusable advisory reasons
+_CREDS = ("Requires a read-only cloud connector (an AWS security-audit IAM role, "
+          "Azure Reader, or GCP Viewer). External SaaS cannot audit account "
+          "internals — IAM, logging, security groups, KMS — without it. Supply "
+          "credentials to enable this check, or run Prowler/ScoutSuite under your "
+          "own engagement scope.")
+_IMDS = ("The instance metadata service (169.254.169.254) is only reachable from "
+         "inside the VPC via an SSRF primitive; it cannot be tested from an "
+         "external SaaS scanner.")
+_IMAGE = ("Requires pulling the container image from the registry; use the "
+          "Container/K8s module's Trivy/Grype scan with the image reference.")
+_OIDCCFG = ("Requires the cloud trust policy / CI OIDC configuration as input; the "
+            "trust relationship cannot be enumerated anonymously from outside.")
+_MANUAL = "Analyst task — manual review under engagement scope."
+
+
+# ───────────────────── existing live probes (kept) ─────────────────────
 def _probe_s3_public(target, req):
     """Check S3 bucket for public read access. Target = bucket name OR full URL."""
     host = _host(target)
@@ -50,31 +110,31 @@ def _probe_s3_public(target, req):
                 f"S3 bucket '{bucket}' publicly listable — anonymous LIST succeeded",
                 "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
                 remediation="Apply BlockPublicAccess at account level; remove public ACLs.",
-                evidence_marker=f"GET {url} → 200 with ListBucketResult"))
+                evidence_marker=f"GET {url} -> 200 with ListBucketResult"))
             break
         if code == 200 and "<?xml" in body and "<Error>" not in body:
             findings.append(wrap_finding(
                 f"S3 bucket '{bucket}' returned XML (likely listable)",
                 "HIGH", cvss="7.5", cwe="CWE-200",
                 remediation="BlockPublicAccess + remove public ACLs.",
-                evidence_marker=f"GET {url} → 200 XML"))
+                evidence_marker=f"GET {url} -> 200 XML"))
             break
         if code == 403 and "AccessDenied" in body:
             findings.append(wrap_finding(
                 f"S3 bucket '{bucket}' exists but access denied (good)",
                 "POSITIVE", cvss="0.0", cwe="N/A",
                 remediation="Continue least-privilege bucket policy.",
-                evidence_marker=f"GET {url} → 403 AccessDenied"))
+                evidence_marker=f"GET {url} -> 403 AccessDenied"))
             break
     if not findings:
         findings.append(wrap_finding(
             f"No S3 bucket found at name '{bucket}' (NXDOMAIN or 404)",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Confirm bucket naming convention; check other regions.",
-            evidence_marker=f"No listable bucket at standard S3 hostnames"))
-    return {"tool":"s3_bucket_public_static_site","target":target,"scan_time":0,
-            "vulnerable": any(f.get("severity") in ("CRITICAL","HIGH") for f in findings),
-            "severity": findings[0].get("severity","INFO"),
+            evidence_marker="No listable bucket at standard S3 hostnames"))
+    return {"tool": "s3_bucket_public_static_site", "target": target, "scan_time": 0,
+            "vulnerable": any(f.get("severity") in ("CRITICAL", "HIGH") for f in findings),
+            "severity": findings[0].get("severity", "INFO"),
             "findings": findings, "tests_performed": len(urls),
             "tests_summary": f"S3 public access check on bucket '{bucket}'",
             "raw_data": {"bucket": bucket, "urls_tested": urls}}
@@ -92,22 +152,22 @@ def _probe_azure_blob_public(target, req):
             f"Azure Blob storage account '{account}' allows anonymous container listing",
             "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
             remediation="Disable anonymous access at storage account level.",
-            evidence_marker=f"GET {url} → 200 with EnumerationResults"))
+            evidence_marker=f"GET {url} -> 200 with EnumerationResults"))
     elif code in (403, 401):
         findings.append(wrap_finding(
             f"Azure Blob '{account}' exists, anonymous access correctly denied",
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue private access posture.",
-            evidence_marker=f"GET {url} → {code}"))
+            evidence_marker=f"GET {url} -> {code}"))
     else:
         findings.append(wrap_finding(
             f"Azure Blob storage account '{account}' not found (NXDOMAIN or unreachable)",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Verify account name.",
-            evidence_marker=f"GET {url} → {code}"))
-    return {"tool":"azure_blob_public_anon","target":target,"scan_time":0,
+            evidence_marker=f"GET {url} -> {code}"))
+    return {"tool": "azure_blob_public_anon", "target": target, "scan_time": 0,
             "vulnerable": code == 200 and "<EnumerationResults" in body,
-            "severity": findings[0].get("severity","INFO"),
+            "severity": findings[0].get("severity", "INFO"),
             "findings": findings, "tests_performed": 1,
             "tests_summary": f"Azure Blob anonymous check on {account}",
             "raw_data": {"account": account, "url": url, "status": code}}
@@ -120,27 +180,27 @@ def _probe_gcs_bucket_public(target, req):
     url = f"https://storage.googleapis.com/{bucket}/"
     code, body, _ = _http_get(url, timeout=4)
     findings = []
-    if code == 200 and ("<ListBucketResult" in body or '<?xml' in body):
+    if code == 200 and ("<ListBucketResult" in body or "<?xml" in body):
         findings.append(wrap_finding(
             f"GCS bucket '{bucket}' publicly listable",
             "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
             remediation="Remove allUsers/allAuthenticatedUsers from bucket IAM.",
-            evidence_marker=f"GET {url} → 200 listable"))
+            evidence_marker=f"GET {url} -> 200 listable"))
     elif code in (401, 403):
         findings.append(wrap_finding(
             f"GCS bucket '{bucket}' exists, access denied (good)",
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue least-privilege.",
-            evidence_marker=f"GET {url} → {code}"))
+            evidence_marker=f"GET {url} -> {code}"))
     else:
         findings.append(wrap_finding(
             f"GCS bucket '{bucket}' not found",
             "INFO", cvss="0.0", cwe="N/A",
             remediation="Verify bucket name.",
-            evidence_marker=f"GET {url} → {code}"))
-    return {"tool":"gcs_bucket_acl_legacy","target":target,"scan_time":0,
+            evidence_marker=f"GET {url} -> {code}"))
+    return {"tool": "gcs_bucket_acl_legacy", "target": target, "scan_time": 0,
             "vulnerable": code == 200,
-            "severity": findings[0].get("severity","INFO"),
+            "severity": findings[0].get("severity", "INFO"),
             "findings": findings, "tests_performed": 1,
             "tests_summary": f"GCS public check on {bucket}",
             "raw_data": {"bucket": bucket, "url": url, "status": code}}
@@ -191,9 +251,9 @@ def _probe_oidc_discovery(target, req):
             "INFO", cvss="0.0", cwe="N/A",
             remediation="If OIDC is in use, ensure discovery endpoint is reachable.",
             evidence_marker=f"Tried {len(urls)} URLs"))
-    return {"tool":"oidc_provider_thumbprint_audit","target":target,"scan_time":0,
-            "vulnerable": findings[0].get("severity") in ("MEDIUM","HIGH"),
-            "severity": findings[0].get("severity","INFO"),
+    return {"tool": "oidc_provider_thumbprint_audit", "target": target, "scan_time": 0,
+            "vulnerable": findings[0].get("severity") in ("MEDIUM", "HIGH"),
+            "severity": findings[0].get("severity", "INFO"),
             "findings": findings, "tests_performed": len(urls),
             "tests_summary": "OIDC discovery posture audit",
             "raw_data": data}
@@ -222,7 +282,7 @@ def _probe_recon_cloud_dns(target, req):
         "INFO", cvss="0.0", cwe="CWE-200",
         remediation="Inventory cloud providers in use; ensure WAF/CDN protections active.",
         evidence_marker=f"IP={ip}; hints={cloud_hints or 'none'}; server={server_hdr or 'unknown'}"))
-    return {"tool":"recon_cloud_dns","target":target,"scan_time":0,
+    return {"tool": "recon_cloud_dns", "target": target, "scan_time": 0,
             "vulnerable": False, "severity": "INFO", "findings": findings,
             "tests_performed": 1, "tests_summary": "Cloud-provider DNS+header recon",
             "raw_data": {"ip": ip, "cloud_hints": cloud_hints, "server": server_hdr}}
@@ -237,14 +297,14 @@ def _probe_ecr_public_access(target, req):
             "INFO", "0.0", evidence=host)
     code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
     is_public = code == 200 and ('"errors"' not in body[:200])
-    return {"tool":"ecr_public_access","target":target,"scan_time":0,
+    return {"tool": "ecr_public_access", "target": target, "scan_time": 0,
             "vulnerable": is_public, "severity": "HIGH" if is_public else "POSITIVE",
-            "findings":[wrap_finding(
+            "findings": [wrap_finding(
                 f"ECR public registry {'allows anonymous /v2 enum' if is_public else 'denied anonymous /v2 enum'}",
                 "HIGH" if is_public else "POSITIVE",
                 cvss="7.0" if is_public else "0.0", cwe="CWE-200",
                 remediation="If unintended, switch to private ECR; require IAM-signed pulls.",
-                evidence_marker=f"GET https://{host}/v2/ → {code}")],
+                evidence_marker=f"GET https://{host}/v2/ -> {code}")],
             "tests_performed": 1, "tests_summary": "ECR public anonymous-pull check",
             "raw_data": {"host": host, "status": code}}
 
@@ -257,14 +317,14 @@ def _probe_gcr_public_access(target, req):
             "Target not on gcr.io / pkg.dev — skipping live probe",
             "INFO", "0.0", evidence=host)
     code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
-    return {"tool":"gcr_public_access","target":target,"scan_time":0,
+    return {"tool": "gcr_public_access", "target": target, "scan_time": 0,
             "vulnerable": code == 200, "severity": "HIGH" if code == 200 else "POSITIVE",
-            "findings":[wrap_finding(
+            "findings": [wrap_finding(
                 f"GCR registry {'allows anonymous /v2 enum' if code == 200 else 'requires auth'}",
                 "HIGH" if code == 200 else "POSITIVE",
                 cvss="7.0" if code == 200 else "0.0", cwe="CWE-200",
                 remediation="If unintended, require IAM-signed pulls.",
-                evidence_marker=f"GET https://{host}/v2/ → {code}")],
+                evidence_marker=f"GET https://{host}/v2/ -> {code}")],
             "tests_performed": 1, "tests_summary": "GCR anonymous-pull check",
             "raw_data": {"host": host, "status": code}}
 
@@ -275,15 +335,15 @@ def _probe_docker_hub_public_image(target, req):
     img = host.replace("hub.docker.com", "").replace("/r/", "").strip("/") or "library/alpine"
     url = f"https://hub.docker.com/v2/repositories/{img}/"
     code, body, _ = _http_get(url, timeout=4)
-    return {"tool":"docker_hub_public_image_secrets","target":target,"scan_time":0,
+    return {"tool": "docker_hub_public_image_secrets", "target": target, "scan_time": 0,
             "vulnerable": code == 200,
             "severity": "INFO" if code == 200 else "POSITIVE",
-            "findings":[wrap_finding(
+            "findings": [wrap_finding(
                 f"Docker Hub image '{img}' {'is public' if code == 200 else 'not found / private'}",
                 "INFO" if code == 200 else "POSITIVE",
                 cvss="0.0", cwe="N/A",
                 remediation="Inventory public images for embedded secrets; consider private hub.",
-                evidence_marker=f"GET {url} → {code}")],
+                evidence_marker=f"GET {url} -> {code}")],
             "tests_performed": 1, "tests_summary": "Docker Hub image public-access check",
             "raw_data": {"image": img, "status": code}}
 
@@ -299,10 +359,10 @@ def _probe_iac_manifest_exposed(target, req):
         code, body, _ = _http_get(f"{base}/{p}", timeout=3)
         if code == 200 and len(body) > 50:
             leaked.append({"path": p, "size": len(body)})
-    return {"tool":"compliance_cis_aws_benchmark","target":target,"scan_time":0,
+    return {"tool": "compliance_cis_aws_benchmark", "target": target, "scan_time": 0,
             "vulnerable": bool(leaked),
             "severity": "CRITICAL" if leaked else "POSITIVE",
-            "findings":[wrap_finding(
+            "findings": [wrap_finding(
                 f"IaC manifest exposure: {len(leaked)} files publicly fetchable",
                 "CRITICAL" if leaked else "POSITIVE",
                 cvss="9.0" if leaked else "0.0", cwe="CWE-538",
@@ -326,12 +386,10 @@ def _probe_s3_bucket_brute(target, req):
     No external dependencies, real HTTP probes.
     """
     host = _host(target)
-    # Extract base name from domain (remove TLD + www prefix)
     base = host
     if base.startswith("www."):
         base = base[4:]
-    base = base.split(":")[0]  # drop port if present
-    # First label only (example.com -> example)
+    base = base.split(":")[0]
     name_core = base.split(".")[0].lower()
     name_core = "".join(c for c in name_core if c.isalnum() or c == "-")
     if not name_core or len(name_core) < 3:
@@ -340,7 +398,6 @@ def _probe_s3_bucket_brute(target, req):
             "INFO", "0.0",
             evidence=f"derived='{name_core}'; need >= 3 alphanumeric chars")
 
-    # Common 2024 bucket-naming patterns (top by frequency)
     suffixes = ["", "-backup", "-backups", "-bak", "-prod", "-production",
                 "-staging", "-stage", "-stg", "-dev", "-development", "-test",
                 "-qa", "-uat", "-data", "-logs", "-log", "-public", "-private",
@@ -355,7 +412,7 @@ def _probe_s3_bucket_brute(target, req):
             cand = f"{p}{name_core}{s}"
             if 3 <= len(cand) <= 63 and not cand.startswith("-") and not cand.endswith("-"):
                 candidates.add(cand)
-    candidates = sorted(candidates)[:40]  # cap at 40 to bound HTTP volume
+    candidates = sorted(candidates)[:40]
 
     findings = []
     listable = []
@@ -367,18 +424,13 @@ def _probe_s3_bucket_brute(target, req):
             listable.append(cand)
         elif code == 403 and ("AccessDenied" in body or "<Code>AccessDenied</Code>" in body):
             private.append(cand)
-        # 404 NoSuchBucket / 0 timeout -> ignored
 
     if listable:
         findings.append(wrap_finding(
             f"PUBLIC-LISTABLE S3 buckets discovered ({len(listable)}): {', '.join(listable[:5])}",
             "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
             remediation=("Make these buckets private immediately. Set Block "
-                          "Public Access at account level (AWS CLI: aws s3api "
-                          "put-public-access-block --bucket NAME --public-access-"
-                          "block-configuration BlockPublicAcls=true,IgnorePublic"
-                          "Acls=true,BlockPublicPolicy=true,RestrictPublicBuckets="
-                          "true). Audit contents before locking down."),
+                          "Public Access at account level. Audit contents before locking down."),
             evidence_marker=(f"Anonymous LIST succeeded on: "
                               f"{', '.join('https://' + b + '.s3.amazonaws.com/' for b in listable[:5])}")))
 
@@ -413,17 +465,230 @@ def _probe_s3_bucket_brute(target, req):
                           "private": private, "candidates_count": len(candidates)}}
 
 
+# ───────────────────── NEW live probes ─────────────────────
+def _probe_azure_storage_public(target, req):
+    """§3 alias — same anonymous-listing check, reported under the §3 slug."""
+    r = _probe_azure_blob_public(target, req)
+    r["tool"] = "azure_storage_public"
+    return r
+
+
+def _probe_gcp_gcs_public(target, req):
+    """§4 alias — same anonymous-read check, reported under the §4 slug."""
+    r = _probe_gcs_bucket_public(target, req)
+    r["tool"] = "gcp_gcs_bucket_public"
+    return r
+
+
+def _probe_acr_anonymous(target, req):
+    """Azure Container Registry anonymous-pull check (*.azurecr.io)."""
+    host = _host(target)
+    if "azurecr.io" not in host:
+        return _adv_response("acr_anonymous_pull", target,
+            "Target is not an *.azurecr.io registry — ACR anonymous-pull check N/A",
+            "INFO", "0.0", evidence=host)
+    code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
+    anon = code == 200
+    return _resp("acr_anonymous_pull", target, [wrap_finding(
+        f"Azure Container Registry {host} {'allows ANONYMOUS pull (/v2 enum succeeded)' if anon else 'requires authentication (good)'}",
+        "HIGH" if anon else "POSITIVE", cvss="7.0" if anon else "0.0",
+        cwe="CWE-200", owasp="A05:2021",
+        remediation="Disable anonymous pull (az acr update --name NAME --anonymous-pull-enabled false) unless the registry is intentionally public.",
+        evidence_marker=f"GET https://{host}/v2/ -> {code}")], 1, "ACR anonymous-pull check")
+
+
+def _probe_k8s_endpoint(slug, label):
+    """Factory for a public Kubernetes API-server / kubelet exposure probe.
+    Read-only GETs against the control-plane (6443) and kubelet (10250).
+    A k8s version/health/pods signature flags PUBLIC exposure — no objects
+    are created or mutated."""
+    def _p(target, req):
+        host = _host(target)
+        checks = [(6443, "/version"), (6443, "/healthz"), (443, "/version"),
+                  (10250, "/healthz"), (10250, "/pods")]
+        hit = None
+        for port, path in checks:
+            code, body, _ = _http_get(f"https://{host}:{port}{path}", timeout=4, insecure=True)
+            bl = body[:2048].lower()
+            if not code:
+                continue
+            is_version = "gitversion" in bl and "major" in bl
+            is_health = path == "/healthz" and code == 200 and bl.strip() == "ok"
+            is_kubelet_pods = path == "/pods" and code in (200, 401, 403)
+            if is_version or is_health or is_kubelet_pods:
+                hit = (port, path, code)
+                break
+        if hit:
+            port, path, code = hit
+            sev = "HIGH" if code == 200 else "MEDIUM"
+            findings = [wrap_finding(
+                f"{label}: Kubernetes control-plane/kubelet reachable from the internet (port {port}{path} -> {code})",
+                sev, cvss="7.5" if sev == "HIGH" else "5.5", cwe="CWE-284", owasp="A05:2021",
+                remediation="Restrict the API server (6443) and kubelet (10250) to private subnets or an "
+                            "authorized CIDR allow-list; never expose them publicly; enforce authn + RBAC.",
+                evidence_marker=f"GET https://{host}:{port}{path} -> {code}")]
+        else:
+            findings = [wrap_finding(
+                f"{label}: no public Kubernetes API/kubelet endpoint detected",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation="No action required for this check.",
+                evidence_marker=f"No control-plane/kubelet response on 6443/443/10250 for {host}")]
+        return _resp(slug, target, findings, 5, f"{label} public-endpoint probe")
+    return _p
+
+
+# ───────────────────────── PROBES registry ─────────────────────────
 PROBES = {
+    # §1 Discovery
+    "recon_cloud_dns":                _probe_recon_cloud_dns,
+    "cloudfox_aws_all":               _abd("cloudfox_aws_all", "CloudFox AWS all-checks", _CREDS),
+    "cloudfox_azure":                 _abd("cloudfox_azure", "CloudFox Azure", _CREDS),
+    "cloudfox_gcp":                   _abd("cloudfox_gcp", "CloudFox GCP", _CREDS),
+    "scoutsuite_aws":                 _abd("scoutsuite_aws", "ScoutSuite AWS", _CREDS),
+    "scoutsuite_azure":               _abd("scoutsuite_azure", "ScoutSuite Azure", _CREDS),
+    "scoutsuite_gcp":                 _abd("scoutsuite_gcp", "ScoutSuite GCP", _CREDS),
+    "prowler_aws_check":              _abd("prowler_aws_check", "Prowler AWS CSPM scan", _CREDS),
+    "prowler_azure_check":            _abd("prowler_azure_check", "Prowler Azure CSPM scan", _CREDS),
+    "prowler_gcp_check":              _abd("prowler_gcp_check", "Prowler GCP CSPM scan", _CREDS),
+    "steampipe_query":                _abd("steampipe_query", "Steampipe SQL cloud queries", _CREDS),
+    "cartography_graph":              _abd("cartography_graph", "Cartography asset graph", _CREDS),
+    "manual_cloud_discovery":         _abd("manual_cloud_discovery", "Manual cloud discovery", _MANUAL),
+    "manual_cloud_asset_inventory":   _abd("manual_cloud_asset_inventory", "Manual cloud asset inventory", _MANUAL),
+
+    # §2 AWS
+    "aws_eks_endpoint_public":        _probe_k8s_endpoint("aws_eks_endpoint_public", "AWS EKS"),
+    "aws_iam_overpermissive":         _abd("aws_iam_overpermissive", "AWS IAM over-permissive policies", _CREDS),
+    "aws_iam_user_keys_old":          _abd("aws_iam_user_keys_old", "AWS IAM access keys > 90 days", _CREDS),
+    "aws_root_account_usage":         _abd("aws_root_account_usage", "AWS root account usage", _CREDS),
+    "aws_mfa_not_enforced":           _abd("aws_mfa_not_enforced", "AWS MFA not enforced", _CREDS),
+    "aws_cloudtrail_disabled":        _abd("aws_cloudtrail_disabled", "AWS CloudTrail disabled", _CREDS),
+    "aws_cloudtrail_log_validation":  _abd("aws_cloudtrail_log_validation", "AWS CloudTrail log validation off", _CREDS),
+    "aws_config_disabled":            _abd("aws_config_disabled", "AWS Config disabled", _CREDS),
+    "aws_guardduty_disabled":         _abd("aws_guardduty_disabled", "AWS GuardDuty disabled", _CREDS),
+    "aws_s3_bucket_public":           _abd("aws_s3_bucket_public", "AWS account-wide S3 public audit", _CREDS + " (single-bucket public checks ARE live: see s3_bucket_public_static_site / s3_bucket_brute)."),
+    "aws_s3_bucket_acl_misconfig":    _abd("aws_s3_bucket_acl_misconfig", "AWS S3 ACL misconfiguration audit", _CREDS),
+    "aws_s3_bucket_unencrypted":      _abd("aws_s3_bucket_unencrypted", "AWS S3 default-encryption audit", _CREDS),
+    "aws_ec2_sg_open":                _abd("aws_ec2_sg_open", "AWS security group 0.0.0.0/0 audit", _CREDS),
+    "aws_ec2_imds_v1_enabled":        _abd("aws_ec2_imds_v1_enabled", "AWS EC2 IMDSv1 enabled", _IMDS),
+    "aws_rds_public_access":          _abd("aws_rds_public_access", "AWS RDS public access audit", _CREDS),
+    "aws_lambda_resource_policy":     _abd("aws_lambda_resource_policy", "AWS Lambda resource-policy audit", _CREDS),
+    "aws_kms_key_rotation_off":       _abd("aws_kms_key_rotation_off", "AWS KMS key rotation off", _CREDS),
+    "aws_efs_unencrypted":            _abd("aws_efs_unencrypted", "AWS EFS unencrypted", _CREDS),
+    "aws_secrets_manager_audit":      _abd("aws_secrets_manager_audit", "AWS Secrets Manager audit", _CREDS),
+
+    # §3 Azure
+    "azure_storage_public":           _probe_azure_storage_public,
+    "azure_aks_endpoint_public":      _probe_k8s_endpoint("azure_aks_endpoint_public", "Azure AKS"),
+    "azure_aad_pim_audit":            _abd("azure_aad_pim_audit", "Azure AAD PIM audit", _CREDS),
+    "azure_conditional_access_audit": _abd("azure_conditional_access_audit", "Azure Conditional Access audit", _CREDS),
+    "azure_managed_identity_audit":   _abd("azure_managed_identity_audit", "Azure Managed Identity audit", _CREDS),
+    "azure_keyvault_public_access":   _abd("azure_keyvault_public_access", "Azure Key Vault public-access audit", _CREDS),
+    "azure_storage_unencrypted":      _abd("azure_storage_unencrypted", "Azure Storage encryption audit", _CREDS),
+    "azure_vm_disk_unencrypted":      _abd("azure_vm_disk_unencrypted", "Azure VM disk encryption audit", _CREDS),
+    "azure_nsg_open_inbound":         _abd("azure_nsg_open_inbound", "Azure NSG open inbound audit", _CREDS),
+    "azure_sql_public_access":        _abd("azure_sql_public_access", "Azure SQL public access audit", _CREDS),
+    "azure_app_service_https_only":   _abd("azure_app_service_https_only", "Azure App Service HTTPS-only audit", _CREDS),
+    "azure_app_registration_unused":  _abd("azure_app_registration_unused", "Azure unused app registration audit", _CREDS),
+    "azure_service_principal_secrets": _abd("azure_service_principal_secrets", "Azure SP secret rotation audit", _CREDS),
+    "azure_diagnostic_settings_off":  _abd("azure_diagnostic_settings_off", "Azure diagnostic settings off", _CREDS),
+    "azure_defender_off":             _abd("azure_defender_off", "Microsoft Defender for Cloud off", _CREDS),
+
+    # §4 GCP
+    "gcp_gcs_bucket_public":          _probe_gcp_gcs_public,
+    "gcp_gke_endpoint_public":        _probe_k8s_endpoint("gcp_gke_endpoint_public", "GCP GKE"),
+    "gcp_org_policy_audit":           _abd("gcp_org_policy_audit", "GCP org policy audit", _CREDS),
+    "gcp_iam_overpermissive":         _abd("gcp_iam_overpermissive", "GCP IAM over-permissive audit", _CREDS),
+    "gcp_sa_key_age":                 _abd("gcp_sa_key_age", "GCP service-account key age audit", _CREDS),
+    "gcp_gcs_uniform_access":         _abd("gcp_gcs_uniform_access", "GCS uniform bucket-level access audit", _CREDS),
+    "gcp_firewall_open":              _abd("gcp_firewall_open", "GCP firewall 0.0.0.0/0 audit", _CREDS),
+    "gcp_sql_public_access":          _abd("gcp_sql_public_access", "Cloud SQL public access audit", _CREDS),
+    "gcp_cloud_kms_audit":            _abd("gcp_cloud_kms_audit", "Cloud KMS audit", _CREDS),
+    "gcp_audit_logs_off":             _abd("gcp_audit_logs_off", "GCP audit logs off", _CREDS),
+    "gcp_secret_manager_audit":       _abd("gcp_secret_manager_audit", "GCP Secret Manager IAM audit", _CREDS),
+    "gcp_workload_identity_audit":    _abd("gcp_workload_identity_audit", "GKE Workload Identity audit", _CREDS),
+
+    # §5 CIEM
+    "ciem_overpermissive_paths":      _abd("ciem_overpermissive_paths", "CIEM over-permissive identity paths", _CREDS),
+    "ciem_cross_account_trust":       _abd("ciem_cross_account_trust", "Cross-account trust audit", _CREDS),
+    "ciem_oidc_federation_audit":     _abd("ciem_oidc_federation_audit", "OIDC federation audit", _CREDS),
+    "ciem_unused_access_keys":        _abd("ciem_unused_access_keys", "Unused access keys audit", _CREDS),
+    "ciem_privilege_escalation_paths": _abd("ciem_privilege_escalation_paths", "Cloud privesc-path mapping", _CREDS),
+    "ciem_zombie_users":              _abd("ciem_zombie_users", "Zombie/dormant users audit", _CREDS),
+    "ciem_excessive_perm_diff":       _abd("ciem_excessive_perm_diff", "Excessive-permission diff vs baseline", _CREDS),
+    "ciem_service_account_creep":     _abd("ciem_service_account_creep", "Service-account permission creep", _CREDS),
+    "manual_ciem_review":             _abd("manual_ciem_review", "Manual CIEM review", _MANUAL),
+    "manual_iam_lateral_chain":       _abd("manual_iam_lateral_chain", "Manual IAM lateral-movement chain", _MANUAL),
+
+    # §6 Serverless
+    "lambdaguard_advisory":           _abd("lambdaguard_advisory", "LambdaGuard scan", _CREDS),
+    "lambda_env_secrets_leak":        _abd("lambda_env_secrets_leak", "Lambda env-var secret leak", _CREDS),
+    "lambda_role_overpermissive":     _abd("lambda_role_overpermissive", "Lambda execution-role over-perm", _CREDS),
+    "azure_function_secrets_leak":    _abd("azure_function_secrets_leak", "Azure Function secret leak", _CREDS),
+    "azure_function_managed_id":      _abd("azure_function_managed_id", "Azure Function managed-ID over-perm", _CREDS),
+    "cloud_run_audit":                _abd("cloud_run_audit", "Cloud Run --allow-unauthenticated audit", _CREDS),
+    "cloud_functions_overpermissive": _abd("cloud_functions_overpermissive", "Cloud Functions over-perm audit", _CREDS),
+    "serverless_cold_start_oracle":   _abd("serverless_cold_start_oracle", "Serverless cold-start side-channel", _MANUAL),
+    "manual_serverless_review":       _abd("manual_serverless_review", "Manual serverless review", _MANUAL),
+    "manual_serverless_chain":        _abd("manual_serverless_chain", "Manual serverless chain", _MANUAL),
+
+    # §7 Container Registry & Image
+    "ecr_public_access":              _probe_ecr_public_access,
+    "acr_anonymous_pull":             _probe_acr_anonymous,
+    "gcr_public_access":              _probe_gcr_public_access,
+    "docker_hub_public_image_secrets": _probe_docker_hub_public_image,
+    "image_unsigned_no_cosign":       _abd("image_unsigned_no_cosign", "Image cosign-signature verification", _IMAGE),
+    "image_vuln_critical_count":      _abd("image_vuln_critical_count", "Image critical-CVE count", _IMAGE),
+    "image_baseimage_age":            _abd("image_baseimage_age", "Base-image age audit", _IMAGE),
+    "image_runtime_provenance":       _abd("image_runtime_provenance", "Image runtime provenance / SLSA", _IMAGE),
+    "manual_image_review":            _abd("manual_image_review", "Manual image review", _MANUAL),
+
+    # §8 Cloud Storage
     "s3_bucket_public_static_site":   _probe_s3_public,
-    "s3_bucket_brute":                _probe_s3_bucket_brute,
     "azure_blob_public_anon":         _probe_azure_blob_public,
     "gcs_bucket_acl_legacy":          _probe_gcs_bucket_public,
+    "s3_bucket_lifecycle_audit":      _abd("s3_bucket_lifecycle_audit", "S3 lifecycle policy audit", _CREDS),
+    "s3_bucket_versioning_off":       _abd("s3_bucket_versioning_off", "S3 versioning / MFA-delete audit", _CREDS),
+    "s3_bucket_logging_off":          _abd("s3_bucket_logging_off", "S3 access-logging audit", _CREDS),
+    "gcs_bucket_logging_off":         _abd("gcs_bucket_logging_off", "GCS access-logging audit", _CREDS),
+    "storage_secret_in_object":       _abd("storage_secret_in_object", "Secret detected in object content", _CREDS + " A public object would be readable, but enumerating object contents requires bucket-list access or credentials."),
+    "manual_storage_review":          _abd("manual_storage_review", "Manual storage review", _MANUAL),
+
+    # §9 Network & VPC
+    "vpc_flow_logs_off":              _abd("vpc_flow_logs_off", "VPC flow logs disabled audit", _CREDS),
+    "nat_gateway_public_egress":      _abd("nat_gateway_public_egress", "NAT gateway public-egress audit", _CREDS),
+    "vpc_endpoints_audit":            _abd("vpc_endpoints_audit", "VPC endpoints (PrivateLink) audit", _CREDS),
+    "transit_gateway_audit":          _abd("transit_gateway_audit", "Transit Gateway audit", _CREDS),
+    "peering_overpermissive":         _abd("peering_overpermissive", "VPC peering over-permissive audit", _CREDS),
+    "ipv6_egress_audit":              _abd("ipv6_egress_audit", "IPv6 egress audit", _CREDS),
+    "vpn_endpoint_public":            _abd("vpn_endpoint_public", "Cloud VPN endpoint public audit", _CREDS),
+    "manual_network_review":          _abd("manual_network_review", "Manual VPC review", _MANUAL),
+
+    # §10 Secrets & KMS
+    "kms_key_rotation_off":           _abd("kms_key_rotation_off", "KMS key rotation off", _CREDS),
+    "secrets_manager_versioning_off": _abd("secrets_manager_versioning_off", "Secrets Manager versioning off", _CREDS),
+    "parameter_store_secret_unencrypted": _abd("parameter_store_secret_unencrypted", "SSM Parameter Store unencrypted secret", _CREDS),
+    "keyvault_purge_protection_off":  _abd("keyvault_purge_protection_off", "Azure Key Vault purge-protection off", _CREDS),
+    "kms_customer_managed_audit":     _abd("kms_customer_managed_audit", "Customer-managed KMS key audit", _CREDS),
+    "kms_grants_audit":               _abd("kms_grants_audit", "KMS grants audit", _CREDS),
+    "hsm_backed_keys_audit":          _abd("hsm_backed_keys_audit", "HSM-backed key audit", _CREDS),
+    "manual_secret_review":           _abd("manual_secret_review", "Manual secret review", _MANUAL),
+
+    # §11 Cross-Cloud OIDC
     "oidc_provider_thumbprint_audit": _probe_oidc_discovery,
-    "recon_cloud_dns":                _probe_recon_cloud_dns,
-    "ecr_public_access":              _probe_ecr_public_access,
-    "gcr_public_access":              _probe_gcr_public_access,
-    "docker_hub_public_image_secrets":_probe_docker_hub_public_image,
+    "gha_oidc_role_audit":            _abd("gha_oidc_role_audit", "GitHub Actions OIDC -> AWS role audit", _OIDCCFG),
+    "cross_cloud_oidc_trust_audit":   _abd("cross_cloud_oidc_trust_audit", "Cross-cloud OIDC trust audit", _OIDCCFG),
+    "oidc_subject_claim_wildcard":    _abd("oidc_subject_claim_wildcard", "OIDC subject-claim wildcard abuse", _OIDCCFG),
+    "manual_oidc_audit":              _abd("manual_oidc_audit", "Manual OIDC audit", _MANUAL),
+    "manual_cross_cloud_chain":       _abd("manual_cross_cloud_chain", "Manual cross-cloud chain", _MANUAL),
+
+    # §12 Compliance
     "compliance_cis_aws_benchmark":   _probe_iac_manifest_exposed,
+    "compliance_cis_azure_benchmark": _abd("compliance_cis_azure_benchmark", "CIS Azure Foundations benchmark", _CREDS),
+    "compliance_cis_gcp_benchmark":   _abd("compliance_cis_gcp_benchmark", "CIS GCP Foundations benchmark", _CREDS),
+    "compliance_pci_dss_cloud":       _abd("compliance_pci_dss_cloud", "PCI DSS 4.0 cloud controls", _CREDS),
+
+    # orphan helper (no T slug — preserved from prior build; not routed)
+    "s3_bucket_brute":                _probe_s3_bucket_brute,
 }
 
 T = [

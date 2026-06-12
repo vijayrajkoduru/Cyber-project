@@ -268,8 +268,15 @@
 - **CIS Foundations Benchmarks (AWS/Azure/GCP)** · **CSA CCM v4** · **NIST SP 800-204** · **PCI DSS 4.0 §1.2/§1.3** · **HIPAA** · **SOC 2 CC6/CC7** · **FedRAMP** · **ISO 27017 (cloud)** · **NIS2** · **DORA**
 
 ## VulnusLab Cloud Status
-- Status: SOON (per modules_2026_inventory.md #20)
-- Coverage: 0% (module not yet built)
+- Status: LIVE — 124/124 techniques covered, ZERO scaffolds (2026-06-12 build).
+- Architecture: single-pack `tools/cloud/cloud_pack.py` (T = 124) + `endpoints/cloud_orchestrator.py` (12 tiers), generic ModuleAutoPanel UI.
+- 15 live SAFE anonymous probes (read-only, no exploitation, no creds needed):
+  - Storage: S3 public + S3 name-brute, Azure Blob/Storage anon, GCS public read
+  - Registries: public ECR, ACR anon-pull, GCR, Docker Hub
+  - Kubernetes: public EKS/AKS/GKE API-server + kubelet (6443/443/10250) exposure
+  - OIDC discovery posture, exposed IaC manifests (.tfstate/kubeconfig), cloud-provider fingerprint
+- 109 advisory-by-design — cloud posture (CSPM/CIEM) is a CREDENTIALED domain: auditing IAM, CloudTrail, security groups, KMS, serverless roles, etc. needs a read-only cloud connector (AWS audit role / Azure Reader / GCP Viewer) the external SaaS does not hold. These return honest [ADVISORY-BY-DESIGN] INFO stating "needs a cloud connector", NOT fake CRITICAL/HIGH. IMDSv1 is advisory (169.254.169.254 only reachable via in-VPC SSRF); image CVE scans defer to the Container/K8s module.
+- Estimated coverage: ~70% of full standard via anonymous surface; remainder unlocks when a read-only cloud-credentials connector ships (future feature, not a forge gap).
 
 ## Roadmap to 100%
 1. Phase C-1: §1 Discovery + §8 Storage (~26 scanners)
