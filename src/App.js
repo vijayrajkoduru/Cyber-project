@@ -161,10 +161,24 @@ const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
 
+  /* ── VL light theme tokens (Stage 1) ── */
+  :root{
+    --bg:#f6f8fb;          /* app canvas */
+    --surface:#ffffff;     /* cards / panels */
+    --surface-2:#eef2f7;   /* subtle raised / hover */
+    --border:#e2e8f0;
+    --heading:#0f172a;
+    --text:#1e293b;
+    --text-2:#475569;
+    --muted:#64748b;
+    --faint:#94a3b8;
+    --accent:#2563eb;
+  }
+
   body{
     font-family:'Inter',sans-serif;
-    background:#020617;
-    color:#e2e8f0;
+    background:var(--bg);
+    color:var(--text);
     font-size:14px;
     line-height:1.6;
     -webkit-font-smoothing:antialiased;
@@ -172,16 +186,16 @@ const CSS = `
   }
 
   /* Global text color improvements */
-  h1,h2,h3,h4,h5,h6 { color:#f1f5f9; font-weight:700; line-height:1.3; }
-  p { color:#cbd5e1; line-height:1.7; }
-  label { color:#94a3b8; font-size:13px; }
+  h1,h2,h3,h4,h5,h6 { color:var(--heading); font-weight:700; line-height:1.3; }
+  p { color:var(--text-2); line-height:1.7; }
+  label { color:var(--muted); font-size:13px; }
   span { color:inherit; }
 
   /* Scrollbar */
-  ::-webkit-scrollbar{width:5px;height:5px;}
-  ::-webkit-scrollbar-track{background:#0a0f1e;}
-  ::-webkit-scrollbar-thumb{background:#334155;border-radius:6px;}
-  ::-webkit-scrollbar-thumb:hover{background:#475569;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-track{background:var(--surface-2);}
+  ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:6px;}
+  ::-webkit-scrollbar-thumb:hover{background:#94a3b8;}
 
   /* Animations */
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -192,24 +206,24 @@ const CSS = `
   .fade{animation:fadeUp .3s ease;}
 
   /* Sidebar nav */
-  .nav-btn:hover{background:#1e293b!important;}
-  .nav-btn span{ font-size:13px !important; font-weight:500 !important; color:#94a3b8; letter-spacing:0.2px; }
+  .nav-btn:hover{background:var(--surface-2)!important;}
+  .nav-btn span{ font-size:13px !important; font-weight:500 !important; color:var(--muted); letter-spacing:0.2px; }
 
   /* Table rows */
-  .row:hover{background:#0f172a!important;}
+  .row:hover{background:var(--surface-2)!important;}
 
   /* Tool cards */
-  .tool-card:hover{border-color:#3b82f680!important;transform:translateY(-1px);}
+  .tool-card:hover{border-color:var(--accent)!important;transform:translateY(-1px);}
   .tool-card{transition:all .2s;}
 
   /* Global input styling */
   input, textarea, select {
     font-family:'Inter',sans-serif !important;
     font-size:13px !important;
-    color:#e2e8f0 !important;
+    color:var(--text) !important;
     letter-spacing:0.2px;
   }
-  input::placeholder, textarea::placeholder { color:#475569 !important; }
+  input::placeholder, textarea::placeholder { color:var(--faint) !important; }
 
   /* Section headers */
   .section-label {
@@ -217,14 +231,14 @@ const CSS = `
     font-weight:700;
     letter-spacing:1.5px;
     text-transform:uppercase;
-    color:#64748b;
+    color:var(--muted);
   }
 
   /* Monospace text */
   .mono {
     font-family:'JetBrains Mono',monospace;
     font-size:12px;
-    color:#94a3b8;
+    color:var(--text-2);
     letter-spacing:0.3px;
   }
 
@@ -232,14 +246,14 @@ const CSS = `
   .tool-name {
     font-size:13px;
     font-weight:600;
-    color:#cbd5e1;
+    color:var(--text);
     letter-spacing:0.1px;
   }
 
   /* Description text */
   .desc-text {
     font-size:12px;
-    color:#64748b;
+    color:var(--muted);
     line-height:1.5;
   }
 
@@ -258,7 +272,7 @@ const CSS = `
     font-family:'JetBrains Mono',monospace;
     font-size:12px;
     line-height:1.7;
-    color:#94a3b8;
+    color:var(--text-2);
   }
 `;
 
@@ -23944,8 +23958,9 @@ export default function App() {
             if (!mods.length) return null;
             return (
               <div key={sec.key}>
-                <div style={{padding:"10px 8px 3px"}}>
+                <div style={{padding:"10px 8px 3px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
+                  <span style={{fontSize:9,color:"#475569",fontWeight:600,marginRight:6}}>{mods.length}</span>
                 </div>
                 {mods.map(m => {
                   const locked = !canAccess(m);
@@ -23956,7 +23971,7 @@ export default function App() {
                   // by section, making sidebar tier nav redundant.
                   return (
                     <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
-                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
+                      style={{width:"calc(100% - 16px)",background:isActive?"#1e3a8a":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1,boxShadow:isActive?"inset 3px 0 0 #60a5fa":"none"}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
                       <span style={{fontSize:13,color:isActive?"#f1f5f9":locked?"#475569":"#94a3b8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
                       {/* VA/PT badge — subtle tag, low-opacity, refined look */}
