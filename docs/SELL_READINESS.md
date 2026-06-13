@@ -34,9 +34,12 @@ vulnuslab-private). The scanning product is mature; the gaps are commercial plum
 2. **[S] Transactional email** — one provider (SendGrid free / Zoho / Gmail SMTP) to send the
    credentials/welcome email after the webhook. No email service exists today; without it a paid
    customer never gets a login.
-3. **[M] Entitlement enforcement** — add `subscription_expires_at` + a scan counter to users;
-   implement `verify_scan_quota()` (confirmed no-op TODO at tools/_shared.py:133): block scans when
-   expired or over the per-plan cap. You can't bill a metric you don't measure.
+3. **[M] Entitlement enforcement** — DONE (commit 7427e9a1): tools/_quota.py meters scans per plan
+   (free 10 / trial 25 / pro 500 / team 5000 / enterprise+admin unlimited) via the consent_log call
+   (1 per scan); added subscription_expires_at/scans_used/usage_period columns; expired subs fall
+   back to free; new signups get a 7-day trial; admin /extend grants paid days; the dashboard aborts
+   over-cap scans with an upgrade message. Functionally tested. (Auto-downgrade email + a usage meter
+   in the UI are P1.)
 4. **[M] Legal pack** — Terms of Service, Privacy Policy, Acceptable Use / Scanning-Authorization
    clause, India DPDP statement. Serve at /terms, /privacy; link from footer + signup. Selling an
    offensive scanner with no ToS/AUP is uninsurable exposure.
@@ -47,9 +50,9 @@ vulnuslab-private). The scanning product is mature; the gaps are commercial plum
 6. **[S] HTTPS verify/harden** — confirm TLS (likely Cloudflare-terminated for app.vulnuslab.com);
    set Cloudflare to Full (strict) so CF→origin is encrypted, force HTTP→HTTPS + HSTS. If the origin
    is plaintext-only behind flexible SSL, fix to full-strict.
-7. **[M] Report persistence** — persist the generated PDF on scan completion with a stable Report ID
-   + a re-download endpoint. Today reports live only in browser memory; close the tab = deliverable
-   lost.
+7. **[M] Report persistence** — DONE (Saved Reports UI, commit 17979247): scans now persist PDFs
+   server-side with browse / re-download / delete. (Verify on the VPS that reports survive a tab
+   close + reload.)
 8. **[S] Deploy the marketing site** to vulnuslab.com with a payment CTA + legal links (content is
    already built).
 
