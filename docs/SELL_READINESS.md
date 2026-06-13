@@ -71,27 +71,29 @@ vulnuslab-private). The scanning product is mature; the gaps are commercial plum
   pending decision on strictness.
 - [M] Admin/sensitive-action audit logging — DONE (3c4e331d): tools/_audit.py append-only log; account
   actions wired. Still to wire: admin plan changes + logins.
-- [S] CI security gates — DONE (3c4e331d): gitleaks (gating) + pip-audit (report-only) added to CI.
-  semgrep SAST + secret history scrub/rotation still TODO.
+- [S] CI security gates — DONE: gitleaks (gating) + pip-audit + semgrep (report-only) in CI
+  (3c4e331d, 95854496). Secret history scrub/rotation still TODO (urgent).
 - [M] New-user onboarding: empty-state "run your first scan" card, trial quota indicator + upsell,
   short first-run walkthrough
 - [M] Automated daily DB backup to off-box (S3) + error capture (Sentry)
 - [M] Sample PDF download + Security/Trust page + legal links on the marketing site
 
 ## P2 — scale / polish
-- [L] Org/team workspaces + RBAC + invitations + seat enforcement (Team tier)
-- [M] API keys for CI/CD service accounts + optional TOTP MFA
+- [L] Org/team workspaces + RBAC + invitations + seat enforcement (Team tier) — TODO (large; partly needs payments for seats)
+- [M] API keys for CI/CD service accounts + optional TOTP MFA — TODO (API keys must be metered to not bypass quota; MFA needs frontend)
 - [L] Unify PDF generators into one generateUniversalVLReport (all 26+ modules) + combined report +
-  encrypted-at-rest storage
-- [L] Founder business dashboard: MRR, churn, conversion, LTV, abuse alerts
-- [M] Payment customer-portal + annual-prepay discount + add-on SKUs
-- [M] Reliability scale-out: Redis rate limiting, tracing/correlation IDs, SQLite WAL+busy_timeout,
-  Prometheus/Grafana, Alembic migrations
-- [M] Data retention/auto-purge + customer data-export + DLP redaction of secrets found in results
-- [M] SECURITY.md + disclosure policy; annual third-party pentest / bug bounty of the platform
+  encrypted-at-rest storage — TODO (heavy App.js work)
+- [L] Founder business dashboard: MRR, churn, conversion, LTV, abuse alerts — DONE (basics): Ops Console
+  (a9e77ff1) + conversion/at-risk/audit-feed (95854496). Churn/LTV need historical data over time.
+- [M] Payment customer-portal + annual-prepay discount + add-on SKUs — TODO (needs payments #1)
+- [M] Reliability scale-out: Redis rate limiting, tracing/correlation IDs, Prometheus/Grafana,
+  Alembic migrations — TODO. SQLite WAL+busy_timeout DONE (95854496).
+- [M] Data retention/auto-purge + customer data-export + DLP redaction of secrets found in results —
+  PARTIAL: data export DONE (/api/account/export); retention auto-purge + DLP redaction TODO.
+- [M] SECURITY.md + disclosure policy — DONE (95854496); annual third-party pentest / bug bounty TODO.
 - [L] SEO/content/analytics: blog, GA/Mixpanel funnel, OG/schema metadata, onboarding email sequence,
-  fix the $29-vs-$49 pricing inconsistency
-- [M] In-app onboarding depth: tooltips, "start here" recommender, finding-interpretation guide
+  fix the $29-vs-$49 pricing inconsistency — TODO (marketing repo + analytics accounts)
+- [M] In-app onboarding depth: tooltips, "start here" recommender, finding-interpretation guide — TODO (App.js)
 
 ## Non-code gaps the audit flagged (business, not build)
 - **Tax/invoicing** — India GST applicability + GST-compliant invoice numbering; FEMA/LUT for export
