@@ -14024,6 +14024,8 @@ function generateUniversalVLReport(opts) {
   const BLUE = [59,130,246], DARK = [15,23,42], GRAY = [100,116,139];
   const LIGHT = [241,245,249], WHITE = [255,255,255], BORDER = [203,213,225];
   const LBLUE = [220,230,245];
+  // SOP palette — deep blue section bands + cyan accent + navy frame (matches VL-SOP-001).
+  const SOPHEAD = [17,85,122], SOPCYAN = [0,168,204], SOPNAVY = [11,31,58];
   const SEVCOL = {CRITICAL:[220,38,38],HIGH:[239,68,68],MEDIUM:[245,158,11],LOW:[59,130,246],INFO:[100,116,139],POSITIVE:[15,118,82]};
   let y = 18, _secN = 0;
 
@@ -14046,8 +14048,9 @@ function generateUniversalVLReport(opts) {
     // break first so the header sits with at least its opening content.
     if (yy + 24 > 278) { doc.addPage(); y = 18; drawHeader(); yy = y; }
     _secN++;
-    fillR(margin, yy, contentW, 9, LBLUE);
-    txt(_secN + ". " + title, margin + 4, yy + 6.2, 10, BLUE, true);
+    fillR(margin, yy, contentW, 9, SOPHEAD);
+    fillR(margin, yy + 9, contentW, 0.8, SOPCYAN);
+    txt(_secN + ". " + title, margin + 4, yy + 6.2, 10, WHITE, true);
     return yy + 13;
   };
   // Continuation header: same look as sHead but reuses the CURRENT _secN
@@ -14055,8 +14058,9 @@ function generateUniversalVLReport(opts) {
   // pages so we don't end up with "22. Tools / 23. Tools (cont.) / 24.
   // Tools (cont.)" instead of "22. Tools / 22. Tools (continued)".
   const sHeadCont = (title, yy) => {
-    fillR(margin, yy, contentW, 9, LBLUE);
-    txt(_secN + ". " + title, margin + 4, yy + 6.2, 10, BLUE, true);
+    fillR(margin, yy, contentW, 9, SOPHEAD);
+    fillR(margin, yy + 9, contentW, 0.8, SOPCYAN);
+    txt(_secN + ". " + title, margin + 4, yy + 6.2, 10, WHITE, true);
     return yy + 13;
   };
   const tHead = (cols, widths, yy) => {
@@ -16654,7 +16658,15 @@ function generateUniversalVLReport(opts) {
       doc.text(_wmStrU, pageW/2, pageH/2, {angle:30, align:"center"});
       doc.restoreGraphicsState();
     }
-    doc.setDrawColor(...BLUE); doc.setLineWidth(1.2); doc.rect(0, 0, pageW, pageH, "S");
+    if (i === 1) {
+      // Cover: edge frame only (the full-bleed branded band must not be cut).
+      doc.setDrawColor(...SOPNAVY); doc.setLineWidth(1.4); doc.rect(0, 0, pageW, pageH, "S");
+    } else {
+      // Content pages: SOP double border — navy outer + cyan inner — in the margin
+      // gap (content bands sit at x=12..198, so 5/7mm insets never overlap them).
+      doc.setDrawColor(...SOPNAVY); doc.setLineWidth(1.4); doc.rect(5, 5, pageW - 10, pageH - 9, "S");
+      doc.setDrawColor(...SOPCYAN); doc.setLineWidth(0.6); doc.rect(7, 7, pageW - 14, pageH - 13, "S");
+    }
     if (i >= 2) {
       // Branded footer (shared helper): accent line + 3-zone + VL glyph.
       _vlDrawBrandedFooter(doc, {
