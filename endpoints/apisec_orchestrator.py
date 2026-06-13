@@ -1,4 +1,4 @@
-"""APISec module orchestrator — 22_apisec.md (108 endpoints)."""
+"""APISec module orchestrator — 22_apisec.md (110 endpoints)."""
 from typing import Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -19,7 +19,7 @@ _RANGES = [
     ("tier7_grpc",            73, 81),
     ("tier8_ws_sse",          81, 90),
     ("tier9_soap_rest_legacy", 90, 99),
-    ("tier10_supply_versioning", 99, 108),
+    ("tier10_supply_versioning", 99, 110),
 ]
 
 APISEC_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
