@@ -4886,32 +4886,56 @@ function SystemHealth() {
   }, []);
   if (loading) return <div style={{textAlign:"center",padding:40,color:"#5a6478",fontSize:13}}>Checking system health...</div>;
   if (!health)  return <div style={{textAlign:"center",padding:40,color:"#ff3e5e"}}>Cannot connect to backend</div>;
-  const available = Object.values(health.free_tools).filter(t=>t.available).length;
-  const total     = Object.keys(health.free_tools).length;
+
+  // /api/health shape: {status, version, tools_loaded, tools_failed[], tools_healed[], healing_engine}.
+  // (Older builds returned a free_tools{} map — fall back to it so this never crashes.)
+  const failed = Array.isArray(health.tools_failed) ? health.tools_failed : [];
+  const healed = Array.isArray(health.tools_healed) ? health.tools_healed : [];
+  let loaded = health.tools_loaded;
+  if (loaded == null && health.free_tools) {
+    loaded = Object.values(health.free_tools).filter(t => t && t.available).length;
+  }
+  loaded = loaded || 0;
+  const ok = health.status === "ok" && failed.length === 0;
+
+  const Card = ({label,value,color}) => (
+    <div style={{background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"14px 16px",flex:"1 1 140px"}}>
+      <div style={{fontSize:22,fontWeight:700,color:color||"#d8deea",fontFamily:"JetBrains Mono,monospace"}}>{value}</div>
+      <div style={{fontSize:11,color:"#5a6478",marginTop:2}}>{label}</div>
+    </div>
+  );
+
   return (
     <div className="fade">
       <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:20,marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div>
             <h2 style={{fontSize:16,fontWeight:700,color:"#ffffff",marginBottom:2}}>System Health</h2>
-            <p style={{fontSize:12,color:"#5a6478"}}>Real-time tool availability on Kali backend</p>
+            <p style={{fontSize:12,color:"#5a6478"}}>Backend status + scanner autoload health (Kali engine)</p>
           </div>
-          <div style={{display:"flex",gap:8}}>
-            <Badge label={available+"/"+total+" Available"} color="green"/>
-            <Badge label={"v"+health.version} color="blue"/>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <Badge label={ok?"Healthy":"Degraded"} color={ok?"green":"red"}/>
+            <Badge label={"v"+(health.version||"?")} color="blue"/>
+            <Badge label={"healing: "+(health.healing_engine||"?")} color={health.healing_engine==="active"?"green":"gray"}/>
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-          {Object.entries(health.free_tools).map(([name,info]) => (
-            <div key={name} style={{background:"#0a0e17",border:"1px solid "+(info.available?"#166534":"#7f1d1d"),borderRadius:6,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:12,fontWeight:600,color:"#d8deea",fontFamily:"JetBrains Mono,monospace",marginBottom:2}}>{name}</div>
-                <div style={{fontSize:10,color:"#8a94a8",fontFamily:"JetBrains Mono,monospace"}}>{info.path||"not found"}</div>
-              </div>
-              <div style={{width:8,height:8,borderRadius:"50%",background:info.available?"#00ff88":"#ff3e5e",flexShrink:0}}/>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:failed.length?16:0}}>
+          <Card label="Scanners loaded" value={loaded} color="#00ff88"/>
+          <Card label="Failed to load" value={failed.length} color={failed.length?"#ff3e5e":"#d8deea"}/>
+          <Card label="Auto-healed" value={healed.length} color={healed.length?"#f5a623":"#d8deea"}/>
+        </div>
+        {failed.length > 0 && (
+          <div style={{background:"#0a0e17",border:"1px solid #7f1d1d",borderRadius:6,padding:"12px 14px"}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#ff8095",marginBottom:8}}>Failed scanners ({failed.length})</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:6}}>
+              {failed.map((t,i) => (
+                <div key={i} style={{fontSize:11,color:"#d8deea",fontFamily:"JetBrains Mono,monospace"}}>
+                  {typeof t === "string" ? t : (t && (t.name || t.tool)) || JSON.stringify(t)}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
