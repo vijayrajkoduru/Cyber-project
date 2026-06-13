@@ -63,7 +63,7 @@ def _try_lab_bootstrap(target: str, login_url: str,
         try:
             # GET setup page first (some DVWA versions need session init)
             base = target.split("/login")[0].rstrip("/")
-            setup_url = base + "/setup.php"
+            setup_url = _resolve_underscore(base + "/setup.php")
             sess.get(setup_url, timeout=8, verify=False, allow_redirects=True)
             # POST the create-db form
             r = sess.post(setup_url,
@@ -79,7 +79,7 @@ def _try_lab_bootstrap(target: str, login_url: str,
         out["lab_detected"] = "mutillidae"
         try:
             base = target.split("/index.php")[0].rstrip("/")
-            setup_url = base + "/set-up-database.php"
+            setup_url = _resolve_underscore(base + "/set-up-database.php")
             r = sess.get(setup_url, timeout=15, verify=False, allow_redirects=True)
             out["bootstrap_attempted"] = True
             out["bootstrap_status"] = r.status_code
@@ -116,7 +116,7 @@ def _try_self_register(target: str, login_url: str, user: str, pwd: str,
         if lab["url_match"] not in full:
             continue
         out["register_lab"] = lab["name"]
-        reg_url = _abs(target, lab["register_url"])
+        reg_url = _resolve_underscore(_abs(target, lab["register_url"]))
         try:
             body = lab["fields"](user, pwd)
             if lab.get("json"):
@@ -236,7 +236,7 @@ def _try_spa_login(target: str, username: str, password: str,
             if deadline and _time.monotonic() > deadline:
                 break
             try:
-                r = sess.post(url, json=body, timeout=6, allow_redirects=False)
+                r = sess.post(_resolve_underscore(url), json=body, timeout=6, allow_redirects=False)
             except Exception:
                 continue
             if r.status_code >= 400:
@@ -341,7 +341,7 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
             raise HTTPException(400, "bearer_token required when auth_type=bearer")
         check_url = _abs(target, req.success_indicator or "/")
         try:
-            r = requests.get(check_url, headers={
+            r = requests.get(_resolve_underscore(check_url), headers={
                 **_BROWSER_HEADERS,
                 "Authorization": f"Bearer {req.bearer_token}",
             }, timeout=8, verify=False, allow_redirects=True)
@@ -362,7 +362,7 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         tok = base64.b64encode(f"{req.username}:{req.password}".encode()).decode()
         check_url = _abs(target, req.success_indicator or "/")
         try:
-            r = requests.get(check_url, headers={
+            r = requests.get(_resolve_underscore(check_url), headers={
                 **_BROWSER_HEADERS, "Authorization": f"Basic {tok}",
             }, timeout=8, verify=False, allow_redirects=True)
         except Exception as e:
@@ -394,7 +394,7 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
 
     # 1. GET login page for hidden fields / CSRF
     try:
-        page = sess.get(login_url, timeout=8, allow_redirects=True)
+        page = sess.get(_resolve_underscore(login_url), timeout=8, allow_redirects=True)
     except Exception as e:
         spa = _try_spa_login(target, req.username, req.password, deadline=deadline)
         if spa is not None:
@@ -427,13 +427,13 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         payload.update(req.extra_fields)
 
     try:
-        resp = sess.post(login_url, data=payload, timeout=8, allow_redirects=True)
+        resp = sess.post(_resolve_underscore(login_url), data=payload, timeout=8, allow_redirects=True)
     except Exception as e:
         return _fail("form", f"Login POST to {login_url} failed: {e}. Is the target still reachable?")
 
     verify_url = _abs(target, req.success_indicator or "/")
     try:
-        check = sess.get(verify_url, timeout=8, allow_redirects=True)
+        check = sess.get(_resolve_underscore(verify_url), timeout=8, allow_redirects=True)
     except Exception as e:
         return _fail("form", f"Could not reach {verify_url} to verify the session: {e}.")
 
