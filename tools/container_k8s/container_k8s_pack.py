@@ -2278,6 +2278,11 @@ T = [
     ("falco_runtime_audit", "Falco runtime audit.", "MEDIUM", "5.5"),
     ("tetragon_runtime_audit", "Tetragon (Cilium) runtime audit.", "MEDIUM", "5.5"),
     ("tracee_runtime_audit", "Tracee (Aqua) runtime audit.", "MEDIUM", "5.5"),
+    # §11 Exposure probes (wired 2026-06-13: present in PROBES but were missing from T)
+    ("docker_daemon_exposed", "Docker daemon (2375/2376) exposure probe.", "HIGH", "8.6"),
+    ("etcd_apiserver_exposure", "etcd (2379) + kube-apiserver exposure probe.", "HIGH", "8.6"),
+    ("registry_npm_2fa_audit", "Harbor / container registry public-access audit.", "MEDIUM", "5.5"),
+    ("registry_pypi_2fa_audit", "Container registry /v2 anonymous-pull probe.", "MEDIUM", "5.5"),
 ]
 
 router = make_advisory_router("container_k8s", T,
