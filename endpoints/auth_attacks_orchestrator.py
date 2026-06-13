@@ -77,6 +77,9 @@ class AuthAttacksRunAllRequest(BaseModel):
     target: str
     tiers: Optional[list[str]] = None
     concurrency: Optional[int] = 3
+    # Authenticated context — token/session/IDOR-style checks behind login.
+    auth_cookie: Optional[str] = None
+    auth_bearer: Optional[str] = None
     options: Optional[dict] = None
 
 
@@ -106,7 +109,8 @@ async def auth_attacks_run_all(req: AuthAttacksRunAllRequest, request: Request,
     concurrency = max(1, min(req.concurrency or 3, 3))
     gen = run_module_streaming(
         target=req.target, tools=tools, module_name="auth_attacks",
-        concurrency=concurrency, extra_body=extra, jwt_token=jwt,
+        concurrency=concurrency, auth_cookie=req.auth_cookie,
+        auth_bearer=req.auth_bearer, extra_body=extra, jwt_token=jwt,
     )
     return StreamingResponse(
         gen,

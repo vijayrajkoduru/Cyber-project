@@ -82,6 +82,10 @@ class ClientSideRunAllRequest(BaseModel):
     # Default fan-out concurrency = 3 (per playbook rule — crawling probes
     # can saturate the customer's CDN if all 5 run in parallel).
     concurrency: Optional[int] = 3
+    # Authenticated scan — behind-login DOM-XSS / clickjacking checks need the
+    # session; safe_get/safe_post inject these into every probe.
+    auth_cookie: Optional[str] = None
+    auth_bearer: Optional[str] = None
     # Per-tool body extras (forwarded into req.options of each scanner)
     options: Optional[dict] = None
 
@@ -112,7 +116,8 @@ async def client_side_run_all(req: ClientSideRunAllRequest, request: Request,
     concurrency = max(1, min(req.concurrency or 3, 3))
     gen = run_module_streaming(
         target=req.target, tools=tools, module_name="client_side",
-        concurrency=concurrency, extra_body=extra, jwt_token=jwt,
+        concurrency=concurrency, auth_cookie=req.auth_cookie,
+        auth_bearer=req.auth_bearer, extra_body=extra, jwt_token=jwt,
     )
     return StreamingResponse(
         gen,

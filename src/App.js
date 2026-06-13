@@ -20865,7 +20865,7 @@ const MODULE_ADVANCED_INPUTS = {
   // needs Dockerfile, tier9_iac/k8s_manifest_scan needs pod YAML,
   // tier10_cloud_native/kube_hunter_scan needs kubeconfig,
   // tier7_sca/* + tier9_iac/* need repo_url with source / IaC files).
-  vuln:          ["dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"],
+  vuln:          ["image_ref", "dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"],
 };
 
 // Per-module example targets shown as clickable "Try:" chips below the target
@@ -21119,7 +21119,6 @@ const MODULE_TEST_TARGETS = {
   password: [
     {label:"lab_pwd_ssh (admin/admin)",   value:"lab_pwd_ssh:2222",  username:"admin",    password:"admin",    desc:"Your Docker SSH lab — hydra_ssh_spray (admin/admin)"},
     {label:"lab_pwd_smb (admin/admin)",   value:"lab_pwd_smb:445",   username:"admin",    password:"admin",    desc:"Your Docker SMB lab — medusa_smb_spray (admin/admin)"},
-    {label:"lab_pwd_web (admin/admin)",   value:"lab_pwd_web:5000",  username:"admin",    password:"admin",    desc:"Your Docker HTTP-form lab — patator_http_form_brute (admin/admin)"},
     {label:"lab_mysql (root/root)",       value:"lab_mysql:3306",    username:"root",     password:"root",     desc:"Your Docker MySQL lab — mysql_brute (root/root)"},
     {label:"lab_postgres (postgres/postgres)", value:"lab_postgres:5432", username:"postgres", password:"postgres", desc:"Your Docker PostgreSQL lab — postgres_brute (postgres/postgres)"},
     {label:"lab_ftp (admin/admin)",       value:"lab_ftp:21",        username:"admin",    password:"admin",    desc:"Your Docker FTP lab — ftp_brute (admin/admin)"},
@@ -21181,8 +21180,8 @@ const MODULE_TEST_TARGETS = {
     {label:"your DC hostname",     value:"dc01.corp.local",                       desc:"Your own Domain Controller"},
   ],
   av_evasion: [
-    {label:"sample payload",       value:"/app/samples/payloads/sample.bin",      desc:"Bundled sample binary — entropy / signature / packer analysis"},
-    {label:"your payload file",    value:"/path/to/payload.exe",                  desc:"Local PE/ELF payload to analyse"},
+    {label:"your Windows host (WinRM)", value:"192.168.1.100", opts:{username:"Administrator", password:"CHANGE_ME"}, desc:"AV/EDR runtime checks run over WinRM — needs a Windows host + admin creds (no Docker lab). Edit the password in the form."},
+    {label:"your Windows host",         value:"win-target.corp.local",                desc:"Your own Windows host (WinRM 5985/5986) — set username/password below"},
   ],
   cloud: [
     {label:"TerraGoat IaC repo",   adv:{repo_url:"https://github.com/bridgecrewio/terragoat"}, desc:"Deliberately-vulnerable Terraform — IaC tier (tfsec/checkov) fires, NO cloud creds needed"},
