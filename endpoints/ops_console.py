@@ -29,6 +29,11 @@ from fastapi.responses import HTMLResponse
 from tools._shared import verify_admin
 from tools.auth._db import get_db, DB_PATH
 from tools import _quota
+try:
+    from tools._audit import recent as audit_recent
+except Exception:  # pragma: no cover
+    def audit_recent(n=15):
+        return []
 
 router = APIRouter()
 
@@ -51,6 +56,7 @@ def _users_block(now):
     mrr = 0
     paying = 0
     customers = []
+    at_risk = []
     d7 = _iso(now - datetime.timedelta(days=7))
     d30 = _iso(now - datetime.timedelta(days=30))
     soon = now + datetime.timedelta(days=7)
@@ -85,6 +91,8 @@ def _users_block(now):
         if exp is not None and exp < now:
             expired += 1
         used = (r["scans_used"] or 0) if (r["usage_period"] or "") == period else 0
+        if cap is not None and used >= max(1, int(cap * 0.8)):
+            at_risk.append({"username": r["username"], "effective_plan": eff, "used": used, "cap": cap})
         customers.append({
             "username": r["username"], "email": r["email"], "plan": plan,
             "effective_plan": eff, "status": status, "role": role,
@@ -92,14 +100,18 @@ def _users_block(now):
             "subscription_expires_at": r["subscription_expires_at"],
             "created_at": created,
         })
+    nonadmin = len(rows) - by_role.get("admin", 0) - by_role.get("superadmin", 0)
+    conversion_pct = round(100 * paying / nonadmin) if nonadmin else 0
     return {
         "users": {
             "total": len(rows), "by_plan": by_plan, "by_status": by_status,
             "by_role": by_role, "signups_7d": signups_7d, "signups_30d": signups_30d,
+            "conversion_pct": conversion_pct,
             "subs": {"active_paid": active_paid, "expiring_7d": expiring_7d, "expired": expired},
         },
         "revenue": {"estimated_mrr": mrr, "paying_customers": paying, "currency": "USD",
                     "note": "estimate from list prices; enterprise is custom-quoted (counted as 0)"},
+        "at_risk": at_risk,
         "customers": customers,
     }
 
@@ -193,6 +205,7 @@ async def ops_overview(_=Depends(verify_admin)):
     data.update(_users_block(now))
     data["scans"] = _scans_block(now)
     data["system"] = _system_block(now)
+    data["audit"] = audit_recent(15)
     data["plan_caps"] = _quota.PLAN_CAPS
     return data
 
@@ -263,6 +276,8 @@ function render(d){
   const modRows=s.by_module_top.map(m=>`<tr><td>${esc(m.module)}</td><td class="r">${m.count}</td></tr>`).join('')||'<tr><td class="mut" colspan=2>no scans yet</td></tr>';
   const recRows=s.recent.map(x=>`<tr><td class="mut">${esc((x.ts||'').replace('T',' ').slice(0,16))}</td><td>${esc(x.user||'—')}</td><td>${esc(x.module)}</td><td>${esc(x.target)}</td></tr>`).join('')||'<tr><td class="mut" colspan=4>no scans yet</td></tr>';
   const cust=d.customers.map(c=>`<tr><td>${esc(c.username)}</td><td class="mut">${esc(c.email||'')}</td><td>${planTag(c.effective_plan)}${c.effective_plan!==c.plan?' <span class="mut" style="font-size:11px">(was '+esc(c.plan)+')</span>':''}</td><td>${esc(c.status)}</td><td class="r">${c.scans_used}${c.cap!=null?' / '+c.cap:' / ∞'}</td><td class="mut">${c.subscription_expires_at?esc(c.subscription_expires_at.slice(0,10)):'—'}</td><td class="mut">${esc((c.created_at||'').slice(0,10))}</td></tr>`).join('');
+  const atRisk=(d.at_risk||[]).map(x=>`<tr><td>${esc(x.username)}</td><td>${planTag(x.effective_plan)}</td><td class="r">${x.used} / ${x.cap}</td></tr>`).join('')||'<tr><td class="mut" colspan=3>none near quota</td></tr>';
+  const aud=(d.audit||[]).map(a=>`<tr><td class="mut">${esc((a.ts||'').replace('T',' ').slice(0,16))}</td><td>${esc(a.action)}</td><td>${esc(a.actor||'')}</td><td class="mut">${esc(a.detail||a.target||'')}</td></tr>`).join('')||'<tr><td class="mut" colspan=4>no events</td></tr>';
   document.getElementById('meta').textContent='updated '+new Date(d.generated_at).toLocaleString();
   document.getElementById('root').innerHTML=`
    <div class="grid kpis">
@@ -272,6 +287,7 @@ function render(d){
     ${kpi(s.this_month,'Scans this month')}
     ${kpi(s.today,'Scans today')}
     ${kpi(u.subs.expiring_7d,'Subs expiring 7d')}
+    ${kpi((u.conversion_pct||0)+'%','Paid conversion')}
    </div>
    <div class="sec"><div class="row">
      <div class="card"><h2 style="margin-top:0">Scans — last 14 days</h2><div class="bars">${bars}</div><div class="mut" style="margin-top:6px">total ${s.total} · 7d ${s.last_7d}</div></div>
@@ -287,6 +303,10 @@ function render(d){
         <tr><td>Expired</td><td class="r">${u.subs.expired}</td></tr></table></div>
    </div></div>
    <div class="sec card"><h2 style="margin-top:0">Recent scans</h2><table><tr><th>When</th><th>User</th><th>Module</th><th>Target</th></tr>${recRows}</table></div>
+   <div class="sec"><div class="row">
+     <div class="card"><h2 style="margin-top:0">At / near quota</h2><table><tr><th>User</th><th>Plan</th><th class="r">Used</th></tr>${atRisk}</table></div>
+     <div class="card"><h2 style="margin-top:0">Audit log</h2><table><tr><th>When</th><th>Action</th><th>Actor</th><th>Detail</th></tr>${aud}</table></div>
+   </div></div>
    <div class="sec card"><h2 style="margin-top:0">Customers (${u.total})</h2><table><tr><th>User</th><th>Email</th><th>Plan</th><th>Status</th><th class="r">Scans (mo)</th><th>Sub ends</th><th>Joined</th></tr>${cust}</table></div>
    <p class="mut" style="margin-top:20px">Auto-refreshes every 30s · superadmin only</p>`;
 }
