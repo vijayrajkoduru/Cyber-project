@@ -59,16 +59,20 @@ vulnuslab-private). The scanning product is mature; the gaps are commercial plum
 ## P1 — within weeks of launch
 - [M] Password reset + email verification (needs the email service)
 - [M] Server-side logout / JWT revocation (token blacklist) + /api/auth/logout
-- [S] Account settings API (change password/email, self-serve delete + data export)
-- [M] Billing self-service: GET /billing/status, upgrade/downgrade, cancel; instant checkout replaces
-  the manual contact-form flow for paid plans
-- [M] Auto-downgrade on expiry + dunning/past-due + 7-day expiry-warning email
-- [M] Invoice generation + emailed receipts (GST-compliant numbering)
-- [M] Per-customer scope whitelist + high-liability/private-IP blocklist (.gov/.mil/banks, RFC1918)
-  enforced before run_all
-- [M] Admin/sensitive-action audit logging (plan changes, backups, credential access, logins)
-- [S] CI security gates: gitleaks + pip-audit + semgrep (tools already in the image, never run);
-  move secrets out of repo + rotate exposed keys
+- [S] Account settings API — DONE (3c4e331d): GET /api/account/billing, POST password, POST email,
+  GET export (DPDP/GDPR), POST delete. (True JWT revocation on password change still TODO.)
+- [M] Billing self-service: GET billing/status DONE (/api/account/billing); upgrade/downgrade/cancel
+  + instant checkout still need the payment integration (#1)
+- [M] Auto-downgrade on expiry — PARTIAL: enforcement already treats expired subs as free; a daily
+  job to persist the downgrade + the 7-day warning email (needs #2) is still TODO
+- [M] Invoice generation + emailed receipts (GST-compliant numbering) — needs payments (#1) + email (#2)
+- [M] Per-customer scope whitelist + high-liability/private-IP blocklist — NEEDS A POLICY CALL (a naive
+  blocklist would false-block legit customers; RFC1918 is the network module's own use case). Deferred
+  pending decision on strictness.
+- [M] Admin/sensitive-action audit logging — DONE (3c4e331d): tools/_audit.py append-only log; account
+  actions wired. Still to wire: admin plan changes + logins.
+- [S] CI security gates — DONE (3c4e331d): gitleaks (gating) + pip-audit (report-only) added to CI.
+  semgrep SAST + secret history scrub/rotation still TODO.
 - [M] New-user onboarding: empty-state "run your first scan" card, trial quota indicator + upsell,
   short first-run walkthrough
 - [M] Automated daily DB backup to off-box (S3) + error capture (Sentry)
