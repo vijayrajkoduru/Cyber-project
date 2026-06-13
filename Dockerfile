@@ -108,6 +108,31 @@ RUN ( wget --tries=3 --waitretry=10 --timeout=60 \
     || ( rm -f /app/samples/mobile/androgoat.apk; \
          echo "WARNING: AndroGoat sample download failed (non-fatal)" )
 
+# ── §1b BOF / firmware / payload samples (self-contained — no downloads) ──
+# bof: a deliberately-weak ELF (no stack canary / no PIE / no RELRO) so the
+#      Binary Exploitation protections audit reports real weaknesses.
+RUN mkdir -p /app/samples/bof /app/samples/firmware /app/samples/payloads \
+ && ( apt-get update -q -o Acquire::Retries=3 \
+      && apt-get install -y -q --no-install-recommends gcc libc6-dev \
+      && printf 'int main(int c,char**v){char b[64];if(c>1)__builtin_strcpy(b,v[1]);return 0;}\n' > /tmp/vuln.c \
+      && gcc -fno-stack-protector -no-pie -z norelro -o /app/samples/bof/vuln /tmp/vuln.c \
+      && rm -f /tmp/vuln.c \
+      && apt-get purge -y gcc libc6-dev && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
+      && ls -lh /app/samples/bof/vuln ) \
+    || echo "WARNING: BOF sample compile failed (non-fatal)"
+# firmware: synthetic blob with planted secrets (shadow line, AWS key, Stripe
+#      key, RSA private key) so the Firmware secret-scan tier finds real hits.
+# payload: a sample binary for the AV/EDR analysis target.
+RUN { printf 'FIRMWARE IMAGE v1.0 (VulnusLab synthetic lab)\n'; \
+      printf 'root:$1$vlsalt$3qiVwxkjVwqSjVwqSjVwq0:0:0:root:/root:/bin/sh\n'; \
+      printf 'AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE\n'; \
+      printf 'admin_password=SuperSecret123!\n'; \
+      printf 'stripe_api_key=%s\n' 'sk_''live_''0123456789abcdef0123456789abcdef'; \
+      printf -- '-----BEGIN RSA PRIVATE KEY-----\nMIIBOwIBAAJBAKj34GkxVL00DUMMYKEYMATERIALforVLfirmwarelabonly==\n-----END RSA PRIVATE KEY-----\n'; \
+      head -c 262144 /dev/urandom; } > /app/samples/firmware/vulnfw.bin \
+ && cp /bin/ls /app/samples/payloads/sample.bin \
+ && ls -lh /app/samples/firmware/vulnfw.bin /app/samples/payloads/sample.bin
+
 WORKDIR /app
 
 # Python deps
