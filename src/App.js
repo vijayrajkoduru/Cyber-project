@@ -15731,12 +15731,33 @@ function generateUniversalVLReport(opts) {
         const ev = String(f.evidence||"").toLowerCase();
         const blob = nm + " " + ev;
         const host = String(x.host || target || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+        const proto = /^http:\/\//i.test(String(x.host || target || "")) ? "http" : "https";
+        const bare = host.replace(/:\d+$/, "");                  // strip :port for DNS / nmap / host cmds
         const tool = String(f._tool||"");
+        // No usable network host (e.g. a supply-chain repo scan with target "(none)")
+        // -> give a clean re-run command, never a broken curl to "(none)".
+        if (!host || host === "(none)" || host.charAt(0) === "(")
+          return tool ? `# Re-run: POST /api/${moduleKey}/${tool}` : `# Re-run /api/${moduleKey}/<scanner>`;
+        // ── DNS-family findings — specific commands BEFORE the generic dns/redirect/secret branches ──
+        if (/private ip|rfc ?1918/.test(blob))
+          return `dig +short A ${bare}  # RFC1918 address(es) here = private IP leaked in public DNS`;
+        if (/\bcaa\b|certification authority auth/.test(blob))
+          return `dig +short CAA ${bare}  # empty result = any CA may issue a certificate for this domain`;
+        if (/\bptr\b|reverse dns/.test(blob))
+          return `for ip in $(dig +short ${bare}); do dig +short -x "$ip"; done`;
+        if (/\bdot\b|\bdoh\b|encrypted dns|dns.over/.test(blob))
+          return `kdig +tls @1.1.1.1 ${bare}; kdig +https @1.1.1.1 ${bare}  # DoT / DoH support probe`;
+        // HTTP -> HTTPS redirect (must precede the open-redirect branch below)
+        if ((/redirect.*https|https.*redirect|enforce https/.test(blob) || /doesn.?t redirect/.test(blob)) && !/open redirect/.test(blob))
+          return `curl -sI http://${bare}/ | grep -i "^location"  # expect a 301/302 to https://`;
+        // Secrets leaked in a SOURCE REPOSITORY (not a live HTTP credential)
+        if (/secret.*(repo|source|git)|gitleaks|trufflehog|leaked.*(secret|credential|token).*(repo|source|git)/.test(blob))
+          return `gitleaks detect --source <repo-path> -v   # or: trufflehog git file://<repo-path>`;
         // CVE-driven reproduce
         if (x.cve !== "-") {
           if (/http\/?2|rapid reset/.test(nm))
-            return `curl --http2 -k -I https://${host}/  # ALPN must NOT advertise h2 on patched stack`;
-          return `nuclei -id ${x.cve.toLowerCase()} -u https://${host}/`;
+            return `curl --http2 -k -I ${proto}://${host}/  # ALPN must NOT advertise h2 on patched stack`;
+          return `nuclei -id ${x.cve.toLowerCase()} -u ${proto}://${host}/`;
         }
         // Auth-class findings - vertical access, admin endpoint
         if (/privileged endpoint|admin.*without auth|vertical access/.test(blob))
@@ -15774,9 +15795,11 @@ function generateUniversalVLReport(opts) {
         // Server / version disclosure
         if (/server.*disclos|version.*disclos|banner/.test(blob))
           return `curl -sI https://${host}/ | grep -iE "server|x-powered-by"`;
-        // DNS / SPF / DMARC
-        if (/dns|spf|dmarc|dkim/.test(nm))
-          return `dig +short TXT _dmarc.${host} ; dig +short TXT ${host}`;
+        // DNS / SPF / DMARC (email-auth records only — private-IP/CAA/PTR handled above)
+        if (/spf|dmarc|dkim/.test(nm))
+          return `dig +short TXT _dmarc.${bare} ; dig +short TXT ${bare}`;
+        if (/\bdns\b/.test(nm))
+          return `dig +short ANY ${bare}`;
         // Subresource Integrity - check BEFORE injection class to avoid the
         // /rce/ substring matching "sub-RCE-source integrity" (fix for
         // user-reported regex bug 2026-06-09).
@@ -16433,7 +16456,7 @@ function generateUniversalVLReport(opts) {
       ];
       _sbomTxt.forEach(line => { chk(5); txt(line, margin + 2, y + 3.5, 7.5, GRAY); y += 4; });
     } else {
-      txt("No Syft inventory captured for this target (image not pulled - likely a registry/host scan rather than an image scan).",
+      txt("No SBOM generated - a software bill of materials applies to container-image and source-tree scans, which this assessment type does not perform.",
           margin + 2, y + 3.5, 7.5, GRAY); y += 5;
       // Even without Syft we can surface fingerprints detected by the
       // CVE/banner/version scanners. Pulls name->version pairs from the
