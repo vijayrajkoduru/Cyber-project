@@ -240,6 +240,7 @@ _DASHBOARD_HTML = r"""<!doctype html><html lang="en"><head>
  .err{background:#2a0e16;border:1px solid var(--bad);color:#ffd0d8;padding:14px;border-radius:10px;margin:20px 0}
  input{background:#0a0e17;border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:8px 11px;width:360px;max-width:80vw}
  code{color:var(--cy)}
+ .ab{background:#15203a;border:1px solid var(--line);color:var(--txt);border-radius:5px;padding:2px 7px;font-size:11px;cursor:pointer;margin-right:3px}.ab:hover{border-color:var(--acc)}
 </style></head><body>
 <header><h1>Vulnus<span>Lab</span> · Ops Console</h1>
 <div class="mut" id="meta">loading…</div></header>
@@ -249,6 +250,12 @@ const $=(h)=>{const d=document.createElement('div');d.innerHTML=h;return d.first
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtAge=(h)=>h==null?'—':(h<1?Math.round(h*60)+'m':h<48?h.toFixed(1)+'h':Math.round(h/24)+'d')+' ago';
 const planTag=(p)=>{const col={free:'#8a94a8',trial:'#3b9eff',pro:'#1f9d57',team:'#06b6d4',enterprise:'#d98c1f',superadmin:'#e02347',admin:'#e02347'}[p]||'#8a94a8';return `<span class="tag" style="color:${col};border-color:${col}">${esc(p)}</span>`;};
+function actionBtns(c){const u=(c.username||'').replace(/'/g,'');const st=c.status||'active';return `<button class="ab" onclick="aExtend('${u}')">Extend</button><button class="ab" onclick="aPlan('${u}')">Plan</button><button class="ab" onclick="aStatus('${u}','${st}')">${st==='active'?'Suspend':'Activate'}</button><button class="ab" onclick="aReset('${u}')">Reset</button>`;}
+async function adminAction(method,path,body){const t=token();if(!t){alert('No token');return;}try{const r=await fetch(path,{method,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:body?JSON.stringify(body):null});const j=await r.json().catch(()=>({}));if(!r.ok||j.ok===false){alert('Failed: '+(j.detail||j.message||('HTTP '+r.status)));return;}load();}catch(e){alert('Error: '+e.message);}}
+function aExtend(u){const d=prompt('Extend by how many days?','30');if(d===null)return;const p=prompt('Plan (trial/pro/team/enterprise):','pro');if(p===null)return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/extend',{days:parseInt(d,10)||0,plan:p});}
+function aPlan(u){const p=prompt('Set plan (trial/pro/team/enterprise/superadmin):','pro');if(p===null)return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/plan',{plan:p});}
+function aStatus(u,st){const a=st==='active'?'suspend':'activate';if(!confirm(a+' '+u+'?'))return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/'+a);}
+function aReset(u){if(!confirm('Reset monthly scan count for '+u+'?'))return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/reset_quota');}
 function token(){let t=localStorage.getItem('cyberToken');if(!t){t=sessionStorage.getItem('vl_ops_token');}return t;}
 async function load(){
   const t=token();
@@ -275,7 +282,7 @@ function render(d){
   const planRows=Object.entries(u.by_plan).map(([p,n])=>`<tr><td>${planTag(p)}</td><td class="r">${n}</td></tr>`).join('');
   const modRows=s.by_module_top.map(m=>`<tr><td>${esc(m.module)}</td><td class="r">${m.count}</td></tr>`).join('')||'<tr><td class="mut" colspan=2>no scans yet</td></tr>';
   const recRows=s.recent.map(x=>`<tr><td class="mut">${esc((x.ts||'').replace('T',' ').slice(0,16))}</td><td>${esc(x.user||'—')}</td><td>${esc(x.module)}</td><td>${esc(x.target)}</td></tr>`).join('')||'<tr><td class="mut" colspan=4>no scans yet</td></tr>';
-  const cust=d.customers.map(c=>`<tr><td>${esc(c.username)}</td><td class="mut">${esc(c.email||'')}</td><td>${planTag(c.effective_plan)}${c.effective_plan!==c.plan?' <span class="mut" style="font-size:11px">(was '+esc(c.plan)+')</span>':''}</td><td>${esc(c.status)}</td><td class="r">${c.scans_used}${c.cap!=null?' / '+c.cap:' / ∞'}</td><td class="mut">${c.subscription_expires_at?esc(c.subscription_expires_at.slice(0,10)):'—'}</td><td class="mut">${esc((c.created_at||'').slice(0,10))}</td></tr>`).join('');
+  const cust=d.customers.map(c=>`<tr><td>${esc(c.username)}</td><td class="mut">${esc(c.email||'')}</td><td>${planTag(c.effective_plan)}${c.effective_plan!==c.plan?' <span class="mut" style="font-size:11px">(was '+esc(c.plan)+')</span>':''}</td><td>${esc(c.status)}</td><td class="r">${c.scans_used}${c.cap!=null?' / '+c.cap:' / ∞'}</td><td class="mut">${c.subscription_expires_at?esc(c.subscription_expires_at.slice(0,10)):'—'}</td><td class="mut">${esc((c.created_at||'').slice(0,10))}</td><td style="white-space:nowrap">${actionBtns(c)}</td></tr>`).join('');
   const atRisk=(d.at_risk||[]).map(x=>`<tr><td>${esc(x.username)}</td><td>${planTag(x.effective_plan)}</td><td class="r">${x.used} / ${x.cap}</td></tr>`).join('')||'<tr><td class="mut" colspan=3>none near quota</td></tr>';
   const aud=(d.audit||[]).map(a=>`<tr><td class="mut">${esc((a.ts||'').replace('T',' ').slice(0,16))}</td><td>${esc(a.action)}</td><td>${esc(a.actor||'')}</td><td class="mut">${esc(a.detail||a.target||'')}</td></tr>`).join('')||'<tr><td class="mut" colspan=4>no events</td></tr>';
   document.getElementById('meta').textContent='updated '+new Date(d.generated_at).toLocaleString();
@@ -307,7 +314,7 @@ function render(d){
      <div class="card"><h2 style="margin-top:0">At / near quota</h2><table><tr><th>User</th><th>Plan</th><th class="r">Used</th></tr>${atRisk}</table></div>
      <div class="card"><h2 style="margin-top:0">Audit log</h2><table><tr><th>When</th><th>Action</th><th>Actor</th><th>Detail</th></tr>${aud}</table></div>
    </div></div>
-   <div class="sec card"><h2 style="margin-top:0">Customers (${u.total})</h2><table><tr><th>User</th><th>Email</th><th>Plan</th><th>Status</th><th class="r">Scans (mo)</th><th>Sub ends</th><th>Joined</th></tr>${cust}</table></div>
+   <div class="sec card"><h2 style="margin-top:0">Customers (${u.total})</h2><table><tr><th>User</th><th>Email</th><th>Plan</th><th>Status</th><th class="r">Scans (mo)</th><th>Sub ends</th><th>Joined</th><th>Actions</th></tr>${cust}</table></div>
    <p class="mut" style="margin-top:20px">Auto-refreshes every 30s · superadmin only</p>`;
 }
 load();setInterval(load,30000);
