@@ -538,7 +538,12 @@ const Tagline = ({size=10}) => (
 );
 function Login(props) {
   const onLogin = props.onLogin;
-  const [mode,setMode]   = useState("login"); // "login" | "register"
+  // Open the Register tab directly when linked here with ?register / ?signup
+  // (e.g. the marketing site's "Start Free Trial" CTA). Otherwise default to Sign In.
+  const [mode,setMode]   = useState(
+    /[?&#](register|signup)\b/i.test((window.location.search || "") + (window.location.hash || ""))
+      ? "register" : "login"
+  ); // "login" | "register"
   const [u,setU]         = useState("");
   const [email,setEmail] = useState("");
   const [p,setP]         = useState("");
