@@ -11,13 +11,6 @@ from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
-# AI-curated 150-entry Joomla-specific path list with CVE markers
-try:
-    from tools._payloads.joomla_scan_paths import JOOMLA_SCAN_PATHS as _AI_JOOMLA_PATHS
-    _AI_JOOMLA_PATHS = _AI_JOOMLA_PATHS if isinstance(_AI_JOOMLA_PATHS, list) else []
-except Exception:
-    _AI_JOOMLA_PATHS = []
-
 
 def _is_joomla(base, req):
     r = safe_get(base + "/", req=req, allow_redirects=True, timeout=8)

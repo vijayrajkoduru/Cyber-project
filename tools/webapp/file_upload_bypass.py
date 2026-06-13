@@ -1,4 +1,10 @@
-"""Webapp: File upload endpoint discovery + bypass technique enumeration."""
+"""Webapp: File upload endpoint discovery (detection-only).
+
+Discovers common upload endpoints and flags those exposing an unauthenticated
+file input. Active bypass-payload POSTing (extension/MIME/magic tricks) is done
+by the separate /api/webapp/scan/file_upload scanner, which uses the curated
+_payloads/webapp/file_upload_payloads.json catalogue.
+"""
 import asyncio
 import re
 from fastapi import APIRouter, Depends
@@ -9,13 +15,6 @@ from tools._vl_core.verify import vl_verify
 router = APIRouter()
 
 _UPLOAD_PATHS = ["/upload","/api/upload","/file/upload","/files/upload","/images/upload","/admin/upload","/user/upload","/api/v1/upload"]
-
-# AI-curated 80-entry list of (filename, content-type, technique, severity)
-try:
-    from tools._payloads.file_upload_bypass_extensions import FILE_UPLOAD_BYPASS_EXTENSIONS as _AI_BYPASS
-    _AI_BYPASS = _AI_BYPASS if isinstance(_AI_BYPASS, list) else []
-except Exception:
-    _AI_BYPASS = []
 
 
 @router.post("/api/webapp/file_upload_bypass")
