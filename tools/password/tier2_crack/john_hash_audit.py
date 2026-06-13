@@ -497,9 +497,15 @@ class JohnHashAudit(MethodologyScanner):
     ) -> tuple[list[dict], int]:
         """Group entries by detected format, run john per format, parse
         --show output, build preliminary findings (no verify yet)."""
+        # Optional user override: force one john --format for every hash. Used
+        # when hashid auto-detect picks the wrong algorithm or can't classify a
+        # hash at all (those map to an empty fmt and would be silently skipped
+        # below, so the user could supply hashes and get zero results). When
+        # blank, behaviour is unchanged (per-hash auto-detected format).
+        forced_fmt = ((ctx.state.get("_options") or {}).get("hash_format") or "").strip()
         groups: dict[str, list[dict]] = {}
         for e in entries:
-            fmt = ALGO_TO_JOHN_FORMAT.get(e.get("algorithm") or "unknown", "")
+            fmt = forced_fmt or ALGO_TO_JOHN_FORMAT.get(e.get("algorithm") or "unknown", "")
             if not fmt:
                 continue
             groups.setdefault(fmt, []).append(e)
