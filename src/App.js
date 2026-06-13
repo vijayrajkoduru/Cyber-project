@@ -14639,6 +14639,17 @@ function generateUniversalVLReport(opts) {
       chk(30); y = sHead("What This Assessment Covers", y);
       // Purpose — per-module one-liner, keyword-matched, with an honest fallback.
       const _ml = (moduleLabel || "").toLowerCase();
+      // Match a keyword only at a word boundary so short keys like "ai" don't
+      // substring-hit "chAIn" (supply chain) or "contAIner". Checks every
+      // occurrence; a leading non-letter (or start) counts as a boundary.
+      const _mlHas = (keys) => keys.split("|").some(kw => {
+        let from = 0, i;
+        while ((i = _ml.indexOf(kw, from)) !== -1) {
+          if (i === 0 || !/[a-z]/.test(_ml[i - 1])) return true;
+          from = i + 1;
+        }
+        return false;
+      });
       const _purposeMap = [
         ["quantum|post-quantum", "the target's exposure to the post-quantum threat - quantum-vulnerable TLS/SSH key exchange and certificates, harvest-now-decrypt-later risk, and whether post-quantum (PQC) key exchange is offered."],
         ["phishing|email posture", "how easily an attacker could spoof email from this domain or impersonate the brand to phish staff and customers - email authentication (SPF/DKIM/DMARC), mail transport security, and lookalike-domain exposure."],
@@ -14668,7 +14679,7 @@ function generateUniversalVLReport(opts) {
         ["evasion|av/edr", "defensive-control posture. Evasion techniques are advisory by design and are NOT executed against the target."],
       ];
       let _purpose = null;
-      for (const _pe of _purposeMap) { if (_pe[0].split("|").some(kw => _ml.includes(kw))) { _purpose = _pe[1]; break; } }
+      for (const _pe of _purposeMap) { if (_mlHas(_pe[0])) { _purpose = _pe[1]; break; } }
       if (!_purpose) _purpose = `the ${(moduleLabel || "target").replace(/\s+/g, " ")} attack surface of the target, using detection-only probes (no exploitation).`;
       const _pl = doc.splitTextToSize(_ascii("Purpose:  This assessment measures " + _purpose), contentW - 4);
       _pl.forEach((ln, i) => txt(ln, margin + 2, y + (i * 4), 8, DARK));
@@ -14849,7 +14860,7 @@ function generateUniversalVLReport(opts) {
         }],
       ];
       let _cap = null;
-      for (const _ce of _capMap) { if (_ce[0].split("|").some(function(kw){ return _ml.includes(kw); })) { _cap = _ce[1]; break; } }
+      for (const _ce of _capMap) { if (_mlHas(_ce[0])) { _cap = _ce[1]; break; } }
       const _scCount = Object.keys(r || {}).length;
       if (!_cap) _cap = {
         does: ["Runs " + _scCount + " automated, detection-only checks across this module's attack surface, each independently re-confirmed on the live target."],
