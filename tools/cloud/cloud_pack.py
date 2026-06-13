@@ -802,8 +802,9 @@ T = [
     ("image_baseimage_age", "Base image age >90 days.", "MEDIUM", "5.5"),
     ("image_runtime_provenance", "Runtime provenance check.", "MEDIUM", "5.5"),
     ("manual_image_review", "Manual image review.", "INFO", "0.0"),
-    # §8 Cloud Storage (9)
+    # §8 Cloud Storage (10)
     ("s3_bucket_public_static_site", "S3 public static site.", "HIGH", "7.5"),
+    ("s3_bucket_brute", "S3 bucket name-brute discovery.", "HIGH", "7.5"),
     ("s3_bucket_lifecycle_audit", "S3 lifecycle policy audit.", "MEDIUM", "5.5"),
     ("s3_bucket_versioning_off", "S3 versioning off.", "MEDIUM", "5.5"),
     ("s3_bucket_logging_off", "S3 logging off.", "MEDIUM", "5.5"),

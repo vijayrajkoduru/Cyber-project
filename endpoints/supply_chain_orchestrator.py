@@ -21,16 +21,19 @@ router = APIRouter()
 
 SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_vuln_scan": [
-        ("trivy_image_scan",       "/api/supply_chain/trivy_image_scan"),
-        ("grype_sbom_scan",        "/api/supply_chain/grype_sbom_scan"),
-        ("osv_repo_audit",         "/api/supply_chain/osv_repo_audit"),
-        ("npm_audit_scanner",      "/api/supply_chain/npm_audit_scanner"),
+        ("trivy_image_scan",          "/api/supply_chain/trivy_image_scan"),
+        ("grype_sbom_scan",           "/api/supply_chain/grype_sbom_scan"),
+        ("osv_repo_audit",            "/api/supply_chain/osv_repo_audit"),
+        ("npm_audit_scanner",         "/api/supply_chain/npm_audit_scanner"),
+        ("cargo_audit_scanner",       "/api/supply_chain/cargo_audit_scanner"),
+        ("transitive_dependency_depth", "/api/supply_chain/transitive_dependency_depth"),
     ],
     "tier2_secrets": [
         ("gitleaks_secrets_scan",  "/api/supply_chain/gitleaks_secrets_scan"),
     ],
     "tier3_sbom": [
-        ("syft_sbom_generate",     "/api/supply_chain/syft_sbom_generate"),
+        ("syft_sbom_generate",        "/api/supply_chain/syft_sbom_generate"),
+        ("license_compliance_audit",  "/api/supply_chain/license_compliance_audit"),
     ],
     # ── Real remote probes (read-only, zero-FP, VA-only) ──
     "tier4_registry": [
@@ -38,12 +41,14 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     ],
     "tier5_oss_health": [
         ("github_repo_health",      "/api/supply_chain/github_repo_health"),
+        ("commit_signing_audit",    "/api/supply_chain/commit_signing_audit"),
     ],
     "tier6_cicd": [
         ("cicd_exposure_probe",     "/api/supply_chain/cicd_exposure_probe"),
     ],
     "tier7_dep_confusion": [
         ("npm_dependency_confusion", "/api/supply_chain/npm_dependency_confusion"),
+        ("pypi_typosquat_scan",      "/api/supply_chain/pypi_typosquat_scan"),
     ],
     # ── Honest advisory-by-design techniques (INFO only; cannot be SaaS-probed) ──
     "tier8_advisory": [
