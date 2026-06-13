@@ -24611,6 +24611,10 @@ export default function App() {
     window.dispatchEvent(new CustomEvent("vl-open-scan", {detail: active}));
   }, [active]);
   const [upgModal,setUpgModal] = useState(false);
+  // Per-module entitlements: which modules this account may access.
+  // null = still loading; ["*"] = all (active trial / enterprise / admin); [ids] = owned.
+  const [ownedModules,setOwnedModules]   = useState(null);
+  const [paidModuleIds,setPaidModuleIds] = useState(null);   // Set of sold module ids
   const [backendOk,setBE]      = useState(null);
   const [time,setTime]         = useState(new Date().toLocaleTimeString());
   const [waptRunning,setWaptRunning]       = useState(false);
@@ -24654,6 +24658,22 @@ export default function App() {
     const t = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Load per-module entitlements (what this account can access) + the paid
+  // catalogue (which modules are sold). Drives the module-tile locking below.
+  useEffect(() => {
+    if (!token) return;
+    api("/api/auth/me", "GET", null, token)
+      .then(d => {
+        setOwnedModules(Array.isArray(d.owned_modules) ? d.owned_modules : []);
+        if (d.role) setRole(d.role);
+        if (d.plan) setPlan(d.plan);
+      })
+      .catch(() => setOwnedModules([]));
+    api("/api/payment/config")
+      .then(c => setPaidModuleIds(new Set((c.modules || []).map(m => m.id))))
+      .catch(() => setPaidModuleIds(new Set()));
+  }, [token]);
 
   useEffect(() => {
     if (token && plan === "trial") {
@@ -24719,6 +24739,14 @@ export default function App() {
     if (isSuperAdmin) return true;           // ADMIN sees everything
     if (m.admin)      return false;          // admin-only modules hidden from non-admins
     if (m.free)       return true;           // free for everyone
+    // Active trial / enterprise / admin -> owned_modules is ["*"] = everything.
+    if (ownedModules && ownedModules.includes("*")) return true;
+    // Modules we SELL (in the payment catalogue) require an active subscription
+    // to THAT module. The backend enforces the same gate at scan time.
+    if (paidModuleIds && paidModuleIds.has(m.id)) {
+      return !!(ownedModules && ownedModules.includes(m.id));
+    }
+    // Modules not sold individually keep the old plan logic (free/trial/pro).
     if (m.trial && isTrial) return true;     // trial modules for trial users
     if (isPro)        return true;           // pro users see everything
     return false;
@@ -24741,7 +24769,7 @@ export default function App() {
   ];
 
   const handleNavClick = (m) => {
-    if (!canAccess(m)) { setUpgModal(true); return; }
+    if (!canAccess(m)) { setUpgModal(m); return; }   // m carries label+id for the checkout link
     setActive(m.id);
   };
 
@@ -25095,15 +25123,17 @@ export default function App() {
             onClick={()=>setUpgModal(false)}>
             <div style={{background:"#0d1320",border:"1px solid #3b9eff",borderRadius:12,padding:32,maxWidth:380,width:"90%",textAlign:"center"}}
               onClick={e=>e.stopPropagation()}>
-              <div style={{fontSize:36,marginBottom:12}}></div>
-              <div style={{fontSize:18,fontWeight:700,color:"#ffffff",marginBottom:8}}>Pro Feature</div>
+              <div style={{fontSize:18,fontWeight:700,color:"#ffffff",marginBottom:8}}>Subscription required</div>
               <div style={{fontSize:13,color:"#8a94a8",marginBottom:24,lineHeight:1.6}}>
-                This module is available on the <strong style={{color:"#3b9eff"}}>Pro plan</strong>.<br/>
-                Upgrade to unlock all {MODULES.filter(m=>!m.free).length} advanced modules.
+                {upgModal && upgModal.label
+                  ? <>The <strong style={{color:"#3b9eff"}}>{upgModal.label}</strong> module isn't in your subscription.</>
+                  : "This module isn't in your subscription."}<br/>
+                Subscribe to it — billed monthly, cancel anytime — to start scanning.
               </div>
-              <a href="mailto:awsvijju5@gmail.com?subject=CyberSecurity Dashboard Pro License"
+              <a href={"https://vulnuslab.com/checkout.html" + (upgModal && upgModal.id ? ("?modules=" + upgModal.id) : "")}
+                target="_blank" rel="noopener noreferrer"
                 style={{display:"block",background:"#2563eb",color:"#fff",padding:"10px 24px",borderRadius:8,fontWeight:600,fontSize:14,textDecoration:"none",marginBottom:10}}>
-                Contact for Pro Access
+                {upgModal && upgModal.label ? ("Subscribe to " + upgModal.label) : "Choose modules & subscribe"}
               </a>
               <button onClick={()=>setUpgModal(false)}
                 style={{background:"none",border:"none",color:"#5a6478",fontSize:13,cursor:"pointer"}}>
