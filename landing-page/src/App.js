@@ -664,6 +664,7 @@ function Pricing() {
     { name: "Pro", sub: "For professionals", price: "$29", period: "per month", color: C.blue, popular: true,
       features: ["All 51 scanners unlocked","Unlimited scans per day","PDF + JSON + CSV reports","Email support","1 user account","5 built-in vulnerable labs","Cancel anytime"],
       locked: [],
+      checkout: "/checkout.html?plan=pro_monthly",
       cta: "Subscribe Now" },
     { name: "Enterprise", sub: "For security teams", price: "Custom", period: "billed annually", color: C.purple, popular: false,
       features: ["Everything in Pro","Multiple user accounts","Team scan history","Custom wordlists","Priority support","Admin panel access","SLA & invoicing"],
@@ -699,14 +700,14 @@ function Pricing() {
                     <span style={{ fontSize: 14, color: C.muted, textDecoration: "line-through" }}>{f}</span>
                   </div>)}
                 </div>
-                <a href="#contact" className={p.popular ? "btn-primary" : "btn-outline"} style={{ display: "flex", justifyContent: "center", padding: "14px", borderRadius: 10, fontSize: 14, fontWeight: 700, textDecoration: "none", background: p.popular ? "linear-gradient(135deg,#1d4ed8,#3b82f6)" : "transparent", color: p.popular ? "#fff" : p.color, border: `1.5px solid ${p.color}40`, boxShadow: p.popular ? "0 4px 20px rgba(59,130,246,0.4)" : "none" }}>{p.cta}</a>
+                <a href={p.checkout || "#contact"} className={p.popular ? "btn-primary" : "btn-outline"} style={{ display: "flex", justifyContent: "center", padding: "14px", borderRadius: 10, fontSize: 14, fontWeight: 700, textDecoration: "none", background: p.popular ? "linear-gradient(135deg,#1d4ed8,#3b82f6)" : "transparent", color: p.popular ? "#fff" : p.color, border: `1.5px solid ${p.color}40`, boxShadow: p.popular ? "0 4px 20px rgba(59,130,246,0.4)" : "none" }}>{p.cta}</a>
               </div>
             </FadeIn>
           ))}
         </div>
         <FadeIn>
           <p style={{ textAlign: "center", fontSize: 14, color: C.muted, marginTop: 32 }}>
-            Secure payment by Lemon Squeezy · No credit card for trial · Cancel anytime
+            Secure payment by Razorpay · No credit card for trial · Cancel anytime
           </p>
         </FadeIn>
       </div>
