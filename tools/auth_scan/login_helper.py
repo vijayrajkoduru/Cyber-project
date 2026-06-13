@@ -304,6 +304,21 @@ def _scrape_form_inputs(html: str) -> dict:
     return out
 
 
+def _fail(auth_type: str, hint: str, **extra) -> dict:
+    """Return a 200 'login did not succeed' result instead of raising 5xx.
+
+    A target that is unreachable or rejects creds is an EXPECTED outcome to
+    report to the user, NOT a server error. Raising 5xx is actively harmful:
+    a CDN/proxy (Cloudflare) replaces the JSON body with its own branded 502
+    page, so the user sees boilerplate HTML instead of the real reason. A
+    200 + ok:false keeps the diagnostic hint visible in the UI.
+    """
+    out = {"ok": False, "auth_type": auth_type, "login_verified": False,
+           "auth_cookie": None, "auth_bearer": None, "hint": hint}
+    out.update(extra)
+    return out
+
+
 @router.post("/api/scan/login")
 def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     """Authenticate against the target and return captured session.
@@ -331,7 +346,7 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
                 "Authorization": f"Bearer {req.bearer_token}",
             }, timeout=8, verify=False, allow_redirects=True)
         except Exception as e:
-            raise HTTPException(502, f"Verification request failed: {e}")
+            return _fail("bearer", f"Could not reach the target to verify the bearer token: {e}. Is the target up and reachable from the scanner backend?")
         verified = (r.status_code < 400) and not _looks_like_login_page(r.text or "")
         return {
             "ok": verified, "auth_type": "bearer",
@@ -351,7 +366,7 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
                 **_BROWSER_HEADERS, "Authorization": f"Basic {tok}",
             }, timeout=8, verify=False, allow_redirects=True)
         except Exception as e:
-            raise HTTPException(502, f"Verification request failed: {e}")
+            return _fail("basic", f"Could not reach the target for basic-auth verification: {e}. Is the target up and reachable from the scanner backend?")
         verified = r.status_code < 400
         return {
             "ok": verified, "auth_type": "basic",
@@ -384,13 +399,13 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         spa = _try_spa_login(target, req.username, req.password, deadline=deadline)
         if spa is not None:
             return {"ok": True, **spa, "fallback": "spa_after_page_unreachable"}
-        raise HTTPException(502, f"Could not fetch login page: {e}")
+        return _fail("form", f"Could not reach the login page at {login_url}: {e}. Is the target/container up and on the scanner network? (e.g. run 'docker compose up -d lab_dvwa')")
 
     if page.status_code >= 400:
         spa = _try_spa_login(target, req.username, req.password, deadline=deadline)
         if spa is not None:
             return {"ok": True, **spa, "fallback": f"spa_after_page_{page.status_code}"}
-        raise HTTPException(502, f"Login page returned HTTP {page.status_code}")
+        return _fail("form", f"Login page {login_url} returned HTTP {page.status_code} — check the login URL path for this target.", verified_status=page.status_code)
 
     hidden = _scrape_hidden_inputs(page.text or "")
     submit = _scrape_submit_inputs(page.text or "")  # DVWA/bWAPP reject login without the submit button (Login=Login / form=submit)
@@ -414,13 +429,13 @@ def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     try:
         resp = sess.post(login_url, data=payload, timeout=8, allow_redirects=True)
     except Exception as e:
-        raise HTTPException(502, f"Login POST failed: {e}")
+        return _fail("form", f"Login POST to {login_url} failed: {e}. Is the target still reachable?")
 
     verify_url = _abs(target, req.success_indicator or "/")
     try:
         check = sess.get(verify_url, timeout=8, allow_redirects=True)
     except Exception as e:
-        raise HTTPException(502, f"Verification request failed: {e}")
+        return _fail("form", f"Could not reach {verify_url} to verify the session: {e}.")
 
     body = check.text or ""
     looks_login = _looks_like_login_page(body)
