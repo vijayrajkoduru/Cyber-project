@@ -158,6 +158,7 @@ const MODULES = [
   { id:"tools",     icon:"", label:"Tool Manager & Updater",            cat:"tools",   free:false, admin:true },
   { id:"apikeys",   icon:"", label:"API Keys & Credentials",            cat:"tools",   free:false, admin:true },
   { id:"credvault", icon:"", label:"Customer Credential Vault",         cat:"tools",   free:false, admin:true },
+  { id:"ops",       icon:"", label:"Ops Console (Monitoring)",          cat:"admin",   free:false, admin:true },
 ];
 
 const CSS = `
@@ -24901,6 +24902,10 @@ export default function App() {
         </div>
         <div style={{display: active==="backupops" ? "block" : "none"}}>
           <BackupOperationsModule token={token}/>
+        </div>
+        <div style={{display: active==="ops" ? "block" : "none", height:"calc(100vh - 70px)"}}>
+          <div style={{padding:"8px 0"}}><a href="/api/admin/ops/dashboard" target="_blank" rel="noreferrer" style={{color:"#3b9eff",fontSize:13,fontWeight:600,textDecoration:"none"}}>Open Ops Console in a new tab ↗</a></div>
+          <iframe src="/api/admin/ops/dashboard" title="Ops Console" style={{width:"100%",height:"calc(100% - 36px)",border:"1px solid #1c2435",borderRadius:8,background:"#0a0e17"}}/>
         </div>
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
