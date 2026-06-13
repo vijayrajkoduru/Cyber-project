@@ -855,15 +855,15 @@ function Contact() {
       <div style={{ maxWidth: 660, margin: "0 auto" }}>
         <FadeIn style={{ textAlign: "center", marginBottom: 48 }}>
           <span style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", color: C.green, fontSize: 13, fontWeight: 700, padding: "6px 16px", borderRadius: 20 }}>Get Access</span>
-          <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 800, marginTop: 16, marginBottom: 12 }}>Request Your Account</h2>
-          <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8 }}>Fill the form and we'll get back to you within 24 hours at <strong style={{ color: C.text }}>support@vulnuslab.com</strong>.</p>
+          <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 800, marginTop: 16, marginBottom: 12 }}>Talk to Sales</h2>
+          <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8 }}>Enterprise access, team seats, or a custom module bundle? Send a note — we reply within 24 hours at <strong style={{ color: C.text }}>support@vulnuslab.com</strong>. For instant access, just <strong style={{ color: C.text }}>Start Free Trial</strong>.</p>
         </FadeIn>
         {sent ? (
           <FadeIn>
             <div style={{ background: "#052e16", border: "2px solid #166534", borderRadius: 20, padding: 60, textAlign: "center" }}>
               <div style={{ fontSize: 64, marginBottom: 20 }}></div>
-              <h3 style={{ fontSize: 26, fontWeight: 800, color: "#4ade80", marginBottom: 12 }}>Request Received!</h3>
-              <p style={{ color: C.muted, fontSize: 16, lineHeight: 1.8 }}>Thanks {form.name || "there"} — we got your request. We'll reply to <strong style={{ color: C.text }}>{form.email}</strong> within 24 hours from <strong style={{ color: C.text }}>support@vulnuslab.com</strong>.</p>
+              <h3 style={{ fontSize: 26, fontWeight: 800, color: "#4ade80", marginBottom: 12 }}>Message Sent!</h3>
+              <p style={{ color: C.muted, fontSize: 16, lineHeight: 1.8 }}>Thanks {form.name || "there"} — we got your message. We'll reply to <strong style={{ color: C.text }}>{form.email}</strong> within 24 hours from <strong style={{ color: C.text }}>support@vulnuslab.com</strong>.</p>
             </div>
           </FadeIn>
         ) : (
@@ -899,11 +899,11 @@ function Contact() {
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Plan *</label>
+                <label style={{ fontSize: 12, color: C.muted, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", display: "block", marginBottom: 8 }}>Inquiry</label>
                 <select name="plan" style={{ ...inp, cursor: "pointer" }} value={form.plan} onChange={e => set("plan", e.target.value)}>
-                  <option value="trial">Trial — 7 Days Free (No payment needed)</option>
-                  <option value="pro">Pro — All 51 Scanners</option>
-                  <option value="enterprise">Enterprise — Team Access</option>
+                  <option value="enterprise">Enterprise — team access & SLA</option>
+                  <option value="custom">Custom module bundle / volume pricing</option>
+                  <option value="question">General question</option>
                 </select>
               </div>
               <div style={{ marginBottom: 24 }}>
@@ -916,7 +916,7 @@ function Contact() {
                 </div>
               )}
               <button type="submit" disabled={submitting} className="btn-primary" style={{ width: "100%", background: submitting ? "#475569" : "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", border: "none", padding: "16px", borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: submitting ? "wait" : "pointer", boxShadow: "0 4px 24px rgba(59,130,246,0.4)", fontFamily: "Inter,sans-serif" }}>
-                {submitting ? "Sending..." : "Request Access Now"}
+                {submitting ? "Sending..." : "Send Message"}
               </button>
               <p style={{ textAlign: "center", fontSize: 13, color: C.muted, marginTop: 16 }}>
                 Or email directly: <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: C.blue, textDecoration: "none", fontWeight: 600 }}>{CONTACT_EMAIL}</a>
