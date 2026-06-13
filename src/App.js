@@ -24394,7 +24394,6 @@ export default function App() {
   const topic = MODULES.find(m => m.id === active);
 
   const SECTIONS = [
-    { key:"quantum",  label:"QUANTUM",           color:"#FFD700" },
     { key:"recon",    label:"RECONNAISSANCE",    color:"#06b6d4" },
     { key:"scan",     label:"SCANNING",          color:"#3b9eff" },
     { key:"exploit",  label:"EXPLOITATION",      color:"#ff3e5e" },
@@ -24402,6 +24401,7 @@ export default function App() {
     { key:"network",  label:"NETWORK & INFRA",   color:"#00ff88" },
     { key:"advanced", label:"ADVANCED",          color:"#a855f7" },
     { key:"mobile",   label:"MOBILE",            color:"#ec4899" },
+    { key:"quantum",  label:"QUANTUM",           color:"#FFD700" },
     { key:"data",     label:"DATA PROTECTION",   color:"#10b981" },
     { key:"admin",    label:"ADMIN",             color:"#e02347" },
     { key:"tools",    label:"TOOLS & REPORTS",   color:"#5a6478" },
