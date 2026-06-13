@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from tools._shared import verify_token
 from tools.auth._db import get_db
+import datetime
 
 router = APIRouter()
 
@@ -74,11 +75,12 @@ async def change_plan(username: str, req: PlanRequest, _=Depends(verify_admin_or
 async def extend_plan(username: str, req: ExtendRequest, _=Depends(verify_admin_or_super)):
     if req.days < 0 or req.days > 3650:
         raise HTTPException(400, "days must be between 0 and 3650")
+    new_exp = (datetime.datetime.utcnow() + datetime.timedelta(days=req.days)).isoformat() + "Z"
     with get_db() as con:
-        result = con.execute("UPDATE users SET plan=? WHERE username=?", (req.plan, username))
+        result = con.execute("UPDATE users SET plan=?, subscription_expires_at=? WHERE username=?", (req.plan, new_exp, username))
         if result.rowcount == 0:
             raise HTTPException(404, f"User '{username}' not found")
-    return {"ok": True, "username": username, "extended_days": req.days, "plan": req.plan}
+    return {"ok": True, "username": username, "extended_days": req.days, "plan": req.plan, "subscription_expires_at": new_exp}
 
 
 @router.delete("/api/admin/users/{username}")

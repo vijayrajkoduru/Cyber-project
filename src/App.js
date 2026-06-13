@@ -343,12 +343,12 @@ function _scanRelease() {
 // must never block or fail a scan.
 async function logConsent(target, moduleKey, token) {
   try {
-    await api("/api/scan/consent_log", "POST", {
+    return await api("/api/scan/consent_log", "POST", {
       target: String(target || ""),
       module: String(moduleKey || ""),
       user_agent: (typeof navigator !== "undefined" ? navigator.userAgent : "")
     }, token);
-  } catch (_) { /* authorization logging must never block the scan */ }
+  } catch (_) { return null; /* a logging/network failure must never block a scan */ }
 }
 
 async function api(path, method, body, token) {
@@ -3316,7 +3316,8 @@ function WebAppModule(props) {
     // Auto-add http:// if user typed just a domain or IP
     const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)(target.trim());
     if (normTarget !== target) setTarget(normTarget);
-    logConsent(normTarget, "webapp", token);   // record scan authorization
+    const _q = await logConsent(normTarget, "webapp", token);   // authorization + quota gate
+    if (_q && _q.quota_exceeded) { alert(_q.message || "Monthly scan limit reached. Upgrade to run more scans."); return; }
     stopRef.current = false; setStopped(false);
     setScanStart(Date.now()); setTickN(0);
     setRunningState(true); setDone([]); setFailed([]); setSkipped([]); setAll({}); setFinished(false);
@@ -12623,7 +12624,8 @@ function ReconModule({token, onRunningChange, activeSections}) {
 
   const run = async () => {
     if (!target.trim()) return;
-    logConsent(target, "recon", token);   // record scan authorization
+    const _q = await logConsent(target, "recon", token);   // authorization + quota gate
+    if (_q && _q.quota_exceeded) { alert(_q.message || "Monthly scan limit reached. Upgrade to run more scans."); return; }
     stopRef.current = false; setStopped(false);
     setRunning(true); _notifyRunning(true); setDone([]); setFailed([]); setAll({}); setFinished(false);
     setTab("phases");
@@ -21765,7 +21767,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     : ((target.trim().length > 0 || hasAnyAdvInput) && !running)) && authConfirmed;
   const runAll = async () => {
     if (!canRun) return;
-    logConsent(target || advInputs.image_ref || advInputs.repo_url || "(advanced inputs)", moduleKey, token);   // record scan authorization
+    const _q = await logConsent(target || advInputs.image_ref || advInputs.repo_url || "(advanced inputs)", moduleKey, token);   // authorization + quota gate
+    if (_q && _q.quota_exceeded) { alert(_q.message || "Monthly scan limit reached. Upgrade to run more scans."); return; }
     setRunning(true);
     setResults({});
     setProgress({done:0, total: totalTools});

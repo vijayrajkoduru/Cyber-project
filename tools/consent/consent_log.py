@@ -64,6 +64,20 @@ async def log_consent(body: ConsentBody, request: Request,
     if isinstance(payload, dict):
         user_email = payload.get("sub") or payload.get("email") or ""
 
+    # Per-plan quota gate. One consent_log call == one scan, so this is the
+    # single place that meters scans. If the user is over their monthly cap
+    # (or on an expired subscription that fell back to free), block here and
+    # the dashboard aborts the scan before any scanner fires.
+    try:
+        from tools._quota import check_and_consume
+        q = check_and_consume(user_email)
+    except Exception:
+        q = {"ok": True}
+    if not q.get("ok", True):
+        return {"ok": False, "quota_exceeded": True,
+                "message": q.get("message", "Monthly scan limit reached. Upgrade to run more scans."),
+                "plan": q.get("effective_plan"), "used": q.get("used"), "cap": q.get("cap")}
+
     client_ip = request.client.host if request.client else ""
     fwd = request.headers.get("x-forwarded-for", "")
     if fwd:
@@ -77,7 +91,8 @@ async def log_consent(body: ConsentBody, request: Request,
                 (datetime.datetime.now(datetime.timezone.utc).isoformat(),
                  user_email, body.target, body.module, client_ip,
                  (body.user_agent or "")[:500]))
-        return {"ok": True}
+        return {"ok": True, "plan": q.get("effective_plan"),
+                "used": q.get("used"), "cap": q.get("cap"), "remaining": q.get("remaining")}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
 

@@ -49,6 +49,9 @@ async def auth_register(req: RegisterRequest):
 
     user_id = str(uuid.uuid4())
     now = datetime.datetime.utcnow().isoformat() + "Z"
+    # New signups get a 7-day trial; after it expires the account falls back to
+    # the free tier (10 scans/mo) until they upgrade. See tools/_quota.py.
+    trial_expires = (datetime.datetime.utcnow() + datetime.timedelta(days=7)).isoformat() + "Z"
 
     with get_db() as con:
         if con.execute("SELECT 1 FROM users WHERE LOWER(username)=LOWER(?)",
@@ -58,10 +61,10 @@ async def auth_register(req: RegisterRequest):
                        (req.email,)).fetchone():
             raise HTTPException(409, "Email already registered")
         con.execute(
-            "INSERT INTO users (id, username, email, password_hash, role, plan, status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO users (id, username, email, password_hash, role, plan, status, created_at, subscription_expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (user_id, req.username, req.email, hash_password(req.password),
-             "user", "trial", "active", now),
+             "user", "trial", "active", now, trial_expires),
         )
 
     # Provision the user's zone: /data/users/<user_id>/ with default files.

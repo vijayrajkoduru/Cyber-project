@@ -16,6 +16,8 @@ DB_PATH = Path(os.getenv("USERS_DB", "/app/data/users.db"))
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+_SCHEMA_MIGRATED = False
+
 
 def _ensure_dir():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -34,6 +36,9 @@ def init_db():
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user',
             plan TEXT DEFAULT 'trial',
+            subscription_expires_at TEXT,
+            scans_used INTEGER DEFAULT 0,
+            usage_period TEXT DEFAULT '',
             status TEXT DEFAULT 'active',
             created_at TEXT NOT NULL,
             updated_at TEXT
@@ -41,6 +46,20 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_email ON users(email);
     """)
+    # Migrate pre-existing DBs that lack the billing columns (ALTER throws once
+    # the column exists -> caught). Runs once per process.
+    global _SCHEMA_MIGRATED
+    if not _SCHEMA_MIGRATED:
+        for _ddl in (
+            "ALTER TABLE users ADD COLUMN subscription_expires_at TEXT",
+            "ALTER TABLE users ADD COLUMN scans_used INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN usage_period TEXT DEFAULT ''",
+        ):
+            try:
+                con.execute(_ddl)
+            except Exception:
+                pass
+        _SCHEMA_MIGRATED = True
     con.commit()
     con.close()
     _seed_admin()
