@@ -12,13 +12,6 @@ from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
-# AI-curated 150-entry Drupal-specific path list with CVE markers
-try:
-    from tools._payloads.drupal_scan_paths import DRUPAL_SCAN_PATHS as _AI_DRUPAL_PATHS
-    _AI_DRUPAL_PATHS = _AI_DRUPAL_PATHS if isinstance(_AI_DRUPAL_PATHS, list) else []
-except Exception:
-    _AI_DRUPAL_PATHS = []
-
 
 def _is_drupal(base, req):
     r1 = safe_get(base + "/", req=req, allow_redirects=True, timeout=8)
