@@ -19,7 +19,8 @@ async def auth_me(payload=Depends(verify_token)):
 
     with get_db() as con:
         row = con.execute(
-            "SELECT id, username, email, role, plan, status, created_at "
+            "SELECT id, username, email, role, plan, status, created_at, "
+            "subscription_expires_at, modules "
             "FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
@@ -29,7 +30,15 @@ async def auth_me(payload=Depends(verify_token)):
     if row["status"] != "active":
         raise HTTPException(403, f"Account is {row['status']}")
 
-    return dict(row)
+    result = dict(row)
+    # Entitlements the dashboard uses to lock/unlock module tiles.
+    # owned_modules == ['*'] means all modules (trial / enterprise / admin).
+    try:
+        from tools._payments.entitlements import owned_modules
+        result["owned_modules"] = owned_modules(row["id"])
+    except Exception:
+        result["owned_modules"] = []
+    return result
 
 
 def register(app):

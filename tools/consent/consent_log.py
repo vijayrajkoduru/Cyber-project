@@ -78,6 +78,20 @@ async def log_consent(body: ConsentBody, request: Request,
                 "message": q.get("message", "Monthly scan limit reached. Upgrade to run more scans."),
                 "plan": q.get("effective_plan"), "used": q.get("used"), "cap": q.get("cap")}
 
+    # Module entitlement gate. For modules we SELL (in the à-la-carte catalogue),
+    # the account must have an active subscription to THAT module. A free trial
+    # unlocks everything; admins/enterprise are exempt; modules we don't sell are
+    # not gated here. Never hard-fails a scan on an entitlement bug.
+    try:
+        from tools._payments.module_catalog import get_module
+        from tools._payments.entitlements import has_module
+        if get_module(body.module) and not has_module(user_email, body.module):
+            return {"ok": False, "module_locked": True, "module": body.module,
+                    "message": (f"The '{body.module}' module is not in your subscription. "
+                                f"Subscribe to it from the pricing page to run this scan.")}
+    except Exception:
+        pass
+
     client_ip = request.client.host if request.client else ""
     fwd = request.headers.get("x-forwarded-for", "")
     if fwd:

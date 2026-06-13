@@ -39,10 +39,11 @@ def parse_modules(csv):
 
 
 def _load(con, identity):
+    # identity may be the JWT 'sub' (user id / UUID), an email, or a username.
     return con.execute(
         "SELECT role, plan, subscription_expires_at, modules "
-        "FROM users WHERE email=? OR username=? LIMIT 1",
-        (identity, identity),
+        "FROM users WHERE id=? OR email=? OR username=? LIMIT 1",
+        (identity, identity, identity),
     ).fetchone()
 
 
