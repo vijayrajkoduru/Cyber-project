@@ -86,9 +86,8 @@ def status_cell(text):
         c = GREEN
     else:
         c = INK
-    return Paragraph(f'<font color="{c.hexval()[2:] and ("#"+c.hexval()[4:])}"><b>{text}</b></font>'
-                     if False else f'<b>{text}</b>', S("stx", fontName="Helvetica-Bold",
-                                                       fontSize=9, textColor=c, leading=12))
+    return Paragraph(f'<b>{text}</b>',
+                     S("stx", fontName="Helvetica-Bold", fontSize=9, textColor=c, leading=12))
 
 def table(data, col_widths, header=True, status_col=None, hdr_color=THEAD):
     rows = []
