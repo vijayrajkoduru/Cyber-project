@@ -112,6 +112,7 @@ const MODULES = [
   { id:"av_evasion",     icon:"", label:"AV / EDR Evasion Tests",           cat:"exploit", free:false },
   { id:"phishing",       icon:"", label:"Phishing & Email Posture",         cat:"exploit", free:false },
   { id:"ai_llm",         icon:"", label:"AI / LLM Security",                cat:"advanced", free:false },
+  { id:"ai_pentest",     icon:"", label:"AI Autonomous Pentest",           cat:"advanced", free:false },
 
   // ── POST-EXPLOITATION ────────────────────────────────────────
   { id:"pivot",          icon:"", label:"Pivoting & Lateral Movement",     cat:"post",    free:false },
@@ -126,7 +127,7 @@ const MODULES = [
   // ── ADVANCED ─────────────────────────────────────────────────
   { id:"cloud",          icon:"", label:"Cloud Security Testing",          cat:"advanced",free:false },
   { id:"apisec",         icon:"", label:"API Security Testing",            cat:"advanced",free:false },
-  { id:"quantum_readiness", icon:"", label:"Quantum Readiness",              cat:"advanced",free:false },
+  { id:"quantum_readiness", icon:"", label:"Quantum Readiness",              cat:"quantum",  free:false },
   { id:"container_k8s",  icon:"", label:"Container / Kubernetes",          cat:"advanced",free:false },
   { id:"iot_ot",         icon:"", label:"IoT / OT / ICS Security",         cat:"advanced",free:false },
   { id:"supply_chain",   icon:"", label:"Supply Chain Security",           cat:"advanced",free:false },
@@ -22837,6 +22838,7 @@ function PasswordModuleV2(p)       { return _autoMod(p, {moduleKey:"password",  
 function WirelessModuleV2(p)       { return _autoMod(p, {moduleKey:"wireless",        moduleLabel:"Wireless Attacks",                emoji:"", color:"#00ff88", playbook:"18_wireless.md"}); }
 function SupplyChainModuleV2(p)    { return _autoMod(p, {moduleKey:"supply_chain",    moduleLabel:"Supply Chain Security",            emoji:"", color:"#a855f7", playbook:"25_supply_chain.md"}); }
 function AiLlmModuleV2(p)          { return _autoMod(p, {moduleKey:"ai_llm",          moduleLabel:"AI / LLM Security",                emoji:"", color:"#ec4899", playbook:"23_ai_llm.md"}); }
+function AiPentestModule(p)        { return _autoMod(p, {moduleKey:"ai_pentest",      moduleLabel:"AI Autonomous Pentest",           emoji:"", color:"#f43f5e", playbook:"34_ai_pentest.md"}); }
 function FirmwareModuleV2(p)       { return _autoMod(p, {moduleKey:"firmware",        moduleLabel:"Firmware Analysis",                emoji:"", color:"#0891b2", playbook:"31_firmware.md"}); }
 function PrivescModuleV2(p)        { return _autoMod(p, {moduleKey:"privesc",         moduleLabel:"Privilege Escalation",             emoji:"", color:"#eab308", playbook:"12_privesc.md"}); }
 function PostExploitModuleV2(p)    { return _autoMod(p, {moduleKey:"post_exploit",    moduleLabel:"Post-Exploitation & Persistence",  emoji:"", color:"#d97706", playbook:"13_post_exploit.md"}); }
@@ -22854,7 +22856,7 @@ function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",   
 function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b9eff", playbook:"16_network.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
 function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"", color:"#10b981", playbook:"22_apisec.md"}); }
-function QuantumReadinessModule(p) { return _autoMod(p, {moduleKey:"quantum_readiness", moduleLabel:"Quantum Readiness",             emoji:"", color:"#22d3ee", playbook:"37_quantum_readiness.md"}); }
+function QuantumReadinessModule(p) { return _autoMod(p, {moduleKey:"quantum_readiness", moduleLabel:"Quantum Readiness",             emoji:"", color:"#FFD700", playbook:"37_quantum_readiness.md"}); }
 
 // ═══════════════════════════════════════════════════════════════
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
@@ -24392,6 +24394,7 @@ export default function App() {
   const topic = MODULES.find(m => m.id === active);
 
   const SECTIONS = [
+    { key:"quantum",  label:"QUANTUM",           color:"#FFD700" },
     { key:"recon",    label:"RECONNAISSANCE",    color:"#06b6d4" },
     { key:"scan",     label:"SCANNING",          color:"#3b9eff" },
     { key:"exploit",  label:"EXPLOITATION",      color:"#ff3e5e" },
@@ -24528,6 +24531,9 @@ export default function App() {
         </div>
         <div style={{display: active==="ai_llm" ? "block" : "none"}}>
           <AiLlmModuleV2 token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="ai_pentest" ? "block" : "none"}}>
+          <AiPentestModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="firmware" ? "block" : "none"}}>
           <FirmwareModuleV2 token={token} apiUrl={API}/>
@@ -24679,7 +24685,7 @@ export default function App() {
             return (
               <div key={sec.key}>
                 <div style={{padding:"10px 8px 3px"}}>
-                  <span style={{fontSize:10,color:"#5a6478",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
+                  <span style={{fontSize:10,color:sec.key==="quantum"?"#FFD700":"#5a6478",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
                 </div>
                 {mods.map(m => {
                   const locked = !canAccess(m);
@@ -24692,7 +24698,7 @@ export default function App() {
                     <button key={m.id} className="nav-btn" onClick={()=>handleNavClick(m)}
                       style={{width:"calc(100% - 16px)",background:isActive?"#0e3a55":"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px",opacity:locked?0.55:1}}>
                       <span style={{fontSize:16,width:22,textAlign:"center",flexShrink:0}}>{m.icon}</span>
-                      <span style={{fontSize:13,color:isActive?"#ffffff":locked?"#5a6478":"#8a94a8",fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
+                      <span style={{fontSize:13,color:isActive?"#ffffff":locked?"#5a6478":(m.cat==="quantum"?"#FFD700":"#8a94a8"),fontWeight:isActive?600:500,flex:1,lineHeight:1.35,letterSpacing:"0.1px"}}>{m.label}</span>
                       {/* VA/PT badge — subtle tag, low-opacity, refined look */}
                       {MODULE_TYPE[m.id] && (() => {
                         const t = MODULE_TYPE[m.id];
