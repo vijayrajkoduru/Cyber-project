@@ -336,6 +336,20 @@ function _scanRelease() {
   if (next) next();
 }
 
+// Append-only authorization record: logs who attested they are authorized to
+// scan a target, right before the first scanner fires. Backend route lives in
+// tools/consent/consent_log.py (/api/scan/consent_log). Fire-and-forget — it
+// must never block or fail a scan.
+async function logConsent(target, moduleKey, token) {
+  try {
+    await api("/api/scan/consent_log", "POST", {
+      target: String(target || ""),
+      module: String(moduleKey || ""),
+      user_agent: (typeof navigator !== "undefined" ? navigator.userAgent : "")
+    }, token);
+  } catch (_) { /* authorization logging must never block the scan */ }
+}
+
 async function api(path, method, body, token) {
   // API-TIMEOUT-V2-SCOPED — scan endpoints need long timeouts (Nuclei = 13k templates,
   // WPScan enumeration, XSS canary fuzzing). Auth/general endpoints stay tight.
@@ -346,8 +360,9 @@ async function api(path, method, body, token) {
   // queue behind the scan semaphore (that caused a permanent "Logging in...")
   // and must time out fast (the backend has a 30s wall-clock budget).
   const isLogin = path.includes("/scan/login");
-  const isScan = !isLogin && (path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/"));
-  const timeoutMs = isLogin ? 45000 : (isScan ? 300000 : 30000);  // login 45s; scans 5 min; else 30s
+  const isConsent = path.includes("/scan/consent_log");
+  const isScan = !isLogin && !isConsent && (path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/"));
+  const timeoutMs = isLogin ? 45000 : (isConsent ? 15000 : (isScan ? 300000 : 30000));  // login 45s; consent 15s; scans 5 min; else 30s
   if (isScan) await _scanAcquire();   // Wait if 6 scans already in flight (login bypasses)
   const ctrl = new AbortController();
   _activeAborts.add(ctrl);
@@ -3300,6 +3315,7 @@ function WebAppModule(props) {
     // Auto-add http:// if user typed just a domain or IP
     const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)(target.trim());
     if (normTarget !== target) setTarget(normTarget);
+    logConsent(normTarget, "webapp", token);   // record scan authorization
     stopRef.current = false; setStopped(false);
     setScanStart(Date.now()); setTickN(0);
     setRunningState(true); setDone([]); setFailed([]); setSkipped([]); setAll({}); setFinished(false);
@@ -4134,10 +4150,14 @@ function WebAppModule(props) {
               <div style={{marginTop:16}}>
                 <AuthPanel target={target} token={token} authCookie={authCookie} setAuthCookie={setAuthCookie} authBearer={authBearer} setAuthBearer={setAuthBearer} persist={true} defaultOpen={true} />
               </div>
+              <label style={{display:"flex",alignItems:"flex-start",gap:8,margin:"12px 0",padding:"10px 12px",background:"#0a0e17",border:`1px solid ${authConfirmed?"#1f6f3f":"#3a2a12"}`,borderRadius:8,cursor:"pointer",fontSize:12,color:"#b8c2d4",lineHeight:1.45}}>
+                <input type="checkbox" checked={authConfirmed} onChange={e=>setAuthConfirmed(e.target.checked)} style={{marginTop:2,accentColor:"#3b9eff",cursor:"pointer"}}/>
+                <span>I confirm I am <b>authorized</b> to scan this target (I own it or have written permission). VulnusLab records this authorization. Unauthorized scanning is illegal.</span>
+              </label>
               <div style={{display:"flex",gap:10,justifyContent:"flex-end",borderTop:"1px solid #1c2435",paddingTop:14,marginTop:14}}>
                 <button onClick={()=>setShowScanModal(false)} style={{background:"transparent",border:"1px solid #1c2435",borderRadius:6,padding:"9px 16px",color:"#8a94a8",fontWeight:600,fontSize:13,cursor:"pointer"}}>Close</button>
-                <button onClick={()=>{ if(target.trim()){ setShowScanModal(false); run(); } }} disabled={!target.trim()}
-                  style={{background:target.trim()?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"9px 22px",color:target.trim()?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:target.trim()?"pointer":"not-allowed"}}>
+                <button onClick={()=>{ if(target.trim()&&authConfirmed){ setShowScanModal(false); run(); } }} disabled={!target.trim()||!authConfirmed}
+                  style={{background:(target.trim()&&authConfirmed)?"linear-gradient(135deg,#3b9eff,#06b6d4)":"#1c2435",border:"none",borderRadius:6,padding:"9px 22px",color:(target.trim()&&authConfirmed)?"#fff":"#5a6478",fontSize:13,fontWeight:700,cursor:(target.trim()&&authConfirmed)?"pointer":"not-allowed"}}>
                   ▶ Start Full Pentest
                 </button>
               </div>
@@ -12602,6 +12622,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
 
   const run = async () => {
     if (!target.trim()) return;
+    logConsent(target, "recon", token);   // record scan authorization
     stopRef.current = false; setStopped(false);
     setRunning(true); _notifyRunning(true); setDone([]); setFailed([]); setAll({}); setFinished(false);
     setTab("phases");
@@ -13275,13 +13296,17 @@ function ReconModule({token, onRunningChange, activeSections}) {
         )}
         <AuthPanel target={target} token={token} authCookie={authCookie} setAuthCookie={setAuthCookie} authBearer={authBearer} setAuthBearer={setAuthBearer} defaultOpen={true} />
         <TestChips moduleKey="recon" setTarget={setTarget} running={running} />
+        <label style={{display:"flex",alignItems:"flex-start",gap:8,margin:"12px 0",padding:"10px 12px",background:"#0a0e17",border:`1px solid ${authConfirmed?"#1f6f3f":"#3a2a12"}`,borderRadius:8,cursor:"pointer",fontSize:12,color:"#b8c2d4",lineHeight:1.45}}>
+          <input type="checkbox" checked={authConfirmed} onChange={e=>setAuthConfirmed(e.target.checked)} style={{marginTop:2,accentColor:"#3b9eff",cursor:"pointer"}}/>
+          <span>I confirm I am <b>authorized</b> to scan this target (I own it or have written permission). VulnusLab records this authorization. Unauthorized scanning is illegal.</span>
+        </label>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&!running&&run()}
+            onKeyDown={e=>e.key==="Enter"&&!running&&authConfirmed&&run()}
             placeholder="domain.com  or  192.168.1.1  or  192.168.1.0/24"
             style={{flex:3,minWidth:240,background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:13,outline:"none"}}/>
-          <button onClick={() => { setShowScanModal(false); run(); }} disabled={running||!target.trim()}
-            style={{background:running?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:running?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:running?"not-allowed":"pointer"}}>
+          <button onClick={() => { if(authConfirmed){ setShowScanModal(false); run(); } }} disabled={running||!target.trim()||!authConfirmed}
+            style={{background:(running||!authConfirmed)?"#1c2435":"linear-gradient(135deg,#3b9eff,#06b6d4)",border:"none",borderRadius:6,padding:"10px 24px",color:(running||!authConfirmed)?"#5a6478":"#fff",fontSize:13,fontWeight:700,cursor:(running||!authConfirmed)?"not-allowed":"pointer"}}>
             {running?"Running...":"Start Scan"}
           </button>
           {running && (
@@ -20987,11 +21012,11 @@ const MODULE_OPTIONS_INPUTS = {
     "form_url", "user_field", "pass_field", "fail_string",  // patator http
     "always_deep", "show_plaintext",  // global behaviour flags
   ],
-  ad:              ["userlist", "password", "domain", "dc_ip", "port"],
+  ad:              ["userlist", "password", "domain"],  // target field IS the DC host; ports are fixed (88/389/445)
   hybrid_identity: ["username_list", "tenant_id", "client_id", "client_secret", "adfs_server_url"],
-  auth_attacks:    ["jwt_token", "public_key", "weak_secret_list", "oauth_authorize_url", "redirect_uri", "saml_metadata_url", "mfa_method"],
+  auth_attacks:    ["jwt_token", "public_key", "weak_secret_list", "oauth_authorize_url", "saml_metadata_url"],  // redirect_uri/mfa_method had no consumer
   privesc:         ["username", "password", "ssh_key", "port", "timeout_sec"],
-  post_exploit:    ["username", "password", "ssh_key", "os", "port", "use_ssl"],
+  post_exploit:    ["username", "password", "ssh_key", "port", "use_ssl"],  // os: both linux+windows audits run and self-skip, selector was a no-op
   av_evasion:      ["username", "password", "port", "use_ssl", "timeout_sec"],
   red_team:        ["atomic_user", "atomic_password", "atomic_ssh_key", "c2_callback_url", "exfil_dns_domain", "lateral_target", "atomic_os"],
   sspm:            ["tenant_id", "client_id", "client_secret", "gcp_service_account_json", "delegated_admin", "sf_domain", "sf_access_token", "slack_bot_token", "github_token", "github_org"],
@@ -21349,7 +21374,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const [authConfirmed, setAuthConfirmed] = useState(false);
   const [scanDepth, setScanDepth] = useState("quick");
   useEffect(() => {
-    const onOpen = (e) => { if (e && e.detail === moduleKey) setShowScanModal(true); };
+    const onOpen = (e) => { if (e && e.detail === moduleKey) { setShowScanModal(true); setAuthConfirmed(false); } };
     window.addEventListener("vl-open-scan", onOpen);
     return () => window.removeEventListener("vl-open-scan", onOpen);
   }, [moduleKey]);
@@ -21596,11 +21621,12 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const hasAnyAdvInput = advancedFields.some(k => (advInputs[k] || "").trim().length > 0);
   // Container module: Target field is hidden, so canRun is gated on
   // having at least one advanced input set (image_ref is the primary).
-  const canRun = _containerMode
+  const canRun = (_containerMode
     ? (hasAnyAdvInput && !running)
-    : ((target.trim().length > 0 || hasAnyAdvInput) && !running);
+    : ((target.trim().length > 0 || hasAnyAdvInput) && !running)) && authConfirmed;
   const runAll = async () => {
     if (!canRun) return;
+    logConsent(target || advInputs.image_ref || advInputs.repo_url || "(advanced inputs)", moduleKey, token);   // record scan authorization
     setRunning(true);
     setResults({});
     setProgress({done:0, total: totalTools});
@@ -22862,6 +22888,10 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   </button>
                 ))}
               </div>
+              <label style={{display:"flex",alignItems:"flex-start",gap:8,margin:"4px 0 14px",padding:"10px 12px",background:"#0a0e17",border:`1px solid ${authConfirmed?"#1f6f3f":"#3a2a12"}`,borderRadius:8,cursor:"pointer",fontSize:12,color:"#b8c2d4",lineHeight:1.45}}>
+                <input type="checkbox" checked={authConfirmed} onChange={e=>setAuthConfirmed(e.target.checked)} style={{marginTop:2,accentColor:"#3b9eff",cursor:"pointer"}}/>
+                <span>I confirm I am <b>authorized</b> to scan this target (I own it or have written permission). VulnusLab records this authorization. Unauthorized scanning is illegal.</span>
+              </label>
               <div style={{display:"flex", gap:10, justifyContent:"flex-end"}}>
                 <button onClick={() => setShowScanModal(false)}
                   style={{background:"transparent", border:"1px solid #1c2435", borderRadius:6, padding:"9px 16px", color:"#8a94a8", fontWeight:600, fontSize:13, cursor:"pointer"}}>Close</button>
