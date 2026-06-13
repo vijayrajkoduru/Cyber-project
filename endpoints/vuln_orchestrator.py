@@ -43,6 +43,18 @@ class RunAllRequest(BaseModel):
     # VL-TURBO 2.0 default — matches Webapp orchestrator. 214 scanners across
     # 15 tiers benefit from higher in-flight parallelism on dispatch.
     concurrency: Optional[int] = 24
+    # Authenticated scan (so behind-login web tiers + safe_get/safe_post get the
+    # session) and advanced inputs (so the SCA / container / IaC / cloud-native
+    # tiers actually receive an image / repo / manifest to analyse — without
+    # these they silently skip).
+    auth_cookie: Optional[str] = None
+    auth_bearer: Optional[str] = None
+    image_ref: Optional[str] = None
+    dockerfile_text: Optional[str] = None
+    pod_spec_yaml: Optional[str] = None
+    kubeconfig: Optional[str] = None
+    repo_url: Optional[str] = None
+    options: Optional[dict] = None
 
 
 @router.post("/api/vuln/run_all")
@@ -61,8 +73,17 @@ async def vuln_run_all(req: RunAllRequest, request: Request, _=Depends(verify_sc
     # tool surface in parallel, leaving most wall-clock time waiting on
     # HTTP/DNS. Matching Webapp's 24/32 cuts run_all from ~12min to ~4min.
     concurrency = max(1, min(req.concurrency or 24, 32))
+    extra = {}
+    for k in ("image_ref", "dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"):
+        v = getattr(req, k, None)
+        if v:
+            extra[k] = v
+    if req.options:
+        extra.update(req.options)
     gen = run_module_streaming(target=req.target, tools=tools, module_name="vuln",
-                               concurrency=concurrency, jwt_token=jwt)
+                               concurrency=concurrency,
+                               auth_cookie=req.auth_cookie, auth_bearer=req.auth_bearer,
+                               extra_body=(extra or None), jwt_token=jwt)
     return StreamingResponse(gen, media_type="application/x-ndjson",
                              headers={"X-Accel-Buffering": "no", "Cache-Control": "no-store",
                                       "Connection": "keep-alive"})
