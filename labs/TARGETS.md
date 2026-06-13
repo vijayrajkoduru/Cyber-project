@@ -39,14 +39,14 @@ sleep 25 && sed -i 's#https://127.0.0.1:6443#https://lab_k3s:6443#' labs/vl_k8s_
 | lab_pwd_ad | nowsci/samba-domain | 389/445/88 | Administrator / VLrange_Admin_2026! (+ svc_mssql/Password123, svc_http/Spring2024, jbloggs/NoPreAuth!) | ad, password tier3 |
 | lab_pwd_oauth | quay.io/keycloak/keycloak:24.0.5 | 8080 | admin / admin_VLrange_2026; realm vl-test-realm: alice/Password1!, bob/Password2! | auth_attacks (OAuth) |
 | lab_pwd_saml | kristophjunge/test-saml-idp | 8080 | user1 / user1pass, user2 / user2pass | auth_attacks (SAML) |
-| lab_modbus | (built: labs/vl_ics_range/modbus) | 502 | none (unauth Modbus) | iot_ot, vuln tier15 |
+| lab_modbus | honeynet/conpot:latest (Conpot ICS honeypot) | 502/102/161/80 | none (unauth Modbus/s7comm/SNMP + HTTP SCADA UI; S7-200 emulation) | iot_ot, vuln tier15 |
 | lab_k3s | rancher/k3s:v1.29.6-k3s2 | 6443 | kubeconfig -> labs/vl_k8s_range/kubeconfig.yaml | container_k8s, vuln tier9/10 |
 
 All targets are internal-only (no published host ports) — reachable by the
 scanner backend over the `vulnuslab` Docker network by hostname.
 
 ## Source build files (do not delete)
-- `labs/vl_ics_range/modbus/{Dockerfile,server.py}` — lab_modbus
+- `labs/vl_ics_range/modbus/{Dockerfile,server.py}` — pure-python fallback for lab_modbus (live target is the Conpot image)
 - `labs/vl_password_range/webform/{Dockerfile,app.py}` — lab_pwd_web
 - `labs/vl_password_range/keycloak/` — lab_pwd_oauth realm import
 - `labs/vl_password_range/ad_bootstrap.sh` — lab_pwd_ad seeded users

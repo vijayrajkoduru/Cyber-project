@@ -18,11 +18,12 @@
 # (e.g. cyber-project_vulnuslab). Verify with `docker network ls`; if yours
 # differs, edit the `name:` under networks: below.
 #
-# Build files this references (keep them — they're the source of two targets):
-#   labs/vl_ics_range/modbus/{Dockerfile,server.py}   -> lab_modbus
+# Build files this references (keep them — they're the source of these targets):
 #   labs/vl_password_range/webform/{Dockerfile,app.py} -> lab_pwd_web
 #   labs/vl_password_range/keycloak/                   -> lab_pwd_oauth realm
 #   labs/vl_password_range/ad_bootstrap.sh             -> lab_pwd_ad users
+#   labs/vl_ics_range/modbus/{Dockerfile,server.py}    -> pure-python fallback for lab_modbus
+#                                                         (live target is the Conpot image below)
 # ─────────────────────────────────────────────────────────────────────────
 services:
 
@@ -177,11 +178,11 @@ services:
     restart: unless-stopped
 
   # ── ICS / IoT range ──────────────────────────────────────────────────
-  lab_modbus:          # unauthenticated Modbus/TCP (502) — built from labs/vl_ics_range/modbus
-    build:
-      context: ./labs/vl_ics_range/modbus
-      dockerfile: Dockerfile
+  lab_modbus:          # Conpot ICS honeypot — Modbus(502)/s7comm(102)/SNMP(161)/HTTP(80), S7-200 emulation
+    image: honeynet/conpot:latest
     container_name: lab_modbus
+    entrypoint: ["conpot"]
+    command: ["-f", "--template", "default"]
     networks: [vulnuslab]
     restart: unless-stopped
 

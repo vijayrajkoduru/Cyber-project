@@ -288,13 +288,18 @@ services:
   #   #   user2 / user2pass
 
   # ── ICS / IoT Range ──────────────────────────────────────────────────
-  # Unauthenticated Modbus/TCP simulator (port 502) for the IoT/OT module
-  # + vuln tier15_wireless_iot. Internal only — backend reaches lab_modbus:502.
+  # Conpot — the Honeynet Project's industry-standard ICS/SCADA honeypot.
+  # The "default" template emulates a Siemens S7-200 CPU and exposes real
+  # MODBUS (502), s7comm (102), SNMP (161/udp) and an HTTP SCADA UI (80).
+  # Used by the IoT/OT module + vuln tier15. Internal only — the backend
+  # reaches it at lab_modbus:502 (name kept so existing targets still work).
+  # (The old pure-python sim under labs/vl_ics_range/modbus is kept as a
+  #  lightweight fallback if this image is ever unavailable.)
   lab_modbus:
-    build:
-      context: ./labs/vl_ics_range/modbus
-      dockerfile: Dockerfile
+    image: honeynet/conpot:latest
     container_name: lab_modbus
+    entrypoint: ["conpot"]
+    command: ["-f", "--template", "default"]
     networks:
     - vulnuslab
     restart: unless-stopped
