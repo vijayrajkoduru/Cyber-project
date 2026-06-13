@@ -14453,8 +14453,11 @@ function generateUniversalVLReport(opts) {
     // recommended next steps. Mimics industry pen-test report narrative
     // style (pdf_industry_standard.md gap 15).
     {
-      const _topName = _top3.length > 0
-        ? _clip(_top3[0].detail || _top3[0].name || _top3[0].title || "", 90)
+      // Fall back to the worst LOW finding when there are no CRITICAL/HIGH/MEDIUM,
+      // so the "most notable item" sentence never renders empty quotes ("").
+      const _topFinding = _top3[0] || _allFindings.find(f => String(f.severity||"").toUpperCase() === "LOW") || null;
+      const _topName = _topFinding
+        ? _clip(_topFinding.detail || _topFinding.name || _topFinding.title || "", 90)
         : "";
       const _topName2 = _top3.length > 1
         ? _clip(_top3[1].detail || _top3[1].name || _top3[1].title || "", 90)
@@ -15994,8 +15997,10 @@ function generateUniversalVLReport(opts) {
         g.fillStyle = "#e7edf7"; g.font = "bold 25px Arial";
         _wrapC(g, String(f.name || f.detail || f.title || "Finding"), 26, 112, W - 52, 32, 2);
         g.fillStyle = "#93a4bf"; g.font = "16px Arial";
-        const cve = (f.cve && f.cve !== "-") ? "   " + f.cve : "";
-        g.fillText("Asset: " + String(f.asset || target || "(target)") + "      CVSS " + String(f.cvss || "-") + "      " + String(f.cwe || "") + cve, 26, 188);
+        const cve = (f.cve && f.cve !== "-" && f.cve !== "N/A") ? "   " + f.cve : "";
+        const _cvssN = Number(f.cvss) > 0 ? f.cvss : ({CRITICAL:9.8, HIGH:7.5, MEDIUM:5.3, LOW:3.1}[sev] || "-");
+        const _cwe = (f.cwe && f.cwe !== "N/A") ? "      " + f.cwe : "";
+        g.fillText("Asset: " + String(f.asset || target || "(target)") + "      CVSS " + String(_cvssN) + _cwe + cve, 26, 188);
         g.fillStyle = "#0f1a30"; g.fillRect(26, 206, W - 52, 212);
         g.fillStyle = "#7fd1a3"; g.font = "16px Consolas, monospace";
         g.fillText("$ captured evidence", 40, 234);
