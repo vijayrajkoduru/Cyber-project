@@ -17,6 +17,14 @@ async def gather(ctx):
     if not a: ctx.state["reachable"]=False; return
     ctx.state["reachable"]=True; ctx.state["a_records"]=a; ctx.state["ttl"]=ttl
     ctx.source(f"a-ttl-{ttl}")
+    # Only a PUBLIC domain can leak private IPs "in public DNS". Single-label
+    # / internal hostnames (e.g. Docker service names like lab_juiceshop) and
+    # raw IP targets resolving to RFC1918 are expected, not a finding.
+    _h=(ctx.host or "")
+    _is_ip=False
+    try: ipaddress.ip_address(_h); _is_ip=True
+    except Exception: pass
+    ctx.state["public_domain"]=("." in _h) and not _is_ip
     private_ips=[]
     for ip in a:
         try:
@@ -27,14 +35,14 @@ async def gather(ctx):
     ctx.state.update({"private_ips":private_ips,"low_ttl":ttl is not None and ttl<60,
         "rebinding_risk":bool(private_ips) and (ttl is not None and ttl<60)})
 def _r_active_rebind(s):
-    if not s.get("rebinding_risk"): return None
+    if not s.get("rebinding_risk") or not s.get("public_domain"): return None
     return {"name":"DNS rebinding attack surface present","severity":"HIGH","cvss":7.5,
         "cwe":"CWE-350","owasp":"A05:2021",
         "evidence":f"TTL={s.get('ttl')}s + private IPs in A: {', '.join(s.get('private_ips') or [])}",
         "remediation":"DNS should not return private IPs externally. Block private-IP DNS responses at resolver."}
 def _r_private_ip(s):
     p=s.get("private_ips") or []
-    if not p or s.get("rebinding_risk"): return None
+    if not p or s.get("rebinding_risk") or not s.get("public_domain"): return None
     return {"name":f"Private IPs in public DNS ({len(p)})","severity":"MEDIUM","cwe":"CWE-200",
         "evidence":", ".join(p),
         "remediation":"Public DNS leaking RFC1918 addresses — split-horizon DNS recommended."}
