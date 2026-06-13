@@ -49,7 +49,7 @@
   <div class="mods" id="mods"><p style="color:#8a94a8">Loading modules…</p></div>
 
   <div class="summary">
-    <div class="total"><span class="lbl" id="selCount">No modules selected</span><span class="amt" id="amt">₹0<small>/mo</small></span></div>
+    <div class="total"><span class="lbl" id="selCount">No modules selected</span><span class="amt" id="amt">$0<small>/mo</small></span></div>
     <label class="fl" for="name">Full name</label>
     <input type="text" id="name" placeholder="Jane Doe" autocomplete="name" />
     <label class="fl" for="email">Email (your login + receipt)</label>
@@ -74,7 +74,7 @@
   var PRESEL = (new URLSearchParams(location.search).get("modules") || "").split(",").filter(Boolean);
   var CFG = null, MODS = [], SEL = {};
   var $ = function (id) { return document.getElementById(id); };
-  function inr(paise) { return "₹" + (paise / 100).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+  function money(cents) { var cur = (CFG && CFG.currency) || "USD"; var sym = cur === "INR" ? "₹" : "$"; return sym + (cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
   function show(kind, t) { var m = $("msg"); m.className = "msg " + kind; m.textContent = t; }
 
   fetch(API + "/api/payment/config").then(function (r) { return r.json(); }).then(function (cfg) {
@@ -90,7 +90,7 @@
       var on = PRESEL.indexOf(m.id) >= 0; if (on) SEL[m.id] = true;
       html += '<label class="mod' + (on ? ' sel' : '') + '" data-id="' + m.id + '">' +
         '<input type="checkbox" ' + (on ? 'checked' : '') + ' data-id="' + m.id + '">' +
-        '<div><div class="name">' + m.label + '</div><div class="price">' + inr(m.amount) + '/mo</div>' +
+        '<div><div class="name">' + m.label + '</div><div class="price">' + money(m.amount) + '/mo</div>' +
         '<div class="blurb">' + (m.blurb || '') + '</div></div></label>';
     });
     $("mods").innerHTML = html;
@@ -115,9 +115,9 @@
   function refresh() {
     var n = selectedIds().length;
     $("selCount").textContent = n ? (n + " module" + (n > 1 ? "s" : "") + " selected") : "No modules selected";
-    $("amt").innerHTML = inr(total()) + "<small>/mo</small>";
+    $("amt").innerHTML = money(total()) + "<small>/mo</small>";
     $("pay").disabled = !valid();
-    $("pay").textContent = n ? ("Subscribe — " + inr(total()) + "/mo") : "Subscribe";
+    $("pay").textContent = n ? ("Subscribe — " + money(total()) + "/mo") : "Subscribe";
   }
   ["name", "email", "auth"].forEach(function (id) { $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); });
 
