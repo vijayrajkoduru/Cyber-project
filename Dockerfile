@@ -493,6 +493,11 @@ RUN set +e ; \
     apt-get clean ; rm -rf /var/lib/apt/lists/* ; \
     echo "=== Phase 2 apt done ==="
 
+# ── retire.js — known-vulnerable JS-library detector (used by webapp + client_side retire_js_audit) ──
+# Non-fatal: if npm/registry is unavailable the scanners degrade to advisory INFO.
+RUN ( npm install -g retire >/dev/null 2>&1 && retire --version ) \
+    || echo "WARNING: retire.js install failed (retire_js scanners degrade to advisory)"
+
 # ── wpscan via Ruby gem (not in apt; needs ruby + ruby-dev + libcurl + libxml/xslt) ──
 # Gem install needs native build tools for nokogiri + typhoeus.
 RUN apt-get update -q -o Acquire::Retries=3 \

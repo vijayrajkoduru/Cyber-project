@@ -16,8 +16,11 @@ Probe coverage 2026-06-12:
   Scaffold (fake)    : 0
 """
 import base64
+import os
 import re
 import time
+import shutil
+import subprocess
 import urllib.request
 import urllib.error
 import json
@@ -942,6 +945,212 @@ def _probe_api_shadow_inventory(target, req):
     return r
 
 
+def _schemathesis_cli():
+    """Return the installed Schemathesis CLI name ('schemathesis' or the
+    short 'st'), or None if neither binary is on PATH."""
+    for name in ("schemathesis", "st"):
+        if shutil.which(name):
+            return name
+    return None
+
+
+def _discover_spec_url(target, req):
+    """Resolve the OpenAPI/Swagger spec URL.
+
+    Precedence: explicit api_spec_url on the request -> common spec paths
+    probed on the live target. Returns the spec URL string or None.
+    Only returns a path if it actually serves a JSON OpenAPI/Swagger doc
+    (read-only GET), so we never feed Schemathesis an HTML/SPA page."""
+    # 1) caller-supplied spec URL (request field or generic options dict)
+    supplied = getattr(req, "api_spec_url", None) if req is not None else None
+    if not supplied and req is not None:
+        opts = getattr(req, "options", None)
+        if isinstance(opts, dict):
+            supplied = opts.get("api_spec_url")
+    if supplied and isinstance(supplied, str) and supplied.strip():
+        return supplied.strip()
+    # 2) discover at the well-known spec endpoints (JSON specs only)
+    base = _base_url(target)
+    for p in ("/openapi.json", "/swagger.json", "/v3/api-docs", "/v2/api-docs",
+              "/api-docs", "/api/swagger.json", "/swagger/v1/swagger.json"):
+        code, body, _ = _http_get(base + p, timeout=4)
+        bs = (body or "").lstrip()
+        if code == 200 and bs.startswith("{") and ('"openapi"' in body or '"swagger"' in body):
+            return base + p
+    return None
+
+
+# Lines Schemathesis prints when a check (an actual confirmed defect) fails.
+_ST_FAIL_MARKERS = (
+    "server_error",            # 5xx from the API under valid input
+    "status_code_conformance", # response status not in the documented set
+    "response_schema_conformance",  # response body violates the declared schema
+    "content_type_conformance",
+    "response_headers_conformance",
+    "schema_conformance",
+    "negative_data_rejection",
+    "use_after_free",
+    "ensure_resource_availability",
+    "ignored_auth",
+    "unsupported_method",
+)
+
+
+def _parse_schemathesis(stdout, stderr):
+    """Parse Schemathesis CLI output into confirmed failures only.
+
+    Schemathesis prints a 'FAILURES' / 'SUMMARY' block; the per-check
+    summary line reads e.g. 'server_error: 3 / 12 passed'. We extract only
+    checks that actually recorded one or more failures, plus the failing
+    operations listed in the FAILURES section. ZERO assumptions: if the
+    output reports no failures, we emit nothing graded."""
+    text = (stdout or "") + "\n" + (stderr or "")
+    failed_checks = {}
+    # Per-check summary lines: "<check_name>: <passed> / <total> passed"
+    for m in re.finditer(r"(?im)^\s*([a-z_]+)\s*:\s*(\d+)\s*/\s*(\d+)\s+passed\b", text):
+        name, passed, total = m.group(1), int(m.group(2)), int(m.group(3))
+        if name in _ST_FAIL_MARKERS and total > passed:
+            failed_checks[name] = total - passed
+    # Failing operations explicitly listed under the FAILURES section.
+    failing_ops = []
+    for m in re.finditer(r"(?im)^\s*(?:[-_]+\s*)?((?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/\S+)", text):
+        op = m.group(1).strip()
+        if op not in failing_ops:
+            failing_ops.append(op)
+    # Overall failed count from the final summary, if present.
+    total_failed = 0
+    mt = re.search(r"(?i)(\d+)\s+(?:failed|failures?)\b", text)
+    if mt:
+        total_failed = int(mt.group(1))
+    return failed_checks, failing_ops, total_failed
+
+
+# Map a Schemathesis check name to severity + CWE for a CONFIRMED failure.
+_ST_CHECK_META = {
+    "server_error":               ("HIGH",   "7.5", "CWE-248", "API8:2023"),
+    "use_after_free":             ("HIGH",   "7.5", "CWE-416", "API8:2023"),
+    "ignored_auth":               ("HIGH",   "7.5", "CWE-306", "API2:2023"),
+    "ensure_resource_availability": ("HIGH", "7.0", "CWE-664", "API1:2023"),
+    "status_code_conformance":    ("MEDIUM", "5.3", "CWE-1287", "API8:2023"),
+    "response_schema_conformance": ("MEDIUM","5.3", "CWE-1287", "API8:2023"),
+    "schema_conformance":         ("MEDIUM", "5.3", "CWE-1287", "API8:2023"),
+    "content_type_conformance":   ("LOW",    "3.7", "CWE-1287", "API8:2023"),
+    "response_headers_conformance": ("LOW",  "3.7", "CWE-1287", "API8:2023"),
+    "negative_data_rejection":    ("MEDIUM", "5.3", "CWE-20",  "API8:2023"),
+    "unsupported_method":         ("LOW",    "3.7", "CWE-650", "API8:2023"),
+}
+
+
+def _probe_schemathesis_fuzz(target, req):
+    """Property-based API conformance fuzzing with Schemathesis.
+
+    Drives the installed Schemathesis CLI against an OpenAPI/Swagger spec
+    (supplied via api_spec_url, or auto-discovered at /openapi.json etc.)
+    and emits findings ONLY for failures the tool actually confirmed
+    (5xx server errors, schema/status conformance violations, ignored
+    auth). If the spec is absent or the CLI is missing, returns an honest
+    [ADVISORY-BY-DESIGN] INFO explaining how to supply api_spec_url —
+    never a crash and never a fake HIGH."""
+    cli = _schemathesis_cli()
+    if not cli:
+        return _advisory_by_design_response(
+            "schemathesis_fuzz", target,
+            "Schemathesis property-based API conformance fuzzing",
+            reason="The Schemathesis CLI is not installed in this scan "
+                   "environment, so the fuzz run could not be executed. "
+                   "Install it (pip install schemathesis) and supply an "
+                   "OpenAPI/Swagger spec via api_spec_url to enable this check.",
+            cwe="CWE-1287")
+
+    spec_url = _discover_spec_url(target, req)
+    if not spec_url:
+        return _advisory_by_design_response(
+            "schemathesis_fuzz", target,
+            "Schemathesis property-based API conformance fuzzing",
+            reason="No OpenAPI/Swagger specification was provided or "
+                   "discovered. Supply api_spec_url (the URL of your "
+                   "openapi.json / swagger.json) in the scan request, or "
+                   "expose the spec at /openapi.json, /swagger.json or "
+                   "/v3/api-docs so it can be discovered automatically.",
+            cwe="CWE-1287")
+
+    # Build the command for whichever CLI is installed. Both 'schemathesis'
+    # and the short 'st' alias accept the same 'run' sub-command and flags.
+    cmd = [cli, "run", spec_url, "--checks", "all", "--max-examples", "20"]
+    # Forward a bearer token for authenticated coverage if the caller gave one.
+    bearer = getattr(req, "auth_bearer", None) if req is not None else None
+    if bearer:
+        cmd += ["-H", f"Authorization: Bearer {bearer}"]
+
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=120,
+            env={"PATH": os.environ.get("PATH", ""),
+                 "NO_COLOR": "1", "PYTHONUNBUFFERED": "1"})
+        stdout, stderr = proc.stdout or "", proc.stderr or ""
+    except subprocess.TimeoutExpired:
+        return _adv_response(
+            "schemathesis_fuzz", target,
+            "Schemathesis fuzz run exceeded the 120s wall-clock limit",
+            "INFO", "0.0", cwe="N/A",
+            remediation="Re-run against a smaller spec subset or lower "
+                        "--max-examples; large APIs can exceed the timeout.",
+            evidence=f"Timed out fuzzing spec {spec_url}")
+    except Exception as e:
+        return _adv_response(
+            "schemathesis_fuzz", target,
+            f"[PROBE ERROR] could not run Schemathesis: {str(e)[:120]}",
+            "INFO", "0.0", cwe="N/A",
+            remediation="Verify the Schemathesis CLI and the spec URL are reachable.",
+            evidence=f"spec={spec_url}; error={str(e)[:160]}")
+
+    failed_checks, failing_ops, total_failed = _parse_schemathesis(stdout, stderr)
+    findings = []
+    if failed_checks:
+        for name, n in sorted(failed_checks.items(), key=lambda kv: kv[0]):
+            sev, cvss, cwe, owasp = _ST_CHECK_META.get(
+                name, ("MEDIUM", "5.3", "CWE-1287", "API8:2023"))
+            label = name.replace("_", " ")
+            findings.append(wrap_finding(
+                f"Schemathesis confirmed {n} '{label}' failure(s) against the API spec",
+                sev, cvss=cvss, cwe=cwe, owasp=owasp,
+                remediation=(
+                    "Fix the operations so responses conform to the declared "
+                    "schema/status set and never return unhandled 5xx; "
+                    "enforce input validation and authentication consistently."),
+                evidence_marker=(
+                    f"schemathesis run {spec_url}: check '{name}' had {n} failing case(s)"
+                    + (f"; failing ops: {', '.join(failing_ops[:5])}" if failing_ops else ""))))
+    elif total_failed > 0:
+        # The summary reported failures but the per-check lines weren't parsed;
+        # still report honestly as a generic conformance failure (no severity inflation).
+        findings.append(wrap_finding(
+            f"Schemathesis reported {total_failed} failing test case(s) against the API spec",
+            "MEDIUM", cvss="5.3", cwe="CWE-1287", owasp="API8:2023",
+            remediation="Review the failing operations; align responses with the "
+                        "declared OpenAPI schema and handle errors gracefully.",
+            evidence_marker=(
+                f"schemathesis run {spec_url}: {total_failed} failed"
+                + (f"; ops: {', '.join(failing_ops[:5])}" if failing_ops else ""))))
+    else:
+        findings.append(wrap_finding(
+            "Schemathesis fuzzing found no spec conformance / server-error failures",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="No action for this check.",
+            evidence_marker=f"schemathesis run {spec_url} --checks all --max-examples 20: all checks passed"))
+
+    return {
+        "tool": "schemathesis_fuzz", "target": target, "scan_time": 0,
+        "vulnerable": any(f.get("severity") in ("CRITICAL", "HIGH", "MEDIUM") for f in findings),
+        "severity": _resp("", "", findings, 0, "")["severity"],
+        "findings": findings,
+        "tests_performed": 20,
+        "tests_summary": "Schemathesis property-based API conformance fuzz (--checks all)",
+        "raw_data": {"spec_url": spec_url, "cli": cli,
+                     "failed_checks": failed_checks, "failing_ops": failing_ops[:10]},
+    }
+
+
 # ───────────────────────── PROBES registry ─────────────────────────
 PROBES = {
     # §1 Discovery
@@ -954,6 +1163,7 @@ PROBES = {
     "api_shadow_inventory":       _probe_api_shadow_inventory,
     "api_deprecated_endpoints":   _probe_deprecated,
     "api_developer_portal_audit": _probe_dev_portal,
+    "schemathesis_fuzz":          _probe_schemathesis_fuzz,
     "postman_collection_discovery": _abd("postman_collection_discovery", "Postman collection harvesting", _OSINT),
     "postman_workspace_audit":    _abd("postman_workspace_audit", "Public Postman workspace audit", _OSINT),
     "readme_io_audit":            _abd("readme_io_audit", "Readme.io hosted-docs audit", _OSINT),
@@ -1087,6 +1297,7 @@ T = [
     ("api_shadow_inventory", "API shadow inventory.", "HIGH", "7.0"),
     ("api_deprecated_endpoints", "Deprecated API endpoints still live.", "MEDIUM", "5.5"),
     ("api_developer_portal_audit", "API developer portal audit.", "MEDIUM", "5.5"),
+    ("schemathesis_fuzz", "Schemathesis OpenAPI conformance fuzzing.", "HIGH", "7.5"),
     ("postman_workspace_audit", "Postman workspace audit.", "MEDIUM", "5.5"),
     ("readme_io_audit", "Readme.io audit.", "INFO", "0.0"),
     ("manual_api_discovery", "Manual API discovery.", "INFO", "0.0"),
