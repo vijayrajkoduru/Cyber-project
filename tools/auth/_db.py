@@ -92,8 +92,15 @@ def _seed_admin():
 def get_db():
     """Context manager for SQLite connection. Auto-inits schema on first call."""
     init_db()
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(DB_PATH, timeout=10)
     con.row_factory = sqlite3.Row
+    # WAL + busy_timeout: readers don't block the writer and concurrent scans
+    # wait briefly instead of erroring with "database is locked".
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA busy_timeout=5000")
+    except Exception:
+        pass
     try:
         yield con
         con.commit()
