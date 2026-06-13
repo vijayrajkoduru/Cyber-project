@@ -1,0 +1,211 @@
+# ─────────────────────────────────────────────────────────────────────────
+# VulnusLab — TARGET / LAB RANGE BACKUP (standalone, restorable snapshot)
+# ─────────────────────────────────────────────────────────────────────────
+# Dedicated backup of every deliberately-vulnerable test target we built.
+# These are ALSO defined in the main docker-compose.yml; this file is a
+# self-contained copy so the lab range can be restored or run on its own even
+# if docker-compose.yml is stashed/wiped.
+#
+# Run the whole range (attaches to the existing backend network):
+#     docker compose -f docker-compose.targets.yml up -d
+# Run a subset:
+#     docker compose -f docker-compose.targets.yml up -d lab_dvwa lab_juiceshop
+# Tear down:
+#     docker compose -f docker-compose.targets.yml down
+#
+# NETWORK: targets attach to the backend's existing network so the scanner can
+# reach them by hostname. The default name is <project-dir>_vulnuslab
+# (e.g. cyber-project_vulnuslab). Verify with `docker network ls`; if yours
+# differs, edit the `name:` under networks: below.
+#
+# Build files this references (keep them — they're the source of two targets):
+#   labs/vl_ics_range/modbus/{Dockerfile,server.py}   -> lab_modbus
+#   labs/vl_password_range/webform/{Dockerfile,app.py} -> lab_pwd_web
+#   labs/vl_password_range/keycloak/                   -> lab_pwd_oauth realm
+#   labs/vl_password_range/ad_bootstrap.sh             -> lab_pwd_ad users
+# ─────────────────────────────────────────────────────────────────────────
+services:
+
+  # ── Web application targets ──────────────────────────────────────────
+  lab_dvwa:            # admin/password  (/login.php)
+    image: vulnerables/web-dvwa
+    container_name: lab_dvwa
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_juiceshop:       # admin@juice-sh.op/admin123  (SPA, :3000)
+    image: bkimminich/juice-shop
+    container_name: lab_juiceshop
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_bwapp:           # bee/bug  (/bWAPP/login.php; run install.php once)
+    image: raesene/bwapp
+    container_name: lab_bwapp
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_mutillidae:      # admin/admin  (/index.php?page=login.php)
+    image: citizenstig/nowasp
+    container_name: lab_mutillidae
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_webgoat:         # guest/guest  (:8080/WebGoat)
+    image: webgoat/webgoat
+    container_name: lab_webgoat
+    networks: [vulnuslab]
+    restart: unless-stopped
+
+  # ── Network / multi-service target ───────────────────────────────────
+  lab_metasploitable:  # msfadmin/msfadmin + many CVEs / open services
+    image: tleemcjr/metasploitable2
+    container_name: lab_metasploitable
+    networks: [vulnuslab]
+    restart: unless-stopped
+
+  # ── Password range (creds match the brute scanners' quick_probe) ─────
+  lab_pwd_ssh:         # admin/admin  (SSH 2222)
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: lab_pwd_ssh
+    environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=Etc/UTC
+    - PASSWORD_ACCESS=true
+    - USER_NAME=admin
+    - USER_PASSWORD=admin
+    - SUDO_ACCESS=true
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_pwd_smb:         # admin/admin  (SMB 445)
+    image: dperson/samba:latest
+    container_name: lab_pwd_smb
+    command: >-
+      -u "admin;admin"
+      -s "public;/share;yes;no;yes;all"
+      -p
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_pwd_web:         # admin/admin  (HTTP form :5000) — built from labs/vl_password_range/webform
+    build:
+      context: ./labs/vl_password_range/webform
+      dockerfile: Dockerfile
+    container_name: lab_pwd_web
+    networks: [vulnuslab]
+    restart: unless-stopped
+
+  # ── Database / service range ─────────────────────────────────────────
+  lab_mysql:           # root/root  (3306)
+    image: mysql:5.7
+    container_name: lab_mysql
+    environment:
+    - MYSQL_ROOT_PASSWORD=root
+    - MYSQL_DATABASE=appdb
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_postgres:        # postgres/postgres  (5432)
+    image: postgres:15-alpine
+    container_name: lab_postgres
+    environment:
+    - POSTGRES_PASSWORD=postgres
+    - POSTGRES_DB=appdb
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_ftp:             # admin/admin  (21)
+    image: delfer/alpine-ftp-server:latest
+    container_name: lab_ftp
+    environment:
+    - USERS=admin|admin
+    - ADDRESS=lab_ftp
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_redis:           # no auth, exposed  (6379)
+    image: redis:7-alpine
+    container_name: lab_redis
+    networks: [vulnuslab]
+    restart: unless-stopped
+  lab_mongo:           # no auth, exposed  (27017)
+    image: mongo:6
+    container_name: lab_mongo
+    networks: [vulnuslab]
+    restart: unless-stopped
+
+  # ── Identity range (heavier — ~2.5GB total) ──────────────────────────
+  lab_pwd_ad:          # Samba AD DC dc01.vlrange.local — run /bootstrap.sh once
+    image: nowsci/samba-domain:latest
+    container_name: lab_pwd_ad
+    hostname: dc01.vlrange.local
+    environment:
+    - DOMAIN=VLRANGE
+    - DOMAIN_DC=dc=vlrange,dc=local
+    - DOMAIN_EMAIL=vlrange.local
+    - DOMAINPASS=VLrange_Admin_2026!
+    - DNSFORWARDER=1.1.1.1
+    - HOSTIP=
+    - INSECURELDAP=true
+    - NOCOMPLEXITY=true
+    networks: [vulnuslab]
+    extra_hosts:
+    - "dc01.vlrange.local:127.0.0.1"
+    volumes:
+    - lab_pwd_ad_data:/var/lib/samba
+    - lab_pwd_ad_conf:/etc/samba/external
+    - ./labs/vl_password_range/ad_bootstrap.sh:/bootstrap.sh:ro
+    cap_add:
+    - SYS_ADMIN
+    restart: unless-stopped
+  lab_pwd_oauth:       # Keycloak OIDC — admin/admin_VLrange_2026; realm users alice/Password1!, bob/Password2!
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: lab_pwd_oauth
+    command: ["start-dev", "--import-realm"]
+    environment:
+    - KEYCLOAK_ADMIN=admin
+    - KEYCLOAK_ADMIN_PASSWORD=admin_VLrange_2026
+    - KC_HTTP_ENABLED=true
+    - KC_HOSTNAME_STRICT=false
+    - KC_HOSTNAME_STRICT_HTTPS=false
+    networks: [vulnuslab]
+    volumes:
+    - ./labs/vl_password_range/keycloak:/opt/keycloak/data/import:ro
+    restart: unless-stopped
+  lab_pwd_saml:        # SimpleSAMLphp IdP/SP — user1/user1pass, user2/user2pass (:8080)
+    image: kristophjunge/test-saml-idp:latest
+    container_name: lab_pwd_saml
+    environment:
+    - SIMPLESAMLPHP_SP_ENTITY_ID=lab-saml-sp
+    - SIMPLESAMLPHP_SP_ASSERTION_CONSUMER_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-acs.php/default-sp
+    - SIMPLESAMLPHP_SP_SINGLE_LOGOUT_SERVICE=http://lab_pwd_saml:8080/simplesaml/module.php/saml/sp/saml2-logout.php/default-sp
+    - SIMPLESAMLPHP_IDP_ENTITY_ID=http://lab_pwd_saml:8080/simplesaml/saml2/idp/metadata.php
+    networks: [vulnuslab]
+    restart: unless-stopped
+
+  # ── ICS / IoT range ──────────────────────────────────────────────────
+  lab_modbus:          # unauthenticated Modbus/TCP (502) — built from labs/vl_ics_range/modbus
+    build:
+      context: ./labs/vl_ics_range/modbus
+      dockerfile: Dockerfile
+    container_name: lab_modbus
+    networks: [vulnuslab]
+    restart: unless-stopped
+
+  # ── Kubernetes range ─────────────────────────────────────────────────
+  lab_k3s:             # single-node k3s; kubeconfig -> labs/vl_k8s_range/kubeconfig.yaml
+    image: rancher/k3s:v1.29.6-k3s2
+    container_name: lab_k3s
+    command: server --tls-san lab_k3s --write-kubeconfig-mode 644 --write-kubeconfig /output/kubeconfig.yaml
+    privileged: true
+    networks: [vulnuslab]
+    volumes:
+    - ./labs/vl_k8s_range:/output
+    - lab_k3s_data:/var/lib/rancher/k3s
+    tmpfs:
+    - /run
+    - /var/run
+    restart: unless-stopped
+
+volumes:
+  lab_pwd_ad_data: null
+  lab_pwd_ad_conf: null
+  lab_k3s_data: null
+
+networks:
+  vulnuslab:
+    external: true
+    name: cyber-project_vulnuslab   # <-- the backend's network; edit if `docker network ls` shows a different name
