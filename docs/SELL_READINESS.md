@@ -40,9 +40,10 @@ vulnuslab-private). The scanning product is mature; the gaps are commercial plum
 4. **[M] Legal pack** — Terms of Service, Privacy Policy, Acceptable Use / Scanning-Authorization
    clause, India DPDP statement. Serve at /terms, /privacy; link from footer + signup. Selling an
    offensive scanner with no ToS/AUP is uninsurable exposure.
-5. **[S] Authorization gates** — ToS-acceptance checkbox on signup; wire the already-built
-   consent_log + the already-declared `authConfirmed` state into an "I am authorized to scan this
-   target" gate before Start. <1 day to turn dead code into your legal paper-trail.
+5. **[S] Authorization gates** — DONE for the per-scan gate (commit 95ebe64b): an "I am authorized
+   to scan this target" checkbox now gates Start in webapp + recon + ModuleAutoPanel (33 modules)
+   and POSTs to the (previously dead) /api/scan/consent_log on every run. STILL PENDING: the
+   ToS-acceptance checkbox on the signup form (depends on the legal pack #4 existing).
 6. **[S] HTTPS verify/harden** — confirm TLS (likely Cloudflare-terminated for app.vulnuslab.com);
    set Cloudflare to Full (strict) so CF→origin is encrypted, force HTTP→HTTPS + HSTS. If the origin
    is plaintext-only behind flexible SSL, fix to full-strict.
