@@ -113,13 +113,12 @@ def _send_smtp(to, subject, html) -> bool:
 
 
 # ── Templates ────────────────────────────────────────────────────────
-def _money(amount, currency="USD"):
-    cur = (currency or "USD").upper()
-    sym = {"INR": "₹", "USD": "$"}.get(cur, cur + " ")
+def _money(amount_paise, currency="INR"):
+    sym = "₹" if (currency or "INR").upper() == "INR" else (currency + " ")
     try:
-        return f"{sym}{int(amount) / 100:,.2f}"
+        return f"{sym}{int(amount_paise) / 100:,.2f}"
     except Exception:
-        return f"{sym}{amount}"
+        return f"{sym}{amount_paise}"
 
 
 def _shell(body_html: str) -> str:
