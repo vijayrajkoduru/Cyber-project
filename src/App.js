@@ -16611,7 +16611,26 @@ function generateUniversalVLReport(opts) {
   // Save
   const _safe = String(target || "target").replace(/[^a-zA-Z0-9_.-]/g, "_");
   const _dt = (date || new Date().toISOString().substring(0,10)).replace(/[^0-9]/g,"").substring(0,8);
-  doc.save(`${moduleKey}_${_safe}_${_dt}.pdf`);
+  const _fname = `${moduleKey}_${_safe}_${_dt}.pdf`;
+  // Persist a copy server-side (best-effort, non-blocking) BEFORE the local
+  // save, so the deliverable survives closing the tab — re-downloadable from
+  // the Saved Reports view. Never let a persistence failure block the download.
+  try {
+    const _rblob = doc.output("blob");
+    const _rfd = new FormData();
+    _rfd.append("file", _rblob, _fname);
+    _rfd.append("report_id", String(_REPORT_ID || ""));
+    _rfd.append("module", String(moduleKey || ""));
+    _rfd.append("target", String(target || ""));
+    _rfd.append("content_hash", String(_contentHash || ""));
+    const _rtok = getAuthToken();
+    fetch((getApiUrl() || "") + "/api/reports/upload", {
+      method: "POST",
+      headers: _rtok ? { Authorization: "Bearer " + _rtok } : {},
+      body: _rfd,
+    }).catch(function () {});
+  } catch (_e) { /* best-effort persistence */ }
+  doc.save(_fname);
 }
 
 // ═══════════════════════════════════════════════════════════════
