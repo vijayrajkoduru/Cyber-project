@@ -110,6 +110,14 @@ async def webapp_param_discovery(req: ScanRequest, payload=Depends(verify_scan_q
                 evidence_marker=f"Sample params: {', '.join(h['name'] for h in size_hits[:8])}",
             ))
 
+    if not findings and ordered:
+        findings.append(wrap_finding(
+            "No hidden parameters discovered — curated parameter set produced no response delta",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. No action required; this is an attack-surface "
+                        "discovery probe. Re-run after adding query/body parameters.",
+            evidence_marker=f"probed {len(ordered)} AI-curated parameter name(s); "
+                            f"{len(hits)} caused a response delta"))
     return standard_response(
         tool="param_discovery", target=req.target,
         findings=findings,

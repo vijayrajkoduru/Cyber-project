@@ -200,6 +200,7 @@ def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="xss", target=req.target, findings=findings,
         tested=max(tests, 1),
         what_checked=f"URL parameters for reflected XSS (canary + {len(_MERGED_XSS)}-entry merged AI+baked-in payload library)",
+        severity_when_clean="POSITIVE",
         tests_summary=(f"Tested {tests} params across {len(urls)} URLs (incl. SPA-discovered) "
                        f"with canary + context-matched confirmation "
                        f"({len(_MERGED_XSS)}-entry library: {len(XSS_PAYLOADS)} baked-in + {len(_AI_EXTRA_XSS)} AI-curated)"),

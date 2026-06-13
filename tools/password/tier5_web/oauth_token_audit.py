@@ -668,6 +668,14 @@ class OauthTokenAudit(MethodologyScanner):
 
     # ── STAGE 5: VERIFY (re-test with different payload) ─────────
     async def verify(self, ctx: ScanContext, finding: dict) -> Optional[dict]:
+        # VL-FOUNDRY evidence surfacing: stamp a concrete, per-finding
+        # evidence string onto the methodology finding object. This rides
+        # into the report via the methodology_findings intel field; it adds
+        # no new finding and changes no severity (advisory-by-design safe).
+        finding["evidence_marker"] = (
+            f"{finding.get('discovery_method') or finding.get('kind') or 'probe'}"
+            f" -> verifying {finding.get('kind') or 'finding'} for "
+            f"{finding.get('user') or finding.get('attack_label') or ctx.host}")
         opts = ctx.state.get("_options") or {}
         client_id = (opts.get("client_id") or "test-client").strip()
         redirect_uri_legit = (opts.get("redirect_uri_legit")

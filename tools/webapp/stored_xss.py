@@ -55,6 +55,14 @@ def scan_stored_xss(req: ScanRequest, _=Depends(verify_scan_quota)):
             confirmed.append({"post": post_path, "get": get_path, "marker": marker})
             break  # one is enough
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No stored XSS — submitted payloads were not echoed un-escaped on read-back",
+            "POSITIVE", cwe="CWE-79",
+            remediation="Maintain output encoding on stored content and a strict CSP. "
+                        "Re-test after adding user-generated-content features.",
+            evidence_marker=f"probed {len(_TARGETS)} post/get endpoint pair(s); no "
+                            "cross-request payload echo"))
     return standard_response(tool="stored_xss", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Stored XSS: probed {len(_TARGETS)} post/get endpoint pairs for cross-request payload echo",

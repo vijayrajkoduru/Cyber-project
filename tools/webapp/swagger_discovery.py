@@ -73,6 +73,14 @@ async def webapp_swagger_discovery(req: ScanRequest, payload=Depends(verify_scan
     tests_summary = f"Tested {len(_SPEC_PATHS)} common Swagger paths; {len(discovered)} exposed"
     if spa_suppressed:
         tests_summary += f"; {len(spa_suppressed)} SPA-shell paths suppressed"
+    if not findings:
+        findings.append(wrap_finding(
+            "No public API spec exposed — Swagger/OpenAPI endpoints were not reachable",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. Keep API docs/specs behind authentication in "
+                        "production. Re-test after adding API documentation routes.",
+            evidence_marker=f"tested {len(_SPEC_PATHS)} spec path(s); "
+                            f"{len(discovered)} reachable"))
     return standard_response(
         tool="swagger_discovery", target=req.target,
         findings=findings, tests_performed=len(_SPEC_PATHS),

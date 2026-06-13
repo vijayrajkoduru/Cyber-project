@@ -142,6 +142,7 @@ def scan_wpscan(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="wpscan", target=req.target, findings=findings,
         tested=tests,
         what_checked=f"WordPress-specific paths ({len(_WP_PATHS)}-entry AI-curated wordlist: backup configs, xmlrpc, admin, themes, plugins, user-enum, debug logs)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"wpscan": {"is_wordpress": True, "wordlist_size": len(_WP_PATHS),
                               "spa_catchall": spa["is_spa"],

@@ -10,31 +10,54 @@ EVERY technique in this section is POST-COMPROMISE: it requires an existing
 administrative/root foothold ON the host (local code execution, SYSTEM/root
 privileges, physical or RDP/SSH session). An external SaaS vulnerability
 scanner has no such foothold and cannot perform any of them. This endpoint
-returns an honest INFO advisory - it is advisory-by-design, NOT a forge gap.
+returns an honest INFO advisory via the canonical run_scanner + FINDING_RULES
+pattern - it is advisory-by-design, NOT a forge gap, and never graded above
+INFO.
 """
+from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from tools._shared import ScanRequest, verify_scan_quota
-from tools._pack_common import _advisory_by_design_response
+from tools._vl_core import ScanContext, run_scanner
+from tools.password.tier6_advisory.os_credential_extraction_advisory_findings import (
+    OS_CREDENTIAL_EXTRACTION_ADVISORY_FINDING_RULES,
+)
 
 router = APIRouter()
 
+TITLE = "OS-specific credential extraction (SAM / LSASS / NTDS.dit / Keychain) - §7"
+REASON = (
+    "Dumping SAM/SYSTEM hives, LSASS memory (Mimikatz/NanoDump), NTDS.dit, "
+    "DPAPI master keys, /etc/shadow, the macOS Keychain, or browser-saved "
+    "passwords all require an existing administrative/root foothold ON the "
+    "host (post-compromise, MITRE ATT&CK Credential Access TA0006). An "
+    "external scanner has no such foothold - these are advisory-by-design "
+    "and belong to a manual / red-team / post-exploitation engagement."
+)
+
+
+async def gather(ctx: ScanContext):
+    ctx.state["advisory"] = True
+    ctx.state["advisory_title"] = TITLE
+    ctx.state["advisory_reason"] = REASON
+    ctx.state["advisory_cwe"] = "CWE-522"
+    # Real source attribution: advisory-by-design, derived from the
+    # playbook §7 catalogue, NOT from a live scan of the target.
+    ctx.source("advisory-by-design (post-compromise credential access, no external foothold)")
+
+
+INTEL_FIELDS = [("§7 OS credential extraction", "advisory_title")]
+
 
 @router.post("/api/password/os_credential_extraction_advisory")
-def os_credential_extraction_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
-    return _advisory_by_design_response(
+async def os_credential_extraction_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
+    return await run_scanner(
+        host=req.target,
         tool="os_credential_extraction_advisory",
-        target=req.target,
-        title="OS-specific credential extraction (SAM / LSASS / NTDS.dit / Keychain) - §7",
-        reason=(
-            "Dumping SAM/SYSTEM hives, LSASS memory (Mimikatz/NanoDump), NTDS.dit, "
-            "DPAPI master keys, /etc/shadow, the macOS Keychain, or browser-saved "
-            "passwords all require an existing administrative/root foothold ON the "
-            "host (post-compromise, MITRE ATT&CK Credential Access TA0006). An "
-            "external scanner has no such foothold - these are advisory-by-design "
-            "and belong to a manual / red-team / post-exploitation engagement."
-        ),
-        cwe="CWE-522",
+        gather_func=gather,
+        finding_rules=OS_CREDENTIAL_EXTRACTION_ADVISORY_FINDING_RULES,
+        intel_fields=INTEL_FIELDS,
+        flat_field_keys=[],
     )
 
 

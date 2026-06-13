@@ -219,6 +219,14 @@ class BreachExposureAudit(MethodologyScanner):
 
     # ── STAGE 5: VERIFY (structural validation of breach object) ─
     async def verify(self, ctx: ScanContext, finding: dict) -> Optional[dict]:
+        # VL-FOUNDRY evidence surfacing: stamp a concrete, per-finding
+        # evidence string onto the methodology finding object. This rides
+        # into the report via the methodology_findings intel field; it adds
+        # no new finding and changes no severity (advisory-by-design safe).
+        finding["evidence_marker"] = (
+            f"{finding.get('discovery_method') or finding.get('kind') or 'probe'}"
+            f" -> verifying {finding.get('kind') or 'finding'} for "
+            f"{finding.get('user') or finding.get('attack_label') or ctx.host}")
         # A breach finding is valid if it has a name. HIBP is the authoritative
         # third-party source; we do not re-query per finding (rate limits).
         if finding.get("breach_name"):

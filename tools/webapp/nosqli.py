@@ -101,6 +101,14 @@ async def webapp_nosqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
             evidence_marker=f"GET ?{param}=normalvalue ({b_size}B) vs GET ?{param}{payload_str} ({r_size}B) - significant size delta ({desc})",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No NoSQL injection — operator payloads did not change query behavior",
+            "POSITIVE", cwe="CWE-943",
+            remediation="Maintain. Enforce scalar types and reject query operators in "
+                        "user input. Re-test after data-access changes.",
+            evidence_marker=f"{tests} NoSQL probe(s) across {len(_PARAMS)} param(s) x "
+                            f"{len(_PAYLOADS)} operator(s); no injection effect"))
     return standard_response(
         tool="nosqli", target=req.target,
         findings=findings, tests_performed=tests,

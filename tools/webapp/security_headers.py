@@ -89,6 +89,7 @@ def scan_security_headers(req, payload):
     return vuln_response(tool="security_headers", target=req.target,
         findings=[c for c in checks if c], tested=len(checks),
         what_checked="9 critical HTTP security headers (CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By)",
+        severity_when_clean="POSITIVE",
         tests_summary="9 header checks: CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By",
         raw_data={"security_headers": {"is_https": https,
                                           "headers_seen": list(h.keys()),

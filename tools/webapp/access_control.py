@@ -74,6 +74,15 @@ def scan_access_control(req: ScanRequest, _=Depends(verify_scan_quota)):
             confirmed.append({"path": path, "status": r.status_code,
                               "len": len(r.content)})
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No broken access control — admin/internal paths enforce authorization",
+            "POSITIVE", cwe="CWE-284",
+            remediation="Maintain role-based access control. Re-test after any new "
+                        "admin route, API version bump, or auth-middleware change.",
+            evidence_marker=f"{tests} admin/internal path(s) probed (auth="
+                            f"{'on' if has_auth else 'off'}); none leaked "
+                            "admin-sensitive content"))
     return standard_response(tool="access_control", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"Access Control: {tests} admin/internal paths probed (auth={'on' if has_auth else 'off'})",

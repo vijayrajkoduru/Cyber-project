@@ -210,6 +210,7 @@ def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="ssrf", target=req.target, findings=findings,
         tested=tests,
         what_checked=f"URL parameters for SSRF to cloud metadata / localhost / k8s / docker / IPC ({len(_MERGED_SSRF)}-entry merged library)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"ssrf": {"confirmed": confirmed,
                             "suppressed_fps": suppressed,

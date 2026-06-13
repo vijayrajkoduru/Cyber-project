@@ -97,6 +97,7 @@ def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="cookies", target=req.target,
         findings=findings, tested=max(len(analyzed), 1),
         what_checked="cookie Secure / HttpOnly / SameSite flags (framework-CSRF aware)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"cookies": {"analyzed": analyzed, "is_https": is_https,
                               "suppressed_fps": suppressed,

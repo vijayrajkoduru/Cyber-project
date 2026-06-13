@@ -54,7 +54,7 @@ class ApiKeyInUrlLeak(MethodologyScanner):
 
     async def pre_flight(self, ctx):
         ctx.state["base_url"] = web_url(str(ctx.host)).rstrip("/")
-        r = await asyncio.to_thread(http_get, ctx.state["base_url"] + "/")
+        r = await asyncio.to_thread(http_get, ctx.state["base_url"] + "/", timeout=10)
         if not r:
             ctx.state["tested"] = 0
             ctx.state["skipped_reason"] = "Homepage unreachable"
@@ -96,7 +96,7 @@ class ApiKeyInUrlLeak(MethodologyScanner):
                 u = base + u
             elif not u.startswith("http"):
                 u = base + "/" + u
-            jr = await asyncio.to_thread(http_get, u)
+            jr = await asyncio.to_thread(http_get, u, timeout=10)
             if jr and jr.get("body"):
                 blobs.append(jr["body"][:200000])
         if not blobs:

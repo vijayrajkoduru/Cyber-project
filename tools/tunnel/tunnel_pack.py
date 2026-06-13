@@ -735,5 +735,68 @@ def manual_vpn_pivot_chain_advisory(req: ScanRequest, _=Depends(verify_scan_quot
         remediation="See Manual Tests panel.")
 
 
+# ─────────────── probe registry (inert metadata) ───────────────
+# Maps each routed slug → its handler function. Routes are created ONLY by the
+# @router.post(...) decorators above; this dict is NOT iterated to register
+# anything (register() below just includes the already-built router). It exists
+# so tooling/introspection can enumerate the 48 probes that the orchestrator's
+# _all_tools() fans out. Values are live function references, not strings.
+PROBES = {
+    # §1 SSH Tunnel Primitives (10)
+    "ssh_local_forward_advisory":            ssh_local_forward_advisory,
+    "ssh_remote_forward_advisory":           ssh_remote_forward_advisory,
+    "ssh_dynamic_socks5_advisory":           ssh_dynamic_socks5_advisory,
+    "ssh_proxyjump_advisory":                ssh_proxyjump_advisory,
+    "ssh_proxycommand_advisory":             ssh_proxycommand_advisory,
+    "sshuttle_advisory":                     sshuttle_advisory,
+    "ssh_detached_advisory":                 ssh_detached_advisory,
+    "ssh_config_match_advisory":             ssh_config_match_advisory,
+    "ssh_agent_forward_advisory":            ssh_agent_forward_advisory,
+    "openssh_socks_advisory":                openssh_socks_advisory,
+    # §2 Reverse Tunneling Tools (12)
+    "chisel_fingerprint":                    chisel_fingerprint,
+    "ligolo_ng_advisory":                    ligolo_ng_advisory,
+    "rsockstun_advisory":                    rsockstun_advisory,
+    "socat_advisory":                        socat_advisory,
+    "ncat_listen_advisory":                  ncat_listen_advisory,
+    "plink_advisory":                        plink_advisory,
+    "frp_fingerprint":                       frp_fingerprint,
+    "regeorg_advisory":                      regeorg_advisory,
+    "neo_regeorg_advisory":                  neo_regeorg_advisory,
+    "pivotnacci_advisory":                   pivotnacci_advisory,
+    "stunnel_advisory":                      stunnel_advisory,
+    "manual_creative_tunnel_chain_advisory": manual_creative_tunnel_chain_advisory,
+    # §3 DNS / ICMP Tunneling (8)
+    "dnscat2_advisory":                      dnscat2_advisory,
+    "iodine_advisory":                       iodine_advisory,
+    "dnstunnel_advisory":                    dnstunnel_advisory,
+    "doh_tunnel_fingerprint":                doh_tunnel_fingerprint,
+    "ptunnel_advisory":                      ptunnel_advisory,
+    "hans_advisory":                         hans_advisory,
+    "icmp_tunnel_advisory":                  icmp_tunnel_advisory,
+    "manual_covert_channel_advisory":        manual_covert_channel_advisory,
+    # §4 HTTP / HTTPS Tunneling (8)
+    "http_connect_probe":                    http_connect_probe,
+    "regeorg_signature_probe":               regeorg_signature_probe,
+    "corkscrew_advisory":                    corkscrew_advisory,
+    "stunnel_https_advisory":                stunnel_https_advisory,
+    "chisel_http2_fallback_advisory":        chisel_http2_fallback_advisory,
+    "frp_https_advisory":                    frp_https_advisory,
+    "cloudfront_fronted_https_advisory":     cloudfront_fronted_https_advisory,
+    "manual_http_tunnel_advisory":           manual_http_tunnel_advisory,
+    # §5 Modern Tunneling (WireGuard / QUIC) (10)
+    "wireguard_userspace_probe":             wireguard_userspace_probe,
+    "tailscale_lateral_probe":               tailscale_lateral_probe,
+    "zerotier_lateral_probe":                zerotier_lateral_probe,
+    "cloudflared_fingerprint":               cloudflared_fingerprint,
+    "ngrok_localtunnel_fingerprint":         ngrok_localtunnel_fingerprint,
+    "quic_http3_advisory":                   quic_http3_advisory,
+    "lightway_advisory":                     lightway_advisory,
+    "manual_wg_config_exfil_advisory":       manual_wg_config_exfil_advisory,
+    "manual_tailscale_acl_bypass_advisory":  manual_tailscale_acl_bypass_advisory,
+    "manual_vpn_pivot_chain_advisory":       manual_vpn_pivot_chain_advisory,
+}
+
+
 def register(app):
     app.include_router(router)

@@ -94,6 +94,14 @@ async def webapp_retire_js(req: ScanRequest, payload=Depends(verify_scan_quota))
                     evidence_marker=f"Found '{lib_name} {m.group(1)}' in target's loaded JavaScript",
                 ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No known-vulnerable JS libraries — loaded scripts matched no CVE signatures",
+            "POSITIVE", cwe="CWE-1104",
+            remediation="Maintain. Keep front-end dependencies patched and run "
+                        "retire.js / npm audit in CI. Re-test after dependency bumps.",
+            evidence_marker=f"scanned {len(bodies)} JS source(s) against "
+                            f"{len(_VULN_LIBS)} known-vulnerable signature(s); none matched"))
     return standard_response(
         tool="retire_js", target=req.target,
         findings=findings, tests_performed=tests,

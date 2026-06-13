@@ -57,6 +57,7 @@ def scan_cors(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="cors", target=req.target,
         findings=findings, tested=len(probes),
         what_checked="CORS reflection of attacker / null origins",
+        severity_when_clean="POSITIVE",
         tests_summary=f"{len(probes)}/2 CORS probes succeeded - {len(findings)} misconfiguration(s) found",
         raw_data={"cors": {"probes": probes}})
 

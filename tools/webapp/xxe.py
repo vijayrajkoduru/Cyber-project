@@ -108,6 +108,7 @@ def scan_xxe(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="xxe", target=req.target, findings=findings,
         tested=max(tests, 1),
         what_checked="XML external entity injection across multiple content-types",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"xxe": {"confirmed": confirmed,
                            "library_size": len(_MERGED_XXE), "ai_extras_loaded": len(_AI_EXTRA_XXE),

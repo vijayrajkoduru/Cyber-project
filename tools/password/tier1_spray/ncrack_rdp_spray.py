@@ -505,6 +505,14 @@ class NcrackRdpSpray(MethodologyScanner):
 
     # ── STAGE 5: VERIFY (second ncrack attempt) ──────────────────
     async def verify(self, ctx: ScanContext, finding: dict) -> Optional[dict]:
+        # VL-FOUNDRY evidence surfacing: stamp a concrete, per-finding
+        # evidence string onto the methodology finding object. This rides
+        # into the report via the methodology_findings intel field; it adds
+        # no new finding and changes no severity (advisory-by-design safe).
+        finding["evidence_marker"] = (
+            f"{finding.get('discovery_method') or finding.get('kind') or 'probe'}"
+            f" -> verifying {finding.get('kind') or 'finding'} for "
+            f"{finding.get('user') or finding.get('attack_label') or ctx.host}")
         host = finding.get("host") or ctx.state.get("target_host") or ctx.host
         port = int(finding.get("port") or ctx.state.get("target_port") or 3389)
         user = finding.get("user", "")

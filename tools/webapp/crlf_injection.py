@@ -88,6 +88,14 @@ async def webapp_crlf_injection(req: ScanRequest, payload=Depends(verify_scan_qu
                 ))
                 break
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No CRLF / HTTP response-splitting — injected newlines were not reflected into headers",
+            "POSITIVE", cwe="CWE-93",
+            remediation="Maintain. Keep stripping CR/LF from user input used in "
+                        "headers / redirects. Re-test after routing or header-logic changes.",
+            evidence_marker=f"{tests} CRLF probe(s) across {len(_TEST_PARAMS)} param(s); "
+                            "no injected header observed in the response"))
     return standard_response(
         tool="crlf_injection", target=req.target,
         findings=findings, tests_performed=tests,

@@ -140,6 +140,7 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="cmd_injection", target=req.target, findings=findings,
         tested=max(tests, 1),
         what_checked=f"URL parameters for OS command injection (timing-based, 8-category merged library: {len(CMD_PAYLOADS)} baked-in + {len(_AI_EXTRA_CMD)} AI-curated)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"cmd_injection": {"baseline_seconds": t0,
                                      "confirmed": confirmed,

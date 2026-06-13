@@ -68,6 +68,14 @@ async def webapp_directory_listing(req: ScanRequest, payload=Depends(verify_scan
             evidence_marker=f"GET {d} returned auto-index page with {entries} entries",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No directory listing exposed — probed directories do not auto-index",
+            "POSITIVE", cwe="CWE-548",
+            remediation="Maintain. Keep autoindex/Options Indexes disabled. Re-test "
+                        "after web-server config changes.",
+            evidence_marker=f"probed {tests} common directory path(s); "
+                            f"{len(exposed)} expose an auto-index"))
     return standard_response(
         tool="directory_listing", target=req.target,
         findings=findings, tests_performed=tests,

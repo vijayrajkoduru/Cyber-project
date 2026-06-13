@@ -95,6 +95,15 @@ async def webapp_api_endpoint_fuzz(req: ScanRequest, payload=Depends(verify_scan
                     evidence_marker=f"GET {full} -> HTTP {status} with stack trace in body",
                 ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No API fault-handling defects — fuzzed endpoints rejected bad input cleanly",
+            "POSITIVE", cwe="CWE-20",
+            remediation="Maintain input validation and structured error handling. "
+                        "Re-fuzz after schema or framework changes.",
+            evidence_marker=f"{tests} fuzz request(s) across {len(paths)} "
+                            "Swagger-discovered endpoint(s); no crashes or "
+                            "stack-trace leakage observed"))
     return standard_response(
         tool="api_endpoint_fuzz", target=req.target,
         findings=findings, tests_performed=tests,

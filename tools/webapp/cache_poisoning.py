@@ -122,6 +122,15 @@ async def webapp_cache_poisoning(req: ScanRequest, payload=Depends(verify_scan_q
                 evidence_marker=f"GET {url} with {header}: {canary} -> canary cached; clean follow-up still serves it",
             ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No web cache poisoning — unkeyed-header inputs did not persist in the cache",
+            "POSITIVE", cwe="CWE-444",
+            remediation="Maintain. Keep cache keys inclusive of security-relevant "
+                        "headers and avoid reflecting unkeyed input. Re-test after "
+                        "CDN / cache-rule changes.",
+            evidence_marker=f"{tests} unkeyed-header input(s) tested against the "
+                            "detected cache layer; no poisoned response cached"))
     return standard_response(
         tool="cache_poisoning", target=req.target,
         findings=findings, tests_performed=tests,

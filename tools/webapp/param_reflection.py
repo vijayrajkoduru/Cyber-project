@@ -49,6 +49,15 @@ async def webapp_param_reflection(req: ScanRequest, payload=Depends(verify_scan_
             evidence_marker=f"GET ?{param}={canary} -> canary appears verbatim in response; preceding context: ...{context}",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No reflected parameters — tested parameter names were not echoed into responses",
+            "POSITIVE", cwe="CWE-79",
+            remediation="Maintain. No action required; this is a reflection-surface "
+                        "discovery probe feeding XSS analysis. Re-run after adding "
+                        "input-handling endpoints.",
+            evidence_marker=f"tested {tests} common parameter name(s); "
+                            f"{len(reflected)} reflect input"))
     return standard_response(
         tool="param_reflection", target=req.target,
         findings=findings, tests_performed=tests,

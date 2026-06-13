@@ -4,7 +4,8 @@ Like Burp Suite's automated scan, but for our 32 webapp scanners.
 Findings are tagged by source_tool so customers see which sub-check fired each finding.
 """
 from fastapi import APIRouter, Depends
-from tools._shared import ScanRequest, verify_scan_quota, standard_response
+from tools._shared import (ScanRequest, verify_scan_quota, standard_response,
+                            wrap_finding)
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -50,6 +51,17 @@ async def webapp_burp_lite(req: ScanRequest, payload=Depends(verify_scan_quota))
         except Exception as exc:
             sub_results[name] = {"error": str(exc)[:120]}
     
+    graded = [f for f in all_findings
+              if (f.get("severity") or "").upper() in
+              ("CRITICAL", "HIGH", "MEDIUM", "LOW")]
+    if not graded and total_tests:
+        all_findings.append(wrap_finding(
+            "Aggregated webapp scan clean — no graded vulnerabilities across all sub-scanners",
+            "POSITIVE", cwe="CWE-1059",
+            remediation="Maintain. Re-run the aggregated suite after each release; "
+                        "review individual sub-scanner advisories for context.",
+            evidence_marker=f"aggregated {len(_SCANNERS)} webapp scanner(s) over "
+                            f"{total_tests} test(s); 0 graded finding(s)"))
     return standard_response(
         tool="burp_lite", target=req.target,
         findings=all_findings,

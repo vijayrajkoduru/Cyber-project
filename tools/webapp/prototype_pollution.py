@@ -91,6 +91,15 @@ async def webapp_prototype_pollution(req: ScanRequest, payload=Depends(verify_sc
     summary = f"{tests} prototype pollution probes with unique canary"
     if spa_suppressed:
         summary += f"; {len(spa_suppressed)} SPA-shell suppression(s)"
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No prototype pollution — __proto__ / constructor gadgets did not alter server behavior",
+            "POSITIVE", cwe="CWE-1321",
+            remediation="Maintain. Reject __proto__/constructor/prototype keys in "
+                        "object merges and use null-prototype objects / Map. Re-test "
+                        "after dependency upgrades.",
+            evidence_marker=f"{tests} pollution probe(s); no gadget changed a "
+                            "server-reflected property"))
     return standard_response(
         tool="prototype_pollution", target=req.target,
         findings=findings, tests_performed=tests,
