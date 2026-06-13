@@ -32,6 +32,19 @@ PLAN_CAPS = {
     "superadmin": None,
 }
 
+# Monthly list price per plan (USD), used only for the Ops Console MRR estimate.
+# enterprise is custom-quoted -> 0 here (cannot be auto-estimated). Keep aligned
+# with docs/PRICING.md.
+PLAN_PRICE = {
+    "free":       0,
+    "trial":      0,
+    "pro":        49,
+    "team":       249,
+    "enterprise": 0,
+    "admin":      0,
+    "superadmin": 0,
+}
+
 _UNLIMITED_PLANS = ("admin", "superadmin", "enterprise")
 
 
