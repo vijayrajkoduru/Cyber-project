@@ -3153,17 +3153,21 @@ function TestChips({ moduleKey, setTarget, running }) {
       <span style={{fontSize:10, color:"#5a6478", fontWeight:600, letterSpacing:0.5, textTransform:"uppercase"}}>Try:</span>
       {list.map((t, idx) => {
         const hasCreds = !!(t.login_url && t.username);
+        const adv = t.adv || {};
+        const tag = adv.image_ref ? "IMG" : adv.repo_url ? "REPO" : adv.kubeconfig ? "KUBE" : (adv.dockerfile_text || adv.pod_spec_yaml) ? "FILE" : adv.api_spec_url ? "SPEC" : null;
         return (
           <button key={idx} disabled={running}
             onClick={() => {
-              setTarget(t.value);
+              if (t.value !== undefined && t.value !== null) setTarget(t.value);
+              window.dispatchEvent(new CustomEvent("vl-fill-inputs", { detail: { target: t.value, adv: t.adv, opts: t.opts } }));
               if (hasCreds) window.dispatchEvent(new CustomEvent("vl-fill-creds", { detail: { target: t.value, login_url: t.login_url, username: t.username, password: t.password, auth_type: t.auth_type, auto: true } }));
               else window.dispatchEvent(new CustomEvent("vl-fill-creds", { detail: { login_url: "", username: "", password: "" } }));
             }}
-            title={hasCreds ? ("Auto-login as " + t.username) : t.value}
-            style={{display:"inline-flex", alignItems:"center", gap:5, background:"#0c1424", border:"1px solid " + (hasCreds ? "#0e5a3a" : "#0e3a55"), color:"#7fdcff", borderRadius:12, padding:"3px 10px", fontSize:11, fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer", opacity: running ? 0.5 : 1}}>
+            title={hasCreds ? ("Auto-login as " + t.username) : (tag ? (Object.values(adv)[0]) : (t.value || t.label))}
+            style={{display:"inline-flex", alignItems:"center", gap:5, background:"#0c1424", border:"1px solid " + (hasCreds ? "#0e5a3a" : tag ? "#5a4a0e" : "#0e3a55"), color:"#7fdcff", borderRadius:12, padding:"3px 10px", fontSize:11, fontFamily:"JetBrains Mono, monospace", cursor: running ? "not-allowed" : "pointer", opacity: running ? 0.5 : 1}}>
             {t.label || t.value}
             {hasCreds && <span style={{fontSize:8, color:"#5dffa6", fontWeight:800, letterSpacing:0.5}}>AUTH</span>}
+            {tag && <span style={{fontSize:8, color:"#ffd479", fontWeight:800, letterSpacing:0.5}}>{tag}</span>}
           </button>
         );
       })}
@@ -21066,8 +21070,8 @@ const MODULE_TEST_TARGETS = {
   ],
   vuln: [
     {label:"lab_metasploitable",  value:"lab_metasploitable",                    desc:"Your Docker Metasploitable2 lab — many real CVEs (Samba/vsftpd/etc)"},
-    {label:"lab_dvwa",            value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", desc:"Your Docker DVWA lab (auto-login admin/password)"},
-    {label:"lab_juiceshop",       value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop lab (auto-login)"},
+    {label:"lab_dvwa",            value:"http://lab_dvwa", login_url:"http://lab_dvwa/login.php", username:"admin", password:"password", adv:{image_ref:"vulnerables/web-dvwa"}, desc:"Your Docker DVWA lab — URL + image (unlocks SCA/CVE tiers), auto-login admin/password"},
+    {label:"lab_juiceshop",       value:"http://lab_juiceshop:3000", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", adv:{image_ref:"bkimminich/juice-shop"}, desc:"Your Docker Juice Shop lab — URL + image (unlocks SCA/CVE tiers), auto-login"},
     {label:"scanme.nmap.org",     value:"scanme.nmap.org",                       desc:"Nmap's authorized target (no-setup baseline)"},
     {label:"lab_mysql",           value:"lab_mysql",                             desc:"Your Docker MySQL 5.7 lab — version/CVE + weak root (root/root)"},
     {label:"lab_postgres",        value:"lab_postgres",                          desc:"Your Docker PostgreSQL 15 lab — version/CVE + weak login (postgres/postgres)"},
@@ -21183,14 +21187,21 @@ const MODULE_TEST_TARGETS = {
     {label:"local ollama",         value:"http://localhost:11434/api/generate",   desc:"Your local Ollama LLM endpoint"},
     {label:"your LLM endpoint",    value:"https://your-llm.example.com/v1/chat",  desc:"Your own deployed LLM API"},
   ],
-  // container_k8s — NO test targets. Container scans should be driven by
-  // the `image_ref` advanced input (a real image like nginx:1.21-alpine),
-  // not a registry hostname. The Target field is hidden for this module
-  // entirely; enterprise users would only get confused by registry presets.
+  // container_k8s test targets fill the image_ref / dockerfile_text /
+  // pod_spec_yaml advanced inputs (the Target field is hidden for this module)
+  // so one click runs Trivy / Grype / Syft / Hadolint / checkov.
+  container_k8s: [
+    {label:"Juice Shop image",     adv:{image_ref:"bkimminich/juice-shop"},        desc:"OWASP Juice Shop image — many npm CVEs (Trivy/Grype/Syft)"},
+    {label:"DVWA image",           adv:{image_ref:"vulnerables/web-dvwa"},          desc:"DVWA image — old PHP/Debian base, many CVEs"},
+    {label:"Log4Shell image",      adv:{image_ref:"vulhub/log4j2:2.14.1"},          desc:"Log4Shell CVE-2021-44228 reproducer image"},
+    {label:"bad Dockerfile",       adv:{dockerfile_text:"FROM debian:bookworm\nRUN apt-get update && apt-get install -y curl openssh-server\nRUN curl https://get.docker.com | bash\nUSER root\nEXPOSE 22 80\n"}, desc:"Intentionally bad Dockerfile — fires most Hadolint/Dockerfile probes"},
+    {label:"privileged pod",       adv:{pod_spec_yaml:"apiVersion: v1\nkind: Pod\nmetadata:\n  name: bad-pod\nspec:\n  hostNetwork: true\n  containers:\n  - name: app\n    image: nginx:latest\n    securityContext:\n      privileged: true\n      runAsUser: 0\n"}, desc:"Privileged pod manifest — fires privileged/hostNet probes"},
+  ],
   supply_chain: [
-    {label:"npm lodash",           value:"lodash",                                desc:"Popular npm package"},
+    {label:"Juice Shop repo",      adv:{repo_url:"https://github.com/juice-shop/juice-shop"}, desc:"OWASP Juice Shop source — SCA / secrets / SBOM over its deps"},
+    {label:"NodeGoat repo",        adv:{repo_url:"https://github.com/OWASP/NodeGoat"},        desc:"OWASP NodeGoat — deliberately vulnerable npm deps"},
+    {label:"npm lodash",           value:"lodash",                                desc:"Popular npm package (dependency-confusion / typosquat)"},
     {label:"pypi requests",        value:"requests",                              desc:"Popular PyPI package"},
-    {label:"github example",       value:"https://github.com/octocat/Hello-World", desc:"Public GitHub repo"},
   ],
   hybrid_identity: [
     {label:"your Entra tenant",    value:"yourtenant.onmicrosoft.com",            desc:"Your own Entra ID tenant (audit-only)"},
@@ -21312,6 +21323,21 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       return next;
     });
   };
+  // vl-fill-inputs — a test-target chip attaches the target to THIS module's
+  // actual inputs, in the form the module consumes: target (URL/host), advanced
+  // (image_ref / repo_url / kubeconfig / dockerfile_text / pod_spec_yaml /
+  // api_spec_url) and options{}. e.g. picking Juice Shop in Vuln fills both the
+  // URL and image_ref so the web AND dependency/CVE tiers run, not just web.
+  useEffect(() => {
+    const onFill = (e) => {
+      const d = (e && e.detail) || {};
+      if (d.target !== undefined && d.target !== null) setTarget(d.target);
+      if (d.adv) Object.entries(d.adv).forEach(([k, v]) => setAdvField(k, v));
+      if (d.opts) Object.entries(d.opts).forEach(([k, v]) => setOptField(k, v));
+    };
+    window.addEventListener("vl-fill-inputs", onFill);
+    return () => window.removeEventListener("vl-fill-inputs", onFill);
+  });
   const advFilledCount = advancedFields.filter(k => (advInputs[k]||"").trim().length > 0).length;
   const [tiers,     setTiers]     = useState([]);
   const [running,   setRunning]   = useState(false);
@@ -22634,6 +22660,13 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             <div style={{fontSize:11, color:"#5a6478", marginBottom:18}}>
               Fill what you want to test, then Start Scan. Blank fields are skipped (their probes report "needs input"). Press Esc or click outside to close.
             </div>
+
+            {_containerMode && (
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:10, color:"#8a94a8", fontWeight:700, textTransform:"uppercase", letterSpacing:1.2, display:"block", marginBottom:5}}>Test image / artifact</label>
+                <TestChips moduleKey={moduleKey} setTarget={setTarget} running={running} />
+              </div>
+            )}
 
             {!_containerMode && (
               <div style={{marginBottom:16}}>
