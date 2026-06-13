@@ -92,6 +92,7 @@ const MODULES = [
   { id:"recon",     icon:"", label:"Information Gathering & Recon",      cat:"recon",   free:true  },
   { id:"guide",     icon:"", label:"Run Guide & Lab Targets",            cat:"tools",   free:true  },
   { id:"report",    icon:"", label:"Report Writing",                     cat:"tools",   free:true  },
+  { id:"saved_reports", icon:"", label:"Saved Reports",                  cat:"tools",   free:true  },
 
   // ── TRIAL ACCESS (free tier gets these) ─────────────────────
   { id:"vuln",      icon:"", label:"Vulnerability Scanning",             cat:"scan",    free:false, trial:true },
@@ -21377,6 +21378,113 @@ const MODULE_TEST_TARGETS = {
   mobile_aiml:     [{label:"InsecureBankv2 (bundled)", value:"/app/samples/mobile/insecurebankv2.apk", desc:"Bundled vulnerable APK"}],
 };
 
+// Saved Reports — lists the PDFs persisted by the report-upload hook and lets
+// the user re-download or delete them. Reports are per-user (server enforces
+// ownership via the JWT), so this only ever shows the current account's files.
+function SavedReportsModule({ token }) {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+
+  const authTok = () => token || getAuthToken();
+
+  const load = () => {
+    setLoading(true); setErr("");
+    const tok = authTok();
+    fetch((getApiUrl() || "") + "/api/reports/list", { headers: tok ? { Authorization: "Bearer " + tok } : {} })
+      .then((r) => (r.ok ? r.json() : Promise.reject("HTTP " + r.status)))
+      .then((d) => setReports(Array.isArray(d.reports) ? d.reports : []))
+      .catch((e) => setErr("Could not load saved reports (" + e + ")"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const download = (rep) => {
+    setBusy(rep.report_id);
+    const tok = authTok();
+    fetch((getApiUrl() || "") + "/api/reports/" + encodeURIComponent(rep.report_id), { headers: tok ? { Authorization: "Bearer " + tok } : {} })
+      .then((r) => (r.ok ? r.blob() : Promise.reject("HTTP " + r.status)))
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = rep.filename || (rep.report_id + ".pdf");
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => window.alert("Download failed — the report may have been removed."))
+      .finally(() => setBusy(""));
+  };
+
+  const remove = (rep) => {
+    if (!window.confirm("Delete this saved report? This cannot be undone.")) return;
+    setBusy(rep.report_id);
+    const tok = authTok();
+    fetch((getApiUrl() || "") + "/api/reports/" + encodeURIComponent(rep.report_id), { method: "DELETE", headers: tok ? { Authorization: "Bearer " + tok } : {} })
+      .then(() => load())
+      .catch(() => window.alert("Delete failed."))
+      .finally(() => setBusy(""));
+  };
+
+  const fmtDate = (ts) => { try { return new Date((ts || 0) * 1000).toLocaleString(); } catch (e) { return "-"; } };
+  const fmtSize = (b) => { b = b || 0; return b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB"; };
+
+  const cell = { padding: "10px 14px", fontSize: 13, color: "#c3ccda", borderBottom: "1px solid #1c2435", textAlign: "left", verticalAlign: "middle" };
+  const th = { padding: "10px 14px", fontSize: 11, fontWeight: 800, color: "#5a6478", letterSpacing: 1, textTransform: "uppercase", textAlign: "left", borderBottom: "1px solid #1c2435" };
+  const btn = (bg, bc, c) => ({ background: bg, border: "1px solid " + bc, color: c, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 8, cursor: "pointer" });
+
+  return (
+    <div style={{ padding: "28px 24px", maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#ffffff", margin: 0 }}>Saved Reports</h1>
+        <button onClick={load} style={btn("rgba(59,158,255,0.12)", "rgba(59,158,255,0.4)", "#3b9eff")}>Refresh</button>
+      </div>
+      <p style={{ fontSize: 14, color: "#8a94a8", lineHeight: 1.6, marginTop: 0, marginBottom: 22 }}>
+        Every PDF you generate is stored privately to your account, so you can re-download a deliverable even after closing the tab. Reports are isolated per user.
+      </p>
+
+      {err ? <div style={{ background: "rgba(224,35,71,0.1)", border: "1px solid rgba(224,35,71,0.4)", color: "#ff6b85", borderRadius: 10, padding: "12px 16px", fontSize: 13, marginBottom: 18 }}>{err}</div> : null}
+
+      <div style={{ background: "#0d1320", border: "1px solid #1c2435", borderRadius: 12, overflow: "hidden" }}>
+        {loading ? (
+          <div style={{ padding: "40px 24px", textAlign: "center", color: "#8a94a8", fontSize: 14 }}>Loading...</div>
+        ) : reports.length === 0 ? (
+          <div style={{ padding: "48px 24px", textAlign: "center", color: "#8a94a8", fontSize: 14 }}>
+            No saved reports yet. Run a scan and generate a PDF; it will appear here automatically.
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>Module</th>
+                <th style={th}>Target</th>
+                <th style={th}>Generated</th>
+                <th style={th}>Size</th>
+                <th style={{ ...th, textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.map((rep) => (
+                <tr key={rep.report_id}>
+                  <td style={{ ...cell, fontWeight: 700, color: "#ffffff", textTransform: "uppercase", fontSize: 12 }}>{(rep.module || "-").replace(/_/g, " ")}</td>
+                  <td style={cell}>{rep.target || "-"}</td>
+                  <td style={cell}>{fmtDate(rep.created_ts)}</td>
+                  <td style={cell}>{fmtSize(rep.size)}</td>
+                  <td style={{ ...cell, textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button disabled={busy === rep.report_id} onClick={() => download(rep)} style={{ ...btn("rgba(16,185,129,0.12)", "rgba(16,185,129,0.4)", "#10b981"), marginRight: 8, opacity: busy === rep.report_id ? 0.5 : 1 }}>Download</button>
+                    <button disabled={busy === rep.report_id} onClick={() => remove(rep)} style={{ ...btn("rgba(224,35,71,0.1)", "rgba(224,35,71,0.35)", "#ff6b85"), opacity: busy === rep.report_id ? 0.5 : 1 }}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token, apiUrl}) {
   const schema = MODULE_INPUT_SCHEMAS[moduleKey] || { ph: "Target", hint: "Target value" };
   const [target,    setTarget]    = useState("");
@@ -24713,6 +24821,9 @@ export default function App() {
         </div>
         <div style={{display: active==="report"   ? "block" : "none"}}>
           <ReportModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="saved_reports" ? "block" : "none"}}>
+          <SavedReportsModule token={token}/>
         </div>
         <div style={{display: active==="tools"    ? "block" : "none"}}>
           <ToolManagerModule token={token}/>
