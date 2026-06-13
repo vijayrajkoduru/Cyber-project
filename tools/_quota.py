@@ -82,10 +82,13 @@ def _effective_plan(plan, sub_exp, now):
 
 
 def _load(con, identity):
+    # identity may be the JWT 'sub' (user id / UUID), an email, or a username.
+    # Matching id too is REQUIRED — consent_log passes payload['sub'] (the UUID),
+    # so an email/username-only match silently missed and the quota never fired.
     return con.execute(
         "SELECT username, plan, subscription_expires_at, scans_used, usage_period "
-        "FROM users WHERE email=? OR username=? LIMIT 1",
-        (identity, identity),
+        "FROM users WHERE id=? OR email=? OR username=? LIMIT 1",
+        (identity, identity, identity),
     ).fetchone()
 
 
