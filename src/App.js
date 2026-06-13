@@ -15764,21 +15764,21 @@ function generateUniversalVLReport(opts) {
         }
         // Auth-class findings - vertical access, admin endpoint
         if (/privileged endpoint|admin.*without auth|vertical access/.test(blob))
-          return `curl -sI https://${host}/admin/api/users  # expect 401/403; 200 = exposed`;
+          return `curl -sI ${proto}://${host}/admin/api/users  # expect 401/403; 200 = exposed`;
         if (/admin panel|hidden admin/.test(blob))
-          return `for p in /admin /admin/api /administrator /wp-admin; do printf "%s -> " "$p"; curl -so /dev/null -w "%{http_code}\\n" https://${host}$p; done`;
+          return `for p in /admin /admin/api /administrator /wp-admin; do printf "%s -> " "$p"; curl -so /dev/null -w "%{http_code}\\n" ${proto}://${host}$p; done`;
         // Cookie hygiene
         if (/cookie|samesite|httponly|jsessionid/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "Set-Cookie"  # check Secure / HttpOnly / SameSite attrs`;
+          return `curl -sI ${proto}://${host}/ | grep -i "Set-Cookie"  # check Secure / HttpOnly / SameSite attrs`;
         // Auth / OTP / session
         if (/otp|password.send|verification|auth.*disclos/.test(blob))
-          return `curl -X POST https://${host}/auth/password-send-otp -H "Content-Type: application/json" -d '{"phone_number":"+1234567890"}'`;
+          return `curl -X POST ${proto}://${host}/auth/password-send-otp -H "Content-Type: application/json" -d '{"phone_number":"+1234567890"}'`;
         // Open redirect
         if (/open redirect|redirect.*to|redirectto/.test(blob))
-          return `curl -I "https://${host}/app/authorize?redirectTo=https://example.com@evil.test"`;
+          return `curl -I "${proto}://${host}/app/authorize?redirectTo=https://example.com@evil.test"`;
         // Hardcoded credentials / exposed secrets
         if (/hardcoded|api.key|secret|credential/.test(blob))
-          return `curl -H "X-API-Key: <leaked-key>" https://${host}/admin/conversions`;
+          return `curl -H "X-API-Key: <leaked-key>" ${proto}://${host}/admin/conversions`;
         // TLS / SSL
         if (/dh.params|diffie.hellman|weak.*key/.test(blob))
           return `nmap --script ssl-dh-params -p 443 ${host}`;
@@ -15786,18 +15786,18 @@ function generateUniversalVLReport(opts) {
           return `nmap --script ssl-enum-ciphers,ssl-cert -p 443 ${host}`;
         // HTTP headers / CSP / CORS / HSTS
         if (/csp|content.security/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "content-security-policy"`;
+          return `curl -sI ${proto}://${host}/ | grep -i "content-security-policy"`;
         if (/hsts|strict.transport/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "strict-transport-security"`;
+          return `curl -sI ${proto}://${host}/ | grep -i "strict-transport-security"`;
         if (/cors|access.control.allow/.test(blob))
-          return `curl -H "Origin: https://evil.test" -I https://${host}/api/  # check Access-Control-Allow-Origin reflection`;
+          return `curl -H "Origin: https://evil.test" -I ${proto}://${host}/api/  # check Access-Control-Allow-Origin reflection`;
         if (/x.frame|clickjack/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "x-frame-options"`;
+          return `curl -sI ${proto}://${host}/ | grep -i "x-frame-options"`;
         if (/header|security.header/.test(nm))
-          return `curl -sI https://${host}/ | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer-policy"`;
+          return `curl -sI ${proto}://${host}/ | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer-policy"`;
         // Server / version disclosure
         if (/server.*disclos|version.*disclos|banner/.test(blob))
-          return `curl -sI https://${host}/ | grep -iE "server|x-powered-by"`;
+          return `curl -sI ${proto}://${host}/ | grep -iE "server|x-powered-by"`;
         // DNS / SPF / DMARC (email-auth records only — private-IP/CAA/PTR handled above)
         if (/spf|dmarc|dkim/.test(nm))
           return `dig +short TXT _dmarc.${bare} ; dig +short TXT ${bare}`;
@@ -15807,22 +15807,22 @@ function generateUniversalVLReport(opts) {
         // /rce/ substring matching "sub-RCE-source integrity" (fix for
         // user-reported regex bug 2026-06-09).
         if (/subresource integrity|\bsri\b/.test(blob))
-          return `curl -s https://${host}/ | grep -oE '<(script|link)[^>]+(src|href)="[^"]+"[^>]*' | grep -v integrity=`;
+          return `curl -s ${proto}://${host}/ | grep -oE '<(script|link)[^>]+(src|href)="[^"]+"[^>]*' | grep -v integrity=`;
         // Web app injection-class. Use \b on short identifiers (rce, lfi,
         // sri, xxe, xss, sqli) so the regex matches whole words only,
         // never substrings inside longer words like "subresource".
         if (/sql injection|\bsqli\b/.test(blob))
-          return `sqlmap -u "https://${host}/<endpoint>?id=1" --batch --random-agent`;
+          return `sqlmap -u "${proto}://${host}/<endpoint>?id=1" --batch --random-agent`;
         if (/\bxss\b|cross.site.script/.test(blob))
-          return `curl "https://${host}/<endpoint>?q=<script>alert(1)</script>"`;
+          return `curl "${proto}://${host}/<endpoint>?q=<script>alert(1)</script>"`;
         if (/\bssrf\b|server.side.request/.test(blob))
-          return `curl "https://${host}/<endpoint>?url=http://169.254.169.254/latest/meta-data/"`;
+          return `curl "${proto}://${host}/<endpoint>?url=http://169.254.169.254/latest/meta-data/"`;
         if (/\bxxe\b|xml.external/.test(blob))
-          return `curl -X POST -H "Content-Type: application/xml" --data-binary @xxe.xml https://${host}/<endpoint>`;
+          return `curl -X POST -H "Content-Type: application/xml" --data-binary @xxe.xml ${proto}://${host}/<endpoint>`;
         if (/\blfi\b|local file|directory traversal|path traversal/.test(blob))
-          return `curl "https://${host}/<endpoint>?file=../../../../etc/passwd"`;
+          return `curl "${proto}://${host}/<endpoint>?file=../../../../etc/passwd"`;
         if (/command injection|\bcmd injection\b|\brce\b/.test(blob))
-          return `curl "https://${host}/<endpoint>?input=;id"`;
+          return `curl "${proto}://${host}/<endpoint>?input=;id"`;
         if (/\bcsrf\b|cross.site.request/.test(blob))
           return `# Submit a state-changing POST without Origin/Referer headers and observe acceptance`;
         // Network exposure
@@ -15843,17 +15843,17 @@ function generateUniversalVLReport(opts) {
         if (/redis|memcached|elasticsearch|mongodb|couchdb/.test(blob))
           return `nmap --script ${blob.match(/redis|memcached|elasticsearch|mongodb|couchdb/)[0]}* -p 6379,11211,9200,27017,5984 ${host}`;
         if (/graphql/.test(blob))
-          return `curl -X POST -H "Content-Type: application/json" -d '{"query":"{__schema{types{name}}}"}' https://${host}/graphql`;
+          return `curl -X POST -H "Content-Type: application/json" -d '{"query":"{__schema{types{name}}}"}' ${proto}://${host}/graphql`;
         if (/jwt/.test(blob))
-          return `curl -sI https://${host}/ | grep -iE "authorization|jwt"`;
+          return `curl -sI ${proto}://${host}/ | grep -iE "authorization|jwt"`;
         if (/swagger|openapi/.test(blob))
-          return `for p in /swagger.json /openapi.json /api-docs /swagger-ui/; do curl -sI https://${host}$p; done`;
+          return `for p in /swagger.json /openapi.json /api-docs /swagger-ui/; do curl -sI ${proto}://${host}$p; done`;
         if (/kev|cisa/.test(blob))
           return `# Inspect the Server header and cross-check the version against https://www.cisa.gov/known-exploited-vulnerabilities-catalog`;
         if (/epss/.test(blob))
           return `# Look up EPSS at https://api.first.org/data/v1/epss?cve=<CVE-ID>`;
         if (/h2c|smuggling/.test(blob))
-          return `curl -k -H "Upgrade: h2c" -H "HTTP2-Settings:" -H "Connection: Upgrade, HTTP2-Settings" -I https://${host}/`;
+          return `curl -k -H "Upgrade: h2c" -H "HTTP2-Settings:" -H "Connection: Upgrade, HTTP2-Settings" -I ${proto}://${host}/`;
         // Tool-specific fallback if recognised
         if (tool)
           return `# Re-run the scan: POST /api/${moduleKey}/${tool} { "target": "${host}" }`;
