@@ -955,7 +955,12 @@ function Footer() {
             <div style={{ marginBottom: 12 }}><a href="#contact" style={{ fontSize: 14, color: C.blue, textDecoration: "none", fontWeight: 700 }}>Get Access →</a></div>
             <div style={{ marginTop: 24 }}>
               <div style={{ fontSize: 12, color: "#475569", fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>Legal</div>
-              <div style={{ fontSize: 13, color: "#334155" }}>For authorized security testing only.</div>
+              {[["Terms & Conditions","/terms.html"],["Privacy Policy","/privacy.html"],["Refund & Cancellation","/refund.html"],["Contact","/contact.html"]].map(([label,href]) => (
+                <div key={href} style={{ marginBottom: 10 }}>
+                  <a href={href} style={{ fontSize: 14, color: C.muted, textDecoration: "none" }}>{label}</a>
+                </div>
+              ))}
+              <div style={{ fontSize: 12, color: "#334155", marginTop: 8 }}>For authorized security testing only.</div>
             </div>
           </div>
         </div>
