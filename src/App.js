@@ -1515,10 +1515,15 @@ function generatePDF(reportData) {
       };
       const _toolKeys = toolsUsed && Array.isArray(toolsUsed) ? toolsUsed.slice() : Object.keys(_toolVars);
       let _data = 0, _empty = 0, _skipped = 0, _errored = 0;
+      const _erroredNames = [];
       _toolKeys.forEach(tk => {
         const r = _toolVars[tk];
         if (r == null) { _skipped++; return; }
-        if (typeof r === "object" && (r.error || r.errored)) { _errored++; return; }
+        if (typeof r === "object" && (r.error || r.errored)) {
+          _errored++;
+          _erroredNames.push(String(tk).replace(/_/g, " "));
+          return;
+        }
         const hasFindings = Array.isArray(r) ? r.length > 0
           : (Array.isArray(r.findings) && r.findings.length > 0)
           || r.vulnerable === true
@@ -1547,6 +1552,18 @@ function generatePDF(reportData) {
         doc.setFont("Arial","normal"); doc.setFontSize(7); doc.setTextColor(100,116,139);
         doc.text("DATA returned findings    EMPTY ran clean, no data    SKIPPED not applicable    ERROR tool had a problem", margin, y);
         y += 6;
+        // Transparency: name the errored scanners so a high ERROR count is
+        // auditable, not an opaque number. On WAF/CDN-fronted or static targets
+        // these are usually probes blocked or with no testable surface, not
+        // engine bugs - listing them lets the reader judge.
+        if (_erroredNames.length) {
+          doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(162,28,28);
+          const _ew = doc.internal.pageSize.getWidth() - margin * 2;
+          const _esLines = doc.splitTextToSize("Errored / no-probe scanners: " + _erroredNames.join(", "), _ew);
+          _esLines.slice(0, 4).forEach(ln => { doc.text(ln, margin, y); y += 3.6; });
+          y += 2.4;
+          doc.setTextColor(100, 116, 139);
+        }
       }
     }
 
