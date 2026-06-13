@@ -113,3 +113,76 @@ def provision_paid_user(*, email, name, plan_key, plan_label, period_days,
     return {"already_processed": False, "created": created, "username": username,
             "email": email, "temp_password": temp_password, "plan": plan_key,
             "plan_label": plan_label, "amount": amount}
+
+
+def _merge_modules(existing_csv: str, new_ids) -> str:
+    seen, out = set(), []
+    for mid in parse_csv(existing_csv) + list(new_ids or []):
+        mid = (mid or "").strip()
+        if mid and mid not in seen:
+            seen.add(mid)
+            out.append(mid)
+    return ",".join(out)
+
+
+def parse_csv(csv):
+    return [m.strip() for m in (csv or "").split(",") if m.strip()]
+
+
+def provision_module_purchase(*, email, name, module_ids, days, payment_id,
+                              order_id, amount, currency):
+    """À-la-carte: grant the purchased module ids (union with any existing) on a
+    'modular' plan with a fresh expiry. Idempotent via the payments table.
+    Returns {already_processed, created, username, temp_password|None, modules}."""
+    email = (email or "").strip().lower()
+    module_ids = [m for m in (module_ids or []) if m]
+    now = datetime.datetime.utcnow()
+    expires = (now + datetime.timedelta(days=int(days))).isoformat() + "Z"
+    created = False
+    temp_password = None
+    new_user_id = None
+
+    with get_db() as con:
+        _ensure_payments_table(con)
+        if payment_id and con.execute(
+                "SELECT 1 FROM payments WHERE payment_id=?", (payment_id,)).fetchone():
+            return {"already_processed": True, "created": False, "username": None,
+                    "temp_password": None, "modules": module_ids}
+
+        row = con.execute("SELECT id, username, modules FROM users WHERE LOWER(email)=?",
+                          (email,)).fetchone()
+        if row:
+            username = row["username"]
+            merged = _merge_modules(row["modules"], module_ids)
+            con.execute(
+                "UPDATE users SET plan='modular', subscription_expires_at=?, modules=?, "
+                "status='active', updated_at=? WHERE id=?",
+                (expires, merged, _now_iso(), row["id"]),
+            )
+        else:
+            created = True
+            new_user_id = str(uuid.uuid4())
+            username = _gen_username(con, email)
+            temp_password = _gen_password()
+            merged = _merge_modules("", module_ids)
+            con.execute(
+                "INSERT INTO users (id, username, email, password_hash, role, plan, status, created_at, subscription_expires_at, modules) "
+                "VALUES (?, ?, ?, ?, 'user', 'modular', 'active', ?, ?, ?)",
+                (new_user_id, username, email, hash_password(temp_password),
+                 _now_iso(), expires, merged),
+            )
+
+        con.execute(
+            "INSERT OR REPLACE INTO payments (payment_id, order_id, email, plan, amount, currency, status, created_at) "
+            "VALUES (?, ?, ?, 'modular', ?, ?, 'captured', ?)",
+            (payment_id, order_id, email, amount, currency, _now_iso()),
+        )
+
+    if created and new_user_id and _init_zone is not None:
+        try:
+            _init_zone(new_user_id)
+        except Exception:
+            pass
+
+    return {"already_processed": False, "created": created, "username": username,
+            "email": email, "temp_password": temp_password, "modules": module_ids}
