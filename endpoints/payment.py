@@ -27,8 +27,9 @@ from pydantic import BaseModel
 
 from tools._payments import mailer
 from tools._payments import razorpay_client as rzp
-from tools._payments.module_catalog import (MODULE_PERIOD_DAYS, get_module,
-                                             price_for, public_modules, valid_ids)
+from tools._payments.module_catalog import (CURRENCY, MODULE_PERIOD_DAYS,
+                                             get_module, price_for,
+                                             public_modules, valid_ids)
 from tools._payments.plans import get_plan, public_plans
 from tools._payments.provisioning import (provision_module_purchase,
                                           provision_paid_user)
@@ -55,6 +56,7 @@ async def payment_config():
     return {
         "configured": configured,
         "key_id": rzp.key_id() if configured else "",
+        "currency": CURRENCY,
         "modules": public_modules(),
         "plans": public_plans(),
         "period_days": MODULE_PERIOD_DAYS,
@@ -86,13 +88,13 @@ async def create_order(req: CreateOrderRequest):
         labels = ", ".join(get_module(m)["label"] for m in mids)
         try:
             order = rzp.create_order(
-                amount=amount, currency="INR", receipt="vl_modules",
+                amount=amount, currency=CURRENCY, receipt="vl_modules",
                 notes={"kind": "modules", "module_ids": ",".join(mids),
                        "customer_email": email, "customer_name": name})
         except Exception as exc:
             _log.error("create_order (modules) failed: %s", exc)
             raise HTTPException(502, "Could not create payment order")
-        return {"order_id": order.get("id"), "amount": amount, "currency": "INR",
+        return {"order_id": order.get("id"), "amount": amount, "currency": CURRENCY,
                 "key_id": rzp.key_id(), "kind": "modules", "module_ids": mids,
                 "label": f"Modules: {labels}", "name": name, "email": email}
 

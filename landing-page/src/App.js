@@ -662,7 +662,7 @@ function Pricing() {
       locked: [],
       href: DASHBOARD_URL + "/?register",
       cta: "Start Free Trial" },
-    { name: "Per-Module", sub: "Pay only for what you need", price: "₹999+", period: "per module · monthly", color: C.blue, popular: true,
+    { name: "Per-Module", sub: "Pay only for what you need", price: "$19+", period: "per module · monthly", color: C.blue, popular: true,
       features: ["Subscribe module-by-module","Pick any combination of modules","Only your chosen modules unlock","Monthly billing · cancel anytime","Add more modules anytime"],
       locked: [],
       checkout: "/checkout.html",
