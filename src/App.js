@@ -10020,7 +10020,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
           fillR(_lx, _ly, 4, 3.5, s.c);
           doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
           const _pct = ((s.v / _totalFx) * 100).toFixed(0);
-          const _full = {C:"Critical",H:"High",M:"Medium",L:"Low",I:"Info"}[s.l];
+          const _full = {C:"Critical",H:"High",M:"Medium",L:"Low",P:"Positive",I:"Info"}[s.l];
           doc.text(`${_full}: ${s.v} (${_pct}%)`, _lx + 6, _ly + 3);
         });
         y += 50;
@@ -14209,9 +14209,26 @@ function generateUniversalVLReport(opts) {
   // PARTIAL SCAN = at least 1 POSITIVE + >=2 INFO + no real findings.
   const _partialScan = !_hasRealFindings && _hasGenuinePositive
                          && _sevCount.INFO >= 2;
-  const _testedCount = _positiveFindings.length;
-  const _untestedCount = _sevCount.INFO;
   const _totalScannerCount = Object.keys(r).length;
+  // Scanner-level coverage. A single scanner can emit many findings (an advisory
+  // pack alone emits ~15), so "X of Y" must count SCANNERS, not findings —
+  // otherwise the denominator is the finding count and the math is impossible
+  // (e.g. "4 clean + 9 need inputs" out of 9 total).
+  const _scKeys = Object.keys(r);
+  const _scIsReal = d => Array.isArray(d.findings) && d.findings.some(f => ["CRITICAL","HIGH","MEDIUM","LOW"].includes(String(f.severity||"").toUpperCase()));
+  const _scIsClean = d => Array.isArray(d.findings) && d.findings.some(f => String(f.severity||"").toUpperCase()==="POSITIVE");
+  const _scIsSkipped = d => {
+    if (d._skipped || d.skipped_reason || d.status === "skipped") return true;
+    const fs = Array.isArray(d.findings) ? d.findings : [];
+    if (!fs.length) return false;
+    return fs.every(f => {
+      if (String(f.severity||"INFO").toUpperCase() !== "INFO") return false;
+      const t = String(f.evidence||"") + " " + String(f.name||"") + " " + String(f.detail||"");
+      return _SKIP_PATTERNS.some(re => re.test(t));
+    });
+  };
+  const _testedCount = _scKeys.filter(k => _scIsClean(r[k]) && !_scIsReal(r[k])).length;
+  const _untestedCount = _scKeys.filter(k => _scIsSkipped(r[k]) && !_scIsClean(r[k]) && !_scIsReal(r[k])).length;
 
   // ── KEY RISK HEADLINE ──
   chk(28);
@@ -14228,7 +14245,7 @@ function generateUniversalVLReport(opts) {
       _hlTitle = `0 of ${_totalScanners} scanners produced findings - posture UNKNOWN`;
       _hlSubtitle = "Scanners completed without producing findings. Likely target mismatch or all probes skipped.";
     } else {
-      _hlTitle = `${_skippedInfoCount} of ${_totalFindings} probes could not execute - posture UNKNOWN`;
+      _hlTitle = `${_untestedCount || _skippedInfoCount} of ${_totalScannerCount} scanners could not execute - posture UNKNOWN`;
       _hlSubtitle = "Provide required inputs (see Per-Tool section) and re-scan for actionable results.";
     }
   } else if (_partialScan) {
@@ -14546,7 +14563,7 @@ function generateUniversalVLReport(opts) {
       const _paragraphs = [];
       if (_insufficientScan) {
         _paragraphs.push(
-          `${moduleLabel.replace(/\s+/g,' ')} assessed ${target || 'the target'} across ${_scannerCount} scanner(s). However, ${_skippedInfoCount} of ${_totalFindings} probe(s) could not execute due to missing required inputs, runtime libraries, or because the target type does not match the probe's prerequisites. As a result, no CRITICAL, HIGH, MEDIUM, or LOW finding was produced - this is NOT evidence of secure posture.`,
+          `${moduleLabel.replace(/\s+/g,' ')} assessed ${target || 'the target'} across ${_scannerCount} scanner(s). However, ${_untestedCount || _skippedInfoCount} of ${_totalScannerCount} scanner(s) could not execute due to missing required inputs, runtime libraries, or because the target type does not match the probe's prerequisites. As a result, no CRITICAL, HIGH, MEDIUM, or LOW finding was produced - this is NOT evidence of secure posture.`,
           `To convert this into a usable assessment, supply the inputs listed in the "Required Inputs" section (typically a Dockerfile, Kubernetes manifest, kubeconfig, repository URL, or container image reference) and re-scan. Without those inputs, most probes silently skip and the report has no signal value.`,
           `Treat this report as a coverage gap notification, not a clean bill of health.`
         );
@@ -14995,11 +15012,12 @@ function generateUniversalVLReport(opts) {
       ["HIGH",     _sevCount.HIGH     || 0, SEVCOL.HIGH],
       ["MEDIUM",   _sevCount.MEDIUM   || 0, SEVCOL.MEDIUM],
       ["LOW",      _sevCount.LOW      || 0, SEVCOL.LOW],
+      ["POSITIVE", _sevCount.POSITIVE || 0, SEVCOL.POSITIVE],   // verified-clean confirmations
       ["INFO",     Math.max(0, _realInfoCount), SEVCOL.INFO],
       ["SCAFFOLD", _scaffoldFindingCount,    [120, 113, 108]],   // stone-500
     ];
     let _x = margin;
-    const _bw = (contentW - 5*3) / 6;
+    const _bw = (contentW - 6*3) / 7;
     _cols.forEach(c => {
       const sev = c[0], cnt = c[1], col = c[2];
       fillR(_x, y, _bw, 24, col);
@@ -15028,7 +15046,7 @@ function generateUniversalVLReport(opts) {
     // Sister of the Recon-PDF charts. Triangle-fan donut + horizontal stacked
     // bar — no canvas, no Chart.js, only jsPDF primitives.
     {
-      const _totalFxU = (_sevCount.CRITICAL||0) + (_sevCount.HIGH||0) + (_sevCount.MEDIUM||0) + (_sevCount.LOW||0) + (Math.max(0, _realInfoCount));
+      const _totalFxU = (_sevCount.CRITICAL||0) + (_sevCount.HIGH||0) + (_sevCount.MEDIUM||0) + (_sevCount.LOW||0) + (_sevCount.POSITIVE||0) + (Math.max(0, _realInfoCount));
       if (_totalFxU > 0) {
         chk(58);
         const _cxU = margin + 22, _cyU = y + 22, _rU = 18, _r2U = 9;
@@ -15037,6 +15055,7 @@ function generateUniversalVLReport(opts) {
           {v: _sevCount.HIGH     || 0, c: SEVCOL.HIGH,     l: "H"},
           {v: _sevCount.MEDIUM   || 0, c: SEVCOL.MEDIUM,   l: "M"},
           {v: _sevCount.LOW      || 0, c: SEVCOL.LOW,      l: "L"},
+          {v: _sevCount.POSITIVE || 0, c: SEVCOL.POSITIVE, l: "P"},
           {v: Math.max(0, _realInfoCount), c: SEVCOL.INFO, l: "I"},
         ];
         let _angU = -Math.PI / 2;
@@ -15088,7 +15107,7 @@ function generateUniversalVLReport(opts) {
           fillR(_lx, _ly, 4, 3.5, s.c);
           doc.setFont("Arial","normal"); doc.setFontSize(6.5); doc.setTextColor(...DARK);
           const _pct = ((s.v / _totalFxU) * 100).toFixed(0);
-          const _full = {C:"Critical",H:"High",M:"Medium",L:"Low",I:"Info"}[s.l];
+          const _full = {C:"Critical",H:"High",M:"Medium",L:"Low",P:"Positive",I:"Info"}[s.l];
           doc.text(`${_full}: ${s.v} (${_pct}%)`, _lx + 6, _ly + 3);
         });
         y += 50;
@@ -15149,14 +15168,21 @@ function generateUniversalVLReport(opts) {
         _grade === "D" ? [194,65,12] : [162,28,28];
 
       chk(40); y = sHead("OWASP Top 10 - 2021 Coverage", y);
+      // When the scan was insufficient/partial there are no graded findings, so
+      // every category "passes" by accident -> a misleading "A / strong posture".
+      // Show NOT ASSESSED instead so PASS is never read as proof of secure.
+      const _owaspUnreliable = _insufficientScan || _partialScan;
+      const _ogColor = _owaspUnreliable ? GRAY : _gradeColor;
       fillR(margin, y, contentW, 16, LIGHT);
-      fillR(margin, y, 4, 16, _gradeColor);
-      doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor.apply(doc, _gradeColor);
-      doc.text(_grade, margin+10, y+11);
+      fillR(margin, y, 4, 16, _ogColor);
+      doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor.apply(doc, _ogColor);
+      doc.text(_owaspUnreliable ? "?" : _grade, margin+10, y+11);
       doc.setFont("Arial","bold"); doc.setFontSize(12); doc.setTextColor.apply(doc, DARK);
-      doc.text(`${_passCats}/10 OWASP categories passing`, margin+28, y+7);
+      doc.text(_owaspUnreliable ? "OWASP coverage NOT ASSESSED" : `${_passCats}/10 OWASP categories passing`, margin+28, y+7);
       doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc, GRAY);
-      doc.text(_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`, margin+28, y+12);
+      doc.text(_owaspUnreliable
+        ? "Scan was insufficient/partial - 'PASS' below means no finding was produced, NOT proof the category is secure."
+        : (_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`), margin+28, y+12);
       y += 19;
       y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
       _OWASP_2021.forEach(([code, name], i) => {
@@ -15332,7 +15358,7 @@ function generateUniversalVLReport(opts) {
     chk(35); y = sHead("Business Impact", y);
     let _imp;
     if (_insufficientScan) {
-      _imp = `${moduleLabel} scan was INSUFFICIENT - ${_skippedInfoCount} of ${_totalFindings} probes could not execute (missing inputs, missing libraries, or wrong target type). `
+      _imp = `${moduleLabel} scan was INSUFFICIENT - ${_untestedCount || _skippedInfoCount} of ${_totalScannerCount} scanners could not execute (missing inputs, missing libraries, or wrong target type). `
            + `Business impact: posture cannot be assessed from this scan. `
            + `Provide the required inputs listed in the "Required Inputs" section at the top of this report, then re-scan. `
            + `Do NOT use this report as evidence of secure posture - it does not reflect actual testing.`;
@@ -21824,6 +21850,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
   const canRun = (_containerMode
     ? (hasAnyAdvInput && !running)
     : ((target.trim().length > 0 || hasAnyAdvInput) && !running)) && authConfirmed;
+  // The exact target sent to the scan, captured at run time so the PDF reports
+  // what was ACTUALLY scanned even if the Target field changes before export.
+  const scannedTargetRef = useRef("");
   const runAll = async () => {
     if (!canRun) return;
     const _q = await logConsent(target || advInputs.image_ref || advInputs.repo_url || "(advanced inputs)", moduleKey, token);   // authorization + quota gate
@@ -21857,6 +21886,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           || "container-scan";
       }
       const runBody = {target: _resolvedTarget || "n/a", concurrency: 16};
+      scannedTargetRef.current = _resolvedTarget || "";   // remember what we actually scanned
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
       // VL-TIER: pass tiers:[ids] when user has scoped scan to subset.
@@ -21997,7 +22027,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
     // repo_url. Otherwise the PDF reads "Target: (none)" everywhere which
     // looks broken to an outside auditor.
     const _displayTarget = (() => {
-      const t = (target || "").trim();
+      // Prefer the target actually scanned (captured at run time) over the live
+      // Target field, which may have changed since the scan ran.
+      const t = (scannedTargetRef.current || target || "").trim();
       if (t) return t;
       if (_containerMode) {
         return (advInputs.image_ref || "").trim()
