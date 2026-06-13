@@ -139,7 +139,7 @@ function Nav() {
         )}
         <div style={{ display: "flex", gap: isMobile ? 6 : 12, alignItems: "center" }}>
           <a href={DASHBOARD_URL} style={{ color: C.muted, fontSize: isMobile ? 13 : 14, fontWeight: 500, textDecoration: "none", padding: isMobile ? "6px 8px" : "8px 16px" }}>Sign In</a>
-          <a href="#contact" className="btn-primary" style={{ background: "linear-gradient(135deg,#1d4ed8,#6366f1)", color: "#fff", padding: isMobile ? "8px 12px" : "10px 22px", borderRadius: 10, fontSize: isMobile ? 12 : 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px rgba(59,130,246,0.35)", whiteSpace: "nowrap" }}>{isMobile ? "Free Trial" : "Start Free Trial"}</a>
+          <a href={DASHBOARD_URL + "/?register"} className="btn-primary" style={{ background: "linear-gradient(135deg,#1d4ed8,#6366f1)", color: "#fff", padding: isMobile ? "8px 12px" : "10px 22px", borderRadius: 10, fontSize: isMobile ? 12 : 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px rgba(59,130,246,0.35)", whiteSpace: "nowrap" }}>{isMobile ? "Free Trial" : "Start Free Trial"}</a>
         </div>
       </div>
     </nav>
@@ -199,7 +199,7 @@ function Hero() {
           </p>
 
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 48, animation: "fadeUp 0.7s ease 0.4s both" }}>
-            <a href="#contact" className="btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", padding: "15px 30px", borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 30px rgba(59,130,246,0.5)" }}>
+            <a href={DASHBOARD_URL + "/?register"} className="btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", padding: "15px 30px", borderRadius: 12, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 30px rgba(59,130,246,0.5)" }}>
               Start Free — 7 Days
             </a>
             <a href="#demo" className="btn-outline" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", color: C.text, padding: "15px 30px", borderRadius: 12, fontSize: 15, fontWeight: 600, textDecoration: "none", border: `1.5px solid ${C.border}` }}>
@@ -503,7 +503,7 @@ function Demo() {
 
         <FadeIn>
           <p style={{ textAlign: "center", marginTop: 24, fontSize: 14, color: C.muted }}>{isMobile && <span style={{ display: "block", fontSize: 11, marginBottom: 8, color: "#475569" }}>↔ Scroll horizontally to see full dashboard</span>}
-            This is the real dashboard interface. <a href="#contact" style={{ color: C.blue, fontWeight: 700, textDecoration: "none" }}>Start your free trial →</a>
+            This is the real dashboard interface. <a href={DASHBOARD_URL + "/?register"} style={{ color: C.blue, fontWeight: 700, textDecoration: "none" }}>Start your free trial →</a>
           </p>
         </FadeIn>
       </div>
@@ -624,8 +624,8 @@ function Scanners() {
 // ── HOW IT WORKS ─────────────────────────────────────────────────
 function HowItWorks() {
   const steps = [
-    { n: "01", icon: "", title: "Request Access", desc: "Fill the form with your name, email, and phone. Choose trial or paid plan. No technical knowledge needed.", color: C.blue },
-    { n: "02", icon: "", title: "Get Credentials", desc: "We create your account manually and email your username and strong password within 30 minutes.", color: C.purple },
+    { n: "01", icon: "", title: "Sign Up Free", desc: "Create your account in seconds and start a 7-day free trial. No card, no waiting, no setup.", color: C.blue },
+    { n: "02", icon: "", title: "Pick Your Modules", desc: "Stay on the free trial, or subscribe to just the modules you need — billed monthly, cancel anytime.", color: C.purple },
     { n: "03", icon: "", title: "Login & Scan", desc: "Open the dashboard, enter any target URL, select tools, click Start. Get full PDF report in minutes.", color: C.green },
   ];
   return (
@@ -657,18 +657,20 @@ function HowItWorks() {
 // ── PRICING ──────────────────────────────────────────────────────
 function Pricing() {
   const plans = [
-    { name: "Trial", sub: "Try before you pay", price: "FREE", period: "7 days", color: C.muted, popular: false,
-      features: ["7 days full access","5 scans per day","All 51 tools available","PDF reports included","No credit card required"],
+    { name: "Free Trial", sub: "Try everything for 7 days", price: "FREE", period: "7 days", color: C.muted, popular: false,
+      features: ["Full access to every module","All 51+ scanners unlocked","PDF / JSON / CSV reports","Instant self-serve signup","No credit card required"],
       locked: [],
+      href: DASHBOARD_URL + "/?register",
       cta: "Start Free Trial" },
-    { name: "Pro", sub: "For professionals", price: "$29", period: "per month", color: C.blue, popular: true,
-      features: ["All 51 scanners unlocked","Unlimited scans per day","PDF + JSON + CSV reports","Email support","1 user account","5 built-in vulnerable labs","Cancel anytime"],
+    { name: "Per-Module", sub: "Pay only for what you need", price: "₹999+", period: "per module · monthly", color: C.blue, popular: true,
+      features: ["Subscribe module-by-module","Pick any combination of modules","Only your chosen modules unlock","Monthly billing · cancel anytime","Add more modules anytime"],
       locked: [],
-      checkout: "/checkout.html?plan=pro_monthly",
-      cta: "Subscribe Now" },
-    { name: "Enterprise", sub: "For security teams", price: "Custom", period: "billed annually", color: C.purple, popular: false,
-      features: ["Everything in Pro","Multiple user accounts","Team scan history","Custom wordlists","Priority support","Admin panel access","SLA & invoicing"],
+      checkout: "/checkout.html",
+      cta: "Choose Your Modules →" },
+    { name: "Enterprise", sub: "For security teams", price: "Custom", period: "all modules + teams", color: C.purple, popular: false,
+      features: ["Every module included","Multiple user accounts","Team scan history","Custom wordlists","Priority support + SLA"],
       locked: [],
+      href: "#contact",
       cta: "Contact Sales" },
   ];
   return (
@@ -700,7 +702,7 @@ function Pricing() {
                     <span style={{ fontSize: 14, color: C.muted, textDecoration: "line-through" }}>{f}</span>
                   </div>)}
                 </div>
-                <a href={p.checkout || "#contact"} className={p.popular ? "btn-primary" : "btn-outline"} style={{ display: "flex", justifyContent: "center", padding: "14px", borderRadius: 10, fontSize: 14, fontWeight: 700, textDecoration: "none", background: p.popular ? "linear-gradient(135deg,#1d4ed8,#3b82f6)" : "transparent", color: p.popular ? "#fff" : p.color, border: `1.5px solid ${p.color}40`, boxShadow: p.popular ? "0 4px 20px rgba(59,130,246,0.4)" : "none" }}>{p.cta}</a>
+                <a href={p.checkout || p.href || "#contact"} className={p.popular ? "btn-primary" : "btn-outline"} style={{ display: "flex", justifyContent: "center", padding: "14px", borderRadius: 10, fontSize: 14, fontWeight: 700, textDecoration: "none", background: p.popular ? "linear-gradient(135deg,#1d4ed8,#3b82f6)" : "transparent", color: p.popular ? "#fff" : p.color, border: `1.5px solid ${p.color}40`, boxShadow: p.popular ? "0 4px 20px rgba(59,130,246,0.4)" : "none" }}>{p.cta}</a>
               </div>
             </FadeIn>
           ))}
@@ -760,8 +762,8 @@ function FAQ() {
   const faqs = [
     { q: "Is this legal to use?", a: "Yes — for authorized testing only. You must have written permission to scan any target. We include 5 built-in vulnerable labs (DVWA, WebGoat, etc.) for safe, legal practice. Never scan targets you don't own or have permission to test." },
     { q: "Do I need to install anything?", a: "No. Everything runs on our cloud servers powered by Kali Linux. Open your browser, login, enter a target, and scan. Works on Windows, Mac, Linux — any device with a browser." },
-    { q: "How do I get my credentials after payment?", a: "After you fill the contact form, we manually create your account with a strong password and email your login details within 30 minutes. You'll receive the dashboard URL, username, and password." },
-    { q: "Can I try it before paying?", a: "Yes! Start a 7-day free trial instantly — no credit card required. Trial gives you access to 5 recon tools and 50 tool calls per day. Enough to understand the power of the platform." },
+    { q: "How do I get access after I subscribe?", a: "Instantly. Pick your modules at checkout and pay securely via Razorpay — your account is created automatically and your login is emailed to you right away. No manual wait." },
+    { q: "Can I try it before paying?", a: "Yes — start a 7-day free trial instantly, no credit card required. The trial unlocks every module so you can explore the full platform before choosing which modules to subscribe to." },
     { q: "What targets can I scan?", a: "Any system you own or have written authorization to test. We also provide 5 built-in vulnerable labs — DVWA, OWASP WebGoat, Juice Shop, Mutillidae, and bWAPP — for safe legal practice anytime." },
     { q: "What makes this different from free tools?", a: "Free tools are separate — you install Nmap here, SQLMap there, Nikto somewhere else. Our platform combines 51 tools in one dashboard, runs them automatically in sequence, and generates a professional PDF report. Hours of manual work done in minutes." },
     { q: "Is my data private and secure?", a: "Yes. Each user has their own isolated account. Your scan history, targets, and reports are never visible to other users. We use JWT authentication with 30-day sessions." },
@@ -801,9 +803,9 @@ function CTABanner() {
       <FadeIn style={{ maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}></div>
         <h2 style={{ fontSize: "clamp(28px,4vw,44px)", fontWeight: 800, marginBottom: 16 }}>Ready To Start Scanning?</h2>
-        <p style={{ fontSize: 17, color: C.muted, marginBottom: 36, lineHeight: 1.8 }}>Join security professionals using our platform. 7-day free trial. No credit card. Credentials by email in 30 minutes.</p>
+        <p style={{ fontSize: 17, color: C.muted, marginBottom: 36, lineHeight: 1.8 }}>Join security professionals using our platform. 7-day free trial. No credit card. Instant self-serve access.</p>
         <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-          <a href="#contact" className="btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", padding: "16px 36px", borderRadius: 12, fontSize: 16, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 30px rgba(59,130,246,0.5)" }}>
+          <a href={DASHBOARD_URL + "/?register"} className="btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "linear-gradient(135deg,#1d4ed8,#3b82f6,#6366f1)", color: "#fff", padding: "16px 36px", borderRadius: 12, fontSize: 16, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 30px rgba(59,130,246,0.5)" }}>
             Start Free Trial
           </a>
           <a href={`mailto:${CONTACT_EMAIL}`} className="btn-outline" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "transparent", color: C.text, padding: "16px 36px", borderRadius: 12, fontSize: 16, fontWeight: 600, textDecoration: "none", border: `1.5px solid ${C.border}` }}>
