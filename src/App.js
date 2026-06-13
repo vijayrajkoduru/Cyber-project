@@ -126,6 +126,7 @@ const MODULES = [
   // ── ADVANCED ─────────────────────────────────────────────────
   { id:"cloud",          icon:"", label:"Cloud Security Testing",          cat:"advanced",free:false },
   { id:"apisec",         icon:"", label:"API Security Testing",            cat:"advanced",free:false },
+  { id:"quantum_readiness", icon:"", label:"Quantum Readiness",              cat:"advanced",free:false },
   { id:"container_k8s",  icon:"", label:"Container / Kubernetes",          cat:"advanced",free:false },
   { id:"iot_ot",         icon:"", label:"IoT / OT / ICS Security",         cat:"advanced",free:false },
   { id:"supply_chain",   icon:"", label:"Supply Chain Security",           cat:"advanced",free:false },
@@ -14638,6 +14639,7 @@ function generateUniversalVLReport(opts) {
       // Purpose — per-module one-liner, keyword-matched, with an honest fallback.
       const _ml = (moduleLabel || "").toLowerCase();
       const _purposeMap = [
+        ["quantum|post-quantum", "the target's exposure to the post-quantum threat - quantum-vulnerable TLS/SSH key exchange and certificates, harvest-now-decrypt-later risk, and whether post-quantum (PQC) key exchange is offered."],
         ["phishing|email posture", "how easily an attacker could spoof email from this domain or impersonate the brand to phish staff and customers - email authentication (SPF/DKIM/DMARC), mail transport security, and lookalike-domain exposure."],
         ["recon|information gathering", "the externally-visible footprint an attacker enumerates first - DNS, subdomains, open ports and services, technologies, TLS certificates, and leaked or exposed assets."],
         ["web app|webapp|web application", "the web application's exposure to the OWASP Top 10 - injection, cross-site scripting, broken access control, security misconfiguration, and authentication/session weaknesses."],
@@ -14675,6 +14677,16 @@ function generateUniversalVLReport(opts) {
       // dump of internal scanner ids). Per-module 'does'/'benefits' so the
       // customer sees what the module delivers and why it matters.
       const _capMap = [
+        ["quantum|post-quantum", {
+          does: [
+            "Checks whether your TLS and SSH use quantum-vulnerable key exchange (RSA/ECDH/X25519) and whether a post-quantum hybrid (X25519MLKEM768) is offered.",
+            "Flags certificate keys and signatures breakable by Shor's algorithm, and symmetric ciphers below the long-term Grover margin.",
+          ],
+          benefits: [
+            "Answers the auditor question - 'what is your post-quantum migration plan?' - with live evidence.",
+            "Pinpoints harvest-now-decrypt-later exposure before a quantum computer exists.",
+          ],
+        }],
         ["phishing|email posture", {
           does: [
             "Checks whether attackers can spoof email from your domain - SPF, DKIM, and DMARC enforcement.",
@@ -15371,6 +15383,7 @@ function generateUniversalVLReport(opts) {
     // duplicate-into-Universal, sister of generateReconReport's _R_cmpRules).
     // Order matters: most-specific patterns first.
     const _cmpRules = [
+      [/quantum|post-quantum|harvest.now|\bpqc\b|shor|mlkem|kyber/i, "NIST IR 8547 - CNSA 2.0 - FIPS 203 - NIST SC-13 - BSI TR-02102"],
       // Email auth
       [/dmarc|spf|dkim/i,                       "PCI 5.4.1 - CIS 9.5 - NIST SI-8 - SOC2 CC6.7"],
       [/mta-sts|bimi/i,                         "NIST SC-8 - PCI 4.2.1 - ISO A.8.24"],
@@ -20727,6 +20740,7 @@ const MODULE_TYPE = {
   firmware:         "VA",
   sspm:             "VA",
   apisec:           "VA",
+  quantum_readiness: "VA",
   client_side:      "VA",
   mobile_static:    "VA",
   mobile_storage:   "VA",
@@ -22840,6 +22854,7 @@ function ExploitationModule(p)     { return _autoMod(p, {moduleKey:"exploit",   
 function NetworkAttacksModule(p)   { return _autoMod(p, {moduleKey:"network",         moduleLabel:"Network Attacks",                  emoji:"", color:"#3b9eff", playbook:"16_network.md"}); }
 function CloudModule(p)            { return _autoMod(p, {moduleKey:"cloud",           moduleLabel:"Cloud Security Testing",           emoji:"", color:"#0ea5e9", playbook:"21_cloud.md"}); }
 function ApiSecModule(p)           { return _autoMod(p, {moduleKey:"apisec",          moduleLabel:"API Security Testing",             emoji:"", color:"#10b981", playbook:"22_apisec.md"}); }
+function QuantumReadinessModule(p) { return _autoMod(p, {moduleKey:"quantum_readiness", moduleLabel:"Quantum Readiness",             emoji:"", color:"#22d3ee", playbook:"37_quantum_readiness.md"}); }
 
 // ═══════════════════════════════════════════════════════════════
 //  PHISHING MODULE — stub for module_playbooks/26_phishing.md
@@ -24555,6 +24570,9 @@ export default function App() {
         </div>
         <div style={{display: active==="apisec"   ? "block" : "none"}}>
           <ApiSecModule token={token} apiUrl={API}/>
+        </div>
+        <div style={{display: active==="quantum_readiness" ? "block" : "none"}}>
+          <QuantumReadinessModule token={token} apiUrl={API}/>
         </div>
         <div style={{display: active==="pivot"    ? "block" : "none"}}>
           <PivotModule token={token} apiUrl={API}/>
