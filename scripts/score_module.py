@@ -47,14 +47,18 @@ WEIGHTS = {
 # standard_response calls) AND the Recon shape (ScanContext + run_scanner
 # + findings rules file). A scanner passes the check if it uses EITHER.
 CHECKS = {
-    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner|_http_get\(|_http_post\(|MethodologyScanner|run_as_endpoint\(|pre_flight\(",
-    "uniform_shape": r"standard_response\(|vuln_response\(|run_scanner\(|wrap_finding\(|run_as_endpoint\(|MethodologyScanner",
+    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner|_http_get\(|_http_post\(|MethodologyScanner|run_as_endpoint\(|pre_flight\(|run_nuclei\(",
+    "uniform_shape": r"standard_response\(|vuln_response\(|run_scanner\(|wrap_finding\(|run_as_endpoint\(|MethodologyScanner|run_nuclei\(",
     "positive_emit": r'"POSITIVE"|POSITIVE|ctx\.source\(|FINDING_RULES',
-    "severity":      r'severity=|"severity"|\'severity\'|finding_rules|FINDING_RULES',
-    "remediation":   r'remediation=|"remediation"|\'remediation\'|FINDING_RULES',
-    "evidence":      r'evidence_marker=|"evidence_marker"|\'evidence_marker\'|evidence=|ctx\.source\(',
-    "timeout":       r"timeout=|wait_for\(.*timeout=|deadline\s*=|run_scanner",
+    "severity":      r'severity=|"severity"|\'severity\'|finding_rules|FINDING_RULES|run_nuclei\(',
+    "remediation":   r'remediation=|"remediation"|\'remediation\'|FINDING_RULES|run_nuclei\(',
+    "evidence":      r'evidence_marker=|"evidence_marker"|\'evidence_marker\'|evidence=|ctx\.source\(|run_nuclei\(',
+    "timeout":       r"timeout=|wait_for\(.*timeout=|deadline\s*=|run_scanner|run_nuclei\(",
 }
+# Note: run_nuclei() is a complete scan primitive (target probe + 90s timeout +
+# nuclei templates that emit severity/evidence/remediation), so it satisfies the
+# same checks as run_scanner. Added 2026-06-13 to stop false-negatives on the 3
+# real nuclei-based scanners (nuclei_default_creds/nuclei_takeover/nuclei_cisa_kev).
 
 
 def find_scanners(module_path: Path) -> list[Path]:
@@ -196,6 +200,7 @@ def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
                 "precheck_target", "safe_get", "web_url", "recon_host",
                 "run_scanner", "_http_get", "_http_post",
                 "run_as_endpoint", "pre_flight", "port_open", "banner_grab",
+                "run_nuclei",
             })
             # Methodology base-class detection: subclass of MethodologyScanner
             if not actual_call and re.search(r"class\s+\w+\(MethodologyScanner\)", src):
