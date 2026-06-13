@@ -18,9 +18,25 @@ Plans map to the existing quota tiers in `tools/_quota.py` (`pro` = 500 scans/mo
 `team` = 5000). On a captured payment the user's `plan` + `subscription_expires_at`
 are set; quota is already enforced by `tools/consent/consent_log.py`.
 
+## Model: à la carte modules (monthly)
+Customers subscribe to **individual modules** (monthly). On a captured payment
+the account is set to `plan='modular'` with `subscription_expires_at = +30d` and
+the purchased module ids unioned into `users.modules` (CSV). A free 7-day Trial
+unlocks everything; after that, access is gated to the modules they bought.
+Entitlement rules live in `tools/_payments/entitlements.py`.
+
+> Phase status: purchase + provisioning + module-select checkout are **done**.
+> Access-gating (lock unowned modules in the dashboard + enforce on the server)
+> and the demo/video section are the next phases.
+
 ## 1. Set the prices
-Edit `tools/_payments/plans.py` — the `PAYMENT_PLANS` amounts are **placeholders
-in paise (INR × 100)**. Replace with your confirmed INR prices.
+**Primary — per-module:** edit `tools/_payments/module_catalog.py` →
+`MODULE_CATALOG` amounts are **placeholder monthly prices in paise (INR × 100)**.
+Replace with your confirmed prices. The module ids must match the backend
+`tools/<id>/` dir + the frontend catalog id.
+
+**Legacy (optional) — plans:** `tools/_payments/plans.py` still supports
+single-plan purchases if you ever want bundles.
 
 ## 2. Env vars (VPS `.env`)
 ```
@@ -51,10 +67,12 @@ CORS_ORIGINS=https://app.vulnuslab.com,https://vulnuslab.com,https://www.vulnusl
 - Events: `payment.captured` and `order.paid`
 - Secret: same value as `RAZORPAY_WEBHOOK_SECRET`
 
-## 5. Link the checkout from pricing
-Point each plan's CTA at `https://vulnuslab.com/checkout.html?plan=<id>`, e.g.
-`?plan=pro_monthly`, `?plan=team_annual`. (For local/test you can append
-`&api=http://localhost:8000`.)
+## 5. The checkout page
+`checkout.html` is a **module multi-select** — it loads the catalogue from
+`/api/payment/config`, the customer ticks modules, the live total updates, and
+the amount is **recomputed server-side** at create-order (the client total is
+never trusted). Link it as `https://vulnuslab.com/checkout.html` (optionally
+pre-select with `?modules=recon,vuln`). For local test: `&api=http://localhost:8000`.
 
 ## 6. Test (test mode, no KYC needed)
 1. Set the `rzp_test_*` keys + webhook secret + email vars, rebuild backend.

@@ -39,6 +39,7 @@ def init_db():
             subscription_expires_at TEXT,
             scans_used INTEGER DEFAULT 0,
             usage_period TEXT DEFAULT '',
+            modules TEXT DEFAULT '',
             status TEXT DEFAULT 'active',
             created_at TEXT NOT NULL,
             updated_at TEXT
@@ -54,6 +55,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN subscription_expires_at TEXT",
             "ALTER TABLE users ADD COLUMN scans_used INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN usage_period TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN modules TEXT DEFAULT ''",
         ):
             try:
                 con.execute(_ddl)

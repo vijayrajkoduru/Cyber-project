@@ -25,6 +25,7 @@ from tools.auth._db import get_db
 PLAN_CAPS = {
     "free":       10,
     "trial":      25,      # bounded trial; also time-boxed (expires ~7d after signup)
+    "modular":    500,     # à la carte: access is gated per-module; scans capped like pro
     "pro":        500,
     "team":       5000,
     "enterprise": None,
@@ -38,6 +39,7 @@ PLAN_CAPS = {
 PLAN_PRICE = {
     "free":       0,
     "trial":      0,
+    "modular":    0,       # per-module pricing lives in tools/_payments/module_catalog.py
     "pro":        49,
     "team":       249,
     "enterprise": 0,

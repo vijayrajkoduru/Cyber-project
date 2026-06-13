@@ -3,131 +3,152 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Checkout — VulnusLab</title>
+<title>Choose your modules — VulnusLab</title>
 <style>
-  :root{--bg:#0a0e17;--card:#0f1525;--border:#1c2435;--text:#c3ccda;--muted:#8a94a8;--white:#fff;--blue:#3b9eff;--green:#10b981;--red:#ff6b85}
+  :root{--bg:#0a0e17;--card:#0f1525;--row:#0b1120;--border:#1c2435;--text:#c3ccda;--muted:#8a94a8;--white:#fff;--blue:#3b9eff;--green:#10b981;--red:#ff6b85}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.6}
-  .wrap{max-width:520px;margin:0 auto;padding:48px 22px 80px}
+  .wrap{max-width:760px;margin:0 auto;padding:44px 20px 90px}
   .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
   .brand img{width:38px;height:38px}.brand span{font-size:18px;font-weight:900}.brand .v{color:#fff}.brand .l{color:var(--blue)}
-  .tag{font-size:12px;color:var(--muted);margin:0 0 26px 48px}
-  h1{color:#fff;font-size:24px;margin:8px 0 18px}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px}
-  .plan{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:18px}
-  .plan .name{font-size:16px;font-weight:700;color:#fff}.plan .price{font-size:22px;font-weight:800;color:var(--blue)}
-  label{display:block;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
-  input[type=text],input[type=email]{width:100%;background:#0b1120;border:1px solid var(--border);border-radius:9px;color:#fff;font-size:15px;padding:11px 13px}
+  .tag{font-size:12px;color:var(--muted);margin:0 0 22px 48px}
+  h1{color:#fff;font-size:25px;margin:6px 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 22px}
+  .mods{display:grid;grid-template-columns:1fr;gap:10px}
+  @media(min-width:620px){.mods{grid-template-columns:1fr 1fr}}
+  .mod{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s}
+  .mod.sel{border-color:var(--blue);background:linear-gradient(135deg,rgba(59,158,255,.08),rgba(59,158,255,.02))}
+  .mod input{margin-top:4px}
+  .mod .name{font-size:15px;font-weight:700;color:#fff}
+  .mod .price{font-size:13px;color:var(--blue);font-weight:700}
+  .mod .blurb{font-size:12px;color:var(--muted);margin-top:3px}
+  .summary{position:sticky;bottom:0;margin-top:22px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+  .total{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+  .total .lbl{color:var(--muted);font-size:13px}.total .amt{font-size:24px;font-weight:900;color:#fff}.total .amt small{font-size:13px;color:var(--muted);font-weight:600}
+  label.fl{display:block;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}
+  input[type=text],input[type=email]{width:100%;background:var(--row);border:1px solid var(--border);border-radius:9px;color:#fff;font-size:15px;padding:11px 13px}
   input:focus{outline:none;border-color:var(--blue)}
-  .auth{display:flex;gap:10px;align-items:flex-start;margin:18px 0;font-size:13px;color:var(--muted)}
-  .auth input{margin-top:3px}
-  button{width:100%;margin-top:8px;background:linear-gradient(135deg,#1d4ed8,#3b9eff);color:#fff;border:0;border-radius:10px;font-size:16px;font-weight:800;padding:13px;cursor:pointer}
+  .auth{display:flex;gap:10px;align-items:flex-start;margin:14px 0;font-size:13px;color:var(--muted)}
+  .auth input{margin-top:3px}.auth a{color:var(--blue)}
+  button{width:100%;background:linear-gradient(135deg,#1d4ed8,#3b9eff);color:#fff;border:0;border-radius:10px;font-size:16px;font-weight:800;padding:13px;cursor:pointer}
   button:disabled{opacity:.5;cursor:not-allowed}
-  .msg{margin-top:16px;font-size:14px;border-radius:9px;padding:12px 14px;display:none}
+  .msg{margin-top:14px;font-size:14px;border-radius:9px;padding:12px 14px;display:none}
   .msg.err{display:block;background:rgba(224,35,71,.1);border:1px solid rgba(224,35,71,.4);color:var(--red)}
   .msg.ok{display:block;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.4);color:var(--green)}
-  .links{margin-top:22px;font-size:12px;color:var(--muted);text-align:center}
-  .links a{color:var(--muted);text-decoration:none;margin:0 8px}
-  .fine{font-size:11px;color:#475569;margin-top:14px;text-align:center}
+  .fine{font-size:11px;color:#475569;margin-top:12px;text-align:center}
+  .links{margin-top:22px;font-size:12px;color:var(--muted);text-align:center}.links a{color:var(--muted);text-decoration:none;margin:0 8px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="brand"><img src="/logo.svg" alt="VulnusLab" /><span><span class="v">VULNUS</span><span class="l">LAB</span></span></div>
   <p class="tag">Automated Vulnerability Assessment Platform</p>
-  <h1>Checkout</h1>
+  <h1>Choose your modules</h1>
+  <p class="sub">Subscribe only to the modules you need — billed monthly. You can add more anytime.</p>
 
-  <div class="card" id="card">
-    <div class="plan"><span class="name" id="planName">Loading plan…</span><span class="price" id="planPrice"></span></div>
-    <label for="name">Full name</label>
+  <div class="mods" id="mods"><p style="color:#8a94a8">Loading modules…</p></div>
+
+  <div class="summary">
+    <div class="total"><span class="lbl" id="selCount">No modules selected</span><span class="amt" id="amt">₹0<small>/mo</small></span></div>
+    <label class="fl" for="name">Full name</label>
     <input type="text" id="name" placeholder="Jane Doe" autocomplete="name" />
-    <label for="email">Email (your login + receipt)</label>
+    <label class="fl" for="email">Email (your login + receipt)</label>
     <input type="email" id="email" placeholder="you@company.com" autocomplete="email" />
     <div class="auth">
       <input type="checkbox" id="auth" />
-      <label for="auth" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--muted)">I confirm I will only use VulnusLab to scan systems I own or am explicitly authorized to test, and I agree to the <a href="/terms.html" style="color:var(--blue)">Terms</a> and <a href="/refund.html" style="color:var(--blue)">Refund Policy</a>.</label>
+      <label for="auth" style="margin:0">I confirm I will only scan systems I own or am explicitly authorized to test, and I agree to the <a href="/terms.html">Terms</a> and <a href="/refund.html">Refund Policy</a>.</label>
     </div>
-    <button id="pay" disabled>Pay</button>
+    <button id="pay" disabled>Subscribe</button>
     <div class="msg" id="msg"></div>
-    <div class="fine">Payments are processed securely by Razorpay. We never see your card details.</div>
+    <div class="fine">Secure payment by Razorpay · We never see your card details · Cancel anytime</div>
   </div>
 
-  <div class="links">
-    <a href="/">Home</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a><a href="/refund.html">Refund</a><a href="/contact.html">Contact</a>
-  </div>
+  <div class="links"><a href="/">Home</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a><a href="/refund.html">Refund</a><a href="/contact.html">Contact</a></div>
 </div>
 
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
-  // Backend API base (dashboard host). Override with ?api= for testing.
   var API = new URLSearchParams(location.search).get("api") || "https://app.vulnuslab.com";
-  var PLAN_ID = new URLSearchParams(location.search).get("plan") || "pro_monthly";
-  var CFG = null, PLAN = null;
+  var PRESEL = (new URLSearchParams(location.search).get("modules") || "").split(",").filter(Boolean);
+  var CFG = null, MODS = [], SEL = {};
   var $ = function (id) { return document.getElementById(id); };
-  function money(paise, cur) { var s = (cur || "INR") === "INR" ? "₹" : (cur + " "); return s + (paise / 100).toLocaleString(undefined, { minimumFractionDigits: 2 }); }
-  function show(kind, text) { var m = $("msg"); m.className = "msg " + kind; m.textContent = text; }
+  function inr(paise) { return "₹" + (paise / 100).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+  function show(kind, t) { var m = $("msg"); m.className = "msg " + kind; m.textContent = t; }
 
-  fetch(API + "/api/payment/config")
-    .then(function (r) { return r.json(); })
-    .then(function (cfg) {
-      CFG = cfg;
-      PLAN = (cfg.plans || []).filter(function (p) { return p.id === PLAN_ID; })[0] || (cfg.plans || [])[0];
-      if (!PLAN) { $("planName").textContent = "No plans available"; return; }
-      $("planName").textContent = PLAN.label;
-      $("planPrice").textContent = money(PLAN.amount, PLAN.currency);
-      if (!cfg.configured) { show("err", "Payments are not live yet — please check back soon or email support@vulnuslab.com."); return; }
-      refreshBtn();
-    })
-    .catch(function () { show("err", "Could not load checkout. Please try again later."); });
+  fetch(API + "/api/payment/config").then(function (r) { return r.json(); }).then(function (cfg) {
+    CFG = cfg; MODS = cfg.modules || [];
+    if (!MODS.length) { $("mods").innerHTML = "<p style='color:#ff6b85'>No modules available right now.</p>"; return; }
+    render();
+    if (!cfg.configured) show("err", "Payments are not live yet — check back soon or email support@vulnuslab.com.");
+  }).catch(function () { $("mods").innerHTML = "<p style='color:#ff6b85'>Could not load modules. Please try again later.</p>"; });
 
+  function render() {
+    var html = "";
+    MODS.forEach(function (m) {
+      var on = PRESEL.indexOf(m.id) >= 0; if (on) SEL[m.id] = true;
+      html += '<label class="mod' + (on ? ' sel' : '') + '" data-id="' + m.id + '">' +
+        '<input type="checkbox" ' + (on ? 'checked' : '') + ' data-id="' + m.id + '">' +
+        '<div><div class="name">' + m.label + '</div><div class="price">' + inr(m.amount) + '/mo</div>' +
+        '<div class="blurb">' + (m.blurb || '') + '</div></div></label>';
+    });
+    $("mods").innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('.mod input'), function (cb) {
+      cb.addEventListener("change", function () {
+        var id = cb.getAttribute("data-id");
+        if (cb.checked) SEL[id] = true; else delete SEL[id];
+        cb.closest(".mod").classList.toggle("sel", cb.checked);
+        refresh();
+      });
+    });
+    refresh();
+  }
+
+  function selectedIds() { return Object.keys(SEL); }
+  function total() { var t = 0; MODS.forEach(function (m) { if (SEL[m.id]) t += m.amount; }); return t; }
   function valid() {
     var email = $("email").value.trim();
-    return PLAN && CFG && CFG.configured && $("name").value.trim().length >= 2 &&
-           email.indexOf("@") > 0 && email.indexOf(".") > email.indexOf("@") && $("auth").checked;
+    return CFG && CFG.configured && selectedIds().length > 0 && $("name").value.trim().length >= 2 &&
+      email.indexOf("@") > 0 && email.indexOf(".") > email.indexOf("@") && $("auth").checked;
   }
-  function refreshBtn() {
+  function refresh() {
+    var n = selectedIds().length;
+    $("selCount").textContent = n ? (n + " module" + (n > 1 ? "s" : "") + " selected") : "No modules selected";
+    $("amt").innerHTML = inr(total()) + "<small>/mo</small>";
     $("pay").disabled = !valid();
-    $("pay").textContent = PLAN ? ("Pay " + money(PLAN.amount, PLAN.currency)) : "Pay";
+    $("pay").textContent = n ? ("Subscribe — " + inr(total()) + "/mo") : "Subscribe";
   }
-  ["name", "email", "auth"].forEach(function (id) { $(id).addEventListener("input", refreshBtn); $(id).addEventListener("change", refreshBtn); });
+  ["name", "email", "auth"].forEach(function (id) { $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); });
 
   $("pay").addEventListener("click", function () {
     if (!valid()) return;
     $("pay").disabled = true; show("ok", "Creating your secure order…");
     fetch(API + "/api/payment/create-order", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan_id: PLAN.id, name: $("name").value.trim(), email: $("email").value.trim() })
-    })
-      .then(function (r) { if (!r.ok) throw new Error("order"); return r.json(); })
-      .then(function (o) {
-        var rzp = new Razorpay({
-          key: o.key_id, order_id: o.order_id, amount: o.amount, currency: o.currency,
-          name: "VulnusLab", description: o.plan_label,
-          prefill: { name: o.name, email: o.email }, theme: { color: "#2563eb" },
-          handler: function (resp) {
-            show("ok", "Verifying payment…");
-            fetch(API + "/api/payment/verify", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_order_id: resp.razorpay_order_id,
-                razorpay_payment_id: resp.razorpay_payment_id,
-                razorpay_signature: resp.razorpay_signature
-              })
-            }).then(function (r) { return r.json(); }).then(function (v) {
-              if (v.verified) {
-                $("card").innerHTML = "<h2 style='color:#10b981;margin-top:0'>Payment successful</h2>" +
-                  "<p>Your <b>" + o.plan_label + "</b> plan is active. We've emailed your login details and receipt to <b>" +
-                  o.email + "</b>. If you don't see it within a few minutes, check spam or email support@vulnuslab.com.</p>" +
-                  "<p style='margin-top:18px'><a href='https://app.vulnuslab.com' style='background:#2563eb;color:#fff;text-decoration:none;padding:11px 22px;border-radius:9px;font-weight:700;display:inline-block'>Go to dashboard</a></p>";
-              } else { show("err", "We received your payment but couldn't verify it automatically. Email support@vulnuslab.com with your payment ID."); }
-            }).catch(function () { show("err", "Payment received — verification pending. You'll get an email shortly."); });
-          },
-          modal: { ondismiss: function () { $("pay").disabled = false; show("err", "Payment cancelled."); } }
-        });
-        rzp.on("payment.failed", function () { $("pay").disabled = false; show("err", "Payment failed. Please try again."); });
-        rzp.open();
-      })
-      .catch(function () { $("pay").disabled = false; show("err", "Could not start payment. Please try again or email support@vulnuslab.com."); });
+      body: JSON.stringify({ module_ids: selectedIds(), name: $("name").value.trim(), email: $("email").value.trim() })
+    }).then(function (r) { if (!r.ok) throw new Error("order"); return r.json(); }).then(function (o) {
+      var rzp = new Razorpay({
+        key: o.key_id, order_id: o.order_id, amount: o.amount, currency: o.currency,
+        name: "VulnusLab", description: o.label,
+        prefill: { name: o.name, email: o.email }, theme: { color: "#2563eb" },
+        handler: function (resp) {
+          show("ok", "Verifying payment…");
+          fetch(API + "/api/payment/verify", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ razorpay_order_id: resp.razorpay_order_id, razorpay_payment_id: resp.razorpay_payment_id, razorpay_signature: resp.razorpay_signature })
+          }).then(function (r) { return r.json(); }).then(function (v) {
+            if (v.verified) {
+              document.querySelector(".summary").innerHTML =
+                "<h2 style='color:#10b981;margin:0 0 8px'>Subscription active</h2>" +
+                "<p>" + o.label + " is now active on your account. We've emailed your login details and receipt to <b>" + o.email + "</b> — check spam if you don't see it shortly.</p>" +
+                "<p style='margin-top:14px'><a href='https://app.vulnuslab.com' style='background:#2563eb;color:#fff;text-decoration:none;padding:11px 22px;border-radius:9px;font-weight:700;display:inline-block'>Go to dashboard</a></p>";
+            } else { show("err", "Payment received but auto-verify failed — email support@vulnuslab.com with your payment ID."); }
+          }).catch(function () { show("err", "Payment received — verification pending. You'll get an email shortly."); });
+        },
+        modal: { ondismiss: function () { $("pay").disabled = false; show("err", "Payment cancelled."); } }
+      });
+      rzp.on("payment.failed", function () { $("pay").disabled = false; show("err", "Payment failed. Please try again."); });
+      rzp.open();
+    }).catch(function () { $("pay").disabled = false; show("err", "Could not start payment. Please try again or email support@vulnuslab.com."); });
   });
 </script>
 </body>
