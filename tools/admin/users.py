@@ -83,6 +83,16 @@ async def extend_plan(username: str, req: ExtendRequest, _=Depends(verify_admin_
     return {"ok": True, "username": username, "extended_days": req.days, "plan": req.plan, "subscription_expires_at": new_exp}
 
 
+@router.post("/api/admin/users/{username}/reset_quota")
+async def reset_quota(username: str, _=Depends(verify_admin_or_super)):
+    """Zero this user's monthly scan counter (give immediate headroom)."""
+    with get_db() as con:
+        result = con.execute("UPDATE users SET scans_used=0 WHERE username=?", (username,))
+        if result.rowcount == 0:
+            raise HTTPException(404, f"User '{username}' not found")
+    return {"ok": True, "username": username, "scans_used": 0}
+
+
 @router.delete("/api/admin/users/{username}")
 async def delete_user(username: str, _=Depends(verify_admin_or_super)):
     if username.upper() == "ADMIN":
