@@ -68,7 +68,9 @@
 
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script>
-  var API = new URLSearchParams(location.search).get("api") || "https://app.vulnuslab.com";
+  // Same-origin by default: the landing nginx proxies /api/ to the backend, so
+  // no CORS is needed. Override with ?api=http://localhost:8000 for local dev.
+  var API = new URLSearchParams(location.search).get("api") || "";
   var PRESEL = (new URLSearchParams(location.search).get("modules") || "").split(",").filter(Boolean);
   var CFG = null, MODS = [], SEL = {};
   var $ = function (id) { return document.getElementById(id); };

@@ -55,12 +55,18 @@ EMAIL_REPLY_TO=support@vulnuslab.com
 DASHBOARD_URL=https://app.vulnuslab.com
 ```
 
-## 3. CORS (checkout page is cross-origin)
-The checkout page lives on `vulnuslab.com` but calls the API on
-`app.vulnuslab.com`. Add the landing origin to `CORS_ORIGINS` in `.env`:
-```
-CORS_ORIGINS=https://app.vulnuslab.com,https://vulnuslab.com,https://www.vulnuslab.com
-```
+## 3. CORS — not needed (landing served from the VPS, same-origin)
+The landing site (incl. `checkout.html`) is now baked into the `frontend` nginx
+image and served on `vulnuslab.com` by the SAME nginx that proxies `/api/` to the
+backend (see `Dockerfile.frontend` + the `vulnuslab.com` server block in
+`nginx.conf`). So the checkout calls `/api/payment/*` **same-origin** — no
+`CORS_ORIGINS` entry required. (If you ever serve the landing from a different
+host, add that origin to `CORS_ORIGINS`.)
+
+DNS: point `vulnuslab.com` + `www.vulnuslab.com` at the VPS (A record / Cloudflare
+proxied to the VPS IP), same as `app.vulnuslab.com`. Deploy with:
+`docker compose up -d --build frontend` (rebuild bakes the latest landing build;
+the mounted nginx.conf is re-read on container recreate).
 
 ## 4. Register the webhook in Razorpay
 - URL: `https://app.vulnuslab.com/api/payment/webhook`

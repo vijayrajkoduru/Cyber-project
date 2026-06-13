@@ -11,10 +11,23 @@ COPY src ./src
 # cleanup pass. For now, warnings are still printed but don't fail the build.
 RUN CI=false npm run build
 
+# ── Landing site (vulnuslab.com) ──────────────────────────────────────
+# Built from landing-page/ and served by the SAME nginx under a separate
+# server_name. Because nginx also proxies /api/ to the backend, the checkout
+# page calls the payment API same-origin — no CORS config needed.
+FROM node:18-alpine AS landingbuilder
+WORKDIR /landing
+COPY landing-page/package*.json ./
+RUN npm install --legacy-peer-deps
+COPY landing-page/public ./public
+COPY landing-page/src ./src
+RUN CI=false npm run build
+
 FROM nginx:alpine
 COPY --from=builder /app/build /usr/share/nginx/html
+COPY --from=landingbuilder /landing/build /usr/share/nginx/landing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY extra_nginx_conf/ /etc/nginx/conf.d/
-RUN chmod -R 755 /usr/share/nginx/html
+RUN chmod -R 755 /usr/share/nginx/html /usr/share/nginx/landing
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
