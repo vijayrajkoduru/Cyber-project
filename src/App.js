@@ -20941,11 +20941,12 @@ const MODULE_ADVANCED_INPUTS = {
   supply_chain:  ["repo_url"],
   apisec:        ["api_spec_url"],
   cloud:         ["repo_url"],   // IaC scans (tfsec / checkov) need repo with .tf files
-  // Vuln has scanners that benefit from all four (tier8_container/dockerfile_hadolint
-  // needs Dockerfile, tier9_iac/k8s_manifest_scan needs pod YAML,
-  // tier10_cloud_native/kube_hunter_scan needs kubeconfig,
-  // tier7_sca/* + tier9_iac/* need repo_url with source / IaC files).
-  vuln:          ["image_ref", "dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"],
+  // Vuln consumes image_ref only (tier8_image/trivy_image_cve). Dockerfile /
+  // pod-spec / kubeconfig / repo scanning live in the Container/K8s + Supply
+  // Chain modules (which DO read them); offering them here was a no-op - no
+  // Vuln scanner read those fields - so they're removed to stop silent
+  // "0 findings because the input did nothing" reports.
+  vuln:          ["image_ref"],
 };
 
 // Per-module example targets shown as clickable "Try:" chips below the target
