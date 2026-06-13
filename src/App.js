@@ -21185,7 +21185,6 @@ const MODULE_TEST_TARGETS = {
     {label:"hackerone.com",              value:"hackerone.com",              desc:"Bug-bounty org — rich public OSINT footprint"},
     {label:"8.8.8.8",                    value:"8.8.8.8",                    desc:"IP — geoip / ASN / Shodan"},
     {label:"@elonmusk",                  value:"@elonmusk",                  desc:"Username — social-handle walk"},
-    {label:"test@example.com",           value:"test@example.com",           desc:"Email — breach + social lookups (format example)"},
   ],
   exploit: [
     {label:"lab_metasploitable",   value:"lab_metasploitable",                    desc:"Your Docker Metasploitable2 lab — exploitable services + CVE cross-ref"},
@@ -21250,13 +21249,10 @@ const MODULE_TEST_TARGETS = {
     {label:"lab_pwd_saml",    value:"http://lab_pwd_saml:8080/simplesaml", desc:"Your Docker SimpleSAMLphp lab — SAML signature tier (user1/user1pass)"},
   ],
   wireless: [
-    {label:"sample BSSID",         value:"AA:BB:CC:DD:EE:FF",                     desc:"Example BSSID format"},
-    {label:"sample SSID",          value:"CorpWiFi",                              desc:"Example SSID format"},
-    {label:"channel 6",            value:"6",                                     desc:"Channel number"},
+    {label:"your AP/router mgmt IP", value:"192.168.1.1",                         desc:"Your access-point/router management interface (host or host:port) — mgmt-plane exposure + TLS audit. RF probes (handshake/WPS) need a local Wi-Fi adapter and degrade to advisory otherwise."},
   ],
   ad: [
     {label:"lab_pwd_ad",           value:"dc01.vlrange.local",                    desc:"Internal Samba AD lab (opt-in - see PHASE_CDE_LABS.md)"},
-    {label:"your AD domain",       value:"corp.local",                            desc:"Your own AD test environment"},
     {label:"your DC hostname",     value:"dc01.corp.local",                       desc:"Your own Domain Controller"},
   ],
   av_evasion: [
@@ -21266,8 +21262,6 @@ const MODULE_TEST_TARGETS = {
   cloud: [
     {label:"TerraGoat IaC repo",   adv:{repo_url:"https://github.com/bridgecrewio/terragoat"}, desc:"Deliberately-vulnerable Terraform — IaC tier (tfsec/checkov) fires, NO cloud creds needed"},
     {label:"CfnGoat IaC repo",     adv:{repo_url:"https://github.com/bridgecrewio/cfngoat"},   desc:"Deliberately-vulnerable CloudFormation — IaC misconfig tier"},
-    {label:"your AWS account id",  value:"123456789012",                          desc:"Your own 12-digit AWS account (needs creds for live cloud tiers)"},
-    {label:"your S3 bucket",       value:"s3://your-bucket-name",                 desc:"Your own S3 bucket (needs creds)"},
   ],
   apisec: [
     {label:"lab_juiceshop API", value:"http://lab_juiceshop:3000/rest", login_url:"http://lab_juiceshop:3000", username:"admin@juice-sh.op", password:"admin123", auth_type:"spa", desc:"Your Docker Juice Shop REST API (auto-login)"},
@@ -21277,7 +21271,6 @@ const MODULE_TEST_TARGETS = {
   ai_llm: [
     {label:"gandalf.lakera.ai",    value:"https://gandalf.lakera.ai",             desc:"Lakera's official prompt-injection challenge"},
     {label:"local ollama",         value:"http://localhost:11434/api/generate",   desc:"Your local Ollama LLM endpoint"},
-    {label:"your LLM endpoint",    value:"https://your-llm.example.com/v1/chat",  desc:"Your own deployed LLM API"},
   ],
   // container_k8s test targets fill the image_ref / dockerfile_text /
   // pod_spec_yaml advanced inputs (the Target field is hidden for this module)
