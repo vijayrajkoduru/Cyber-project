@@ -205,6 +205,7 @@ def scan_sqlmap_full(req: ScanRequest, payload=Depends(verify_scan_quota)):
         tool="sqlmap_full", target=req.target, findings=[],
         tested=1,
         what_checked="sqlmap full SQLi battery (boolean/error/UNION/time/stacked)",
+        severity_when_clean="POSITIVE",
         tests_summary=f"sqlmap completed; 0 SQLi confirmed on {base}",
         raw_data={"sqlmap": {"exit_code": exit_code, "params_vulnerable": 0,
                                "stderr_tail": stderr[-300:] if stderr else ""}},

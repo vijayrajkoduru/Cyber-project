@@ -104,6 +104,14 @@ async def webapp_joomla_scan(req: ScanRequest, payload=Depends(verify_scan_quota
             evidence_marker="GET /configuration.php returned PHP source with JConfig class definition",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "Joomla detected, no exposed admin/version/config disclosure paths",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. Keep version XMLs and configuration.php restricted "
+                        "and core/extensions patched. Re-test after Joomla upgrades.",
+            evidence_marker=f"{tests} Joomla-specific probe(s); no version XML or "
+                            "configuration.php disclosure"))
     return standard_response(
         tool="joomla_scan", target=req.target,
         findings=findings, tests_performed=tests,

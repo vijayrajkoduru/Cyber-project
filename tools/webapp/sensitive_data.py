@@ -90,6 +90,14 @@ def scan_sensitive_data(req: ScanRequest, _=Depends(verify_scan_quota)):
                f"(AWS/Stripe/RSA/bcrypt/JWT/PII) in {time.time() - _wallclock_start:.1f}s")
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No sensitive-data exposure — responses leaked no PII / financial / credential patterns",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. Keep PII out of client responses and mask sensitive "
+                        "fields. Re-test after API response-shape changes.",
+            evidence_marker=f"{tests} content check(s) across scanned URLs; no "
+                            "sensitive-data pattern matched"))
     return standard_response(tool="sensitive_data", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=summary,

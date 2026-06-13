@@ -120,6 +120,14 @@ async def webapp_drupal_scan(req: ScanRequest, payload=Depends(verify_scan_quota
             evidence_marker="GET /user/register returned a usable registration form",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "Drupal detected, no exposed install/update/version-disclosure paths",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. Keep CHANGELOG/install/update endpoints restricted "
+                        "and core patched. Re-test after Drupal core upgrades.",
+            evidence_marker=f"{tests} Drupal-specific probe(s); no version disclosure "
+                            "or open install/update path"))
     return standard_response(
         tool="drupal_scan", target=req.target,
         findings=findings, tests_performed=tests,

@@ -66,6 +66,15 @@ async def webapp_race_condition(req: ScanRequest, payload=Depends(verify_scan_qu
                 evidence_marker=f"GET {path} x10 parallel returned mixed statuses: {sorted(unique_statuses)}",
             ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No race condition — endpoints behaved consistently under parallel load",
+            "POSITIVE", cwe="CWE-362",
+            remediation="Maintain. Keep idempotency keys / atomic transactions / locks "
+                        "on state-changing endpoints. Re-test after concurrency-sensitive "
+                        "feature changes.",
+            evidence_marker=f"{tests} race probe(s); no endpoint diverged under "
+                            "parallel requests"))
     return standard_response(
         tool="race_condition", target=req.target,
         findings=findings, tests_performed=tests,

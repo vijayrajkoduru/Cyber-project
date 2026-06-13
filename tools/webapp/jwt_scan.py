@@ -140,6 +140,7 @@ def scan_jwt(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="jwt", target=req.target, findings=findings,
         tested=pages,
         what_checked=f"JWT tokens for alg=none, weak HMAC secrets ({len(_SECRETS)}-entry AI-curated wordlist), missing exp, PII leakage",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"jwt": {"tokens_found": len(tokens), "issues_confirmed": confirmed,
                           "secret_dictionary_size": len(_SECRETS),

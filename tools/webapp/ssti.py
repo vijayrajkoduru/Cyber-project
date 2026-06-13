@@ -106,6 +106,15 @@ def scan_ssti(req: ScanRequest, _=Depends(verify_scan_quota)):
                f"(Jinja2/FreeMarker/ERB/Pug/Angular/Thymeleaf) in {time.time() - _wallclock_start:.1f}s")
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No server-side template injection — arithmetic-marker payloads were not evaluated",
+            "POSITIVE", cwe="CWE-1336",
+            remediation="Maintain. Keep user input out of template source; use "
+                        "logic-less / sandboxed templates. Re-test after templating changes.",
+            evidence_marker=f"{tests} SSTI probe(s) across "
+                            f"{len([e for _,_,e in _PROBES])} engine signature(s); "
+                            "no marker evaluation"))
     return standard_response(tool="ssti", target=req.target, findings=findings,
         tests_performed=max(tests, 1),
         tests_summary=summary,

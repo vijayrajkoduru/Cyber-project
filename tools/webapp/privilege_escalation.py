@@ -98,6 +98,16 @@ async def webapp_privilege_escalation(req: ScanRequest, payload=Depends(verify_s
             evidence_marker=f"GET {path} baseline {b_status}; GET {path} with '{hdr_name}: admin' -> 200 ({len(r.content)} bytes)",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No privilege escalation — auth-bypass headers did not grant admin access",
+            "POSITIVE", cwe="CWE-269",
+            remediation="Maintain. Do not trust client-supplied role/identity headers "
+                        "(X-Forwarded-*, X-Original-URL, etc.). Re-test after gateway "
+                        "changes.",
+            evidence_marker=f"tested {len(_ADMIN_PATHS)} admin path(s) x "
+                            f"{len(_AUTH_BYPASS_HEADERS)} bypass header(s); none "
+                            "escalated"))
     return standard_response(
         tool="privilege_escalation", target=req.target,
         findings=findings, tests_performed=tests,

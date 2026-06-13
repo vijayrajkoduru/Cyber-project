@@ -68,7 +68,7 @@ class SwaggerOpenapiDiscovery(MethodologyScanner):
         spa_is = spa.get("is_spa", False)
 
         async def _c(p):
-            r = await asyncio.to_thread(http_get, base + p, 8, 4000)
+            r = await asyncio.to_thread(http_get, base + p, timeout=8, read=4000)
             if not (r and r.get("status") == 200):
                 return None
             if _looks_like_spec(r.get("body", ""), canary_body, spa_is):

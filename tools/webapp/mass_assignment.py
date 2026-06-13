@@ -86,6 +86,15 @@ def scan_mass_assignment(req: ScanRequest, _=Depends(verify_scan_quota)):
                f"in {time.time() - _wallclock_start:.1f}s")
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No mass assignment — privileged fields were not bindable via request body",
+            "POSITIVE", cwe="CWE-915",
+            remediation="Maintain allow-list binding (DTOs / explicit field maps); "
+                        "never bind raw request bodies to models. Re-test after model "
+                        "or endpoint changes.",
+            evidence_marker=f"{tests} mass-assignment probe(s); no privileged field "
+                            "(role/admin/isAdmin/etc.) accepted"))
     return standard_response(tool="mass_assignment", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=summary,

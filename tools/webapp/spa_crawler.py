@@ -46,6 +46,15 @@ from tools._vl_core.verify import vl_verify
 router = APIRouter()
 
 
+# AI-curated SPA route seeds (client-side hash routes + common app paths that
+# are frequently NOT linked from the homepage, e.g. #/admin, #/api-docs). The
+# BFS crawl below seeds these so React/Vue/Angular routers expose their views
+# even when the landing page has no <a> tag pointing at them.
+def _load_route_seeds() -> list[str]:
+    from tools._payloads.webapp._loader import load_json
+    return load_json("spa_routes", fallback=[])
+
+
 VULNUSLAB_UA = "VulnusLab/1.0 (+https://vulnuslab.com/scanner)"
 MAX_PAGES = 50
 MAX_DEPTH = 3
@@ -122,6 +131,14 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
     discovered_api: Dict[str, Dict] = {}   # endpoint -> {methods:set, params:set}
     discovered_params: Set[str] = set()
     queue: List[Tuple[str, int]] = [(target_url, 0)]
+    # Seed the crawl with AI-curated SPA routes (hash routes + common app paths
+    # not reachable via homepage links). Hash routes attach to the SPA shell;
+    # absolute paths are joined to the target origin.
+    for _seed in _load_route_seeds():
+        if _seed.startswith("#"):
+            queue.append((target_url + "/" + _seed, 1))
+        else:
+            queue.append((target_url + _seed, 1))
     visited: Set[str] = set()
     errors: List[str] = []
 
@@ -280,6 +297,28 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
                         "Restrict to authenticated users or remove."
                     ),
                 })
+
+    # Clean-state advisory: crawl succeeded and surfaced no sensitive-looking
+    # endpoint. This is a discovery scanner, so the POSITIVE confirms the
+    # attack-surface map was built without exposing debug/admin/.env routes.
+    if not any((f.get("severity") or "").upper() == "MEDIUM" for f in findings):
+        findings.append({
+            "severity": "POSITIVE",
+            "detail": (
+                f"SPA crawl mapped attack surface with no exposed sensitive "
+                f"endpoints: {len(visited)} pages, {len(discovered_api)} API "
+                f"endpoints, {len(discovered_params)} parameters discovered."
+            ),
+            "confidence": "CONFIRMED",
+            "remediation": (
+                "Maintain. No action required; this map feeds downstream "
+                "scanners. Keep debug/admin/.env routes off the client."
+            ),
+            "evidence_marker": (
+                f"{len(visited)} pages crawled; no /debug, /admin, or /.env "
+                "endpoint observed in SPA traffic"
+            ),
+        })
 
     # Serialize sets for JSON
     api_summary = {

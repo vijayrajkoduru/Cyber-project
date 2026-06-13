@@ -111,6 +111,14 @@ def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
                f"with {len(_PAYLOADS)} payload types in {time.time() - _wallclock_start:.1f}s")
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No unrestricted file upload — upload endpoints rejected dangerous payload types",
+            "POSITIVE", cwe="CWE-434",
+            remediation="Maintain content-type/extension allow-lists and store uploads "
+                        "outside the web root. Re-test after upload-handler changes.",
+            evidence_marker=f"{tests} upload probe(s) with {len(_PAYLOADS)} payload "
+                            "type(s); no executable upload accepted"))
     return standard_response(tool="file_upload", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=summary,

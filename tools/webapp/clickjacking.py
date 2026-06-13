@@ -35,6 +35,15 @@ def scan_clickjacking(req: ScanRequest, payload=Depends(verify_scan_quota)):
             "MEDIUM", cvss="6.1", cwe="CWE-1021", owasp="A05:2021",
             remediation="Add 'X-Frame-Options: DENY' OR 'frame-ancestors none' to CSP.",
             evidence_marker="neither X-Frame-Options nor CSP frame-ancestors present"))
+    else:
+        findings.append(wrap_finding(
+            "Frame-embedding protection present — no clickjacking exposure",
+            "POSITIVE", cwe="CWE-1021",
+            remediation="Maintain X-Frame-Options / CSP frame-ancestors. Keep "
+                        "the policy at DENY or an explicit allow-list; review on "
+                        "any reverse-proxy or CDN header-rewrite change.",
+            evidence_marker=f"X-Frame-Options={xfo or 'absent'}; "
+                            f"CSP frame-ancestors={'present' if has_fa else 'absent'}"))
     return standard_response(tool="clickjacking", target=req.target,
         findings=findings, tests_performed=1,
         tests_summary="Frame-embedding protection check",

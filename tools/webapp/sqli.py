@@ -114,6 +114,7 @@ def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="sqli", target=req.target, findings=findings,
         tested=max(tests, 1),
         what_checked="URL parameters for time-based SQL injection (triple-confirmation SLEEP)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"sqli": {"confirmed": confirmed, "baseline_seconds": t0,
                             "wallclock_bailed": _bailed}})

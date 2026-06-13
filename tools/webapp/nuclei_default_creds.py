@@ -22,6 +22,7 @@ def scan(req: ScanRequest, _=Depends(verify_scan_quota)):
     return vuln_response(tool="nuclei_default_creds", target=req.target,
         findings=res["findings"], tested=res["tested"],
         what_checked="Nuclei community default-login + weak-credentials templates (~600)",
+        severity_when_clean="POSITIVE",
         tests_summary=f"Nuclei default-creds: {len(res['findings'])} match(es)",
         raw_data={"nuclei_default_creds": {"matches": res["raw"]}})
 

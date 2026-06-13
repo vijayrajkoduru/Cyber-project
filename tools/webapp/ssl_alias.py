@@ -22,6 +22,9 @@ def scan_ssl(req: ScanRequest, payload=Depends(verify_scan_quota)):
     info = wrap_finding(
         "SSL/TLS analysis delegated — see Recon module's tls_deep scanner",
         "POSITIVE",
+        remediation=("Run the Recon module's tls_deep scanner for full handshake / "
+                      "cipher / certificate-chain results; no separate action is "
+                      "needed in the Webapp module."),
         evidence_marker=("Deep TLS handshake / cipher / certificate analysis "
                           "runs as tools/recon/tier7_app/tls_deep.py "
                           "(/api/recon/tls_deep). The Vuln module no longer "

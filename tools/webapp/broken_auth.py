@@ -101,6 +101,15 @@ async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota
     except Exception:
         pass
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No broken-authentication weaknesses — login flow enforced rate-limit / "
+            "session / enumeration protections",
+            "POSITIVE", cwe="CWE-287",
+            remediation="Maintain rate limiting, generic auth-failure messages, and "
+                        "fresh session IDs on login. Re-test after auth changes.",
+            evidence_marker=f"{tests} authentication check(s) against {login_url}; "
+                            "no rate-limit, user-enumeration, or weak-session defect"))
     return standard_response(
         tool="broken_auth", target=req.target,
         findings=findings, tests_performed=tests,

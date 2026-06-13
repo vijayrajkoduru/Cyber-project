@@ -91,6 +91,14 @@ async def webapp_forced_browsing(req: ScanRequest, payload=Depends(verify_scan_q
                             ("contains admin-page markers" if has_admin_marker else "no login redirect"),
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No forced-browsing exposure — restricted paths required authentication",
+            "POSITIVE", cwe="CWE-425",
+            remediation="Maintain. Enforce auth on every restricted path; do not rely "
+                        "on URL obscurity. Re-test after adding privileged routes.",
+            evidence_marker=f"probed {tests} restricted path(s); "
+                            f"{len(accessible)} reachable without auth"))
     return standard_response(
         tool="forced_browsing", target=req.target,
         findings=findings, tests_performed=tests,

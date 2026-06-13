@@ -85,6 +85,14 @@ async def webapp_oauth_redirect_bypass(req: ScanRequest, payload=Depends(verify_
                 evidence_marker=f"GET {oauth_url}?...&redirect_uri={variant}&... -> HTTP {r.status_code} Location: {loc[:120]}",
             ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No OAuth redirect_uri bypass — authorization endpoint enforced exact redirect matching",
+            "POSITIVE", cwe="CWE-601",
+            remediation="Maintain exact redirect_uri allow-listing (no wildcard / "
+                        "prefix / sub-path matching). Re-test after OAuth-client changes.",
+            evidence_marker=f"tested {len(_BYPASS_VARIANTS)} redirect_uri bypass "
+                            f"variant(s) at {oauth_url}; none accepted"))
     return standard_response(
         tool="oauth_redirect_bypass", target=req.target,
         findings=findings, tests_performed=tests,

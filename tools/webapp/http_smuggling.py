@@ -109,6 +109,15 @@ async def webapp_http_smuggling(req: ScanRequest, payload=Depends(verify_scan_qu
             evidence_marker=f"CL.TE probe took {t_clte:.2f}s vs {t_normal:.2f}s baseline - backend likely waited for additional chunks",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No HTTP request smuggling — CL.TE timing probe matched baseline",
+            "POSITIVE", cwe="CWE-444",
+            remediation="Maintain. Keep front-end and back-end agreed on a single "
+                        "request-framing rule (reject ambiguous CL/TE). Re-test after "
+                        "proxy / load-balancer changes.",
+            evidence_marker=f"{tests} timing probe(s); CL.TE attempt did not diverge "
+                            "from the normal-request baseline"))
     return standard_response(
         tool="http_smuggling", target=req.target,
         findings=findings, tests_performed=tests,

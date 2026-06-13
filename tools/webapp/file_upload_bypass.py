@@ -62,6 +62,14 @@ async def webapp_file_upload_bypass(req: ScanRequest, payload=Depends(verify_sca
             evidence_marker=f"GET {path} - file input found; client-side accept='{accept_val}'" + (f", max_size={max_val}" if max_val else ""),
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No upload-filter bypass surface — no unprotected upload endpoints discovered",
+            "POSITIVE", cwe="CWE-434",
+            remediation="Maintain. Enforce server-side type validation and keep upload "
+                        "handlers authenticated. Re-test after adding upload features.",
+            evidence_marker=f"probed {tests} common upload path(s); "
+                            f"{len(discovered)} endpoint(s) found"))
     return standard_response(
         tool="file_upload_bypass", target=req.target,
         findings=findings, tests_performed=tests,

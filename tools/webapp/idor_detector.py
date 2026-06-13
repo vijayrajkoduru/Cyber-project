@@ -80,6 +80,14 @@ async def webapp_idor_detector(req: ScanRequest, payload=Depends(verify_scan_quo
             evidence_marker=f"GET {tpl.replace('{id}','1')} ({sizes[0]}B), GET {tpl.replace('{id}','2')} ({sizes[1]}B), GET {tpl.replace('{id}','999')} ({sizes[2]}B) - all 200 with differing content",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No IDOR — REST id patterns enforced authorization, no suspect access",
+            "POSITIVE", cwe="CWE-639",
+            remediation="Maintain per-object authorization checks. Re-test after "
+                        "adding id-addressable REST resources.",
+            evidence_marker=f"{tests} IDOR probe(s) across {len(_ID_PATHS)} REST "
+                            f"pattern(s); {len(suspect)} suspect"))
     return standard_response(
         tool="idor_detector", target=req.target,
         findings=findings, tests_performed=tests,

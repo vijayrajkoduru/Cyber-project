@@ -78,6 +78,14 @@ async def webapp_session_fixation(req: ScanRequest, payload=Depends(verify_scan_
             evidence_marker=f"Pre-login cookie {session_cookie_names[0]}={pre_cookies[session_cookie_names[0]][:12]}... persists after auth attempt",
         ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No session fixation — session identifier rotated on authentication state change",
+            "POSITIVE", cwe="CWE-384",
+            remediation="Maintain. Regenerate the session ID on login/privilege change "
+                        "and set Secure/HttpOnly. Re-test after auth-flow changes.",
+            evidence_marker=f"{tests} session check(s) at {login_url}; session cookie "
+                            "rotated on auth-state change"))
     return standard_response(
         tool="session_fixation", target=req.target,
         findings=findings, tests_performed=tests,

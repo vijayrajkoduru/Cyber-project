@@ -87,6 +87,14 @@ def scan_force_browse(req: ScanRequest, _=Depends(verify_scan_quota)):
                f"{suppressed} SPA-shell FP(s) suppressed")
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No forced-browse exposure — hidden/admin paths were not reachable",
+            "POSITIVE", cwe="CWE-425",
+            remediation="Maintain. Keep sensitive paths behind authentication and "
+                        "off predictable URLs. Re-run after route changes.",
+            evidence_marker=f"{tests} path(s) from a {len(FORCE_BROWSE_PATHS)}-entry "
+                            "library probed; none returned protected content"))
     return standard_response(tool="force_browse", target=req.target,
         findings=findings, tests_performed=tests, tests_summary=summary,
         raw_data={"force_browse": {"confirmed": confirmed, "by_category": by_cat,

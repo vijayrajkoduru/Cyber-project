@@ -214,6 +214,7 @@ def scan_open_redirect(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="open_redirect", target=req.target, findings=findings,
         tested=tests,
         what_checked=f"URL parameters for open redirect to attacker host ({len(_MERGED_REDIR)}-entry merged library, Location-verified)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"open_redirect": {
             "confirmed": confirmed,

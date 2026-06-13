@@ -136,6 +136,14 @@ async def webapp_secrets(req: ScanRequest, payload=Depends(verify_scan_quota)):
             evidence_marker=f"At {h['url']}: matched pattern '{h['name']}' (snippet: {h['snippet'][:60]}...)",
         ))
 
+    if not findings and bodies:
+        findings.append(wrap_finding(
+            "No exposed secrets — response bodies matched no API-key / token / credential patterns",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. Keep secrets server-side and add gitleaks/trufflehog "
+                        "to CI plus a post-deploy scan. Re-test after front-end changes.",
+            evidence_marker=f"scanned {len(bodies)} response body(ies) against "
+                            f"{len(_COMPILED)} AI-curated regex pattern(s); no leak"))
     return standard_response(
         tool="secrets", target=req.target,
         findings=findings,

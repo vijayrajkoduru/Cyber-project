@@ -164,6 +164,7 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="http_methods", target=req.target,
         findings=findings, tested=max(len(tested), 1),
         what_checked="dangerous HTTP methods (TRACE/PUT/DELETE/CONNECT/PATCH)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"http_methods": {"allow_header": allow_str,
                                     "allowed_methods": sorted(allowed_methods),

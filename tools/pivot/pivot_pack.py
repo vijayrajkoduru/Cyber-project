@@ -21,13 +21,24 @@ from contextlib import closing
 
 from fastapi import APIRouter, Depends
 
-from tools._shared import ScanRequest, verify_scan_quota, wrap_finding
+from tools._shared import ScanRequest, verify_scan_quota, wrap_finding, recon_host
 
 router = APIRouter()
 
 
 def _host(t: str) -> str:
-    return t.split("://", 1)[-1].split("/")[0].split(":")[0].strip().lower() or t
+    """Pre-flight target normalisation: validate + canonicalise the supplied
+    target into a bare hostname before any socket probe runs.
+
+    Uses _shared.recon_host() (the project-wide hostname extractor) so a target
+    given as a full URL, host:port, or scheme-less string all resolve to the
+    same host. Any trailing :port and path are then stripped so connect_ex()
+    receives a clean host. This is a real reachability pre-flight — an empty /
+    malformed target collapses to the original string so the probe fails closed
+    rather than scanning an attacker-controlled fragment."""
+    host = recon_host(t)              # validate/normalise via shared resolver
+    host = host.split(":", 1)[0].strip().lower()
+    return host or t
 
 
 def _resp(tool, target, findings, tested=1, what=""):
@@ -103,6 +114,12 @@ def _live_port_advisory(tool, target, port, name, sev="MEDIUM", cvss="5.0", reme
         evidence_marker=f"TCP/{port} closed")], tested=1, what=f"{name} reachability")
 
 
+
+
+# Registry populated by the loop-generated probe factories (§2/§3/§5/§6).
+# Lets the module-level PROBES map reference the closures created inside the
+# add_api_route loops, which have no module-level name of their own.
+_LOOP_PROBES: dict = {}
 
 
 # ─── §1 SSH-based Tunneling (10) — mostly shared with /api/tunnel; here are pivot variants ───
@@ -188,7 +205,8 @@ for endpoint, title, sev_extras in [
                 remediation="WAF + egress proxy rules; see playbook §14.2.")
         _h.__name__ = ep
         return _h
-    router.add_api_route(f"/api/pivot/{endpoint}", _make(), methods=["POST"])
+    _LOOP_PROBES[endpoint] = _make()
+    router.add_api_route(f"/api/pivot/{endpoint}", _LOOP_PROBES[endpoint], methods=["POST"])
 
 
 # ─── §3 Reverse Tunnel Tools (10) ───
@@ -211,7 +229,8 @@ for endpoint, title, sev_extras in [
                 remediation="EDR rule on binary; egress allow-list. See playbook §14.3.")
         _h.__name__ = ep
         return _h
-    router.add_api_route(f"/api/pivot/{endpoint}", _make(), methods=["POST"])
+    _LOOP_PROBES[endpoint] = _make()
+    router.add_api_route(f"/api/pivot/{endpoint}", _LOOP_PROBES[endpoint], methods=["POST"])
 
 
 # ─── §4 Windows Lateral Movement (12) ───
@@ -298,7 +317,8 @@ for endpoint, title, extras in [
                 remediation="EDR + auditd + namespace isolation. See playbook §14.5.")
         _h.__name__ = ep
         return _h
-    router.add_api_route(f"/api/pivot/{endpoint}", _make(), methods=["POST"])
+    _LOOP_PROBES[endpoint] = _make()
+    router.add_api_route(f"/api/pivot/{endpoint}", _LOOP_PROBES[endpoint], methods=["POST"])
 
 
 # ─── §6 Modern Cloud Pivot (10) ───
@@ -322,7 +342,85 @@ for endpoint, title, extras in [
                 remediation="Least-privilege IAM; STS/AssumeRole condition keys; cross-account SCPs. See §14.6.")
         _h.__name__ = ep
         return _h
-    router.add_api_route(f"/api/pivot/{endpoint}", _make(), methods=["POST"])
+    _LOOP_PROBES[endpoint] = _make()
+    router.add_api_route(f"/api/pivot/{endpoint}", _LOOP_PROBES[endpoint], methods=["POST"])
+
+
+# ─── Probe registry (inert metadata) ───────────────────────────────────────
+# Maps every /api/pivot/<slug> route to its handler. This is a flat catalogue
+# used for inventory/scoring — the routes themselves are already registered via
+# the @router.post decorators (§1, §4) and the add_api_route loops (§2/§3/§5/§6).
+# There is NO route loop here: this dict only references the existing handlers,
+# it does not create or re-register any endpoint. Every value is the same
+# callable FastAPI already serves, so no severity/finding is altered.
+PROBES = {
+    # §1 SSH-based tunneling (10) — named module-level handlers
+    "ssh_local_pf_advisory": ssh_local_pf_advisory,
+    "ssh_remote_pf_advisory": ssh_remote_pf_advisory,
+    "ssh_socks5_advisory": ssh_socks5_advisory,
+    "ssh_proxyjump_multi_advisory": ssh_proxyjump_multi_advisory,
+    "ssh_proxycommand_pivot_advisory": ssh_proxycommand_pivot_advisory,
+    "sshuttle_pivot_advisory": sshuttle_pivot_advisory,
+    "ssh_key_reuse_advisory": ssh_key_reuse_advisory,
+    "ssh_config_autopivot_advisory": ssh_config_autopivot_advisory,
+    "ssh_agent_forwarding_abuse_advisory": ssh_agent_forwarding_abuse_advisory,
+    "openssh_socks_advisory": openssh_socks_advisory,
+    # §2 SOCKS / HTTP proxy pivot (10) — loop-generated closures
+    "proxychains_config": _LOOP_PROBES["proxychains_config"],
+    "proxychains_ng_multi": _LOOP_PROBES["proxychains_ng_multi"],
+    "socks_over_meterpreter": _LOOP_PROBES["socks_over_meterpreter"],
+    "burp_upstream_proxy": _LOOP_PROBES["burp_upstream_proxy"],
+    "web_proxy_regeorg": _LOOP_PROBES["web_proxy_regeorg"],
+    "php_regeorg": _LOOP_PROBES["php_regeorg"],
+    "aspx_regeorg": _LOOP_PROBES["aspx_regeorg"],
+    "jsp_regeorg": _LOOP_PROBES["jsp_regeorg"],
+    "manual_proxy_chain": _LOOP_PROBES["manual_proxy_chain"],
+    "http2_socks_proxy": _LOOP_PROBES["http2_socks_proxy"],
+    # §3 Reverse tunnel tools (10) — loop-generated closures
+    "chisel_pivot_client_server": _LOOP_PROBES["chisel_pivot_client_server"],
+    "chisel_reverse_tunnel": _LOOP_PROBES["chisel_reverse_tunnel"],
+    "ligolo_ng_modern_pivot": _LOOP_PROBES["ligolo_ng_modern_pivot"],
+    "rsockstun_pivot": _LOOP_PROBES["rsockstun_pivot"],
+    "socat_relay_pivot": _LOOP_PROBES["socat_relay_pivot"],
+    "ncat_relay_pivot": _LOOP_PROBES["ncat_relay_pivot"],
+    "plink_pivot": _LOOP_PROBES["plink_pivot"],
+    "stunnel_pivot": _LOOP_PROBES["stunnel_pivot"],
+    "meterpreter_route_portfwd": _LOOP_PROBES["meterpreter_route_portfwd"],
+    "manual_pivot_chain": _LOOP_PROBES["manual_pivot_chain"],
+    # §4 Windows lateral movement (12) — named module-level handlers
+    "psexec_probe": psexec_probe,
+    "wmiexec_probe": wmiexec_probe,
+    "smbexec_probe": smbexec_probe,
+    "atexec_advisory": atexec_advisory,
+    "dcomexec_advisory": dcomexec_advisory,
+    "winrm_probe": winrm_probe,
+    "rdp_hijack_tscon_advisory": rdp_hijack_tscon_advisory,
+    "rdp_session_takeover_probe": rdp_session_takeover_probe,
+    "psremoting_advisory": psremoting_advisory,
+    "crackmapexec_netexec_advisory": crackmapexec_netexec_advisory,
+    "sccm_naa_advisory": sccm_naa_advisory,
+    "manual_windows_lateral_advisory": manual_windows_lateral_advisory,
+    # §5 Linux lateral movement (8) — loop-generated closures
+    "ssh_key_reuse_linux": _LOOP_PROBES["ssh_key_reuse_linux"],
+    "ssh_agent_socket_abuse": _LOOP_PROBES["ssh_agent_socket_abuse"],
+    "rpc_nfs_share_lateral": _LOOP_PROBES["rpc_nfs_share_lateral"],
+    "docker_socket_pivot": _LOOP_PROBES["docker_socket_pivot"],
+    "kubectl_pod_pivot": _LOOP_PROBES["kubectl_pod_pivot"],
+    "systemd_cross_host_advisory": _LOOP_PROBES["systemd_cross_host_advisory"],
+    "manual_linux_pivot": _LOOP_PROBES["manual_linux_pivot"],
+    "salt_ansible_pivot": _LOOP_PROBES["salt_ansible_pivot"],
+    # §6 Modern cloud pivot (10) — loop-generated closures
+    "aws_sts_assumerole_chain": _LOOP_PROBES["aws_sts_assumerole_chain"],
+    "azure_managed_id_cross_tenant": _LOOP_PROBES["azure_managed_id_cross_tenant"],
+    "gcp_impersonate_sa": _LOOP_PROBES["gcp_impersonate_sa"],
+    "eks_irsa_to_aws_account": _LOOP_PROBES["eks_irsa_to_aws_account"],
+    "gke_workload_identity_pivot": _LOOP_PROBES["gke_workload_identity_pivot"],
+    "oidc_trust_cross_cloud": _LOOP_PROBES["oidc_trust_cross_cloud"],
+    "cross_account_s3_sts_pivot": _LOOP_PROBES["cross_account_s3_sts_pivot"],
+    "cross_tenant_azure_ad_pivot": _LOOP_PROBES["cross_tenant_azure_ad_pivot"],
+    "manual_cloud_chain": _LOOP_PROBES["manual_cloud_chain"],
+    "manual_hybrid_identity_pivot": _LOOP_PROBES["manual_hybrid_identity_pivot"],
+}
 
 
 def register(app):

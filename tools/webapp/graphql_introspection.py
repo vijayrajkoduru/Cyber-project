@@ -53,6 +53,14 @@ async def webapp_graphql_introspection(req: ScanRequest, payload=Depends(verify_
             evidence_marker=f"POST {path} returned __schema with {len(types)} types; queries={query_type}, mutations={mutation_type or 'none'}",
         ))
 
+    if not findings:
+        findings.append(wrap_finding(
+            "GraphQL introspection disabled — schema not exposed on tested endpoints",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. Keep introspection: false in production "
+                        "(apollo-server / graphql-yoga). Re-test after deploys.",
+            evidence_marker=f"tested {len(_GRAPHQL_PATHS)} GraphQL path(s); "
+                            f"{len(discovered)} expose introspection"))
     return standard_response(
         tool="graphql_introspection", target=req.target,
         findings=findings, tests_performed=len(_GRAPHQL_PATHS),

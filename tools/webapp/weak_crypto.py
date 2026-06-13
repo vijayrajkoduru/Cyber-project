@@ -80,6 +80,14 @@ async def webapp_weak_crypto(req: ScanRequest, payload=Depends(verify_scan_quota
                 evidence_marker=f"Pattern '{name}' found in {source}: ...{snippet}...",
             ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No weak client-side crypto — scanned scripts used no broken algorithms",
+            "POSITIVE", cwe="CWE-327",
+            remediation="Maintain. Avoid MD5/SHA1/DES/Math.random for security; use "
+                        "WebCrypto with modern primitives. Re-test after front-end changes.",
+            evidence_marker=f"scanned {len(bodies)} JS source(s) for "
+                            f"{len(_WEAK_PATTERNS)} weak-crypto pattern(s); none matched"))
     return standard_response(
         tool="weak_crypto", target=req.target,
         findings=findings, tests_performed=tests,

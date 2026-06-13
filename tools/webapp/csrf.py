@@ -92,6 +92,7 @@ def scan_csrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="csrf", target=req.target, findings=findings,
         tested=max(tests, 1),
         what_checked="state-changing forms for missing CSRF tokens + cookie SameSite",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"csrf": {"forms_seen": forms_seen, "samesite_status": samesite,
                             "wallclock_bailed": _bailed,

@@ -178,6 +178,15 @@ def scan_nosql(req: ScanRequest, _=Depends(verify_scan_quota)):
                               "probe_len": probe_len})
 
     tests = len(login_jobs) + len(review_paths) + len(review_jobs)
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No NoSQL injection — operator-injection payloads did not bypass auth or alter queries",
+            "POSITIVE", cwe="CWE-943",
+            remediation="Maintain. Reject object/operator values where scalars are "
+                        "expected and validate types server-side. Re-test after query "
+                        "changes.",
+            evidence_marker=f"{tests} NoSQL probe(s) across login + review/search "
+                            "endpoints; no operator-injection effect"))
     return standard_response(tool="nosql", target=req.target, findings=findings,
         tests_performed=tests,
         tests_summary=(f"NoSQL: {tests} parallel probes across "

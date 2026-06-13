@@ -111,6 +111,14 @@ async def webapp_csp_bypass(req: ScanRequest, payload=Depends(verify_scan_quota)
                 evidence_marker=f"CSP includes {jh}",
             ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No exploitable CSP bypass — Content-Security-Policy has no weakening directives",
+            "POSITIVE", cwe="CWE-693",
+            remediation="Maintain a strict CSP (no unsafe-inline / unsafe-eval / "
+                        "wildcard sources). Re-audit when adding third-party scripts.",
+            evidence_marker=f"parsed CSP across {tests} check(s); "
+                            f"{len(weaknesses)} weakness(es) found"))
     return standard_response(
         tool="csp_bypass", target=req.target,
         findings=findings, tests_performed=tests,

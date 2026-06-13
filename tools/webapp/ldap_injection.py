@@ -97,6 +97,14 @@ async def webapp_ldap_injection(req: ScanRequest, payload=Depends(verify_scan_qu
             evidence_marker=f"GET ?{param}=normaluser ({b_size}B) vs GET ?{param}={p} ({len(r.content)}B) - {desc}",
         ))
 
+    if not findings and probe_tasks:
+        findings.append(wrap_finding(
+            "No LDAP injection — filter metacharacters did not alter query results",
+            "POSITIVE", cwe="CWE-90",
+            remediation="Maintain. Escape LDAP special characters and use "
+                        "parameterized filters. Re-test after directory-query changes.",
+            evidence_marker=f"{len(probe_tasks)} LDAP filter probe(s) across "
+                            f"{len(_PAYLOADS)} payload(s); no filter manipulation"))
     return standard_response(
         tool="ldap_injection", target=req.target,
         findings=findings, tests_performed=len(probe_tasks),

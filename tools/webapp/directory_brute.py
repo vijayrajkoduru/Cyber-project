@@ -113,6 +113,14 @@ async def webapp_directory_brute(req: ScanRequest, payload=Depends(verify_scan_q
             evidence_marker=f"GET {base}{r['path']} -> HTTP {r['status']} ({r['length']}B)",
         ))
 
+    if not findings and ordered:
+        findings.append(wrap_finding(
+            "No sensitive directories exposed — AI-curated path brute returned no accessible hits",
+            "POSITIVE", cwe="CWE-538",
+            remediation="Maintain. Keep admin / backup / config paths off the public "
+                        "web root or behind authentication. Re-run after deploys.",
+            evidence_marker=f"probed {len(ordered)} AI-curated path(s); "
+                            f"{len(hits)} accessible"))
     return standard_response(
         tool="directory_brute", target=req.target,
         findings=findings,

@@ -156,6 +156,7 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="lfi", target=req.target, findings=findings,
         tested=max(tests, 1),
         what_checked=f"URL parameters for path traversal / LFI (marker-verified, {len(_MERGED_LFI)}-entry merged library covering ~19 categories)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"lfi": {"confirmed": confirmed,
                            "library_size": len(_PAYLOADS),

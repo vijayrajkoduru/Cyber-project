@@ -34,9 +34,10 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     #  tools/webapp/ — the Recon module already handles them. Keeping the
     #  webapp module focused on app-layer tests only.)
     "tier2_recon": [
-        ("cms",      "/api/webapp/scan/cms"),
-        ("ssl",      "/api/webapp/scan/ssl"),
-        ("portscan", "/api/webapp/scan/portscan"),
+        ("cms",       "/api/webapp/scan/cms"),
+        ("ssl",       "/api/webapp/scan/ssl"),
+        ("ssl_alias", "/api/webapp/scan/ssl"),    # TLS/cert audit (stem alias)
+        ("portscan",  "/api/webapp/scan/portscan"),
     ],
     # Injection Attacks (highest customer impact)
     "tier3_injection": [
@@ -44,13 +45,16 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("sqli",           "/api/webapp/scan/sqli"),
         ("cmd_injection",  "/api/webapp/scan/cmd_injection"),
         ("xxe",            "/api/webapp/scan/xxe"),
+        ("sqlmap_full",    "/api/webapp/scan/sqlmap_full"),
     ],
     # Authentication & Session
     "tier4_auth": [
         ("headers", "/api/webapp/scan/headers"),     # security_headers route alias
+        ("security_headers", "/api/webapp/scan/security_headers"),  # stem-matched route
         ("cookies", "/api/webapp/scan/cookies"),
         ("csrf",    "/api/webapp/scan/csrf"),
         ("jwt",     "/api/webapp/scan/jwt"),
+        ("jwt_scan", "/api/webapp/scan/jwt"),         # JWT deep-scan (alg/secret/claims)
     ],
     # File & Path
     "tier5_file_path": [
@@ -71,6 +75,7 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("mass_assignment", "/api/webapp/scan/mass_assignment"),
         ("nosql",           "/api/webapp/scan/nosql"),
         ("access_control",  "/api/webapp/scan/access_control"),
+        ("idor_detector",   "/api/webapp/idor_detector"),
     ],
     # Framework-specific + Heavy
     "tier8_framework": [
@@ -83,6 +88,8 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("sensitive_data", "/api/webapp/scan/sensitive_data"),
         ("stored_xss",     "/api/webapp/scan/stored_xss"),
         ("wpscan",         "/api/webapp/scan/wpscan"),
+        ("forced_browsing", "/api/webapp/forced_browsing"),
+        ("burp_lite",      "/api/webapp/burp_lite"),
     ],
     # Tier 8b — Nuclei tag-specific scanners limited to areas your
     # existing engines do NOT cover (subdomain takeover patterns and
@@ -92,6 +99,7 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier8b_nuclei_complement": [
         ("nuclei_takeover",      "/api/webapp/scan/nuclei_takeover"),
         ("nuclei_default_creds", "/api/webapp/scan/nuclei_default_creds"),
+        ("subdomain_takeover",   "/api/webapp/scan/subdomain_takeover"),
     ],
     # Tier 9 — AI-curated discovery (newly forged, big wordlists, async-parallel)
     "tier9_ai_curated_discovery": [
@@ -128,6 +136,7 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("oauth_redirect_bypass", "/api/webapp/oauth_redirect_bypass"),
         ("password_reset_flaws",  "/api/webapp/password_reset_flaws"),
         ("privilege_escalation",  "/api/webapp/privilege_escalation"),
+        ("authenticated_scan",    "/api/webapp/authenticated_scan"),
     ],
     # Tier 13 — Modern + framework-specific (pre-existing real implementations)
     "tier13_modern_framework": [

@@ -76,6 +76,15 @@ async def webapp_backup_files(req: ScanRequest, payload=Depends(verify_scan_quot
                               f"{hit['ct_raw'] or 'unknown'}"),
         ))
 
+    if not findings and paths:
+        findings.append(wrap_finding(
+            "No exposed backup/archive files — probed paths returned no recoverable artifacts",
+            "POSITIVE", cwe="CWE-530",
+            remediation="Maintain. Keep backups outside the web root and block "
+                        "archive/SQL/config extensions at the server. Re-test after "
+                        "deploy-tooling changes.",
+            evidence_marker=f"probed {len(paths)} backup path(s); none returned a "
+                            "downloadable backup/archive"))
     return standard_response(
         tool="backup_files", target=req.target,
         findings=findings, tests_performed=len(paths),

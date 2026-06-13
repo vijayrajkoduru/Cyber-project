@@ -74,6 +74,14 @@ def scan_graphql(req: ScanRequest, _=Depends(verify_scan_quota)):
                               "fields": found_sensitive})
         break  # one GraphQL endpoint is enough
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No GraphQL exposure — no endpoint leaked introspection or sensitive fields",
+            "POSITIVE", cwe="CWE-200",
+            remediation="Maintain. Keep introspection disabled in production and apply "
+                        "field-level authorization. Re-test after schema changes.",
+            evidence_marker=f"{tests} GraphQL endpoint(s) probed; no introspection "
+                            "or sensitive-field exposure"))
     return standard_response(tool="graphql", target=req.target,
         findings=findings, tests_performed=tests,
         tests_summary=f"GraphQL: {tests} endpoints probed for introspection + sensitive field exposure",

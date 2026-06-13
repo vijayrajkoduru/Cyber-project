@@ -85,6 +85,14 @@ async def webapp_host_header_injection(req: ScanRequest, payload=Depends(verify_
                 evidence_marker=f"Sent {header_name}: {canary} -> canary appeared in {where}",
             ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No Host-header injection — canary Host values were not reflected or trusted",
+            "POSITIVE", cwe="CWE-644",
+            remediation="Maintain. Validate Host against an allow-list and build "
+                        "absolute URLs from server config, not request headers.",
+            evidence_marker=f"tested {tests} Host-header variant(s) with a unique "
+                            "canary; no reflection into response/redirect/cache"))
     return standard_response(
         tool="host_header_injection", target=req.target,
         findings=findings, tests_performed=tests,

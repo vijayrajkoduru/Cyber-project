@@ -111,6 +111,15 @@ async def webapp_deserialization_probe(req: ScanRequest, payload=Depends(verify_
                 evidence_marker=f"GET {path} -> __VIEWSTATE field present",
             ))
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No insecure-deserialization markers — endpoints did not echo serialized-payload signatures",
+            "POSITIVE", cwe="CWE-502",
+            remediation="Maintain. Avoid native deserialization of untrusted input "
+                        "(PHP/Java/Python/.NET); prefer schema-validated JSON. Re-test "
+                        "after adding object-input endpoints.",
+            evidence_marker=f"probed {tests} endpoint(s) for serialized-payload "
+                            "markers; none reflected"))
     return standard_response(
         tool="deserialization_probe", target=req.target,
         findings=findings, tests_performed=tests,

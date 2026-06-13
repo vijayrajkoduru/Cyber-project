@@ -133,6 +133,7 @@ def scan_exposed_files(req: ScanRequest, payload=Depends(verify_scan_quota)):
     return vuln_response(tool="exposed_files", target=req.target,
         findings=findings, tested=len(_PATHS),
         what_checked=f"sensitive paths exposed publicly ({len(_PATHS)}-path AI-curated wordlist: .env, .git, backups, cloud creds, K8s, SSH, IDE files)",
+        severity_when_clean="POSITIVE",
         tests_summary=summary,
         raw_data={"exposed_files": {"matches": matches,
                                      "spa_mode": spa_mode,

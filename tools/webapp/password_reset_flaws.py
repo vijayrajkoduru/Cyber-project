@@ -92,6 +92,15 @@ async def webapp_password_reset_flaws(req: ScanRequest, payload=Depends(verify_s
     except Exception:
         pass
 
+    if not findings and tests:
+        findings.append(wrap_finding(
+            "No password-reset flaws — reset flow did not enable email enumeration",
+            "POSITIVE", cwe="CWE-640",
+            remediation="Maintain a uniform reset response for known and unknown "
+                        "emails, plus token entropy/expiry. Re-test after reset-flow "
+                        "changes.",
+            evidence_marker=f"{tests} reset probe(s) at {reset_url}; no response "
+                            "differential distinguishing valid vs invalid accounts"))
     return standard_response(
         tool="password_reset_flaws", target=req.target,
         findings=findings, tests_performed=tests,
