@@ -62,6 +62,7 @@ CLIENT_SIDE_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("subresource_integrity_audit",   "/api/client_side/subresource_integrity_audit"),
         ("service_worker_audit",          "/api/client_side/service_worker_audit"),
         ("open_redirect_param_audit",     "/api/client_side/open_redirect_param_audit"),
+        ("retire_js_audit",               "/api/client_side/retire_js_audit"),
     ],
     "tier3_advisory": [
         ("clientside_advisory_surface",   "/api/client_side/clientside_advisory_surface"),
