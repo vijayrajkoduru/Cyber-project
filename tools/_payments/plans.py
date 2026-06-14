@@ -4,9 +4,9 @@ Maps a public checkout `plan_id` -> Razorpay amount (INR paise) + the internal
 quota plan key (one of tools/_quota.PLAN_CAPS: pro / team / enterprise) that the
 account is switched to on successful payment, plus the access period in days.
 
-PRICES BELOW ARE PLACEHOLDERS - confirm the final INR amounts before going live.
-USD list prices live in tools/_quota.PLAN_PRICE (pro $49 / team $249); the INR
-figures here are a rough starting estimate only.
+PRICES ARE FINAL / CONFIRMED (2026-06-14, owner-approved). Do NOT change without
+owner sign-off — these are the live amounts charged in production via Razorpay.
+USD list prices live in tools/_quota.PLAN_PRICE (pro $49 / team $249).
 """
 from __future__ import annotations
 
@@ -17,7 +17,8 @@ PAYMENT_PLANS = {
     "team_monthly": {"label": "Team — Monthly", "plan": "team", "amount": 1999900,  "currency": "INR", "period_days": 30},
     "team_annual":  {"label": "Team — Annual",  "plan": "team", "amount": 19999000, "currency": "INR", "period_days": 365},
 }
-# TODO(pricing): replace the amounts above with your confirmed INR prices.
+# Prices CONFIRMED FINAL 2026-06-14 (owner-approved). Module one-time prices live
+# in the module catalogue; both surfaced via /api/payment/config.
 
 
 def get_plan(plan_id):
