@@ -326,12 +326,14 @@ const $=(h)=>{const d=document.createElement('div');d.innerHTML=h;return d.first
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmtAge=(h)=>h==null?'—':(h<1?Math.round(h*60)+'m':h<48?h.toFixed(1)+'h':Math.round(h/24)+'d')+' ago';
 const planTag=(p)=>{const col={free:'#8a94a8',trial:'#3b9eff',pro:'#1f9d57',team:'#06b6d4',enterprise:'#d98c1f',superadmin:'#e02347',admin:'#e02347'}[p]||'#8a94a8';return `<span class="tag" style="color:${col};border-color:${col}">${esc(p)}</span>`;};
-function actionBtns(c){const u=(c.username||'').replace(/'/g,'');const st=c.status||'active';return `<button class="ab" onclick="aExtend('${u}')">Extend</button><button class="ab" onclick="aPlan('${u}')">Plan</button><button class="ab" onclick="aStatus('${u}','${st}')">${st==='active'?'Suspend':'Activate'}</button><button class="ab" onclick="aReset('${u}')">Reset</button>`;}
+function actionBtns(c){const u=(c.username||'').replace(/'/g,'');const st=c.status||'active';return `<button class="ab" onclick="aExtend('${u}')">Extend</button><button class="ab" onclick="aPlan('${u}')">Plan</button><button class="ab" onclick="aStatus('${u}','${st}')">${st==='active'?'Suspend':'Activate'}</button><button class="ab" onclick="aReset('${u}')">Reset</button><button class="ab" onclick="aRole('${u}')">Role</button><button class="ab" onclick="aDelete('${u}')">Delete</button>`;}
 async function adminAction(method,path,body){const t=token();if(!t){alert('No token');return;}try{const r=await fetch(path,{method,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:body?JSON.stringify(body):null});const j=await r.json().catch(()=>({}));if(!r.ok||j.ok===false){alert('Failed: '+(j.detail||j.message||('HTTP '+r.status)));return;}load();}catch(e){alert('Error: '+e.message);}}
 function aExtend(u){const d=prompt('Extend by how many days?','30');if(d===null)return;const p=prompt('Plan (trial/pro/team/enterprise):','pro');if(p===null)return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/extend',{days:parseInt(d,10)||0,plan:p});}
 function aPlan(u){const p=prompt('Set plan (trial/pro/team/enterprise/superadmin):','pro');if(p===null)return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/plan',{plan:p});}
 function aStatus(u,st){const a=st==='active'?'suspend':'activate';if(!confirm(a+' '+u+'?'))return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/'+a);}
 function aReset(u){if(!confirm('Reset monthly scan count for '+u+'?'))return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/reset_quota');}
+function aRole(u){const r=prompt('Set role (user / admin / superadmin):','user');if(r===null)return;adminAction('POST','/api/admin/users/'+encodeURIComponent(u)+'/role',{role:r.trim()});}
+function aDelete(u){if(!confirm('DELETE account '+u+'? Removes the user and their data. Cannot be undone.'))return;adminAction('DELETE','/api/admin/users/'+encodeURIComponent(u));}
 function token(){let t=localStorage.getItem('cyberToken');if(!t){t=sessionStorage.getItem('vl_ops_token');}return t;}
 async function load(){
   const t=token();

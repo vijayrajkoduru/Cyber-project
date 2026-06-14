@@ -68,13 +68,18 @@ def init_db():
 
 
 def _seed_admin():
-    """Create the ADMIN superadmin user from .env ADMIN_PASSWORD."""
+    """Bootstrap the default ADMIN superadmin from .env ADMIN_PASSWORD — but ONLY
+    when there is no admin/superadmin yet. Once you have your own admin, the
+    default ADMIN can be deleted permanently (it will not be re-created)."""
     admin_password = os.getenv("ADMIN_PASSWORD", "")
     if not admin_password:
         return
     con = sqlite3.connect(DB_PATH)
     try:
-        row = con.execute("SELECT 1 FROM users WHERE username=?", ("ADMIN",)).fetchone()
+        # Bootstrap-only: skip if ANY admin/superadmin already exists.
+        row = con.execute(
+            "SELECT 1 FROM users WHERE role IN ('admin','superadmin') LIMIT 1"
+        ).fetchone()
         if row:
             return
         hashed = _pwd_ctx.hash(admin_password)
