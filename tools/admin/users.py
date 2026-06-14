@@ -19,6 +19,10 @@ class PlanRequest(BaseModel):
     plan: str
 
 
+class RoleRequest(BaseModel):
+    role: str
+
+
 class ExtendRequest(BaseModel):
     days: int
     plan: str = "trial"
@@ -93,14 +97,34 @@ async def reset_quota(username: str, _=Depends(verify_admin_or_super)):
     return {"ok": True, "username": username, "scans_used": 0}
 
 
+@router.post("/api/admin/users/{username}/role")
+async def change_role(username: str, req: RoleRequest, _=Depends(verify_admin_or_super)):
+    valid = {"user", "admin", "superadmin"}
+    if req.role not in valid:
+        raise HTTPException(400, f"Invalid role. Must be one of: {sorted(valid)}")
+    with get_db() as con:
+        target = con.execute("SELECT role FROM users WHERE username=?", (username,)).fetchone()
+        if not target:
+            raise HTTPException(404, f"User '{username}' not found")
+        # never demote the last remaining admin/superadmin
+        if req.role == "user" and (target["role"] or "") in ("admin", "superadmin"):
+            n = con.execute("SELECT COUNT(*) c FROM users WHERE role IN ('admin','superadmin')").fetchone()["c"]
+            if n <= 1:
+                raise HTTPException(400, "Cannot demote the last admin/superadmin")
+        con.execute("UPDATE users SET role=? WHERE username=?", (req.role, username))
+    return {"ok": True, "username": username, "role": req.role}
+
+
 @router.delete("/api/admin/users/{username}")
 async def delete_user(username: str, _=Depends(verify_admin_or_super)):
-    if username.upper() == "ADMIN":
-        raise HTTPException(403, "Cannot delete the ADMIN account")
     with get_db() as con:
-        row = con.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+        row = con.execute("SELECT id, role FROM users WHERE username=?", (username,)).fetchone()
         if not row:
             raise HTTPException(404, f"User '{username}' not found")
+        if (row["role"] or "") in ("admin", "superadmin"):
+            n = con.execute("SELECT COUNT(*) c FROM users WHERE role IN ('admin','superadmin')").fetchone()["c"]
+            if n <= 1:
+                raise HTTPException(400, "Cannot delete the last admin/superadmin - create another admin first")
         user_id = row["id"]
         con.execute("DELETE FROM users WHERE username=?", (username,))
     try:
