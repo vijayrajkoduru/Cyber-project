@@ -195,6 +195,13 @@ def _system_block(now):
                 break
         except Exception:
             pass
+    try:
+        from tools._payments import razorpay_client as _rzp, mailer as _mailer
+        sysd["payments_configured"] = bool(_rzp.is_configured())
+        sysd["email_configured"] = bool(_mailer.is_configured())
+    except Exception:
+        sysd["payments_configured"] = None
+        sysd["email_configured"] = None
     return sysd
 
 
@@ -377,7 +384,7 @@ function render(d){
    <div class="sec"><div class="row">
      <div class="card"><h2 style="margin-top:0">Scans — last 14 days</h2><div class="bars">${bars}</div><div class="mut" style="margin-top:6px">total ${s.total} · 7d ${s.last_7d}</div></div>
      <div class="card"><h2 style="margin-top:0">System health</h2>${meter('Disk',sy.disk)}${meter('Memory',sy.memory)}
-       <div class="mut" style="margin-top:8px">users.db ${sy.users_db_mb}MB · consent.db ${sy.consent_db_mb}MB · last backup ${sy.last_backup?esc(sy.last_backup.name)+' ('+fmtAge(sy.last_backup.age_hours)+')':'<span style="color:var(--warn)">none found</span>'}</div></div>
+       <div class="mut" style="margin-top:8px">users.db ${sy.users_db_mb}MB · consent.db ${sy.consent_db_mb}MB · last backup ${sy.last_backup?esc(sy.last_backup.name)+' ('+fmtAge(sy.last_backup.age_hours)+')':'<span style="color:var(--warn)">none found</span>'}</div><div class="mut" style="margin-top:6px">Payments: <b style="color:${sy.payments_configured?'var(--ok)':'var(--warn)'}">${sy.payments_configured?'LIVE':'not configured'}</b> &middot; Email: <b style="color:${sy.email_configured?'var(--ok)':'var(--warn)'}">${sy.email_configured?'configured':'not configured'}</b></div></div>
    </div></div>
    <div class="sec"><div class="row">
      <div class="card"><h2 style="margin-top:0">Plans</h2><table>${planRows}</table></div>
