@@ -23,7 +23,7 @@ import os
 import shutil
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 
 from tools._shared import verify_admin
@@ -210,6 +210,81 @@ async def ops_overview(_=Depends(verify_admin)):
     return data
 
 
+def _user_detail(username, now):
+    """Full per-user drill-down: account, plan/price, quota, what they scan,
+    scan history, and their audit events."""
+    import sqlite3
+    with get_db() as con:
+        row = con.execute(
+            "SELECT username, email, role, plan, status, created_at, updated_at, "
+            "subscription_expires_at, scans_used, usage_period "
+            "FROM users WHERE username=? OR email=? LIMIT 1", (username, username)).fetchone()
+    if not row:
+        return None
+    ident = row["username"]
+    email = row["email"]
+    plan = row["plan"] or "free"
+    eff = _quota._effective_plan(plan, row["subscription_expires_at"], now)
+    cap = _quota.PLAN_CAPS.get(eff)
+    period = now.strftime("%Y-%m")
+    used = (row["scans_used"] or 0) if (row["usage_period"] or "") == period else 0
+    # keys this user's scans were logged under (sub=username, sometimes email)
+    keys = tuple(x for x in (ident, email) if x) or (ident,)
+    ph = ",".join("?" * len(keys))
+    history, by_module = [], []
+    try:
+        c = sqlite3.connect(f"file:{_CONSENT_DB}?mode=ro", uri=True)
+        c.row_factory = sqlite3.Row
+        history = [dict(r) for r in c.execute(
+            f"SELECT ts, target, module FROM consent_log WHERE user_email IN ({ph}) "
+            f"ORDER BY ts DESC LIMIT 200", keys).fetchall()]
+        by_module = [{"module": r["module"], "count": r["c"]} for r in c.execute(
+            f"SELECT module, COUNT(*) c FROM consent_log WHERE user_email IN ({ph}) "
+            f"GROUP BY module ORDER BY c DESC", keys).fetchall()]
+        c.close()
+    except Exception:
+        pass
+    audit = []
+    try:
+        adb = os.environ.get("AUDIT_DB_PATH", "/app/data/audit_log.db")
+        c = sqlite3.connect(f"file:{adb}?mode=ro", uri=True)
+        c.row_factory = sqlite3.Row
+        audit = [dict(r) for r in c.execute(
+            "SELECT ts, action, detail, client_ip FROM audit_log WHERE actor=? "
+            "ORDER BY id DESC LIMIT 50", (ident,)).fetchall()]
+        c.close()
+    except Exception:
+        pass
+    # à-la-carte module entitlements (best-effort; system may not be present)
+    modules_owned = []
+    try:
+        from tools._payments import entitlements as _ent
+        for fn in ("list_modules", "user_modules", "list_user_modules"):
+            f = getattr(_ent, fn, None)
+            if callable(f):
+                modules_owned = list(f(ident) or [])
+                break
+    except Exception:
+        modules_owned = []
+    return {
+        "account": {k: row[k] for k in row.keys()},
+        "effective_plan": eff, "cap": cap, "scans_used": used,
+        "remaining": (None if cap is None else max(0, cap - used)),
+        "monthly_price_usd": _quota.PLAN_PRICE.get(eff, 0), "period": period,
+        "modules_owned": modules_owned,
+        "total_scans": sum(m["count"] for m in by_module),
+        "scans_by_module": by_module, "scan_history": history, "audit": audit,
+    }
+
+
+@router.get("/api/admin/ops/user/{username}")
+async def ops_user_detail(username: str, _=Depends(verify_admin)):
+    d = _user_detail(username, _now())
+    if d is None:
+        raise HTTPException(404, "user not found")
+    return d
+
+
 @router.get("/api/admin/ops/dashboard", response_class=HTMLResponse)
 async def ops_dashboard():
     # Public shell only — it carries no data. It reads the JWT from
@@ -245,6 +320,7 @@ _DASHBOARD_HTML = r"""<!doctype html><html lang="en"><head>
 <header><h1>Vulnus<span>Lab</span> · Ops Console</h1>
 <div class="mut" id="meta">loading…</div></header>
 <div class="wrap" id="root"><p class="mut">Loading…</p></div>
+<div id="umodal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:50;overflow:auto;padding:28px"><div id="ubody" style="max-width:1040px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px"></div></div>
 <script>
 const $=(h)=>{const d=document.createElement('div');d.innerHTML=h;return d.firstElementChild;};
 const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -282,7 +358,7 @@ function render(d){
   const planRows=Object.entries(u.by_plan).map(([p,n])=>`<tr><td>${planTag(p)}</td><td class="r">${n}</td></tr>`).join('');
   const modRows=s.by_module_top.map(m=>`<tr><td>${esc(m.module)}</td><td class="r">${m.count}</td></tr>`).join('')||'<tr><td class="mut" colspan=2>no scans yet</td></tr>';
   const recRows=s.recent.map(x=>`<tr><td class="mut">${esc((x.ts||'').replace('T',' ').slice(0,16))}</td><td>${esc(x.user||'—')}</td><td>${esc(x.module)}</td><td>${esc(x.target)}</td></tr>`).join('')||'<tr><td class="mut" colspan=4>no scans yet</td></tr>';
-  const cust=d.customers.map(c=>`<tr><td>${esc(c.username)}</td><td class="mut">${esc(c.email||'')}</td><td>${planTag(c.effective_plan)}${c.effective_plan!==c.plan?' <span class="mut" style="font-size:11px">(was '+esc(c.plan)+')</span>':''}</td><td>${esc(c.status)}</td><td class="r">${c.scans_used}${c.cap!=null?' / '+c.cap:' / ∞'}</td><td class="mut">${c.subscription_expires_at?esc(c.subscription_expires_at.slice(0,10)):'—'}</td><td class="mut">${esc((c.created_at||'').slice(0,10))}</td><td style="white-space:nowrap">${actionBtns(c)}</td></tr>`).join('');
+  const cust=d.customers.map(c=>`<tr><td><a onclick="openUser('${(c.username||'').replace(/'/g,'')}')" style="color:var(--acc);cursor:pointer;text-decoration:underline">${esc(c.username)}</a></td><td class="mut">${esc(c.email||'')}</td><td>${planTag(c.effective_plan)}${c.effective_plan!==c.plan?' <span class="mut" style="font-size:11px">(was '+esc(c.plan)+')</span>':''}</td><td>${esc(c.status)}</td><td class="r">${c.scans_used}${c.cap!=null?' / '+c.cap:' / ∞'}</td><td class="mut">${c.subscription_expires_at?esc(c.subscription_expires_at.slice(0,10)):'—'}</td><td class="mut">${esc((c.created_at||'').slice(0,10))}</td><td style="white-space:nowrap">${actionBtns(c)}</td></tr>`).join('');
   const atRisk=(d.at_risk||[]).map(x=>`<tr><td>${esc(x.username)}</td><td>${planTag(x.effective_plan)}</td><td class="r">${x.used} / ${x.cap}</td></tr>`).join('')||'<tr><td class="mut" colspan=3>none near quota</td></tr>';
   const aud=(d.audit||[]).map(a=>`<tr><td class="mut">${esc((a.ts||'').replace('T',' ').slice(0,16))}</td><td>${esc(a.action)}</td><td>${esc(a.actor||'')}</td><td class="mut">${esc(a.detail||a.target||'')}</td></tr>`).join('')||'<tr><td class="mut" colspan=4>no events</td></tr>';
   document.getElementById('meta').textContent='updated '+new Date(d.generated_at).toLocaleString();
@@ -316,6 +392,46 @@ function render(d){
    </div></div>
    <div class="sec card"><h2 style="margin-top:0">Customers (${u.total})</h2><table><tr><th>User</th><th>Email</th><th>Plan</th><th>Status</th><th class="r">Scans (mo)</th><th>Sub ends</th><th>Joined</th><th>Actions</th></tr>${cust}</table></div>
    <p class="mut" style="margin-top:20px">Auto-refreshes every 30s · superadmin only</p>`;
+}
+function ufmt(s){return esc((s||'').replace('T',' ').slice(0,16));}
+function closeUser(){document.getElementById('umodal').style.display='none';}
+async function openUser(u){
+  const t=token(); if(!t){alert('No token');return;}
+  const m=document.getElementById('umodal'), b=document.getElementById('ubody');
+  b.innerHTML='<p class="mut">Loading '+esc(u)+'...</p>'; m.style.display='block';
+  try{
+    const r=await fetch('/api/admin/ops/user/'+encodeURIComponent(u),{headers:{Authorization:'Bearer '+t}});
+    if(!r.ok){b.innerHTML='<div class="err">HTTP '+r.status+'</div><div style="text-align:right"><button class="ab" onclick="closeUser()">Close</button></div>';return;}
+    renderUser(await r.json(), u);
+  }catch(e){b.innerHTML='<div class="err">'+esc(e.message)+'</div>';}
+}
+function renderUser(d,u){
+  const a=d.account||{};
+  const mods=(d.scans_by_module||[]).map(m=>`<tr><td>${esc(m.module)}</td><td class="r">${m.count}</td></tr>`).join('')||'<tr><td class="mut" colspan=2>no scans</td></tr>';
+  const hist=(d.scan_history||[]).map(h=>`<tr><td class="mut">${ufmt(h.ts)}</td><td>${esc(h.module)}</td><td class="mut">${esc(h.target)}</td></tr>`).join('')||'<tr><td class="mut" colspan=3>no scans</td></tr>';
+  const aud=(d.audit||[]).map(x=>`<tr><td class="mut">${ufmt(x.ts)}</td><td>${esc(x.action)}</td><td class="mut">${esc(x.detail||'')}</td></tr>`).join('')||'<tr><td class="mut" colspan=3>no events</td></tr>';
+  const owned=(d.modules_owned&&d.modules_owned.length)?d.modules_owned.map(esc).join(', '):'(plan-based)';
+  document.getElementById('ubody').innerHTML=`
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+     <h2 style="margin:0">${esc(a.username||u)} ${planTag(d.effective_plan)}</h2>
+     <button class="ab" onclick="closeUser()">Close ✕</button></div>
+   <div class="row">
+     <div class="card"><h2 style="margin-top:0">Account</h2><table>
+       <tr><td class="mut">Email</td><td>${esc(a.email||'-')}</td></tr>
+       <tr><td class="mut">Role</td><td>${esc(a.role||'user')}</td></tr>
+       <tr><td class="mut">Status</td><td>${esc(a.status||'')}</td></tr>
+       <tr><td class="mut">Plan</td><td>${esc(a.plan)} (effective ${esc(d.effective_plan)})</td></tr>
+       <tr><td class="mut">Monthly price</td><td>$${d.monthly_price_usd}</td></tr>
+       <tr><td class="mut">Scans this month</td><td>${d.scans_used} / ${d.cap==null?'∞':d.cap}</td></tr>
+       <tr><td class="mut">Sub ends</td><td>${a.subscription_expires_at?esc(a.subscription_expires_at.slice(0,10)):'-'}</td></tr>
+       <tr><td class="mut">Joined</td><td>${esc((a.created_at||'').slice(0,10))}</td></tr>
+       <tr><td class="mut">Modules owned</td><td>${owned}</td></tr>
+     </table></div>
+     <div class="card"><h2 style="margin-top:0">What they scan (${d.total_scans} total)</h2><table><tr><th>Module</th><th class="r">Scans</th></tr>${mods}</table></div>
+   </div>
+   <div class="sec card"><h2 style="margin-top:0">Scan history (${(d.scan_history||[]).length})</h2><div style="max-height:320px;overflow:auto"><table><tr><th>When</th><th>Module</th><th>Target</th></tr>${hist}</table></div></div>
+   <div class="sec card"><h2 style="margin-top:0">Audit events</h2><table><tr><th>When</th><th>Action</th><th>Detail</th></tr>${aud}</table></div>
+   <div style="text-align:right;margin-top:14px"><button class="ab" onclick="closeUser()">Close</button></div>`;
 }
 load();setInterval(load,30000);
 </script></body></html>
