@@ -23440,7 +23440,7 @@ function RedTeamConsole({ token }) {
               <div style={{flex:"1 1 220px"}}><label style={lbl}>Scenario</label>
                 <select style={inp} value={scenario} onChange={e=>setScenario(e.target.value)}>
                   <option value="">— choose —</option>
-                  {catalog && catalog.scenarios.map(s=><option key={s.name} value={s.name}>{s.name} ({s.technique_count} steps)</option>)}
+                  {catalog && catalog.scenarios.map(s=><option key={s.name} value={s.name}>{s.label||s.name} ({s.technique_count} steps)</option>)}
                 </select></div>
               <div style={{flex:"1 1 220px"}}><label style={lbl}>Target (must be in scope)</label><input style={inp} value={target} onChange={e=>setTarget(e.target.value)} placeholder="app.acme.com"/></div>
               <button onClick={doRun} disabled={busy||!selEng} style={{background:(busy||!selEng)?"#3a0a12":"linear-gradient(135deg,#e02347,#991b1b)",border:"none",color:"#fff",padding:"9px 22px",borderRadius:8,fontWeight:800,fontSize:13,cursor:(busy||!selEng)?"not-allowed":"pointer"}}>{busy?"Running…":"Run"}</button>
@@ -23491,16 +23491,21 @@ function RedTeamConsole({ token }) {
 
           {/* Scenario catalog */}
           <div style={{background:PANEL,border:"1px solid "+BORD,borderRadius:10,padding:16}}>
-            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:10}}>Scenario catalog</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <span style={{fontSize:13,fontWeight:800,color:"#fff"}}>Scenario catalog</span>
+              {catalog && <span style={{fontSize:10.5,color:DIM,fontFamily:"JetBrains Mono,monospace"}}>{catalog.scenarios.length} playbooks · {catalog.technique_count||(catalog.techniques||[]).length} ATT&CK techniques · AI-curated</span>}
+            </div>
             {!catalog && <div style={{fontSize:12,color:DIM}}>Loading…</div>}
             {catalog && catalog.scenarios.map(s=>(
               <div key={s.name} style={{border:"1px solid "+BORD,background:CARD,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
-                  <span style={{fontSize:12.5,fontWeight:800,color:"#fff"}}>{s.name}</span>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                  <span style={{fontSize:12.5,fontWeight:800,color:"#fff"}}>{s.label||s.name}</span>
+                  {s.adversary && <Badge label={s.adversary} color="purple" size="xs"/>}
                   <Badge label={s.technique_count+" techniques"} color="blue" size="xs"/>
                   {s.blocked_count>0 && <Badge label={s.blocked_count+" blocked"} color="red" size="xs"/>}
                   <button onClick={()=>setScenario(s.name)} style={{marginLeft:"auto",background:BORD,border:"none",color:MUT,fontSize:10.5,fontWeight:700,padding:"3px 10px",borderRadius:5,cursor:"pointer"}}>Use</button>
                 </div>
+                {s.description && <div style={{fontSize:10.5,color:MUT,marginBottom:7,lineHeight:1.45}}>{s.description}</div>}
                 <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                   {s.steps.map(st=>(
                     <span key={st.id} title={st.name+" — "+(st.blocked?st.blocked_reason:st.emulation)} style={{fontSize:9.5,fontFamily:"JetBrains Mono,monospace",fontWeight:700,padding:"2px 6px",borderRadius:4,

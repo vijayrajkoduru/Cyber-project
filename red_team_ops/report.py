@@ -9,7 +9,8 @@ from __future__ import annotations
 from . import attack_catalog as cat
 
 _TACTIC_LABEL = {
-    "reconnaissance": "Reconnaissance", "initial_access": "Initial Access",
+    "reconnaissance": "Reconnaissance", "resource_development": "Resource Development",
+    "initial_access": "Initial Access",
     "execution": "Execution", "persistence": "Persistence",
     "privilege_escalation": "Privilege Escalation", "defense_evasion": "Defense Evasion",
     "credential_access": "Credential Access", "discovery": "Discovery",

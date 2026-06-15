@@ -1,0 +1,236 @@
+{
+  "external_foothold": {
+    "label": "External foothold (perimeter to access)",
+    "adversary": "Generic external attacker",
+    "description": "Internet-facing recon and exploitation to a first authenticated foothold.",
+    "techniques": [
+      "T1595",
+      "T1595.002",
+      "T1589",
+      "T1190",
+      "T1078"
+    ]
+  },
+  "phishing_to_persistence": {
+    "label": "Phishing to persistence",
+    "adversary": "Commodity phishing crew",
+    "description": "Spearphishing attachment leads to code execution and a persistence foothold.",
+    "techniques": [
+      "T1566.001",
+      "T1204.002",
+      "T1059.001",
+      "T1547.001",
+      "T1053.005"
+    ]
+  },
+  "ad_compromise": {
+    "label": "Active Directory compromise",
+    "adversary": "Hands-on-keyboard intruder",
+    "description": "Domain recon, Kerberoasting and credential reuse toward domain dominance.",
+    "techniques": [
+      "T1087.002",
+      "T1018",
+      "T1482",
+      "T1558.003",
+      "T1003.003",
+      "T1550.002",
+      "T1021.001"
+    ]
+  },
+  "full_kill_chain": {
+    "label": "Full kill chain (recon to impact)",
+    "adversary": "End-to-end emulation",
+    "description": "All 14 tactics end to end; destructive endpoints are recorded as resilience objectives.",
+    "techniques": [
+      "T1595",
+      "T1190",
+      "T1059.004",
+      "T1053.005",
+      "T1068",
+      "T1562.001",
+      "T1110.003",
+      "T1046",
+      "T1021.001",
+      "T1005",
+      "T1071.001",
+      "T1041",
+      "T1486"
+    ]
+  },
+  "apt29_cozy_bear": {
+    "label": "APT29 (Cozy Bear / Nobelium) \u2014 stealthy espionage",
+    "adversary": "APT29 (Russia, SVR)",
+    "description": "Low-and-slow espionage: spearphishing link, stealthy persistence, mailbox collection and quiet HTTPS exfil.",
+    "techniques": [
+      "T1566.002",
+      "T1204.002",
+      "T1059.001",
+      "T1547.001",
+      "T1027",
+      "T1003.001",
+      "T1021.006",
+      "T1114",
+      "T1071.001",
+      "T1041"
+    ]
+  },
+  "fin7_carbanak": {
+    "label": "FIN7 / Carbanak \u2014 financial intrusion",
+    "adversary": "FIN7 (financially motivated)",
+    "description": "Weaponized document, scripting and scheduled-task persistence toward POS/finance data collection.",
+    "techniques": [
+      "T1566.001",
+      "T1204.002",
+      "T1059.005",
+      "T1053.005",
+      "T1055",
+      "T1003.001",
+      "T1087",
+      "T1113",
+      "T1074",
+      "T1041"
+    ]
+  },
+  "apt28_fancy_bear": {
+    "label": "APT28 (Fancy Bear) \u2014 credential-driven",
+    "adversary": "APT28 (Russia, GRU)",
+    "description": "Perimeter exploit / phishing, password spraying and Kerberoasting into lateral movement and exfil.",
+    "techniques": [
+      "T1190",
+      "T1566.002",
+      "T1078",
+      "T1110.003",
+      "T1558.003",
+      "T1021.001",
+      "T1560",
+      "T1048"
+    ]
+  },
+  "lazarus_supply_chain": {
+    "label": "Lazarus \u2014 supply-chain intrusion",
+    "adversary": "Lazarus Group (DPRK)",
+    "description": "Supply-chain compromise, obfuscated execution, persistence and DNS/cloud exfil.",
+    "techniques": [
+      "T1195",
+      "T1059.007",
+      "T1547.001",
+      "T1027",
+      "T1003.001",
+      "T1021.002",
+      "T1071.004",
+      "T1567"
+    ]
+  },
+  "conti_ransomware_playbook": {
+    "label": "Conti \u2014 ransomware affiliate playbook",
+    "adversary": "Conti / ransomware affiliate",
+    "description": "Phishing to beacon, AD recon, Kerberoasting and PtH, double-extortion exfil, then encryption (encryption + recovery-inhibition are blocked resilience objectives).",
+    "techniques": [
+      "T1566.002",
+      "T1059.001",
+      "T1071.001",
+      "T1087.002",
+      "T1558.003",
+      "T1550.002",
+      "T1021.002",
+      "T1560",
+      "T1567",
+      "T1490",
+      "T1486"
+    ]
+  },
+  "ransomware_operator": {
+    "label": "Ransomware operator (fast)",
+    "adversary": "Big-game-hunting ransomware",
+    "description": "Rapid intrusion to mass encryption; the destructive endpoints test backup/recovery resilience (blocked).",
+    "techniques": [
+      "T1566.001",
+      "T1204.002",
+      "T1059.001",
+      "T1003.001",
+      "T1018",
+      "T1021.002",
+      "T1490",
+      "T1486"
+    ]
+  },
+  "insider_threat": {
+    "label": "Insider threat / data theft",
+    "adversary": "Malicious insider",
+    "description": "Legitimate access used to locate, collect and (blocked) exfiltrate sensitive data.",
+    "techniques": [
+      "T1078",
+      "T1083",
+      "T1005",
+      "T1114",
+      "T1052"
+    ]
+  },
+  "cloud_account_takeover": {
+    "label": "Cloud account takeover",
+    "adversary": "Cloud-focused attacker",
+    "description": "Valid cloud credentials, service/account discovery, and cloud-storage collection/exfil.",
+    "techniques": [
+      "T1078.004",
+      "T1526",
+      "T1087",
+      "T1530",
+      "T1567"
+    ]
+  },
+  "web_app_to_dc": {
+    "label": "Web app to domain controller",
+    "adversary": "External-to-internal pivot",
+    "description": "Public web exploit and web-shell vector, local credential discovery, and pivot toward AD.",
+    "techniques": [
+      "T1190",
+      "T1505.003",
+      "T1059.004",
+      "T1552.001",
+      "T1003.003",
+      "T1021.002",
+      "T1018"
+    ]
+  },
+  "living_off_the_land": {
+    "label": "Living-off-the-land (LOLBins)",
+    "adversary": "Stealth/fileless operator",
+    "description": "Native binaries and built-in tooling for execution, discovery and C2 \u2014 minimal new artifacts.",
+    "techniques": [
+      "T1059.001",
+      "T1218",
+      "T1047",
+      "T1057",
+      "T1082",
+      "T1016",
+      "T1049",
+      "T1071.001"
+    ]
+  },
+  "credential_access_sweep": {
+    "label": "Credential-access sweep",
+    "adversary": "Credential harvester",
+    "description": "Spray, stuffing and credential-store techniques \u2014 real-credential capture is blocked.",
+    "techniques": [
+      "T1110.003",
+      "T1110.004",
+      "T1003.001",
+      "T1552.001",
+      "T1555",
+      "T1558.003"
+    ]
+  },
+  "exfil_resilience_test": {
+    "label": "Exfiltration / DLP resilience test",
+    "adversary": "Data-theft emulation",
+    "description": "Stage and archive canary data and attempt multiple exfil channels (all blocked) to test DLP and egress detection.",
+    "techniques": [
+      "T1005",
+      "T1560",
+      "T1041",
+      "T1048",
+      "T1567",
+      "T1011"
+    ]
+  }
+}

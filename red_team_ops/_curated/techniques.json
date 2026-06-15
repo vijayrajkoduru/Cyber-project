@@ -1,0 +1,1909 @@
+[
+  {
+    "id": "T1595",
+    "name": "Active Scanning",
+    "tactic": "reconnaissance",
+    "desc": "Scan in-scope hosts for open ports/services.",
+    "emulation": "Enumerate authorized targets (ports/services/banners) \u2014 read-only.",
+    "detection": "IDS port-scan signatures; spikes in connection attempts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1595.001",
+    "name": "Scanning IP Blocks",
+    "tactic": "reconnaissance",
+    "desc": "Sweep authorized IP ranges for live hosts.",
+    "emulation": "Live-host sweep of authorized CIDRs \u2014 read-only.",
+    "detection": "Network-flow anomalies, ICMP/SYN sweeps.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1595.002",
+    "name": "Vulnerability Scanning",
+    "tactic": "reconnaissance",
+    "desc": "Scan in-scope assets for known vulns.",
+    "emulation": "Non-exploitative vuln scan of authorized assets.",
+    "detection": "Scanner user-agents, version-probe bursts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network",
+      "web"
+    ]
+  },
+  {
+    "id": "T1592",
+    "name": "Gather Victim Host Information",
+    "tactic": "reconnaissance",
+    "desc": "Profile OS/software of in-scope hosts.",
+    "emulation": "Fingerprint OS/software from authorized banners/headers.",
+    "detection": "Hard to detect externally.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1589",
+    "name": "Gather Victim Identity Information",
+    "tactic": "reconnaissance",
+    "desc": "Collect emails/usernames for the in-scope org.",
+    "emulation": "OSINT username/email enumeration on authorized domains.",
+    "detection": "Monitor for credential-stuffing follow-on.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1590",
+    "name": "Gather Victim Network Information",
+    "tactic": "reconnaissance",
+    "desc": "Map the in-scope org's network footprint.",
+    "emulation": "Passive ASN/DNS/subdomain mapping of authorized assets.",
+    "detection": "Passive recon is hard to detect.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1591",
+    "name": "Gather Victim Org Information",
+    "tactic": "reconnaissance",
+    "desc": "Collect org/role/tech-stack intel.",
+    "emulation": "OSINT org/role/tech-stack collection for in-scope org.",
+    "detection": "Not directly detectable.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1598",
+    "name": "Phishing for Information",
+    "tactic": "reconnaissance",
+    "desc": "Elicit info via pretext messages.",
+    "emulation": "Authorized pretext info-gathering to consented contacts only.",
+    "detection": "User-report rate, suspicious sender domains.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "email"
+    ]
+  },
+  {
+    "id": "T1596",
+    "name": "Search Open Technical Databases",
+    "tactic": "reconnaissance",
+    "desc": "Query Shodan/Censys/CT logs.",
+    "emulation": "Query open tech databases for in-scope assets \u2014 read-only.",
+    "detection": "Not detectable on target.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1593",
+    "name": "Search Open Websites/Domains",
+    "tactic": "reconnaissance",
+    "desc": "Review public web/social footprint.",
+    "emulation": "Review the authorized org's public web/social footprint.",
+    "detection": "Not detectable.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1594",
+    "name": "Search Victim-Owned Websites",
+    "tactic": "reconnaissance",
+    "desc": "Crawl the org's own sites for data.",
+    "emulation": "Crawl authorized public site for metadata/paths \u2014 read-only.",
+    "detection": "Spider user-agent, crawl-rate spikes.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "web"
+    ]
+  },
+  {
+    "id": "T1583",
+    "name": "Acquire Infrastructure",
+    "tactic": "resource_development",
+    "desc": "Stand up attacker infrastructure.",
+    "emulation": "Planning-only: document required infra; no target action.",
+    "detection": "Threat-intel domain/IP monitoring.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1586",
+    "name": "Compromise Accounts",
+    "tactic": "resource_development",
+    "desc": "Obtain accounts for operations.",
+    "emulation": "Planning-only: note credential sources; no real compromise.",
+    "detection": "N/A (off-target).",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1587",
+    "name": "Develop Capabilities",
+    "tactic": "resource_development",
+    "desc": "Build tooling/malware.",
+    "emulation": "Planning-only: list TTPs/tooling to be used.",
+    "detection": "N/A.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1588",
+    "name": "Obtain Capabilities",
+    "tactic": "resource_development",
+    "desc": "Acquire tools/exploits.",
+    "emulation": "Planning-only: acquire benign test tooling.",
+    "detection": "N/A.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1608",
+    "name": "Stage Capabilities",
+    "tactic": "resource_development",
+    "desc": "Stage payloads on infra.",
+    "emulation": "Stage benign payloads on authorized infra only.",
+    "detection": "Threat-intel staging detection.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "osint"
+    ]
+  },
+  {
+    "id": "T1190",
+    "name": "Exploit Public-Facing Application",
+    "tactic": "initial_access",
+    "desc": "Exploit an internet-facing app for a foothold.",
+    "emulation": "Non-destructively verify an in-scope app is vulnerable; do NOT drop a shell.",
+    "detection": "WAF alerts, app error spikes, unexpected child processes.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "web"
+    ]
+  },
+  {
+    "id": "T1133",
+    "name": "External Remote Services",
+    "tactic": "initial_access",
+    "desc": "Access exposed VPN/RDP/SSH.",
+    "emulation": "Confirm exposed remote services and test provided test creds.",
+    "detection": "Geo-anomalous logins, new-device auth.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1566",
+    "name": "Phishing",
+    "tactic": "initial_access",
+    "desc": "Send a phishing lure to authorized test users.",
+    "emulation": "Authorized simulated-phishing to consented test recipients only.",
+    "detection": "Mail gateway, user-report rate, link-click telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "email"
+    ]
+  },
+  {
+    "id": "T1566.001",
+    "name": "Spearphishing Attachment",
+    "tactic": "initial_access",
+    "desc": "Lure with a malicious attachment.",
+    "emulation": "Send a tracked benign attachment to consented users.",
+    "detection": "Attachment sandboxing, macro-exec alerts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "email"
+    ]
+  },
+  {
+    "id": "T1566.002",
+    "name": "Spearphishing Link",
+    "tactic": "initial_access",
+    "desc": "Lure with a malicious link.",
+    "emulation": "Send a tracked benign link to consented users.",
+    "detection": "URL-rewrite/click telemetry, proxy logs.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "email"
+    ]
+  },
+  {
+    "id": "T1078",
+    "name": "Valid Accounts",
+    "tactic": "initial_access",
+    "desc": "Use legitimate credentials.",
+    "emulation": "Authenticate with provided test credentials to confirm access paths.",
+    "detection": "Impossible-travel, new-device, off-hours logins.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "identity"
+    ]
+  },
+  {
+    "id": "T1078.004",
+    "name": "Cloud Accounts",
+    "tactic": "initial_access",
+    "desc": "Use valid cloud credentials.",
+    "emulation": "Use provided cloud test creds to confirm console/API access.",
+    "detection": "CloudTrail anomalous IAM use, new-region logins.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "cloud"
+    ]
+  },
+  {
+    "id": "T1199",
+    "name": "Trusted Relationship",
+    "tactic": "initial_access",
+    "desc": "Abuse third-party/B2B trust.",
+    "emulation": "Map authorized third-party/B2B access paths \u2014 read-only.",
+    "detection": "Unusual partner-network access.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1195",
+    "name": "Supply Chain Compromise",
+    "tactic": "initial_access",
+    "desc": "Compromise via a dependency/build chain.",
+    "emulation": "Audit in-scope dependency/build trust \u2014 read-only; do not tamper.",
+    "detection": "Build-integrity/signing verification gaps.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "supply_chain"
+    ]
+  },
+  {
+    "id": "T1189",
+    "name": "Drive-by Compromise",
+    "tactic": "initial_access",
+    "desc": "Compromise via a watering-hole site.",
+    "emulation": "Verify a watering-hole vector exists; do not weaponize.",
+    "detection": "Browser-exploit telemetry, anomalous redirects.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "web"
+    ]
+  },
+  {
+    "id": "T1200",
+    "name": "Hardware Additions",
+    "tactic": "initial_access",
+    "desc": "Introduce rogue hardware.",
+    "emulation": "Planning-only: note physical/HW vector; no deployment.",
+    "detection": "NAC, rogue-device detection.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "physical"
+    ]
+  },
+  {
+    "id": "T1059",
+    "name": "Command and Scripting Interpreter",
+    "tactic": "execution",
+    "desc": "Run commands via an interpreter.",
+    "emulation": "Run a benign command via an interpreter on an authorized host.",
+    "detection": "Process-creation + command-line logging.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1059.001",
+    "name": "PowerShell",
+    "tactic": "execution",
+    "desc": "Run commands via PowerShell.",
+    "emulation": "Atomic benign PowerShell (whoami) on an authorized host.",
+    "detection": "Script-block logging, AMSI, parent-child anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1059.003",
+    "name": "Windows Command Shell",
+    "tactic": "execution",
+    "desc": "Run commands via cmd.exe.",
+    "emulation": "Benign cmd.exe (whoami/ipconfig) on an authorized host.",
+    "detection": "cmd.exe spawned by Office/odd parents.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1059.004",
+    "name": "Unix Shell",
+    "tactic": "execution",
+    "desc": "Run shell commands on Unix.",
+    "emulation": "Benign id/uname on an authorized host.",
+    "detection": "auditd/EDR process telemetry, anomalous shells.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "linux"
+    ]
+  },
+  {
+    "id": "T1059.005",
+    "name": "Visual Basic",
+    "tactic": "execution",
+    "desc": "Execute VBScript/VBA.",
+    "emulation": "Detonate a benign VBScript/macro in a controlled sandbox.",
+    "detection": "wscript/cscript exec, macro-security logs.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1059.006",
+    "name": "Python",
+    "tactic": "execution",
+    "desc": "Execute Python.",
+    "emulation": "Benign Python one-liner on an authorized host.",
+    "detection": "python spawning network/child processes.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1059.007",
+    "name": "JavaScript",
+    "tactic": "execution",
+    "desc": "Execute JScript/Node.",
+    "emulation": "Benign JScript/Node test on an authorized host.",
+    "detection": "wscript/node anomalous exec.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1204",
+    "name": "User Execution",
+    "tactic": "execution",
+    "desc": "Rely on a user running content.",
+    "emulation": "Track whether consented users run a benign tracked file/link.",
+    "detection": "User-report rate, exec-from-download telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "email"
+    ]
+  },
+  {
+    "id": "T1204.002",
+    "name": "Malicious File",
+    "tactic": "execution",
+    "desc": "User opens a malicious file.",
+    "emulation": "Consented user opens a tracked benign document; log only.",
+    "detection": "Office-spawns-shell, mark-of-the-web bypass.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1047",
+    "name": "Windows Management Instrumentation",
+    "tactic": "execution",
+    "desc": "Execute via WMI.",
+    "emulation": "Benign WMI query (Win32_Process) on an authorized host.",
+    "detection": "wmic/WMI-Activity logs, remote WMI.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1053",
+    "name": "Scheduled Task/Job",
+    "tactic": "execution",
+    "desc": "Execute/persist via scheduling.",
+    "emulation": "Create a clearly-tagged benign job, then REMOVE it in-window.",
+    "detection": "Task-creation events (4698), cron changes.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1053.005",
+    "name": "Scheduled Task",
+    "tactic": "execution",
+    "desc": "Execute/persist via Windows Scheduled Task.",
+    "emulation": "Create a tagged benign task, then remove it.",
+    "detection": "4698/4702 task events, schtasks telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1569.002",
+    "name": "Service Execution",
+    "tactic": "execution",
+    "desc": "Execute via a Windows service.",
+    "emulation": "Start a benign tagged service, then remove it.",
+    "detection": "7045 service-install, PsExec artifacts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1106",
+    "name": "Native API",
+    "tactic": "execution",
+    "desc": "Execute via OS native API.",
+    "emulation": "Benign API-call test (CreateProcess) on an authorized host.",
+    "detection": "EDR API telemetry, unbacked memory exec.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1129",
+    "name": "Shared Modules",
+    "tactic": "execution",
+    "desc": "Execute via loaded modules/DLLs.",
+    "emulation": "Load a benign signed DLL on an authorized host.",
+    "detection": "Image-load telemetry, unsigned DLL loads.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1098",
+    "name": "Account Manipulation",
+    "tactic": "persistence",
+    "desc": "Add/modify accounts to keep access.",
+    "emulation": "Emulate-only: log the technique; do not modify real accounts.",
+    "detection": "Directory-change auditing, new privileged members.",
+    "risk": [
+      "destructive_persistence"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "identity"
+    ]
+  },
+  {
+    "id": "T1136",
+    "name": "Create Account",
+    "tactic": "persistence",
+    "desc": "Create an account for persistence.",
+    "emulation": "BLOCKED: do not create real persistent accounts; objective only.",
+    "detection": "4720 account-creation, new local/domain users.",
+    "risk": [
+      "destructive_persistence"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "identity"
+    ]
+  },
+  {
+    "id": "T1136.001",
+    "name": "Local Account",
+    "tactic": "persistence",
+    "desc": "Create a local account.",
+    "emulation": "BLOCKED: do not create real local accounts; objective only.",
+    "detection": "4720, net user adds.",
+    "risk": [
+      "destructive_persistence"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
+  },
+  {
+    "id": "T1547.001",
+    "name": "Registry Run Keys / Startup Folder",
+    "tactic": "persistence",
+    "desc": "Persist via run keys / startup.",
+    "emulation": "Add a tagged benign run-key, then remove it.",
+    "detection": "Run-key writes (Sysmon 13), startup-folder changes.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1543.003",
+    "name": "Windows Service",
+    "tactic": "persistence",
+    "desc": "Persist via a Windows service.",
+    "emulation": "Install a tagged benign service, then remove it.",
+    "detection": "7045 service-install, ImagePath anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1505.003",
+    "name": "Web Shell",
+    "tactic": "persistence",
+    "desc": "Plant a web shell backdoor.",
+    "emulation": "BLOCKED: verify the upload vector only; do not deploy a live shell.",
+    "detection": "New executables in webroot, anomalous web-process children.",
+    "risk": [
+      "destructive_persistence"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "web"
+    ]
+  },
+  {
+    "id": "T1546.003",
+    "name": "WMI Event Subscription",
+    "tactic": "persistence",
+    "desc": "Persist via WMI event subscription.",
+    "emulation": "Register a tagged benign WMI subscription, then remove it.",
+    "detection": "WMI-Activity __EventFilter/Consumer creation.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1574",
+    "name": "Hijack Execution Flow",
+    "tactic": "persistence",
+    "desc": "Hijack DLL search order / paths.",
+    "emulation": "Identify DLL-search-order/path-hijack vectors \u2014 read-only.",
+    "detection": "Unsigned DLLs from writable paths.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1037",
+    "name": "Boot or Logon Initialization Scripts",
+    "tactic": "persistence",
+    "desc": "Persist via logon scripts.",
+    "emulation": "Add a tagged benign logon script, then remove it.",
+    "detection": "Logon-script registry/GPO changes.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
+  },
+  {
+    "id": "T1068",
+    "name": "Exploitation for Privilege Escalation",
+    "tactic": "privilege_escalation",
+    "desc": "Exploit a local vuln to elevate.",
+    "emulation": "Identify a local privesc vector (version/config); do not weaponize.",
+    "detection": "EDR exploit-guard, unexpected SYSTEM/root processes.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
+  },
+  {
+    "id": "T1548.002",
+    "name": "Bypass User Account Control",
+    "tactic": "privilege_escalation",
+    "desc": "Bypass UAC to elevate.",
+    "emulation": "Benign atomic UAC-bypass test on an authorized host.",
+    "detection": "fodhelper/eventvwr auto-elevate anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1548.003",
+    "name": "Sudo and Sudo Caching",
+    "tactic": "privilege_escalation",
+    "desc": "Abuse sudo misconfig to elevate.",
+    "emulation": "Read-only sudo -l / sudoers review on an authorized host.",
+    "detection": "sudo logs, auth.log anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "linux"
+    ]
+  },
+  {
+    "id": "T1134",
+    "name": "Access Token Manipulation",
+    "tactic": "privilege_escalation",
+    "desc": "Manipulate tokens to elevate.",
+    "emulation": "Benign token-impersonation test (whoami /priv).",
+    "detection": "Token-manipulation EDR telemetry.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1055",
+    "name": "Process Injection",
+    "tactic": "privilege_escalation",
+    "desc": "Inject code into another process.",
+    "emulation": "Benign atomic injection test into a sacrificial process.",
+    "detection": "CreateRemoteThread, unbacked executable memory.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
+  },
+  {
+    "id": "T1484.001",
+    "name": "Group Policy Modification",
+    "tactic": "privilege_escalation",
+    "desc": "Abuse GPO to escalate.",
+    "emulation": "Read-only GPO review; do not modify policy.",
+    "detection": "GPO change auditing (5136).",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1562.001",
+    "name": "Impair Defenses: Disable or Modify Tools",
+    "tactic": "defense_evasion",
+    "desc": "Disable AV/EDR/logging.",
+    "emulation": "Emulate-only: log the intent; do NOT disable security controls.",
+    "detection": "Service-stop events, EDR self-protection alerts.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
+  },
+  {
+    "id": "T1070.004",
+    "name": "Indicator Removal: File Deletion",
+    "tactic": "defense_evasion",
+    "desc": "Delete artifacts to cover tracks.",
+    "emulation": "BLOCKED \u2014 destructive. Recorded as a detection objective.",
+    "detection": "File-delete auditing, gaps in artifact continuity.",
+    "risk": [
+      "data_destruction"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
+  },
+  {
+    "id": "T1070.001",
+    "name": "Clear Windows Event Logs",
+    "tactic": "defense_evasion",
+    "desc": "Wipe event logs.",
+    "emulation": "BLOCKED \u2014 destructive. Detection objective only.",
+    "detection": "1102 log-cleared, gaps in event sequence.",
+    "risk": [
+      "data_destruction"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1027",
+    "name": "Obfuscated Files or Information",
+    "tactic": "defense_evasion",
+    "desc": "Obfuscate payloads to evade.",
+    "emulation": "Detonate a benign obfuscated sample for detection testing.",
+    "detection": "Entropy analysis, AMSI, packer signatures.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1140",
+    "name": "Deobfuscate/Decode Files",
+    "tactic": "defense_evasion",
+    "desc": "Decode payloads on host.",
+    "emulation": "Benign decode test (certutil) on an authorized host.",
+    "detection": "certutil/base64 decode telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1112",
+    "name": "Modify Registry",
+    "tactic": "defense_evasion",
+    "desc": "Tamper with the registry.",
+    "emulation": "Write/read a tagged benign registry value, then remove it.",
+    "detection": "Registry-modification auditing (Sysmon 13).",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1036",
+    "name": "Masquerading",
+    "tactic": "defense_evasion",
+    "desc": "Disguise tooling as legit.",
+    "emulation": "Run a benign binary renamed to mimic a system process.",
+    "detection": "Path/signature mismatch, name vs hash.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1218",
+    "name": "System Binary Proxy Execution",
+    "tactic": "defense_evasion",
+    "desc": "Proxy execution via LOLBins.",
+    "emulation": "Benign LOLBin test (rundll32/mshta no-op).",
+    "detection": "LOLBin command-line anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1497",
+    "name": "Virtualization/Sandbox Evasion",
+    "tactic": "defense_evasion",
+    "desc": "Evade sandboxes/VMs.",
+    "emulation": "Benign sandbox-check test; log only.",
+    "detection": "Anti-VM API calls, timing checks.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1553",
+    "name": "Subvert Trust Controls",
+    "tactic": "defense_evasion",
+    "desc": "Abuse code-signing/cert trust.",
+    "emulation": "Identify code-signing/cert-trust gaps \u2014 read-only.",
+    "detection": "Untrusted-signer execution, cert anomalies.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1620",
+    "name": "Reflective Code Loading",
+    "tactic": "defense_evasion",
+    "desc": "Load code reflectively in memory.",
+    "emulation": "Benign reflective-load test for detection testing.",
+    "detection": "Unbacked/memory-only module loads.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1110",
+    "name": "Brute Force",
+    "tactic": "credential_access",
+    "desc": "Guess credentials.",
+    "emulation": "Rate-limited spray against authorized auth endpoints with a test wordlist.",
+    "detection": "Lockout spikes, failed-auth bursts (4625).",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "identity"
+    ]
+  },
+  {
+    "id": "T1110.003",
+    "name": "Password Spraying",
+    "tactic": "credential_access",
+    "desc": "Spray one password across many accounts.",
+    "emulation": "Single-password spray across authorized accounts, rate-limited.",
+    "detection": "Many accounts, one password; 4625 patterns.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "identity"
+    ]
+  },
+  {
+    "id": "T1110.004",
+    "name": "Credential Stuffing",
+    "tactic": "credential_access",
+    "desc": "Replay breached cred pairs.",
+    "emulation": "Replay test credential pairs against an authorized login (consented).",
+    "detection": "High-volume distinct-credential login attempts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "identity"
+    ]
+  },
+  {
+    "id": "T1003.001",
+    "name": "OS Credential Dumping: LSASS",
+    "tactic": "credential_access",
+    "desc": "Dump LSASS for credentials.",
+    "emulation": "BLOCKED: log technique; do not capture real production creds.",
+    "detection": "LSASS access by non-system processes (EDR).",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1003.002",
+    "name": "Security Account Manager",
+    "tactic": "credential_access",
+    "desc": "Dump SAM hashes.",
+    "emulation": "BLOCKED: do not dump real SAM hashes; objective only.",
+    "detection": "SAM/registry-hive access, reg save HKLM\\SAM.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1003.003",
+    "name": "NTDS",
+    "tactic": "credential_access",
+    "desc": "Extract the AD NTDS.dit database.",
+    "emulation": "BLOCKED: do not extract real NTDS.dit; objective only.",
+    "detection": "ntdsutil/VSS NTDS access, 4662 DC reads.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1558.003",
+    "name": "Kerberoasting",
+    "tactic": "credential_access",
+    "desc": "Request service tickets to crack offline.",
+    "emulation": "Request SPNs for authorized AD; mark crackable; do not reuse real creds.",
+    "detection": "4769 RC4 ticket requests, abnormal SPN queries.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1558.001",
+    "name": "Golden Ticket",
+    "tactic": "credential_access",
+    "desc": "Forge Kerberos TGTs.",
+    "emulation": "BLOCKED: do not forge real TGTs; resilience objective only.",
+    "detection": "Anomalous TGT lifetime, krbtgt usage.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1552",
+    "name": "Unsecured Credentials",
+    "tactic": "credential_access",
+    "desc": "Find exposed credentials.",
+    "emulation": "Read-only search for exposed secrets in authorized scope; do not reuse.",
+    "detection": "Secret-scanning, access to credential files.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1552.001",
+    "name": "Credentials In Files",
+    "tactic": "credential_access",
+    "desc": "Find credentials in files.",
+    "emulation": "Locate credential files (report paths only); do not exfil/reuse.",
+    "detection": "Mass reads of config/.env/key files.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1555",
+    "name": "Credentials from Password Stores",
+    "tactic": "credential_access",
+    "desc": "Extract creds from browsers/keystores.",
+    "emulation": "BLOCKED: do not extract real browser/keystore creds; objective only.",
+    "detection": "Browser-credential-store access by non-browser process.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1056.001",
+    "name": "Keylogging",
+    "tactic": "credential_access",
+    "desc": "Capture keystrokes.",
+    "emulation": "BLOCKED: do not capture real keystrokes; objective only.",
+    "detection": "Hook installation, keylogger EDR signatures.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1187",
+    "name": "Forced Authentication",
+    "tactic": "credential_access",
+    "desc": "Coerce auth to capture hashes.",
+    "emulation": "BLOCKED: do not capture real NetNTLM hashes; objective only.",
+    "detection": "Outbound SMB/WebDAV to attacker host, responder sigs.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1557",
+    "name": "Adversary-in-the-Middle",
+    "tactic": "credential_access",
+    "desc": "Intercept traffic/credentials.",
+    "emulation": "BLOCKED: do not intercept real credentials/traffic; objective only.",
+    "detection": "ARP/LLMNR/NBT-NS poisoning, rogue gateway.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1046",
+    "name": "Network Service Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate services on reachable hosts.",
+    "emulation": "Read-only service scan of in-scope hosts.",
+    "detection": "Internal scan signatures, east-west spikes.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1087",
+    "name": "Account Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate accounts/groups.",
+    "emulation": "Read-only directory/IAM account enumeration on authorized scope.",
+    "detection": "LDAP query spikes, recon-tool signatures.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "identity"
+    ]
+  },
+  {
+    "id": "T1087.002",
+    "name": "Account Discovery: Domain Account",
+    "tactic": "discovery",
+    "desc": "Enumerate domain accounts/groups.",
+    "emulation": "Read-only domain account/group enumeration (BloodHound collector).",
+    "detection": "SharpHound LDAP patterns, 4661 access.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1018",
+    "name": "Remote System Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate reachable hosts.",
+    "emulation": "Enumerate reachable in-scope hosts \u2014 read-only.",
+    "detection": "net view / ping sweeps, ARP scans.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1082",
+    "name": "System Information Discovery",
+    "tactic": "discovery",
+    "desc": "Profile the host.",
+    "emulation": "Benign systeminfo/uname on an authorized host.",
+    "detection": "systeminfo/host-recon command telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1083",
+    "name": "File and Directory Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate files/dirs.",
+    "emulation": "Read-only directory listing on an authorized host.",
+    "detection": "Recursive dir enumeration, mass stat.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1057",
+    "name": "Process Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate processes.",
+    "emulation": "Benign tasklist/ps on an authorized host.",
+    "detection": "Process-enumeration telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1016",
+    "name": "System Network Configuration Discovery",
+    "tactic": "discovery",
+    "desc": "Read network config.",
+    "emulation": "Benign ipconfig/ifconfig/route on an authorized host.",
+    "detection": "Network-config recon commands.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1049",
+    "name": "System Network Connections Discovery",
+    "tactic": "discovery",
+    "desc": "List active connections.",
+    "emulation": "Benign netstat on an authorized host.",
+    "detection": "netstat/connection-enumeration telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1069",
+    "name": "Permission Groups Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate groups/roles.",
+    "emulation": "Read-only group/role enumeration on authorized scope.",
+    "detection": "net group / whoami /groups telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1482",
+    "name": "Domain Trust Discovery",
+    "tactic": "discovery",
+    "desc": "Map domain trusts.",
+    "emulation": "Read-only domain-trust enumeration.",
+    "detection": "nltest/LDAP trust queries.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1135",
+    "name": "Network Share Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate shares.",
+    "emulation": "Read-only share enumeration on authorized hosts.",
+    "detection": "net view, SMB share-enum bursts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1201",
+    "name": "Password Policy Discovery",
+    "tactic": "discovery",
+    "desc": "Read the password policy.",
+    "emulation": "Read-only password-policy query on authorized scope.",
+    "detection": "net accounts / LDAP policy reads.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1033",
+    "name": "System Owner/User Discovery",
+    "tactic": "discovery",
+    "desc": "Identify the logged-in user.",
+    "emulation": "Benign whoami on an authorized host.",
+    "detection": "whoami/quser telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1526",
+    "name": "Cloud Service Discovery",
+    "tactic": "discovery",
+    "desc": "Enumerate cloud services.",
+    "emulation": "Read-only enumeration of authorized cloud services/APIs.",
+    "detection": "CloudTrail describe/list bursts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "cloud"
+    ]
+  },
+  {
+    "id": "T1021",
+    "name": "Remote Services",
+    "tactic": "lateral_movement",
+    "desc": "Move laterally via remote services.",
+    "emulation": "Confirm remote-service reachability/auth on in-scope hosts only.",
+    "detection": "Anomalous remote-logon source/dest pairs.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1021.001",
+    "name": "Remote Services: RDP",
+    "tactic": "lateral_movement",
+    "desc": "Move laterally via RDP.",
+    "emulation": "Confirm RDP reachability/auth on in-scope hosts only.",
+    "detection": "4624 type-10 logons, unusual RDP pairs.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1021.002",
+    "name": "SMB / Windows Admin Shares",
+    "tactic": "lateral_movement",
+    "desc": "Move laterally via SMB admin shares.",
+    "emulation": "Confirm ADMIN$/C$ access with provided creds on an in-scope host.",
+    "detection": "5140 share access, PsExec/SMB lateral signatures.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1021.004",
+    "name": "Remote Services: SSH",
+    "tactic": "lateral_movement",
+    "desc": "Move laterally via SSH.",
+    "emulation": "Confirm SSH reachability/auth on in-scope hosts.",
+    "detection": "Anomalous SSH source IPs, auth.log spikes.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "linux"
+    ]
+  },
+  {
+    "id": "T1021.006",
+    "name": "Windows Remote Management",
+    "tactic": "lateral_movement",
+    "desc": "Move laterally via WinRM.",
+    "emulation": "Confirm WinRM reachability/auth on in-scope hosts.",
+    "detection": "WinRM/WSMan logons, 4624 + 5985 traffic.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1550.002",
+    "name": "Use Alternate Auth Material: Pass the Hash",
+    "tactic": "lateral_movement",
+    "desc": "Authenticate with a stolen NTLM hash.",
+    "emulation": "BLOCKED: do not reuse real NTLM hashes; objective only.",
+    "detection": "NTLM logons without preceding interactive auth.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1550.003",
+    "name": "Use Alternate Auth Material: Pass the Ticket",
+    "tactic": "lateral_movement",
+    "desc": "Authenticate with a stolen Kerberos ticket.",
+    "emulation": "BLOCKED: do not reuse real Kerberos tickets; objective only.",
+    "detection": "Anomalous ticket use, mismatched TGT/TGS.",
+    "risk": [
+      "credential_harvest_live"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1570",
+    "name": "Lateral Tool Transfer",
+    "tactic": "lateral_movement",
+    "desc": "Move tools between hosts.",
+    "emulation": "Transfer a benign tagged file to an in-scope host.",
+    "detection": "SMB/HTTP tool-drop, new exe on host.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1563",
+    "name": "Remote Service Session Hijacking",
+    "tactic": "lateral_movement",
+    "desc": "Hijack an existing session.",
+    "emulation": "Identify hijackable sessions \u2014 read-only; do not hijack.",
+    "detection": "Session-reconnect anomalies, tscon use.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1080",
+    "name": "Taint Shared Content",
+    "tactic": "lateral_movement",
+    "desc": "Plant malicious content on shares.",
+    "emulation": "BLOCKED: could spread out of scope; objective only.",
+    "detection": "Modified files on shares, write bursts.",
+    "risk": [
+      "out_of_scope_spread"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1005",
+    "name": "Data from Local System",
+    "tactic": "collection",
+    "desc": "Collect data from the host.",
+    "emulation": "Identify (do not copy) sensitive-data locations on authorized hosts.",
+    "detection": "Mass file reads, staging-dir creation.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1039",
+    "name": "Data from Network Shared Drive",
+    "tactic": "collection",
+    "desc": "Collect data from shares.",
+    "emulation": "Identify sensitive shares \u2014 read-only; do not copy real data.",
+    "detection": "Mass share reads, large SMB pulls.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1114",
+    "name": "Email Collection",
+    "tactic": "collection",
+    "desc": "Collect data from mailboxes.",
+    "emulation": "Confirm mailbox access path with provided creds; do not read real PII.",
+    "detection": "Mass mailbox access, EWS/eDiscovery bursts.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "email"
+    ]
+  },
+  {
+    "id": "T1113",
+    "name": "Screen Capture",
+    "tactic": "collection",
+    "desc": "Capture the screen.",
+    "emulation": "Take a single benign screenshot on an authorized host.",
+    "detection": "Screen-capture API telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1074",
+    "name": "Data Staged",
+    "tactic": "collection",
+    "desc": "Stage data for exfil.",
+    "emulation": "Create a benign canary staging archive; do not stage real data.",
+    "detection": "Staging-dir creation, large temp archives.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1560",
+    "name": "Archive Collected Data",
+    "tactic": "collection",
+    "desc": "Compress/encrypt collected data.",
+    "emulation": "Archive benign canary data (zip/rar) on an authorized host.",
+    "detection": "rar/7z/zip of large data, password-protected archives.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1119",
+    "name": "Automated Collection",
+    "tactic": "collection",
+    "desc": "Auto-collect data at scale.",
+    "emulation": "Run a benign canary collection script; do not gather real data.",
+    "detection": "Scripted mass-file access patterns.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1530",
+    "name": "Data from Cloud Storage",
+    "tactic": "collection",
+    "desc": "Collect data from cloud storage.",
+    "emulation": "Identify accessible buckets/objects \u2014 read-only; do not exfil real data.",
+    "detection": "S3/GCS list+get bursts, public-bucket access.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "cloud"
+    ]
+  },
+  {
+    "id": "T1071",
+    "name": "Application Layer Protocol",
+    "tactic": "command_and_control",
+    "desc": "C2 over a standard protocol.",
+    "emulation": "Benign beacon over a standard protocol to an authorized listener.",
+    "detection": "Beacon jitter, rare-domain traffic, JA3 anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1071.001",
+    "name": "Application Layer Protocol: Web",
+    "tactic": "command_and_control",
+    "desc": "C2 over HTTP(S).",
+    "emulation": "Benign HTTP(S) beacon to an authorized listener for detection testing.",
+    "detection": "Beaconing, rare-domain TLS, JA3/JA4 anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1071.004",
+    "name": "Application Layer Protocol: DNS",
+    "tactic": "command_and_control",
+    "desc": "C2 over DNS.",
+    "emulation": "Benign DNS-beacon pattern to an authorized resolver/listener.",
+    "detection": "High-entropy subdomains, TXT-record bursts.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1573",
+    "name": "Encrypted Channel",
+    "tactic": "command_and_control",
+    "desc": "Encrypt the C2 channel.",
+    "emulation": "Benign TLS-encrypted beacon to an authorized listener.",
+    "detection": "Self-signed/rare-CA TLS, JA3 anomalies.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1090",
+    "name": "Proxy",
+    "tactic": "command_and_control",
+    "desc": "Relay C2 through a proxy.",
+    "emulation": "Route benign test traffic through an authorized proxy/relay.",
+    "detection": "Multi-hop traffic, unexpected proxy chains.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1572",
+    "name": "Protocol Tunneling",
+    "tactic": "command_and_control",
+    "desc": "Tunnel C2 inside another protocol.",
+    "emulation": "Benign tunnel (DNS/ICMP/HTTP) to an authorized listener.",
+    "detection": "Tunneling signatures, anomalous protocol payloads.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1105",
+    "name": "Ingress Tool Transfer",
+    "tactic": "command_and_control",
+    "desc": "Pull tools onto the host.",
+    "emulation": "Download a benign tagged tool to an authorized host.",
+    "detection": "certutil/curl/bitsadmin downloads, new exe.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1095",
+    "name": "Non-Application Layer Protocol",
+    "tactic": "command_and_control",
+    "desc": "C2 over raw TCP/ICMP.",
+    "emulation": "Benign raw-TCP/ICMP beacon to an authorized listener.",
+    "detection": "Non-standard-port beacons, ICMP payloads.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1219",
+    "name": "Remote Access Software",
+    "tactic": "command_and_control",
+    "desc": "Abuse RMM tools for access.",
+    "emulation": "Confirm presence/use of RMM tools \u2014 read-only.",
+    "detection": "AnyDesk/TeamViewer/RMM execution telemetry.",
+    "risk": [],
+    "atomic_safe": true,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1102",
+    "name": "Web Service",
+    "tactic": "command_and_control",
+    "desc": "C2 via a legitimate web service.",
+    "emulation": "Benign C2-over-web-service test (paste/cloud) to an authorized listener.",
+    "detection": "Traffic to cloud/paste services, rare-domain APIs.",
+    "risk": [],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1041",
+    "name": "Exfiltration Over C2 Channel",
+    "tactic": "exfiltration",
+    "desc": "Exfil over the C2 channel.",
+    "emulation": "BLOCKED: emulate with benign canary data only; never real data.",
+    "detection": "Large outbound over C2, DLP triggers.",
+    "risk": [
+      "real_exfiltration"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1048",
+    "name": "Exfiltration Over Alternative Protocol",
+    "tactic": "exfiltration",
+    "desc": "Exfil over DNS/FTP/ICMP.",
+    "emulation": "BLOCKED: canary-only over DNS/FTP/ICMP; never real data.",
+    "detection": "Anomalous outbound protocols, DNS/ICMP volume.",
+    "risk": [
+      "real_exfiltration"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1567",
+    "name": "Exfiltration Over Web Service",
+    "tactic": "exfiltration",
+    "desc": "Exfil to cloud/paste services.",
+    "emulation": "BLOCKED: canary-only to cloud/paste; never real data.",
+    "detection": "Uploads to cloud-storage/paste sites.",
+    "risk": [
+      "real_exfiltration"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1011",
+    "name": "Exfiltration Over Other Network Medium",
+    "tactic": "exfiltration",
+    "desc": "Exfil over Bluetooth/Wi-Fi/cellular.",
+    "emulation": "BLOCKED: canary-only over alt medium; never real data.",
+    "detection": "Bluetooth/Wi-Fi/cellular exfil anomalies.",
+    "risk": [
+      "real_exfiltration"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1052",
+    "name": "Exfiltration Over Physical Medium",
+    "tactic": "exfiltration",
+    "desc": "Exfil via removable media.",
+    "emulation": "BLOCKED: canary-only via removable media; never real data.",
+    "detection": "USB mass-storage writes, removable-media policy.",
+    "risk": [
+      "real_exfiltration"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "physical"
+    ]
+  },
+  {
+    "id": "T1029",
+    "name": "Scheduled Transfer",
+    "tactic": "exfiltration",
+    "desc": "Exfil on a schedule.",
+    "emulation": "BLOCKED: canary-only scheduled exfil; never real data.",
+    "detection": "Periodic outbound bursts at fixed intervals.",
+    "risk": [
+      "real_exfiltration"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1030",
+    "name": "Data Transfer Size Limits",
+    "tactic": "exfiltration",
+    "desc": "Exfil in fixed-size chunks.",
+    "emulation": "BLOCKED: canary-only chunked exfil; never real data.",
+    "detection": "Uniform-sized outbound chunks.",
+    "risk": [
+      "real_exfiltration"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1486",
+    "name": "Data Encrypted for Impact (Ransomware)",
+    "tactic": "impact",
+    "desc": "Encrypt data to deny access.",
+    "emulation": "BLOCKED \u2014 destructive. Resilience objective only.",
+    "detection": "Mass file rename/entropy spikes, shadow-copy deletion.",
+    "risk": [
+      "data_destruction"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows",
+      "linux"
+    ]
+  },
+  {
+    "id": "T1485",
+    "name": "Data Destruction",
+    "tactic": "impact",
+    "desc": "Destroy data irrecoverably.",
+    "emulation": "BLOCKED \u2014 destructive. Resilience objective only.",
+    "detection": "Mass deletes/overwrites, secure-wipe patterns.",
+    "risk": [
+      "data_destruction"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1490",
+    "name": "Inhibit System Recovery",
+    "tactic": "impact",
+    "desc": "Delete backups/shadow copies.",
+    "emulation": "BLOCKED \u2014 destructive. Resilience objective only.",
+    "detection": "vssadmin delete shadows, wbadmin delete, bcdedit.",
+    "risk": [
+      "data_destruction"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "windows"
+    ]
+  },
+  {
+    "id": "T1489",
+    "name": "Service Stop",
+    "tactic": "impact",
+    "desc": "Stop critical services.",
+    "emulation": "BLOCKED \u2014 disruptive. Resilience objective only.",
+    "detection": "Critical-service stop events (7036/7040).",
+    "risk": [
+      "denial_of_service"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1498",
+    "name": "Network Denial of Service",
+    "tactic": "impact",
+    "desc": "Flood the network.",
+    "emulation": "BLOCKED \u2014 DoS. Resilience objective only.",
+    "detection": "Bandwidth saturation, availability monitors.",
+    "risk": [
+      "denial_of_service"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "network"
+    ]
+  },
+  {
+    "id": "T1499",
+    "name": "Endpoint Denial of Service",
+    "tactic": "impact",
+    "desc": "Exhaust endpoint resources.",
+    "emulation": "BLOCKED \u2014 DoS. Resilience objective only.",
+    "detection": "Resource-exhaustion alerts.",
+    "risk": [
+      "denial_of_service"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1491",
+    "name": "Defacement",
+    "tactic": "impact",
+    "desc": "Deface web assets.",
+    "emulation": "BLOCKED \u2014 destructive. Resilience objective only.",
+    "detection": "Unauthorized content changes on web assets.",
+    "risk": [
+      "data_destruction"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "web"
+    ]
+  },
+  {
+    "id": "T1561",
+    "name": "Disk Wipe",
+    "tactic": "impact",
+    "desc": "Wipe disks / boot sectors.",
+    "emulation": "BLOCKED \u2014 destructive. Resilience objective only.",
+    "detection": "Raw disk writes, MBR/boot-sector tampering.",
+    "risk": [
+      "data_destruction"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  },
+  {
+    "id": "T1496",
+    "name": "Resource Hijacking",
+    "tactic": "impact",
+    "desc": "Hijack resources (e.g. mining).",
+    "emulation": "BLOCKED \u2014 abuse/DoS. Resilience objective only.",
+    "detection": "Sustained CPU/GPU spikes, mining-pool traffic.",
+    "risk": [
+      "denial_of_service"
+    ],
+    "atomic_safe": false,
+    "platforms": [
+      "any"
+    ]
+  }
+]
