@@ -1,0 +1,30 @@
+{
+  "_note": "IAP / billing API markers across platforms. billing_markers is joined with | into a regex (same semantics as the inline BILLING_RE). The other lists are reference markers for the broader mobile_payment suite.",
+  "billing_markers": [
+    "BillingClient",
+    "com/android/billingclient",
+    "Purchase\\.\\$Builder",
+    "queryPurchasesAsync",
+    "launchBillingFlow",
+    "acknowledgePurchase",
+    "SKPaymentQueue",
+    "SKPaymentTransaction",
+    "StoreKit",
+    "Transaction\\.currentEntitlements",
+    "com/amazon/device/iap",
+    "com/samsung/android/sdk/iap"
+  ],
+  "server_verify_markers": [
+    "androidpublisher/v3",
+    "googleapis\\.com/androidpublisher",
+    "verifyReceipt",
+    "buy.itunes.apple.com/verifyReceipt",
+    "sandbox.itunes.apple.com/verifyReceipt",
+    "appstoreserverapi"
+  ],
+  "local_verify_markers": [
+    "verifyPurchase",
+    "Security\\.verifyPurchase",
+    "signature\\.verify"
+  ]
+}

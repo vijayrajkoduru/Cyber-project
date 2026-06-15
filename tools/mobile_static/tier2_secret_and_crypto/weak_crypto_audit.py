@@ -8,20 +8,27 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.weak_crypto_audit_findings import WEAK_CRYPTO_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 
-# Patterns based on smali + Java/Kotlin syntax
+# Patterns based on smali + Java/Kotlin syntax. Sourced from the shared
+# AI-curated mobile pool; inline dict is the fallback.
+_WEAK_CRYPTO_FALLBACK = {
+    "DES cipher":          r'Cipher\.getInstance\(\s*"DES"|/javax/crypto/spec/DESKeySpec|"DES/CBC|"DES/ECB',
+    "RC4 cipher":          r'Cipher\.getInstance\(\s*"RC4"|"ARC4"',
+    "Blowfish cipher":     r'Cipher\.getInstance\(\s*"Blowfish"',
+    "AES ECB mode":        r'Cipher\.getInstance\(\s*"AES/ECB',
+    "MD5 used for crypto": r'MessageDigest\.getInstance\(\s*"MD5"|/MD5\.smali',
+    "SHA1 used for crypto":r'MessageDigest\.getInstance\(\s*"SHA-?1"|/SHA1\.smali',
+    "Insecure SecureRandom seed": r'SecureRandom\(\)\.setSeed\(|new SecureRandom\(new byte',
+    "TrustManager bypass": r'X509TrustManager.{1,500}checkServerTrusted[^{]*\{\s*\}|return\s+new\s+X509Certificate\[\s*0\s*\]',
+    "HostnameVerifier ALLOW_ALL": r'ALLOW_ALL_HOSTNAME_VERIFIER|verify\s*\([^)]*\)\s*\{\s*return\s+true',
+}
 PATTERNS = {
-    "DES cipher":          re.compile(r'Cipher\.getInstance\(\s*"DES"|/javax/crypto/spec/DESKeySpec|"DES/CBC|"DES/ECB'),
-    "RC4 cipher":          re.compile(r'Cipher\.getInstance\(\s*"RC4"|"ARC4"'),
-    "Blowfish cipher":     re.compile(r'Cipher\.getInstance\(\s*"Blowfish"'),
-    "AES ECB mode":        re.compile(r'Cipher\.getInstance\(\s*"AES/ECB'),
-    "MD5 used for crypto": re.compile(r'MessageDigest\.getInstance\(\s*"MD5"|/MD5\.smali'),
-    "SHA1 used for crypto":re.compile(r'MessageDigest\.getInstance\(\s*"SHA-?1"|/SHA1\.smali'),
-    "Insecure SecureRandom seed": re.compile(r'SecureRandom\(\)\.setSeed\(|new SecureRandom\(new byte'),
-    "TrustManager bypass": re.compile(r'X509TrustManager.{1,500}checkServerTrusted[^{]*\{\s*\}|return\s+new\s+X509Certificate\[\s*0\s*\]'),
-    "HostnameVerifier ALLOW_ALL": re.compile(r'ALLOW_ALL_HOSTNAME_VERIFIER|verify\s*\([^)]*\)\s*\{\s*return\s+true'),
+    name: re.compile(rx)
+    for name, rx in load_json("weak_crypto", fallback=_WEAK_CRYPTO_FALLBACK).items()
+    if name != "_note"
 }
 
 SCAN_EXTS = (".java", ".kt", ".smali")

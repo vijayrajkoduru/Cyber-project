@@ -12,14 +12,21 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.sharedprefs_audit_findings import SHAREDPREFS_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 
 SENSITIVE_KEY_RE = re.compile(
     r'"([^"]{3,40})"', re.IGNORECASE)
-SENSITIVE_HINTS = ("token", "password", "passwd", "pwd", "jwt", "auth",
-                    "session", "api_key", "apikey", "secret", "credential",
-                    "pin", "otp", "private_key", "access_token", "refresh_token")
+# Sensitive key-name hints sourced from the shared AI-curated mobile pool;
+# inline tuple is the fallback.
+_SENSITIVE_HINTS_FALLBACK = ("token", "password", "passwd", "pwd", "jwt", "auth",
+                             "session", "api_key", "apikey", "secret", "credential",
+                             "pin", "otp", "private_key", "access_token", "refresh_token")
+SENSITIVE_HINTS = tuple(
+    load_json("sensitive_keys", fallback={}).get(
+        "hints", _SENSITIVE_HINTS_FALLBACK)
+) or _SENSITIVE_HINTS_FALLBACK
 SCAN_MAX_FILES = 2500
 
 

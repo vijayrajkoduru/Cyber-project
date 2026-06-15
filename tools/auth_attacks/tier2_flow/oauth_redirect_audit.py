@@ -36,10 +36,18 @@ from pydantic import BaseModel
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._framework import ScanContext, run_scanner
 from tools._payloads.oauth_redirect_audit_findings import OAUTH_REDIRECT_AUDIT_FINDING_RULES
+from tools._payloads.auth_attacks._loader import load_json
 
 router = APIRouter()
 
 DEFAULT_TIMEOUT = 15
+
+# VL-CORE: AI-curated OAuth parameter-pollution pool owned by this module.
+# Used to (a) extend the redirect_uri mutation surface with single-value
+# attacker URIs templated against the customer's registered URI, and (b)
+# surface the broader scope/state/response_type pollution techniques as intel.
+# The detection verdict (302 -> attacker host, no OAuth error) is unchanged.
+_OAUTH_PARAM_POLLUTION = load_json("oauth_param_pollution", fallback=[])
 
 
 class OauthRedirectAuditRequest(ScanRequest):
@@ -82,6 +90,30 @@ def _build_mutations(original: str) -> list[tuple[str, str]]:
         ("query_fragment_smuggle",
             f"{original}#@evil.com/" if "#" not in original else original),
     ]
+
+    # VL-CORE extension: append single-value redirect_uri attacker URIs from the
+    # curated pollution pool, templated against the customer's registered URI.
+    # Duplicate-param ('&redirect_uri=' inside the mutation) entries are skipped
+    # here because _send_authorize uses a dict (one value per key); those are
+    # surfaced as intel instead. Backslash entries are skipped (urlencode would
+    # mangle them under the dict path).
+    orig_host = host or "victim.example"
+    seen = {m for _, m in out}
+    for p in _OAUTH_PARAM_POLLUTION:
+        if not isinstance(p, dict) or p.get("param") != "redirect_uri":
+            continue
+        mut = p.get("mutation") or ""
+        if "&redirect_uri=" in mut or "\\" in mut:
+            continue
+        if not mut.startswith("redirect_uri="):
+            continue
+        val = (mut[len("redirect_uri="):]
+               .replace("{ORIGINAL_HOST}", orig_host)
+               .replace("{ORIGINAL}", original))
+        if not val or val in seen:
+            continue
+        seen.add(val)
+        out.append((p.get("id") or "pool_redirect_uri", val))
     return out
 
 
@@ -195,6 +227,10 @@ async def gather(ctx: ScanContext):
 
     ctx.state["oauth_variant_results"] = results
     ctx.state["oauth_accepted_attacks"] = accepted
+    ctx.state["oauth_pollution_techniques"] = [
+        p.get("id") for p in _OAUTH_PARAM_POLLUTION
+        if isinstance(p, dict) and p.get("param") in ("scope", "state", "response_type", "response_mode")
+    ]
     ctx.source(f"OAuth /authorize -> {len(mutations)} mutations, {len(accepted)} accepted")
 
 
@@ -205,6 +241,7 @@ INTEL_FIELDS = [
     ("Baseline status",        "oauth_baseline_status"),
     ("Variant results",        "oauth_variant_results"),
     ("Accepted attacks",       "oauth_accepted_attacks"),
+    ("Pollution techniques",   "oauth_pollution_techniques"),
 ]
 
 

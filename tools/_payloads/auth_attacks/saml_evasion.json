@@ -1,0 +1,106 @@
+[
+  {
+    "id": "signature_stripped",
+    "technique": "signature_strip",
+    "intent": "Delete every ds:Signature element. SPs that treat a missing signature as 'no validation required' accept the unsigned assertion.",
+    "mutation": "remove_all_signatures",
+    "indicates": "Relying party does not require a signature on the assertion/response.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "unsigned_assertion_accept",
+    "technique": "unsigned_assertion",
+    "intent": "Wrap a forged, unsigned Assertion alongside a signed Response (or vice versa) where only the outer element is signed but the SP reads claims from the unsigned inner Assertion.",
+    "mutation": "inject_unsigned_assertion_sibling",
+    "indicates": "SP validates the Response signature but trusts assertion content that is outside the signed scope.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw1_response_wrap",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW1",
+    "intent": "Clone the signed Response, give the original a new ID, and place the forged Response (containing attacker NameID) as the parent. Signature still references the original ID.",
+    "mutation": "wrap_signed_response_with_forged_parent",
+    "indicates": "SP resolves the signed reference but processes the first/forged Response element.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw2_response_detached_sig",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW2",
+    "intent": "Like XSW1 but the signature uses a detached (non-enveloped) reference; the forged Response sits as a sibling rather than a child.",
+    "mutation": "detached_signature_forged_sibling_response",
+    "indicates": "Reference resolution and assertion processing target different elements.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw3_assertion_wrap_before",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW3",
+    "intent": "Insert a forged Assertion as a sibling BEFORE the original signed Assertion; both share document scope so the SP may pick the forged one first.",
+    "mutation": "forged_assertion_before_signed",
+    "indicates": "SP picks the first Assertion by position, validator validates the signed (later) one.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw4_assertion_wrap_after",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW4",
+    "intent": "Forged Assertion as a sibling AFTER the original, with the original moved inside the forged one as a child.",
+    "mutation": "forged_assertion_after_signed_nested_original",
+    "indicates": "DOM order vs reference URI mismatch in assertion selection.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw5_copy_sig_value",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW5",
+    "intent": "Copy the original assertion and change attacker assertion's content while leaving the signature value pointing at the (now-relocated) original; exploits enveloped-signature transform handling.",
+    "mutation": "relocate_original_keep_sigvalue",
+    "indicates": "Signature value validates a tree the SP does not actually consume.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw6_nested_sig_in_forged",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW6",
+    "intent": "Place the original signed assertion (with its Signature) inside the Signature element of the forged assertion to confuse reference resolution.",
+    "mutation": "embed_original_inside_forged_signature",
+    "indicates": "Reference '' (whole-doc) or same-ID resolution selects original while content read is forged.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw7_extensions_wrap",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW7",
+    "intent": "Add an Extensions element with a forged assertion bearing the same ID as the original; ID uniqueness is not enforced so getElementById may return the wrong node.",
+    "mutation": "duplicate_id_in_extensions",
+    "indicates": "getElementById returns first match; signed and processed nodes differ.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "xsw8_object_wrap",
+    "technique": "xml_signature_wrapping",
+    "variant": "XSW8",
+    "intent": "For SPs using the legacy Object element: move the original assertion into a ds:Object inside the forged signature so it validates but is not the consumed assertion.",
+    "mutation": "original_into_ds_object",
+    "indicates": "Signed ds:Object content ignored during assertion consumption.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "comment_injection_nameid",
+    "technique": "comment_truncation",
+    "intent": "Inject an XML comment inside NameID (admin<!---->@victim) so canonicalization-vs-text-extraction differences make the SP read only 'admin'. Classic GitHub/Duo/OneLogin auth bypass class.",
+    "mutation": "insert_comment_in_nameid",
+    "indicates": "SP's text extraction differs from the canonicalizer that validated the signature.",
+    "cwe": "CWE-347"
+  },
+  {
+    "id": "cert_confusion_swap_x509",
+    "technique": "certificate_confusion",
+    "intent": "Replace the embedded ds:X509Certificate with an attacker certificate while keeping the original signature. SPs that trust the in-message cert (key-confusion / no trust pinning) re-validate against the attacker key.",
+    "mutation": "replace_x509certificate_with_attacker",
+    "indicates": "SP validates the signature against the certificate embedded in the message rather than a pinned IdP certificate.",
+    "cwe": "CWE-347"
+  }
+]

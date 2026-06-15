@@ -34,10 +34,24 @@ from pydantic import BaseModel
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._framework import ScanContext, run_scanner
 from tools._payloads.saml_signature_audit_findings import SAML_SIGNATURE_AUDIT_FINDING_RULES
+from tools._payloads.auth_attacks._loader import load_json
 
 router = APIRouter()
 
 DEFAULT_TIMEOUT = 15
+
+# VL-CORE: AI-curated SAML signature-bypass catalogue owned by this module
+# (XSW1-8 + signature strip + comment injection + cert confusion + unsigned
+# assertion). The active POST probes below send the four high-signal mutators;
+# this catalogue documents the full evasion surface in the report. Inline
+# fallback keeps the scanner self-describing when the bundled file is absent.
+_INLINE_SAML_EVASION = [
+    {"id": "signature_stripped",   "technique": "signature_strip"},
+    {"id": "xsw1_response_wrap",   "technique": "xml_signature_wrapping", "variant": "XSW1"},
+    {"id": "comment_injection_nameid", "technique": "comment_truncation"},
+    {"id": "cert_confusion_swap_x509", "technique": "certificate_confusion"},
+]
+SAML_EVASION_CATALOGUE = load_json("saml_evasion", fallback=_INLINE_SAML_EVASION)
 
 
 class SamlSignatureAuditRequest(ScanRequest):
@@ -218,6 +232,9 @@ async def gather(ctx: ScanContext):
 
     ctx.state["saml_variant_results"] = results
     ctx.state["saml_accepted_variants"] = accepted_variants
+    ctx.state["saml_evasion_techniques"] = [
+        t.get("id") for t in SAML_EVASION_CATALOGUE if isinstance(t, dict) and t.get("id")
+    ]
     ctx.source(f"POSTed 4 variants to ACS, {len(accepted_variants)} accepted")
 
 
@@ -230,6 +247,7 @@ INTEL_FIELDS = [
     ("Attribute names",         "saml_attr_names"),
     ("Variant results",         "saml_variant_results"),
     ("Accepted variants",       "saml_accepted_variants"),
+    ("Evasion techniques",      "saml_evasion_techniques"),
 ]
 
 

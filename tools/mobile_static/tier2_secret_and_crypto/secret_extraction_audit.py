@@ -8,21 +8,29 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.secret_extraction_audit_findings import SECRET_EXTRACTION_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 
-# Standard secret-detection regexes (subset of trufflehog/apkleaks rules)
+# Standard secret-detection regexes (subset of trufflehog/apkleaks rules).
+# Sourced from the shared AI-curated mobile pool; inline dict is the fallback
+# so behaviour is identical if the JSON is ever missing/malformed.
+_SECRETS_FALLBACK = {
+    "AWS Access Key":    r"\b(AKIA|ASIA)[A-Z0-9]{16}\b",
+    "AWS Secret":        r"(?i)aws.{0,20}?(secret|access).{0,5}['\"]([A-Za-z0-9/+=]{40})['\"]",
+    "Google API Key":    r"\bAIza[0-9A-Za-z\-_]{35}\b",
+    "Firebase URL":      r"https?://[\w.-]+\.firebaseio\.com",
+    "Stripe Live Key":   r"\b(sk|pk)_live_[0-9a-zA-Z]{24,}\b",
+    "GitHub Token":      r"\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}\b",
+    "Slack Token":       r"\bxox[bpoars]-[0-9]{10,}-[0-9a-zA-Z]{20,}\b",
+    "JWT":               r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b",
+    "RSA Private Key":   r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |)PRIVATE KEY-----",
+    "Generic API Token": r"(?i)(api[_-]?key|api[_-]?token|access[_-]?token)['\"]?\s*[:=]\s*['\"]([A-Za-z0-9_\-]{20,})['\"]",
+}
 PATTERNS = {
-    "AWS Access Key":    re.compile(r"\b(AKIA|ASIA)[A-Z0-9]{16}\b"),
-    "AWS Secret":        re.compile(r"(?i)aws.{0,20}?(secret|access).{0,5}['\"]([A-Za-z0-9/+=]{40})['\"]"),
-    "Google API Key":    re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"),
-    "Firebase URL":      re.compile(r"https?://[\w.-]+\.firebaseio\.com"),
-    "Stripe Live Key":   re.compile(r"\b(sk|pk)_live_[0-9a-zA-Z]{24,}\b"),
-    "GitHub Token":      re.compile(r"\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}\b"),
-    "Slack Token":       re.compile(r"\bxox[bpoars]-[0-9]{10,}-[0-9a-zA-Z]{20,}\b"),
-    "JWT":               re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
-    "RSA Private Key":   re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |)PRIVATE KEY-----"),
-    "Generic API Token": re.compile(r"(?i)(api[_-]?key|api[_-]?token|access[_-]?token)['\"]?\s*[:=]\s*['\"]([A-Za-z0-9_\-]{20,})['\"]"),
+    name: re.compile(rx)
+    for name, rx in load_json("secrets_regex", fallback=_SECRETS_FALLBACK).items()
+    if name != "_note"
 }
 
 # Files to scan (resource + decompiled source)

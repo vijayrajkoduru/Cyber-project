@@ -10,10 +10,21 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.prompt_injection_in_app_audit_findings import PROMPT_INJECTION_IN_APP_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
-LLM_API_RE = re.compile(r'api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis\.com|api\.mistral\.ai|api\.x\.ai')
-SDK_RE = re.compile(r'OpenAIKit|AnthropicSDK|GoogleGenerativeAI|MistralAI|LangChain|LlamaIndex')
+# LLM API hosts + SDK class markers sourced from the shared AI-curated mobile
+# pool; inline lists are the fallback. Joined into the same alternation regexes.
+_LLM_API_FALLBACK = [r'api\.openai\.com', r'api\.anthropic\.com',
+                     r'generativelanguage\.googleapis\.com',
+                     r'api\.mistral\.ai', r'api\.x\.ai']
+_LLM_SDK_FALLBACK = ['OpenAIKit', 'AnthropicSDK', 'GoogleGenerativeAI',
+                     'MistralAI', 'LangChain', 'LlamaIndex']
+_llm_endpoints = load_json("llm_endpoints", fallback={})
+_llm_api = _llm_endpoints.get("api_hosts", _LLM_API_FALLBACK) or _LLM_API_FALLBACK
+_llm_sdk = _llm_endpoints.get("sdk_classes", _LLM_SDK_FALLBACK) or _LLM_SDK_FALLBACK
+LLM_API_RE = re.compile('|'.join(_llm_api))
+SDK_RE = re.compile('|'.join(_llm_sdk))
 SYSTEM_PROMPT_RE = re.compile(r'role.*?system|systemPrompt|messages.*?system')
 USER_CONCAT_RE = re.compile(r'userInput\s*\+|messages\.append\(.*userInput|f"\{userInput\}"', re.IGNORECASE)
 SANITIZER_RE = re.compile(r'sanitize|escape|stripPromptInjection|llm_guard')

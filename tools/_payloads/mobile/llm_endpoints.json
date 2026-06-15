@@ -1,0 +1,50 @@
+{
+  "_note": "Markers for in-app LLM usage. api_hosts + sdk_classes are alternation fragments joined with | into a regex (same semantics as the inline LLM_API_RE / SDK_RE). ondevice_markers are matched as substrings against bundled asset filenames / bytecode.",
+  "api_hosts": [
+    "api\\.openai\\.com",
+    "api\\.anthropic\\.com",
+    "generativelanguage\\.googleapis\\.com",
+    "aiplatform\\.googleapis\\.com",
+    "api\\.mistral\\.ai",
+    "api\\.x\\.ai",
+    "api\\.cohere\\.ai",
+    "api\\.cohere\\.com",
+    "api\\.groq\\.com",
+    "api\\.perplexity\\.ai",
+    "api\\.together\\.xyz",
+    "api\\.replicate\\.com",
+    "[\\w-]+\\.openai\\.azure\\.com",
+    "bedrock-runtime\\.[\\w-]+\\.amazonaws\\.com",
+    "api-inference\\.huggingface\\.co"
+  ],
+  "sdk_classes": [
+    "OpenAIKit",
+    "AnthropicSDK",
+    "GoogleGenerativeAI",
+    "MistralAI",
+    "LangChain",
+    "LlamaIndex",
+    "com/aallam/openai",
+    "com/anthropic/",
+    "com/google/ai/client/generativeai",
+    "MLCEngine",
+    "llama_cpp",
+    "GGUF"
+  ],
+  "ondevice_markers": [
+    ".onnx",
+    ".ort",
+    ".tflite",
+    ".lite",
+    ".mlmodel",
+    ".mlmodelc",
+    ".mlpackage",
+    ".gguf",
+    ".ggml",
+    ".pte",
+    ".safetensors",
+    "MLModel",
+    "Interpreter.tflite",
+    "onnxruntime"
+  ]
+}

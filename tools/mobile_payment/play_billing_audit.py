@@ -9,9 +9,16 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.play_billing_audit_findings import PLAY_BILLING_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
-BILLING_RE = re.compile(r'BillingClient|com/android/billingclient|Purchase\.\$Builder')
+# Billing/IAP API markers sourced from the shared AI-curated mobile pool;
+# inline list is the fallback. Joined into the same alternation regex.
+_BILLING_MARKERS_FALLBACK = ['BillingClient', 'com/android/billingclient',
+                             r'Purchase\.\$Builder']
+_billing_markers = load_json("billing_apis", fallback={}).get(
+    "billing_markers", _BILLING_MARKERS_FALLBACK) or _BILLING_MARKERS_FALLBACK
+BILLING_RE = re.compile('|'.join(_billing_markers))
 LOCAL_VERIFY_RE = re.compile(r'verifyPurchase|Security\.verifyPurchase|signature\.verify')
 SERVER_API_RE = re.compile(r'androidpublisher/v3|googleapis\.com/androidpublisher')
 PURCHASE_TOKEN_FORWARD_RE = re.compile(r'purchaseToken|getPurchaseToken')

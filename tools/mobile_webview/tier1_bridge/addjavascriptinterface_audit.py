@@ -11,12 +11,20 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.addjavascriptinterface_audit_findings import ADDJAVASCRIPTINTERFACE_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 ADD_JS_RE = re.compile(r'addJavascriptInterface\s*\(')
 JS_INTERFACE_ANN_RE = re.compile(r'@JavascriptInterface')
 TARGET_SDK_RE = re.compile(r'targetSdkVersion="?(\d+)|android:targetSdkVersion="(\d+)"')
-DANGEROUS_METHOD_RE = re.compile(r'Runtime\.getRuntime|ProcessBuilder|FileOutputStream|File\.createTempFile|getPackageManager')
+# Dangerous bridge-reachable methods sourced from the shared AI-curated mobile
+# pool; inline list is the fallback. Joined into the same alternation regex.
+_DANGEROUS_METHODS_FALLBACK = [r'Runtime\.getRuntime', 'ProcessBuilder',
+                               'FileOutputStream', r'File\.createTempFile',
+                               'getPackageManager']
+_dangerous_methods = load_json("dangerous_webview_methods", fallback={}).get(
+    "methods", _DANGEROUS_METHODS_FALLBACK) or _DANGEROUS_METHODS_FALLBACK
+DANGEROUS_METHOD_RE = re.compile('|'.join(_dangerous_methods))
 SCAN_MAX_FILES = 3000
 
 
