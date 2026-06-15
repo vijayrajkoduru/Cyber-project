@@ -23293,6 +23293,229 @@ function SettingsModule() {
   );
 }
 
+// ── RED TEAM console (SUPERADMIN ONLY) ───────────────────────────────────────
+// Internal owner-only UI for the isolated red_team_ops adversary-emulation
+// engine. Customers never see this (gated by isSuperAdmin + backend superadmin
+// check). Authorized-scope + non-destructive contract is enforced server-side.
+function RedTeamConsole({ token }) {
+  const RED = "#ff6b82", PANEL = "#0d1320", CARD = "#0a0e17", BORD = "#1c2435", MUT = "#8a94a8", DIM = "#5a6478", OK = "#5dffa6";
+  const [catalog, setCatalog]         = useState(null);
+  const [engagements, setEngagements] = useState([]);
+  const [selEng, setSelEng]           = useState(null);
+  const [run, setRun]                 = useState(null);
+  const [reportMd, setReportMd]       = useState("");
+  const [busy, setBusy]               = useState(false);
+  const [msg, setMsg]                 = useState("");
+  const [err, setErr]                 = useState("");
+  const [scenario, setScenario]       = useState("");
+  const [target, setTarget]           = useState("");
+  const [f, setF] = useState({client:"", authorized_by:"", in_scope:"", out_of_scope:"", impact_level:"emulation", window_days:14, auth_ref:"", accept_roe:false});
+
+  const flash = (m, isErr) => { if(isErr){setErr(m); setMsg("");} else {setMsg(m); setErr("");} setTimeout(()=>{setMsg("");setErr("");}, 7000); };
+
+  const loadCatalog = async () => { try { setCatalog(await api("/api/admin/redteam/catalog","GET",null,token)); } catch(e){ flash("catalog load failed: "+(e.message||e), true); } };
+  const loadEngagements = async () => { try { const d = await api("/api/admin/redteam/engagements","GET",null,token); setEngagements(d.engagements||[]); } catch(e){ flash("engagements load failed: "+(e.message||e), true); } };
+  useEffect(()=>{ loadCatalog(); loadEngagements(); /* eslint-disable-next-line */ }, []);
+
+  const createEng = async () => {
+    const body = {
+      client: f.client.trim(), authorized_by: f.authorized_by.trim(),
+      in_scope: f.in_scope.split(",").map(s=>s.trim()).filter(Boolean),
+      out_of_scope: f.out_of_scope.split(",").map(s=>s.trim()).filter(Boolean),
+      impact_level: f.impact_level, window_days: Number(f.window_days)||14,
+      auth_ref: f.auth_ref.trim(), accept_roe: !!f.accept_roe,
+    };
+    if(!body.client || !body.authorized_by || !body.in_scope.length){ flash("client, authorized-by and at least one in-scope target are required", true); return; }
+    setBusy(true);
+    try {
+      const eng = await api("/api/admin/redteam/engagements","POST",body,token);
+      flash("engagement created: "+eng.id);
+      setF({client:"", authorized_by:"", in_scope:"", out_of_scope:"", impact_level:"emulation", window_days:14, auth_ref:"", accept_roe:false});
+      await loadEngagements(); setSelEng(eng); setRun(null); setReportMd("");
+    } catch(e){ flash(e.message||String(e), true); }
+    setBusy(false);
+  };
+
+  const ackRoe = async (eid) => {
+    try { const eng = await api("/api/admin/redteam/engagements/"+encodeURIComponent(eid)+"/ack","POST",null,token); flash("RoE acknowledged for "+eid); await loadEngagements(); if(selEng && selEng.id===eid) setSelEng(eng); }
+    catch(e){ flash(e.message||String(e), true); }
+  };
+
+  const doRun = async () => {
+    if(!selEng){ flash("select an engagement first", true); return; }
+    if(!selEng.roe_acknowledged){ flash("acknowledge the RoE for this engagement first", true); return; }
+    if(!scenario){ flash("pick a scenario", true); return; }
+    if(!target.trim()){ flash("enter an in-scope target", true); return; }
+    setBusy(true); setRun(null); setReportMd("");
+    try {
+      const r = await api("/api/admin/redteam/run","POST",{engagement_id:selEng.id, scenario, target:target.trim()},token);
+      setRun(r); flash("run complete: "+r.emulated+" emulated, "+r.blocked+" blocked");
+    } catch(e){ flash(e.message||String(e), true); }
+    setBusy(false);
+  };
+
+  const loadReport = async () => {
+    if(!selEng) return;
+    try { const d = await api("/api/admin/redteam/report/"+encodeURIComponent(selEng.id),"GET",null,token); setReportMd(d.markdown||""); }
+    catch(e){ flash(e.message||String(e), true); }
+  };
+
+  const inp = {width:"100%",background:CARD,border:"1px solid "+BORD,color:"#fff",padding:"8px 10px",borderRadius:6,fontSize:12.5,fontFamily:"inherit",boxSizing:"border-box"};
+  const lbl = {fontSize:10.5,color:DIM,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginBottom:4,display:"block"};
+  const covered = run ? (run.tactics_covered||[]) : [];
+
+  return (
+    <div className="fade" style={{padding:24,fontFamily:"Inter,sans-serif",maxWidth:1180}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+        <div>
+          <h2 style={{fontSize:20,fontWeight:800,color:"#fff",margin:0,letterSpacing:.3}}>Red Team <span style={{color:RED}}>·</span> Adversary Emulation</h2>
+          <p style={{fontSize:12,color:DIM,margin:0}}>Internal. Superadmin only. ATT&CK-mapped emulation — authorized scope, non-destructive.</p>
+        </div>
+        <button onClick={()=>{loadCatalog();loadEngagements();}} style={{marginLeft:"auto",background:BORD,border:"1px solid "+BORD,color:MUT,padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Refresh</button>
+      </div>
+
+      {/* Contract banner */}
+      <div style={{background:"#1c0000",border:"1px solid #7f1d1d",borderRadius:8,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"flex-start"}}>
+        <span style={{color:RED,fontWeight:800,fontSize:11,letterSpacing:.5,whiteSpace:"nowrap"}}>SAFETY CONTRACT</span>
+        <span style={{fontSize:11.5,color:"#fecaca",lineHeight:1.5}}>{catalog ? catalog.contract : "Loading…"}</span>
+      </div>
+
+      {(msg||err) && (
+        <div style={{background:err?"#1c0000":"#052e16",border:"1px solid "+(err?"#7f1d1d":"#166534"),color:err?RED:OK,padding:"8px 12px",borderRadius:6,fontSize:12,marginBottom:12,fontFamily:"JetBrains Mono,monospace"}}>{err||msg}</div>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:"360px 1fr",gap:16,alignItems:"start"}}>
+
+        {/* LEFT — engagements */}
+        <div>
+          <div style={{background:PANEL,border:"1px solid "+BORD,borderRadius:10,padding:16,marginBottom:14}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:10}}>New engagement</div>
+            <div style={{marginBottom:8}}><label style={lbl}>Client</label><input style={inp} value={f.client} onChange={e=>setF({...f,client:e.target.value})} placeholder="Acme Corp"/></div>
+            <div style={{marginBottom:8}}><label style={lbl}>Authorized by</label><input style={inp} value={f.authorized_by} onChange={e=>setF({...f,authorized_by:e.target.value})} placeholder="CISO name / signed-off contact"/></div>
+            <div style={{marginBottom:8}}><label style={lbl}>In-scope targets (comma-sep)</label><input style={inp} value={f.in_scope} onChange={e=>setF({...f,in_scope:e.target.value})} placeholder="app.acme.com, 10.0.0.0/24, *.lab.acme.com"/></div>
+            <div style={{marginBottom:8}}><label style={lbl}>Out-of-scope (comma-sep)</label><input style={inp} value={f.out_of_scope} onChange={e=>setF({...f,out_of_scope:e.target.value})} placeholder="prod-db.acme.com"/></div>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <div style={{flex:1}}><label style={lbl}>Impact</label>
+                <select style={inp} value={f.impact_level} onChange={e=>setF({...f,impact_level:e.target.value})}>
+                  {(catalog ? catalog.impact_levels : ["emulation","atomic"]).map(i=><option key={i} value={i}>{i}</option>)}
+                </select></div>
+              <div style={{width:96}}><label style={lbl}>Window (days)</label><input type="number" style={inp} value={f.window_days} onChange={e=>setF({...f,window_days:e.target.value})}/></div>
+            </div>
+            <div style={{marginBottom:10}}><label style={lbl}>Authorization ref</label><input style={inp} value={f.auth_ref} onChange={e=>setF({...f,auth_ref:e.target.value})} placeholder="SOW / contract / ticket #"/></div>
+            <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:11.5,color:MUT,cursor:"pointer",marginBottom:12,lineHeight:1.45}}>
+              <input type="checkbox" checked={f.accept_roe} onChange={e=>setF({...f,accept_roe:e.target.checked})} style={{marginTop:2}}/>
+              <span>I assert written authorization exists for these targets (acknowledges Rules of Engagement).</span>
+            </label>
+            <button onClick={createEng} disabled={busy} style={{width:"100%",background:busy?"#3a0a12":"linear-gradient(135deg,#e02347,#991b1b)",border:"none",color:"#fff",padding:"10px",borderRadius:8,fontWeight:800,fontSize:13,cursor:busy?"wait":"pointer",letterSpacing:.3}}>{busy?"Working…":"Create engagement"}</button>
+          </div>
+
+          <div style={{background:PANEL,border:"1px solid "+BORD,borderRadius:10,padding:16}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:10}}>Engagements ({engagements.length})</div>
+            {engagements.length===0 && <div style={{fontSize:12,color:DIM}}>None yet. Create one above.</div>}
+            {engagements.map(eng=>{
+              const sel = selEng && selEng.id===eng.id;
+              return (
+                <div key={eng.id} onClick={()=>{setSelEng(eng);setRun(null);setReportMd("");}} style={{border:"1px solid "+(sel?"#991b1b":BORD),background:sel?"#1c0000":CARD,borderRadius:8,padding:"9px 11px",marginBottom:8,cursor:"pointer"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:12.5,fontWeight:700,color:"#fff"}}>{eng.client||"(client)"}</span>
+                    <Badge label={eng.roe_acknowledged?"RoE OK":"RoE PENDING"} color={eng.roe_acknowledged?"green":"orange"} size="xs"/>
+                  </div>
+                  <div style={{fontSize:10.5,color:DIM,fontFamily:"JetBrains Mono,monospace",marginTop:3}}>{eng.id} · {eng.impact_level}</div>
+                  <div style={{fontSize:10.5,color:MUT,marginTop:3}}>scope: {(eng.in_scope||[]).join(", ")||"—"}</div>
+                  {!eng.roe_acknowledged && <button onClick={(e)=>{e.stopPropagation();ackRoe(eng.id);}} style={{marginTop:6,background:"#2d1000",border:"1px solid #9a3412",color:"#fb923c",fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:5,cursor:"pointer"}}>Acknowledge RoE</button>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* RIGHT — run + scenarios + results */}
+        <div>
+          {/* Run bar */}
+          <div style={{background:PANEL,border:"1px solid "+BORD,borderRadius:10,padding:16,marginBottom:14}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:4}}>Run emulation</div>
+            <div style={{fontSize:11.5,color:DIM,marginBottom:10}}>{selEng ? <>Engagement: <span style={{color:RED,fontFamily:"JetBrains Mono,monospace"}}>{selEng.id}</span> — {selEng.client}</> : "Select an engagement on the left."}</div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 220px"}}><label style={lbl}>Scenario</label>
+                <select style={inp} value={scenario} onChange={e=>setScenario(e.target.value)}>
+                  <option value="">— choose —</option>
+                  {catalog && catalog.scenarios.map(s=><option key={s.name} value={s.name}>{s.name} ({s.technique_count} steps)</option>)}
+                </select></div>
+              <div style={{flex:"1 1 220px"}}><label style={lbl}>Target (must be in scope)</label><input style={inp} value={target} onChange={e=>setTarget(e.target.value)} placeholder="app.acme.com"/></div>
+              <button onClick={doRun} disabled={busy||!selEng} style={{background:(busy||!selEng)?"#3a0a12":"linear-gradient(135deg,#e02347,#991b1b)",border:"none",color:"#fff",padding:"9px 22px",borderRadius:8,fontWeight:800,fontSize:13,cursor:(busy||!selEng)?"not-allowed":"pointer"}}>{busy?"Running…":"Run"}</button>
+            </div>
+          </div>
+
+          {/* Run results */}
+          {run && (
+            <div style={{background:PANEL,border:"1px solid "+BORD,borderRadius:10,padding:16,marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>Result — {run.scenario}</div>
+                <Badge label={run.emulated+" EMULATED"} color="green" size="xs"/>
+                <Badge label={run.blocked+" BLOCKED"} color="red" size="xs"/>
+                <Badge label={covered.length+" TACTICS"} color="blue" size="xs"/>
+                <button onClick={loadReport} style={{marginLeft:"auto",background:BORD,border:"1px solid "+BORD,color:MUT,fontSize:11.5,fontWeight:700,padding:"5px 12px",borderRadius:6,cursor:"pointer"}}>View full report</button>
+              </div>
+              {/* ATT&CK coverage */}
+              <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:14}}>
+                {catalog && catalog.tactics.map(tac=>{
+                  const on = covered.includes(tac);
+                  return <span key={tac} style={{fontSize:9.5,fontWeight:700,letterSpacing:.3,padding:"3px 7px",borderRadius:4,textTransform:"uppercase",
+                    background:on?"#052e16":CARD,border:"1px solid "+(on?"#166534":BORD),color:on?OK:DIM}}>{tac.replace(/_/g," ")}</span>;
+                })}
+              </div>
+              {/* Kill-chain steps */}
+              {(run.steps||[]).map(s=>(
+                <div key={s.seq} style={{borderLeft:"3px solid "+(s.status==="emulated"?"#166534":"#991b1b"),background:CARD,borderRadius:"0 6px 6px 0",padding:"8px 12px",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,fontFamily:"JetBrains Mono,monospace",color:RED,fontWeight:700}}>{s.id}</span>
+                    <span style={{fontSize:12.5,fontWeight:700,color:"#fff"}}>{s.name}</span>
+                    <Badge label={(s.tactic||"").replace(/_/g," ")} color="gray" size="xs"/>
+                    <Badge label={s.status==="emulated"?"EMULATED":"BLOCKED"} color={s.status==="emulated"?"green":"red"} size="xs"/>
+                  </div>
+                  <div style={{fontSize:11,color:MUT,marginTop:4}}>{s.note}</div>
+                  <div style={{fontSize:10.5,color:DIM,marginTop:2}}>Detect: {s.detection}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Full markdown report */}
+          {reportMd && (
+            <div style={{background:PANEL,border:"1px solid "+BORD,borderRadius:10,padding:16,marginBottom:14}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:10}}>Report (Markdown)</div>
+              <pre style={{whiteSpace:"pre-wrap",fontSize:11.5,color:"#cbd5e1",fontFamily:"JetBrains Mono,monospace",lineHeight:1.55,margin:0,maxHeight:520,overflow:"auto"}}>{reportMd}</pre>
+            </div>
+          )}
+
+          {/* Scenario catalog */}
+          <div style={{background:PANEL,border:"1px solid "+BORD,borderRadius:10,padding:16}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#fff",marginBottom:10}}>Scenario catalog</div>
+            {!catalog && <div style={{fontSize:12,color:DIM}}>Loading…</div>}
+            {catalog && catalog.scenarios.map(s=>(
+              <div key={s.name} style={{border:"1px solid "+BORD,background:CARD,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                  <span style={{fontSize:12.5,fontWeight:800,color:"#fff"}}>{s.name}</span>
+                  <Badge label={s.technique_count+" techniques"} color="blue" size="xs"/>
+                  {s.blocked_count>0 && <Badge label={s.blocked_count+" blocked"} color="red" size="xs"/>}
+                  <button onClick={()=>setScenario(s.name)} style={{marginLeft:"auto",background:BORD,border:"none",color:MUT,fontSize:10.5,fontWeight:700,padding:"3px 10px",borderRadius:5,cursor:"pointer"}}>Use</button>
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {s.steps.map(st=>(
+                    <span key={st.id} title={st.name+" — "+(st.blocked?st.blocked_reason:st.emulation)} style={{fontSize:9.5,fontFamily:"JetBrains Mono,monospace",fontWeight:700,padding:"2px 6px",borderRadius:4,
+                      background:st.blocked?"#1c0000":"#0d2436",border:"1px solid "+(st.blocked?"#991b1b":"#1e40af"),color:st.blocked?RED:"#00d4ff"}}>{st.id}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminPanel({ token }) {
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -24987,6 +25210,7 @@ export default function App() {
 
         {active === "dashboard" && <Dashboard token={token} setActive={setActive}/>}
         {active === "health"    && <SystemHealth/>}
+        {active === "redteam"   && isSuperAdmin && <RedTeamConsole token={token}/>}
         {active === "guide"     && <GuideModule/>}
         {active === "apikeys"   && <ApiKeysModule token={token}/>}
         {active === "credvault" && <CredentialVaultModule token={token}/>}
@@ -24994,7 +25218,7 @@ export default function App() {
             AND NOT one of the special internal view ids. Built dynamically from
             MODULES so new modules can never drift back into "under development". */}
         {!MODULES.map(m=>m.id).concat([
-            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys","credvault"
+            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys","credvault","redteam"
           ]).includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
@@ -25107,9 +25331,10 @@ export default function App() {
             {id:"history", icon:"", label:"Scan History"},
             {id:"settings",icon:"",  label:"Settings"},
             ...(isSuperAdmin ? [{id:"adminpanel", icon:"", label:"Admin Panel"}] : []),
+            ...(isSuperAdmin ? [{id:"redteam", icon:"", label:"Red Team"}] : []),
           ].map(m => (
             <button key={m.id} className="nav-btn" onClick={()=>setActive(m.id)}
-              style={{width:"calc(100% - 16px)",background:active===m.id?(m.id==="adminpanel"?"#3b0764":"#1c2435"):"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
+              style={{width:"calc(100% - 16px)",background:active===m.id?(m.id==="adminpanel"?"#3b0764":(m.id==="redteam"?"#3a0a12":"#1c2435")):"transparent",border:"none",borderRadius:6,padding:"9px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",margin:"1px 8px"}}>
               <span style={{fontSize:15,width:22,textAlign:"center"}}>{m.icon}</span>
               <span style={{fontSize:13,color:active===m.id?"#ffffff":"#8a94a8",fontWeight:active===m.id?600:500,letterSpacing:"0.1px"}}>{m.label}</span>
             </button>
