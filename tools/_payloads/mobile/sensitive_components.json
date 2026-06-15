@@ -1,0 +1,11 @@
+{
+  "_note": "Substring hints in an exported component's android:name that flag it as security-sensitive (login/payment/admin/etc). Matched case-insensitively as substrings (same semantics as the inline SENSITIVE_HINTS tuple).",
+  "hints": [
+    "login", "signin", "sign_in", "auth", "oauth", "sso",
+    "pin", "password", "passcode", "credential", "biometric",
+    "payment", "pay", "checkout", "card", "billing", "wallet",
+    "transfer", "transaction", "vault", "admin", "settings",
+    "config", "debug", "developer", "secret", "token",
+    "export", "import", "backup", "key", "account"
+  ]
+}

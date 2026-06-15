@@ -42,6 +42,7 @@ MODULES = (
     "cloud",
     "container_k8s",
     "apisec",
+    "auth_attacks",
     "network",
     "wireless",
     "system_exploit",

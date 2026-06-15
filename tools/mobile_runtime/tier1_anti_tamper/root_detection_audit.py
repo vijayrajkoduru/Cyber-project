@@ -11,10 +11,13 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.root_detection_audit_findings import ROOT_DETECTION_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 
-ROOT_MARKERS = {
+# Root/jailbreak detection mechanism markers sourced from the shared
+# AI-curated mobile pool; inline dict is the fallback.
+_ROOT_MARKERS_FALLBACK = {
     "RootBeer (com.scottyab.rootbeer)": ["com/scottyab/rootbeer", "RootBeer", "isRooted"],
     "su binary path checks":            ['"/system/xbin/su"', '"/system/bin/su"', '"/sbin/su"', '"/system/app/Superuser.apk"'],
     "Magisk markers":                   ["Magisk", "/sbin/.magisk", "MagiskHide", "magiskhide"],
@@ -23,6 +26,8 @@ ROOT_MARKERS = {
     "Superuser package check":          ['"com.koushikdutta.superuser"', '"eu.chainfire.supersu"', '"com.topjohnwu.magisk"'],
     "BusyBox marker":                   ['"busybox"', '"/system/xbin/busybox"'],
 }
+ROOT_MARKERS = load_json("root_markers", fallback=_ROOT_MARKERS_FALLBACK) \
+    or _ROOT_MARKERS_FALLBACK
 SCAN_MAX_FILES = 3000
 
 

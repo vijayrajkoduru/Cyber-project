@@ -35,12 +35,13 @@ from pydantic import BaseModel
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._framework import ScanContext, run_scanner
 from tools._payloads.jwt_secret_audit_findings import JWT_SECRET_AUDIT_FINDING_RULES
+from tools._payloads.auth_attacks._loader import load_lines, load_json
 
 router = APIRouter()
 
 # Top-100 weak secrets sampled from rockyou/dev defaults/JWT.io examples.
 # Customer can override via options.weak_secret_list.
-DEFAULT_WEAK_SECRETS = [
+_INLINE_WEAK_SECRETS = [
     "secret", "secretkey", "key", "your-256-bit-secret", "yoursecret",
     "jwt_secret", "jwtsecret", "supersecret", "supersecretkey",
     "mysecret", "mysecretkey", "thisisasecret", "thisisthesecret",
@@ -68,8 +69,12 @@ DEFAULT_WEAK_SECRETS = [
     "supersafe", "ultrasecret", "topsecret", "highsecret",
 ]
 
+# VL-CORE: load the AI-curated HMAC secret pool owned by this module, with the
+# inline list as fallback when the bundled wordlist is absent (partial deploy).
+DEFAULT_WEAK_SECRETS = load_lines("jwt_secrets", fallback=_INLINE_WEAK_SECRETS)
+
 # kid injection markers to test for SQLi + path traversal
-KID_INJECTIONS = [
+_INLINE_KID_INJECTIONS = [
     "../../../../../../../dev/null",   # path traversal -> empty -> HS256(\"\")
     "../../../etc/passwd",
     "../../../../../../../proc/self/environ",
@@ -78,6 +83,16 @@ KID_INJECTIONS = [
     "1' UNION SELECT NULL,NULL--",
     "../../../tmp/x",
 ]
+
+# VL-CORE: AI-curated KID-header injection pool (path traversal / SQLi / cmd /
+# LDAP / SSRF / type-confusion). We feed the scanner the flat string `kid`
+# values it expects; non-string kid forms (arrays, empty) are skipped so the
+# downstream {"kid_variant": ...} shape is preserved exactly.
+_KID_INJECTION_PAYLOADS = load_json("jwt_kid_injection", fallback=[])
+KID_INJECTIONS = [
+    p["kid"] for p in _KID_INJECTION_PAYLOADS
+    if isinstance(p, dict) and isinstance(p.get("kid"), str) and p["kid"]
+] or _INLINE_KID_INJECTIONS
 
 
 class JwtSecretAuditRequest(ScanRequest):

@@ -9,10 +9,17 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.pii_in_logs_audit_findings import PII_IN_LOGS_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 LOG_CALL_RE = re.compile(r'Log\.[dievwt]\s*\(|NSLog\s*\(|print\(|os_log|os\.log')
-PII_NEAR_LOG_RE = re.compile(r'(email|phone|imei|idfa|gaid|aaid|ssn|passport|address|userid)', re.IGNORECASE)
+# PII keyword fragments sourced from the shared AI-curated mobile pool; inline
+# list is the fallback. Joined into the same alternation regex as before.
+_PII_KEYWORDS_FALLBACK = ["email", "phone", "imei", "idfa", "gaid", "aaid",
+                          "ssn", "passport", "address", "userid"]
+_pii_keywords = load_json("pii_patterns", fallback={}).get(
+    "keywords", _PII_KEYWORDS_FALLBACK) or _PII_KEYWORDS_FALLBACK
+PII_NEAR_LOG_RE = re.compile(r'(' + '|'.join(_pii_keywords) + r')', re.IGNORECASE)
 EMAIL_LITERAL_RE = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
 SCAN_MAX_FILES = 3000
 

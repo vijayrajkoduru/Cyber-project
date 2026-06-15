@@ -1,37 +1,441 @@
 [
-  {"name": "Introspection — __schema",                      "query": "query{__schema{types{name}}}",                                                                                                                          "category": "introspection",   "severity": "HIGH",     "cvss": 7.5, "expected_block": "introspection-disabled-in-prod"},
-  {"name": "Introspection — full schema",                   "query": "query IntrospectionQuery{__schema{queryType{name}mutationType{name}subscriptionType{name}types{...FullType}}}fragment FullType on __Type{kind name description fields(includeDeprecated:true){name description args{...InputValue}type{...TypeRef}}inputFields{...InputValue}interfaces{...TypeRef}enumValues(includeDeprecated:true){name description}possibleTypes{...TypeRef}}fragment InputValue on __InputValue{name description type{...TypeRef}defaultValue}fragment TypeRef on __Type{kind name ofType{kind name}}", "category": "introspection", "severity": "HIGH", "cvss": 8.0, "expected_block": "introspection-disabled-in-prod"},
-  {"name": "Introspection — types only",                    "query": "query{__schema{types{name kind}}}",                                                                                                                     "category": "introspection",   "severity": "HIGH",     "cvss": 7.5, "expected_block": "introspection-disabled-in-prod"},
-  {"name": "Introspection — type details (User)",           "query": "query{__type(name:\"User\"){name fields{name type{name kind}}}}",                                                                                       "category": "introspection",   "severity": "MEDIUM",   "cvss": 6.5, "expected_block": "introspection-disabled-in-prod"},
-  {"name": "Introspection — mutations enumeration",         "query": "query{__schema{mutationType{fields{name args{name type{name}}}}}}",                                                                                     "category": "introspection",   "severity": "HIGH",     "cvss": 7.5, "expected_block": "introspection-disabled-in-prod"},
-  {"name": "Suggestion-based schema leak",                  "query": "query{userr(id:1){id}}",                                                                                                                                "category": "suggestion-leak", "severity": "MEDIUM",   "cvss": 5.5, "expected_block": "field-suggestion-disabled", "matcher": "Did you mean|Cannot query field"},
-  {"name": "Field suggestion fuzz",                         "query": "query{adm{id}}",                                                                                                                                        "category": "suggestion-leak", "severity": "MEDIUM",   "cvss": 5.5, "expected_block": "field-suggestion-disabled", "matcher": "Did you mean|admin|administrator"},
-  {"name": "Batching attack — 100 queries",                 "query": "[{\"query\":\"{user(id:1){name}}\"},{\"query\":\"{user(id:2){name}}\"}]",                                                                                "category": "batch-dos",       "severity": "HIGH",     "cvss": 7.5, "expected_block": "batch-size-limit", "note": "POST array of operations"},
-  {"name": "Alias batching — overload",                     "query": "query{a:user(id:1){name} b:user(id:2){name} c:user(id:3){name} d:user(id:4){name} e:user(id:5){name}}",                                                "category": "alias-overload",  "severity": "HIGH",     "cvss": 8.0, "expected_block": "alias-count-limit"},
-  {"name": "Alias brute-force login",                       "query": "mutation{a:login(username:\"admin\",password:\"a\"){token} b:login(username:\"admin\",password:\"b\"){token}}",                                          "category": "brute-force",     "severity": "CRITICAL", "cvss": 9.0, "expected_block": "rate-limit-per-operation"},
-  {"name": "Deep nesting DoS",                              "query": "query{a:user(id:1){posts{author{posts{author{posts{author{posts{author{posts{author{id}}}}}}}}}}}}}",                                                  "category": "deep-nesting-dos","severity": "HIGH",     "cvss": 7.5, "expected_block": "max-depth-limit"},
-  {"name": "Circular fragment DoS",                         "query": "fragment A on User{...B}fragment B on User{...A}query{user(id:1){...A}}",                                                                               "category": "circular-dos",    "severity": "HIGH",     "cvss": 7.5, "expected_block": "fragment-cycle-detection"},
-  {"name": "GET-based mutation (CSRF vector)",              "query": "mutation{deleteUser(id:1)}",                                                                                                                            "category": "csrf",            "severity": "CRITICAL", "cvss": 9.0, "expected_block": "post-only-for-mutations", "note": "send as ?query="},
-  {"name": "Field duplication amplification",               "query": "query{user(id:1){name name name name name name name name name name}}",                                                                                  "category": "amplification",   "severity": "MEDIUM",   "cvss": 6.0, "expected_block": "field-duplicate-limit"},
-  {"name": "Mutation without auth",                         "query": "mutation{updateUser(id:1,role:\"admin\"){id role}}",                                                                                                    "category": "broken-authz",    "severity": "CRITICAL", "cvss": 9.5, "expected_block": "auth-on-every-mutation"},
-  {"name": "IDOR via id-traversal",                         "query": "query{user(id:1){email password ssn}}",                                                                                                                 "category": "idor",            "severity": "CRITICAL", "cvss": 9.0, "expected_block": "field-level-authz"},
-  {"name": "Mass assignment via mutation",                  "query": "mutation{updateUser(id:1,isAdmin:true,balance:99999){id}}",                                                                                             "category": "mass-assignment", "severity": "CRITICAL", "cvss": 9.5, "expected_block": "input-field-allowlist"},
-  {"name": "SQL Injection in argument",                     "query": "query{user(id:\"1 OR 1=1--\"){id name}}",                                                                                                               "category": "sqli-in-arg",     "severity": "CRITICAL", "cvss": 9.8, "expected_block": "parameterized-resolver-query"},
-  {"name": "NoSQL injection in argument",                   "query": "query{user(filter:{id:{$ne:null}}){id name email}}",                                                                                                    "category": "nosqli-in-arg",   "severity": "CRITICAL", "cvss": 9.5, "expected_block": "validate-input-shape"},
-  {"name": "Command injection via custom directive",         "query": "query @execute(cmd:\"id\"){user(id:1){id}}",                                                                                                            "category": "directive-rce",   "severity": "CRITICAL", "cvss": 9.8, "expected_block": "no-arbitrary-directives"},
-  {"name": "Operation without name",                        "query": "{__schema{queryType{name}}}",                                                                                                                            "category": "policy-bypass",   "severity": "LOW",      "cvss": 3.0, "expected_block": "anonymous-op-rate-limit"},
-  {"name": "Query whitelist bypass via aliasing",           "query": "query{user_safe:user(id:1){name email}}",                                                                                                                "category": "whitelist-bypass","severity": "MEDIUM",   "cvss": 5.5, "expected_block": "alias-normalized-before-check"},
-  {"name": "GraphQL Voyager probe",                          "query": "query{__schema{directives{name args{name type{name}}}}}",                                                                                              "category": "tooling-probe",   "severity": "LOW",      "cvss": 3.5, "expected_block": "directive-enum-disabled"},
-  {"name": "Query cost / complexity exhaustion",            "query": "query{users(first:99999){edges{node{posts(first:99999){edges{node{comments(first:99999){edges{node{id}}}}}}}}}}",                                       "category": "cost-dos",        "severity": "HIGH",     "cvss": 7.5, "expected_block": "query-cost-analysis"},
-  {"name": "Trace / debug field leak",                       "query": "query{__schema{queryType{name}}} __extensions{tracing}",                                                                                                "category": "debug-leak",      "severity": "MEDIUM",   "cvss": 5.5, "expected_block": "tracing-extension-prod-off"},
-  {"name": "Common path probe /graphql",                    "query": "{__schema{queryType{name}}}",                                                                                                                            "category": "endpoint-probe",  "severity": "INFO",     "cvss": 0,   "expected_block": "graphql-endpoint-hidden", "endpoint": "/graphql"},
-  {"name": "Common path probe /graphiql",                   "query": "",                                                                                                                                                       "category": "endpoint-probe",  "severity": "HIGH",     "cvss": 7.5, "expected_block": "graphiql-disabled-in-prod", "endpoint": "/graphiql"},
-  {"name": "Common path probe /v1/graphql",                 "query": "{__schema{queryType{name}}}",                                                                                                                            "category": "endpoint-probe",  "severity": "INFO",     "cvss": 0,   "expected_block": "graphql-endpoint-hidden", "endpoint": "/v1/graphql"},
-  {"name": "Common path probe /api/graphql",                "query": "{__schema{queryType{name}}}",                                                                                                                            "category": "endpoint-probe",  "severity": "INFO",     "cvss": 0,   "expected_block": "graphql-endpoint-hidden", "endpoint": "/api/graphql"},
-  {"name": "Apollo studio endpoint probe",                   "query": "",                                                                                                                                                       "category": "endpoint-probe",  "severity": "MEDIUM",   "cvss": 5.0, "expected_block": "apollo-sandbox-disabled", "endpoint": "/apollo"},
-  {"name": "Hasura console probe",                          "query": "",                                                                                                                                                       "category": "endpoint-probe",  "severity": "HIGH",     "cvss": 8.5, "expected_block": "hasura-console-disabled", "endpoint": "/console"},
-  {"name": "GraphQL Playground probe",                       "query": "",                                                                                                                                                       "category": "endpoint-probe",  "severity": "HIGH",     "cvss": 7.5, "expected_block": "playground-disabled-in-prod", "endpoint": "/playground"},
-  {"name": "Error-based info disclosure",                    "query": "query{user(id:\"abc\"){id}}",                                                                                                                            "category": "error-leak",      "severity": "MEDIUM",   "cvss": 5.5, "expected_block": "generic-error-handler", "matcher": "Cannot|Invalid|TypeError|undefined"},
-  {"name": "JWT in Authorization header probe",              "query": "query{me{id email role}}",                                                                                                                              "category": "auth-required",   "severity": "INFO",     "cvss": 0,   "expected_block": "me-requires-auth"},
-  {"name": "Internal-only field exposed",                    "query": "query{user(id:1){id name __typename internalNotes adminFlag}}",                                                                                          "category": "internal-leak",   "severity": "HIGH",     "cvss": 7.5, "expected_block": "internal-field-hidden"}
+  {
+    "name": "Introspection — __schema",
+    "query": "query{__schema{types{name}}}",
+    "category": "introspection",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "introspection-disabled-in-prod"
+  },
+  {
+    "name": "Introspection — full schema",
+    "query": "query IntrospectionQuery{__schema{queryType{name}mutationType{name}subscriptionType{name}types{...FullType}}}fragment FullType on __Type{kind name description fields(includeDeprecated:true){name description args{...InputValue}type{...TypeRef}}inputFields{...InputValue}interfaces{...TypeRef}enumValues(includeDeprecated:true){name description}possibleTypes{...TypeRef}}fragment InputValue on __InputValue{name description type{...TypeRef}defaultValue}fragment TypeRef on __Type{kind name ofType{kind name}}",
+    "category": "introspection",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "expected_block": "introspection-disabled-in-prod"
+  },
+  {
+    "name": "Introspection — types only",
+    "query": "query{__schema{types{name kind}}}",
+    "category": "introspection",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "introspection-disabled-in-prod"
+  },
+  {
+    "name": "Introspection — type details (User)",
+    "query": "query{__type(name:\"User\"){name fields{name type{name kind}}}}",
+    "category": "introspection",
+    "severity": "MEDIUM",
+    "cvss": 6.5,
+    "expected_block": "introspection-disabled-in-prod"
+  },
+  {
+    "name": "Introspection — mutations enumeration",
+    "query": "query{__schema{mutationType{fields{name args{name type{name}}}}}}",
+    "category": "introspection",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "introspection-disabled-in-prod"
+  },
+  {
+    "name": "Introspection — directives",
+    "query": "query{__schema{directives{name args{name type{name}}}}}",
+    "category": "introspection",
+    "severity": "LOW",
+    "cvss": 3.5,
+    "expected_block": "directive-enum-disabled"
+  },
+  {
+    "name": "Introspection — subscription type",
+    "query": "query{__schema{subscriptionType{fields{name}}}}",
+    "category": "introspection",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "introspection-disabled-in-prod"
+  },
+  {
+    "name": "Introspection — bypass via newline",
+    "query": "query{__schema\n{types{name}}}",
+    "category": "introspection-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "introspection-regex-too-strict"
+  },
+  {
+    "name": "Introspection — bypass via __schema alias",
+    "query": "query{s:__schema{types{name}}}",
+    "category": "introspection-bypass",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "alias-aware-introspection-block"
+  },
+  {
+    "name": "Suggestion-based schema leak",
+    "query": "query{userr(id:1){id}}",
+    "category": "suggestion-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "field-suggestion-disabled",
+    "matcher": "Did you mean|Cannot query field"
+  },
+  {
+    "name": "Field suggestion fuzz",
+    "query": "query{adm{id}}",
+    "category": "suggestion-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "field-suggestion-disabled",
+    "matcher": "Did you mean|admin|administrator"
+  },
+  {
+    "name": "Error-based info disclosure",
+    "query": "query{user(id:\"abc\"){id}}",
+    "category": "error-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "generic-error-handler",
+    "matcher": "Cannot|Invalid|TypeError|undefined"
+  },
+  {
+    "name": "Stack trace leak",
+    "query": "query{user(id:null){id}}",
+    "category": "error-leak",
+    "severity": "MEDIUM",
+    "cvss": 6.0,
+    "expected_block": "debug-stacktrace-off",
+    "matcher": "at .*\\(|stack|Error:"
+  },
+  {
+    "name": "Batching attack — array",
+    "query": "[{\"query\":\"{user(id:1){name}}\"},{\"query\":\"{user(id:2){name}}\"}]",
+    "category": "batch-dos",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "batch-size-limit",
+    "note": "POST array of operations"
+  },
+  {
+    "name": "Alias batching — overload",
+    "query": "query{a:user(id:1){name} b:user(id:2){name} c:user(id:3){name} d:user(id:4){name} e:user(id:5){name}}",
+    "category": "alias-overload",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "expected_block": "alias-count-limit"
+  },
+  {
+    "name": "Alias brute-force login",
+    "query": "mutation{a:login(username:\"admin\",password:\"a\"){token} b:login(username:\"admin\",password:\"b\"){token}}",
+    "category": "brute-force",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "expected_block": "rate-limit-per-operation"
+  },
+  {
+    "name": "Deep nesting DoS",
+    "query": "query{a:user(id:1){posts{author{posts{author{posts{author{posts{author{posts{author{id}}}}}}}}}}}}",
+    "category": "deep-nesting-dos",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "max-depth-limit"
+  },
+  {
+    "name": "Circular fragment DoS",
+    "query": "fragment A on User{...B}fragment B on User{...A}query{user(id:1){...A}}",
+    "category": "circular-dos",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "fragment-cycle-detection"
+  },
+  {
+    "name": "Field duplication amplification",
+    "query": "query{user(id:1){name name name name name name name name name name}}",
+    "category": "amplification",
+    "severity": "MEDIUM",
+    "cvss": 6.0,
+    "expected_block": "field-duplicate-limit"
+  },
+  {
+    "name": "Query cost / complexity exhaustion",
+    "query": "query{users(first:99999){edges{node{posts(first:99999){edges{node{comments(first:99999){edges{node{id}}}}}}}}}}",
+    "category": "cost-dos",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "query-cost-analysis"
+  },
+  {
+    "name": "Directive overload DoS",
+    "query": "query{user(id:1)@skip(if:false)@skip(if:false)@skip(if:false){id}}",
+    "category": "directive-dos",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "directive-count-limit"
+  },
+  {
+    "name": "GET-based mutation (CSRF vector)",
+    "query": "mutation{deleteUser(id:1)}",
+    "category": "csrf",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "expected_block": "post-only-for-mutations",
+    "note": "send as ?query="
+  },
+  {
+    "name": "Mutation without auth",
+    "query": "mutation{updateUser(id:1,role:\"admin\"){id role}}",
+    "category": "broken-authz",
+    "severity": "CRITICAL",
+    "cvss": 9.5,
+    "expected_block": "auth-on-every-mutation"
+  },
+  {
+    "name": "IDOR via id-traversal",
+    "query": "query{user(id:1){email password ssn}}",
+    "category": "idor",
+    "severity": "CRITICAL",
+    "cvss": 9.0,
+    "expected_block": "field-level-authz"
+  },
+  {
+    "name": "Mass assignment via mutation",
+    "query": "mutation{updateUser(id:1,isAdmin:true,balance:99999){id}}",
+    "category": "mass-assignment",
+    "severity": "CRITICAL",
+    "cvss": 9.5,
+    "expected_block": "input-field-allowlist"
+  },
+  {
+    "name": "SQL Injection in argument",
+    "query": "query{user(id:\"1 OR 1=1--\"){id name}}",
+    "category": "sqli-in-arg",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "expected_block": "parameterized-resolver-query"
+  },
+  {
+    "name": "NoSQL injection in argument",
+    "query": "query{user(filter:{id:{$ne:null}}){id name email}}",
+    "category": "nosqli-in-arg",
+    "severity": "CRITICAL",
+    "cvss": 9.5,
+    "expected_block": "validate-input-shape"
+  },
+  {
+    "name": "Command injection via custom directive",
+    "query": "query @execute(cmd:\"id\"){user(id:1){id}}",
+    "category": "directive-rce",
+    "severity": "CRITICAL",
+    "cvss": 9.8,
+    "expected_block": "no-arbitrary-directives"
+  },
+  {
+    "name": "Internal-only field exposed",
+    "query": "query{user(id:1){id name __typename internalNotes adminFlag}}",
+    "category": "internal-leak",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "internal-field-hidden"
+  },
+  {
+    "name": "Query whitelist bypass via aliasing",
+    "query": "query{user_safe:user(id:1){name email}}",
+    "category": "whitelist-bypass",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "alias-normalized-before-check"
+  },
+  {
+    "name": "Operation without name",
+    "query": "{__schema{queryType{name}}}",
+    "category": "policy-bypass",
+    "severity": "LOW",
+    "cvss": 3.0,
+    "expected_block": "anonymous-op-rate-limit"
+  },
+  {
+    "name": "JWT in Authorization header probe",
+    "query": "query{me{id email role}}",
+    "category": "auth-required",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "me-requires-auth"
+  },
+  {
+    "name": "Trace / debug field leak",
+    "query": "query{__schema{queryType{name}}} __extensions{tracing}",
+    "category": "debug-leak",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "tracing-extension-prod-off"
+  },
+  {
+    "name": "GraphQL Voyager probe",
+    "query": "query{__schema{directives{name args{name type{name}}}}}",
+    "category": "tooling-probe",
+    "severity": "LOW",
+    "cvss": 3.5,
+    "expected_block": "directive-enum-disabled"
+  },
+  {
+    "name": "Subscription auth bypass",
+    "query": "subscription{messageAdded{id content user{email}}}",
+    "category": "subscription-authz",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "subscription-auth-required"
+  },
+  {
+    "name": "Variable-based injection",
+    "query": "query($id:String){user(id:$id){id}}",
+    "category": "variable-injection",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "typed-variable-validation",
+    "note": "vars:{id:\"1 OR 1=1\"}"
+  },
+  {
+    "name": "Common path probe /graphql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/graphql"
+  },
+  {
+    "name": "Common path probe /api/graphql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/api/graphql"
+  },
+  {
+    "name": "Common path probe /v1/graphql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/v1/graphql"
+  },
+  {
+    "name": "Common path probe /v2/graphql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/v2/graphql"
+  },
+  {
+    "name": "Common path probe /query",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/query"
+  },
+  {
+    "name": "Common path probe /api/query",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/api/query"
+  },
+  {
+    "name": "Common path probe /graphql/console",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "HIGH",
+    "cvss": 8.0,
+    "expected_block": "graphql-console-disabled",
+    "endpoint": "/graphql/console"
+  },
+  {
+    "name": "Common path probe /graphiql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "graphiql-disabled-in-prod",
+    "endpoint": "/graphiql"
+  },
+  {
+    "name": "Common path probe /playground",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "HIGH",
+    "cvss": 7.5,
+    "expected_block": "playground-disabled-in-prod",
+    "endpoint": "/playground"
+  },
+  {
+    "name": "Common path probe /apollo",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "expected_block": "apollo-sandbox-disabled",
+    "endpoint": "/apollo"
+  },
+  {
+    "name": "Common path probe /console",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "HIGH",
+    "cvss": 8.5,
+    "expected_block": "hasura-console-disabled",
+    "endpoint": "/console"
+  },
+  {
+    "name": "Common path probe /v1/graphql/explorer",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "MEDIUM",
+    "cvss": 5.0,
+    "expected_block": "explorer-disabled",
+    "endpoint": "/v1/graphql/explorer"
+  },
+  {
+    "name": "Common path probe /subscriptions",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "MEDIUM",
+    "cvss": 5.5,
+    "expected_block": "ws-subscriptions-authz",
+    "endpoint": "/subscriptions"
+  },
+  {
+    "name": "Common path probe /api/v1/graphql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/api/v1/graphql"
+  },
+  {
+    "name": "Common path probe /gql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/gql"
+  },
+  {
+    "name": "Common path probe /index.php?graphql",
+    "query": "{__schema{queryType{name}}}",
+    "category": "endpoint-probe",
+    "severity": "INFO",
+    "cvss": 0,
+    "expected_block": "graphql-endpoint-hidden",
+    "endpoint": "/index.php?graphql"
+  }
 ]

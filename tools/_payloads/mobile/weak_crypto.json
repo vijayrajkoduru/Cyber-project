@@ -1,0 +1,17 @@
+{
+  "DES cipher":              "Cipher\\.getInstance\\(\\s*\"DES\"|/javax/crypto/spec/DESKeySpec|\"DES/CBC|\"DES/ECB",
+  "3DES / DESede cipher":    "Cipher\\.getInstance\\(\\s*\"DESede|\"TripleDES|DESedeKeySpec",
+  "RC4 cipher":              "Cipher\\.getInstance\\(\\s*\"RC4\"|\"ARC4\"|\"ARCFOUR\"",
+  "RC2 cipher":              "Cipher\\.getInstance\\(\\s*\"RC2\"",
+  "Blowfish cipher":         "Cipher\\.getInstance\\(\\s*\"Blowfish\"",
+  "AES ECB mode":            "Cipher\\.getInstance\\(\\s*\"AES/ECB",
+  "Cipher with no mode (defaults to ECB)": "Cipher\\.getInstance\\(\\s*\"AES\"\\s*\\)|Cipher\\.getInstance\\(\\s*\"DES\"\\s*\\)",
+  "MD2 used for crypto":     "MessageDigest\\.getInstance\\(\\s*\"MD2\"",
+  "MD4 used for crypto":     "MessageDigest\\.getInstance\\(\\s*\"MD4\"",
+  "MD5 used for crypto":     "MessageDigest\\.getInstance\\(\\s*\"MD5\"|/MD5\\.smali",
+  "SHA1 used for crypto":    "MessageDigest\\.getInstance\\(\\s*\"SHA-?1\"|/SHA1\\.smali",
+  "Insecure SecureRandom seed": "SecureRandom\\(\\)\\.setSeed\\(|new SecureRandom\\(new byte",
+  "Weak PBKDF iteration count": "PBEKeySpec\\([^,]+,[^,]+,\\s*(?:[1-9][0-9]{0,2}|[1-9][0-9]{3})\\s*,",
+  "TrustManager bypass":     "X509TrustManager.{1,500}checkServerTrusted[^{]*\\{\\s*\\}|return\\s+new\\s+X509Certificate\\[\\s*0\\s*\\]",
+  "HostnameVerifier ALLOW_ALL": "ALLOW_ALL_HOSTNAME_VERIFIER|verify\\s*\\([^)]*\\)\\s*\\{\\s*return\\s+true"
+}

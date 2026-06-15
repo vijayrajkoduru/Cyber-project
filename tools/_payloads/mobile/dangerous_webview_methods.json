@@ -1,0 +1,17 @@
+{
+  "_note": "Dangerous APIs reachable from a WebView JavaScript bridge (@JavascriptInterface). Joined with | into a regex (same semantics as the inline DANGEROUS_METHOD_RE alternation). Reflection-reachable native/file/process/PM calls from JS = RCE / data-exfil class.",
+  "methods": [
+    "Runtime\\.getRuntime",
+    "ProcessBuilder",
+    "FileOutputStream",
+    "FileInputStream",
+    "File\\.createTempFile",
+    "RandomAccessFile",
+    "getPackageManager",
+    "getSystemService",
+    "openFileOutput",
+    "getExternalFilesDir",
+    "java/lang/reflect/Method",
+    "loadLibrary"
+  ]
+}

@@ -9,9 +9,12 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.tracking_sdk_audit_findings import TRACKING_SDK_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
-TRACKERS = {
+# Sourced from the shared AI-curated mobile pool (path-style markers); inline
+# dict is the fallback so behaviour is identical if the JSON is unavailable.
+_TRACKERS_FALLBACK = {
     "Google Firebase Analytics": r"com/google/firebase/analytics|firebase_analytics",
     "Google Crashlytics": r"com/google/firebase/crashlytics|com/crashlytics/android",
     "Google AdMob": r"com/google/android/gms/ads",
@@ -33,6 +36,21 @@ TRACKERS = {
     "Yandex Metrica": r"com/yandex/metrica",
     "OneSignal": r"com/onesignal/",
 }
+
+
+def _load_trackers():
+    pool = load_json("tracker_sdks", fallback=None)
+    if not pool:
+        return _TRACKERS_FALLBACK
+    out = {}
+    for row in pool:
+        pat = row.get("path_marker")
+        if pat:
+            out[row.get("name", "Unknown")] = pat
+    return out or _TRACKERS_FALLBACK
+
+
+TRACKERS = _load_trackers()
 SCAN_MAX_FILES = 5000
 
 

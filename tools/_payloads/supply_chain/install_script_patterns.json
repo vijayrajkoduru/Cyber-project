@@ -1,0 +1,185 @@
+{
+  "_comment": "ADVISORY-ONLY detection HINTS for suspicious install/build-time script behavior in supply-chain manifests (setup.py, pyproject build hooks, package.json pre/postinstall, etc.). These are heuristics for HUMAN review, NOT exploits and NOT confirmed malice. Severity is INFO or LOW ONLY and must NEVER be graded HIGH/CRITICAL. Many legitimate packages match these patterns; treat every hit as 'worth a look', not 'compromised'. Each pattern: name, regex (Python re, case-insensitive intended), severity, note.",
+  "patterns": [
+    {
+      "name": "curl-piped-to-shell",
+      "regex": "curl\\b[^|\\n]*\\|\\s*(?:sudo\\s+)?(?:ba)?sh",
+      "severity": "LOW",
+      "note": "Install/build step downloads a script and pipes it straight to a shell. Common in installers but unverifiable code execution; review the URL and pin a hash."
+    },
+    {
+      "name": "wget-piped-to-shell",
+      "regex": "wget\\b[^|\\n]*\\|\\s*(?:sudo\\s+)?(?:ba)?sh",
+      "severity": "LOW",
+      "note": "wget output piped to a shell at install/build time. Same risk profile as curl|bash."
+    },
+    {
+      "name": "base64-decode-then-exec",
+      "regex": "b64decode[\\s\\S]{0,120}?\\bexec\\s*\\(",
+      "severity": "LOW",
+      "note": "Base64-decoded payload passed to exec(). A frequent obfuscation pattern in malicious packages; confirm what the blob decodes to."
+    },
+    {
+      "name": "base64-decode-then-eval",
+      "regex": "b64decode[\\s\\S]{0,120}?\\beval\\s*\\(",
+      "severity": "LOW",
+      "note": "Base64-decoded content passed to eval(). Obfuscated dynamic execution; review the decoded source."
+    },
+    {
+      "name": "eval-of-network-content",
+      "regex": "\\beval\\s*\\(\\s*(?:requests|urllib|urlopen|fetch)\\b",
+      "severity": "LOW",
+      "note": "eval() applied directly to downloaded content. Remote code execution by design; should be inspected."
+    },
+    {
+      "name": "exec-of-network-content",
+      "regex": "\\bexec\\s*\\(\\s*(?:requests|urllib|urlopen|fetch)\\b",
+      "severity": "LOW",
+      "note": "exec() applied to downloaded content. Executes remote code at install/build time; review the source URL."
+    },
+    {
+      "name": "os-system-in-setup",
+      "regex": "os\\.system\\s*\\(",
+      "severity": "INFO",
+      "note": "os.system() call present. Build scripts sometimes need shell-outs; flagged for review of what command is run."
+    },
+    {
+      "name": "subprocess-shell-true",
+      "regex": "subprocess\\.(?:call|run|popen|check_output|check_call)\\b[\\s\\S]{0,200}?shell\\s*=\\s*True",
+      "severity": "INFO",
+      "note": "subprocess invoked with shell=True. Shell injection surface if any argument is attacker-influenced; review the command construction."
+    },
+    {
+      "name": "subprocess-in-setup",
+      "regex": "import\\s+subprocess",
+      "severity": "INFO",
+      "note": "subprocess imported in a packaging/build script. Common and often legitimate; included so a reviewer can confirm intent."
+    },
+    {
+      "name": "request-to-raw-ip",
+      "regex": "https?://(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}",
+      "severity": "LOW",
+      "note": "Hard-coded raw IPv4 URL (not a domain). Legitimate packages almost always use named hosts; raw IPs in install/build code warrant a look."
+    },
+    {
+      "name": "outbound-request-in-setup",
+      "regex": "(?:requests\\.(?:get|post)|urllib\\.request\\.urlopen|urlopen)\\s*\\(",
+      "severity": "INFO",
+      "note": "Outbound HTTP request inside packaging/build code. Could be legitimate (fetch data file) or exfil/staging; verify the endpoint."
+    },
+    {
+      "name": "socket-connect-in-setup",
+      "regex": "socket\\.socket\\s*\\([\\s\\S]{0,120}?\\.connect\\s*\\(",
+      "severity": "LOW",
+      "note": "Raw socket connection in build/install code. Unusual for legitimate packaging; inspect the destination."
+    },
+    {
+      "name": "env-var-harvest",
+      "regex": "os\\.environ(?:\\.get)?\\b[\\s\\S]{0,200}?(?:requests\\.(?:get|post)|urlopen|socket)",
+      "severity": "LOW",
+      "note": "Environment variables read and then sent over the network near install time. Classic secret/token exfiltration shape; review carefully."
+    },
+    {
+      "name": "marshal-or-pickle-loads",
+      "regex": "(?:marshal|pickle)\\.loads?\\s*\\(",
+      "severity": "INFO",
+      "note": "marshal/pickle deserialization in build code. Deserializing untrusted bytes is code execution; confirm the source is trusted/local."
+    },
+    {
+      "name": "compile-then-exec",
+      "regex": "\\bcompile\\s*\\([\\s\\S]{0,120}?\\bexec\\s*\\(",
+      "severity": "LOW",
+      "note": "Source compiled then exec()'d. Dynamic execution that can hide intent; review the compiled string's origin."
+    },
+    {
+      "name": "getattr-builtins-dynamic",
+      "regex": "getattr\\s*\\(\\s*__builtins__",
+      "severity": "LOW",
+      "note": "Dynamic lookup against __builtins__. Common obfuscation to reach exec/eval indirectly; inspect what attribute is fetched."
+    },
+    {
+      "name": "chmod-exec-bit",
+      "regex": "os\\.chmod\\s*\\([\\s\\S]{0,80}?(?:0o7|0o5|stat\\.S_IX)",
+      "severity": "INFO",
+      "note": "Sets an executable bit during install/build. Often legitimate for bundled binaries; flagged so a reviewer can confirm the file."
+    },
+    {
+      "name": "write-to-autostart-or-cron",
+      "regex": "(?:/etc/cron|crontab|\\.bashrc|\\.bash_profile|\\.zshrc|/etc/rc\\.local|LaunchAgents|autostart)",
+      "severity": "LOW",
+      "note": "Install/build code touches a persistence/autostart location. Legitimate packages rarely do this; treat as a strong review hint."
+    },
+    {
+      "name": "tempfile-then-execute",
+      "regex": "(?:mkstemp|NamedTemporaryFile|/tmp/)[\\s\\S]{0,200}?(?:os\\.system|subprocess|exec\\s*\\()",
+      "severity": "LOW",
+      "note": "Writes to a temp path then executes it. Common dropper pattern; confirm the temp file content is benign."
+    },
+    {
+      "name": "powershell-invocation",
+      "regex": "(?:powershell|pwsh)\\b[\\s\\S]{0,120}?(?:-enc|-encodedcommand|-nop|-w\\s+hidden|invoke-expression|iex)",
+      "severity": "LOW",
+      "note": "Encoded/hidden PowerShell invoked from install/build code. Strong obfuscation/persistence indicator; review the command."
+    },
+    {
+      "name": "npm-preinstall-shell",
+      "regex": "\"preinstall\"\\s*:\\s*\"[^\"]*(?:curl|wget|sh\\s|bash|node\\s+-e|python\\s+-c|eval)",
+      "severity": "LOW",
+      "note": "package.json preinstall runs shell/inline-code. preinstall executes before dependency review; verify the command."
+    },
+    {
+      "name": "npm-postinstall-shell",
+      "regex": "\"postinstall\"\\s*:\\s*\"[^\"]*(?:curl|wget|sh\\s|bash|node\\s+-e|python\\s+-c|eval)",
+      "severity": "LOW",
+      "note": "package.json postinstall runs shell/inline-code. postinstall is the most-abused npm lifecycle hook; inspect the command."
+    },
+    {
+      "name": "npm-install-script-shell",
+      "regex": "\"install\"\\s*:\\s*\"[^\"]*(?:curl|wget|\\|\\s*sh|\\|\\s*bash|node\\s+-e|eval)",
+      "severity": "LOW",
+      "note": "package.json install lifecycle runs shell/download. Review what the install hook fetches and runs."
+    },
+    {
+      "name": "npm-node-dash-e-inline",
+      "regex": "\"(?:pre|post)?install\"\\s*:\\s*\"[^\"]*node\\s+-e",
+      "severity": "LOW",
+      "note": "npm lifecycle hook executes inline Node code (node -e). Inline code in a hook can hide behavior; read the snippet."
+    },
+    {
+      "name": "npm-lifecycle-base64",
+      "regex": "\"(?:pre|post)?install\"\\s*:\\s*\"[^\"]*(?:base64\\s+-d|atob|Buffer\\.from\\([^\"]*,\\s*['\\\"]base64)",
+      "severity": "LOW",
+      "note": "npm lifecycle hook decodes base64. Obfuscated install-time payload; decode and inspect."
+    },
+    {
+      "name": "npm-lifecycle-env-exfil",
+      "regex": "\"(?:pre|post)?install\"\\s*:\\s*\"[^\"]*(?:process\\.env|printenv|env\\s*\\|)[^\"]*(?:curl|wget|http)",
+      "severity": "LOW",
+      "note": "npm lifecycle hook reads env vars and contacts the network. Token/secret exfiltration shape; review the endpoint."
+    },
+    {
+      "name": "child-process-in-package",
+      "regex": "require\\(\\s*['\\\"]child_process['\\\"]\\s*\\)",
+      "severity": "INFO",
+      "note": "Node child_process required (in a script field or bundled install helper). Often legitimate build tooling; flagged for review."
+    },
+    {
+      "name": "dynamic-import-from-url",
+      "regex": "(?:__import__|importlib\\.import_module)\\s*\\([\\s\\S]{0,120}?(?:requests|urlopen|http)",
+      "severity": "LOW",
+      "note": "Module name/source derived from a network value before import. Remote-controlled imports; verify the resolution path."
+    },
+    {
+      "name": "hardcoded-credential-like-token",
+      "regex": "(?:api[_-]?key|secret|token|password)\\s*[=:]\\s*['\\\"][A-Za-z0-9_\\-]{16,}['\\\"]",
+      "severity": "INFO",
+      "note": "Credential-shaped literal in build/install code. May be a placeholder or a real leaked secret; confirm it is not live."
+    },
+    {
+      "name": "atexit-or-import-time-side-effect",
+      "regex": "atexit\\.register\\s*\\([\\s\\S]{0,120}?(?:os\\.system|subprocess|requests|socket)",
+      "severity": "INFO",
+      "note": "Side-effecting action registered for interpreter exit during install/build. Unusual placement; review what runs at exit."
+    }
+  ]
+}

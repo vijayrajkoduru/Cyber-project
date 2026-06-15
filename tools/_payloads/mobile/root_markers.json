@@ -1,0 +1,14 @@
+{
+  "RootBeer (com.scottyab.rootbeer)": ["com/scottyab/rootbeer", "RootBeer", "isRooted"],
+  "su binary path checks":            ["\"/system/xbin/su\"", "\"/system/bin/su\"", "\"/sbin/su\"", "\"/su/bin/su\"", "\"/system/app/Superuser.apk\""],
+  "Magisk markers":                   ["Magisk", "/sbin/.magisk", "MagiskHide", "magiskhide", "/data/adb/magisk"],
+  "SuperSU markers":                  ["SuperSU.apk", "eu/chainfire/supersu"],
+  "test-keys build tag":              ["\"test-keys\""],
+  "Superuser package check":          ["\"com.koushikdutta.superuser\"", "\"eu.chainfire.supersu\"", "\"com.topjohnwu.magisk\""],
+  "BusyBox marker":                   ["\"busybox\"", "\"/system/xbin/busybox\""],
+  "Frida / dynamic-instrumentation":  ["frida-server", "frida-agent", "re.frida.server", "LIBFRIDA"],
+  "Xposed framework":                 ["de/robv/android/xposed", "XposedBridge", "de.robv.android.xposed.installer"],
+  "iOS jailbreak path checks":        ["/Applications/Cydia.app", "/bin/bash", "/usr/sbin/sshd", "/etc/apt", "/private/var/lib/apt"],
+  "iOS jailbreak URL scheme":         ["cydia://", "sileo://", "zbra://"],
+  "Emulator / debug build check":     ["ro.debuggable", "ro.secure", "generic_x86", "goldfish", "ranchu"]
+}

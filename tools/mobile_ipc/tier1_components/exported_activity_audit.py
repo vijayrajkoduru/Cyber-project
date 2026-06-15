@@ -11,13 +11,20 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.exported_activity_audit_findings import EXPORTED_ACTIVITY_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 EXPORTED_RE = re.compile(r'<(activity|service|receiver)\b[^>]*android:exported="true"[^>]*>', re.IGNORECASE)
 PERM_RE = re.compile(r'android:permission="')
 LAUNCHER_RE = re.compile(r'android\.intent\.category\.LAUNCHER')
-SENSITIVE_HINTS = ("login", "pin", "password", "auth", "payment", "card",
-                    "transfer", "vault", "checkout", "admin", "settings")
+# Sensitive exported-component name hints sourced from the shared AI-curated
+# mobile pool; inline tuple is the fallback.
+_SENSITIVE_HINTS_FALLBACK = ("login", "pin", "password", "auth", "payment", "card",
+                             "transfer", "vault", "checkout", "admin", "settings")
+SENSITIVE_HINTS = tuple(
+    load_json("sensitive_components", fallback={}).get(
+        "hints", _SENSITIVE_HINTS_FALLBACK)
+) or _SENSITIVE_HINTS_FALLBACK
 SCAN_MAX_FILES = 1000
 
 

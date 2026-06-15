@@ -1,0 +1,23 @@
+{
+  "_note": "smali/source markers for predictable PRNG usage in security contexts. Matched as plain substrings (NOT regex) against decompiled file text — same semantics as the inline INSECURE_PRNG_MARKERS tuple.",
+  "insecure_markers": [
+    "java/util/Random;-><init>",
+    "Ljava/util/Random;",
+    "Math;->random()D",
+    "Math.random(",
+    "new Random(",
+    "ThreadLocalRandom",
+    "java/util/concurrent/ThreadLocalRandom",
+    "org/apache/commons/lang3/RandomStringUtils",
+    "kotlin/random/Random$Default",
+    "Random.nextInt(",
+    "currentTimeMillis()J\n.*nextInt",
+    "System;->nanoTime()J"
+  ],
+  "insecure_seed_markers": [
+    "SecureRandom;->setSeed",
+    "new SecureRandom(new byte",
+    "SecureRandom(seed",
+    "setSeed(System.currentTimeMillis"
+  ]
+}

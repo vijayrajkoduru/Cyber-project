@@ -10,10 +10,17 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.insecure_prng_audit_findings import INSECURE_PRNG_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 
-INSECURE_PRNG_MARKERS = ("java/util/Random;-><init>", "Math;->random()D")
+# Markers sourced from the shared AI-curated mobile pool; inline tuple is the
+# fallback so behaviour is identical if the JSON is unavailable.
+_INSECURE_PRNG_FALLBACK = ("java/util/Random;-><init>", "Math;->random()D")
+INSECURE_PRNG_MARKERS = tuple(
+    load_json("insecure_prng", fallback={}).get(
+        "insecure_markers", _INSECURE_PRNG_FALLBACK)
+) or _INSECURE_PRNG_FALLBACK
 SECURE_PRNG_MARKER = "java/security/SecureRandom"
 SECURITY_CONTEXT_HINTS = ("token", "key", "iv", "nonce", "session",
                           "secret", "password", "auth", "challenge", "salt")

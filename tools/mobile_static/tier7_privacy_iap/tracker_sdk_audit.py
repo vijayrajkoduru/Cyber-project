@@ -13,11 +13,13 @@ from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.tracker_sdk_audit_findings import \
     TRACKER_SDK_AUDIT_FINDING_RULES
+from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 
-# (sdk_name, category, byte-marker that uniquely identifies it)
-TRACKERS = [
+# (sdk_name, category, byte-marker that uniquely identifies it).
+# Sourced from the shared AI-curated mobile pool; inline list is the fallback.
+_TRACKERS_FALLBACK = [
     # Analytics
     ("Firebase Analytics",  "analytics",   b"Lcom/google/firebase/analytics/"),
     ("Google Analytics 4",  "analytics",   b"Lcom/google/android/gms/analytics/"),
@@ -52,6 +54,27 @@ TRACKERS = [
     ("LogRocket",           "session_replay", b"Lcom/logrocket/protocol/"),
     ("UXCam",               "session_replay", b"Lcom/uxcam/"),
 ]
+
+
+def _load_trackers():
+    """Build the (name, category, byte-marker) list from the shared pool.
+    Each JSON object carries a class_marker (smali descriptor) which is
+    encoded to bytes for the DEX byte-scan. Falls back to the inline list."""
+    pool = load_json("tracker_sdks", fallback=None)
+    if not pool:
+        return _TRACKERS_FALLBACK
+    out = []
+    for row in pool:
+        marker = row.get("class_marker")
+        if not marker:
+            continue
+        out.append((row.get("name", "Unknown"),
+                    row.get("category", "tracker"),
+                    marker.encode("utf-8")))
+    return out or _TRACKERS_FALLBACK
+
+
+TRACKERS = _load_trackers()
 
 
 async def gather(ctx: ScanContext):

