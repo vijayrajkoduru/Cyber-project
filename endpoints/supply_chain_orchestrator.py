@@ -53,6 +53,9 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("npm_dependency_confusion", "/api/supply_chain/npm_dependency_confusion"),
         ("pypi_typosquat_scan",      "/api/supply_chain/pypi_typosquat_scan"),
     ],
+    "tier9_iac": [
+        ("checkov_scanner",          "/api/supply_chain/checkov_scanner"),
+    ],
     # ── Honest advisory-by-design techniques (INFO only; cannot be SaaS-probed) ──
     "tier8_advisory": [
         ("sbom_signing_attest",        "/api/supply_chain/sbom_signing_attest"),
