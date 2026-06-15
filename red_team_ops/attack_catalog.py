@@ -18,14 +18,19 @@ Schema:
 """
 from __future__ import annotations
 
+from . import _curated   # noqa: E402  (AI-curated offline knowledge base)
+
 TACTICS = [
-    "reconnaissance", "initial_access", "execution", "persistence",
-    "privilege_escalation", "defense_evasion", "credential_access",
-    "discovery", "lateral_movement", "collection",
+    "reconnaissance", "resource_development", "initial_access", "execution",
+    "persistence", "privilege_escalation", "defense_evasion",
+    "credential_access", "discovery", "lateral_movement", "collection",
     "command_and_control", "exfiltration", "impact",
 ]
 
-TECHNIQUES = [
+# Built-in fallback set — used only if the curated data files are missing, so the
+# engine always works. The shipped catalog comes from _curated/*.json (141+
+# techniques, 16 adversary-emulation playbooks).
+_FALLBACK_TECHNIQUES = [
     # ── Reconnaissance ──
     {"id": "T1595", "name": "Active Scanning", "tactic": "reconnaissance",
      "desc": "Scan in-scope hosts for open ports/services.",
@@ -178,8 +183,8 @@ TECHNIQUES = [
      "risk": ["denial_of_service"], "atomic_safe": False, "platforms": ["any"]},
 ]
 
-# Predefined emulation scenarios (ordered chains of technique ids).
-SCENARIOS = {
+# Built-in fallback scenarios (ordered chains of technique ids).
+_FALLBACK_SCENARIOS = {
     "external_foothold": ["T1595", "T1589", "T1190", "T1078"],
     "phishing_to_persistence": ["T1566", "T1059.001", "T1053.005", "T1098"],
     "ad_compromise": ["T1087", "T1558.003", "T1003.001", "T1550.002", "T1021.001"],
@@ -189,6 +194,24 @@ SCENARIOS = {
         "T1071.001", "T1041", "T1486",
     ],
 }
+
+
+# ── Load the AI-curated knowledge base (fall back to built-ins if absent) ─────
+_curated_techniques = _curated.load_techniques()
+TECHNIQUES = _curated_techniques if _curated_techniques else _FALLBACK_TECHNIQUES
+
+_curated_scenarios = _curated.load_scenarios()
+if _curated_scenarios:
+    # Curated form: name -> {label, adversary, description, techniques[]}
+    SCENARIOS = {k: v.get("techniques", []) for k, v in _curated_scenarios.items()}
+    SCENARIO_META = {
+        k: {"label": v.get("label", k), "adversary": v.get("adversary", ""),
+            "description": v.get("description", "")}
+        for k, v in _curated_scenarios.items()
+    }
+else:
+    SCENARIOS = _FALLBACK_SCENARIOS
+    SCENARIO_META = {k: {"label": k, "adversary": "", "description": ""} for k in SCENARIOS}
 
 _BY_ID = {t["id"]: t for t in TECHNIQUES}
 
@@ -203,6 +226,10 @@ def by_tactic(tactic: str) -> list[dict]:
 
 def scenario(name: str) -> list[dict]:
     return [_BY_ID[i] for i in SCENARIOS.get(name, []) if i in _BY_ID]
+
+
+def scenario_meta(name: str) -> dict:
+    return SCENARIO_META.get(name, {"label": name, "adversary": "", "description": ""})
 
 
 def all_scenarios() -> list[str]:

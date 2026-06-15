@@ -68,8 +68,12 @@ async def redteam_catalog(_=Depends(verify_superadmin)):
     scenarios = []
     for name in cat.all_scenarios():
         steps = [_technique_view(t) for t in cat.scenario(name)]
+        meta = cat.scenario_meta(name)
         scenarios.append({
             "name": name,
+            "label": meta.get("label", name),
+            "adversary": meta.get("adversary", ""),
+            "description": meta.get("description", ""),
             "steps": steps,
             "technique_count": len(steps),
             "blocked_count": sum(1 for s in steps if s["blocked"]),
@@ -79,9 +83,11 @@ async def redteam_catalog(_=Depends(verify_superadmin)):
         "tactics": cat.TACTICS,
         "scenarios": scenarios,
         "techniques": [_technique_view(t) for t in cat.TECHNIQUES],
+        "technique_count": len(cat.TECHNIQUES),
         "impact_levels": list(ALLOWED_IMPACTS),
         "forbidden": FORBIDDEN,
         "contract": contract_text(),
+        "curated": True,
     }
 
 
