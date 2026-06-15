@@ -587,7 +587,14 @@ def _abd(slug, title, reason, cwe="CWE-1395"):
     return _p
 
 
-_TAKEOVER_SIGS = [
+# Inline fallback signatures. Kept verbatim so the takeover probe still works
+# if the VL-CORE pool (tools/_payloads/network/subdomain_takeover_sigs.json) is
+# missing during a partial deploy / dev env. The AI-curated pool, when present,
+# supersedes this list (see _load_takeover_sigs below). Shape: (cname-suffix,
+# unclaimed-resource-fingerprint) — fingerprint must be a SPECIFIC, lowercased
+# substring the provider returns ONLY for an unregistered resource. The probe
+# requires BOTH a CNAME-suffix match AND a fingerprint body-match (zero-FP).
+_TAKEOVER_SIGS_FALLBACK = [
     ("github.io", "there isn't a github pages site here"),
     ("herokuapp.com", "no such app"),
     ("s3.amazonaws.com", "nosuchbucket"),
@@ -605,6 +612,43 @@ _TAKEOVER_SIGS = [
     ("myshopify.com", "sorry, this shop is currently unavailable"),
     ("zendesk.com", "help center closed"),
 ]
+
+
+def _load_takeover_sigs():
+    """Load the AI-curated subdomain-takeover pool and flatten it to the
+    [(cname-suffix, fingerprint), ...] shape the probe expects.
+
+    Each JSON entry carries one or more 'suffixes' and ONE 'fingerprint', so a
+    service with N suffixes expands to N tuples. Suffix + fingerprint are
+    lowercased to match the probe (which lowercases both the CNAME and the body).
+    On any failure / empty pool we fall back to the inline list so the check
+    never silently goes dark. The matching contract (CNAME-confirm + specific
+    fingerprint) is unchanged.
+    """
+    try:
+        from tools._payloads.network import _loader as _net_loader
+        data = _net_loader.load_json("subdomain_takeover_sigs", fallback=None)
+    except Exception:
+        data = None
+    if not isinstance(data, dict):
+        return list(_TAKEOVER_SIGS_FALLBACK)
+    sigs = data.get("signatures") or []
+    out = []
+    for entry in sigs:
+        if not isinstance(entry, dict):
+            continue
+        fp = (entry.get("fingerprint") or "").strip().lower()
+        if not fp:
+            continue
+        for suf in entry.get("suffixes") or []:
+            suf = (suf or "").strip().lower()
+            if suf:
+                out.append((suf, fp))
+    return out or list(_TAKEOVER_SIGS_FALLBACK)
+
+
+# Active signature list: curated pool when available, inline fallback otherwise.
+_TAKEOVER_SIGS = _load_takeover_sigs()
 
 
 def _probe_subdomain_takeover(target, req):

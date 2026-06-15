@@ -1,6 +1,85 @@
 """Shared CVE-intelligence helpers for tier2 Vuln scanners (autoload-skipped via _ prefix)."""
 import json, os, re, socket, ssl, time, urllib.parse, urllib.request
 
+from tools._payloads.vuln._loader import load_json
+
+# ── Advisory enrichment data (ENRICHMENT ONLY) ───────────────────────────────
+# These curated reference tables NEVER create a finding and NEVER change a
+# severity. They only annotate findings a scanner has ALREADY produced:
+#   * CWE_CATALOG     : CWE-id -> {name, description, owasp_category}
+#   * REMEDIATION_TEXT: CWE-id / type-slug -> remediation prose
+#   * KEV_REF         : EXACT CVE-ID -> KEV metadata (exact-id lookup only)
+# Inline fallbacks ({}/dict) keep callers working if a JSON file is absent.
+CWE_CATALOG = load_json("cwe_catalog", {})
+REMEDIATION_TEXT = load_json("remediation_text", {})
+KEV_REF = load_json("kev_crossref", {})
+VERSION_NORM = load_json("version_normalization", {})
+_VN_PREFIX = [re.compile(p, re.I) for p in (VERSION_NORM.get("strip_prefix_patterns") or [])]
+_VN_SUFFIX = [re.compile(p, re.I) for p in (VERSION_NORM.get("strip_suffix_patterns") or [])]
+_VN_EPOCH = re.compile((VERSION_NORM.get("epoch_strip") or {}).get("pattern") or r"^\d+:")
+
+
+def normalize_version(raw):
+    """Clean a version string a scanner ALREADY extracted: strip distro/build/
+    pre-release suffixes, v-prefixes, and package epochs, leaving a bare dotted
+    version where possible. SUPPORT ONLY - does not decide vulnerability."""
+    if not raw or not isinstance(raw, str):
+        return raw
+    v = raw.strip()
+    v = _VN_EPOCH.sub("", v)
+    for rx in _VN_PREFIX:
+        v = rx.sub("", v)
+    for rx in _VN_SUFFIX:
+        v = rx.sub("", v)
+    sep = (VERSION_NORM.get("separator_normalization") or {})
+    for s in (sep.get("treat_as_dot") or []):
+        v = v.replace(s, ".")
+    if sep.get("collapse_repeats"):
+        v = re.sub(r"\.+", ".", v)
+    return v.strip(". ").strip()
+
+
+def version_tuple(raw, pad_to=3):
+    """Coerce a (normalized) version string to a comparable int tuple, padding
+    missing components with 0 and dropping a non-numeric tail. Mirrors the
+    existing _parse_version behaviour in scanners, just centralised + robust."""
+    norm = normalize_version(raw)
+    nums = []
+    for part in (norm or "").split("."):
+        if part.isdigit():
+            nums.append(int(part))
+        else:
+            break
+    nums = nums[:pad_to]
+    return tuple(nums) + (0,) * (pad_to - len(nums))
+
+
+def cwe_meta(cwe_id):
+    """Return {name, description, owasp_category} for an EXISTING finding's CWE
+    id, or {} if unknown. Pure metadata lookup - never invents a CWE."""
+    if not cwe_id or not isinstance(CWE_CATALOG, dict):
+        return {}
+    return CWE_CATALOG.get(cwe_id.strip(), {}) or {}
+
+
+def remediation_for(key, fallback=""):
+    """Return curated remediation prose for a CWE id or type-slug. Used to
+    populate/supplement a finding's 'remediation' text. Returns `fallback`
+    (default '') when no entry exists - never fabricates guidance."""
+    if not key or not isinstance(REMEDIATION_TEXT, dict):
+        return fallback
+    return REMEDIATION_TEXT.get(key, fallback) or fallback
+
+
+def kev_note_for_cve(cve_id):
+    """Return KEV metadata dict for an ALREADY-CONFIRMED cve_id via EXACT
+    CVE-ID dictionary lookup ONLY (never substring / fingerprint). Returns {}
+    when the CVE is not on the reference KEV list. Advisory note only - the
+    caller must NOT raise severity based on this."""
+    if not cve_id or not isinstance(KEV_REF, dict):
+        return {}
+    return KEV_REF.get(cve_id.strip().upper(), {}) or {}
+
 _UA = {"User-Agent": "VulnusLab-Scanner/1.0"}
 _CTX = ssl.create_default_context()
 _CTX.check_hostname = False
