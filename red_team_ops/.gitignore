@@ -1,0 +1,4 @@
+# Runtime engagement data (client scope, RoE, run results) — never commit
+engagements/
+__pycache__/
+*.pyc
