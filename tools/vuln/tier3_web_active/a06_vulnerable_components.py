@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import probe_url_async, detect_spa_catchall
+from tools.vuln._cve_intel import version_tuple
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -26,6 +27,17 @@ VULN_RULES = [
 
 
 def _parse_version(v):
+    # Use the curated version-normalization helper so build/pre-release suffixes
+    # (e.g. '3.6.0+build1', '1.2.3-rc2') are stripped before comparison. This
+    # only cleans the already-extracted version string; it does not change the
+    # vulnerable-range rules or severity below. Inline fallback to the original
+    # naive parse if the helper is unavailable.
+    try:
+        t = version_tuple(v, pad_to=3)
+        if t and any(t):
+            return t
+    except Exception:
+        pass
     parts = v.split(".")
     try:
         return tuple(int(x) for x in parts[:3]) + ((0,) * (3 - len(parts[:3])))

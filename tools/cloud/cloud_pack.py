@@ -29,6 +29,7 @@ from tools._pack_common import (
     make_advisory_router, _adv_response, _advisory_by_design_response,
 )
 from tools._shared import wrap_finding
+from tools._payloads.cloud._loader import load_lines
 
 
 _NOVERIFY = ssl.create_default_context()
@@ -412,13 +413,18 @@ def _probe_s3_bucket_brute(target, req):
             "INFO", "0.0",
             evidence=f"derived='{name_core}'; need >= 3 alphanumeric chars")
 
-    suffixes = ["", "-backup", "-backups", "-bak", "-prod", "-production",
+    # AI-curated pools (VL-CORE), with the original inline lists as fallback.
+    # The "" entries (bare root name, no affix) are kept inline so the bare
+    # candidate is always generated regardless of the loaded pool.
+    suffixes = [""] + load_lines("bucket_suffixes", fallback=[
+                "-backup", "-backups", "-bak", "-prod", "-production",
                 "-staging", "-stage", "-stg", "-dev", "-development", "-test",
                 "-qa", "-uat", "-data", "-logs", "-log", "-public", "-private",
                 "-internal", "-static", "-assets", "-media", "-images", "-img",
-                "-files", "-uploads", "-archive", "-snapshots", "-db", "-cdn"]
-    prefixes = ["", "backup-", "backups-", "logs-", "data-", "uploads-",
-                "media-", "static-", "www-", "cdn-"]
+                "-files", "-uploads", "-archive", "-snapshots", "-db", "-cdn"])
+    prefixes = [""] + load_lines("bucket_prefixes", fallback=[
+                "backup-", "backups-", "logs-", "data-", "uploads-",
+                "media-", "static-", "www-", "cdn-"])
 
     candidates = set()
     for p in prefixes:

@@ -1,0 +1,76 @@
+{
+  "_meta": {
+    "purpose": "Rules to normalize and compare software version strings so existing version-comparison logic is more robust. ENRICHMENT/SUPPORT ONLY: this NEVER decides that a target is vulnerable - it only cleans a version string a scanner already extracted, and records vendor display names. No finding is created and no severity is assigned here.",
+    "fp_safe": true
+  },
+  "strip_suffix_patterns": [
+    "[-_+ ]?(?:ubuntu|debian|deb|el|rhel|centos|fc|amzn|alpine|sles|suse).*$",
+    "[-_+ ]?(?:build|b)\\d+$",
+    "[-_+ ]?(?:rc|alpha|beta|dev|snapshot|nightly|pre|preview|milestone|m)\\d*$",
+    "[-_+ ]?(?:git|svn|hg)[0-9a-f]{6,}$",
+    "[+~].*$",
+    "[-_ ](?:final|release|ga|stable|patched)$",
+    "\\s*\\((?:[^)]*)\\)\\s*$"
+  ],
+  "strip_prefix_patterns": [
+    "^[vV]",
+    "^version[ :=]+",
+    "^release[ :=]+",
+    "^ver[ .:=]+"
+  ],
+  "semver_coercion": {
+    "comment": "Coerce loose dotted versions to a comparable (major, minor, patch) tuple. Missing components default to 0. Non-numeric trailing components are dropped, not guessed.",
+    "pad_to": 3,
+    "default_component": 0,
+    "max_components": 4,
+    "drop_non_numeric_tail": true
+  },
+  "separator_normalization": {
+    "comment": "Treat these as equivalent component separators before splitting into a version tuple.",
+    "treat_as_dot": ["-", "_", ":", " "],
+    "collapse_repeats": true
+  },
+  "vendor_display_names": {
+    "comment": "Canonical display name for a normalized vendor token. Display/labelling ONLY - not used for vulnerability matching (which is exact-CVE-ID via the scanners).",
+    "apache": "Apache HTTP Server",
+    "httpd": "Apache HTTP Server",
+    "nginx": "nginx",
+    "iis": "Microsoft IIS",
+    "openssl": "OpenSSL",
+    "openssh": "OpenSSH",
+    "tomcat": "Apache Tomcat",
+    "jboss": "JBoss / WildFly",
+    "weblogic": "Oracle WebLogic",
+    "websphere": "IBM WebSphere",
+    "php": "PHP",
+    "wordpress": "WordPress",
+    "drupal": "Drupal",
+    "joomla": "Joomla",
+    "jquery": "jQuery",
+    "bootstrap": "Bootstrap",
+    "angularjs": "AngularJS",
+    "lodash": "Lodash",
+    "moment": "moment.js",
+    "node": "Node.js",
+    "express": "Express",
+    "django": "Django",
+    "flask": "Flask",
+    "spring": "Spring Framework",
+    "struts": "Apache Struts",
+    "jenkins": "Jenkins",
+    "gitlab": "GitLab",
+    "confluence": "Atlassian Confluence",
+    "jira": "Atlassian Jira",
+    "exchange": "Microsoft Exchange Server",
+    "postgresql": "PostgreSQL",
+    "mysql": "MySQL",
+    "mariadb": "MariaDB",
+    "mongodb": "MongoDB",
+    "redis": "Redis",
+    "elasticsearch": "Elasticsearch"
+  },
+  "epoch_strip": {
+    "comment": "Distro package epoch prefix like '2:1.4.6' -> drop the leading 'N:' epoch before parsing.",
+    "pattern": "^\\d+:"
+  }
+}

@@ -25,10 +25,18 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import run_scanner
 from tools._payloads.trivy_image_scan_findings import TRIVY_IMAGE_SCAN_FINDING_RULES
+from tools._payloads.vuln._loader import load_json
 
 router = APIRouter()
 TRIVY_BIN = shutil.which("trivy") or "/usr/local/bin/trivy"
 TIMEOUT = 180
+
+# Offline CISA-KEV reference, keyed by EXACT CVE-ID. ENRICHMENT ONLY: we add a
+# 'this Trivy-confirmed CVE is on CISA KEV' note to CVEs Trivy ALREADY reported,
+# matched by exact CVE-ID dictionary lookup. This never creates a finding and
+# never changes Trivy's severity grading - it only annotates the intel display.
+# Inline {} fallback keeps the scanner working if the bundled JSON is absent.
+_KEV_REF = load_json("kev_crossref", {})
 
 
 def _make_gather(req: ScanRequest):
@@ -96,9 +104,26 @@ def _make_gather(req: ScanRequest):
         sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "UNKNOWN": 4}
         cves.sort(key=lambda c: (sev_order.get(c["severity"], 9), c["id"]))
 
+        # CISA-KEV annotation (advisory, exact CVE-ID match only). For each CVE
+        # Trivy already confirmed, look it up by its exact id; if present on the
+        # reference KEV list, attach kev=True + ransomware context. No severity
+        # change, no new finding - this only enriches the intel rows below.
+        kev_hits = []
+        for c in cves:
+            ref = _KEV_REF.get(c["id"]) if isinstance(_KEV_REF, dict) else None
+            if ref:
+                c["kev"] = True
+                c["kev_ransomware"] = bool(ref.get("known_ransomware"))
+                c["kev_due_date"] = ref.get("due_date", "")
+                kev_hits.append({"id": c["id"], "product": ref.get("product", ""),
+                                 "ransomware": bool(ref.get("known_ransomware")),
+                                 "due_date": ref.get("due_date", "")})
+
         ctx.state["trivy_severity_counts"] = by_sev
         ctx.state["trivy_total_cves"] = sum(by_sev.values())
         ctx.state["trivy_top_cves"] = cves[:10]
+        # Advisory KEV note only - surfaced as an intel field, never as a finding.
+        ctx.state["trivy_kev_cves"] = kev_hits
         ctx.state["trivy_artifact_type"] = data.get("ArtifactType") or "container_image"
         ctx.state["trivy_os"] = (data.get("Metadata", {}).get("OS") or {})
         ctx.source(f"trivy: {sum(by_sev.values())} CVEs "
@@ -111,7 +136,8 @@ INTEL_FIELDS = [("Image scanned", "trivy_image_ref"),
                 ("OS metadata", "trivy_os"),
                 ("CVE counts by severity", "trivy_severity_counts"),
                 ("Total CVEs", "trivy_total_cves"),
-                ("Top 10 CVEs", "trivy_top_cves")]
+                ("Top 10 CVEs", "trivy_top_cves"),
+                ("On CISA KEV (exact CVE-ID match)", "trivy_kev_cves")]
 
 
 @router.post("/api/vuln/trivy_image_cve")

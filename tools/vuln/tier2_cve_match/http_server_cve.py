@@ -7,10 +7,26 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 from tools.vuln._vuln_common import http_get, http_json
+from tools.vuln._cve_intel import cwe_meta, remediation_for
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 _VER = re.compile(r"([A-Za-z][A-Za-z0-9_+.-]*?)[/ ]v?(\d+\.\d+(?:\.\d+)?)")
+
+
+def _enrich(finding):
+    """Advisory enrichment of an EXISTING finding: append the human-readable
+    CWE name to evidence, and append curated remediation guidance for the
+    finding's CWE when available. No new finding, no severity change - text
+    only."""
+    cwe = finding.get("cwe")
+    meta = cwe_meta(cwe)
+    if meta.get("name"):
+        finding["evidence"] = f"{finding.get('evidence', '')} [{cwe}: {meta['name']}]".strip()
+    extra = remediation_for(cwe)
+    if extra and extra not in (finding.get("remediation") or ""):
+        finding["remediation"] = f"{finding.get('remediation', '')} {extra}".strip()
+    return finding
 
 
 def _nvd_cves(product, version):
@@ -61,19 +77,19 @@ def _r_cve(s):
         return None
     h = hits[0]
     top = ", ".join(f"{c} ({sc})" for c, sc in h["top"])
-    return {"name": f"Server '{h['product']}' maps to {h['count']} high-severity CVE(s) (version-based)",
+    return _enrich({"name": f"Server '{h['product']}' maps to {h['count']} high-severity CVE(s) (version-based)",
             "severity": "MEDIUM", "cvss": 5.3, "cwe": "CWE-1395",
             "evidence": f"NVD: {top}. Version-inferred - confirm patch level (backports may apply).",
-            "remediation": "Upgrade to the latest patched release; suppress version banners (server_tokens off)."}
+            "remediation": "Upgrade to the latest patched release; suppress version banners (server_tokens off)."})
 
 
 def _r_disclosure(s):
     b = s.get("banners") or []
     if not b or (s.get("cve_hits") or []) or not (s.get("products") or []):
         return None
-    return {"name": f"Server version disclosed: {b[0][:80]}", "severity": "LOW", "cwe": "CWE-200",
+    return _enrich({"name": f"Server version disclosed: {b[0][:80]}", "severity": "LOW", "cwe": "CWE-200",
             "evidence": f"Headers: {', '.join(b)[:160]}",
-            "remediation": "Suppress version banners (nginx: server_tokens off; remove X-Powered-By)."}
+            "remediation": "Suppress version banners (nginx: server_tokens off; remove X-Powered-By)."})
 
 
 def _r_clean(s):
