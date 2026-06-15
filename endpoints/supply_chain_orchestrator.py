@@ -32,7 +32,8 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("transitive_dependency_depth", "/api/supply_chain/transitive_dependency_depth"),
     ],
     "tier2_secrets": [
-        ("gitleaks_secrets_scan",  "/api/supply_chain/gitleaks_secrets_scan"),
+        ("gitleaks_secrets_scan",    "/api/supply_chain/gitleaks_secrets_scan"),
+        ("trufflehog_secrets_scan",  "/api/supply_chain/trufflehog_secrets_scan"),
     ],
     "tier3_sbom": [
         ("syft_sbom_generate",        "/api/supply_chain/syft_sbom_generate"),
