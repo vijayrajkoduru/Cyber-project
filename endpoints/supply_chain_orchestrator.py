@@ -35,6 +35,10 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("gitleaks_secrets_scan",    "/api/supply_chain/gitleaks_secrets_scan"),
         ("trufflehog_secrets_scan",  "/api/supply_chain/trufflehog_secrets_scan"),
     ],
+    # ── Install/build-time script behavior audit (ADVISORY INFO/LOW only) ──
+    "tier2_install": [
+        ("install_script_audit",     "/api/supply_chain/install_script_audit"),
+    ],
     "tier3_sbom": [
         ("syft_sbom_generate",        "/api/supply_chain/syft_sbom_generate"),
         ("license_compliance_audit",  "/api/supply_chain/license_compliance_audit"),
@@ -52,6 +56,7 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     ],
     "tier7_dep_confusion": [
         ("npm_dependency_confusion", "/api/supply_chain/npm_dependency_confusion"),
+        ("npm_typosquat_scan",       "/api/supply_chain/npm_typosquat_scan"),
         ("pypi_typosquat_scan",      "/api/supply_chain/pypi_typosquat_scan"),
     ],
     "tier9_iac": [
