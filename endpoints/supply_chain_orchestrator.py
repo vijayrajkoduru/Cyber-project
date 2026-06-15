@@ -26,6 +26,7 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("osv_repo_audit",            "/api/supply_chain/osv_repo_audit"),
         ("npm_audit_scanner",         "/api/supply_chain/npm_audit_scanner"),
         ("cargo_audit_scanner",       "/api/supply_chain/cargo_audit_scanner"),
+        ("govulncheck_scanner",       "/api/supply_chain/govulncheck_scanner"),
         ("transitive_dependency_depth", "/api/supply_chain/transitive_dependency_depth"),
     ],
     "tier2_secrets": [
