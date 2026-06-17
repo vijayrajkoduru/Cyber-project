@@ -22675,8 +22675,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                                   transition:"border-left 0.15s"}}>
                       <span style={{width:9, height:9, borderRadius:"50%",
                                     background:dot(r), flexShrink:0}}></span>
-                      <span style={{color:"#5a6478", fontSize:11, letterSpacing:-1,
-                                    fontFamily:"monospace", flexShrink:0}}>≡≡</span>
+                      <span style={{fontSize:11, color:(!r.status||r.status==="queued")?"#5a6478":statusColor(r), fontWeight:700, width:11, textAlign:"center", flexShrink:0}}>{(r.status==="done"||r.status==="error")?"●":"○"}</span>
                       <span style={{flex:1, color:"#ffffff", fontSize:13, fontWeight:500,
                                     overflow:"hidden", textOverflow:"ellipsis",
                                     whiteSpace:"nowrap"}}>{prettyName(tool)}</span>
