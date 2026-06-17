@@ -1,6 +1,18 @@
 """garak_owasp_test_suite - findings rules (Garak hit reporting)."""
 
 
+def rule_unreachable(s):
+    if not s.get("garak_unreachable"):
+        return None
+    return {"name": "LLM endpoint not reachable for Garak / OWASP suite",
+            "severity": "INFO",
+            "evidence": str(s.get("garak_unreachable", "")),
+            "remediation": ("Re-run with the target set to a full LLM endpoint "
+                            "URL (http(s)://...), plus options.prompt_field / "
+                            "options.response_field so Garak can drive it."),
+            "cwe": "CWE-693", "owasp": "LLM01:2025"}
+
+
 def rule_library_missing(s):
     if not s.get("garak_error"):
         return None
@@ -98,6 +110,7 @@ def rule_cli_unavailable_used_fallback(s):
 
 
 GARAK_OWASP_TEST_SUITE_FINDING_RULES = [
+    rule_unreachable,
     rule_library_missing,
     rule_positive,
     rule_dan_hit,

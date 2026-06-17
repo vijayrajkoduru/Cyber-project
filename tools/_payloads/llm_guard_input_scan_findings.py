@@ -43,10 +43,14 @@ def rule_high_false_positive_scanner(s):
             bad.append((name, m["fp"], m.get("benign_inputs", 0)))
     if not bad:
         return None
-    return {"name": f"High false-positive rate in {len(bad)} llm_guard scanner(s)",
-            "severity": "LOW", "cvss": "3.7",
+    return {"name": f"[ADVISORY] High false-positive rate in {len(bad)} open-source llm_guard scanner(s)",
+            "severity": "INFO",
             "cwe": "CWE-693", "owasp": "LLM01:2025",
-            "evidence": (", ".join(f"{n}: {fp}/{b} benign blocked"
+            "evidence": ("Defensive-baseline benchmark of the open-source "
+                         "llm_guard library against VulnusLab's synthetic test "
+                         "set - this measures the library, not an exposure of "
+                         "the target: "
+                         + ", ".join(f"{n}: {fp}/{b} benign blocked"
                                     for n, fp, b in bad)),
             "remediation": ("Tune scanner thresholds (most llm_guard scanners "
                             "accept a `threshold` kwarg). High FP rate degrades "
@@ -63,10 +67,14 @@ def rule_low_recall_scanner(s):
             bad.append((name, rec))
     if not bad:
         return None
-    return {"name": f"Low malicious-input recall in {len(bad)} llm_guard scanner(s)",
-            "severity": "MEDIUM", "cvss": "5.3",
+    return {"name": f"[ADVISORY] Low malicious-input recall in {len(bad)} open-source llm_guard scanner(s)",
+            "severity": "INFO",
             "cwe": "CWE-693", "owasp": "LLM01:2025",
-            "evidence": ", ".join(f"{n}: recall={r}" for n, r in bad),
+            "evidence": ("Defensive-baseline benchmark of the open-source "
+                         "llm_guard library against VulnusLab's synthetic test "
+                         "set - this measures the library's detection quality, "
+                         "not an exposure of the target itself: "
+                         + ", ".join(f"{n}: recall={r}" for n, r in bad)),
             "remediation": ("Pair weak scanners with a complementary guard "
                             "(e.g. supplement llm_guard's regex Secrets with "
                             "trufflehog; supplement Toxicity with Detoxify). "

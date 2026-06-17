@@ -14331,7 +14331,10 @@ function generateUniversalVLReport(opts) {
   doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._displayColor);
   doc.text(_displayScore, margin + 8, y + 15);
   txt(_displayLabel, margin + 38, y + 8, 11, _displayColor, true);
-  const _totalCount = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW + _sevCount.INFO;
+  // Total findings = every emitted finding, matching the Severity Donut center
+  // (_totalFxU): all graded + POSITIVE + real INFO (scaffolds excluded). Keeps the
+  // cover, conclusion, and donut counts identical across the report.
+  const _totalCount = _sevCount.CRITICAL + _sevCount.HIGH + _sevCount.MEDIUM + _sevCount.LOW + _sevCount.POSITIVE + Math.max(0, _realInfoCount);
   txt(`Report ID: ${_REPORT_ID}  -  ${_totalCount} findings across ${Object.keys(r).length} scanners`, margin + 38, y + 14, 7.5, GRAY);
   fillR(margin + 38, y + 17, contentW - 40, 2, [226,232,240]);
   if (!_insufficientScan) {
@@ -14570,7 +14573,7 @@ function generateUniversalVLReport(opts) {
             ? `Additionally, ${_sevCount.HIGH} HIGH-severity issue(s) require patching within 7 days. ${_topName2 ? 'Notable: "' + _topName2 + '". ' : ''}These findings widen the attack surface and should be addressed in parallel with the CRITICAL remediation.`
             : `No other HIGH-severity issues were detected on this scan.`,
           _otherCount > _sevCount.HIGH
-            ? `${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s) round out the surface. These are typically hardening opportunities (cookie hygiene, server version disclosure, missing security headers) that reduce defense-in-depth depth but are not immediately exploitable on their own.`
+            ? `${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s) round out the surface. These are typically configuration-hardening and defense-in-depth opportunities specific to this module's checks - they reduce resilience but are not immediately exploitable on their own.`
             : `No MEDIUM or LOW findings were detected.`,
           `Treat the CRITICAL finding as P0: schedule incident response review, contain affected endpoints, and remediate before the next public exposure window. Use the Strategic Recommendations queue (section 13) for the prioritized work plan.`
         );
@@ -14578,14 +14581,14 @@ function generateUniversalVLReport(opts) {
         _paragraphs.push(
           `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} surfaced ${_sevCount.HIGH} HIGH-severity issue(s) that require patching within 7 days under standard remediation SLAs. The most significant finding is "${_topName}". These findings reflect known-exploited attack classes (e.g. weak TLS parameters, vulnerable CVE-mapped components, or authentication weaknesses) and should be addressed before any public attacker can weaponize the exposure.`,
           _sevCount.MEDIUM + _sevCount.LOW > 0
-            ? `Beyond the HIGH-severity issues, the scan identified ${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s). These are typically hygiene gaps (cookie security flags, version-banner disclosure, missing security headers) that reduce defense-in-depth but are not standalone exploits.`
+            ? `Beyond the HIGH-severity issues, the scan identified ${_sevCount.MEDIUM} MEDIUM and ${_sevCount.LOW} LOW finding(s). These are typically configuration-hardening gaps specific to this module's checks that reduce defense-in-depth but are not standalone exploits.`
             : `No MEDIUM or LOW findings were detected on this scan.`,
           `Recommended next steps: address the HIGH findings via the Strategic Recommendations queue (section 13), then close the remaining items per SLA cadence. Re-scan post-remediation to capture the improvement delta.`
         );
       } else if (_totalReal > 0) {
         _paragraphs.push(
           `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed cleanly across ${_scannerCount} scanner(s) with ${_totalReal} finding(s) - all at MEDIUM or LOW severity. The most notable item is "${_topName}". No CRITICAL or HIGH exposures were detected, indicating the externally-visible attack surface is well-controlled.`,
-          `The MEDIUM/LOW findings are typically hardening opportunities: cookie security flags, server-version disclosure, or missing security headers. None are independently exploitable but together they reduce defense-in-depth against client-side and credential-harvesting attacks.`,
+          `The MEDIUM/LOW findings are configuration-hardening opportunities specific to the vulnerability classes this module tests. None are independently exploitable, but together they reduce defense-in-depth.`,
           `Recommended next steps: address findings per SLA cadence (MEDIUM within 30 days, LOW within 90 days) and continue continuous monitoring. Schedule a re-scan on the cadence indicated in the Conclusion section to detect drift.`
         );
       } else {
@@ -15140,7 +15143,37 @@ function generateUniversalVLReport(opts) {
         const owasp = _CWE_TO_OWASP[cwe[0]];
         if (owasp && _owaspMap[owasp]) _owaspMap[owasp].push(f);
       });
-      const _passCats = Object.values(_owaspMap).filter(arr => arr.length === 0).length;
+      // AI/LLM module reports against the OWASP LLM Top 10 (2025), mapped from the
+      // finding's `owasp` field (LLM0X) rather than the web CWE->A0X table.
+      const _isAiLlmOwasp = (moduleKey === 'ai_llm');
+      const _OWASP_LLM_2025 = [
+        ["LLM01","Prompt Injection"],
+        ["LLM02","Sensitive Information Disclosure"],
+        ["LLM03","Supply Chain"],
+        ["LLM04","Data & Model Poisoning"],
+        ["LLM05","Improper Output Handling"],
+        ["LLM06","Excessive Agency"],
+        ["LLM07","System Prompt Leakage"],
+        ["LLM08","Vector & Embedding Weaknesses"],
+        ["LLM09","Misinformation"],
+        ["LLM10","Unbounded Consumption"],
+      ];
+      const _llmMap = {LLM01:[],LLM02:[],LLM03:[],LLM04:[],LLM05:[],LLM06:[],LLM07:[],LLM08:[],LLM09:[],LLM10:[]};
+      if (_isAiLlmOwasp) {
+        _allFindings.forEach(f => {
+          const sev = String(f.severity||"").toUpperCase();
+          if (!["CRITICAL","HIGH","MEDIUM","LOW"].includes(sev)) return;
+          const m = String(f.owasp||"").toUpperCase().match(/LLM\s*0*(\d+)/);
+          if (!m) return;
+          const code = "LLM" + String(m[1]).padStart(2,"0");
+          if (_llmMap[code]) _llmMap[code].push(f);
+        });
+      }
+      const _catList    = _isAiLlmOwasp ? _OWASP_LLM_2025 : _OWASP_2021;
+      const _catMap     = _isAiLlmOwasp ? _llmMap : _owaspMap;
+      const _codeSuffix = _isAiLlmOwasp ? "2025" : "2021";
+      const _owaspTitle = _isAiLlmOwasp ? "OWASP LLM Top 10 - 2025 Coverage" : "OWASP Top 10 - 2021 Coverage";
+      const _passCats = Object.values(_catMap).filter(arr => arr.length === 0).length;
       const _failCats = 10 - _passCats;
       const _grade =
         _passCats === 10 ? "A" :
@@ -15153,7 +15186,7 @@ function generateUniversalVLReport(opts) {
         _grade === "C" ? [202,138,4] :
         _grade === "D" ? [194,65,12] : [162,28,28];
 
-      chk(40); y = sHead("OWASP Top 10 - 2021 Coverage", y);
+      chk(40); y = sHead(_owaspTitle, y);
       // When the scan was insufficient/partial there are no graded findings, so
       // every category "passes" by accident -> a misleading "A / strong posture".
       // Show NOT ASSESSED instead so PASS is never read as proof of secure.
@@ -15171,14 +15204,14 @@ function generateUniversalVLReport(opts) {
         : (_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`), margin+28, y+12);
       y += 19;
       y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
-      _OWASP_2021.forEach(([code, name], i) => {
-        const matches = _owaspMap[code] || [];
+      _catList.forEach(([code, name], i) => {
+        const matches = _catMap[code] || [];
         const passing = matches.length === 0;
         chk(9);
         fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
         fillR(margin, y, 1.5, 8, passing ? [15,118,82] : [162,28,28]);
         doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor.apply(doc, DARK);
-        doc.text(code+":2021", margin+4, y+5.5);
+        doc.text(code+":"+_codeSuffix, margin+4, y+5.5);
         doc.setFont("Arial","normal"); doc.setFontSize(8);
         doc.text(name, margin+24, y+5.5);
         const stBg = passing ? [220,252,231] : [254,226,226];
@@ -20979,7 +21012,10 @@ const MODULE_TYPE = {
   iot_ot:           "PT",
   phishing:         "PT",
   mobile_runtime:   "PT",
-  ai_llm:           "PT",
+  // ai_llm sends crafted, non-destructive detection probes to an LLM endpoint
+  // (active touch, no exploitation/chaining) -> VA+, matching the report body's
+  // "detection-only Vulnerability Assessment" framing.
+  ai_llm:           "VA+",
   // ── Additional mobile sub-modules ──
   mobile_ipc:       "VA",
   mobile_webview:   "VA",

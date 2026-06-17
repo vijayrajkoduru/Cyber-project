@@ -272,7 +272,7 @@ async def gather(ctx: ScanContext):
         ctx.source("no-target")
         return
     if not target.startswith(("http://", "https://")):
-        ctx.state["garak_error"] = (
+        ctx.state["garak_unreachable"] = (
             "target must be a full LLM endpoint URL (http(s)://...)")
         ctx.source("invalid target")
         return
