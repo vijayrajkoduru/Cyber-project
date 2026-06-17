@@ -4526,14 +4526,7 @@ function WebAppModule(props) {
               onMouseEnter={e=>{ if(!toolLocked&&!running) e.currentTarget.style.background="#111c33"; }}
               onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
               style={{background:"transparent",borderTop:(i===0||secHdr)?"none":"1px solid #1c2435",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,cursor:toolLocked?"not-allowed":running?"default":"pointer",opacity:toolLocked?0.45:isSelected?1:0.5,transition:"background 0.12s,opacity 0.12s"}}>
-              <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
-              {isActive ? (
-                <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b9eff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
-              ) : (
-                <span style={{fontSize:11,color:isDone?statusCol:"#5a6478",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
-                  {isDone?(isSkipped?"○":"●"):"○"}
-                </span>
-              )}
+              <span style={{width:9,height:9,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none",animation:isActive?"pulse 1s infinite":"none"}}/>
               <span style={{fontSize:13,fontWeight:500,color:toolLocked?"#5a6478":"#ffffff",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
               <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:88,textAlign:"right"}}>{statusLabel}</span>
               <span style={{fontSize:11,color:"#8a94a8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:100,textAlign:"right",flexShrink:0}}>{detail}</span>
@@ -13443,14 +13436,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                 onMouseEnter={e=>{ if(!running) e.currentTarget.style.background="#111c33"; }}
                 onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; }}
                 style={{background:"transparent",borderTop:i===0?"none":"1px solid #1c2435",padding:"10px 16px",display:"flex",alignItems:"center",gap:14,width:"100%",cursor:running?"default":"pointer",opacity:sel?1:0.45,transition:"background 0.12s,opacity 0.12s",boxSizing:"border-box"}}>
-                <span style={{width:7,height:7,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none"}}/>
-                {isActive ? (
-                  <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b9eff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
-                ) : (
-                  <span style={{fontSize:11,color:isDone?statusCol:"#5a6478",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
-                    {isDone?"●":"○"}
-                  </span>
-                )}
+                <span style={{width:9,height:9,borderRadius:"50%",background:statusCol,flexShrink:0,boxShadow:isActive?`0 0 8px ${statusCol}`:"none",animation:isActive?"pulse 1s infinite":"none"}}/>
                 <span style={{flex:1,fontSize:13,fontWeight:500,color:"#ffffff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
                 <span style={{fontSize:10,fontWeight:600,letterSpacing:"0.08em",color:statusCol,textTransform:"uppercase",minWidth:90,textAlign:"right"}}>{statusLabel}</span>
                 <span style={{fontSize:11,color:isFailed?"#ff6b82":itemsCount>0?"#00d4ff":"#8a94a8",fontFamily:"ui-monospace,SFMono-Regular,monospace",minWidth:70,textAlign:"right",flexShrink:0}}>{itemsLabel}</span>
@@ -22675,7 +22661,6 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                                   transition:"border-left 0.15s"}}>
                       <span style={{width:9, height:9, borderRadius:"50%",
                                     background:dot(r), flexShrink:0}}></span>
-                      <span style={{fontSize:11, color:(!r.status||r.status==="queued")?"#5a6478":statusColor(r), fontWeight:700, width:11, textAlign:"center", flexShrink:0}}>{(r.status==="done"||r.status==="error")?"●":"○"}</span>
                       <span style={{flex:1, color:"#ffffff", fontSize:13, fontWeight:500,
                                     overflow:"hidden", textOverflow:"ellipsis",
                                     whiteSpace:"nowrap"}}>{prettyName(tool)}</span>
