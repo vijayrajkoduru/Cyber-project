@@ -257,6 +257,39 @@ RUN ( wget --tries=3 --waitretry=10 --timeout=120 -q \
    && /usr/local/bin/cosign version ) \
  || echo "WARNING: Cosign install failed (non-fatal)"
 
+# ── Supply-chain depth (2026-06-17): OpenSSF Scorecard, actionlint, slsa-verifier ──
+# Single-file Go binaries; non-fatal. Power tier5_oss_health/ossf_scorecard_audit,
+# tier6_cicd/actionlint_workflow_audit, and tier10_provenance/slsa_provenance_verify.
+ARG SCORECARD_VERSION=5.0.0
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/ossf/scorecard/releases/download/v${SCORECARD_VERSION}/scorecard_${SCORECARD_VERSION}_linux_amd64.tar.gz" \
+        -O scorecard.tgz \
+   && [ -s scorecard.tgz ] \
+   && tar -xzf scorecard.tgz -C /usr/local/bin scorecard \
+   && rm scorecard.tgz \
+   && /usr/local/bin/scorecard version 2>&1 | head -1 ) \
+ || echo "WARNING: scorecard install failed (non-fatal)"
+
+ARG ACTIONLINT_VERSION=1.7.7
+RUN ( cd /tmp \
+   && wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+        -O actionlint.tgz \
+   && [ -s actionlint.tgz ] \
+   && tar -xzf actionlint.tgz -C /usr/local/bin actionlint \
+   && rm actionlint.tgz \
+   && /usr/local/bin/actionlint --version 2>&1 | head -1 ) \
+ || echo "WARNING: actionlint install failed (non-fatal)"
+
+ARG SLSA_VERIFIER_VERSION=2.6.0
+RUN ( wget --tries=3 --waitretry=10 --timeout=120 -q \
+        "https://github.com/slsa-framework/slsa-verifier/releases/download/v${SLSA_VERIFIER_VERSION}/slsa-verifier-linux-amd64" \
+        -O /usr/local/bin/slsa-verifier \
+   && chmod +x /usr/local/bin/slsa-verifier \
+   && /usr/local/bin/slsa-verifier version 2>&1 | head -1 ) \
+ || echo "WARNING: slsa-verifier install failed (non-fatal)"
+
 # ── Webapp / DAST — sqlmap, nikto, sslyze ───────────────────────────────
 # nikto is NOT in Debian Bookworm main (lives in contrib). Install from
 # the official Sullo repo as a Perl script + symlink to /usr/local/bin

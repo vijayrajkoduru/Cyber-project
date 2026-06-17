@@ -58,14 +58,9 @@ _ADVISORY_TECHNIQUES = [
      "API access; an external host scan cannot see runner registration state."),
 
     # ── §5 Code-signing & provenance (SLSA) ──
-    ("slsa_provenance_verify",
-     "SLSA v1.0 build provenance verification (playbook §5 #59)",
-     "slsa-verifier needs the released artifact plus its provenance attestation and "
-     "the expected builder identity — supplied by the build owner, not a host scan."),
-    ("cosign_signature_verify",
-     "Sigstore / cosign signature verification (playbook §5 #60)",
-     "cosign verify requires the exact image digest and the trusted certificate "
-     "identity/issuer policy; these come from the release process, not remote probing."),
+    # NOTE: slsa_provenance_verify (#59) and cosign_signature_verify (#60) were
+    # upgraded 2026-06-17 from advisory to REAL checks (tier10_provenance) that
+    # run against a supplied image_ref. They are intentionally NOT listed here.
     ("intoto_attestation_validate",
      "in-toto attestation validation (playbook §5 #63)",
      "in-toto layout + link metadata custody lives inside the build system; it is "
