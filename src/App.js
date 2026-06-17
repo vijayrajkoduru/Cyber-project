@@ -4531,7 +4531,7 @@ function WebAppModule(props) {
                 <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b9eff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
               ) : (
                 <span style={{fontSize:11,color:isDone?statusCol:"#5a6478",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
-                  {isDone?(isSkipped?"":isFailed?"":isSQLi||isVuln?"!":""):"○"}
+                  {isDone?(isSkipped?"○":"●"):"○"}
                 </span>
               )}
               <span style={{fontSize:13,fontWeight:500,color:toolLocked?"#5a6478":"#ffffff",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
@@ -13448,7 +13448,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
                   <span style={{display:"inline-block",width:11,height:11,border:"2px solid #3b9eff",borderTopColor:"transparent",borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>
                 ) : (
                   <span style={{fontSize:11,color:isDone?statusCol:"#5a6478",fontWeight:700,width:11,textAlign:"center",flexShrink:0}}>
-                    {isDone?(isFailed?"":""):"○"}
+                    {isDone?"●":"○"}
                   </span>
                 )}
                 <span style={{flex:1,fontSize:13,fontWeight:500,color:"#ffffff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:"0.01em"}}>{ph.name}</span>
