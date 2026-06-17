@@ -50,9 +50,19 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier5_oss_health": [
         ("github_repo_health",      "/api/supply_chain/github_repo_health"),
         ("commit_signing_audit",    "/api/supply_chain/commit_signing_audit"),
+        ("ossf_scorecard_audit",    "/api/supply_chain/ossf_scorecard_audit"),
     ],
     "tier6_cicd": [
-        ("cicd_exposure_probe",     "/api/supply_chain/cicd_exposure_probe"),
+        ("cicd_exposure_probe",       "/api/supply_chain/cicd_exposure_probe"),
+        ("actionlint_workflow_audit", "/api/supply_chain/actionlint_workflow_audit"),
+    ],
+    # ── REAL code-signing & SLSA provenance verification (playbook §5) ──
+    # Upgraded from advisory: run cosign/slsa-verifier against a supplied
+    # image_ref. Signature/attestation presence is observable; full keyless
+    # trust verification runs when an identity/source policy is supplied.
+    "tier10_provenance": [
+        ("cosign_signature_verify", "/api/supply_chain/cosign_signature_verify"),
+        ("slsa_provenance_verify",  "/api/supply_chain/slsa_provenance_verify"),
     ],
     "tier7_dep_confusion": [
         ("npm_dependency_confusion", "/api/supply_chain/npm_dependency_confusion"),
@@ -71,8 +81,8 @@ SUPPLY_CHAIN_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("branch_protection_audit",    "/api/supply_chain/branch_protection_audit"),
         ("pwn_request_audit",          "/api/supply_chain/pwn_request_audit"),
         ("self_hosted_runner_audit",   "/api/supply_chain/self_hosted_runner_audit"),
-        ("slsa_provenance_verify",     "/api/supply_chain/slsa_provenance_verify"),
-        ("cosign_signature_verify",    "/api/supply_chain/cosign_signature_verify"),
+        # slsa_provenance_verify + cosign_signature_verify upgraded to REAL
+        # checks in tier10_provenance (2026-06-17).
         ("intoto_attestation_validate", "/api/supply_chain/intoto_attestation_validate"),
         ("reproducible_build_verify",  "/api/supply_chain/reproducible_build_verify"),
         ("commit_signing_audit",       "/api/supply_chain/commit_signing_audit"),
