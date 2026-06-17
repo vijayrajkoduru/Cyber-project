@@ -4,9 +4,13 @@ Per module_playbooks/23_ai_llm.md - 10 sections, 114 techniques.
 
 Live-probe + advisory coverage:
   - tier1_owasp_llm (active prompt-level probes):
-      * prompt_injection_audit  (LLM01)
-      * jailbreak_resistance_test (LLM02)
-      * pii_leak_test  (LLM06)
+      * prompt_injection_audit         (LLM01)
+      * jailbreak_resistance_test      (LLM02)
+      * pii_leak_test                  (LLM06)
+      * insecure_output_handling_test  (LLM05 XSS-via-LLM output)
+      * system_prompt_leak_test        (LLM07 system prompt leakage)
+      * training_data_extraction_test  (LLM02 secret/PII disclosure)
+      * multi_turn_crescendo_test      (LLM01 multi-turn jailbreak)
   - tier2_defenses (defensive baseline):
       * llm_guard_input_scan  (open-source input guardrails P/R/F1)
       * garak_owasp_test_suite (Garak DAN-11 / Base64 / GTPhish probes)
@@ -17,6 +21,7 @@ Live-probe + advisory coverage:
                                         Helicone/Phoenix observability)
       * inference_endpoint_auth_audit  (unauthenticated inference serving)
       * llm_output_handling_headers    (LLM05 XSS-via-LLM + CORS/transport)
+      * unbounded_consumption_probe    (LLM10 token-DoS/cost, SAFE bounded)
   - tier4_advisory (honest advisory-by-design — §4 #48-49, §5, §7, §8, §10,
     multi-modal/white-box, manual red-team):
       * ai_redteam_advisory            (INFO-only, vulnerable:false)
@@ -38,9 +43,13 @@ router = APIRouter()
 
 AI_LLM_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier1_owasp_llm": [
-        ("prompt_injection_audit",     "/api/ai_llm/prompt_injection_audit"),
-        ("jailbreak_resistance_test",  "/api/ai_llm/jailbreak_resistance_test"),
-        ("pii_leak_test",              "/api/ai_llm/pii_leak_test"),
+        ("prompt_injection_audit",       "/api/ai_llm/prompt_injection_audit"),
+        ("jailbreak_resistance_test",    "/api/ai_llm/jailbreak_resistance_test"),
+        ("pii_leak_test",                "/api/ai_llm/pii_leak_test"),
+        ("insecure_output_handling_test","/api/ai_llm/insecure_output_handling_test"),
+        ("system_prompt_leak_test",      "/api/ai_llm/system_prompt_leak_test"),
+        ("training_data_extraction_test","/api/ai_llm/training_data_extraction_test"),
+        ("multi_turn_crescendo_test",    "/api/ai_llm/multi_turn_crescendo_test"),
     ],
     "tier2_defenses": [
         ("llm_guard_input_scan",       "/api/ai_llm/llm_guard_input_scan"),
@@ -55,6 +64,7 @@ AI_LLM_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("llm_ops_exposure",               "/api/ai_llm/llm_ops_exposure"),
         ("inference_endpoint_auth_audit",  "/api/ai_llm/inference_endpoint_auth_audit"),
         ("llm_output_handling_headers",    "/api/ai_llm/llm_output_handling_headers"),
+        ("unbounded_consumption_probe",    "/api/ai_llm/unbounded_consumption_probe"),
     ],
     # tier4_advisory — honest advisory-by-design coverage for playbook
     # techniques that cannot be detected from an external SaaS scanner
