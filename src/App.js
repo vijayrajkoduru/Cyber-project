@@ -627,7 +627,7 @@ function Login(props) {
 
         {/* Logo */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
-          <img src={LOGO} alt="logo" style={{width:130,height:130,objectFit:"contain",display:"block"}}/>
+          <img src={LOGO} alt="logo" style={{width:130,height:130,objectFit:"contain",display:"block",filter:"hue-rotate(-40deg) saturate(1.15)"}}/>
         </div>
 
         {/* Brand */}
@@ -25221,7 +25221,7 @@ export default function App() {
       <div style={{width:280,background:"#0b1a24",borderRight:"1px solid #173041",display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
         <div style={{padding:"6px 0 8px",borderBottom:"1px solid #173041",flexShrink:0,background:"#0b1a24"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 12px"}}>
-            <img src={LOGO} alt="logo" style={{width:48,height:48,objectFit:"contain",display:"block",flexShrink:0}}/>
+            <img src={LOGO} alt="logo" style={{width:48,height:48,objectFit:"contain",display:"block",flexShrink:0,filter:"hue-rotate(-40deg) saturate(1.15)"}}/>
             <div>
               <div style={{fontSize:15,fontWeight:900,letterSpacing:2,lineHeight:1.1}}>
                 <span style={{color:"#ffffff"}}>VULNUS</span><span style={{color:"#00d4c0"}}>LAB</span>
