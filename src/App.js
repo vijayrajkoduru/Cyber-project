@@ -4239,9 +4239,16 @@ function WebAppModule(props) {
                           const lr = await api("/api/scan/login","POST",{target, login_url: loginUrl, username: loginUser, password: loginPass, auth_type: "form"}, token);
                           const _got = (lr && (lr.auth_cookie || lr.auth_bearer));
                           if (lr && (lr.login_verified || _got)) {
-                            setAuthCookie(lr.auth_cookie || "");
+                            // DVWA gates exploitability behind a `security` cookie.
+                            // Auto-login captures PHPSESSID but not the security level,
+                            // so DVWA serves vulns at the stored (often "impossible")
+                            // difficulty and scanners find nothing. Force security=low
+                            // for DVWA targets so the lab is actually exploitable.
+                            let _ck = lr.auth_cookie || "";
+                            if (_ck && target.includes("lab_dvwa") && !/security=/.test(_ck)) _ck += "; security=low";
+                            setAuthCookie(_ck);
                             if (lr.auth_bearer) setAuthBearer(lr.auth_bearer);
-                            localStorage.setItem("cyberAuthCookie", lr.auth_cookie || "");
+                            localStorage.setItem("cyberAuthCookie", _ck);
                             if (lr.auth_bearer) localStorage.setItem("cyberAuthBearer", lr.auth_bearer);
                             setAutoLoginStatus(lr.fallback ? `ok (via ${lr.fallback})` : "ok");
                           } else { setAutoLoginStatus(lr?.hint || "Login could not be verified"); }
@@ -4259,7 +4266,7 @@ function WebAppModule(props) {
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123; security=low (DVWA)" style={{width:"100%",background:"#0a0e17",border:"1px solid #0e3a55",borderRadius:5,padding:"8px 11px",color:"#d8deea",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"#5a6478",marginBottom:3,fontWeight:600}}>Bearer Token</div>
