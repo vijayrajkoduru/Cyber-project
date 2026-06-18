@@ -15865,6 +15865,20 @@ function generateUniversalVLReport(opts) {
         // -> give a clean re-run command, never a broken curl to "(none)".
         if (!host || host === "(none)" || host.charAt(0) === "(")
           return tool ? `# Re-run: POST /api/${moduleKey}/${tool}` : `# Re-run /api/${moduleKey}/<scanner>`;
+        // ── Source-repo / artifact targets (supply_chain, or a github/gitlab/
+        // bitbucket repo URL) have NO live web host. A web curl against a repo
+        // path is nonsense (it was producing e.g. a POST to
+        // github.com/.../auth/password-send-otp on a dependency-count finding).
+        // Use the source-secrets command for secret findings, otherwise the
+        // clean re-run command. (2026-06-18)
+        if (moduleKey === "supply_chain" ||
+            /^(www\.)?(github|gitlab|bitbucket)\.(com|org)\//i.test(host)) {
+          if (/secret|gitleaks|trufflehog|leaked|credential/.test(blob))
+            return `gitleaks detect --source <repo-path> -v   # or: trufflehog git file://<repo-path>`;
+          return tool
+            ? `# Re-run the scan: POST /api/${moduleKey}/${tool} { "target": "${host}" }`
+            : `# Re-run /api/${moduleKey}/<scanner> against ${host} to reproduce`;
+        }
         // ── DNS-family findings — specific commands BEFORE the generic dns/redirect/secret branches ──
         if (/private ip|rfc ?1918/.test(blob))
           return `dig +short A ${bare}  # RFC1918 address(es) here = private IP leaked in public DNS`;
@@ -15902,7 +15916,7 @@ function generateUniversalVLReport(opts) {
         if (/cookie|samesite|httponly|jsessionid/.test(blob))
           return `curl -sI ${proto}://${host}/ | grep -i "Set-Cookie"  # check Secure / HttpOnly / SameSite attrs`;
         // Auth / OTP / session
-        if (/otp|password.send|verification|auth.*disclos/.test(blob))
+        if (/\botp\b|one.time.password|password.send|verification|auth.*disclos/.test(blob))
           return `curl -X POST ${proto}://${host}/auth/password-send-otp -H "Content-Type: application/json" -d '{"phone_number":"+1234567890"}'`;
         // Open redirect
         if (/open redirect|redirect.*to|redirectto/.test(blob))
@@ -16612,15 +16626,17 @@ function generateUniversalVLReport(opts) {
     let _sbomLine = null;
     let _imageScanned = false;
     Object.keys(r).forEach(k => {
-      if (/trivy_image|image_cve/i.test(k)) _imageScanned = true;
       (r[k] && r[k].findings || []).forEach(f => {
         const ev = String(f.evidence || f.evidence_marker || "");
+        // Only count the image as scanned when a real image-CVE result exists -
+        // a trivy scanner that errored with "image_ref required" did NOT scan.
         if (/container image has .*cve|trivy reports .*cve/i.test(ev + " " + String(f.name || f.title || "")))
           _imageScanned = true;
         if (_sbomLine) return;
         const m = ev.match(/Syft inventory:\s*([a-z]+:\d+)/i)
-              || ev.match(/SBOM:\s*([\w\s,:+-]+)/i);
-        if (m) _sbomLine = m[0];
+              || ev.match(/SBOM generated:\s*([^.]+)/i)
+              || ev.match(/SBOM:\s*([\w\s,():+.-]+)/i);
+        if (m) _sbomLine = m[1] || m[0];
       });
     });
     txt("C. Software Bill of Materials (SBOM)", margin, y + 5, 9, DARK, true); y += 8;
