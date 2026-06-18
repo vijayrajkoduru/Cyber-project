@@ -158,6 +158,11 @@ def scan_ssrf(req: ScanRequest, payload=Depends(verify_scan_quota)):
         if baseline_fp is not None and probe_fp == baseline_fp:
             return ("spa", key, entry, None)
         try:
+            # An always-true matcher (".+"/".*") fires on ANY response (zero
+            # detection value) -> never emit a finding from it. Root-cause fix
+            # for SSRF false positives from placeholder matchers.
+            if marker and re.fullmatch(r"[()\s]*\.[+*]\??[()\s]*", marker.strip()):
+                return ("miss", key, entry, None)
             if re.search(marker, (r.text or "")[:8000], re.IGNORECASE):
                 return ("hit", key, entry, marker)
         except re.error:

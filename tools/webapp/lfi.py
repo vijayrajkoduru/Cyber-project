@@ -63,6 +63,11 @@ _PAYLOADS = _build_lfi_payloads()
 
 def _check_marker(body, matcher, category):
     body = body or ""
+    # An always-true matcher (".+"/".*") has ZERO detection value (it fires on
+    # any response) -> drop it so category-specific logic (php-filter decode)
+    # decides, never a blind match. Root-cause fix for LFI false positives.
+    if matcher and re.fullmatch(r"[()\s]*\.[+*]\??[()\s]*", matcher.strip()):
+        matcher = ""
     if category == "php-filter":
         # Smart fallback: decode any long base64 chunk and check for raw PHP
         for chunk in re.findall(r"[A-Za-z0-9+/=]{40,}", body):
