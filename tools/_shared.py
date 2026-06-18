@@ -104,28 +104,19 @@ INTERNAL_FANOUT_TOKEN = _derive_internal_fanout_token()
 # Back-compat aliases — internal callers referenced the underscore names.
 _INTERNAL_FANOUT_HEADER = INTERNAL_FANOUT_HEADER
 _INTERNAL_FANOUT_TOKEN = INTERNAL_FANOUT_TOKEN
-_INTERNAL_TRUSTED_IPS = ("127.0.0.1", "::1", "localhost")
-_INTERNAL_TRUSTED_PREFIXES = ("10.", "172.", "192.168.")
 
 
 def is_internal_fanout(request: Optional[Request]) -> bool:
-    """VL-PRIME: True iff this request is signed orchestrator fan-out
-    from a trusted internal IP. The orchestrator stamps every internal
-    HTTP fan-out with VL_INTERNAL_FANOUT_TOKEN; the limiter then knows
-    that one user scan triggering N internal calls counts as 1, not N."""
+    """VL-PRIME: True iff this request carries the correct internal
+    orchestrator fan-out header token."""
     if request is None:
         return False
-    if request.headers.get(_INTERNAL_FANOUT_HEADER, "") != _INTERNAL_FANOUT_TOKEN:
-        return False
-    client_ip = request.client.host if request.client else ""
-    if client_ip in _INTERNAL_TRUSTED_IPS:
-        return True
-    return any(client_ip.startswith(p) for p in _INTERNAL_TRUSTED_PREFIXES)
+    return request.headers.get(_INTERNAL_FANOUT_HEADER, "") == _INTERNAL_FANOUT_TOKEN
 
 
 def verify_scan_quota(request: Request, payload=Depends(verify_token)):
     """VL-PRIME: verify_token + per-plan quota check. Internal orchestrator
-    fan-out (signed marker from 127.0.0.1/172.x/10.x/192.168.x) bypasses
+    fan-out (verified via shared internal fan-out header token) bypasses
     quota counting so one user scan that fans out to N scanners costs 1
     unit, not N. Without this exemption the limiter 429's most scanners."""
     if is_internal_fanout(request):
