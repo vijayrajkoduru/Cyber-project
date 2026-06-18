@@ -49,6 +49,7 @@ async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota
     # Fire 10 bad login attempts back-to-back. If all return same response (no 429, no lockout), flag.
     statuses = []
     times = []
+    last_body = ""
     for i in range(10):
         tests += 1
         t0 = time.time()
@@ -59,6 +60,7 @@ async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota
                               timeout=6, allow_redirects=False, verify=False)
             statuses.append(r.status_code)
             times.append(time.time() - t0)
+            last_body = r.text or ""
         except Exception:
             statuses.append(None)
             times.append(0)
@@ -67,7 +69,24 @@ async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota
     avg_first_5 = sum(times[:5]) / 5 if times[:5] else 0
     avg_last_5 = sum(times[5:]) / 5 if times[5:] else 0
     grew = avg_last_5 > avg_first_5 * 1.5  # 50% slowdown suggests rate limiting
-    if not has_429 and not grew:
+    # ZERO-FP: "missing rate limit" is only meaningful on a REAL login
+    # endpoint. A static site / SPA catch-all returns the same page for ANY
+    # path, so the 10 POSTs hit a non-existent endpoint and "no 429" is a
+    # false positive. Probe a guaranteed-nonexistent sibling path; if the
+    # login response is the same page, login_url is a catch-all -> suppress.
+    is_real_login = True
+    try:
+        ctrl = requests.post(base + "/vl-nonexistent-9f2c7a3e1d4b",
+                             data={"username": "x", "password": "x"},
+                             headers={"User-Agent": "VulnusLab/1.0"},
+                             timeout=6, allow_redirects=False, verify=False)
+        if (statuses and ctrl.status_code == statuses[-1]
+                and is_same_as_canary(last_body, ctrl.text or "")):
+            is_real_login = False
+            spa_suppressed.append(login_url)
+    except Exception:
+        pass
+    if not has_429 and not grew and is_real_login:
         findings.append(wrap_finding(
             f"No rate limit on {login_url} - 10 failed logins accepted without throttle",
             "HIGH",
