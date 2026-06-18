@@ -23196,6 +23196,11 @@ function ContainerK8sModule(p)   { return _autoMod(p, {moduleKey:"container_k8s"
 function IoTOTModule(p)          { return _autoMod(p, {moduleKey:"iot_ot",          moduleLabel:"IoT / OT / ICS Security",      emoji:"", color:"#ff3e5e", playbook:"30_iot_ot.md"}); }
 
 // ── Per-module ModuleAutoPanel wrappers ──
+function AuthModule(p)             { return _autoMod(p, {moduleKey:"auth",             moduleLabel:"Authentication",                 emoji:"", color:"#6366f1"}); }
+function AdminModule(p)            { return _autoMod(p, {moduleKey:"admin",            moduleLabel:"Administration",                 emoji:"", color:"#4b5563"}); }
+function AuthScanModule(p)         { return _autoMod(p, {moduleKey:"auth_scan",        moduleLabel:"Auth Scan",                      emoji:"", color:"#8b5cf6"}); }
+function ConsentModule(p)          { return _autoMod(p, {moduleKey:"consent",          moduleLabel:"Consent",                        emoji:"", color:"#10b981"}); }
+function UserModule(p)             { return _autoMod(p, {moduleKey:"user",             moduleLabel:"User",                           emoji:"", color:"#3b82f6"}); }
 function TunnelModule(p)           { return _autoMod(p, {moduleKey:"tunnel",          moduleLabel:"Port Redirection & Tunneling",    emoji:"", color:"#06b6d4", playbook:"15_tunnel.md"}); }
 function PivotModule(p)            { return _autoMod(p, {moduleKey:"pivot",           moduleLabel:"Pivoting & Lateral Movement",     emoji:"", color:"#0ea5e9", playbook:"14_pivot.md"}); }
 function OsintModuleV2(p)          { return _autoMod(p, {moduleKey:"osint",           moduleLabel:"Advanced OSINT & Threat Intel",   emoji:"", color:"#8b5cf6", playbook:"08_osint.md"}); }

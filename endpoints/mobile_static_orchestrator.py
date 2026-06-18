@@ -28,8 +28,12 @@ router = APIRouter()
 
 # ─── Upload pipeline ─────────────────────────────────────────────
 UPLOAD_DIR = Path("/uploads/mobile_static")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+def _ensure_upload_dir() -> Path:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    return UPLOAD_DIR
 VALID_MAGIC = (
     b"PK",          # APK / IPA / JAR (ZIP)
     b"\x7fELF",     # Linux ELF
@@ -44,6 +48,7 @@ VALID_MAGIC = (
 async def mobile_static_upload(file: UploadFile = File(...),
                                 _=Depends(verify_scan_quota)):
     """Receive an APK / IPA / PE / ELF binary. Validate + store."""
+    _ensure_upload_dir()
     head = await file.read(4)
     if not any(head.startswith(m[:len(head)]) for m in VALID_MAGIC):
         raise HTTPException(status_code=400,
