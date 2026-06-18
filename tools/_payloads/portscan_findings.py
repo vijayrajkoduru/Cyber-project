@@ -31,6 +31,8 @@ _LEGACY_PROTO_PORTS = {23, 21, 110, 143}  # Telnet/FTP/POP3/IMAP (cleartext)
 
 
 def rule_databases_exposed(s):
+    if s.get("cdn"):
+        return None
     open_db = [p for p in (s.get("ports_open") or [])
                 if p.get("port") in _DATABASE_PORTS]
     if not open_db: return None
@@ -43,6 +45,10 @@ def rule_databases_exposed(s):
 
 
 def rule_admin_ports_exposed(s):
+    # Behind a confirmed CDN edge, the open ports belong to the CDN, not the
+    # customer origin — do not grade them (see rule_cdn_edge for the INFO note).
+    if s.get("cdn"):
+        return None
     open_admin = [p for p in (s.get("ports_open") or [])
                    if p.get("port") in _ADMIN_PORTS]
     if not open_admin: return None
@@ -55,18 +61,76 @@ def rule_admin_ports_exposed(s):
 
 
 def rule_devops_panels_exposed(s):
-    open_devops = [p for p in (s.get("ports_open") or [])
-                    if p.get("port") in _DEVOPS_PORTS]
-    if not open_devops: return None
-    names = ", ".join(f"{p['port']}/{p.get('service', '?')}" for p in open_devops[:5])
-    return {"name": f"DevOps/admin panels exposed ({len(open_devops)})",
+    """Graded HIGH ONLY for panels CONFIRMED by a live HTTP fetch.
+
+    ZERO-FP: an open TCP port is NOT proof of a DevOps panel. The scanner's
+    HTTP confirmation pass (tools/webapp/portscan.py) fetches each open web
+    port and only records confirmed_panels[] when the live response actually
+    matches a known Jenkins/Kibana/Grafana/Docker-API/etc. signature. A bare
+    open port with no panel proof is reported by rule_open_web_ports_info as
+    INFO, never HIGH.
+    """
+    # Behind a confirmed CDN edge there is no customer panel to grade.
+    if s.get("cdn"):
+        return None
+    confirmed = s.get("confirmed_panels") or []
+    if not confirmed:
+        return None
+    names = ", ".join(f"{c.get('panel', '?')} on :{c.get('port')}"
+                      for c in confirmed[:5])
+    evid = "; ".join(c.get("evidence", "") for c in confirmed[:5])
+    return {"name": f"DevOps/admin panel(s) exposed — HTTP-confirmed ({len(confirmed)})",
             "severity": "HIGH",
             "cwe": "CWE-306",
-            "evidence": f"Open: {names}",
+            "evidence": f"Confirmed: {names}. {evid}",
             "remediation": "Jenkins/Kibana/Docker-API/etc. should NEVER be internet-facing. They're high-value targets with default-cred history. VPN-restrict immediately."}
 
 
+def rule_open_web_ports_info(s):
+    """INFO note for open web ports that did NOT confirm a known panel.
+
+    These are open + responded to HTTP, but the response did not match any
+    admin/devops panel signature, so they are NOT graded — reported as
+    informational attack-surface only (zero-FP)."""
+    if s.get("cdn"):
+        return None
+    unconfirmed = s.get("unconfirmed_web_ports") or []
+    if not unconfirmed:
+        return None
+    names = ", ".join(f"{u.get('port')}/{u.get('service', '?')}"
+                      for u in unconfirmed[:8])
+    return {"name": f"Open web port(s) with no admin/DevOps panel detected ({len(unconfirmed)})",
+            "severity": "INFO",
+            "evidence": f"Open + responded to HTTP, but no known panel "
+                        f"signature matched: {names}",
+            "remediation": "Informational. These ports are reachable but did "
+                           "not identify as a known admin/DevOps panel. Review "
+                           "whether they should be internet-facing."}
+
+
+def rule_cdn_edge(s):
+    """INFO note when the host resolves to a known CDN edge.
+
+    The open ports we probed belong to the CDN (Cloudflare/Akamai/Fastly),
+    not the customer origin, so they are NOT graded as exposed services."""
+    cdn = s.get("cdn")
+    if not cdn:
+        return None
+    op = s.get("ports_open") or []
+    names = ", ".join(f"{p.get('port')}/{p.get('service', '?')}" for p in op[:8])
+    return {"name": f"Host fronted by {cdn.title()} CDN — ports are CDN edge",
+            "severity": "INFO",
+            "evidence": f"Response signatures identified {cdn.title()} at the "
+                        f"edge. Open ports ({names or 'none'}) belong to the CDN, "
+                        f"not the origin, and are not graded as exposed services.",
+            "remediation": "This is expected for CDN-fronted sites. To assess "
+                           "the real origin attack surface, scan the origin IP "
+                           "directly (if discoverable) rather than the CDN edge."}
+
+
 def rule_file_shares_exposed(s):
+    if s.get("cdn"):
+        return None
     open_fs = [p for p in (s.get("ports_open") or [])
                 if p.get("port") in _FILE_SHARE_PORTS]
     if not open_fs: return None
@@ -79,6 +143,8 @@ def rule_file_shares_exposed(s):
 
 
 def rule_legacy_cleartext(s):
+    if s.get("cdn"):
+        return None
     open_legacy = [p for p in (s.get("ports_open") or [])
                     if p.get("port") in _LEGACY_PROTO_PORTS]
     if not open_legacy: return None
@@ -177,6 +243,8 @@ PORTSCAN_FINDING_RULES = [
     rule_databases_exposed,
     rule_admin_ports_exposed,
     rule_devops_panels_exposed,
+    rule_open_web_ports_info,
+    rule_cdn_edge,
     rule_file_shares_exposed,
     rule_legacy_cleartext,
     rule_total_open_count,
@@ -190,6 +258,16 @@ PORTSCAN_FINDING_RULES = [
 
 
 # ── Port catalog shared by all 5 family tools ──
+#
+# NOTE on the `service` label and `severity` field below:
+#   * `service` is the CONVENTIONAL service for that port number — a hint, not
+#     a confirmation. For HTTP-served dev/devops ports (3000/5601/8080/9000/…)
+#     the label is phrased as "<default> default" so the open-ports display
+#     never ASSERTS a product we have not actually fetched and confirmed
+#     (e.g. Juice Shop's own :3000 is no longer mislabelled "Grafana").
+#   * The `severity` column here is metadata only — it does NOT grade any
+#     finding. All graded findings come exclusively from PORTSCAN_FINDING_RULES,
+#     and HTTP panels are graded HIGH only via confirmed_panels[] (live-proof).
 PORT_CATALOG = {
     21:    ("FTP",            "HIGH",     "CWE-200"),
     22:    ("SSH",            "HIGH",     "CWE-200"),
@@ -214,11 +292,11 @@ PORT_CATALOG = {
     2049:  ("NFS",            "HIGH",     "CWE-668"),
     2375:  ("Docker API",     "CRITICAL", "CWE-306"),
     2376:  ("Docker API TLS", "CRITICAL", "CWE-306"),
-    3000:  ("Grafana",        "HIGH",     "CWE-306"),
+    3000:  ("HTTP-alt (Grafana default)", "INFO", None),
     3306:  ("MySQL",          "CRITICAL", "CWE-668"),
     3389:  ("RDP",            "HIGH",     "CWE-200"),
     5432:  ("PostgreSQL",     "CRITICAL", "CWE-668"),
-    5601:  ("Kibana",         "HIGH",     "CWE-200"),
+    5601:  ("HTTP-alt (Kibana default)", "INFO", None),
     5672:  ("AMQP",           "MEDIUM",   "CWE-306"),
     5900:  ("VNC",            "HIGH",     "CWE-306"),
     5984:  ("CouchDB",        "CRITICAL", "CWE-668"),
@@ -230,11 +308,11 @@ PORT_CATALOG = {
     8443:  ("HTTPS-alt",      "INFO",     None),
     8888:  ("HTTP-alt",       "INFO",     None),
     9000:  ("HTTP-alt",       "INFO",     None),
-    9090:  ("Prometheus",     "HIGH",     "CWE-200"),
+    9090:  ("HTTP-alt (Prometheus default)", "INFO", None),
     9200:  ("Elasticsearch",  "CRITICAL", "CWE-668"),
     9300:  ("ES transport",   "HIGH",     "CWE-668"),
     11211: ("Memcached",      "CRITICAL", "CWE-668"),
-    15672: ("RabbitMQ UI",    "HIGH",     "CWE-200"),
+    15672: ("HTTP-alt (RabbitMQ mgmt default)", "INFO", None),
     27017: ("MongoDB",        "CRITICAL", "CWE-668"),
     27018: ("MongoDB shard",  "CRITICAL", "CWE-668"),
 }
