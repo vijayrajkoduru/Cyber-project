@@ -15,7 +15,16 @@ _WEAK_PATTERNS = [
     ("DES",          re.compile(r"CryptoJS\.DES|\bDES\.encrypt|TripleDES\.encrypt", re.I), "DES/3DES"),
     ("RC4",          re.compile(r"CryptoJS\.RC4|\bRC4\s*\(", re.I), "RC4"),
     ("ECB mode",     re.compile(r"mode:\s*CryptoJS\.mode\.ECB|ECB\s*\(", re.I), "AES-ECB"),
-    ("Math.random crypto", re.compile(r"Math\.random\(\)[^;]*(?:token|password|secret|key|nonce|salt)", re.I), "Math.random() for crypto"),
+    # Tight match — no comma/semicolon bridge. Minified JS is comma-separated,
+    # so the old "[^;]*" greedily bridged Math.random() in an unrelated UUID/ID
+    # helper to a far-off "userPassword" var = false positive. Now only fires
+    # when a crypto-sensitive identifier is actually bound to Math.random().
+    # "key" is excluded on purpose (React list keys key={Math.random()} are not
+    # crypto). This also catches the real keyword-before form the old regex missed.
+    ("Math.random crypto", re.compile(
+        r"(?:token|secret|otp|csrf|salt|nonce|session[_-]?id|api[_-]?key|reset[_-]?token)\w*\s*[:=]\s*[^;,]{0,40}Math\.random\(\)"
+        r"|Math\.random\(\)[^;,]{0,25}(?:token|secret|otp|csrf|salt|nonce|session[_-]?id|api[_-]?key)",
+        re.I), "Math.random() for crypto"),
 ]
 
 
