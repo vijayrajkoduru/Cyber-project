@@ -66,7 +66,7 @@ def _check_marker(body, matcher, category):
     # An always-true matcher (".+"/".*") has ZERO detection value (it fires on
     # any response) -> drop it so category-specific logic (php-filter decode)
     # decides, never a blind match. Root-cause fix for LFI false positives.
-    if matcher and re.fullmatch(r"[()\s]*\.[+*]\??[()\s]*", matcher.strip()):
+    if matcher and re.fullmatch(r"[()\s]*\.[+*?]*[()\s]*", matcher.strip()):
         matcher = ""
     if category == "php-filter":
         # Smart fallback: decode any long base64 chunk and check for raw PHP

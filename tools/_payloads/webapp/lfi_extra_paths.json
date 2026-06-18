@@ -1277,7 +1277,7 @@
     "severity": "critical",
     "cvss": "9.8",
     "payload": "/.dockerenv",
-    "matcher": "."
+    "matcher": ".+"
   },
   {
     "category": "cloud-meta",
@@ -1285,7 +1285,7 @@
     "severity": "high",
     "cvss": "7.5",
     "payload": "/run/.containerenv",
-    "matcher": "."
+    "matcher": ".+"
   },
   {
     "category": "cloud-meta",
@@ -1837,7 +1837,7 @@
     "severity": "critical",
     "cvss": "9.1",
     "payload": "php://filter/read=convert.base64-encode/resource=.env",
-    "matcher": "."
+    "matcher": ".+"
   },
   {
     "category": "php-filter",
@@ -1853,7 +1853,7 @@
     "severity": "critical",
     "cvss": "9.1",
     "payload": "php://filter/zlib.deflate/convert.base64-encode/resource=index.php",
-    "matcher": "."
+    "matcher": ".+"
   },
   {
     "category": "php-filter",
@@ -1861,7 +1861,7 @@
     "severity": "critical",
     "cvss": "9.1",
     "payload": "php://filter/convert.iconv.utf-8.utf-16le/resource=index.php",
-    "matcher": "."
+    "matcher": ".+"
   },
   {
     "category": "php-filter",
@@ -1869,7 +1869,7 @@
     "severity": "critical",
     "cvss": "9.1",
     "payload": "php://filter/convert.iconv.UTF8.CSISO2022KR|convert.base64-encode/resource=index.php",
-    "matcher": "."
+    "matcher": ".+"
   },
   {
     "category": "php-filter",

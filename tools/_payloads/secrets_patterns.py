@@ -3,9 +3,27 @@
 Regex patterns for detecting leaked secrets in HTTP responses (HTML/JS/JSON).
 Used by tools/webapp/secrets.py. Sources: gitleaks, trufflehog, custom curation.
 
-Each entry: {name, regex, service, severity, cvss, remediation}.
+Each entry: {name, regex, service, severity, cvss, remediation, [class]}.
 Regex is Python-style; use re.IGNORECASE when matching.
+
+ZERO-FP gating (read tools/webapp/secrets.py for the enforcement):
+  - "class": "vendor"  (DEFAULT when key is absent) — precise prefix-anchored
+    shapes (AWS AKIA, Slack xox*, Google AIza*, Stripe sk_live_, GitHub ghp_,
+    private-key PEM headers, etc.). Graded as written, but the scanner still
+    runs a light shape sanity-check before grading.
+  - "class": "generic" — loose / high-entropy / proximity-keyword patterns that
+    are KNOWN to collide with normal minified JS bundles (webpack chunk hashes,
+    base64 fragments, SRI integrity hashes, source-map refs, long hex consts).
+    The scanner ONLY grades these when the captured candidate clears a Shannon
+    entropy floor AND survives the allowlist below; otherwise -> INFO, never
+    HIGH/CRITICAL. This is what stopped the 8 fake "Cohere API Key" hits on
+    Juice Shop's main.js.
+
+Helpers exported for the scanner: SECRET_ALLOWLIST_PATTERNS, GENERIC_MIN_ENTROPY,
+shannon_entropy(), looks_like_false_match().
 """
+import math
+import re as _re
 
 SECRETS_PATTERNS = [
     # ── AWS ─────────────────────────────────────────────────────────────────
@@ -13,7 +31,7 @@ SECRETS_PATTERNS = [
      "severity": "CRITICAL", "cvss": "9.8",
      "remediation": "Rotate the AWS key immediately at IAM console. Audit CloudTrail for misuse."},
     {"name": "AWS Secret Access Key", "regex": r"(?i)aws_?secret_?access_?key[\"'\s:=]{1,5}[A-Za-z0-9/+=]{40}", "service": "aws",
-     "severity": "CRITICAL", "cvss": "9.8",
+     "class": "generic", "severity": "CRITICAL", "cvss": "9.8",
      "remediation": "Rotate immediately. Never commit secrets to source. Use IAM roles or AWS Secrets Manager."},
     {"name": "AWS Session Token", "regex": r"FQoG[A-Za-z0-9/+=]{100,}", "service": "aws",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Session tokens expire — but rotate IAM key that issued it."},
@@ -41,7 +59,7 @@ SECRETS_PATTERNS = [
     {"name": "Azure Connection String", "regex": r"Endpoint=sb://[^;]+;SharedAccessKey=[A-Za-z0-9/+=]+", "service": "azure",
      "severity": "CRITICAL", "cvss": "9.1", "remediation": "Rotate SharedAccessKey in Service Bus / Event Hubs."},
     {"name": "Azure AD Client Secret", "regex": r"(?i)client_secret[\"'\s:=]{1,5}[A-Za-z0-9~._\-]{34,40}", "service": "azure",
-     "severity": "CRITICAL", "cvss": "9.8", "remediation": "Rotate in App Registrations → Certificates & Secrets."},
+     "class": "generic", "severity": "CRITICAL", "cvss": "9.8", "remediation": "Rotate in App Registrations → Certificates & Secrets."},
 
     # ── GitHub / GitLab / Bitbucket ─────────────────────────────────────────
     {"name": "GitHub Personal Access Token (classic)", "regex": r"ghp_[A-Za-z0-9]{36}", "service": "github",
@@ -95,36 +113,36 @@ SECRETS_PATTERNS = [
     {"name": "Razorpay Key ID", "regex": r"rzp_(?:live|test)_[A-Za-z0-9]{14,}", "service": "razorpay",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate at dashboard.razorpay.com → Settings → API Keys."},
     {"name": "PayU Merchant Key", "regex": r"(?i)payu_?merchant_?key[\"'\s:=]{1,5}[A-Za-z0-9]{6,12}", "service": "payu",
-     "severity": "HIGH", "cvss": "7.5", "remediation": "Rotate at info.payu.in merchant dashboard."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.5", "remediation": "Rotate at info.payu.in merchant dashboard."},
 
     # ── Communication APIs ──────────────────────────────────────────────────
     {"name": "Twilio Account SID", "regex": r"AC[0-9a-fA-F]{32}", "service": "twilio",
-     "severity": "MEDIUM", "cvss": "5.3", "remediation": "SID alone is non-credential, but pair with Auth Token = full control."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "5.3", "remediation": "SID alone is non-credential, but pair with Auth Token = full control."},
     {"name": "Twilio Auth Token", "regex": r"SK[0-9a-fA-F]{32}", "service": "twilio",
-     "severity": "CRITICAL", "cvss": "9.1", "remediation": "Rotate at console.twilio.com → Account → API keys."},
+     "class": "generic", "severity": "CRITICAL", "cvss": "9.1", "remediation": "Rotate at console.twilio.com → Account → API keys."},
     {"name": "SendGrid API Key", "regex": r"SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}", "service": "sendgrid",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at app.sendgrid.com/settings/api_keys."},
     {"name": "Mailgun API Key", "regex": r"key-[0-9a-f]{32}", "service": "mailgun",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate at app.mailgun.com → Sending → Domain settings."},
     {"name": "Mailgun Domain Sending Key", "regex": r"(?i)mailgun.{0,15}[\"'][A-Za-z0-9]{40,80}[\"']", "service": "mailgun",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate domain sending key."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate domain sending key."},
     {"name": "Postmark Server Token", "regex": r"(?i)postmark.{0,15}[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "service": "postmark",
-     "severity": "HIGH", "cvss": "7.5", "remediation": "Regenerate server token in Postmark account."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.5", "remediation": "Regenerate server token in Postmark account."},
 
     # ── JWT ─────────────────────────────────────────────────────────────────
     {"name": "JWT (HS/RS signed token)", "regex": r"eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{20,}", "service": "jwt",
-     "severity": "MEDIUM", "cvss": "5.5",
+     "class": "generic", "severity": "MEDIUM", "cvss": "5.5",
      "remediation": "JWT in HTML/JS source = client-side leak. Move to HttpOnly cookie. Audit if it's a high-privilege token."},
 
     # ── Generic API key shape ───────────────────────────────────────────────
     {"name": "Bearer token in source", "regex": r"(?i)bearer\s+[A-Za-z0-9_\-\.]{30,200}", "service": "generic",
-     "severity": "HIGH", "cvss": "7.0", "remediation": "Never embed Bearer tokens in HTML/JS. Use HttpOnly cookies."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.0", "remediation": "Never embed Bearer tokens in HTML/JS. Use HttpOnly cookies."},
     {"name": "Generic API key param", "regex": r"(?i)(?:api[_\-]?key|apikey|access[_\-]?token)[\"'\s:=]{1,5}[A-Za-z0-9_\-]{16,80}", "service": "generic",
-     "severity": "MEDIUM", "cvss": "6.5", "remediation": "Audit context. Move secrets to environment variables / vault."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "6.5", "remediation": "Audit context. Move secrets to environment variables / vault."},
     {"name": "Authorization header literal", "regex": r"(?i)authorization[\"'\s:=]{1,5}[\"']?(?:Basic|Bearer|Token)\s+[A-Za-z0-9_\-/.+=]{16,}", "service": "generic",
-     "severity": "HIGH", "cvss": "7.5", "remediation": "Don't ship Authorization headers in HTML/JS."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.5", "remediation": "Don't ship Authorization headers in HTML/JS."},
     {"name": "x-api-key header", "regex": r"(?i)x-api-key[\"'\s:=]{1,5}[\"']?[A-Za-z0-9_\-]{16,}", "service": "generic",
-     "severity": "MEDIUM", "cvss": "6.0", "remediation": "Audit value source. Avoid hardcoding."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "6.0", "remediation": "Audit value source. Avoid hardcoding."},
 
     # ── Private keys ────────────────────────────────────────────────────────
     {"name": "RSA Private Key", "regex": r"-----BEGIN RSA PRIVATE KEY-----", "service": "private_key",
@@ -154,9 +172,9 @@ SECRETS_PATTERNS = [
 
     # ── Crypto wallets ──────────────────────────────────────────────────────
     {"name": "BIP39 Mnemonic (12-24 words)", "regex": r"\b(?:[a-z]{3,8}\s+){11,23}[a-z]{3,8}\b", "service": "crypto",
-     "severity": "CRITICAL", "cvss": "10.0", "remediation": "Move funds to new wallet IMMEDIATELY. Mnemonic = root key for all derived addresses."},
+     "class": "generic", "severity": "CRITICAL", "cvss": "10.0", "remediation": "Move funds to new wallet IMMEDIATELY. Mnemonic = root key for all derived addresses."},
     {"name": "Ethereum Private Key", "regex": r"\b0x[0-9a-fA-F]{64}\b", "service": "crypto",
-     "severity": "HIGH", "cvss": "8.0", "remediation": "If this is a private key (not a tx hash), transfer balance to new address."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.0", "remediation": "If this is a private key (not a tx hash), transfer balance to new address."},
 
     # ── AI provider keys ────────────────────────────────────────────────────
     {"name": "OpenAI API Key", "regex": r"sk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}", "service": "openai",
@@ -167,34 +185,38 @@ SECRETS_PATTERNS = [
      "severity": "HIGH", "cvss": "7.5", "remediation": "Revoke at console.anthropic.com/settings/keys."},
     {"name": "Hugging Face Token", "regex": r"hf_[A-Za-z0-9]{34}", "service": "huggingface",
      "severity": "MEDIUM", "cvss": "5.3", "remediation": "Revoke at huggingface.co/settings/tokens."},
-    {"name": "Cohere API Key", "regex": r"[A-Za-z0-9]{40}", "service": "cohere",
-     "severity": "MEDIUM", "cvss": "5.3", "remediation": "Cohere keys are 40-char alnum; verify context. Rotate if confirmed."},
+    # Cohere keys are bare 40-char alnum — that shape matches webpack chunk
+    # hashes / base64 fragments in every minified bundle, so REQUIRE a real
+    # `cohere`-adjacent context token (assignment to a cohere-named var/key)
+    # before we will even consider it. Classified generic -> capped at INFO.
+    {"name": "Cohere API Key", "regex": r"(?i)cohere[\"'\s_\-]{0,15}(?:api[_\-]?key|token|key)?[\"'\s:=]{1,5}[\"']?[A-Za-z0-9]{40}[\"']?", "service": "cohere",
+     "class": "generic", "severity": "MEDIUM", "cvss": "5.3", "remediation": "Cohere keys are 40-char alnum; verify context. Rotate if confirmed."},
     {"name": "Replicate API Token", "regex": r"r8_[A-Za-z0-9]{32,40}", "service": "replicate",
      "severity": "MEDIUM", "cvss": "5.3", "remediation": "Revoke at replicate.com/account/api-tokens."},
 
     # ── CDN / hosting ───────────────────────────────────────────────────────
     {"name": "Cloudflare API Token", "regex": r"(?i)cloudflare.{0,15}[\"']?[A-Za-z0-9_-]{40}[\"']?", "service": "cloudflare",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at dash.cloudflare.com/profile/api-tokens."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at dash.cloudflare.com/profile/api-tokens."},
     {"name": "Cloudflare Global API Key", "regex": r"(?i)cf-api-key[\"'\s:=]{1,5}[0-9a-f]{37}", "service": "cloudflare",
      "severity": "CRITICAL", "cvss": "9.8", "remediation": "Global API keys are deprecated. Roll to scoped API tokens immediately."},
     {"name": "Heroku API Key", "regex": r"(?i)heroku.{0,15}[\"']?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[\"']?", "service": "heroku",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Regenerate at dashboard.heroku.com/account → API Key."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Regenerate at dashboard.heroku.com/account → API Key."},
     {"name": "Vercel API Token", "regex": r"(?i)vercel.{0,15}[\"']?[A-Za-z0-9]{24}[\"']?", "service": "vercel",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Delete at vercel.com/account/tokens."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Delete at vercel.com/account/tokens."},
     {"name": "Netlify API Token", "regex": r"(?i)netlify.{0,15}[\"']?[A-Za-z0-9_-]{30,}[\"']?", "service": "netlify",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at app.netlify.com/user/applications."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at app.netlify.com/user/applications."},
     {"name": "Fastly API Token", "regex": r"(?i)fastly.{0,15}[\"']?[A-Za-z0-9_-]{32}[\"']?", "service": "fastly",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at manage.fastly.com/account/personal/tokens."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at manage.fastly.com/account/personal/tokens."},
 
     # ── High-entropy generic catches ────────────────────────────────────────
     {"name": "Generic JWT-format token (not validated)", "regex": r"\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b", "service": "jwt",
-     "severity": "MEDIUM", "cvss": "5.3", "remediation": "Inspect token content. Move sensitive tokens out of HTML/JS."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "5.3", "remediation": "Inspect token content. Move sensitive tokens out of HTML/JS."},
     {"name": "High-entropy base64 string (64+ chars)", "regex": r"[A-Za-z0-9+/]{64,}={0,2}", "service": "generic",
-     "severity": "LOW", "cvss": "3.1", "remediation": "Audit context — could be cert chain, but may also be secret material."},
+     "class": "generic", "severity": "LOW", "cvss": "3.1", "remediation": "Audit context — could be cert chain, but may also be secret material."},
     {"name": "High-entropy hex string (128+ chars)", "regex": r"\b[0-9a-fA-F]{128,}\b", "service": "generic",
-     "severity": "LOW", "cvss": "3.1", "remediation": "Audit context — could be a session key or private key material."},
+     "class": "generic", "severity": "LOW", "cvss": "3.1", "remediation": "Audit context — could be a session key or private key material."},
     {"name": "Base64 with secret-like prefix", "regex": r"(?i)(?:secret|password|token|key)[\"'\s:=]{1,5}[\"']?[A-Za-z0-9+/]{20,}={0,2}[\"']?", "service": "generic",
-     "severity": "HIGH", "cvss": "7.5", "remediation": "Treat as compromised. Rotate."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.5", "remediation": "Treat as compromised. Rotate."},
 
     # ── Misc dev infra ──────────────────────────────────────────────────────
     {"name": "NPM Token", "regex": r"npm_[A-Za-z0-9]{36}", "service": "npm",
@@ -204,19 +226,19 @@ SECRETS_PATTERNS = [
     {"name": "Docker Hub Personal Access Token", "regex": r"dckr_pat_[A-Za-z0-9_\-]{27}", "service": "dockerhub",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at hub.docker.com/settings/security."},
     {"name": "Sentry Auth Token", "regex": r"(?i)sentry.{0,15}[\"']?[a-f0-9]{64}[\"']?", "service": "sentry",
-     "severity": "MEDIUM", "cvss": "6.5", "remediation": "Revoke at sentry.io/settings/account/api/auth-tokens/."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "6.5", "remediation": "Revoke at sentry.io/settings/account/api/auth-tokens/."},
     {"name": "Datadog API Key", "regex": r"(?i)datadog.{0,15}[\"']?[a-f0-9]{32}[\"']?", "service": "datadog",
-     "severity": "HIGH", "cvss": "7.5", "remediation": "Revoke at app.datadoghq.com/organization-settings/api-keys."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.5", "remediation": "Revoke at app.datadoghq.com/organization-settings/api-keys."},
     {"name": "New Relic License Key", "regex": r"(?i)new[_\-]?relic.{0,15}[\"']?[a-f0-9]{40}[\"']?", "service": "newrelic",
-     "severity": "HIGH", "cvss": "7.5", "remediation": "Rotate at one.newrelic.com → Account settings → API keys."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.5", "remediation": "Rotate at one.newrelic.com → Account settings → API keys."},
     {"name": "Pusher Channel App Key", "regex": r"(?i)pusher.{0,15}[\"']?[a-z0-9]{16,32}[\"']?", "service": "pusher",
-     "severity": "MEDIUM", "cvss": "5.3", "remediation": "Rotate at dashboard.pusher.com → Apps → Settings."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "5.3", "remediation": "Rotate at dashboard.pusher.com → Apps → Settings."},
     {"name": "Shopify Access Token", "regex": r"shpat_[a-fA-F0-9]{32}", "service": "shopify",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke in Shopify admin → Apps → Develop apps."},
     {"name": "Shopify Shared Secret", "regex": r"shpss_[a-fA-F0-9]{32}", "service": "shopify",
      "severity": "HIGH", "cvss": "7.5", "remediation": "Rotate shared secret in app settings."},
     {"name": "Asana Token", "regex": r"(?i)asana.{0,15}[\"']?\d/\d{16}/[a-f0-9]{32}[\"']?", "service": "asana",
-     "severity": "MEDIUM", "cvss": "5.3", "remediation": "Revoke at app.asana.com/0/my-apps."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "5.3", "remediation": "Revoke at app.asana.com/0/my-apps."},
     {"name": "Atlassian / Jira API Token", "regex": r"ATATT3[A-Za-z0-9_\-]{180,}", "service": "atlassian",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at id.atlassian.com/manage-profile/security/api-tokens."},
     {"name": "Linear API Key", "regex": r"lin_api_[A-Za-z0-9]{40}", "service": "linear",
@@ -224,7 +246,7 @@ SECRETS_PATTERNS = [
     {"name": "Notion API Token", "regex": r"secret_[A-Za-z0-9]{43}", "service": "notion",
      "severity": "HIGH", "cvss": "7.5", "remediation": "Revoke integration at notion.so/my-integrations."},
     {"name": "Zoom API Token", "regex": r"(?i)zoom.{0,15}[\"']?eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}[\"']?", "service": "zoom",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at marketplace.zoom.us."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at marketplace.zoom.us."},
     {"name": "DigitalOcean Personal Access Token", "regex": r"dop_v1_[a-f0-9]{64}", "service": "digitalocean",
      "severity": "HIGH", "cvss": "8.1", "remediation": "Revoke at cloud.digitalocean.com/account/api/tokens."},
     {"name": "DigitalOcean OAuth", "regex": r"doo_v1_[a-f0-9]{64}", "service": "digitalocean",
@@ -232,13 +254,76 @@ SECRETS_PATTERNS = [
 
     # ── Indian fintech (regional moat) ──────────────────────────────────────
     {"name": "PhonePe Merchant Key", "regex": r"(?i)phonepe.{0,15}[\"']?[A-Za-z0-9_\-]{20,}[\"']?", "service": "phonepe",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate merchant key in PhonePe Business Portal."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate merchant key in PhonePe Business Portal."},
     {"name": "Paytm Merchant Key", "regex": r"(?i)paytm.{0,15}[\"']?[A-Za-z0-9!@#$&]{16}[\"']?", "service": "paytm",
-     "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate at business.paytm.com → Developer Settings."},
+     "class": "generic", "severity": "HIGH", "cvss": "8.1", "remediation": "Rotate at business.paytm.com → Developer Settings."},
     {"name": "Cashfree App ID", "regex": r"(?i)cashfree.{0,15}[\"']?[A-Za-z0-9]{16,32}[\"']?", "service": "cashfree",
-     "severity": "MEDIUM", "cvss": "6.5", "remediation": "Rotate at merchant.cashfree.com → Developers → Keys."},
+     "class": "generic", "severity": "MEDIUM", "cvss": "6.5", "remediation": "Rotate at merchant.cashfree.com → Developers → Keys."},
     {"name": "Instamojo API Key", "regex": r"(?i)instamojo.{0,15}[\"']?[A-Za-z0-9]{40,}[\"']?", "service": "instamojo",
-     "severity": "HIGH", "cvss": "7.5", "remediation": "Rotate at imjo.in/integrations/api/keys."},
+     "class": "generic", "severity": "HIGH", "cvss": "7.5", "remediation": "Rotate at imjo.in/integrations/api/keys."},
 
     # ── End — pattern catalog is intentionally over-inclusive for high recall ─
 ]
+
+
+# ── Zero-FP support for generic / high-entropy matches ──────────────────────
+#
+# Minimum Shannon entropy (bits/char) a *generic-class* candidate must clear
+# before it is even eligible to be graded. Random secret material on a 62-char
+# alphabet sits around ~5.5–6.0 bits/char; a webpack chunk hash or a repetitive
+# minified token is much lower. 3.6 is a deliberately conservative floor: it
+# kills low-entropy filler without dropping genuinely random key material.
+GENERIC_MIN_ENTROPY = 3.6
+
+# Regexes for strings that LOOK like high-entropy secrets but are well-known
+# benign artifacts of modern front-end builds. A generic-class candidate whose
+# surrounding context (or the candidate itself) matches any of these is treated
+# as a false match and is NEVER graded (downgraded to INFO at most).
+SECRET_ALLOWLIST_PATTERNS = [
+    # Sub-Resource Integrity hashes:  integrity="sha384-…"
+    r"(?i)integrity\s*=\s*[\"']?(?:sha256|sha384|sha512)-",
+    r"(?i)\b(?:sha256|sha384|sha512)-[A-Za-z0-9+/]{20,}={0,2}",
+    # Source-map references / inline maps
+    r"(?i)sourceMappingURL\s*=",
+    r"(?i)\.js\.map\b",
+    r"(?i)\.css\.map\b",
+    # base64 data-URIs (fonts/images inlined into bundles)
+    r"(?i)data:[a-z0-9.+/\-]+;base64,",
+    # webpack / hashed asset filenames:  main.4f3a9c.js, chunk-AB12.css,
+    # runtime~app.deadbeef.js, app.[contenthash].bundle.js
+    r"(?i)[\w./~-]+\.[0-9a-f]{6,}\.(?:js|css|mjs|map|woff2?|png|jpe?g|gif|svg|webp)\b",
+    # webpack module/chunk identifiers
+    r"(?i)__webpack_require__|webpackJsonp|webpackChunk",
+    # generic content-hash query/fragment cache busters: ?v=deadbeef, ?h=abc123
+    r"(?i)[?&](?:v|h|hash|rev|ver)=[0-9a-f]{6,}",
+]
+_ALLOWLIST_COMPILED = [_re.compile(p) for p in SECRET_ALLOWLIST_PATTERNS]
+
+
+def shannon_entropy(s: str) -> float:
+    """Shannon entropy of a string in bits/char. 0.0 for empty input."""
+    if not s:
+        return 0.0
+    freq = {}
+    for ch in s:
+        freq[ch] = freq.get(ch, 0) + 1
+    n = len(s)
+    ent = 0.0
+    for c in freq.values():
+        p = c / n
+        ent -= p * math.log2(p)
+    return ent
+
+
+def looks_like_false_match(candidate: str, context: str = "") -> bool:
+    """True if a generic-class candidate is a known-benign front-end artifact.
+
+    `candidate` is the exact matched substring; `context` is the surrounding
+    text (e.g. ±60 chars) so SRI / data-URI / source-map markers that sit
+    *next to* the blob are caught too.
+    """
+    hay = candidate + "\n" + (context or "")
+    for rx in _ALLOWLIST_COMPILED:
+        if rx.search(hay):
+            return True
+    return False

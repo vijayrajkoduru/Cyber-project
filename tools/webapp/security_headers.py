@@ -16,7 +16,7 @@ router = APIRouter()
 def _csp(h):
     if "content-security-policy" not in {k.lower() for k in h}:
         return wrap_finding("No Content-Security-Policy header — XSS mitigation absent",
-            "HIGH", cvss="7.5", cwe="CWE-693", owasp="A05:2021",
+            "MEDIUM", cvss="4.8", cwe="CWE-693", owasp="A05:2021",
             remediation='Add a CSP, e.g. "default-src \'self\'; script-src \'self\'".',
             evidence_marker="response missing Content-Security-Policy header")
 def _hsts(h, https):
@@ -25,26 +25,16 @@ def _hsts(h, https):
             "HIGH", cvss="7.4", cwe="CWE-319", owasp="A02:2021",
             remediation='Add "Strict-Transport-Security: max-age=31536000; includeSubDomains".',
             evidence_marker="HTTPS site missing Strict-Transport-Security")
-def _xfo(h):
-    hk = {k.lower() for k in h}
-    csp = ""
-    for k, v in h.items():
-        if k.lower() == "content-security-policy": csp = (v or "").lower(); break
-    if "x-frame-options" not in hk and "frame-ancestors" not in csp:
-        return wrap_finding("No X-Frame-Options and no CSP frame-ancestors — clickjacking possible",
-            "HIGH", cvss="6.1", cwe="CWE-1021", owasp="A05:2021",
-            remediation="Add 'X-Frame-Options: DENY' or 'frame-ancestors' in CSP.",
-            evidence_marker="missing X-Frame-Options AND frame-ancestors")
 def _xcto(h):
     for k, v in h.items():
         if k.lower() == "x-content-type-options":
             if "nosniff" in (v or "").lower(): return None
             return wrap_finding(f"X-Content-Type-Options present but not 'nosniff': {v!r}",
-                "MEDIUM", cvss="4.3", cwe="CWE-693", owasp="A05:2021",
+                "LOW", cvss="3.1", cwe="CWE-693", owasp="A05:2021",
                 remediation="Set to exactly 'X-Content-Type-Options: nosniff'.",
                 evidence_marker=f"X-Content-Type-Options: {v}")
     return wrap_finding("Missing 'X-Content-Type-Options: nosniff' — MIME-sniffing possible",
-        "MEDIUM", cvss="4.3", cwe="CWE-693", owasp="A05:2021",
+        "LOW", cvss="3.1", cwe="CWE-693", owasp="A05:2021",
         remediation="Set header 'X-Content-Type-Options: nosniff'.",
         evidence_marker="response missing X-Content-Type-Options header")
 def _ref(h):
@@ -85,12 +75,12 @@ def scan_security_headers(req, payload):
             skipped_reason=f"Could not reach {url}")
     https = str(r.url).startswith("https://")
     h = dict(r.headers)
-    checks = [_csp(h), _hsts(h, https), _xfo(h), _xcto(h), _ref(h), _perm(h), _srv(h), _xpb(h)]
+    checks = [_csp(h), _hsts(h, https), _xcto(h), _ref(h), _perm(h), _srv(h), _xpb(h)]
     return vuln_response(tool="security_headers", target=req.target,
         findings=[c for c in checks if c], tested=len(checks),
-        what_checked="9 critical HTTP security headers (CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By)",
+        what_checked="Critical HTTP security headers (CSP, HSTS, XCTO, Referrer, Permissions, Server, X-Powered-By); clickjacking/X-Frame-Options is covered by the dedicated clickjacking scanner",
         severity_when_clean="POSITIVE",
-        tests_summary="9 header checks: CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By",
+        tests_summary="Header checks: CSP, HSTS, XCTO, Referrer, Permissions, Server, X-Powered-By",
         raw_data={"security_headers": {"is_https": https,
                                           "headers_seen": list(h.keys()),
                                           "spa_catchall": spa["is_spa"]}})
