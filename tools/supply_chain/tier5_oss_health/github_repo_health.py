@@ -114,7 +114,14 @@ def _make_gather(req: ScanRequest):
             return
 
         status = meta.get("status")
-        if status == 403 and "rate limit" in str((meta.get("json") or {}).get("message", "")).lower():
+        _hdrs = meta.get("headers") or {}
+        _remaining = str(_hdrs.get("x-ratelimit-remaining", "")).strip()
+        _msg = str((meta.get("json") or {}).get("message", "")).lower()
+        # Unauthenticated API is 60 req/hr per IP; a busy/shared (datacenter/VPS)
+        # IP can exhaust it and GitHub may answer 403/404/429. Classify any
+        # non-200 with the rate-limit header at 0 (or a rate-limit message) as
+        # rate-limited so a PUBLIC repo is never mislabeled "not found / private".
+        if status != 200 and (_remaining == "0" or "rate limit" in _msg or status == 429):
             ctx.state["gh_rate_limited"] = True
             ctx.source("github api rate limited")
             return
