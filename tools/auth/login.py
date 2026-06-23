@@ -8,7 +8,7 @@ Returns BOTH:
 import os
 import time
 import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from jose import jwt
 
@@ -16,15 +16,27 @@ from tools.auth._db import get_db, verify_password
 
 _login_attempts: dict[str, list[float]] = {}
 
-MAX_LOGIN_ATTEMPTS = 5
-LOGIN_WINDOW = 300  # seconds
+MAX_LOGIN_ATTEMPTS = 5       # per-username (brute-force one account)
+MAX_IP_ATTEMPTS = 20        # per-source-IP across ALL usernames (password-spray)
+LOGIN_WINDOW = 300           # seconds
 
 
-def _check_login_rate(identifier: str):
+def _client_ip(request: Request) -> str:
+    """Real client IP behind nginx / Cloudflare (X-Forwarded-For / CF-Connecting-IP)."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    cf = request.headers.get("cf-connecting-ip", "")
+    if cf:
+        return cf.strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_login_rate(identifier: str, max_attempts: int = MAX_LOGIN_ATTEMPTS):
     now = time.time()
     attempts = _login_attempts.get(identifier, [])
     attempts = [t for t in attempts if now - t < LOGIN_WINDOW]
-    if len(attempts) >= MAX_LOGIN_ATTEMPTS:
+    if len(attempts) >= max_attempts:
         raise HTTPException(429, "Too many login attempts. Please try again later.")
     attempts.append(now)
     _login_attempts[identifier] = attempts
@@ -50,8 +62,13 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/api/auth/login")
-async def auth_login(req: LoginRequest):
-    _check_login_rate(req.username)
+async def auth_login(req: LoginRequest, request: Request):
+    # Per-IP limit catches password-spray (1 try across many usernames from one
+    # source); per-username limit catches brute-force of a single account.
+    # (In-memory per worker — a shared store would make it global; adequate as a
+    # first gate, and far better than username-only which spray bypasses.)
+    _check_login_rate("ip:" + _client_ip(request), MAX_IP_ATTEMPTS)
+    _check_login_rate("user:" + req.username.lower())
 
     with get_db() as con:
         user = con.execute(
