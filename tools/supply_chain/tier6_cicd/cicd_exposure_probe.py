@@ -60,12 +60,32 @@ def _has_env_secrets(text: str) -> bool:
     if "<html" in text.lower() or "<!doctype" in text.lower():
         return False
     keyish = re.findall(r"^\s*([A-Z][A-Z0-9_]{2,})\s*=\s*\S", text, re.M)
-    if len(keyish) < 2:
+    # Require >=2 DISTINCT env-style keys so a single stray `API=` (or one line
+    # of a templated page) can never trip a HIGH credential-exposure finding.
+    distinct = {k.upper() for k in keyish}
+    if len(distinct) < 2:
         return False
     secret_kw = ("secret", "key", "token", "password", "passwd", "api", "aws", "db",
                  "database", "private", "credential")
-    joined = " ".join(keyish).lower()
+    joined = " ".join(distinct).lower()
     return any(k in joined for k in secret_kw)
+
+
+_DOCKER_DIRECTIVE_RE = re.compile(
+    r"(?im)^\s*(RUN|COPY|ADD|ENTRYPOINT|CMD|WORKDIR|ENV|EXPOSE|ARG|LABEL|USER|VOLUME)\s+\S")
+
+
+def _is_dockerfile(t: str) -> bool:
+    """A served Dockerfile, not an HTML page that merely contains 'FROM '.
+    Require an anchored FROM directive AND a second Dockerfile directive, and
+    reject HTML bodies."""
+    low = t.lower()
+    if "<html" in low or "<!doctype" in low or "<body" in low:
+        return False
+    if not re.search(r"(?im)^\s*from\s+\S+", t):
+        return False
+    # A real Dockerfile has at least one more build directive beyond FROM.
+    return bool(_DOCKER_DIRECTIVE_RE.search(t))
 
 
 _ARTIFACTS = [
@@ -84,7 +104,7 @@ _ARTIFACTS = [
     ("/Gemfile.lock", "Exposed bundler lockfile (Gemfile.lock)",
      "MEDIUM", "CWE-538", lambda t: t.lstrip().lower().startswith("gem") or "\nGEM\n" in t),
     ("/Dockerfile", "Exposed Dockerfile",
-     "LOW", "CWE-538", lambda t: bool(re.search(r"(?im)^\s*from\s+\S+", t)) and "<html" not in t.lower()),
+     "LOW", "CWE-538", lambda t: _is_dockerfile(t)),
     ("/requirements.txt", "Exposed Python requirements.txt",
      "LOW", "CWE-538", lambda t: bool(re.search(r"(?im)^[a-z0-9_.-]+\s*(==|>=|~=)\s*\d", t)) and "<html" not in t.lower()),
 ]

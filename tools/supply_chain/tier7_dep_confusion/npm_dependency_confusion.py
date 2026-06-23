@@ -97,7 +97,7 @@ def _fetch_package_json(req: ScanRequest, ctx: ScanContext):
         res = _http_get(url)
         if res.get("ok") and res.get("status") == 200:
             txt = res.get("text", "")
-            if txt.lstrip().startswith("{") and '"dependencies"' in txt.lower() or '"name"' in txt.lower():
+            if txt.lstrip().startswith("{") and ('"dependencies"' in txt.lower() or '"name"' in txt.lower()):
                 return txt, f"{base}/package.json"
     return None, None
 

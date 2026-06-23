@@ -35,6 +35,13 @@ def rule_no_requirements(s):
             "cwe": "N/A", "owasp": "N/A"}
 
 
+# CISA Known-Exploited-Vulnerabilities ids confirmed exploited in the wild.
+# Empty by default; HIGH is only emitted on a positive KEV match so absence of
+# enrichment never escalates severity (zero-FP).
+def _kev_ids():
+    return set()
+
+
 def rule_vulns(s):
     n = s.get("pip_vuln_count") or 0
     if n <= 0:
@@ -42,12 +49,34 @@ def rule_vulns(s):
     top = s.get("pip_top_vulns") or []
     sample = ", ".join(f"{v['id']} ({v['pkg']})" for v in top[:5])
     pkgs = s.get("pip_vuln_pkg_count") or 0
+    # pip-audit existence is reliable (curated PYSEC/OSV advisories), but a
+    # matched advisory does NOT prove the vulnerable code path is reachable in
+    # this application. Cap to advisory severity (MEDIUM); reserve HIGH for a
+    # CVE/advisory id on the CISA KEV catalogue (proven exploitation).
+    kev = _kev_ids()
+    kev_hits = [v for v in top if (v.get("id") or "") in kev]
+    if kev_hits:
+        ksample = ", ".join(f"{v['id']} ({v['pkg']})" for v in kev_hits[:5])
+        return {"name": f"pip-audit: {len(kev_hits)} known-exploited Python advisory(ies)",
+                "severity": "HIGH", "cvss": "7.5",
+                "cwe": "CWE-1395", "owasp": "A06:2021",
+                "evidence": (f"pip-audit matched {n} PYSEC/OSV advisory(ies) across {pkgs} package(s); "
+                             f"of these the following are on the CISA Known-Exploited-Vulnerabilities "
+                             f"catalogue: {ksample}. Reachability in this app's executed code path is "
+                             f"not confirmed by pip-audit."),
+                "remediation": ("Patch the KEV-flagged packages immediately to the fix version "
+                                "pip-audit reports. Then review reachability for the remaining "
+                                "advisories. Gate CI with `pip-audit`.")}
     return {"name": f"pip-audit: {n} vulnerable Python dependency advisory(ies) across {pkgs} package(s)",
-            "severity": "HIGH", "cvss": "7.5",
+            "severity": "MEDIUM", "cvss": "5.3",
             "cwe": "CWE-1395", "owasp": "A06:2021",
-            "evidence": f"pip-audit matched {n} PYSEC/OSV advisory(ies). Top: {sample}",
+            "evidence": (f"pip-audit matched {n} PYSEC/OSV advisory(ies). Top: {sample}. The advisory "
+                         "match is reliable, but pip-audit does NOT confirm the vulnerable code is "
+                         "reachable in this application's executed paths, so exploitability-in-context "
+                         "is unconfirmed and the finding is capped to advisory severity."),
             "remediation": ("Upgrade each package to the fix version pip-audit reports "
-                            "(bump requirements.txt / `pip install -U <pkg>`). Gate CI with `pip-audit`.")}
+                            "(bump requirements.txt / `pip install -U <pkg>`). Prioritise by "
+                            "reachability in your code path. Gate CI with `pip-audit`.")}
 
 
 def rule_clean(s):

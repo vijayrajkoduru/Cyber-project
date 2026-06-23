@@ -56,17 +56,62 @@ async def _shallow_clone(repo_url: str, dest: str) -> tuple[bool, str]:
     return True, ""
 
 
+_TOKEN_SPLIT = re.compile(r"[^a-z0-9.+-]+")
+
+
+def _spdx_tokens(expr: str) -> list[str]:
+    """Split an SPDX expression into individual licence-id tokens.
+
+    SPDX expressions combine ids with operators/separators ('AND', 'OR', 'WITH',
+    parens, slashes). We tokenise on those separators so classification matches
+    a WHOLE licence id (e.g. 'AGPL-3.0-or-later') and never a bare substring
+    inside an unrelated id (avoids e.g. a permissive id that merely contains the
+    letters 'gpl' being mis-bucketed)."""
+    e = (expr or "").lower()
+    if not e:
+        return []
+    parts = _TOKEN_SPLIT.split(e)
+    # Drop SPDX boolean operators; keep only candidate licence ids.
+    return [p for p in parts if p and p not in ("and", "or", "with")]
+
+
+def _tok_matches(tokens: list[str], families: tuple) -> bool:
+    """True iff any whole token starts with one of the family id stems.
+
+    A token like 'agpl-3.0-or-later' should match the 'agpl' stem; 'lgpl-2.1'
+    must NOT match the 'gpl' stem (it is its own id). We compare against the
+    leading licence-id segment, anchored at the token start, so 'gpl-3.0'
+    matches 'gpl-3' but 'lgpl-3.0' does not."""
+    for t in tokens:
+        for fam in families:
+            # Anchored: token must BEGIN with the family stem, so 'lgpl'/'agpl'
+            # never match a 'gpl' stem and a permissive id containing the
+            # substring elsewhere never matches.
+            if t == fam or t.startswith(fam + "-") or t.startswith(fam + ".") or t.startswith(fam):
+                # Guard 'gpl' stem against the lgpl/agpl supersets handled earlier.
+                if fam == "gpl" and (t.startswith("lgpl") or t.startswith("agpl")):
+                    continue
+                return True
+    return False
+
+
 def _classify(expr: str) -> str:
-    """Return the copyleft family for an SPDX expression, or '' if permissive."""
+    """Return the copyleft family for an SPDX expression, or '' if permissive.
+
+    Classification is by EXACT SPDX-id token (split on separators), not bare
+    substring, so dual/combined expressions and unrelated ids are not
+    over-matched. License posture is advisory (distribution risk), not an
+    exploit — graded INFO/LOW downstream."""
     e = (expr or "").lower()
     if not e or e in ("none", "noassertion", "unknown"):
         return "unknown"
-    if any(t in e for t in _NETWORK_COPYLEFT):
+    tokens = _spdx_tokens(expr)
+    if _tok_matches(tokens, _NETWORK_COPYLEFT):
         return "network_copyleft"
-    # plain "gpl" without lgpl/agpl already handled above
-    if any(t in e for t in _STRONG_COPYLEFT) or (("gpl" in e) and "lgpl" not in e and "agpl" not in e):
+    # plain "gpl" id (gpl-2/gpl-3/...) — agpl/lgpl tokens are excluded by _tok_matches
+    if _tok_matches(tokens, _STRONG_COPYLEFT) or _tok_matches(tokens, ("gpl",)):
         return "strong_copyleft"
-    if any(t in e for t in _WEAK_COPYLEFT):
+    if _tok_matches(tokens, _WEAK_COPYLEFT):
         return "weak_copyleft"
     return "permissive"
 

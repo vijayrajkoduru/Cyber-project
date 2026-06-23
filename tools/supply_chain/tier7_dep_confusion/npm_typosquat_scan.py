@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from urllib.parse import quote
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
 from tools._framework import ScanContext, run_scanner
@@ -36,6 +37,7 @@ except Exception:  # pragma: no cover
 router = APIRouter()
 TIMEOUT = 8
 MAX_PACKAGES = 200  # safety cap on names compared per scan
+NPM_REGISTRY = "https://registry.npmjs.org"
 
 _HEADERS = {"User-Agent": "VulnusLab-SupplyChain/1.0 (+npm-typosquat)",
             "Accept": "application/json,*/*"}
@@ -132,6 +134,26 @@ def _http_get(url: str) -> dict:
         return {"ok": False}
 
 
+def _registry_status(name: str) -> int | None:
+    """HTTP status from the public npm registry for a package name. None on error.
+    Used to CONFIRM a near-miss: only a declared name that does NOT resolve
+    (404) is real typo/confusion risk; a name that resolves (200) is a real,
+    published package and must not be graded."""
+    if requests is None:
+        return None
+    if name.startswith("@") and "/" in name:
+        scope, pkg = name.split("/", 1)
+        enc = f"{scope}%2F{pkg}"
+    else:
+        enc = quote(name, safe="@")
+    try:
+        r = requests.get(f"{NPM_REGISTRY}/{enc}", headers=_HEADERS, timeout=TIMEOUT,
+                         verify=True, allow_redirects=True)
+        return r.status_code
+    except Exception:
+        return None
+
+
 def _gh_owner_repo(value: str):
     m = _GH_RE.search((value or "").strip())
     if not m:
@@ -219,26 +241,58 @@ def _make_gather(req: ScanRequest):
             ctx.source("no declared npm dependencies")
             return
 
-        # Candidates = declared names not in the popular list that are
+        # Near-misses = declared names not in the popular list that are
         # Damerau-distance EXACTLY 1 from a popular name. (Exact popular names,
         # and names >1 edit away, are never flagged -> zero-FP class.)
-        candidates = []
+        near_misses = []
         for name in declared:
             if name in top:
                 continue
             near = next((t for t in top if _within_one(name, t)), None)
             if near:
-                candidates.append({"declared": name, "near": near})
+                near_misses.append({"declared": name, "near": near})
+
+        # CONFIRMATION GATE: a near-miss is only real typo/confusion risk if the
+        # DECLARED name does NOT resolve on the public npm registry. A name that
+        # resolves (200) is a genuinely published package (legit fork / similarly
+        # named project) -> advisory INFO, not graded MEDIUM. Registry errors
+        # (None) are recorded as unknown and never graded (zero-FP).
+        async def _status(nm):
+            return nm, await asyncio.to_thread(_registry_status, nm)
+
+        statuses = {}
+        if near_misses:
+            results = await asyncio.gather(*[_status(c["declared"]) for c in near_misses])
+            statuses = dict(results)
+
+        candidates = []     # declared name 404 on npm => real typo/confusion risk
+        resolves = []       # declared name exists on npm => legit, advisory only
+        unknown = []        # registry error => never graded
+        for c in near_misses:
+            st = statuses.get(c["declared"])
+            entry = {**c, "registry_status": st}
+            if st == 404:
+                candidates.append(entry)
+            elif st == 200:
+                resolves.append(entry)
+            else:
+                unknown.append(entry)
 
         ctx.state["npmtypo_candidates"] = candidates
+        ctx.state["npmtypo_resolving_near_misses"] = resolves
+        ctx.state["npmtypo_unknown_near_misses"] = unknown
         ctx.source(f"npm-typosquat: {len(declared)} declared deps, "
-                   f"{len(candidates)} near-miss candidate(s) from {source}")
+                   f"{len(near_misses)} near-miss(es) -> {len(candidates)} confirmed "
+                   f"(unresolved on npm) / {len(resolves)} resolve / {len(unknown)} unknown "
+                   f"from {source}")
     return gather
 
 
 INTEL_FIELDS = [("Manifest source", "npmtypo_manifest_source"),
                 ("Declared dependencies", "npmtypo_declared_count"),
-                ("Typosquat candidates", "npmtypo_candidates")]
+                ("Confirmed typosquat candidates (unresolved on npm)", "npmtypo_candidates"),
+                ("Near-misses that resolve on npm (advisory)", "npmtypo_resolving_near_misses"),
+                ("Near-misses with unknown registry status", "npmtypo_unknown_near_misses")]
 
 
 @router.post("/api/supply_chain/npm_typosquat_scan")
