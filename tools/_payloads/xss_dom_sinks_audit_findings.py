@@ -5,9 +5,12 @@ Severity model:
              (within ~400 chars / one function body of each other). A
              reflected/stored attacker-controlled value can reach the
              sink — DOM-XSS is likely live.
-  HIGH     - dangerous sink present but no co-occurring source. Code
-             could still be vulnerable if reached via a different path
-             — needs manual review.
+  LOW      - dangerous sink present but NO co-occurring taint source.
+             A sink existing is not a proven exploit (no source→sink
+             dataflow demonstrated) — it is a code-review pointer, not a
+             confirmed DOM-XSS. Downgraded from HIGH to suppress
+             false-positives on sites that use innerHTML/document.write
+             with only static/trusted values.
   INFO     - fetch failed / no JS / dependency missing
   POSITIVE - JS analysed, zero sinks found
 """
@@ -67,17 +70,23 @@ def rule_high_sinks_no_source(s):
             sample = smp.get("snippet")[:160]
             break
     return {
-        "name": f"Dangerous DOM sinks present ({total}) but no source proximity confirmed",
-        "severity": "HIGH",
-        "cvss": "6.1",
+        "name": f"Dangerous DOM sinks present ({total}) but no taint source / dataflow confirmed",
+        "severity": "LOW",
+        "cvss": "3.1",
         "cwe": "CWE-79",
         "owasp": "A03:2021",
+        "verified_exploit": False,
         "evidence": (
             f"{total} occurrence(s) of innerHTML / document.write / eval / "
             f"setTimeout(string) detected across "
-            f"{s.get('xss_dom_assets_total', 0)} JS asset(s). No taint "
-            f"source was found within ~400 chars — could still be reachable "
-            f"via a longer code path, framework binding, or runtime mutation. "
+            f"{s.get('xss_dom_assets_total', 0)} JS asset(s). NO attacker-"
+            f"controllable taint source (document.location / .URL / "
+            f"window.name / postMessage data / storage) was found within "
+            f"~400 chars of any sink, so no source→sink dataflow is proven. "
+            f"A sink existing is not itself an exploit — this is a "
+            f"code-review pointer, not a confirmed DOM-XSS. It could still "
+            f"be reachable via a longer code path / framework binding and "
+            f"warrants manual review. "
             f"Sample sink: {sample or '(none)'}"
         ),
         "remediation": (

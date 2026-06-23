@@ -16,16 +16,15 @@ Access-Control-Allow-Origin (ACAO) + Access-Control-Allow-Credentials
   CRITICAL  - ACAO is "*" AND ACAC: true
               (spec violation, but some browsers / older middleware
                still accept this and authenticate the read)
-  HIGH      - ACAO reflects ANY Origin, ACAC: false
-              (no cookies but can still read public APIs / IP-bound
-               internal endpoints)
+  MEDIUM    - ACAO reflects ANY Origin, ACAC: false
+              (no cookies, so NO credentialed data theft — can still read
+               non-authenticated public APIs / IP-bound internal endpoints)
   HIGH      - ACAO accepts "null" Origin
               (file://, data:, sandboxed iframes — easy attacker primitive)
-  HIGH      - ACAO accepts a mistyped variant of the production domain
-              (e.g. accepts `https://target-mistyped.com` when intended
-               to allow `target.com`)
-  MEDIUM    - ACAO uses a suffix-match bug (accepts `evil-target.com`
-              when expecting `target.com`)
+  MEDIUM    - ACAO accepts a mistyped / suffix / subdomain variant of the
+              production domain without credentials (broken origin check,
+              but no credentialed read)
+  MEDIUM    - HTTP downgrade accepted (mixed-content read)
   INFO      - ACAO absent → CORS not configured (default deny → safe)
   POSITIVE  - ACAO present, locks to specific origin(s), no reflection
 
@@ -160,16 +159,30 @@ def _classify(probe_result: dict) -> dict:
     if probe_id == "http_target" and acao == origin_sent:
         flags["http_downgrade"] = True
 
-    # Severity
+    # Severity.
+    #
+    # Origin reflection / allowlist-bypass WITHOUT Allow-Credentials is
+    # NOT credentialed data theft (the attacker page can only read
+    # responses the victim's cookies are NOT attached to), so it is graded
+    # MEDIUM, not HIGH. HIGH/CRITICAL are reserved for cases that enable a
+    # credentialed cross-origin read (ACAC: true) — except 'null' Origin,
+    # which is a uniquely easy-to-forge attacker primitive and stays HIGH.
     if (flags["reflected_origin"] or flags["wildcard"]) and acac:
         flags["severity"] = "CRITICAL"
     elif flags["null_origin_allowed"] and acac:
         flags["severity"] = "CRITICAL"
-    elif flags["reflected_origin"] or flags["null_origin_allowed"]:
+    elif flags["null_origin_allowed"]:
+        # 'null' Origin accepted (no creds) — easy attacker primitive
+        # (sandboxed iframe / data: / file://), keep HIGH.
         flags["severity"] = "HIGH"
+    elif flags["reflected_origin"]:
+        # Origin reflected back but NO credentials -> no credentialed read.
+        flags["severity"] = "MEDIUM"
     elif (flags["mistyped_allowed"] or flags["suffix_bypass"]
           or flags["prefix_bypass"] or flags["evil_subdomain"]):
-        flags["severity"] = "HIGH"
+        # Allowlist-bypass reflection without credentials -> MEDIUM (no
+        # credentialed data theft; still indicates a broken origin check).
+        flags["severity"] = "MEDIUM"
     elif flags["http_downgrade"]:
         flags["severity"] = "MEDIUM"
     elif acao:

@@ -103,6 +103,34 @@ def rule_telnet_mgmt(s):
                             "PCI DSS 4.0 §2.2 / NIST SP 800-153 violation.")}
 
 
+def rule_generic_marker_only(s):
+    """A LIVE response contained only a GENERIC AP marker ("access point",
+    "SSID", "wlan settings", ...) and no exact vendor signature. Such markers
+    appear on countless unrelated pages, so this is NOT a confirmed wireless
+    management plane — INFO context only, never graded."""
+    hits = s.get("generic_ap_markers") or []
+    if not hits:
+        return None
+    lines = "; ".join(
+        f"{h.get('url')} (HTTP {h.get('status')}, "
+        f"Server: {h.get('server') or 'n/a'}"
+        f"{', title=' + h.get('title') if h.get('title') else ''})"
+        for h in hits
+    )
+    return {"name": "Generic AP/Wi-Fi marker seen but no vendor admin panel confirmed",
+            "severity": "INFO",
+            "evidence": (f"Live response(s) contained only low-specificity wireless "
+                         f"markers (e.g. 'access point' / 'SSID' / 'WLAN settings') with "
+                         f"NO exact vendor fingerprint: {lines}. These strings appear on "
+                         "many unrelated pages and do not confirm an exposed wireless "
+                         "management plane."),
+            "remediation": ("If any of these ports DO front wireless infrastructure, "
+                            "firewall the admin interface off the public internet "
+                            "regardless. Otherwise no action — no wireless exposure "
+                            "was confirmed."),
+            "cwe": "CWE-668", "owasp": "A05:2021"}
+
+
 def rule_open_unidentified(s):
     """Ports reachable but NO wireless-admin signature matched. Context only —
     NEVER graded (could be any web service). INFO."""
@@ -111,6 +139,8 @@ def rule_open_unidentified(s):
         return None
     if s.get("ap_admin_exposed"):
         return None  # the graded rule already covers identified panels
+    if s.get("generic_ap_markers"):
+        return None  # covered by rule_generic_marker_only
     if s.get("telnet_mgmt_reachable"):
         return None  # telnet rule covers that case
     ports = ", ".join(str(p.get("port")) for p in open_ports)
@@ -131,5 +161,6 @@ WIRELESS_MGMT_EXPOSURE_AUDIT_FINDING_RULES = [
     rule_no_mgmt_ports,
     rule_ap_admin_exposed,
     rule_telnet_mgmt,
+    rule_generic_marker_only,
     rule_open_unidentified,
 ]

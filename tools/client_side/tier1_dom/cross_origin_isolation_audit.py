@@ -21,8 +21,9 @@ a missing mitigation, not a demonstrated exploit), the missing-header
 findings are graded LOW/MEDIUM and a clear POSITIVE is emitted when
 full isolation is present.
 
-  MEDIUM  - COOP absent AND the page is a high-value auth/SSO surface
-            indicator (login form / oauth path) — opener-based XS-Leaks
+  MEDIUM  - COOP absent AND the page is a REAL auth surface (an actual
+            <input type="password"> field AND a <form action=...>, not a
+            substring like "/login") — opener-based XS-Leaks
   LOW     - COOP absent (general window.opener / tabnabbing exposure)
   LOW     - CORP absent (resource embeddable cross-origin -> no-cors leak)
   INFO    - COEP absent (crossOriginIsolated unavailable) — informational,
@@ -55,15 +56,32 @@ class CrossOriginIsolationRequest(ScanRequest):
     options: Optional[dict] = None
 
 
-# Heuristic markers that the page is an authentication / SSO surface where
-# opener-based XS-Leaks (login detection, account-existence oracles) bite
-# hardest. Only used to nudge COOP-absent from LOW -> MEDIUM.
-_AUTH_HINT_RE = re.compile(
-    r"""type\s*=\s*["']password["']|"""
-    r"""name\s*=\s*["'](?:password|passwd|pwd|otp|mfa)["']|"""
-    r"""(?:oauth|/login|/signin|/sign-in|/sso|/authorize)""",
+# Authentication-surface detection used ONLY to nudge COOP-absent from
+# LOW -> MEDIUM. A loose substring match ("/login", "password" anywhere
+# in the HTML) over-fires badly — almost any marketing page mentions
+# "login" or links to "/signin". To qualify as a real auth surface we
+# require BOTH a real password <input type="password"> field AND a <form>
+# carrying an action attribute (i.e. an actual credential-submitting form
+# is present in the DOM), not a substring anywhere in the markup.
+_PASSWORD_INPUT_RE = re.compile(
+    r"""<input\b[^>]*\btype\s*=\s*["']?password["']?""",
     re.IGNORECASE,
 )
+_FORM_WITH_ACTION_RE = re.compile(
+    r"""<form\b[^>]*\baction\s*=\s*["']?[^"'\s>]+""",
+    re.IGNORECASE,
+)
+
+
+def _is_auth_surface(html: str) -> bool:
+    """Real auth surface = an actual password input field AND a form with
+    an action attribute. Substring presence of "password"/"/login" is NOT
+    sufficient (over-fires on any page that merely links to a login page)."""
+    if not html:
+        return False
+    return bool(_PASSWORD_INPUT_RE.search(html)) and bool(
+        _FORM_WITH_ACTION_RE.search(html)
+    )
 
 
 async def gather(ctx: ScanContext):
@@ -110,7 +128,7 @@ async def gather(ctx: ScanContext):
     coep_protective = coep_l in ("require-corp", "credentialless")
     corp_protective = corp_l in ("same-origin", "same-site")
 
-    auth_surface = bool(_AUTH_HINT_RE.search((r.text or "")[:200000]))
+    auth_surface = _is_auth_surface((r.text or "")[:400000])
 
     ctx.state["coi_target_url"] = str(r.url)
     ctx.state["coi_http_status"] = r.status_code
@@ -148,12 +166,13 @@ def rule_coop_absent_auth(s):
         "cwe": "CWE-1021",
         "cwe_name": "Improper Restriction of Rendered UI Layers or Frames",
         "owasp": "A05:2021",
-        "verified_exploit": True,
+        "verified_exploit": False,
         "evidence": (
             f"GET {s.get('coi_target_url')} returned "
             f"Cross-Origin-Opener-Policy: {s.get('coi_coop')} and the page "
-            "exposes authentication markers (password field / OAuth / "
-            "/login path). Without COOP same-origin, a window opened by an "
+            "exposes a real authentication form (an actual password input "
+            "field together with a credential-submitting <form action=...>). "
+            "Without COOP same-origin, a window opened by an "
             "attacker page retains a live window.opener reference, enabling "
             "frame-count / login-state XS-Leaks and tabnabbing against the "
             "auth flow."
@@ -181,7 +200,7 @@ def rule_coop_absent(s):
         "cvss": "3.1",
         "cwe": "CWE-1021",
         "owasp": "A05:2021",
-        "verified_exploit": True,
+        "verified_exploit": False,
         "evidence": (
             f"Cross-Origin-Opener-Policy header is {s.get('coi_coop')} on "
             f"{s.get('coi_target_url')}. A cross-origin document that opens "
@@ -209,7 +228,7 @@ def rule_corp_absent(s):
         "cwe": "CWE-200",
         "cwe_name": "Exposure of Sensitive Information to an Unauthorized Actor",
         "owasp": "A01:2021",
-        "verified_exploit": True,
+        "verified_exploit": False,
         "evidence": (
             f"Cross-Origin-Resource-Policy header is {s.get('coi_corp')} on "
             f"{s.get('coi_target_url')}. Any cross-origin page can embed "

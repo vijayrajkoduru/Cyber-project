@@ -9,9 +9,15 @@ after a successful HTTP fetch whose framing-control headers were actually
 parsed (bitb_fetched_ok is True). A failed/blocked fetch, a missing URL,
 or a missing dependency is INFO — never graded.
 
+A framable page is clickjacking/BitB *surface*, not a confirmed exploit. We
+never frame the page, run JS, or demonstrate a working overlay — so a missing
+XFO / frame-ancestors header is framable-advisory (LOW), not a graded MEDIUM
+vulnerability.
+
 Severity model:
-  MEDIUM   - page IS framable by any origin (no XFO deny + no/weak CSP
-             frame-ancestors) -> BitB + clickjacking surface confirmed
+  LOW      - page IS framable by any origin (no XFO deny + no/weak CSP
+             frame-ancestors) -> BitB + clickjacking surface (advisory; no
+             confirmed exploit)
   LOW      - only protection is the obsolete `X-Frame-Options: ALLOW-FROM`
              (ignored by modern browsers) and CSP doesn't cover it
   INFO     - no target_url / httpx missing / fetch failed / non-2xx page
@@ -87,7 +93,7 @@ def rule_framable(s):
     return {
         "name": (f"Login page {s.get('bitb_target_url', '?')} is framable by "
                  "any origin - Browser-in-the-Browser / clickjacking surface"),
-        "severity": "MEDIUM",
+        "severity": "LOW",
         "cvss": "4.3",
         "cwe": _CWE_FRAMING,
         "cwe_name": "Improper Restriction of Rendered UI Layers (Clickjacking)",
@@ -98,11 +104,11 @@ def rule_framable(s):
             f"X-Frame-Options: {v.get('xfo_value') or 'absent'}. "
             f"CSP frame-ancestors: "
             f"{(' '.join(fa) if fa else 'absent')}. "
-            "Because the page does not refuse framing, an attacker can embed "
-            "the genuine login UI inside a Browser-in-the-Browser overlay (a "
-            "fake browser window with a spoofed address bar) or a "
-            "clickjacking frame, so credentials are entered against the real "
-            "origin while the victim believes they are on a legitimate site."
+            "Because the page does not refuse framing, the page is potentially "
+            "embeddable inside a Browser-in-the-Browser overlay or a "
+            "clickjacking frame. This is framable SURFACE (advisory) — the "
+            "probe did not frame the page, run JavaScript, or demonstrate a "
+            "working overlay, so no exploit is confirmed."
         ),
         "remediation": (
             "Add a framing-deny response header to the login page (and ideally "

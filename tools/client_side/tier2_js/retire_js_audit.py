@@ -23,8 +23,12 @@ This probe (DETECTION ONLY, nothing executed):
      severity straight from retire's advisory database.
 
 Findings (graded ONLY on what retire actually matched):
-  CRITICAL/HIGH/MEDIUM/LOW - one per vulnerable library, severity mapped
-                             from the retire advisory entry
+  HIGH/MEDIUM/LOW - one per vulnerable library. A version match is a
+                    "component present" supply-chain signal (the site
+                    SHIPS a flagged version), NOT proof the vulnerable
+                    code path is reachable — so severity is CAPPED AT
+                    HIGH (retire "critical" -> HIGH) and every match
+                    carries verified_exploit=False.
   INFO  [ADVISORY-BY-DESIGN] - `retire` binary not installed in the image
   INFO                        - no first-party JavaScript found / target
                                unreachable
@@ -72,8 +76,16 @@ MAX_JS_BYTES = 5 * 1024 * 1024          # don't write >5 MB per JS file
 MAX_VULN_LIBS = 40
 
 # retire severity strings -> our canonical grades + CVSS anchors.
+#
+# NOTE: retire.js matching a library version is a "component present"
+# signal — it proves the site SHIPS a version with a published advisory,
+# NOT that the vulnerable code path is reachable / exploitable on this
+# target. So we CAP the emitted grade at HIGH (a known-vuln dependency
+# being loaded is a real supply-chain concern, but presence alone is not
+# a proven CRITICAL exploit) and set verified_exploit=False on every
+# match. retire "critical" is mapped down to HIGH for this reason.
 _SEV_MAP = {
-    "critical": ("CRITICAL", "9.8"),
+    "critical": ("HIGH", "7.5"),
     "high":     ("HIGH", "7.5"),
     "medium":   ("MEDIUM", "5.4"),
     "moderate": ("MEDIUM", "5.4"),
@@ -398,7 +410,7 @@ def _make_lib_rule(idx: int):
         summary = lib.get("summary") or ""
         ref = lib.get("reference") or ""
         return {
-            "name": (f"Vulnerable JS library: {component} {version}"
+            "name": (f"Known-vulnerable JS library loaded: {component} {version}"
                      + (f" ({cves[0]})" if cves else "")),
             "severity": sev,
             "cvss": cvss,
@@ -406,13 +418,19 @@ def _make_lib_rule(idx: int):
             "cwe": "CWE-1395",
             "cwe_name": "Dependency on Vulnerable Third-Party Component",
             "owasp": "A06:2021",
-            "verified_exploit": True,   # retire confirmed the version match
+            # retire confirmed the VERSION MATCH (a "component present"
+            # signal), NOT that the vulnerable code path is reachable /
+            # exploitable on this target — so this is not a proven exploit.
+            "verified_exploit": False,
             "evidence": (
                 f"retire.js matched {component} version {version} against its "
-                f"advisory database as a known-vulnerable component loaded by "
-                f"this site"
+                f"advisory database, so this site LOADS a version of "
+                f"{component} that has a published advisory"
                 + (f" (file: {lib.get('file')})" if lib.get("file") else "")
-                + ". "
+                + ". This is a component-present / supply-chain signal: it "
+                f"shows the vulnerable version is shipped, but does NOT prove "
+                f"the vulnerable code path is reachable or exploitable on this "
+                f"target. "
                 + (f"Advisory: {summary} " if summary else "")
                 + (f"CVE(s): {cve_str}." if cves else "")
             ),

@@ -78,22 +78,30 @@ def rule_wps_enabled(s):
 
 
 def rule_pixie_dust_indicator(s):
+    # ZERO-FP: the pixie_dust_indicator is set from a SUBSTRING match
+    # ("Pixie-Dust" / "pixiewps" / "WPS pin:" appearing in reaver output).
+    # A substring is NOT a confirmed crack — reaver prints "Pixie-Dust"
+    # banners even when the attack does not succeed. A graded (MEDIUM+)
+    # finding requires actual recovery (pin_recovered/psk_recovered), which
+    # the dedicated rules below cover. Substring-only -> INFO advisory.
     a = s.get("wps_audit") or {}
-    if a.get("pin_recovered"):
-        return None
+    if a.get("pin_recovered") or a.get("psk_recovered"):
+        return None  # actual recovery is graded by rule_pin_recovered
     if not a.get("pixie_dust_indicator"):
         return None
-    return {"name": "AP appears vulnerable to Pixie Dust offline WPS attack",
-            "severity": "MEDIUM", "cvss": "8.1",
+    return {"name": "Pixie Dust attempted (no PIN/PSK recovery confirmed) - advisory",
+            "severity": "INFO",
             "cwe": "CWE-330", "owasp": "A02:2021",
-            "evidence": ("reaver mentioned Pixie-Dust but vulnerability NOT confirmed by "
-                         "successful nonce/PIN recovery for BSSID "
-                         + str(s.get("bssid", ""))),
+            "evidence": ("reaver output referenced Pixie-Dust/pixiewps for BSSID "
+                         + str(s.get("bssid", "")) +
+                         " but NO WPS PIN or WPA PSK was recovered, so the AP is "
+                         "NOT confirmed Pixie-Dust-vulnerable. This is a substring "
+                         "indicator only, not a successful offline crack."),
             "remediation": ("Pixie Dust exploits weak random-number generation in "
-                            "Ralink/Broadcom/Realtek WPS chipsets — the registrar "
-                            "nonces are predictable, allowing offline PIN recovery. "
-                            "DISABLE WPS entirely and upgrade firmware. Replace "
-                            "AP if vendor has not patched.")}
+                            "Ralink/Broadcom/Realtek WPS chipsets. Although no crack "
+                            "was confirmed in this window, disabling WPS entirely and "
+                            "upgrading firmware remains best practice. Re-run with a "
+                            "longer scan_duration to confirm/deny vulnerability.")}
 
 
 def rule_pin_recovered(s):

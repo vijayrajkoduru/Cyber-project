@@ -6,15 +6,25 @@ final step before a phishing landing page goes live. A non-owned domain
 that contains the brand keyword AND has a publicly-trusted cert is an
 active impersonation surface.
 
-ZERO-FALSE-POSITIVE rule: MEDIUM fires ONLY when crt.sh actually returned
-parseable rows (ctlog_queried) AND at least one covered name contains the
-brand keyword on a domain outside the customer's owned set
+ZERO-FALSE-POSITIVE rule: a graded finding fires ONLY when crt.sh actually
+returned parseable rows (ctlog_queried) AND at least one covered name contains
+the brand keyword on a domain outside the customer's owned set
 (ctlog_lookalike_count > 0). crt.sh being unreachable, the keyword being
 too short, or zero hits is INFO / POSITIVE - never graded.
 
+A cert issued on a lookalike domain is NOT proof of a live phishing page —
+it is impersonation *capability*. Without content confirmation (we never
+fetch the lookalike host) the strongest claim is "HTTPS infra exists". When
+the issuer is a well-known free/automated CA (Let's Encrypt, ZeroSSL,
+Google Trust, etc.) the cert alone carries no extra signal, so we cap it at
+LOW. Only when an issuer is unrecognised / non-standard do we raise to
+MEDIUM for triage priority.
+
 Severity model:
-  MEDIUM   - >=1 certificate found for brand-keyword hostname(s) on
-             domain(s) the customer does not own
+  MEDIUM   - >=1 brand-keyword cert on a non-owned domain from an
+             UNRECOGNISED issuer (warrants priority triage)
+  LOW      - >=1 brand-keyword cert on a non-owned domain, all from
+             well-known CAs (cert issuance only; no live-page confirmation)
   INFO     - crt.sh unreachable / httpx missing / keyword too short / bad
              target
   POSITIVE - query succeeded and found NO non-owned brand-keyword certs
@@ -22,6 +32,29 @@ Severity model:
 
 _CWE_SPOOF = "CWE-290"   # Authentication Bypass by Spoofing
 _NIST = "NIST 800-53 SC-8 / SI-4 (Information System Monitoring)"
+
+# Well-known publicly-trusted CAs. A cert from one of these on a lookalike
+# domain is routine (free/automated) and is NOT additional evidence of an
+# active phishing page — so it caps the finding at LOW.
+_WELL_KNOWN_CAS = (
+    "let's encrypt", "lets encrypt", "letsencrypt", "r3", "r10", "r11", "e1",
+    "e5", "e6", "zerossl", "google trust", "gts ", "digicert", "sectigo",
+    "comodo", "globalsign", "amazon", "cloudflare", "buypass", "ssl.com",
+    "certum", "actalis", "entrust", "godaddy", "starfield",
+)
+
+
+def _all_well_known(domains) -> bool:
+    """True only when EVERY listed lookalike cert came from a recognised CA."""
+    saw_issuer = False
+    for d in domains:
+        issuer = (d.get("issuer") or "").lower()
+        if not issuer:
+            return False  # unknown issuer -> cannot claim "well-known only"
+        saw_issuer = True
+        if not any(ca in issuer for ca in _WELL_KNOWN_CAS):
+            return False
+    return saw_issuer
 
 
 def rule_dep_or_error(s):
@@ -86,17 +119,33 @@ def rule_lookalikes_found(s):
         for d in sample
     )
     more = f" (+{len(domains) - len(sample)} more)" if len(domains) > len(sample) else ""
+    well_known_only = _all_well_known(domains)
+    if well_known_only:
+        sev, cvss = "LOW", "3.1"
+        sev_note = (
+            " All listed certs were issued by well-known CAs (routine free/"
+            "automated issuance); the cert alone is NOT evidence of a live "
+            "phishing page — this is impersonation capability pending content "
+            "review."
+        )
+    else:
+        sev, cvss = "MEDIUM", "5.3"
+        sev_note = (
+            " One or more certs came from an unrecognised issuer — prioritise "
+            "these for triage (still cert-issuance evidence only, not a "
+            "confirmed live phishing page)."
+        )
     return {
         "name": (f"{len(domains)} brand-impersonating domain(s) with valid "
                  f"HTTPS certs found in CT logs for "
                  f"'{s.get('ctlog_brand_keyword')}'"),
-        "severity": "MEDIUM",
-        "cvss": "5.3",
+        "severity": sev,
+        "cvss": cvss,
         "cwe": _CWE_SPOOF,
         "cwe_name": "Authentication Bypass by Spoofing",
         "owasp": "A07:2021",
-        "verified_exploit": True,  # the cert issuance is a fact read from CT logs
         "evidence": (
+            sev_note.strip() + " "
             f"crt.sh returned {s.get('ctlog_rows_seen', '?')} certificate "
             f"rows for `%{s.get('ctlog_brand_keyword')}%`. After excluding "
             f"your owned domains ({', '.join(s.get('ctlog_owned_domains') or [])}), "
