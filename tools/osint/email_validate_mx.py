@@ -94,12 +94,15 @@ def _do_scan(req: ScanRequest) -> dict:
         tool="email_validate_mx", target=req.target,
         findings=[wrap_finding(
             f"Domain {domain} has no MX or A records — mail not deliverable",
-            severity="HIGH", cwe="CWE-1395",
-            remediation="If this is your domain: add MX records pointing to your "
-                        "mail provider. If this is an attacker-controlled spoof "
-                        "lookalike: monitor via dnstwist.",
+            # A missing MX/A is a DNS deliverability misconfiguration, not a
+            # security breach or proven exposure. INFO, not graded.
+            severity="INFO", cwe="CWE-1395",
+            remediation="Informational: missing MX/A is a mail-deliverability "
+                        "misconfiguration, not a breach. If this is your domain: "
+                        "add MX records pointing to your mail provider. If this is "
+                        "an attacker-controlled spoof lookalike: monitor via dnstwist.",
             evidence_marker="No MX, no A (CONFIRMED via DNS)")],
-        tests_performed=1, vulnerable=True,
+        tests_performed=1, vulnerable=False,
         tests_summary="Domain rejects mail (no MX/A)",
         raw_data={"mx": [], "a": [], "domain": domain})
 

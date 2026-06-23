@@ -63,10 +63,13 @@ def _do_scan(req: ScanRequest) -> dict:
         sample = sorted(org_emails)[:20]
         findings.append(wrap_finding(
             f"{len(org_emails)} email(s) extracted from CT log certificates",
-            severity="MEDIUM", cvss="4.3",
+            severity="INFO", cvss="0.0",
             cwe="CWE-200", owasp="A05:2021",
-            remediation=("Avoid putting personal contact emails in certificate "
-                        "subjects/SAN fields. Use a role-based registration mailbox."),
+            remediation=("Certificate Transparency logs are public by design; "
+                        "emails in cert subjects/SAN fields are world-readable "
+                        "and not an exposure in themselves. Informational: avoid "
+                        "putting personal contact emails in certificate subjects — "
+                        "use a role-based registration mailbox."),
             evidence_marker=", ".join(sample)))
     else:
         findings.append(wrap_finding(
@@ -79,7 +82,7 @@ def _do_scan(req: ScanRequest) -> dict:
     return standard_response(
         tool="crtsh_emails", target=req.target, findings=findings,
         tests_performed=len(data),
-        vulnerable=len(org_emails) > 0,
+        vulnerable=False,  # CT logs are public by design — informational only
         tests_summary=f"crt.sh CT log: {len(data)} entries, {len(org_emails)} org emails",
         raw_data={"emails": sorted(org_emails)[:50]})
 

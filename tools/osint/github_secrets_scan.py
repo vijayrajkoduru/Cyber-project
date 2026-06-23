@@ -9,12 +9,53 @@ Real probe — actually fetches diffs and pattern-matches. Patterns are
 high-confidence (AKIA / sk_live_ / xoxb-) to avoid false positives.
 """
 import asyncio
+import math
 import re
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+
+# Reuse the project-wide entropy + allowlist helpers (same logic as the webapp
+# secrets fix) so a regex match is only graded when the captured blob is
+# actually high-entropy and not an obvious test/example/placeholder value.
+try:
+    from tools._payloads.secrets_patterns import (
+        shannon_entropy, GENERIC_MIN_ENTROPY)
+except Exception:  # pragma: no cover - defensive local fallback
+    GENERIC_MIN_ENTROPY = 3.6
+
+    def shannon_entropy(s: str) -> float:
+        if not s:
+            return 0.0
+        freq = {}
+        for ch in s:
+            freq[ch] = freq.get(ch, 0) + 1
+        n = len(s)
+        ent = 0.0
+        for c in freq.values():
+            p = c / n
+            ent -= p * math.log2(p)
+        return ent
+
+# Substrings that mark an obviously fake / non-secret token. A match whose
+# captured value (lowercased) contains any of these is treated as INFO, never
+# graded — even if it matches a key-shaped regex.
+_SECRET_PLACEHOLDERS = ("example", "test", "sample", "dummy", "xxxx",
+                         "0000", "placeholder", "redacted")
+
+
+def _is_real_secret(tok: str) -> bool:
+    """True only if the captured token is high-entropy and not a placeholder."""
+    low = tok.lower()
+    if any(p in low for p in _SECRET_PLACEHOLDERS):
+        return False
+    # PEM private-key headers carry no key material in the matched substring
+    # itself, so exempt them from the entropy floor (the header IS the signal).
+    if "private key" in low:
+        return True
+    return shannon_entropy(tok) >= GENERIC_MIN_ENTROPY
 
 router = APIRouter()
 WALL_CLOCK_S = 35
@@ -36,11 +77,18 @@ PATTERNS = [
 
 
 def _scan_text(text):
+    """Return list of (name, redacted_snippet, is_real) for each pattern match.
+
+    is_real is True only when the captured token clears the entropy floor and
+    is not a test/example/placeholder. Low-entropy/placeholder matches are
+    retained but flagged is_real=False so they can be reported as INFO.
+    """
     hits = []
     for name, pat in PATTERNS:
         for m in re.finditer(pat, text):
             tok = m.group(0)
-            hits.append((name, tok[:20] + ("…" + tok[-4:] if len(tok) > 24 else "")))
+            redacted = tok[:20] + ("…" + tok[-4:] if len(tok) > 24 else "")
+            hits.append((name, redacted, _is_real_secret(tok)))
             if len(hits) >= 10: break
         if len(hits) >= 10: break
     return hits
@@ -128,7 +176,10 @@ def _do_scan(req: ScanRequest) -> dict:
         except Exception:
             return (full, sha, [])
 
+    # secret_hits: graded (entropy-cleared, non-placeholder).
+    # weak_hits: pattern matched but low-entropy / placeholder -> INFO only.
     secret_hits = []
+    weak_hits = []
     scanned = 0
     with ThreadPoolExecutor(max_workers=12) as pool:
         for full, sha, files in pool.map(_fetch_diff, commit_jobs, timeout=25):
@@ -138,11 +189,11 @@ def _do_scan(req: ScanRequest) -> dict:
                     continue
                 scanned += 1
                 hits = _scan_text(patch)
-                for tname, snippet in hits:
-                    secret_hits.append((full, sha[:8], tname, snippet,
-                                          f.get("filename", "?")))
+                for tname, snippet, is_real in hits:
+                    row = (full, sha[:8], tname, snippet, f.get("filename", "?"))
+                    (secret_hits if is_real else weak_hits).append(row)
 
-    if not secret_hits:
+    if not secret_hits and not weak_hits:
         return standard_response(
             tool="github_secrets_scan", target=req.target,
             findings=[wrap_finding(
@@ -155,14 +206,13 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=scanned, vulnerable=False,
             tests_summary=f"{scanned} diffs clean")
 
-    evidence_lines = [
-        f"{repo}@{sha} {ttype} in {fname}: {snip}"
-        for repo, sha, ttype, snip, fname in secret_hits[:8]
-    ]
-
-    return standard_response(
-        tool="github_secrets_scan", target=req.target,
-        findings=[wrap_finding(
+    findings = []
+    if secret_hits:
+        evidence_lines = [
+            f"{repo}@{sha} {ttype} in {fname}: {snip}"
+            for repo, sha, ttype, snip, fname in secret_hits[:8]
+        ]
+        findings.append(wrap_finding(
             f"LEAKED SECRETS — {len(secret_hits)} hit(s) in recent commits of {name}",
             severity="CRITICAL", cvss="9.8", cwe="CWE-798",
             owasp="A07:2021",
@@ -172,10 +222,29 @@ def _do_scan(req: ScanRequest) -> dict:
                         "Set up gitleaks pre-commit + GitHub Advanced Security "
                         "secret scanning push protection.",
             evidence_marker=" | ".join(evidence_lines) +
-                              " (CONFIRMED via diff-pattern match)")],
-        tests_performed=scanned, vulnerable=True,
-        tests_summary=f"{len(secret_hits)} secrets in {scanned} diffs",
-        raw_data={"hits": secret_hits[:20], "scanned_diffs": scanned,
+                              " (CONFIRMED via diff-pattern match + entropy gate)"))
+    if weak_hits:
+        weak_lines = [
+            f"{repo}@{sha} {ttype} in {fname}: {snip}"
+            for repo, sha, ttype, snip, fname in weak_hits[:8]
+        ]
+        findings.append(wrap_finding(
+            f"{len(weak_hits)} key-shaped string(s) failed the entropy/allowlist gate",
+            severity="INFO", cvss="0.0", cwe="CWE-798",
+            owasp="A07:2021",
+            remediation="These matched a secret-shaped regex but are low-entropy or "
+                        "contain test/example/placeholder markers — likely fixtures "
+                        "or docs, not live secrets. Manually confirm before acting.",
+            evidence_marker=" | ".join(weak_lines) +
+                              " (NOT graded — failed entropy/placeholder gate)"))
+
+    return standard_response(
+        tool="github_secrets_scan", target=req.target,
+        findings=findings,
+        tests_performed=scanned, vulnerable=bool(secret_hits),
+        tests_summary=f"{len(secret_hits)} secrets ({len(weak_hits)} filtered) in {scanned} diffs",
+        raw_data={"hits": secret_hits[:20], "weak_hits": weak_hits[:20],
+                   "scanned_diffs": scanned,
                    "scanned_repos": [r.get("full_name") for r in repos[:5]]})
 
 

@@ -128,7 +128,8 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="otx_indicators", target=req.target, findings=findings,
-        tests_performed=1, vulnerable=True,
+        tests_performed=1,
+        vulnerable=sev in ("MEDIUM", "HIGH", "CRITICAL"),  # INFO/LOW pulses are analyst signal, not an exposure
         tests_summary=f"OTX: {pulses} pulse(s)",
         raw_data={"pulse_count": pulses, "top_pulses": pulse_names,
                    "country": countries, "type": otx_type})

@@ -133,8 +133,11 @@ def _do_scan(req: ScanRequest) -> dict:
         evidence = " | ".join(f"{l}: {u}" for l, u in found[:15])
         findings.append(wrap_finding(
             f"Username '{username}' found on {len(found)} platform(s)",
-            severity="MEDIUM" if len(found) >= 5 else "LOW",
-            cwe="CWE-200", cvss="3.7",
+            # Public profile existence is public-by-design OSINT, not an
+            # exposure in itself. INFO baseline; LOW max only when the handle
+            # is reused widely enough to materially aid identity correlation.
+            severity="LOW" if len(found) >= 5 else "INFO",
+            cwe="CWE-200", cvss="0.0",
             remediation="Username reuse across platforms allows attacker to "
                         "build full identity profile. For high-risk users (execs, "
                         "security team), use platform-unique usernames or random handles.",
@@ -155,7 +158,8 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="sherlock_username", target=req.target, findings=findings,
-        tests_performed=len(SITES), vulnerable=bool(found),
+        tests_performed=len(SITES),
+        vulnerable=False,  # public profile existence is OSINT, not an exposure
         tests_summary=f"checked {len(SITES)} platforms; found on {len(found)}; clean on {len(clean)}",
         raw_data={"found": found, "clean": clean, "ambiguous": ambiguous})
 

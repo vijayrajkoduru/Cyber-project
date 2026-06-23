@@ -66,24 +66,53 @@ def _do_scan(req: ScanRequest) -> dict:
     families = sorted({i.get("malware_printable") or i.get("malware") or "?"
                         for i in iocs})
 
+    # FRESHNESS + CONFIDENCE GATE: ThreatFox carries first_seen + a
+    # confidence_level (0-100). An IOC is only graded high when it is BOTH
+    # recent (<=24 months) AND high-confidence. Stale or low-confidence
+    # entries (e.g. a brand-lookalike example) stay INFO.
+    import datetime as _dt
+    max_conf = max((i.get("confidence_level", 0) or 0 for i in iocs), default=0)
+    latest_seen = max((str(i.get("first_seen", "") or "")[:10] for i in iocs),
+                       default="")
+    recent = False
+    if len(latest_seen) >= 7 and latest_seen[:4].isdigit():
+        try:
+            yr, mo = int(latest_seen[:4]), int(latest_seen[5:7] or "1")
+            age_months = ((_dt.date.today().year - yr) * 12
+                          + (_dt.date.today().month - mo))
+            recent = age_months <= 24
+        except Exception:
+            recent = False
+
+    if recent and max_conf >= 75:
+        sev, cvss = "HIGH", "7.5"
+    elif recent and max_conf >= 50:
+        sev, cvss = "MEDIUM", "5.3"
+    elif recent or max_conf >= 50:
+        sev, cvss = "LOW", "3.1"
+    else:
+        sev, cvss = "INFO", "0.0"
+
     findings = [wrap_finding(
         f"ThreatFox FLAGGED — {target} associated with {len(families)} malware family/ies",
-        severity="CRITICAL", cvss="9.5", cwe="CWE-829",
+        severity=sev, cvss=cvss, cwe="CWE-829",
         owasp="A06:2021",
-        remediation="This IOC is being used by active malware. If outbound: block "
-                    "at egress. If inbound: investigate source. If owned: rebuild the "
-                    "compromised asset and rotate all credentials.",
+        remediation="ThreatFox inclusion is analyst-curated IOC intel, not proof of "
+                    "exploitation. Validate freshness + confidence below. If recent and "
+                    "high-confidence and owned: rebuild the compromised asset and rotate "
+                    "all credentials. If outbound: block at egress. If inbound: investigate.",
         evidence_marker=(
             f"families: {', '.join(families[:8])} | "
             f"threat_types: {', '.join(sorted({i.get('threat_type') or '?' for i in iocs}))} | "
-            f"first_seen: {min(i.get('first_seen','9999') for i in iocs)} | "
-            f"confidence: {max(i.get('confidence_level',0) or 0 for i in iocs)}% "
-            f"(CONFIRMED via ThreatFox)"
+            f"first_seen: {latest_seen or '?'} (recent<=24mo={recent}) | "
+            f"confidence: {max_conf}% "
+            f"(via ThreatFox)"
         ))]
 
     return standard_response(
         tool="threatfox_iocs", target=req.target, findings=findings,
-        tests_performed=1, vulnerable=True,
+        tests_performed=1,
+        vulnerable=sev in ("MEDIUM", "HIGH"),  # only graded when recent + confident
         tests_summary=f"ThreatFox: {len(iocs)} IOC entry/ies across {len(families)} families",
         raw_data={"iocs": iocs[:10], "total": len(iocs), "families": families})
 
