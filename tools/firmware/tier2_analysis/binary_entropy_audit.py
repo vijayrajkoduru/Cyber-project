@@ -7,8 +7,9 @@ and classifies regions:
   - BALANCED otherwise                     => normal binary mixture
 
 Reports region offsets + sizes + dominant class. If firmware is entirely
-high-entropy, static analysis is blocked → MEDIUM finding. If entirely
-low-entropy, NO encryption at all → LOW finding.
+high-entropy, static analysis is blocked → INFO state advisory (visibility,
+not a proven weakness). If entirely low-entropy, NO encryption at all → LOW
+finding (cleartext code/secrets readable from a chip dump).
 
 Customer input: ScanRequest.target = path to firmware blob.
 """

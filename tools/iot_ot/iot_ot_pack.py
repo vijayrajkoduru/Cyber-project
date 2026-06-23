@@ -22,6 +22,27 @@ condition was actually detected on the target.
 HARD RULE: a CRITICAL/HIGH/MEDIUM/LOW severity is emitted ONLY when the probe
 actually observed the condition. VA not PT: detection only, no exploitation,
 no writes, no replay, no flooding, no cross-scanner chaining.
+
+ZERO-FP PROTOCOL CONFIRMATION: an OT/IoT protocol is graded ONLY after FULL
+FRAME validation, never on a single magic byte or a substring. If only the
+port is open (or a partial/ambiguous signal is seen) the probe emits INFO
+"port open, protocol NOT confirmed". Specifically:
+  - Modbus/502     : full ADU — MBAP transaction-id echo, protocol-id 0x0000,
+                     exact length field, unit echo, FC01/FC81 function-code echo.
+  - S7/102         : full TPKT+COTP Connection Confirm framing (+ best-effort
+                     S7comm Setup-Communication ACK, protocol id 0x32).
+  - EtherNet/IP    : full List-Identity reply — command 0x0063 echo, exact
+    /44818           length, status 0, item count>=1, CPF item type 0x000C.
+  - BACnet/47808   : BVLC type 0x81 + valid function + length==datagram + NPDU
+                     version 0x01.
+  - KNX/3671       : header 0x0610 + service type 0x0202 (SEARCH_RESPONSE) +
+                     total-length field == datagram length.
+  - UPnP/SSDP      : HTTP/1.x 200 status line + mandatory ST + USN headers
+                     (+ LOCATION/SERVER) — not a bare 'HTTP/1.1'/'USN' substring.
+  - mDNS/5353      : DNS QR/response bit set + ANCOUNT>0 + answer section — not
+                     the QR bit alone.
+  - Telnet/23      : IAC (0xff) + WILL/WONT/DO/DONT command byte negotiation —
+                     not a 'login:'/'password:' substring.
 """
 import socket
 import struct
@@ -168,60 +189,155 @@ _MANUAL = ("Manual / creative analyst task — requires interactive tooling, "
 
 # ─────────────── REAL LIVE PROBES (detection-only) ───────────────
 
+def _valid_modbus_adu(resp, txn_hi, txn_lo, unit, fc):
+    """Full Modbus/TCP ADU validation of a response to our FC01 Read-Coils.
+    Requires the MBAP header to ECHO our request, not just resp[7]:
+      bytes 0-1  transaction id  -> must equal the txn id we sent
+      bytes 2-3  protocol id     -> must be 0x0000 (Modbus)
+      bytes 4-5  length          -> remaining-byte count, must equal len(resp)-6
+                                    and be >= 2 (unit + function code)
+      byte  6    unit id         -> must echo the unit we addressed
+      byte  7    function code   -> our FC (0x01) or its exception (0x81)
+    A single magic byte is not enough — any TCP service could happen to put
+    0x01/0x81 at offset 7."""
+    if not resp or len(resp) < 9:
+        return False
+    if resp[0] != txn_hi or resp[1] != txn_lo:
+        return False
+    if resp[2] != 0x00 or resp[3] != 0x00:        # protocol id must be 0
+        return False
+    length = (resp[4] << 8) | resp[5]
+    if length < 2 or length != len(resp) - 6:      # length field must be exact
+        return False
+    if resp[6] != unit:                            # unit id must echo
+        return False
+    if resp[7] not in (fc, fc | 0x80):             # FC echo or exception FC
+        return False
+    # If it is the normal reply (0x01), a byte-count field must follow and be
+    # consistent. If it is the exception (0x81), an exception code follows.
+    if resp[7] == fc:
+        byte_count = resp[8]
+        return byte_count == len(resp) - 9
+    return True
+
+
 def _probe_modbus(target, req):
     """Modbus TCP/502 — send a benign Read-Coils (FC01) request and confirm a
-    valid Modbus response. Read-only; no writes."""
+    valid full Modbus ADU (MBAP header echo + function-code echo). Read-only."""
     host = _host(target)
     findings = []
     if not _tcp_open(host, 502):
         return _clean_pos("modbus_502_probe", target,
                           "Modbus TCP/502 not externally reachable",
                           "TCP/502 closed/filtered", 1, "Modbus TCP/502 probe")
-    # FC01 Read Coils, 1 coil at addr 0 — a harmless read.
+    # FC01 Read Coils, 1 coil at addr 0 — a harmless read. txn=0x0001 unit=0x01.
     req_pkt = b"\x00\x01\x00\x00\x00\x06\x01\x01\x00\x00\x00\x01"
     resp = _tcp_send_recv(host, 502, req_pkt, timeout=3.0, recv=256)
-    if resp and len(resp) >= 8 and resp[7] in (0x01, 0x81):
-        # 0x01 = valid Read-Coils reply; 0x81 = Modbus exception to FC01 — both
-        # confirm a real Modbus speaker is listening.
+    if _valid_modbus_adu(resp, 0x00, 0x01, 0x01, 0x01):
+        # Full MBAP echo (txn id + protocol 0 + exact length + unit) plus a
+        # valid FC01 reply / FC81 exception — confirms a real Modbus speaker.
         findings.append(wrap_finding(
             "Modbus TCP/502 service responding — unauthenticated critical-control protocol exposed to the internet",
             "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
             remediation="NEVER expose Modbus to the internet. Segregate the OT network from corporate; place Modbus behind an industrial firewall + VPN.",
-            evidence_marker="TCP/502 open; valid Modbus reply to Read-Coils (FC01)"))
+            evidence_marker="TCP/502 open; full Modbus ADU validated — MBAP header echoed our transaction id, protocol-id 0x0000, exact length field and unit id, with a valid FC01/FC81 function-code echo"))
     else:
         findings.append(wrap_finding(
             "TCP/502 reachable — port commonly used by Modbus (protocol NOT confirmed)",
             "INFO", cvss="0.0", cwe="CWE-306",
             remediation="Confirm what listens on TCP/502; if Modbus, restrict it to the OT network immediately.",
-            evidence_marker="TCP/502 open only — no valid Modbus reply to Read-Coils (FC01) was observed, so Modbus is NOT protocol-confirmed; any service on this port would match"))
+            evidence_marker="TCP/502 open only — the response did not validate as a full Modbus ADU (MBAP transaction-id echo + protocol-id 0x0000 + exact length + unit echo + FC01/FC81), so Modbus is NOT protocol-confirmed; any service on this port would match"))
     return _build("modbus_502_probe", target, findings, 1, "Modbus TCP/502 protocol probe")
 
 
+def _valid_cotp_cc(resp):
+    """Validate a TPKT + COTP Connection Confirm (not just resp[5]==0xd0):
+      bytes 0-1  TPKT version 0x03 + reserved 0x00
+      bytes 2-3  TPKT length        -> must equal len(resp)
+      byte  4    COTP length indicator (LI) -> >=6, and LI+5 <= len(resp)
+      byte  5    COTP PDU type      -> high nibble 0xd = Connection Confirm
+    Returns True only when the whole TPKT/COTP framing is self-consistent."""
+    if not resp or len(resp) < 7:
+        return False
+    if resp[0] != 0x03 or resp[1] != 0x00:
+        return False
+    tpkt_len = (resp[2] << 8) | resp[3]
+    if tpkt_len != len(resp) or tpkt_len < 7:
+        return False
+    li = resp[4]
+    if li < 6 or (li + 5) > len(resp):
+        return False
+    # COTP PDU type is the high nibble of byte 5; 0xd0 = Connection Confirm.
+    return (resp[5] & 0xf0) == 0xd0
+
+
+def _valid_s7comm_setup_ack(resp):
+    """Validate an S7comm Setup-Communication ACK on top of TPKT+COTP DT:
+      byte 0      TPKT 0x03
+      after COTP (DT, LI usually 0x02, type 0xf0) the S7 protocol id 0x32
+      S7 ROSCTR byte -> 0x03 (Ack_Data) for a setup response.
+    Best-effort: scans the first bytes for the S7 protocol id 0x32 followed by
+    a valid ROSCTR, which a non-S7 service will not produce."""
+    if not resp or len(resp) < 10 or resp[0] != 0x03:
+        return False
+    # TPKT(4) + COTP header (LI+1). LI at offset 4.
+    li = resp[4]
+    s7_off = 5 + li
+    if s7_off + 1 >= len(resp):
+        return False
+    return resp[s7_off] == 0x32 and resp[s7_off + 1] in (0x02, 0x03)
+
+
 def _probe_siemens_s7(target, req):
-    """Siemens S7 / ISO-TSAP TCP/102 — confirm a COTP connection response.
+    """Siemens S7 / ISO-TSAP TCP/102 — validate a full COTP Connection Confirm
+    and (best-effort) an S7comm Setup-Communication ACK, not just resp[5]==0xd0.
     Read-only handshake; no PLC commands."""
     host = _host(target)
     if not _tcp_open(host, 102):
         return _clean_pos("siemens_s7_102_probe", target,
                           "Siemens S7 TCP/102 (ISO-TSAP) not reachable",
                           "TCP/102 closed/filtered", 1, "Siemens S7 PLC probe")
-    # COTP Connection Request (TPKT + COTP CR). Benign session setup.
+    # 1) COTP Connection Request (TPKT + COTP CR). Benign session setup.
     cotp_cr = (b"\x03\x00\x00\x16\x11\xe0\x00\x00\x00\x01\x00\xc0\x01\x0a"
                b"\xc1\x02\x01\x00\xc2\x02\x01\x02")
-    resp = _tcp_send_recv(host, 102, cotp_cr, timeout=3.0, recv=64)
-    if resp and len(resp) >= 6 and resp[0] == 0x03 and resp[5] == 0xd0:
-        # TPKT version 3 + COTP Connection Confirm (0xd0) = real S7/ISO-TSAP node.
+    s7comm_confirmed = False
+    cotp_ok = False
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.settimeout(3.0)
+            if s.connect_ex((host, 102)) == 0:
+                s.send(cotp_cr)
+                resp = s.recv(64)
+                cotp_ok = _valid_cotp_cc(resp)
+                if cotp_ok:
+                    # 2) S7comm Setup Communication (over COTP DT). Read-only.
+                    s7_setup = (b"\x03\x00\x00\x19\x02\xf0\x80"          # TPKT+COTP DT
+                                b"\x32\x01\x00\x00\x00\x00\x00\x08"      # S7 header
+                                b"\x00\x00\xf0\x00\x00\x01\x00\x01\x01\xe0")
+                    try:
+                        s.send(s7_setup)
+                        s7resp = s.recv(64)
+                        s7comm_confirmed = _valid_s7comm_setup_ack(s7resp)
+                    except Exception:
+                        s7comm_confirmed = False
+    except Exception:
+        cotp_ok = False
+    if cotp_ok:
+        # Full COTP CC framing validated = real S7/ISO-TSAP node; S7comm setup
+        # ACK (when present) additionally confirms the S7comm application layer.
+        proto = "S7comm" if s7comm_confirmed else "ISO-TSAP/COTP"
         findings = [wrap_finding(
-            "Siemens S7 / ISO-TSAP TCP/102 confirmed — PLC management exposed to the internet",
+            f"Siemens S7 / ISO-TSAP TCP/102 confirmed ({proto}) — PLC management exposed to the internet",
             "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
             remediation="NEVER expose PLC management (S7comm/ISO-TSAP) to the internet. Use an industrial firewall + VPN and restrict to the engineering VLAN.",
-            evidence_marker="TCP/102 open; COTP Connection Confirm (0xd0) returned")]
+            evidence_marker="TCP/102 open; valid TPKT+COTP Connection Confirm framing"
+                            + ("; S7comm Setup-Communication ACK (protocol id 0x32) confirmed" if s7comm_confirmed else ""))]
     else:
         findings = [wrap_finding(
             "TCP/102 reachable — port commonly used by Siemens S7 / ISO-TSAP (protocol NOT confirmed)",
             "INFO", cvss="0.0", cwe="CWE-306",
             remediation="Confirm the service on TCP/102; if it is a PLC, isolate it on the OT network.",
-            evidence_marker="TCP/102 open only — no COTP Connection Confirm (0xd0) was observed, so S7/ISO-TSAP is NOT protocol-confirmed; any service on this port would match")]
+            evidence_marker="TCP/102 open only — no valid TPKT+COTP Connection Confirm framing was returned, so S7/ISO-TSAP is NOT protocol-confirmed; any service on this port would match")]
     return _build("siemens_s7_102_probe", target, findings, 1, "Siemens S7 PLC probe")
 
 
@@ -233,6 +349,39 @@ def _enip_list_identity(host, timeout=3.0):
     return _tcp_send_recv(host, 44818, pkt, timeout=timeout, recv=512)
 
 
+def _valid_enip_list_identity(resp):
+    """Validate a full EtherNet/IP List-Identity REPLY, not just resp[0]==0x63.
+    ENIP encapsulation header (little-endian, 24 bytes):
+      [0:2]   command  -> must echo 0x0063 (List Identity)
+      [2:4]   length   -> payload byte count, must equal len(resp)-24
+      [4:8]   session  -> 0 for List Identity
+      [8:12]  status   -> must be 0x00000000 (success)
+    CPF payload then begins at offset 24:
+      [24:26] item count -> >= 1
+      [26:28] item type  -> 0x000C (List Identity item)
+    Any service that merely emits 0x63 at byte 0 fails these structural checks.
+    """
+    if not resp or len(resp) < 26:
+        return False
+    command = resp[0] | (resp[1] << 8)
+    if command != 0x0063:
+        return False
+    length = resp[2] | (resp[3] << 8)
+    if length != len(resp) - 24 or length < 2:
+        return False
+    status = resp[8] | (resp[9] << 8) | (resp[10] << 16) | (resp[11] << 24)
+    if status != 0:
+        return False
+    item_count = resp[24] | (resp[25] << 8)
+    if item_count < 1:
+        return False
+    if len(resp) >= 28:
+        item_type = resp[26] | (resp[27] << 8)
+        if item_type != 0x000C:
+            return False
+    return True
+
+
 def _probe_ethernet_ip(target, req):
     """EtherNet/IP CIP TCP/44818 — List Identity (read-only). Confirms a real
     CIP device and extracts the product name string if present."""
@@ -242,7 +391,7 @@ def _probe_ethernet_ip(target, req):
                           "EtherNet/IP TCP/44818 not reachable",
                           "TCP/44818 closed/filtered", 1, "EtherNet/IP probe")
     resp = _enip_list_identity(host)
-    if resp and len(resp) >= 2 and resp[0] == 0x63 and resp[1] == 0x00:
+    if _valid_enip_list_identity(resp):
         # Try to recover the printable product-name tail (ASCII).
         ascii_tail = "".join(chr(b) for b in resp[40:] if 32 <= b < 127).strip()
         prod = ascii_tail[-48:] if ascii_tail else ""
@@ -251,14 +400,14 @@ def _probe_ethernet_ip(target, req):
             + (f" ({prod})" if prod else ""),
             "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
             remediation="Block EtherNet/IP (44818) at the corporate firewall; segregate the OT/ENIP network.",
-            evidence_marker="TCP/44818 open; List-Identity reply (0x0063) returned"
+            evidence_marker="TCP/44818 open; full ENIP List-Identity reply validated (command 0x0063 echo, exact length, status 0, item count>=1, CPF item type 0x000C)"
                             + (f"; product='{prod}'" if prod else ""))]
     else:
         findings = [wrap_finding(
             "TCP/44818 reachable — port used by EtherNet/IP CIP (protocol NOT confirmed)",
             "INFO", cvss="0.0", cwe="CWE-306",
             remediation="Identify the service on 44818; if it is EtherNet/IP, restrict it to the OT network and firewall internet exposure.",
-            evidence_marker="TCP/44818 open only — no CIP List-Identity reply (0x0063) was observed, so EtherNet/IP is NOT protocol-confirmed; any service on this port would match")]
+            evidence_marker="TCP/44818 open only — the reply did not validate as a full ENIP List-Identity structure (command 0x0063 echo + exact length + status 0 + item count + CPF item type 0x000C), so EtherNet/IP is NOT protocol-confirmed; any service on this port would match")]
     return _build("ethernet_ip_probe", target, findings, 1, "EtherNet/IP List-Identity probe")
 
 
@@ -271,7 +420,7 @@ def _probe_rockwell(target, req):
                           "Rockwell/Allen-Bradley EtherNet/IP (44818) not reachable",
                           "TCP/44818 closed/filtered", 1, "Rockwell EtherNet/IP probe")
     resp = _enip_list_identity(host)
-    if resp and len(resp) >= 2 and resp[0] == 0x63 and resp[1] == 0x00:
+    if _valid_enip_list_identity(resp):
         ascii_tail = "".join(chr(b) for b in resp[40:] if 32 <= b < 127).strip()
         prod = ascii_tail[-48:] if ascii_tail else ""
         findings = [wrap_finding(
@@ -279,14 +428,14 @@ def _probe_rockwell(target, req):
             + (f" ({prod})" if prod else ""),
             "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
             remediation="Isolate ControlLogix/CompactLogix on the OT VLAN; never expose 44818 to the internet.",
-            evidence_marker="List-Identity reply (0x0063) returned"
+            evidence_marker="Full ENIP List-Identity reply validated (command 0x0063 echo, exact length, status 0, item count>=1, CPF item type 0x000C)"
                             + (f"; product='{prod}'" if prod else ""))]
     else:
         findings = [wrap_finding(
             "TCP/44818 reachable — port used by EtherNet/IP CIP (Rockwell/AB; protocol NOT confirmed)",
             "INFO", cvss="0.0", cwe="CWE-306",
             remediation="Identify the service on 44818; if it is EtherNet/IP, restrict it to the OT VLAN.",
-            evidence_marker="TCP/44818 open only — no CIP List-Identity reply (0x0063) was observed, so EtherNet/IP is NOT protocol-confirmed; any service on this port would match")]
+            evidence_marker="TCP/44818 open only — the reply did not validate as a full ENIP List-Identity structure (command 0x0063 echo + exact length + status 0 + item count + CPF item type 0x000C), so EtherNet/IP is NOT protocol-confirmed; any service on this port would match")]
     return _build("rockwell_allenbradley_probe", target, findings, 1, "Rockwell EtherNet/IP probe")
 
 
@@ -299,13 +448,13 @@ def _probe_schneider(target, req):
     if _tcp_open(host, 502):
         req_pkt = b"\x00\x01\x00\x00\x00\x06\x01\x01\x00\x00\x00\x01"
         resp = _tcp_send_recv(host, 502, req_pkt, timeout=3.0, recv=64)
-        if resp and len(resp) >= 8 and resp[7] in (0x01, 0x81):
+        if _valid_modbus_adu(resp, 0x00, 0x01, 0x01, 0x01):
             modbus_up = True
             findings.append(wrap_finding(
                 "Schneider Modicon Modbus TCP/502 responding — unauthenticated control protocol exposed",
                 "CRITICAL", cvss="9.5", cwe="CWE-306", owasp="A05:2021",
                 remediation="Segregate Modicon PLCs on the OT network; never expose Modbus to the internet.",
-                evidence_marker="TCP/502 open; valid Modbus reply (FC01)"))
+                evidence_marker="TCP/502 open; full Modbus ADU validated (MBAP header echo + FC01/FC81 function-code echo)"))
     # HTTP fingerprint (read-only GET) for Schneider/Modicon web UI.
     for scheme, port in (("http", 80), ("https", 443)):
         status, hdrs, body = _http_get(f"{scheme}://{host}:{port}/", timeout=4)
@@ -340,20 +489,46 @@ def _probe_dnp3(target, req):
                       "TCP/20000 closed/filtered", 1, "DNP3 TCP/20000 probe")
 
 
+def _valid_bacnet_bvlc(data):
+    """Validate a full BACnet/IP BVLC frame, not just data[0]==0x81:
+      byte 0    BVLC type      -> must be 0x81 (BACnet/IP)
+      byte 1    BVLC function  -> a known function code (0x00-0x0c)
+      bytes 2-3 BVLC length    -> entire BVLC length, must equal len(data)
+      byte 4    NPDU version   -> must be 0x01 (when an NPDU follows)
+    Any UDP service that happens to start with 0x81 fails the length/NPDU check.
+    """
+    if not data or len(data) < 4:
+        return False
+    if data[0] != 0x81:
+        return False
+    if data[1] > 0x0c:                              # known BVLC function range
+        return False
+    bvlc_len = (data[2] << 8) | data[3]
+    if bvlc_len != len(data) or bvlc_len < 4:
+        return False
+    # A Who-Is reply (I-Am, Original-Unicast/Broadcast NPDU) carries an NPDU
+    # whose version byte is 0x01. Forwarded-NPDU (func 0x04) inserts a 6-byte
+    # B/IP address before the NPDU; accept either layout.
+    if data[1] == 0x04:
+        return len(data) >= 11 and data[10] == 0x01
+    return data[4] == 0x01
+
+
 def _probe_bacnet(target, req):
-    """BACnet/IP UDP/47808 — send a benign Who-Is and confirm a BVLC response.
-    Read-only discovery."""
+    """BACnet/IP UDP/47808 — send a benign Who-Is and confirm a full BVLC frame
+    (type + function + length + NPDU version). Read-only discovery."""
     host = _host(target)
     # BVLC/NPDU Who-Is (global broadcast, unconfirmed). Read-only.
     who_is = b"\x81\x0b\x00\x0c\x01\x20\xff\xff\x00\xff\x10\x08"
     got, data = _udp_probe(host, 47808, who_is, timeout=2.5)
-    if got and data and len(data) >= 1 and data[0] == 0x81:
-        # BVLC type byte 0x81 = a real BACnet/IP speaker answered (I-Am etc.).
+    if got and _valid_bacnet_bvlc(data):
+        # Full BVLC framing (type 0x81 + valid function + length == len(data))
+        # plus an NPDU version 0x01 = a real BACnet/IP speaker answered.
         findings = [wrap_finding(
             "BACnet/IP UDP/47808 confirmed — building automation system (BMS) exposed to the internet",
             "HIGH", cvss="7.5", cwe="CWE-306", owasp="A05:2021",
             remediation="Restrict BACnet to the building network; firewall internet exposure of UDP/47808.",
-            evidence_marker="UDP/47808 Who-Is answered with a BACnet/IP BVLC frame (0x81)")]
+            evidence_marker="UDP/47808 Who-Is answered with a valid BACnet/IP BVLC frame (type 0x81, length field == datagram length, NPDU version 0x01)")]
         return _build("bacnet_47808_probe", target, findings, 1, "BACnet UDP/47808 probe")
     if _tcp_open(host, 47808):
         findings = [wrap_finding(
@@ -367,9 +542,29 @@ def _probe_bacnet(target, req):
                       "UDP/47808 silent, TCP/47808 closed", 1, "BACnet UDP/47808 probe")
 
 
+def _valid_knxnet_search_response(data):
+    """Validate a full KNXnet/IP SEARCH_RESPONSE, not just the 0x0610 prefix:
+      byte 0    header length    -> 0x06
+      byte 1    protocol version -> 0x10
+      bytes 2-3 service type     -> 0x0202 (SEARCH_RESPONSE)
+      bytes 4-5 total length     -> entire frame length, must equal len(data)
+    We sent a SEARCH_REQUEST (0x0201); a real KNXnet/IP server answers with
+    SEARCH_RESPONSE (0x0202). Any service emitting 0x06 0x10 fails the service-
+    type + length validation."""
+    if not data or len(data) < 6:
+        return False
+    if data[0] != 0x06 or data[1] != 0x10:
+        return False
+    service_type = (data[2] << 8) | data[3]
+    if service_type != 0x0202:                      # SEARCH_RESPONSE
+        return False
+    total_len = (data[4] << 8) | data[5]
+    return total_len == len(data) and total_len >= 6
+
+
 def _probe_knx(target, req):
-    """KNXnet/IP UDP/3671 — send a benign SEARCH_REQUEST and confirm a
-    KNXnet/IP response (read-only building-bus discovery)."""
+    """KNXnet/IP UDP/3671 — send a benign SEARCH_REQUEST and confirm a full
+    KNXnet/IP SEARCH_RESPONSE frame (read-only building-bus discovery)."""
     host = _host(target)
     # KNXnet/IP SEARCH_REQUEST. HPAI carries 0.0.0.0:0 (discovery). Read-only.
     search_req = (b"\x06\x10"           # header: 0x0610
@@ -379,12 +574,12 @@ def _probe_knx(target, req):
                   b"\x00\x00\x00\x00"   # IP 0.0.0.0
                   b"\x00\x00")          # port 0
     got, data = _udp_probe(host, 3671, search_req, timeout=2.5)
-    if got and data and len(data) >= 2 and data[0] == 0x06 and data[1] == 0x10:
+    if got and _valid_knxnet_search_response(data):
         findings = [wrap_finding(
             "KNXnet/IP UDP/3671 confirmed — KNX building-automation bus exposed to the internet",
             "HIGH", cvss="7.5", cwe="CWE-306", owasp="A05:2021",
             remediation="Restrict KNXnet/IP to the building LAN; firewall UDP/3671 from the internet (KNX has no native authentication).",
-            evidence_marker="UDP/3671 SEARCH_REQUEST answered with a KNXnet/IP frame (0x0610)")]
+            evidence_marker="UDP/3671 SEARCH_REQUEST answered with a valid KNXnet/IP SEARCH_RESPONSE frame (header 0x0610, service type 0x0202, total-length field == datagram length)")]
         return _build("knx_3671_probe", target, findings, 1, "KNXnet/IP UDP/3671 probe")
     if _tcp_open(host, 3671):
         findings = [wrap_finding(
@@ -449,9 +644,25 @@ def _probe_ics_nmap(target, req):
     return res
 
 
+def _has_telnet_iac(banner):
+    """Confirm the Telnet protocol by its IAC negotiation sequence, not by a
+    'login:'/'password:' substring. A real Telnet server opens with one or more
+    IAC (0xff) commands: 0xff followed by 0xfb-0xfe (WILL/WONT/DO/DONT) or 0xfa
+    (SB). 0xff at the very end with no following command byte does not count."""
+    if not banner:
+        return False
+    i = banner.find(0xff)
+    while i != -1:
+        if i + 1 < len(banner) and banner[i + 1] in (0xfa, 0xfb, 0xfc, 0xfd, 0xfe):
+            return True
+        i = banner.find(0xff, i + 1)
+    return False
+
+
 def _probe_iot_telnet(target, req):
-    """IoT telnet 23/2323 — Mirai-era exposure. Grabs the banner read-only; no
-    credential attempts."""
+    """IoT telnet 23/2323 — Mirai-era exposure. Grabs the banner read-only and
+    confirms Telnet ONLY via the IAC negotiation sequence; no credential
+    attempts."""
     host = _host(target)
     findings = []
     for port in (23, 2323):
@@ -459,20 +670,24 @@ def _probe_iot_telnet(target, req):
             continue
         banner = _tcp_send_recv(host, port, b"", timeout=2.0, recv=128)
         btxt = banner.decode("utf-8", errors="ignore").strip()
-        bl = btxt.lower()
-        telnet_confirmed = (b"\xff" in banner) or ("login:" in bl) or ("password:" in bl) or ("telnet" in bl)
+        # PROTOCOL confirmation requires the Telnet IAC negotiation sequence:
+        # an IAC byte (0xff) immediately followed by a command byte in the
+        # WILL/WONT/DO/DONT/SB range (0xfa-0xfe). A "login:"/"password:" string
+        # alone is NOT Telnet-specific (SSH/HTTP/SMTP/banners all emit it) and
+        # must not confirm the protocol.
+        telnet_confirmed = _has_telnet_iac(banner)
         if telnet_confirmed:
             findings.append(wrap_finding(
                 f"Telnet {port}/tcp open — IoT/Mirai-era exposure (cleartext, default-cred risk)",
                 "HIGH", cvss="8.1", cwe="CWE-319", owasp="A07:2021",
                 remediation="Disable telnet entirely; use SSH with key auth. Replace any embedded default credentials.",
-                evidence_marker=f"TCP/{port} banner: {btxt[:80] if btxt else '(empty)'}"))
+                evidence_marker=f"TCP/{port} returned a Telnet IAC negotiation sequence (0xff + WILL/WONT/DO/DONT). Banner: {btxt[:80] if btxt else '(empty)'}"))
         else:
             findings.append(wrap_finding(
                 f"TCP/{port} reachable — port commonly used by Telnet (protocol NOT confirmed)",
                 "INFO", cvss="0.0", cwe="CWE-319", owasp="A07:2021",
                 remediation="Disable telnet entirely; use SSH with key auth. Replace any embedded default credentials.",
-                evidence_marker=f"TCP/{port} open only — no Telnet IAC byte (0xff) or login:/password: prompt observed, so Telnet is NOT protocol-confirmed; any service on this port would match. Banner: {btxt[:80] if btxt else '(empty)'}"))
+                evidence_marker=f"TCP/{port} open only — no Telnet IAC negotiation sequence (0xff + WILL/WONT/DO/DONT command byte) was observed, so Telnet is NOT protocol-confirmed; a bare login:/password: prompt is not Telnet-specific and any service on this port would match. Banner: {btxt[:80] if btxt else '(empty)'}"))
     if not findings:
         return _clean_pos("iot_telnet_2323_probe", target,
                           "Telnet 23/2323 not externally reachable",
@@ -480,9 +695,32 @@ def _probe_iot_telnet(target, req):
     return _build("iot_telnet_2323_probe", target, findings, 2, "IoT telnet port probe")
 
 
+def _valid_ssdp_response(data):
+    """Validate an SSDP M-SEARCH response, not just an 'HTTP/1.1' or 'USN'
+    substring. A genuine SSDP reply is an HTTP-style datagram that:
+      - starts with an 'HTTP/1.1 200' status line (response to our M-SEARCH), and
+      - carries the SSDP-mandatory ST and USN headers, and
+      - carries a LOCATION or SERVER header (device-description pointer/banner).
+    A plain HTTP server or any payload merely containing 'USN' fails this."""
+    if not data:
+        return False
+    txt = data.decode("utf-8", errors="ignore")
+    head = txt[:24].upper()
+    if not head.startswith("HTTP/1.1 200") and not head.startswith("HTTP/1.0 200"):
+        return False
+    low = txt.lower()
+    if "st:" not in low:                             # ST header is mandatory
+        return False
+    if "usn:" not in low:                            # USN header is mandatory
+        return False
+    if "location:" not in low and "server:" not in low:
+        return False
+    return True
+
+
 def _probe_upnp(target, req):
-    """UPnP/SSDP UDP/1900 — send a benign M-SEARCH and confirm an SSDP reply.
-    Read-only discovery; extracts SERVER header if present."""
+    """UPnP/SSDP UDP/1900 — send a benign M-SEARCH and confirm a structurally
+    valid SSDP response (status line + ST/USN/LOCATION headers). Read-only."""
     host = _host(target)
     msearch = (b"M-SEARCH * HTTP/1.1\r\n"
                b"HOST: 239.255.255.250:1900\r\n"
@@ -490,7 +728,7 @@ def _probe_upnp(target, req):
                b"MX: 1\r\n"
                b"ST: ssdp:all\r\n\r\n")
     got, data = _udp_probe(host, 1900, msearch, timeout=2.5, recv=1024)
-    if got and data and b"HTTP/1.1" in data[:16] or (got and b"USN" in data):
+    if got and _valid_ssdp_response(data):
         txt = data.decode("utf-8", errors="ignore")
         server = ""
         for line in txt.split("\r\n"):
@@ -501,7 +739,14 @@ def _probe_upnp(target, req):
             "UPnP/SSDP UDP/1900 reachable from the internet — device discovery interface exposed",
             "HIGH", cvss="7.5", cwe="CWE-200", owasp="A05:2021",
             remediation="Disable UPnP/SSDP on the WAN interface; UPnP must never face the internet (used for NAT-pinhole and device enumeration abuse).",
-            evidence_marker=f"UDP/1900 M-SEARCH answered" + (f"; SERVER: {server[:80]}" if server else ""))]
+            evidence_marker="UDP/1900 M-SEARCH answered with a valid SSDP response (HTTP/1.1 200 status line + ST/USN headers)" + (f"; SERVER: {server[:80]}" if server else ""))]
+        return _build("iot_upnp_audit", target, findings, 1, "UPnP/SSDP discovery probe")
+    if got and data:
+        findings = [wrap_finding(
+            "UDP/1900 responded but SSDP format NOT confirmed",
+            "INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
+            remediation="Confirm what service answers on UDP/1900; if it is UPnP/SSDP, disable it on the WAN interface.",
+            evidence_marker="UDP/1900 returned data but it was not a valid SSDP response (missing the HTTP/1.1 status line and the ST/USN headers), so UPnP/SSDP is NOT protocol-confirmed")]
         return _build("iot_upnp_audit", target, findings, 1, "UPnP/SSDP discovery probe")
     return _clean_pos("iot_upnp_audit", target,
                       "UPnP/SSDP UDP/1900 not externally reachable",
@@ -516,22 +761,28 @@ def _probe_mdns(target, req):
     qname = b"\x09_services\x07_dns-sd\x04_udp\x05local\x00"
     query = b"\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00" + qname + b"\x00\x0c\x00\x01"
     got, data = _udp_probe(host, 5353, query, timeout=2.5, recv=1024)
-    if got and data and len(data) >= 4:
-        # Validate the DNS header response (QR) bit before any graded severity:
-        # byte index 2 high bit (0x80) is set on a real multicast-DNS response.
-        mdns_confirmed = (data[2] & 0x80) != 0
+    if got and data and len(data) >= 12:
+        # Validate the full mDNS response header before any graded severity:
+        #   - QR/response bit set (byte 2 high bit 0x80), and
+        #   - ANCOUNT > 0 (bytes 6-7) — i.e. at least one answer record, and
+        #   - the datagram is long enough to actually carry an answer section.
+        # The QR bit alone is not enough — a malformed/empty reply must not grade.
+        qr = (data[2] & 0x80) != 0
+        ancount = (data[6] << 8) | data[7]
+        has_answer_room = len(data) > 12        # header(12) + at least some RRs
+        mdns_confirmed = qr and ancount > 0 and has_answer_room
         if mdns_confirmed:
             findings = [wrap_finding(
                 "mDNS / DNS-SD UDP/5353 reachable from the internet — service/device enumeration exposed",
                 "MEDIUM", cvss="5.3", cwe="CWE-200", owasp="A05:2021",
                 remediation="mDNS is a link-local protocol and must never be internet-reachable; filter UDP/5353 at the edge.",
-                evidence_marker="UDP/5353 query answered with a multicast-DNS response (DNS QR/response bit set)")]
+                evidence_marker=f"UDP/5353 query answered with a valid multicast-DNS response (DNS QR/response bit set, ANCOUNT={ancount} answer record(s), answer section present)")]
         else:
             findings = [wrap_finding(
                 "UDP/5353 responded but mDNS format NOT confirmed",
                 "INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
                 remediation="mDNS is a link-local protocol and must never be internet-reachable; filter UDP/5353 at the edge.",
-                evidence_marker="UDP/5353 returned data but the DNS header QR/response bit was not set — not a confirmed mDNS response")]
+                evidence_marker="UDP/5353 returned data but it did not validate as an mDNS response (requires the DNS QR/response bit set AND ANCOUNT>0 AND an answer section) — not a confirmed mDNS response")]
         return _build("iot_mdns_dnssd_audit", target, findings, 1, "mDNS/DNS-SD probe")
     return _clean_pos("iot_mdns_dnssd_audit", target,
                       "mDNS/DNS-SD UDP/5353 not externally reachable",

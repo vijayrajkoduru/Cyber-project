@@ -18,9 +18,11 @@ Detects:
                                 in plaintext config.
 
 ZERO-FP: all output is detection-only. Versions/markers are reported as INFO
-inventory for CVE matching. A graded LOW finding fires ONLY when a literal
-known default-credential marker string (e.g. "root:calvin", "ADMIN:ADMIN")
-is found in the bytes — a confirmed presence, not an inference.
+inventory for CVE matching. A literal known default-credential marker string
+(e.g. "root:calvin", "ADMIN:ADMIN") found in the bytes is reported as INFO —
+its mere presence in firmware config text does NOT prove the account is active
+or reachable, which can only be confirmed by a live authentication probe (out
+of static-analysis scope). Never graded as a confirmed weakness.
 
 REAL static probe against the customer firmware file.
 
@@ -54,7 +56,8 @@ COMPONENTS = [
 
 SURFACE_RE = re.compile(rb"/redfish/v1|\bRAKP\b|ipmitool|\bipmi\b", re.I)
 
-# Literal default-cred markers (confirmed presence => graded LOW)
+# Literal default-cred markers (presence in bytes => INFO; NOT proof of an
+# active account — a live auth probe would be required to grade it)
 DEFAULT_CRED_MARKERS = [
     (rb"root\s*[:=]\s*calvin", "iDRAC default root:calvin"),
     (rb"ADMIN\s*[:=]\s*ADMIN", "Supermicro/AMI default ADMIN:ADMIN"),
