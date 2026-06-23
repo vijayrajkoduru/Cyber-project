@@ -13,8 +13,16 @@ Reads firmware as bytes (capped 256 MB) and runs strict regex passes for:
   - Telnet hardcoded pwd (passwd patterns in inittab/rcS)
   - Base64-creds         (basic auth headers)
 
-Each finding mask actual cred beyond first 8 chars. CRITICAL severity for any
-AWS / GitHub / Google / private-key hit.
+Each finding mask actual cred beyond first 8 chars.
+
+Zero-FP severity bands (a graded finding must be PROVEN exploitable by itself):
+  - CRITICAL: confirmed live secret VALUES (aws_secret/google/github/stripe)
+              and PEM PRIVATE KEY blocks. An AWS access-key ID (AKIA/ASIA) is a
+              PUBLIC identifier — CRITICAL only when a paired AWS secret is found
+              nearby, otherwise INFO ("key id found, confirm if active").
+  - HIGH:     live bearer tokens (slack/JWT/basic-auth) + PGP private key.
+  - INFO:     password / shadow / bcrypt HASHES are inventory only — not
+              exploitable by themselves (must be cracked, KDF-gated).
 
 Customer input: ScanRequest.target = path to firmware blob.
 """
@@ -51,6 +59,8 @@ PATTERNS = [
     ("hardcoded_root",   re.compile(rb"root:[^:]+:0:0:"),                              "MEDIUM"),
 ]
 
+PATTERNS_BY_CAT = {cat: pat for cat, pat, _sev in PATTERNS}
+
 
 def _mask(b: bytes) -> str:
     """Mask cred beyond first 8 chars."""
@@ -59,6 +69,34 @@ def _mask(b: bytes) -> str:
     s = s.strip()[:120]
     if len(s) <= 8: return s
     return s[:8] + "*" * min(12, len(s) - 8) + ("..." if len(s) > 20 else "")
+
+
+# Generic AWS-secret shape (40-char base64) — used ONLY to prove an access-key
+# ID is paired with a secret nearby. An access-key ID alone is a PUBLIC
+# identifier, not a secret.
+_AWS_SECRET_SHAPE = re.compile(rb"\b[A-Za-z0-9/+]{40}\b")
+_AWS_PAIR_WINDOW = 512  # bytes around an AKIA/ASIA hit to look for a secret
+
+
+def _aws_key_has_paired_secret(data: bytes, offsets) -> bool:
+    """A bare AWS access-key ID (AKIA/ASIA + 16 chars) is a public identifier.
+    It is only an exploitable secret when a 40-char AWS secret value sits near
+    it (same env block / config line region). Look in a small window around
+    each access-key offset for an aws_secret assignment OR a stand-alone
+    40-char base64 secret-shape token."""
+    for off in offsets:
+        lo = max(0, off - _AWS_PAIR_WINDOW)
+        hi = min(len(data), off + _AWS_PAIR_WINDOW)
+        window = data[lo:hi]
+        # Strong signal: an explicit aws_secret_access_key assignment nearby.
+        if PATTERNS_BY_CAT["aws_secret_like"].search(window):
+            return True
+        # Weaker signal: a 40-char secret-shape token that is NOT itself the
+        # access-key ID region (access-key IDs are 20 chars).
+        for sm in _AWS_SECRET_SHAPE.finditer(window):
+            if sm.group(0) not in (data[off:off + 20],):
+                return True
+    return False
 
 
 def _scan(path: Path):
@@ -71,6 +109,7 @@ def _scan(path: Path):
         return {}, ""
 
     results = {}
+    aws_key_offsets = []
     for cat, pat, sev in PATTERNS:
         seen = set()
         hits = []
@@ -80,10 +119,18 @@ def _scan(path: Path):
             if key in seen: continue
             seen.add(key)
             hits.append({"match": _mask(raw), "offset": m.start(), "severity": sev})
+            if cat == "aws_access_key":
+                aws_key_offsets.append(m.start())
             if len(hits) >= MAX_HITS_PER_CAT: break
         if hits:
             results[cat] = hits
-    return results, ""
+
+    # Zero-FP gate: only treat an AWS access-key ID as a CRITICAL secret when a
+    # paired AWS secret is found nearby; otherwise it is a public identifier.
+    aws_key_paired = False
+    if "aws_access_key" in results:
+        aws_key_paired = _aws_key_has_paired_secret(data, aws_key_offsets)
+    return {"results": results, "aws_key_paired": aws_key_paired}, ""
 
 
 async def gather(ctx: ScanContext):
@@ -93,20 +140,42 @@ async def gather(ctx: ScanContext):
         ctx.source("firmware file not found at target path")
         return
 
-    results, err = await asyncio.get_event_loop().run_in_executor(None, _scan, Path(target))
-    if results is None:
+    scan, err = await asyncio.get_event_loop().run_in_executor(None, _scan, Path(target))
+    if scan is None:
         ctx.state["hardcoded_credentials_search_error"] = f"read failed: {err[:120]}"
         ctx.source("read failed")
         return
+    results = scan.get("results", {})
+    aws_key_paired = scan.get("aws_key_paired", False)
 
     findings = []
     total_hits = sum(len(v) for v in results.values())
-    critical_cats = [c for c in ("aws_access_key", "aws_secret_like", "google_api_key",
-                                 "github_pat", "github_pat_new", "stripe_secret",
-                                 "openssh_priv") if c in results]
-    high_cats = [c for c in ("slack_token", "pgp_priv", "bcrypt_hash", "shadow_hash_md5",
-                             "shadow_hash_sha", "shadow_hash_yes", "jwt_token",
-                             "basic_auth_b64") if c in results]
+
+    # ── Zero-FP severity bands ──────────────────────────────────────────────
+    # CRITICAL only for material that is exploitable BY ITSELF:
+    #   - confirmed live API secrets (secret VALUES, not public identifiers)
+    #   - PEM PRIVATE KEY blocks
+    # An AWS access-key ID (AKIA/ASIA) is a PUBLIC identifier — CRITICAL only
+    # when a paired AWS secret was found nearby, else INFO ("key id found,
+    # confirm if active").
+    critical_candidates = ["aws_secret_like", "google_api_key", "github_pat",
+                           "github_pat_new", "stripe_secret", "openssh_priv"]
+    critical_cats = [c for c in critical_candidates if c in results]
+    aws_key_id_present = "aws_access_key" in results
+    aws_key_id_info = aws_key_id_present and not aws_key_paired
+    if aws_key_id_present and aws_key_paired:
+        critical_cats.insert(0, "aws_access_key")
+
+    # HIGH only for full live-token secrets that grant access by themselves:
+    #   - slack token, PGP private key, JWT, basic-auth blob.
+    # Password / shadow / bcrypt HASHES are NOT exploitable by themselves
+    # (they must be cracked, gated by KDF strength) -> INFO inventory.
+    high_candidates = ["slack_token", "pgp_priv", "jwt_token", "basic_auth_b64"]
+    high_cats = [c for c in high_candidates if c in results]
+    hash_candidates = ["bcrypt_hash", "shadow_hash_md5", "shadow_hash_sha",
+                       "shadow_hash_yes"]
+    hash_cats = [c for c in hash_candidates if c in results]
+
     medium_cats = [c for c in ("telnet_passwd", "hardcoded_root") if c in results]
 
     if critical_cats:
@@ -117,6 +186,14 @@ async def gather(ctx: ScanContext):
         findings.append({"check": "high_severity_secrets",
                          "categories": high_cats,
                          "count": sum(len(results[c]) for c in high_cats)})
+    if aws_key_id_info:
+        findings.append({"check": "aws_access_key_id_inventory",
+                         "categories": ["aws_access_key"],
+                         "count": len(results.get("aws_access_key", []))})
+    if hash_cats:
+        findings.append({"check": "password_hash_inventory",
+                         "categories": hash_cats,
+                         "count": sum(len(results[c]) for c in hash_cats)})
     if medium_cats:
         findings.append({"check": "system_account_credentials",
                          "categories": medium_cats,
@@ -128,10 +205,14 @@ async def gather(ctx: ScanContext):
     ctx.state["secrets_by_category"] = by_cat_counts
     ctx.state["secrets_samples"] = samples
     ctx.state["secrets_critical_categories"] = critical_cats
+    ctx.state["secrets_high_categories"] = high_cats
+    ctx.state["secrets_hash_categories"] = hash_cats
+    ctx.state["secrets_aws_key_id_only"] = aws_key_id_info
+    ctx.state["secrets_aws_key_paired"] = bool(aws_key_id_present and aws_key_paired)
     ctx.state["secrets_total_hits"] = total_hits
     ctx.state["hardcoded_credentials_search_total"] = len(findings)
     ctx.source(f"{total_hits} secrets across {len(results)} categories, "
-               f"{len(critical_cats)} critical")
+               f"{len(critical_cats)} critical, {len(hash_cats)} hash-inventory")
 
 
 INTEL_FIELDS = [("Secrets per category",      "secrets_by_category"),

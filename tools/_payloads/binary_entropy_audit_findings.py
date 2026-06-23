@@ -18,8 +18,11 @@ def rule_positive(s):
 def rule_encrypted_blob(s):
     if s.get("entropy_classification") != "encrypted_or_compressed":
         return None
-    return {"name": "Firmware appears fully encrypted or compressed",
-            "severity": "MEDIUM", "cvss": "5.3",
+    # "Encrypted/compressed -> static analysis blocked" is a STATE ADVISORY
+    # about the analyst's visibility, not a proven weakness in the firmware ->
+    # INFO, not a graded MEDIUM. (Encryption at-rest is, if anything, a control.)
+    return {"name": "Firmware appears fully encrypted or compressed (static analysis blocked)",
+            "severity": "INFO",
             "cwe": "CWE-200", "owasp": "A05:2021",
             "evidence": (f">{s.get('entropy_high_pct')}% of bytes sustained >7.5 bits/byte entropy "
                          f"(avg={s.get('entropy_avg')})"),

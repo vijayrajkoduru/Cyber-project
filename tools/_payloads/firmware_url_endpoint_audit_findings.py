@@ -10,21 +10,28 @@ def rule_cleartext_endpoints(s):
     ct = s.get("fw_cleartext_endpoints") or []
     if not ct:
         return None
-    # telnet:// + tftp:// are worse (no auth/no integrity at all)
+    # A hardcoded http/ftp/tftp/telnet URL is INTENT (the device WOULD contact
+    # it over cleartext) — it is NOT a live exposure observed on the network and
+    # no request is ever made to it. So this is downgraded: the no-auth/no-
+    # integrity transports (telnet/tftp/ftp) are LOW; the rest are INFO. A live
+    # MITM/downgrade only matters if the endpoint is actually reached at runtime.
     worst = [c for c in ct if c.get("scheme") in ("telnet", "tftp", "ftp")]
-    sev = "MEDIUM" if worst else "LOW"
-    cvss = "5.3" if worst else "3.7"
+    sev = "LOW" if worst else "INFO"
+    cvss = "3.7" if worst else "0.0"
     sample = ", ".join(f"{c['scheme']}://…" for c in ct[:5])
     detail = ", ".join(c["url"] for c in (worst or ct)[:4])
-    return {"name": f"{len(ct)} cleartext network endpoint(s) hardcoded in firmware",
+    return {"name": f"{len(ct)} cleartext network endpoint(s) hardcoded in firmware (intent, not a live exposure)",
             "severity": sev, "cvss": cvss,
             "cwe": "CWE-319", "owasp": "A02:2021",
-            "evidence": f"Schemes: {sample}. e.g. {detail}",
-            "remediation": ("The device will contact these endpoints over unencrypted transport "
-                            "(http/ftp/tftp/telnet), exposing config, firmware updates, or shell "
-                            "traffic to network MITM and downgrade. Move update/control channels to "
-                            "HTTPS/SFTP/SSH with certificate or signature pinning. Remove telnet/"
-                            "tftp entirely from production builds.")}
+            "evidence": (f"Schemes: {sample}. e.g. {detail}. Static extraction only — no request "
+                         f"was made to any endpoint, so this is the device's intended transport, "
+                         f"not an observed live exposure."),
+            "remediation": ("If reached at runtime, the device will contact these endpoints over "
+                            "unencrypted transport (http/ftp/tftp/telnet), exposing config, "
+                            "firmware updates, or shell traffic to network MITM and downgrade. "
+                            "Confirm whether the endpoint is actually used, then move update/"
+                            "control channels to HTTPS/SFTP/SSH with certificate or signature "
+                            "pinning. Remove telnet/tftp entirely from production builds.")}
 
 
 def rule_public_ips(s):

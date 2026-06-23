@@ -44,16 +44,23 @@ def rule_default_creds(s):
     creds = s.get("bmc_default_creds") or []
     if not creds:
         return None
-    return {"name": f"BMC firmware ships with default-credential markers ({len(creds)})",
-            "severity": "LOW", "cvss": "3.7",
+    # A default-cred MARKER string in firmware config text (e.g. "root:calvin")
+    # is NOT proof of an exploitable, active account — it could be a doc string,
+    # a comment, a default that the provisioning flow overwrites, or a disabled
+    # account. We cannot confirm it is active without a live authentication
+    # probe (out of static-analysis scope) -> INFO, not a graded LOW.
+    return {"name": f"BMC default-credential marker(s) present in firmware bytes ({len(creds)}) — NOT confirmed active",
+            "severity": "INFO",
             "cwe": "CWE-1392", "owasp": "A07:2021",
-            "evidence": "Found: " + "; ".join(creds[:5]),
-            "remediation": ("Literal default-credential strings were found in the firmware. If these "
-                            "are the shipped factory defaults (e.g. iDRAC root:calvin, ADMIN:ADMIN), "
-                            "the BMC is trivially accessible until an operator changes them. Force a "
-                            "credential change on first boot, disable the default account, and never "
-                            "ship a fixed password. Confirmed from bytes — verify the account is "
-                            "actually active on the live BMC.")}
+            "evidence": ("Found in bytes: " + "; ".join(creds[:5])
+                         + ". Static string match only — presence in firmware does not prove the "
+                           "account is active/reachable; that needs a live authentication probe."),
+            "remediation": ("Literal default-credential strings were found in the firmware (e.g. "
+                            "iDRAC root:calvin, ADMIN:ADMIN). If these are the shipped factory "
+                            "defaults and remain unchanged, the BMC would be trivially accessible. "
+                            "Verify on the live BMC whether the account is actually active before "
+                            "grading; then force a credential change on first boot, disable the "
+                            "default account, and never ship a fixed password.")}
 
 
 BMC_COMPONENT_AUDIT_FINDING_RULES = [rule_not_bmc, rule_platform_inventory, rule_default_creds]
