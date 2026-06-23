@@ -28,9 +28,12 @@ def _parse_version(banner):
     names with no version info. Real version disclosure is, e.g.,
     `Server: Apache/2.4.41 (Ubuntu)`. We now require either:
       - A version-bearing product pattern (nginx/X.Y.Z, OpenSSH_X.Y, ...)
-      - OR a Server header whose value contains digits (e.g. `nginx/1.18.0`)
-    Bare-brand Server headers like 'Netlify' / 'cloudflare' are returned as
-    intel only (handled by INTEL_FIELDS), not as a finding.
+      - OR a Server header whose value contains a REAL version number
+        (semver-ish `\\d+\\.\\d+`, e.g. `nginx/1.18.0`).
+    A lone digit is NOT a version: `Server: Apache2`, `nginx-2024`,
+    `Server: ECS (dcb/7F84)` must NOT be reported as a 'version'. Bare-brand /
+    digit-decorated Server headers are returned as intel only (INTEL_FIELDS),
+    not as a finding.
     """
     # Version-bearing product patterns (must have a digit-only capture group)
     versioned=[r"OpenSSH[_\- ]([\d.]+)",r"nginx/([\d.]+)",r"Apache/([\d.]+)",
@@ -39,11 +42,12 @@ def _parse_version(banner):
     for p in versioned:
         m=re.search(p,banner)
         if m: return m.group(0)[:80]
-    # Fallback: bare 'Server: <value>' - only flag if <value> contains a digit
+    # Fallback: bare 'Server: <value>' — only a REAL version number counts.
+    # Require a digit-dot-digit (semver-ish) token, not "any digit present".
     m=re.search(r"Server:\s*([^\r\n]+)",banner)
     if m:
         val=m.group(1).strip()
-        if re.search(r"\d", val):
+        if re.search(r"\d+\.\d+", val):
             return f"Server: {val[:60]}"
     # Postfix advertises itself without version - mention but don't flag
     return None

@@ -18,6 +18,24 @@ _COMMON_PARAMS = [
     "debug", "verbose", "admin", "role", "file", "path", "include",
 ]
 
+# JSON structural / styling keys that the `"key":` regex picks up but are NOT
+# HTTP parameters. The regex matches any quoted-identifier-then-colon, which on
+# any JSON blob / inline style / Tailwind config produces hundreds of
+# non-parameter tokens. Drop these so `js_params` reflects plausible params,
+# not arbitrary JSON keys.
+_NON_PARAM_KEYS = {
+    # JSON-LD / schema.org + framework metadata
+    "context", "graph", "@context", "@type", "@id", "type",
+    # CSS / style object keys
+    "color", "background", "width", "height", "margin", "padding", "border",
+    "display", "position", "top", "left", "right", "bottom", "font", "flex",
+    "opacity", "transform", "transition", "fontsize", "fontweight", "zindex",
+    # generic structural keys common in app JSON that are not request params
+    "children", "props", "key", "ref", "class", "classname", "style", "data",
+    "items", "list", "value", "label", "title", "description", "content",
+    "name", "text", "src", "href", "alt", "rel", "target", "icon", "image",
+}
+
 
 async def gather(ctx: ScanContext):
     base = base_url(ctx.host)
@@ -31,7 +49,11 @@ async def gather(ctx: ScanContext):
     form_params = set()
     for m in re.finditer(r'<input[^>]+name=[\"\']([^\"\']+)', text, re.I):
         form_params.add(m.group(1))
-    js_params = set(re.findall(r'[\"\']([a-z][a-zA-Z0-9_]{2,30})[\"\']\s*:', text))
+    # NOTE: `"key":` matches every JSON key, not just request params. Filter to
+    # plausible params: a snake_case/short-identifier shape AND not a known
+    # JSON-structural / CSS / metadata key.
+    _raw_js = set(re.findall(r'[\"\']([a-z][a-zA-Z0-9_]{2,30})[\"\']\s*:', text))
+    js_params = {p for p in _raw_js if p.lower() not in _NON_PARAM_KEYS}
     interesting = sorted((form_params | js_params) & set(_COMMON_PARAMS))
     ctx.state["form_params"] = sorted(form_params)[:40]
     ctx.state["js_params"] = sorted(js_params)[:40]

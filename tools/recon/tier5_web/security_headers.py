@@ -14,10 +14,15 @@ router = APIRouter()
 # "Missing critical security headers: Strict-Transport-Security"). HSTS is
 # now owned exclusively by hsts_audit; this scanner only handles the other
 # response headers.
+# ZERO-FP-V2 (2026-06-23): PASSIVE recon header checks are informational —
+# a missing header is not exploitation proof. Capped at LOW (MEDIUM max,
+# LOW preferred). CSP/XFO were MEDIUM; downgraded to LOW so passive recon
+# does not inflate the customer's risk score with un-proven HIGH/MEDIUM
+# findings. Active webapp module reserves higher severities for real proof.
 _HEADERS_AUDIT = {
-    "Content-Security-Policy":  {"sev":"MEDIUM","cwe":"CWE-693","weight":15,
+    "Content-Security-Policy":  {"sev":"LOW","cwe":"CWE-693","weight":15,
         "fix":"Add 'default-src \\'self\\'; script-src \\'self\\'' to ALL responses."},
-    "X-Frame-Options":          {"sev":"MEDIUM","cwe":"CWE-1021","weight":10,
+    "X-Frame-Options":          {"sev":"LOW","cwe":"CWE-1021","weight":10,
         "fix":"Add 'X-Frame-Options: DENY' (or CSP frame-ancestors)."},
     "X-Content-Type-Options":   {"sev":"LOW","cwe":"CWE-79","weight":5,
         "fix":"Add 'X-Content-Type-Options: nosniff'."},

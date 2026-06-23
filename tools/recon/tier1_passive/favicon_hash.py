@@ -4,6 +4,10 @@ from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host, web_url
 from tools._vl_core import run_scanner
 router=APIRouter()
+# Explicit allowlist of hashes that are KNOWN stock/default server favicons.
+# Membership here (not a "'default' in name" substring guess) is the only
+# trigger for the LOW default-favicon finding.
+_KNOWN_DEFAULT_HASHES={-247388890,158475343,1730712320}
 def _g(u):
     try:
         r=requests.get(u,timeout=8,verify=False,headers={"User-Agent":"VulnusLab/1.0"})
@@ -27,12 +31,17 @@ async def gather(ctx):
         h=None
     ctx.state.update({"favicon_path":found_path,"favicon_size":len(found),
         "favicon_hash":h,"favicon_hash_unsigned":h+2**32 if h and h<0 else h})
-    # Known framework favicons (small DB)
+    # Known framework favicons (small DB). Only EXACT hash matches resolve to a
+    # product. The subset below are explicitly known *default/stock* server
+    # icons whose presence reveals an unconfigured stack — these (and ONLY
+    # these) drive the LOW "default favicon" finding, never a substring guess.
     db={-1399433489:"WordPress",-247388890:"Cloudflare-default",
         1738910457:"Drupal",-1473321600:"Joomla",
         158475343:"Apache-default",1730712320:"nginx-default"}
     if h in db:
         ctx.state["favicon_fingerprint"]=db[h]
+        if h in _KNOWN_DEFAULT_HASHES:
+            ctx.state["is_known_default"]=True
 def _r_fp(s):
     if not s.get("favicon_fingerprint"): return None
     return {"name":f"Favicon fingerprint matches: {s['favicon_fingerprint']}",
@@ -44,8 +53,10 @@ def _r_hash(s):
         "evidence":f"Path: {s.get('favicon_path')} — pivot via Shodan: http.favicon.hash:{h}",
         "remediation":"Search Shodan with this hash to find sister hosts using same favicon."}
 def _r_default(s):
+    # Only when the favicon's EXACT hash is in the known-default allowlist —
+    # not a 'default' substring of an arbitrary fingerprint name.
+    if not s.get("is_known_default"): return None
     fp=s.get("favicon_fingerprint","")
-    if "default" not in fp.lower(): return None
     return {"name":f"Default {fp} favicon — fingerprint reveal","severity":"LOW","cwe":"CWE-200",
         "evidence":fp,"remediation":"Replace default favicon to avoid trivial tech fingerprinting."}
 def _r_un(s):
