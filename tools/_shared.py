@@ -63,6 +63,34 @@ class ScanRequest(BaseModel):
     api_spec_url: Optional[str] = None      # OpenAPI / Swagger spec URL (APISec)
 
 
+_TVA_CACHE = {}        # user_id -> (revocation_cutoff_epoch:int, cached_at:float)
+_TVA_TTL = 60.0
+
+
+def _tokens_valid_after(user_id) -> int:
+    """Cached lookup of a user's token-revocation cutoff (epoch seconds), set when
+    they change their password. Tokens issued before it are rejected. Cached 60s
+    (a by-primary-key read) so verify_token stays cheap, and FAIL-OPEN on any DB
+    error so a hiccup can't lock everyone out."""
+    now = time.time()
+    hit = _TVA_CACHE.get(user_id)
+    if hit and now - hit[1] < _TVA_TTL:
+        return hit[0]
+    cutoff = 0
+    try:
+        from tools.auth._db import get_db
+        with get_db() as con:
+            row = con.execute("SELECT tokens_valid_after FROM users WHERE id=?",
+                              (user_id,)).fetchone()
+        raw = (row["tokens_valid_after"] if row else "") or ""
+        cutoff = int(float(raw)) if str(raw).strip() else 0
+    except Exception:
+        cutoff = 0
+    if len(_TVA_CACHE) < 8192:
+        _TVA_CACHE[user_id] = (cutoff, now)
+    return cutoff
+
+
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     """Decode JWT. Raises 401 if missing/invalid. Every tool endpoint
     that requires auth depends on this."""
@@ -73,6 +101,19 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     except Exception as e:
         log.warning("JWT decode failed: %s", e)
         raise HTTPException(401, "Invalid or expired token")
+    # Token revocation: reject tokens issued before the user's last password
+    # change (cached, fail-open). Closes the "stolen token valid 7 days" gap.
+    _sub = payload.get("sub")
+    _iat = payload.get("iat")
+    if _sub and _iat:
+        try:
+            revoked = int(_iat) < _tokens_valid_after(_sub)
+        except HTTPException:
+            raise
+        except Exception:
+            revoked = False
+        if revoked:
+            raise HTTPException(401, "Session expired — please log in again")
     _USER_CTX.set(payload.get("sub", "unknown"))
     return payload
 
