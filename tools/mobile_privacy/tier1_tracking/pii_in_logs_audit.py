@@ -13,6 +13,11 @@ from tools._payloads.mobile._loader import load_json
 
 router = APIRouter()
 LOG_CALL_RE = re.compile(r'Log\.[dievwt]\s*\(|NSLog\s*\(|print\(|os_log|os\.log')
+# Capture a log call together with its argument span so we can test for PII
+# INSIDE the call, not anywhere in the file. presence != usage.
+LOG_CALL_ARG_RE = re.compile(
+    r'(?:Log\.[dievwt]|NSLog|os_log|os\.log|System\.out\.print(?:ln)?)\s*\(([^;{}]{0,400})',
+    re.IGNORECASE)
 # PII keyword fragments sourced from the shared AI-curated mobile pool; inline
 # list is the fallback. Joined into the same alternation regex as before.
 _PII_KEYWORDS_FALLBACK = ["email", "phone", "imei", "idfa", "gaid", "aaid",
@@ -42,7 +47,15 @@ async def gather(ctx: ScanContext):
         files_scanned += 1
         if LOG_CALL_RE.search(txt):
             log_users += 1
-            if PII_NEAR_LOG_RE.search(txt) and len(pii_log_files) < 20:
+            # Require the PII keyword to appear INSIDE a log call's argument
+            # span, not merely somewhere in the file.
+            pii_in_call = False
+            for lm in LOG_CALL_ARG_RE.finditer(txt):
+                arg = lm.group(1) or ""
+                if PII_NEAR_LOG_RE.search(arg) or EMAIL_LITERAL_RE.search(arg):
+                    pii_in_call = True
+                    break
+            if pii_in_call and len(pii_log_files) < 20:
                 pii_log_files.append(p.name)
         for m in EMAIL_LITERAL_RE.finditer(txt):
             if len(email_literals) < 10 and "@example" not in m.group(0).lower():

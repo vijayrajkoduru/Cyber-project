@@ -14,6 +14,7 @@ from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.js_bridge_audit_findings import \
     JS_BRIDGE_AUDIT_FINDING_RULES
+from tools._payloads.mobile._fp_gates import is_app_code_path
 
 router = APIRouter()
 
@@ -36,31 +37,49 @@ async def gather(ctx: ScanContext):
     except Exception as e:
         ctx.state["js_bridge_audit_error"] = str(e); return
 
-    hits = []
+    hits = []          # all references (intel)
+    app_hits = []      # references in app-code smali (graded)
     files_scanned = 0
     for f in unpacked.rglob("*"):
         if not f.is_file(): continue
         if f.suffix not in (".dex", ".smali") and "classes" not in f.name: continue
+        is_smali = f.suffix == ".smali"
         try:
             data = f.read_bytes()[:10_000_000]
         except Exception: continue
         files_scanned += 1
+        try:
+            rel = f.relative_to(unpacked).as_posix()
+        except ValueError:
+            rel = f.name
+        # "presence != usage": a JS bridge inside a bundled WebView/ad SDK is not
+        # the app's exposed surface, and classes.dex is multidex (unattributable).
+        # Only per-class app-code smali counts toward grading.
+        app_code = is_smali and is_app_code_path(rel)
         for marker in MARKERS:
             count = data.count(marker)
             if count:
-                hits.append({"marker": marker.decode(errors="ignore"),
-                              "count": count,
-                              "file": f.relative_to(unpacked).as_posix()})
+                rec = {"marker": marker.decode(errors="ignore"),
+                       "count": count, "file": rel, "app_code": bool(app_code)}
+                hits.append(rec)
+                if app_code:
+                    app_hits.append(rec)
 
     ctx.state["js_bridge_hits"] = hits[:30]
+    ctx.state["js_bridge_app_hits"] = app_hits[:30]
+    ctx.state["js_bridge_app_files"] = len({h["file"] for h in app_hits})
     total = sum(h["count"] for h in hits)
+    app_total = sum(h["count"] for h in app_hits)
     ctx.state["js_bridge_audit_total"] = total
+    ctx.state["js_bridge_app_total"] = app_total
     ctx.state["files_scanned"] = files_scanned
     ctx.source(f"scanned {files_scanned} DEX/smali files")
 
 
 INTEL_FIELDS = [
     ("JS bridge marker occurrences", "js_bridge_audit_total"),
+    ("JS bridge markers in app code", "js_bridge_app_total"),
+    ("App-code JS bridge files",     "js_bridge_app_files"),
     ("Files scanned",                "files_scanned"),
 ]
 

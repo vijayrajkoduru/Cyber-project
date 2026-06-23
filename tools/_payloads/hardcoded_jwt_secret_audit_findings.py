@@ -3,7 +3,7 @@
 
 def rule_positive_emit(s):
     n = s.get("hardcoded_jwt_secret_audit_total", 0)
-    if n > 0: return None
+    if n > 0 or s.get("uses_jwt_lib"): return None
     return {"name": "No JWT library or embedded tokens detected",
             "severity": "POSITIVE",
             "cwe": "CWE-321", "owasp": "M9:2023",

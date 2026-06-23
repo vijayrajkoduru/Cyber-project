@@ -9,6 +9,7 @@ from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.weak_crypto_audit_findings import WEAK_CRYPTO_AUDIT_FINDING_RULES
 from tools._payloads.mobile._loader import load_json
+from tools._payloads.mobile._fp_gates import is_app_code_path
 
 router = APIRouter()
 
@@ -58,12 +59,18 @@ async def gather(ctx: ScanContext):
         except OSError:
             continue
         files_scanned += 1
+        rel = str(f.relative_to(unpacked))
+        # "presence != usage": a primitive inside a bundled SDK / test path is
+        # the library's code, not the app's risky use. Flag so findings rules
+        # can downgrade library-only / test-only hits to INFO.
+        app_code = is_app_code_path(rel)
         for kind, pat in PATTERNS.items():
             for m in pat.finditer(text):
                 hits.append({
                     "kind": kind,
-                    "file": str(f.relative_to(unpacked))[:120],
+                    "file": rel[:120],
                     "snippet": m.group(0)[:80],
+                    "app_code": app_code,
                 })
                 if len(hits) >= 200:
                     break

@@ -11,6 +11,7 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.weak_algo_audit_findings import WEAK_ALGO_AUDIT_FINDING_RULES
+from tools._payloads.mobile._fp_gates import is_app_code_path
 
 router = APIRouter()
 
@@ -41,6 +42,10 @@ async def gather(ctx: ScanContext):
         return
 
     matches_by_algo = {}
+    # Per-algo app-code file lists: a hit inside a bundled SDK / test path is
+    # the library's code ("presence != usage"). Only app-code occurrences are
+    # graded; library-only references are reported at INFO.
+    app_matches_by_algo = {}
     files_scanned = 0
     for p in unpacked.rglob("*.smali"):
         if files_scanned >= SCAN_MAX_FILES:
@@ -50,13 +55,23 @@ async def gather(ctx: ScanContext):
         except (OSError, UnicodeDecodeError):
             continue
         files_scanned += 1
+        try:
+            rel = str(p.relative_to(unpacked))
+        except ValueError:
+            rel = p.name
+        app_code = is_app_code_path(rel)
         for regex, algo, _sev in WEAK_ALGOS:
             if regex.search(txt):
                 matches_by_algo.setdefault(algo, [])
                 if p.name not in matches_by_algo[algo] and len(matches_by_algo[algo]) < 10:
                     matches_by_algo[algo].append(p.name)
+                if app_code:
+                    app_matches_by_algo.setdefault(algo, [])
+                    if p.name not in app_matches_by_algo[algo] and len(app_matches_by_algo[algo]) < 10:
+                        app_matches_by_algo[algo].append(p.name)
 
     ctx.state["weak_algos_found"] = matches_by_algo
+    ctx.state["weak_algos_app_code"] = app_matches_by_algo
     ctx.state["files_scanned"] = files_scanned
     ctx.state["weak_algo_audit_total"] = len(matches_by_algo)
     ctx.source(f"{files_scanned} smali files")

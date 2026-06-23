@@ -13,8 +13,10 @@ def rule_positive_emit(s):
 def rule_models_present(s):
     m = s.get("coreml_models") or []
     if not m: return None
+    # presence != vuln: an extractable bundled model is an IP/asset note, not a
+    # security defect by itself -> LOW.
     return {"name": f"{len(m)} CoreML model(s) bundled in plaintext ({s.get('total_kb', 0)} KB total)",
-            "severity": "MEDIUM", "cvss": "5.0",
+            "severity": "LOW", "cvss": "3.1",
             "cwe": "CWE-200", "owasp": "M10:2023",
             "evidence": "Models: " + ", ".join(e["name"] for e in m[:6]),
             "remediation": "If model represents IP / training-data investment, encrypt with on-device key (Keychain-stored) + decrypt at load. Otherwise classify as public asset."}
