@@ -7,8 +7,10 @@ Provides:
   POST   /api/admin/backups/wipe           — delete ALL backups (nuclear option)
   GET    /api/admin/backups/download/{f}   — stream a backup file as download
 
-The bundle includes users.db + .env + data/ + tools/ + src/ + docker/nginx config
-— enough to fully restore the VPS from scratch.
+The bundle includes code + config + scan data. SECURITY: it deliberately does
+NOT include .env (live API keys / JWT secret) or users.db (emails + password
+hashes) — a downloadable admin backup must never carry live secrets. Those are
+backed up separately (backup-vulnuslab.sh) and restored from a secure store.
 """
 import datetime
 import subprocess
@@ -28,12 +30,12 @@ router = APIRouter()
 #                     so we can tar real host files (main.py, src/, configs, etc.)
 BACKUP_DIR = Path("/backups")
 PROJECT_ROOT = Path("/host-project")
-# Complete end-to-end coverage: backend + frontend + infra + data + secrets.
-# Restore from this single bundle should produce a working VPS deployment.
+# Code + config + scan data — enough to redeploy. Secrets (.env) and the user
+# DB (users.db) are EXCLUDED on purpose: a downloadable bundle must never carry
+# live API keys, the JWT secret, or password hashes. Restore those separately
+# from the secure backup-vulnuslab.sh output.
 INCLUDE_PATHS = [
-    # ─── Data + secrets (highest criticality) ─────────────────────
-    "users.db",
-    ".env",
+    # ─── Data (no secrets, no user DB) ────────────────────────────
     "data",                       # scan history, consent log, user state
 
     # ─── Backend ─────────────────────────────────────────────────

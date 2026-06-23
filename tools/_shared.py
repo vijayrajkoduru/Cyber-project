@@ -218,6 +218,57 @@ def make_req_headers(req: Optional[ScanRequest] = None) -> dict:
     return h
 
 
+import socket as _socket
+import ipaddress as _ipaddress
+from urllib.parse import urlparse as _urlparse
+
+_SSRF_CACHE = {}
+_SSRF_BLOCK_HOSTS = {"localhost", "metadata.google.internal", "metadata.goog",
+                     "metadata.azure.com", "metadata", "instance-data",
+                     "metadata.packet.net", "metadata.platformequinix.com"}
+
+
+def _ssrf_blocked(url: str) -> bool:
+    """SSRF guard for user-supplied scan targets. Blocks loopback + link-local:
+    link-local 169.254.0.0/16 (and fe80::/10) covers AWS/GCP/Azure cloud-metadata,
+    and loopback stops the backend from being made to scan ITSELF. RFC1918 private
+    ranges are deliberately ALLOWED — the bundled labs + legitimate internal-network
+    pentests rely on them. Resolved hostnames are checked too (catches a hostname
+    that points at the metadata IP)."""
+    try:
+        host = (_urlparse(url).hostname or "").lower().strip("[]")
+    except Exception:
+        return False
+    if not host:
+        return False
+    if host in _SSRF_CACHE:
+        return _SSRF_CACHE[host]
+    blocked = False
+    if host in _SSRF_BLOCK_HOSTS:
+        blocked = True
+    else:
+        ips = []
+        try:
+            _ipaddress.ip_address(host)
+            ips = [host]                       # URL used a literal IP
+        except ValueError:
+            try:
+                ips = [ai[4][0] for ai in _socket.getaddrinfo(host, None)]
+            except Exception:
+                ips = []
+        for ip in ips:
+            try:
+                addr = _ipaddress.ip_address(ip)
+            except ValueError:
+                continue
+            if addr.is_loopback or addr.is_link_local:
+                blocked = True
+                break
+    if len(_SSRF_CACHE) < 4096:
+        _SSRF_CACHE[host] = blocked
+    return blocked
+
+
 def safe_request(method: str, url: str, *,
                  retries: int = 2,
                  timeout: int = 15,
@@ -235,6 +286,11 @@ def safe_request(method: str, url: str, *,
     Returns the requests.Response on success, or None after final
     failure (callers do `if r is None: ...`).
     """
+    # SSRF GUARD: refuse scans aimed at loopback / cloud-metadata (link-local).
+    # Returns None — the standard "unreachable" contract — so callers degrade
+    # gracefully. RFC1918 stays allowed (labs + internal-network pentests).
+    if _ssrf_blocked(url):
+        return None
     # Always merge auth from req into explicit headers (AUTH-MERGE-V1).
     # Previous behaviour: explicit headers={"Origin":...} silently REPLACED
     # the Cookie/Authorization header set by req — so cors/ssrf/xxe scanners
