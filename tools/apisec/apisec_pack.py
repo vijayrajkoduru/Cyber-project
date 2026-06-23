@@ -29,6 +29,60 @@ from tools._pack_common import (
 )
 from tools._shared import wrap_finding
 
+# Zero-FP secret validation helpers (shared with the webapp secrets scanner).
+# A captured key blob must clear a Shannon-entropy floor and survive a
+# placeholder/example allowlist before it is graded as a real leak.
+try:
+    from tools._payloads.secrets_patterns import (
+        shannon_entropy as _shannon_entropy,
+        GENERIC_MIN_ENTROPY as _GENERIC_MIN_ENTROPY,
+        looks_like_false_match as _looks_like_false_match,
+    )
+except Exception:  # pragma: no cover - defensive fallback if module unavailable
+    import math as _math
+
+    def _shannon_entropy(s: str) -> float:
+        if not s:
+            return 0.0
+        freq = {}
+        for ch in s:
+            freq[ch] = freq.get(ch, 0) + 1
+        n = len(s)
+        ent = 0.0
+        for c in freq.values():
+            p = c / n
+            ent -= p * _math.log2(p)
+        return ent
+
+    _GENERIC_MIN_ENTROPY = 3.6
+
+    def _looks_like_false_match(candidate: str, context: str = "") -> bool:
+        return False
+
+# Obvious placeholder / example tokens that must never be graded as live secrets.
+_SECRET_PLACEHOLDER_MARKERS = (
+    "example", "placeholder", "your_", "yourkey", "xxxx", "aaaa", "0000",
+    "1234567890", "changeme", "dummy", "sample", "test", "redacted",
+    "akiaiosfodnn7example",  # canonical AWS docs example key
+    "abcdef", "deadbeef", "<", ">", "{{", "}}",
+)
+
+
+def _is_real_secret(blob: str, context: str = "") -> bool:
+    """True only when a captured secret blob looks genuinely random.
+
+    Gate: clears the Shannon-entropy floor, is not an obvious placeholder/
+    example, and does not match a known-benign front-end artifact. Unvalidated
+    matches are downgraded to INFO by the caller, never graded CRITICAL."""
+    if not blob:
+        return False
+    low = blob.lower()
+    if any(m in low for m in _SECRET_PLACEHOLDER_MARKERS):
+        return False
+    if _looks_like_false_match(blob, context):
+        return False
+    return _shannon_entropy(blob) >= _GENERIC_MIN_ENTROPY
+
 
 def _host(target: str) -> str:
     s = target.split("://", 1)[-1].split("/")[0]
@@ -158,7 +212,14 @@ def _probe_graphql_discovery(target, req):
     found = []
     for p in paths:
         code, body, _ = _http_get(base + p, timeout=3)
-        if code in (200, 400, 405) and ("graphql" in body.lower() or "graphiql" in body.lower() or code == 400):
+        bl = body.lower()
+        # A bare 400/405 is NOT proof of GraphQL — any backend returns 400 to a
+        # malformed/empty request. Require a real GraphQL signature in the body:
+        # the "graphql"/"graphiql" marker, or the GraphQL error envelope
+        # (an "errors" array with "locations"/"message" entries).
+        is_graphql = ("graphql" in bl or "graphiql" in bl
+                      or ('"errors"' in bl and ('"locations"' in bl or '"message"' in bl)))
+        if code in (200, 400, 405) and is_graphql:
             found.append(p)
     if found:
         return {"tool": "graphql_schema_discovery", "target": target, "scan_time": 0,
@@ -279,35 +340,87 @@ def _probe_api_endpoint_brute(target, req):
 
 
 def _probe_hidden_api_versions(target, req):
-    """Look for hidden API version endpoints."""
+    """Look for hidden API version endpoints.
+
+    Zero-FP gate: a status code alone is meaningless — a SPA/catch-all returns
+    200 to /v0../v4 and every alias, which would fake 'version sprawl' on a
+    static site. We only count a version as REAL (and gradeable) when it shows
+    structural proof of an API: a JSON body (with a version/api/data field) or a
+    401/403 whose body is a structured auth-error (not an HTML login page).
+    Paths that merely return 200-HTML are recorded as unproven (INFO)."""
     base = _base_url(target)
     versions = ["/v0", "/v1", "/v2", "/v3", "/v4", "/api/v0", "/api/v1", "/api/v2",
                  "/api/v3", "/api/v4", "/api/beta", "/api/alpha", "/api/internal"]
-    found = []
+    proven = []      # structurally-confirmed API versions
+    soft = []        # reachable but unproven (could be SPA catch-all)
     for p in versions:
-        code, _, _ = _http_get(base + p, timeout=2)
-        if code in (200, 401, 403):
-            found.append({"path": p, "code": code})
+        code, body, headers = _http_get(base + p, timeout=2)
+        if code not in (200, 401, 403):
+            continue
+        ct = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
+        bs = (body or "").strip()
+        is_html = "<html" in bs[:200].lower() or "text/html" in ct
+        structured_json = ("json" in ct or bs.startswith(("{", "["))) and not is_html and len(bs) > 2
+        # 401/403 with a structured (non-HTML) body is a genuine guarded API.
+        guarded_api = code in (401, 403) and structured_json
+        if structured_json or guarded_api:
+            proven.append({"path": p, "code": code})
+        else:
+            soft.append({"path": p, "code": code})
+    found = proven
+    n = len(found)
+    findings = []
+    if n > 1:
+        sev = "MEDIUM" if n > 3 else "LOW"
+        findings.append(wrap_finding(
+            f"API version sprawl — {n} live API versions confirmed (structured responses)",
+            sev, cvss="5.0" if n > 3 else "3.0", cwe="CWE-1059",
+            remediation="Deprecate old versions; document version lifecycle policy.",
+            evidence_marker=", ".join(f"{f['path']}->{f['code']}" for f in found)))
+    elif n == 1:
+        findings.append(wrap_finding(
+            f"Single API version confirmed at {found[0]['path']}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Document version lifecycle policy.",
+            evidence_marker=f"{found[0]['path']}->{found[0]['code']}"))
+    elif soft:
+        findings.append(wrap_finding(
+            f"{len(soft)} version-prefixed path(s) reachable but unconfirmed (200/HTML — likely SPA catch-all)",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="A catch-all that returns the same HTML to every /vN path is not API version sprawl. Confirm real APIs before remediating.",
+            evidence_marker=", ".join(f"{f['path']}->{f['code']}" for f in soft[:6])))
+    else:
+        findings.append(wrap_finding(
+            "No version-prefixed API endpoints found",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="No action for this check.",
+            evidence_marker="No structured /vN responses"))
     return {"tool": "hidden_api_versions", "target": target, "scan_time": 0,
-            "vulnerable": len(found) > 2,
-            "severity": "MEDIUM" if len(found) > 3 else ("LOW" if len(found) > 1 else "INFO"),
-            "findings": [wrap_finding(
-                f"API version sprawl — {len(found)} live versions discovered" if found else "No version-prefixed endpoints found",
-                "MEDIUM" if len(found) > 3 else ("LOW" if len(found) > 1 else "POSITIVE"),
-                cvss="5.0" if len(found) > 3 else ("3.0" if len(found) > 1 else "0.0"),
-                cwe="CWE-1059",
-                remediation="Deprecate old versions; document version lifecycle policy.",
-                evidence_marker=", ".join(f"{f['path']}->{f['code']}" for f in found) or "No versions exposed")],
+            "vulnerable": n > 1,
+            "severity": findings[0].get("severity", "INFO"),
+            "findings": findings,
             "tests_performed": len(versions),
             "tests_summary": "Hidden API version discovery",
-            "raw_data": {"versions_found": found}}
+            "raw_data": {"versions_found": found, "unconfirmed": soft}}
 
 
 def _probe_rate_limit(target, req):
-    """Probe API rate-limit posture by rapid-fire (10 reqs) to /api/health or /."""
+    """Probe API rate-limit posture by rapid-fire (10 reqs) to /api/health or /.
+
+    Zero-FP gate: a SPA/catch-all returns 200 to every path (incl. a bogus
+    control path), so "10 successes" proves nothing on its own. Before grading
+    'no rate limit', we confirm the path is a REAL endpoint — its response must
+    differ from a guaranteed-nonexistent control sibling. If they are identical
+    (catch-all), we suppress the HIGH and report inconclusive."""
+    import hashlib
     base = _base_url(target)
     paths = ["/api/health", "/health", "/api", "/"]
     findings = []
+
+    def _fingerprint(u):
+        c, b, _ = _http_get(u, timeout=3)
+        return c, hashlib.sha1((b or "")[:4096].encode("utf-8", "ignore")).hexdigest(), len(b or "")
+
     for p in paths:
         url = base + p
         codes = []
@@ -324,11 +437,26 @@ def _probe_rate_limit(target, req):
                 remediation="Continue rate-limiting; consider per-endpoint limits.",
                 evidence_marker=f"Codes: {codes[:5]}..."))
         elif all(c == codes[0] and c < 400 for c in codes if c):
-            findings.append(wrap_finding(
-                f"Rate limit NOT enforced at {p} — 10 rapid requests all succeeded",
-                "HIGH", cvss="7.0", cwe="CWE-770",
-                remediation="Implement token-bucket or sliding-window rate limit per IP/user.",
-                evidence_marker=f"10 requests in {elapsed:.1f}s, all {codes[0]}"))
+            # Confirm this is a genuine endpoint, not a catch-all that 200s every path.
+            real_code, real_fp, real_len = _fingerprint(url)
+            ctrl_path = f"{p.rstrip('/')}/vl-nonexistent-{int(time.time())}-zz9"
+            ctrl_code, ctrl_fp, ctrl_len = _fingerprint(base + ctrl_path)
+            is_catch_all = (real_code == ctrl_code) and (real_fp == ctrl_fp)
+            genuine = (real_code == 200) and not is_catch_all
+            if genuine:
+                findings.append(wrap_finding(
+                    f"Rate limit NOT enforced at {p} — 10 rapid requests all succeeded",
+                    "HIGH", cvss="7.0", cwe="CWE-770",
+                    remediation="Implement token-bucket or sliding-window rate limit per IP/user.",
+                    evidence_marker=(f"10 requests in {elapsed:.1f}s, all {codes[0]}; "
+                                     f"control {ctrl_path}->{ctrl_code} differs (real endpoint)")))
+            else:
+                # Catch-all / SPA: every path returns the same 200. Not provable.
+                findings.append(wrap_finding(
+                    f"Rate-limit probe inconclusive at {p} — responses match a nonexistent control path (catch-all/SPA)",
+                    "INFO", cvss="0.0", cwe="N/A",
+                    remediation="Re-test against a confirmed API endpoint; a catch-all that 200s every path cannot be assessed for rate limiting.",
+                    evidence_marker=(f"{p}->{real_code} ({real_len}b) == control {ctrl_path}->{ctrl_code} ({ctrl_len}b)")))
         if findings: break
     if not findings:
         findings.append(wrap_finding(
@@ -361,9 +489,14 @@ def _probe_ws_origin(target, req):
                 "Sec-WebSocket-Version": "13",
             })
             with urllib.request.urlopen(r, timeout=3) as resp:
-                if resp.status in (101, 200):
+                # A real WebSocket upgrade is 101 Switching Protocols. A 200
+                # means the handshake FAILED (server ignored Upgrade and served
+                # a normal HTTP response / SPA page) — not a cross-origin accept.
+                if resp.status == 101:
                     found.append({"path": p, "code": resp.status, "accepted_evil_origin": True})
         except urllib.error.HTTPError as e:
+            # 101 won't surface here (handled above); 426 Upgrade Required means
+            # a WS endpoint exists but rejected this handshake (origin enforced).
             if e.code in (101, 426):
                 found.append({"path": p, "code": e.code, "accepted_evil_origin": False})
         except Exception:
@@ -434,28 +567,52 @@ def _probe_api_key_in_url(target, req):
         return _adv_response("api_key_in_url_leak", target,
             "Target unreachable — skipping URL-credential probe",
             "INFO", "0.0", evidence=f"GET {base} -> {code}")
+    # (regex, label, capture-group-index of the secret blob to entropy-validate)
     patterns = [
-        (r'[?&](api[_-]?key|token|secret|access[_-]?token)=([A-Za-z0-9_\-]{16,})', "credential in URL param"),
-        (r'(AKIA|ASIA)[A-Z0-9]{16}', "AWS access key in body"),
-        (r'sk_live_[A-Za-z0-9]{20,}', "Stripe live key in body"),
-        (r'AIza[A-Za-z0-9_-]{35}', "Google API key in body"),
+        (r'[?&](api[_-]?key|token|secret|access[_-]?token)=([A-Za-z0-9_\-]{16,})', "credential in URL param", 2),
+        (r'(AKIA|ASIA)[A-Z0-9]{16}', "AWS access key in body", 0),
+        (r'sk_live_[A-Za-z0-9]{20,}', "Stripe live key in body", 0),
+        (r'AIza[A-Za-z0-9_-]{35}', "Google API key in body", 0),
     ]
-    leaks = []
-    for pat, label in patterns:
-        m = re.search(pat, body[:8192])
-        if m: leaks.append({"label": label, "match": m.group(0)[:60]})
+    leaks = []        # entropy-validated -> graded CRITICAL
+    weak = []         # pattern matched but failed validation -> INFO only
+    hay = body[:8192]
+    for pat, label, gi in patterns:
+        m = re.search(pat, hay)
+        if not m:
+            continue
+        full = m.group(0)
+        blob = m.group(gi) if gi else m.group(0)
+        ctx = hay[max(0, m.start() - 60):m.end() + 60]
+        if _is_real_secret(blob, ctx):
+            leaks.append({"label": label, "match": full[:60]})
+        else:
+            weak.append({"label": label, "match": full[:60]})
+    if leaks:
+        findings = [wrap_finding(
+            f"Credential exposure: {len(leaks)} validated match(es)",
+            "CRITICAL", cvss="9.0", cwe="CWE-798",
+            remediation="Never embed API keys in URLs; use headers/cookies with HttpOnly+Secure. Rotate the exposed credential immediately.",
+            evidence_marker=", ".join(f"{l['label']}: {l['match']}" for l in leaks))]
+    elif weak:
+        findings = [wrap_finding(
+            f"Possible credential pattern(s) ({len(weak)}) — low entropy / placeholder, NOT confirmed",
+            "INFO", cvss="0.0", cwe="CWE-798",
+            remediation="Likely an example/placeholder value. Manually confirm it is not a live credential before acting.",
+            evidence_marker=", ".join(f"{l['label']}: {l['match']}" for l in weak))]
+    else:
+        findings = [wrap_finding(
+            "No credential patterns in response body",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Never embed API keys in URLs; use headers/cookies with HttpOnly+Secure.",
+            evidence_marker="Clean")]
     return {"tool": "api_key_in_url_leak", "target": target, "scan_time": 0,
             "vulnerable": bool(leaks),
-            "severity": "CRITICAL" if leaks else "POSITIVE",
-            "findings": [wrap_finding(
-                f"Credential exposure: {len(leaks)} match(es)" if leaks else "No credential patterns in response body",
-                "CRITICAL" if leaks else "POSITIVE",
-                cvss="9.0" if leaks else "0.0", cwe="CWE-798",
-                remediation="Never embed API keys in URLs; use headers/cookies with HttpOnly+Secure.",
-                evidence_marker=", ".join(f"{l['label']}: {l['match']}" for l in leaks) or "Clean")],
+            "severity": findings[0].get("severity", "INFO"),
+            "findings": findings,
             "tests_performed": len(patterns),
             "tests_summary": "API key/secret leak pattern scan",
-            "raw_data": {"leaks": leaks}}
+            "raw_data": {"leaks": leaks, "unvalidated": weak}}
 
 
 # ───────────────────── NEW live probes ─────────────────────
@@ -493,16 +650,40 @@ def _probe_api8_misconfig(target, req):
             remediation="Restrict ACAO to an allow-list of trusted origins for any authenticated API.",
             evidence_marker="ACAO=*"))
     # verbose error / stack trace
+    # Zero-FP gate: broad substrings ("sqlstate", "nonetype", "<b>fatal error</b>")
+    # also appear on docs/blog pages and would fire on a 200. We require EITHER a
+    # 5xx status (a real server error response) OR an exact framework stack-trace
+    # signature (a multi-line trace shape, not a lone keyword) before grading.
     code2, body2, _ = _http_get(base + "/vl-canary-error-%27%22%3C", timeout=4); tested += 1
     bl = body2[:8192].lower()
-    if any(s in bl for s in ["stack trace", "traceback (most recent", "exception in thread",
-                              "sqlstate", "at org.springframework", "system.web.httpexception",
-                              "org.apache.catalina", "<b>fatal error</b>", "nonetype"]):
+    # Exact framework stack-trace signatures (anchored shapes, not stray words).
+    _trace_signatures = [
+        "traceback (most recent call last):",          # Python
+        "at org.springframework.",                       # Java/Spring frame
+        "org.apache.catalina.",                          # Tomcat
+        "system.web.httpexception",                      # ASP.NET
+        "stack trace:\n",                                # generic labelled trace
+        "exception in thread \"",                        # JVM
+        re.compile(r"(?im)^\s*at [\w.$]+\([\w.]+:\d+\)\s*$"),  # Java "at x.y(File.java:42)"
+        re.compile(r'(?im)^\s*file "[^"]+", line \d+, in '),    # Python frame line
+        re.compile(r"(?i)<b>\s*fatal error\s*</b>.{0,120}\bin\b.{0,200}\bon line\b\s*\d+"),  # PHP fatal w/ file+line
+    ]
+    sig_hit = None
+    for sig in _trace_signatures:
+        if isinstance(sig, str):
+            if sig in bl:
+                sig_hit = sig; break
+        elif sig.search(body2[:8192]):
+            sig_hit = sig.pattern; break
+    is_5xx = 500 <= (code2 or 0) <= 599
+    if is_5xx or sig_hit:
         findings.append(wrap_finding(
             "Verbose error / stack trace leaked from the API",
             "MEDIUM", cvss="5.3", cwe="CWE-209", owasp="API8:2023",
             remediation="Return generic error bodies; log stack traces server-side only.",
-            evidence_marker="Stack-trace/exception markers present in error response"))
+            evidence_marker=(f"HTTP {code2} with framework stack-trace signature" if (is_5xx and sig_hit)
+                             else (f"HTTP {code2} server-error response" if is_5xx
+                                   else f"Stack-trace signature in response: {str(sig_hit)[:60]}"))))
     # missing security headers (only if the base request actually connected)
     miss = [hdr for hdr in ["x-content-type-options", "strict-transport-security"] if hdr not in hk] if code else []
     if miss:
@@ -523,27 +704,97 @@ def _probe_api8_misconfig(target, req):
 
 def _probe_api2_broken_auth(target, req):
     """API2: detect sensitive endpoints returning data WITHOUT authentication.
-    SPA-canary guarded: only structured (JSON) bodies that are not HTML."""
+
+    Zero-FP gate: a JSON-shaped 200 body is NOT proof — public endpoints and
+    SPA catch-alls return JSON too. To grade HIGH we must PROVE the endpoint is
+    actually meant to be protected. We do that two ways and require ONE:
+      (a) PROVE auth is enforced elsewhere but missing here: the endpoint serves
+          real protected data anonymously, while a guaranteed-nonexistent
+          control sibling returns a DIFFERENT response (so it's a real endpoint,
+          not a catch-all that 200s everything).
+      (b) If creds are supplied (auth_cookie/auth_bearer), compare authed vs
+          unauthed: only grade when both return data AND the unauth body is the
+          same protected resource (auth makes no difference -> access control off).
+    Otherwise the unproven hit is reported INFO, never HIGH."""
+    import hashlib
     base = _base_url(target)
     sensitive = ["/api/users", "/api/v1/users", "/api/admin", "/api/accounts",
                  "/api/orders", "/api/customers", "/api/v1/admin", "/api/internal",
                  "/api/config", "/api/me", "/api/user", "/actuator/env",
                  "/api/v1/users/1", "/api/secrets"]
-    exposed = []
+
+    def _fp(b):
+        return hashlib.sha1((b or "")[:4096].encode("utf-8", "ignore")).hexdigest()
+
+    # Optional caller creds for the authed-vs-unauthed comparison.
+    auth_hdr = {}
+    bearer = getattr(req, "auth_bearer", None) if req is not None else None
+    cookie = getattr(req, "auth_cookie", None) if req is not None else None
+    if bearer: auth_hdr["Authorization"] = f"Bearer {bearer}"
+    if cookie: auth_hdr["Cookie"] = cookie
+
+    def _get_with(url, hdrs):
+        try:
+            r = urllib.request.Request(url, headers={"User-Agent": "VulnusLab/2.0", "Accept": "*/*", **hdrs})
+            with urllib.request.urlopen(r, timeout=3) as resp:
+                return resp.status, resp.read(8192).decode("utf-8", "ignore")
+        except urllib.error.HTTPError as e:
+            try: return e.code, e.read(8192).decode("utf-8", "ignore")
+            except Exception: return e.code, ""
+        except Exception:
+            return 0, ""
+
+    proven = []      # endpoints that PROVE missing auth -> graded HIGH
+    suspected = []   # JSON 200 but unproven (could be public/catch-all) -> INFO
     for p in sensitive:
         code, body, headers = _http_get(base + p, timeout=3)
         ct = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
         bs = body.strip()
-        if code == 200 and ("json" in ct or bs.startswith(("[", "{"))) and len(bs) > 2 \
-           and "<html" not in body[:200].lower():
-            exposed.append({"path": p, "bytes": len(body)})
+        looks_json = code == 200 and ("json" in ct or bs.startswith(("[", "{"))) and len(bs) > 2 \
+            and "<html" not in body[:200].lower()
+        if not looks_json:
+            continue
+        proven_here = False
+        evidence = ""
+        # (b) authed-vs-unauthed comparison takes precedence when creds present
+        if auth_hdr:
+            ac, ab = _get_with(base + p, auth_hdr)
+            # Access control is OFF if the unauth body == authed body (or authed
+            # also got the same protected resource) AND a control path differs.
+            ctrl_path = f"{p.rstrip('/')}/vl-nonexistent-{int(time.time())}-zz9"
+            cc, cb = _get_with(base + ctrl_path, {})
+            if ac == 200 and _fp(ab) == _fp(body) and _fp(cb) != _fp(body):
+                proven_here = True
+                evidence = f"{p}: unauth body == authed body and control {ctrl_path}->{cc} differs (auth not enforced)"
+        # (a) prove it's a real protected endpoint vs a catch-all
+        if not proven_here:
+            ctrl_path = f"{p.rstrip('/')}/vl-nonexistent-{int(time.time())}-zz9"
+            cc, cb = _get_with(base + ctrl_path, {})
+            # Real endpoint: control sibling returns a DIFFERENT response.
+            # Plus require the protected resource to either reference auth-y
+            # protected-data signals or be a non-empty structured collection,
+            # not an empty {} the catch-all happens to echo.
+            if (cc != code or _fp(cb) != _fp(body)) and len(bs) > 16:
+                proven_here = True
+                evidence = f"{p} ({len(body)}b JSON); control {ctrl_path}->{cc} differs (real endpoint, served anonymously)"
+        if proven_here:
+            proven.append({"path": p, "bytes": len(body), "evidence": evidence})
+        else:
+            suspected.append({"path": p, "bytes": len(body)})
+
     findings = []
-    if exposed:
+    if proven:
         findings.append(wrap_finding(
-            f"Sensitive API endpoint(s) return JSON data WITHOUT authentication ({len(exposed)})",
+            f"Sensitive API endpoint(s) return protected data WITHOUT authentication ({len(proven)})",
             "HIGH", cvss="8.0", cwe="CWE-306", owasp="API2:2023",
             remediation="Require authentication and authorization on every data endpoint; deny by default.",
-            evidence_marker=", ".join(f"{e['path']} ({e['bytes']}b JSON)" for e in exposed[:6])))
+            evidence_marker="; ".join(e["evidence"] for e in proven[:6])))
+    elif suspected:
+        findings.append(wrap_finding(
+            f"JSON-shaped endpoint(s) reachable anonymously but auth-requirement UNPROVEN ({len(suspected)})",
+            "INFO", cvss="0.0", cwe="N/A", owasp="API2:2023",
+            remediation="Could be a public endpoint or a SPA catch-all. Re-run with auth_bearer/auth_cookie to compare authed vs unauthed, or confirm the resource is meant to be protected.",
+            evidence_marker=", ".join(f"{e['path']} ({e['bytes']}b)" for e in suspected[:6])))
     else:
         findings.append(wrap_finding(
             "No unauthenticated sensitive API endpoint detected",
@@ -908,11 +1159,28 @@ def _probe_hasura(target, req):
     """Hasura GraphQL engine detection + admin-secret-less introspection check."""
     base = _base_url(target)
     hit = False; ev = []
-    code, body, _ = _http_get(base + "/v1/version", timeout=3)
-    if code == 200 and "version" in body.lower() and len(body) < 400:
-        hit = True; ev.append("/v1/version responds")
+    # Zero-FP gate: ANY endpoint can return a body containing "version" — that is
+    # not Hasura. Require an EXACT Hasura signature: the /v1/version JSON shape
+    # ({"version":"vX.Y..."}), an x-hasura-* response header, or the /console
+    # body explicitly identifying Hasura.
+    code, body, headers = _http_get(base + "/v1/version", timeout=3)
+    hk = {k.lower(): (v or "") for k, v in (headers or {}).items()}
+    has_hasura_header = any(k.startswith("x-hasura") for k in hk)
+    is_hasura_version_json = False
+    if code == 200 and len(body) < 400:
+        try:
+            j = json.loads(body)
+            # Hasura /v1/version returns exactly {"version": "v2.x.y(-...)"}.
+            v = str(j.get("version", "")) if isinstance(j, dict) else ""
+            is_hasura_version_json = bool(re.match(r"^v\d+\.\d+", v.strip()))
+        except Exception:
+            is_hasura_version_json = False
+    if is_hasura_version_json:
+        hit = True; ev.append("/v1/version returns Hasura version JSON")
+    if has_hasura_header:
+        hit = True; ev.append("x-hasura-* response header present")
     code2, body2, _ = _http_get(base + "/console", timeout=3)
-    if "hasura" in body2[:4096].lower():
+    if code2 == 200 and "hasura" in body2[:4096].lower():
         hit = True; ev.append("/console is Hasura")
     findings = []
     if hit:
