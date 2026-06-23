@@ -34,19 +34,18 @@ def _r_kev(s):
     if not m: return None
     lst = ", ".join(f"{x['cve']} ({x['product']})" for x in m[:4])
     ranso = any(x["ransomware"].lower() == "known" for x in m)
-    # Product-level fingerprint match is SUSPECTED, not confirmed (no version
-    # check, no exploit). Industry VA convention keeps unverified findings
-    # below HIGH. We do NOT escalate to HIGH on ransomware linkage alone: a
-    # single loose product token (e.g. the word 'ivanti' echoed in body text)
-    # would otherwise reach HIGH purely because Ivanti/Pulse KEVs are
-    # ransomware-linked -> exactly the false positive this scanner produced on
-    # a plain React+FastAPI site. Ransomware stays in the evidence as urgency
-    # context, and bumps cvss within the MEDIUM band only.
-    sev, cvss = ("MEDIUM", 6.5 if ranso else 5.8)
-    return {"name": f"Detected tech matches {len(m)} CISA KEV entry(ies) - known-exploited class present",
-            "severity": sev, "cvss": cvss, "cwe": "CWE-1395",
-            "evidence": f"KEV match (product-level, SUSPECTED - verify version): {lst}." + (" Ransomware-linked KEV class - confirm the version urgently." if ranso else ""),
-            "remediation": "Confirm running version; if affected, patch immediately (CISA KEV / BOD 22-01)."}
+    # ZERO-FP: this is a PRODUCT/VENDOR-TOKEN match against the KEV catalog with
+    # NO detected version and NO range check — we cannot prove the running
+    # version falls inside any of these CVEs' affected ranges. A bare product
+    # token (e.g. the word 'ivanti' echoed in body text, or 'apache' in a
+    # Server header) is NOT proof, so this is reference-only INFO, never graded.
+    # Ransomware linkage is PRIORITY context, not CONFIDENCE: it stays in the
+    # evidence but does NOT lift severity. A graded KEV finding must come from a
+    # scanner that confirmed an exact version in the CVE's affected range.
+    return {"name": f"Detected tech appears on the CISA KEV list ({len(m)} entry(ies)) - version unconfirmed",
+            "severity": "INFO", "cwe": "CWE-1395",
+            "evidence": f"KEV product/vendor token seen on target (version-inferred, NOT range-confirmed - verify the exact version against each CVE's affected range): {lst}." + (" Some of these are ransomware-linked KEVs - if your version is in range, treat as urgent." if ranso else ""),
+            "remediation": "Confirm the exact running version; only if it falls inside an affected CVE range is this exploitable - then patch immediately (CISA KEV / BOD 22-01)."}
 def _r_clean(s):
     if (s.get("tested") or 0) < 1 or (s.get("matches") or []): return None
     techs = ', '.join(s.get('techs') or []) or 'none'

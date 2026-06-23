@@ -45,9 +45,16 @@ async def gather(ctx):
 def _r_version(s):
     if not s.get("cms") or not s.get("cms_version"):
         return None
-    return {"name": f"{s['cms']} version disclosed: {s['cms_version']}", "severity": "MEDIUM", "cvss": 5.3,
-            "cwe": "CWE-200", "evidence": f"Meta generator exposes {s['cms']} {s['cms_version']}",
-            "remediation": f"Remove generator meta; keep {s['cms']} core+plugins patched; run wpscan/droopescan."}
+    # ZERO-FP: the version comes from the meta-generator tag (a real signal),
+    # but this finding is graded purely for version DISCLOSURE - we have NOT
+    # confirmed this exact version falls inside any CVE's affected range. A
+    # disclosed version is an information-leak (LOW), not a proven
+    # vulnerability. Grading MEDIUM/HIGH would require mapping this exact
+    # version into a known-vulnerable CVE range (use wpscan/droopescan for
+    # that). So: LOW with an explicit version-inferred note.
+    return {"name": f"{s['cms']} version disclosed: {s['cms_version']}", "severity": "LOW",
+            "cwe": "CWE-200", "evidence": f"Meta generator exposes {s['cms']} {s['cms_version']}. Version-inferred, NOT range-confirmed - verify this exact version against known {s['cms']} CVE ranges before treating it as vulnerable.",
+            "remediation": f"Remove generator meta; keep {s['cms']} core+plugins patched; run wpscan/droopescan to confirm whether this exact version is in an affected CVE range."}
 
 
 def _r_cms(s):

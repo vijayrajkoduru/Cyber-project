@@ -25,8 +25,15 @@ async def gather(ctx):
         if h: ctx.state["cve_top"] = [f"{c} ({s})" for c, s in h[:3]]; ctx.state["cve_count"] = len(h)
 def _r_cve(s):
     if not s.get("cve_top"): return None
-    return {"name": f"Database '{s.get('version')}' maps to {s.get('cve_count')} high-severity CVE(s)", "severity": "MEDIUM", "cvss": 6.5, "cwe": "CWE-1395",
-            "evidence": f"NVD: {', '.join(s['cve_top'])}. Version from MySQL handshake - confirm patch level.", "remediation": "Upgrade the database engine; bind to localhost / firewall the port."}
+    # ZERO-FP: the version IS a real signal (extracted from the MySQL
+    # handshake), but the CVE ids come from an NVD KEYWORD search on
+    # "MySQL <version>" and are mapped by name, not by an affected-range
+    # check ("any CVE mentioning MySQL" rather than "CVEs whose affected range
+    # contains THIS version"). Without range confirmation this is
+    # version-INFERRED -> LOW, not MEDIUM. (MySQL versions are also commonly
+    # backported by distros, so the digits alone do not prove vulnerability.)
+    return {"name": f"Database '{s.get('version')}' has candidate CVEs (version-inferred, not range-confirmed)", "severity": "LOW", "cwe": "CWE-1395",
+            "evidence": f"NVD keyword candidates: {', '.join(s['cve_top'])}. Version read from the MySQL handshake but NOT range-confirmed - verify this exact version against each CVE's affected range (backports may already patch it).", "remediation": "Confirm the exact build; if it is inside an affected range, upgrade the database engine. Bind to localhost / firewall the port regardless."}
 def _r_clean(s):
     if not s.get("probed") or s.get("cve_top"): return None
     return {"name": "No version-vulnerable database service detected", "severity": "POSITIVE",
