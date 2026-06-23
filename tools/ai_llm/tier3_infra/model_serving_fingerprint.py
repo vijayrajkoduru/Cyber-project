@@ -68,7 +68,11 @@ SERVING_SIGNATURES = [
     {"platform": "LocalAI", "path": "/readyz",
      "header_hint": ("server", "localai"), "kind": "health"},
     {"platform": "OpenAI-compatible model list", "path": "/v1/models",
+     # Require the OpenAI-compatible JSON envelope ({"object":"list","data":
+     # [{"id":...}]}) so a generic page merely mentioning "llama"/"gpt-" does
+     # NOT get INFO-claimed as a model server. require_all gates the shape.
      "body_any": ["gpt-", "llama", "mistral", "qwen", "claude"],
+     "require_all": ["\"data\"", "\"id\"", "\"object\""],
      "kind": "model_list_generic", "weak": True},
 ]
 
@@ -128,6 +132,13 @@ async def gather(ctx: ScanContext):
             # status gate
             status_ok = sig.get("status_ok")
             if status_ok and r.status_code not in status_ok:
+                return
+            # require_all gate: every token must be present (used to require the
+            # OpenAI-compatible JSON envelope shape before claiming a model
+            # server — never match on a generic page that just mentions a model
+            # name). If any required token is missing, this sig does not match.
+            require_all = sig.get("require_all")
+            if require_all and not all(t.lower() in low for t in require_all):
                 return
             # body markers
             body_any = sig.get("body_any")

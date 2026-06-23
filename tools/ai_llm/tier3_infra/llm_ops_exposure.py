@@ -60,9 +60,12 @@ OPS_SIGNATURES = [
     {"platform": "Arize Phoenix (trace UI)", "path": "/",
      "body_any": ["phoenix", "arize"], "must_status": [200],
      "class": "dashboard"},
-    {"platform": "Phoenix GraphQL", "path": "/arize_phoenix_version",
-     "body_any": ["."], "must_status": [200], "class": "dashboard",
-     "weak": True},
+    {"platform": "Arize Phoenix (version)", "path": "/arize_phoenix_version",
+     "body_any": ["arize", "phoenix"], "must_status": [200],
+     "class": "dashboard", "weak": True},
+    {"platform": "Arize Phoenix (GraphQL)", "path": "/graphql",
+     "body_any": ["__schema", "\"data\"", "graphql"], "must_status": [200],
+     "class": "dashboard", "weak": True},
     {"platform": "Ray dashboard (jobs API)", "path": "/api/jobs/",
      "body_any": ["job_id", "\"jobs\"", "submission_id"], "must_status": [200],
      "class": "gateway_info"},
@@ -124,14 +127,10 @@ async def gather(ctx: ScanContext):
             except Exception:
                 body = ""
             low = body.lower()
-            # For the "." catch-all (weak) sigs, require a short, non-HTML body
-            # to avoid matching arbitrary pages.
-            body_any = sig["body_any"]
-            if body_any == ["."]:
-                matched = bool(low.strip()) and len(body) < 200 \
-                    and "<html" not in low
-            else:
-                matched = any(m.lower() in low for m in body_any)
+            # Service-specific markers only — never an always-true catch-all.
+            # A reachable-but-unsignatured endpoint is NOT a detection.
+            body_any = [m for m in sig["body_any"] if m and m.strip(". ")]
+            matched = any(m.lower() in low for m in body_any)
             if not matched:
                 return
             if sig["platform"] in seen:
