@@ -10,12 +10,18 @@ technique used by o365creeper / Get-MsolUser enum / AADInternals
 Invoke-AADIntUserEnumerationAsOutsider.
 
 IfExistsResult encoding (Microsoft documented values):
-  0  = user exists
+  0  = user exists  (the ONLY value that proves a real tenant account)
   1  = user does not exist
   4  = throttled
-  5  = federated namespace (still resolvable)
-  6  = federated (resolvable)
+  5  = federated namespace (resolvable) — a NAMESPACE-TYPE signal, NOT proof the
+       specific user exists. On federated domains Microsoft does not reliably
+       leak per-user existence via this endpoint, so 5/6 must NOT be counted as
+       user-enumeration hits (that was a false positive).
+  6  = federated (resolvable) — same: namespace info, not user existence.
   others = error
+
+ZERO-FP: user-enumeration findings are graded ONLY on IfExistsResult=0
+(EXISTS). FEDERATED (5/6) is reported as an INFO namespace signal.
 
 Customer input via ScanRequest.options:
   - options.username_list = newline-separated UPNs (required)
@@ -174,9 +180,10 @@ async def _run(req: EntraUserEnumRequest, ctx: ScanContext):
             elif delay_ms:
                 await asyncio.sleep(delay_ms / 1000.0)
 
-    existing = [r for r in results if r.get("if_exists_label") in ("EXISTS",
-                                                                    "FEDERATED",
-                                                                    "FEDERATED_RESOLVED")]
+    # ZERO-FP: only IfExistsResult=0 (EXISTS) proves a real account. FEDERATED
+    # (5/6) is a namespace-type signal, NOT user existence — exclude it from the
+    # graded enumeration count.
+    existing = [r for r in results if r.get("if_exists_label") == "EXISTS"]
     federated = [r for r in results if r.get("if_exists_label") in ("FEDERATED",
                                                                      "FEDERATED_RESOLVED")]
     not_found = [r for r in results if r.get("if_exists_label") == "NOT_FOUND"]

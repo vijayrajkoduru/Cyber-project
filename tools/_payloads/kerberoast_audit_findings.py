@@ -200,10 +200,28 @@ def rule_confirmed_sql_service(s):
     if not sql:
         return None
     accounts = ", ".join(f.get("spn_account", "?") for f in sql[:5])
+    # ZERO-FP severity: extracting an RC4 TGS proves the ticket is RC4-encrypted,
+    # NOT that the password is crackable. Crack time depends entirely on the
+    # service-account password policy - a 20+ char random / gMSA password is
+    # uncrackable even with RC4. CRITICAL only when a weak service-account
+    # password policy is CONFIRMED; otherwise HIGH (real, but crackability
+    # unproven).
+    weak_confirmed = bool(s.get("weak_password_policy_confirmed"))
+    sev = "CRITICAL" if weak_confirmed else "HIGH"
+    cvss = "9.1" if weak_confirmed else "8.1"
+    name_prefix = "CRITICAL" if weak_confirmed else "HIGH"
+    policy_note = (
+        " A weak service-account password policy was CONFIRMED for this domain, "
+        "so the RC4 ticket is expected to be crackable offline."
+        if weak_confirmed else
+        " NOTE: crack time depends on the service-account password policy - an "
+        "RC4 ticket protected by a 20+ char random or gMSA password (auto-rotated "
+        "240 chars) is computationally infeasible to crack. Severity is HIGH "
+        "(not CRITICAL) until a weak service-account password policy is confirmed.")
     return {
-        "name": (f"CRITICAL: SQL service account TGS extracted - "
+        "name": (f"{name_prefix}: SQL service account TGS extracted - "
                  f"{len(sql)} ticket(s), RC4-crackable"),
-        "severity": "CRITICAL", "cvss": "9.1",
+        "severity": sev, "cvss": cvss,
         "cwe": "CWE-521", "owasp": "A07:2021",
         "evidence": (
             f"Extracted RC4-HMAC-encrypted TGS tickets for SQL "
@@ -213,7 +231,7 @@ def rule_confirmed_sql_service(s):
             f"privileges = SYSTEM in most deployments). RC4 hashes "
             f"crack on a single GPU at ~5,000 H/s for hashcat -m "
             f"13100 - an 8-char mixed-case password cracks in under "
-            f"24 hours. Accounts: {accounts}. MITRE T1558.003 "
+            f"24 hours.{policy_note} Accounts: {accounts}. MITRE T1558.003 "
             f"(Kerberoasting) -> T1078.002 (Domain Accounts) -> "
             f"T1059.003 (cmd via xp_cmdshell). Verification: "
             f"hashcat -m 13100 format validated."),
@@ -243,10 +261,24 @@ def rule_confirmed_rc4_kerberoast(s):
     if not non_sql:
         return None
     accounts = ", ".join(f.get("spn_account", "?") for f in non_sql[:5])
+    # ZERO-FP severity: see rule_confirmed_sql_service. An RC4 ticket is only
+    # offline-crackable in practice when the service-account password is weak.
+    # CRITICAL only when a weak password policy is CONFIRMED; otherwise HIGH.
+    weak_confirmed = bool(s.get("weak_password_policy_confirmed"))
+    sev = "CRITICAL" if weak_confirmed else "HIGH"
+    cvss = "8.8" if weak_confirmed else "7.5"
+    policy_note = (
+        " A weak service-account password policy was CONFIRMED, so these RC4 "
+        "tickets are expected to be crackable offline."
+        if weak_confirmed else
+        " NOTE: crack time depends on the service-account password policy - RC4 "
+        "tickets protected by 20+ char random or gMSA passwords are infeasible "
+        "to crack. Severity is HIGH (not CRITICAL) until a weak service-account "
+        "password policy is confirmed.")
     return {
         "name": (f"Kerberoasting RC4-HMAC TGS tickets extracted - "
                  f"{len(non_sql)} account(s), offline-crackable"),
-        "severity": "CRITICAL", "cvss": "8.8",
+        "severity": sev, "cvss": cvss,
         "cwe": "CWE-521", "owasp": "A07:2021",
         "evidence": (
             f"Extracted TGS-REP tickets encrypted with RC4-HMAC "
@@ -256,7 +288,7 @@ def rule_confirmed_rc4_kerberoast(s):
             f"hits ~5,000 H/s on a single mid-tier GPU (RTX 3060), "
             f"~80,000 H/s on an RTX 4090. An 8-character mixed-case "
             f"service password cracks in under 24 hours; rockyou/"
-            f"hashcat rules complete in minutes. Accounts: {accounts}. "
+            f"hashcat rules complete in minutes.{policy_note} Accounts: {accounts}. "
             f"MITRE T1558.003. Verification: hashcat -m 13100 ticket "
             f"format validated."),
         "remediation": (

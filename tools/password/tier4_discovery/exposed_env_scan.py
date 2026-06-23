@@ -142,6 +142,84 @@ class ExposedEnvScanRequest(ScanRequest):
     options: Optional[dict] = None
 
 
+# Placeholder / example / sentinel values that look like a credential
+# assignment but are not a real secret. Matched case-insensitively against the
+# normalized value (and a stripped alnum form so "xxx-xxx" / "<changeme>" hit).
+_PLACEHOLDER_VALUES = {
+    "changeme", "change_me", "change-me",
+    "yourpassword", "your_password", "your-password",
+    "yoursecret", "your_secret", "your-secret",
+    "your_api_key", "your-api-key", "yourapikey",
+    "your_token", "your-token", "yourtoken",
+    "example", "examplevalue", "exampletoken", "examplekey", "examplepassword",
+    "test", "testtest", "testing", "testpassword", "test123", "testsecret",
+    "secret", "secrethere", "secret_here", "password", "passwd",
+    "todo", "fixme", "tbd", "none", "null", "nil", "undefined",
+    "not_set", "notset", "not-set", "unset", "placeholder",
+    "xxx", "xxxx", "xxxxx", "xxxxxx", "xxxxxxxx",
+    "redacted", "hidden", "dummy", "sample", "foobar", "foo", "bar",
+    "admin", "root", "default", "12345678", "123456789", "password123",
+}
+
+# Minimum Shannon entropy (bits per char) for a value to be considered a
+# plausible real secret. Low-entropy strings (repeated chars, dictionary words,
+# placeholders) fall below this and are treated as SUSPECTED, not graded.
+_MIN_ENTROPY_BITS_PER_CHAR = 2.5
+
+
+def _shannon_entropy_per_char(s: str) -> float:
+    """Shannon entropy in bits per character (0 for empty)."""
+    if not s:
+        return 0.0
+    import math
+    from collections import Counter
+    counts = Counter(s)
+    n = len(s)
+    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+
+
+# Dictionary-word stems that, when followed only by trivial digits (e.g.
+# "test1234", "password123", "admin123", "secret01"), are still placeholders.
+_PLACEHOLDER_STEMS = (
+    "test", "example", "password", "passwd", "secret", "admin", "changeme",
+    "demo", "sample", "default", "foobar", "dummy", "qwerty", "letmein",
+)
+
+
+def _is_placeholder_value(val: str) -> bool:
+    """True if the value is an obvious placeholder/example/sentinel, not a
+    real secret. Matches the literal value, an alnum-stripped form, and the
+    common "dictionary-word + trivial digits" example pattern."""
+    if not val:
+        return True
+    low = val.strip().strip("'\"<>[]{}() ").lower()
+    if low in _PLACEHOLDER_VALUES:
+        return True
+    alnum = re.sub(r"[^a-z0-9]", "", low)
+    if alnum in _PLACEHOLDER_VALUES:
+        return True
+    # All-same-char or trivially repeating (e.g. "aaaaaaaa", "xxxxxxxx")
+    if alnum and len(set(alnum)) <= 2:
+        return True
+    # "word + only trivial digits" -> example/weak placeholder (test1234,
+    # password123, admin123, secret01). Real secrets mix letters & symbols.
+    m = re.fullmatch(r"([a-z]+)([0-9]{1,6})", alnum)
+    if m and m.group(1) in _PLACEHOLDER_STEMS:
+        return True
+    return False
+
+
+def _looks_like_real_secret(val: str) -> bool:
+    """A generic key=value is a plausible real credential only when it is NOT a
+    placeholder AND clears the entropy floor (and has length >= 8). This gates
+    over-matching the generic password/secret/api_key regex on examples."""
+    if not val or len(val) < 8:
+        return False
+    if _is_placeholder_value(val):
+        return False
+    return _shannon_entropy_per_char(val) >= _MIN_ENTROPY_BITS_PER_CHAR
+
+
 def _redact(secret: str, show_plaintext: bool = False) -> str:
     """Customer-safe redaction. Format: TYPE_LEN_HASH.
     e.g. 'STR_len=42_sha8=a1b2c3d4'. When show_plaintext=True (customer
@@ -282,22 +360,24 @@ def _extract_secrets(path: str, body: str, status: int, show_plaintext: bool) ->
         # Skip JWT secret duplicates (already captured by RE_JWT)
         if "jwt" in key:
             continue
-        # Skip obvious placeholders
-        low = val.lower()
-        if low in ("changeme", "yourpassword", "your_password", "example",
-                   "yoursecret", "secret_here", "todo", "fixme",
-                   "your_api_key", "your_token", "xxx", "xxxxxx"):
+        # Skip obvious placeholders / example / sentinel values up-front so the
+        # generic key=value regex does not over-match documentation/examples.
+        if _is_placeholder_value(val):
             continue
         dedup = f"{key}={val[:24]}"
         if dedup in seen_keys:
             continue
         seen_keys.add(dedup)
+        # Pre-classify: only values clearing the entropy floor are plausible
+        # real secrets. Low-entropy values still get emitted but are marked so
+        # verify() keeps them SUSPECTED (LOW) rather than CONFIRMED (graded).
         out.append({
             "match_type": "generic_password",
             "file_path": path,
             "key_hint": key,
             "redacted_value": _redact(val, show_plaintext=show_plaintext),
             "raw_for_verify": val,
+            "entropy_ok": _looks_like_real_secret(val),
             "file_size": size,
             "http_status": status,
         })
@@ -581,15 +661,23 @@ class ExposedEnvScan(MethodologyScanner):
         elif mt == "ssh_private_key":
             struct_ok = "PRIVATE KEY" in raw
         elif mt == "generic_password":
-            # generic creds are "structurally valid" if length >= 8 (already
-            # enforced by regex), and look reasonably random (>= 2 char classes)
+            # ZERO-FP: a generic key=value match is only a CONFIRMED credential
+            # when the value is NOT a placeholder/example AND clears the entropy
+            # floor (length >= 8 already enforced by regex) AND mixes >= 2 char
+            # classes. Otherwise it stays SUSPECTED/LOW (or INFO via the rule),
+            # so placeholders like "changeme"/"example"/"xxxx" are never graded.
             classes = sum([
                 bool(re.search(r"[a-z]", raw)),
                 bool(re.search(r"[A-Z]", raw)),
                 bool(re.search(r"[0-9]", raw)),
                 bool(re.search(r"[^a-zA-Z0-9]", raw)),
             ])
-            struct_ok = len(raw) >= 8 and classes >= 2
+            entropy_ok = finding.get("entropy_ok")
+            if entropy_ok is None:
+                entropy_ok = _looks_like_real_secret(raw)
+            struct_ok = (len(raw) >= 8 and classes >= 2
+                         and bool(entropy_ok)
+                         and not _is_placeholder_value(raw))
 
         if stable and struct_ok:
             finding["confidence"] = "CONFIRMED"

@@ -20,6 +20,11 @@ Customer input via ScanRequest.options:
                          refresh_token  (long-lived)
                        The connected app must have "Manage org" + "Customize
                        Application" perms on the user that issued the token.
+  - admin_profile_ids = (optional) list (or comma/space-separated string) of
+                       the org's System Administrator profile Id(s) (15- or
+                       18-char). When supplied, the built-in admin profile is
+                       excluded by EXACT Id match rather than by name — robust
+                       against renamed / localised admin profiles.
 
 All operations READ-ONLY (only GET /services/data/...) — no metadata
 deployments, no DML, no user creates.
@@ -107,10 +112,48 @@ async def _sf_query(client, base: str, token: str, soql: str) -> dict:
         return {"_error": f"{type(e).__name__}: {str(e)[:200]}", "_status": 0}
 
 
+# Stable, exact identities for the built-in System Administrator profile.
+# We match the profile by EXACT (normalised) name against this allowlist, and
+# by EXACT profile Id against any customer-supplied admin profile Id list.
+# Substring matching is intentionally avoided: a profile literally named
+# "Custom Administrator (read-only)" must NOT be silently excluded, and a
+# profile named "Administrative Assistant" must NOT be matched by "admin".
+_STANDARD_ADMIN_PROFILE_NAMES = frozenset({
+    # English default + common Salesforce-shipped variants / localisations.
+    "system administrator",
+    "salesforce administrator",
+    "systemadministrator",
+    "administrateur système",      # fr
+    "systemadministrator",         # de (same token)
+    "administrador del sistema",   # es
+    "administrador do sistema",    # pt
+    "システム管理者",                # ja
+    "系统管理员",                    # zh
+})
+
+
+def _is_standard_admin(profile: dict, admin_ids: frozenset) -> bool:
+    """Exact-match (not substring) on profile Id or normalised profile name."""
+    pid = (profile.get("Id") or "").strip()
+    # Salesforce Ids are 15/18-char; compare on the 15-char case-sensitive id
+    # prefix so a supplied 15- or 18-char id both work.
+    if pid and (pid in admin_ids or pid[:15] in admin_ids):
+        return True
+    name_norm = (profile.get("Name") or "").strip().lower()
+    return name_norm in _STANDARD_ADMIN_PROFILE_NAMES
+
+
 async def gather(ctx: ScanContext):
     opts = ctx.state.get("_options") or {}
     sf_domain = (opts.get("sf_domain") or "").strip()
     token = (opts.get("sf_access_token") or "").strip()
+    # Optional: explicit admin profile Ids (15- or 18-char) to exclude by id.
+    raw_admin_ids = opts.get("admin_profile_ids") or []
+    if isinstance(raw_admin_ids, str):
+        raw_admin_ids = [x.strip() for x in raw_admin_ids.replace(",", " ").split()]
+    admin_ids = frozenset(
+        x.strip() for x in raw_admin_ids if isinstance(x, str) and x.strip()
+    )
 
     if not sf_domain or not token:
         ctx.state["salesforce_org_audit_creds_missing"] = True
@@ -167,9 +210,9 @@ async def gather(ctx: ScanContext):
         modMeta = bool(p.get("PermissionsModifyMetadata"))
         api = bool(p.get("PermissionsApiEnabled"))
         # System Administrator is by design god-mode — only flag NON-SysAdmin
-        # profiles holding ModifyAllData.
-        is_sysadmin = name.lower() in (
-            "system administrator", "salesforce administrator")
+        # profiles holding ModifyAllData. Exact Id / normalised-name match
+        # (never substring) so look-alike profile names aren't mis-classified.
+        is_sysadmin = _is_standard_admin(p, admin_ids)
         if modAll and not is_sysadmin:
             god_mode_profiles.append({
                 "name": name, "user_type": utype,

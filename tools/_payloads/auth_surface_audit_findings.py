@@ -66,6 +66,34 @@ def _svc_summary(findings, limit=8):
     return ", ".join(seen)
 
 
+# Banner markers that indicate the service ACTUALLY presents a plaintext
+# authentication prompt / handshake on the wire (not merely that the port is
+# open). Only when a banner matches do we treat the cleartext exposure as a
+# proven (HIGH) credential-interception risk rather than mere surface (MEDIUM).
+_PLAINTEXT_AUTH_BANNER = {
+    "telnet": ("login:", "username:", "password:", "\xff\xfd", "\xff\xfb"),
+    "ftp":    ("220 ", "ftp", "user "),
+    "pop3":   ("+ok", "pop3"),
+    "imap":   ("* ok", "imap"),
+    "smtp":   ("220 ", "smtp", "esmtp"),
+    "vnc":    ("rfb 003.", "rfb"),
+    "ldap":   (),  # LDAP bind has no human-readable cleartext prompt banner
+}
+
+
+def _has_plaintext_auth_prompt(f):
+    """True only if the captured banner shows the service really speaks a
+    cleartext auth handshake (not just that the TCP port answered)."""
+    svc = (f.get("service") or "").lower()
+    banner = (f.get("banner") or "").lower()
+    if not banner:
+        return False
+    markers = _PLAINTEXT_AUTH_BANNER.get(svc)
+    if not markers:
+        return False
+    return any(m in banner for m in markers)
+
+
 def rule_input_missing(s):
     sr = s.get("skipped_reason") or ""
     if "no target supplied" not in sr:
@@ -80,28 +108,62 @@ def rule_input_missing(s):
     }
 
 
-def rule_cleartext_auth(s):
+def rule_cleartext_auth_confirmed(s):
+    # ZERO-FP: HIGH only when the banner grab PROVES the service actually
+    # presents a cleartext authentication handshake on the wire (login prompt /
+    # protocol greeting), not merely that a cleartext-default port answered a
+    # TCP SYN. A port being open is exposure surface, not proof of cleartext auth.
     g = _by_kind(s)
-    hits = g["cleartext_auth_exposed"]
+    hits = [f for f in g["cleartext_auth_exposed"] if _has_plaintext_auth_prompt(f)]
     if not hits:
         return None
     return {
-        "name": f"Cleartext-credential authentication service exposed to the internet ({len(hits)} service)",
+        "name": f"Cleartext-credential authentication service confirmed exposed ({len(hits)} service)",
         "severity": "HIGH", "cvss": "7.5",
         "cwe": "CWE-319", "owasp": "A07:2021",
-        "verified_exploit": True,  # observed reachable + plaintext protocol
-        "evidence": ("The following authentication service(s) accepted a TCP "
-                     "connection and use a protocol that transmits credentials "
-                     f"in cleartext (or weak legacy crypto): {_svc_summary(hits)}. "
-                     "An on-path attacker can capture credentials, and exposure "
-                     "of these services on the public internet invites credential "
-                     "spraying. No credentials were submitted by this scan."),
+        "verified_exploit": True,  # banner proves a live cleartext auth handshake
+        "evidence": ("The following service(s) accepted a TCP connection AND "
+                     "their banner shows a live cleartext authentication "
+                     f"handshake/prompt: {_svc_summary(hits)}. An on-path "
+                     "attacker can capture credentials in transit, and public "
+                     "exposure invites credential spraying. No credentials were "
+                     "submitted by this scan."),
         "remediation": ("Restrict these services to a VPN / management VLAN "
                         "(firewall the ports at the perimeter). Migrate to the "
                         "encrypted equivalent: Telnet->SSH, FTP->SFTP/FTPS, "
                         "POP3/IMAP/SMTP->STARTTLS or implicit-TLS ports "
                         "(995/993/465), LDAP->LDAPS (636). Where the service must "
                         "stay public, enforce TLS-only and place it behind "
+                        "source-IP allowlisting + rate limiting."),
+    }
+
+
+def rule_cleartext_auth_surface(s):
+    # A cleartext-default port is OPEN but the banner did NOT prove a live
+    # plaintext auth prompt -> exposure surface, MEDIUM (not HIGH). Could be
+    # firewalled at the auth layer, TLS-wrapped, or non-interactive.
+    g = _by_kind(s)
+    hits = [f for f in g["cleartext_auth_exposed"] if not _has_plaintext_auth_prompt(f)]
+    if not hits:
+        return None
+    return {
+        "name": f"Cleartext-default authentication port exposed to the internet ({len(hits)} service)",
+        "severity": "MEDIUM", "cvss": "5.3",
+        "cwe": "CWE-319", "owasp": "A07:2021",
+        "verified_exploit": True,  # the port is observably reachable
+        "evidence": ("The following port(s) for protocols that default to "
+                     "cleartext credentials accepted a TCP connection: "
+                     f"{_svc_summary(hits)}. The banner grab did NOT capture a "
+                     "live plaintext auth prompt, so cleartext credential "
+                     "transmission is exposure surface here, not confirmed. "
+                     "Internet exposure of these ports still invites credential "
+                     "spraying. No credentials were submitted by this scan."),
+        "remediation": ("Restrict these services to a VPN / management VLAN "
+                        "(firewall the ports at the perimeter). If the service is "
+                        "in use, confirm it enforces TLS (STARTTLS / implicit "
+                        "TLS) and migrate any cleartext fallback to the encrypted "
+                        "equivalent: Telnet->SSH, FTP->SFTP/FTPS, "
+                        "POP3/IMAP/SMTP->995/993/465, LDAP->LDAPS (636). Add "
                         "source-IP allowlisting + rate limiting."),
     }
 
@@ -156,6 +218,7 @@ def rule_positive_clean(s):
 AUTH_SURFACE_AUDIT_FINDING_RULES = [
     rule_input_missing,
     rule_positive_clean,
-    rule_cleartext_auth,
+    rule_cleartext_auth_confirmed,
+    rule_cleartext_auth_surface,
     rule_auth_service_exposed,
 ]

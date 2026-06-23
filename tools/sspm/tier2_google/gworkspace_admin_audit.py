@@ -180,8 +180,16 @@ def _is_admin(u: dict) -> bool:
     return bool(u.get("isAdmin") or u.get("isDelegatedAdmin"))
 
 
+def _security_key_field_present(u: dict) -> bool:
+    """True only when the directory record explicitly populates the
+    securityKeyAuthenticatorEnrolled field. Non-Enterprise editions of
+    Workspace do NOT populate it — its absence is NOT evidence of a missing
+    hardware key, so we must not grade on absence (zero-FP)."""
+    return "securityKeyAuthenticatorEnrolled" in u
+
+
 def _has_hardware_key(u: dict) -> bool:
-    # Workspace exposes this via securityKeyAuthenticatorEnrolled OR isEnforcedIn2Sv
+    # Workspace exposes this via securityKeyAuthenticatorEnrolled.
     # We treat presence of an enrolled security key as best-of-breed posture.
     return bool(u.get("isEnrolledIn2Sv") and u.get("securityKeyAuthenticatorEnrolled"))
 
@@ -248,6 +256,7 @@ async def gather(ctx: ScanContext):
     admins_no_2sv = []
     admins_dormant = []
     admins_no_hwkey = []
+    admins_hwkey_field_unavailable = []
     suspended_admins = []
     for u in admins:
         email = u.get("primaryEmail", "(unknown)")
@@ -255,6 +264,7 @@ async def gather(ctx: ScanContext):
         is_suspended = bool(u.get("suspended"))
         twoSv = bool(u.get("isEnrolledIn2Sv"))
         last_days = _last_login_days(u)
+        hwkey_field_present = _security_key_field_present(u)
         record = {
             "email": email,
             "super_admin": is_super,
@@ -263,17 +273,25 @@ async def gather(ctx: ScanContext):
             "isEnrolledIn2Sv": twoSv,
             "isEnforcedIn2Sv": bool(u.get("isEnforcedIn2Sv")),
             "security_key": bool(u.get("securityKeyAuthenticatorEnrolled")),
+            "security_key_field_present": hwkey_field_present,
             "last_login_days": last_days,
         }
         if is_suspended:
             suspended_admins.append(record)
         if not twoSv:
             admins_no_2sv.append(record)
-        elif not _has_hardware_key(u):
-            admins_no_hwkey.append(record)
+        elif hwkey_field_present:
+            # Only grade hardware-key absence when the field is explicitly
+            # populated (Enterprise edition). Absence != "no key" (zero-FP).
+            if not _has_hardware_key(u):
+                admins_no_hwkey.append(record)
+        else:
+            admins_hwkey_field_unavailable.append(record)
         if is_super and last_days >= DORMANT_DAYS:
             admins_dormant.append(record)
 
+    # Hardware-key field unavailability is INFO-only (edition-dependent), NOT a
+    # graded posture issue — keep it OUT of the issue tally.
     issues = (len(admins_no_2sv) + len(admins_dormant)
               + len(admins_no_hwkey) + len(suspended_admins))
 
@@ -282,6 +300,7 @@ async def gather(ctx: ScanContext):
     ctx.state["gworkspace_admins_no_2sv"] = admins_no_2sv
     ctx.state["gworkspace_admins_dormant"] = admins_dormant
     ctx.state["gworkspace_admins_no_hwkey"] = admins_no_hwkey
+    ctx.state["gworkspace_admins_hwkey_field_unavailable"] = admins_hwkey_field_unavailable
     ctx.state["gworkspace_suspended_admins"] = suspended_admins
     ctx.state["gworkspace_admin_audit_total"] = issues
     ctx.source(f"Directory API OK — {len(admins)} admin(s) of {len(users)} user(s); "
@@ -294,6 +313,7 @@ INTEL_FIELDS = [
     ("Admins without 2-Step Verification","gworkspace_admins_no_2sv"),
     ("Super-admins dormant 90+ days",    "gworkspace_admins_dormant"),
     ("Admins without security key",      "gworkspace_admins_no_hwkey"),
+    ("Admins (hardware-key field N/A on plan)", "gworkspace_admins_hwkey_field_unavailable"),
     ("Suspended users still admin",      "gworkspace_suspended_admins"),
 ]
 

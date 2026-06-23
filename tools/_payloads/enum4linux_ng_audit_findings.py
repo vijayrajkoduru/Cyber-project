@@ -45,6 +45,14 @@ def rule_users_leaked(s):
 
 
 def rule_password_policy_leaked(s):
+    # ZERO-FP: reading the password policy over a NULL SESSION is information
+    # disclosure, NOT proof of how the DC actually enforces passwords. The
+    # null-session read can be stale, can reflect only the Default Domain
+    # Policy (not fine-grained PSOs that override it for privileged accounts),
+    # and cannot observe lockout/complexity actually being applied at logon.
+    # Therefore the "weak policy" determination is emitted as an INFO advisory
+    # (a credentialed GPO / RSoP check is required to confirm enforcement) and
+    # is never a graded false positive. The leak itself is still surfaced.
     f = s.get("enum4linux_findings") or []
     if not any(x.get("check") == "password_policy_leaked" for x in f):
         return None
@@ -60,14 +68,36 @@ def rule_password_policy_leaked(s):
     if pp.get("complexity") in (False, "Disabled", "No", "0"):
         weak.append("complexity disabled")
     if not weak:
-        return None
-    return {"name": "Weak domain password policy leaked",
-            "severity": "MEDIUM", "cvss": "5.3",
+        # Policy was leaked but reads within accepted thresholds — still note
+        # the disclosure as advisory (null-session read should be blocked).
+        return {"name": "Domain password policy readable via null session (information disclosure)",
+                "severity": "INFO",
+                "cwe": "CWE-200", "owasp": "A07:2021",
+                "evidence": ("enum4linux-ng read the Default Domain password policy over an "
+                             "anonymous SMB session. The values themselves read within accepted "
+                             "thresholds, but exposing them to an unauthenticated attacker still "
+                             "aids targeting. Note: a null-session read is NOT proof of DC "
+                             "enforcement (fine-grained PSOs may override it)."),
+                "remediation": ("[ADVISORY] Block null-session enumeration (see null-session "
+                                "finding). Confirm actual enforcement with a credentialed GPO / "
+                                "RSoP check, not a null-session read.")}
+    return {"name": "Domain password policy readable via null session - weak settings observed (advisory)",
+            "severity": "INFO",
             "cwe": "CWE-521", "owasp": "A07:2021",
-            "evidence": "Issues: " + "; ".join(weak),
-            "remediation": ("Strengthen Default Domain Policy: min length 14+, complexity enabled, "
-                            "lockout after 5 attempts within 15 min. Best practice: layer with "
-                            "fine-grained password policy (PSO) for privileged accounts >20 chars.")}
+            "evidence": ("Issues observed in the null-session-readable Default Domain Policy: "
+                         + "; ".join(weak) + ". NOTE: a null-session read does NOT prove the DC "
+                         "actually enforces (or fails to enforce) these settings - fine-grained "
+                         "password policies (PSOs) commonly override the Default Domain Policy for "
+                         "privileged/service accounts, and lockout/complexity application cannot be "
+                         "observed anonymously. This is an advisory pending a credentialed check."),
+            "remediation": ("[ADVISORY - credentialed GPO check needed] Confirm the effective "
+                            "policy with a domain-joined RSoP / `Get-ADDefaultDomainPasswordPolicy` "
+                            "+ `Get-ADFineGrainedPasswordPolicy` check before remediating. If "
+                            "confirmed weak: strengthen Default Domain Policy (min length 14+, "
+                            "complexity enabled, lockout after 5 attempts within 15 min) and layer "
+                            "a fine-grained password policy (PSO) for privileged accounts >20 chars. "
+                            "Separately, block the null-session read itself (see null-session "
+                            "finding).")}
 
 
 ENUM4LINUX_NG_AUDIT_FINDING_RULES = [rule_positive, rule_null_session, rule_users_leaked,

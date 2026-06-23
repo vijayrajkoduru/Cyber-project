@@ -36,8 +36,35 @@ def rule_input_missing(s):
             "cwe": "CWE-1006"}
 
 
+def rule_no_decision(s):
+    # ZERO-FP: the KDC never returned a usable pre-auth decision for any user
+    # (all errored / unreachable / clock skew). We tested nothing, so this is an
+    # honest INFO advisory - never a clean POSITIVE.
+    if s.get("ad_asrep_error") or s.get("ad_asrep_input_missing"):
+        return None
+    if not s.get("ad_asrep_no_decision"):
+        return None
+    if s.get("ad_asrep_roastable"):
+        return None
+    errors = s.get("ad_asrep_errors", 0)
+    unknown = s.get("ad_asrep_unknown_users", 0)
+    return {"name": "AS-REP roast inconclusive - KDC returned no usable pre-auth decision",
+            "severity": "INFO",
+            "evidence": (f"No submitted account produced a definitive KDC pre-auth decision "
+                         f"({errors} error/unreachable, {unknown} unknown). A network timeout, "
+                         f"clock skew, or unreachable KDC means we CANNOT conclude the accounts "
+                         f"are safe - this run tested nothing."),
+            "remediation": ("Confirm the DC's Kerberos service (88/TCP+UDP) is reachable from "
+                            "the scanner, the system clocks are within 5 minutes, and the domain "
+                            "FQDN is correct, then re-run. No safety conclusion should be drawn "
+                            "from this run."),
+            "cwe": "CWE-294", "owasp": "A07:2021"}
+
+
 def rule_positive(s):
     if s.get("ad_asrep_error") or s.get("ad_asrep_input_missing"):
+        return None
+    if s.get("ad_asrep_no_decision"):
         return None
     tested = s.get("ad_asrep_users_tested", 0)
     if tested == 0:
@@ -70,4 +97,5 @@ def rule_roastable_accounts(s):
 
 
 AD_ASREP_ROAST_FINDING_RULES = [rule_binary_missing, rule_input_missing,
-                                rule_positive, rule_roastable_accounts]
+                                rule_no_decision, rule_positive,
+                                rule_roastable_accounts]

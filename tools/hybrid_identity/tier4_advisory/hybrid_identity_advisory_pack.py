@@ -311,7 +311,10 @@ def _make_advisory_rule(key, section, title, reason, cwe):
             "severity": "INFO",
             "cvss": "0.0",
             "cwe": cwe,
-            "owasp": "A07:2021",
+            # No blanket OWASP tag: these advisories span auth, consent, crypto,
+            # authz, etc. — a single A07 label was inaccurate. The per-technique
+            # CWE already carries the correct categorisation.
+            "owasp": "N/A",
             "evidence": (
                 f"This technique cannot be safely detected from an external SaaS scanner. "
                 f"{reason} It is reported as advisory-by-design (NOT a forge gap and NOT a "

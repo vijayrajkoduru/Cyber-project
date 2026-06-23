@@ -8,13 +8,15 @@ Mapping:
   ISO 27001 A.8.5          = secure authentication
   ISO 27001 A.5.23         = cloud-services security
 
-Severity model:
+Severity model (graded ONLY from the explicit numeric maxScore Graph reports
+for each control id — never from a substring of the control NAME):
   CRITICAL — (none here; we never auto-fail on a posture readout)
-  HIGH     — MFA / Conditional Access / legacy-auth controls "Not Implemented"
-  MEDIUM   — any other Not-Implemented control with max score >= 5
-  LOW      — total secure score < 70% of max
-  INFO     — credentials missing  |  Graph auth failed  |  Graph API error
-  POSITIVE — score >= 90% AND no high-risk controls unimplemented
+  MEDIUM   — Not-Implemented control with explicit maxScore >= 5
+  LOW      — Not-Implemented control with explicit maxScore in [1,5)
+           — OR total secure score < 70% of max
+  INFO     — Not-Implemented control whose maxScore is NOT known (unverifiable)
+           — OR credentials missing | Graph auth failed | Graph API error
+  POSITIVE — score >= 90% of max
 """
 
 
@@ -116,7 +118,9 @@ def rule_not_implemented_controls(s):
     seen_highs = 0
     seen_meds = 0
     for c in controls[:25]:
-        sev = c.get("severity") or "MEDIUM"
+        # ZERO-FP: default to INFO when severity wasn't explicitly graded from
+        # a numeric maxScore (never silently promote an ungraded control).
+        sev = c.get("severity") or "INFO"
         title = c.get("title") or c.get("name") or "(unknown control)"
         category = c.get("category") or c.get("service") or ""
         max_pts = c.get("max") or 0

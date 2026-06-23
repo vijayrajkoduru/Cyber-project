@@ -20,9 +20,11 @@ This probe:
      surface still exists.
   3. Reports whether idpinitiatedsignon-style legacy bindings are present.
 
-We NEVER submit credentials and NEVER chain into a spray tool. Reachability
-of a legacy binding is graded LOW (it is a real, observed exposure that
-weakens CA legacy-auth blocking), everything else is INFO.
+We NEVER submit credentials and NEVER chain into a spray tool. A legacy
+binding is graded LOW ONLY when it answers a bare GET with 200 or 405 (a
+genuinely published WS-Trust endpoint). Ambiguous statuses (415/500, often
+from WAFs / generic error pages) are reported INFO, not graded. Everything
+else is INFO.
 
 Customer input via ScanRequest.options:
   - options.probe_upn = a UPN in the federated domain to resolve the
@@ -108,9 +110,16 @@ async def _get_user_realm(client, upn: str) -> dict:
 
 async def _probe_reachable(client, url: str) -> dict:
     """HTTP reachability probe only — GET, no body, no credentials.
-    A WS-Trust binding existing typically answers 200/405/500 to a bare GET
-    (it wants a SOAP POST); 404 means the binding is not published."""
-    out = {"url": url, "status": None, "reachable": False}
+
+    ZERO-FP: a genuinely published WS-Trust binding answers a bare GET (it
+    wants a SOAP POST) with 200 or 405 (Method Not Allowed). Those are the
+    ONLY statuses we treat as 'reachable' (and therefore graded). 415
+    (Unsupported Media Type) and 500 (server error) are AMBIGUOUS — they are
+    routinely returned by WAFs, reverse proxies, and generic error handlers
+    for paths that are NOT a live WS-Trust binding — so they are recorded as
+    'ambiguous' (INFO), never graded as a confirmed legacy-auth surface. 404
+    and connection errors mean the binding is not exposed."""
+    out = {"url": url, "status": None, "reachable": False, "ambiguous": False}
     try:
         r = await client.get(url, headers={
             "User-Agent": "VulnusLab/HybridIdentityAudit LegacyWSTrust/1.0",
@@ -119,9 +128,8 @@ async def _probe_reachable(client, url: str) -> dict:
         out["error"] = f"{type(e).__name__}: {str(e)[:80]}"
         return out
     out["status"] = r.status_code
-    # A published WS-Trust endpoint responds to a GET with 200/405/500/415;
-    # 404 (and connection errors) mean it is not exposed.
-    out["reachable"] = r.status_code in (200, 401, 405, 415, 500)
+    out["reachable"] = r.status_code in (200, 405)
+    out["ambiguous"] = r.status_code in (415, 500)
     return out
 
 
@@ -171,14 +179,19 @@ async def _run(req: LegacyWsTrustRequest, ctx: ScanContext):
         # (2) Legacy usernamemixed bindings — reachability only.
         legacy_results: list[dict] = []
         reachable_legacy: list[str] = []
+        ambiguous_legacy: list[str] = []
         for binding in LEGACY_BINDINGS:
             res = await _probe_reachable(client, idp_base + binding)
             legacy_results.append(res)
             if res.get("reachable"):
                 reachable_legacy.append(binding)
+            elif res.get("ambiguous"):
+                ambiguous_legacy.append(binding)
         ctx.state["legacy_wstrust_binding_results"] = legacy_results
         ctx.state["legacy_wstrust_reachable_bindings"] = reachable_legacy
         ctx.state["legacy_wstrust_reachable_count"] = len(reachable_legacy)
+        ctx.state["legacy_wstrust_ambiguous_bindings"] = ambiguous_legacy
+        ctx.state["legacy_wstrust_ambiguous_count"] = len(ambiguous_legacy)
 
     ctx.source(
         f"Federated IdP {ctx.state.get('legacy_wstrust_idp_base')}: "
@@ -223,6 +236,33 @@ def rule_legacy_binding_reachable(s):
             "verify it actually blocks WS-Trust (CA legacy-block does not "
             "cover federated WS-Trust unless the endpoint is also disabled "
             "at the IdP)."),
+    }
+
+
+def rule_ambiguous_binding(s):
+    amb = s.get("legacy_wstrust_ambiguous_bindings") or []
+    if not amb:
+        return None
+    # If a binding was confirmed reachable, the LOW finding already covers it.
+    if s.get("legacy_wstrust_reachable_bindings"):
+        return None
+    return {
+        "name": ("Legacy WS-Trust binding returned an ambiguous status "
+                 "(415/500) — exposure inconclusive"),
+        "severity": "INFO",
+        "cwe": "CWE-1390",
+        "evidence": (
+            f"The IdP at {s.get('legacy_wstrust_idp_base')} answered "
+            f"{len(amb)} legacy usernamemixed probe(s) with HTTP 415 / 500: "
+            f"{', '.join(amb)}. These statuses are commonly emitted by WAFs, "
+            "reverse proxies, and generic error handlers for paths that are "
+            "NOT a live WS-Trust binding, so a usable legacy-auth surface is "
+            "NOT confirmed. Only 200/405 are treated as reachable (and graded)."),
+        "remediation": (
+            "Verify on the IdP whether the usernamemixed endpoints are actually "
+            "published (ADFS: Get-AdfsEndpoint). If they are not needed, keep "
+            "them disabled. If they are published, disable them and enforce "
+            "Conditional Access 'block legacy authentication'."),
     }
 
 
@@ -308,6 +348,7 @@ def rule_httpx_missing(s):
 
 LEGACY_WSTRUST_SURFACE_FINDING_RULES = [
     rule_legacy_binding_reachable,
+    rule_ambiguous_binding,
     rule_mex_published,
     rule_managed,
     rule_idp_unresolved,
@@ -325,6 +366,7 @@ INTEL_FIELDS = [
     ("WS-Trust MEX probe",      "legacy_wstrust_mex"),
     ("Legacy binding probes",   "legacy_wstrust_binding_results"),
     ("Reachable legacy bindings", "legacy_wstrust_reachable_bindings"),
+    ("Ambiguous legacy bindings (415/500)", "legacy_wstrust_ambiguous_bindings"),
 ]
 
 

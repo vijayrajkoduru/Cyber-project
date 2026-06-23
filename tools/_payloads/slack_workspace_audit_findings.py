@@ -92,6 +92,30 @@ def rule_users_no_2fa(s):
     return out
 
 
+def rule_2fa_not_available(s):
+    # Only meaningful once auth succeeded and members were enumerated.
+    if s.get("slack_workspace_audit_creds_missing"): return None
+    if s.get("slack_workspace_audit_auth_error"):    return None
+    if not s.get("slack_total_users"):               return None
+    # If the has_2fa field was exposed for any user, real grading applied.
+    if s.get("slack_2fa_field_available"):           return None
+    return {
+        "name": "Slack 2FA enforcement state not available on this workspace plan",
+        "severity": "INFO",
+        "evidence": ("The Slack API did not expose the has_2fa flag for any "
+                     f"member of '{s.get('slack_team_name','?')}'. This field "
+                     "is surfaced on paid / Enterprise Grid plans; on the free "
+                     "plan it is absent for everyone. 2FA coverage could NOT be "
+                     "measured, so no 2FA finding (gap OR clean) is asserted."),
+        "remediation": ("Upgrade to a paid Slack plan to read per-member 2FA "
+                        "state via the API, or verify enforcement manually in "
+                        "Settings & Administration -> Authentication. Require "
+                        "2FA for all members regardless of plan."),
+        "cwe": "CWE-308",
+        "iso27001": "A.8.5",
+    }
+
+
 def rule_public_external_channels(s):
     rows = s.get("slack_public_external_channels") or []
     if not rows:
@@ -168,15 +192,18 @@ def rule_positive(s):
     if s.get("slack_workspace_audit_auth_error"):    return None
     if (s.get("slack_workspace_audit_total") or 0) > 0: return None
     if not s.get("slack_total_users"):               return None
+    # Don't claim "100% 2FA" if the plan never exposed the 2FA field.
+    twofa_phrase = ("100% 2FA, " if s.get("slack_2fa_field_available")
+                    else "2FA state not available on plan (see INFO finding), ")
     return {
         "name": "Slack workspace posture clean across audited surface",
         "severity": "POSITIVE",
         "evidence": (f"Workspace '{s.get('slack_team_name','?')}' — "
                      f"{s.get('slack_total_users', 0)} member(s), "
                      f"{s.get('slack_total_channels', 0)} channel(s), "
-                     f"{s.get('slack_total_apps', 0)} OAuth app(s). 100% "
-                     "2FA, no external shares, no risky scopes, no default-"
-                     "retention DLP gaps."),
+                     f"{s.get('slack_total_apps', 0)} OAuth app(s). "
+                     f"{twofa_phrase}no external shares, no risky scopes, "
+                     "no default-retention DLP gaps."),
         "remediation": ("Re-audit monthly — OAuth apps + external channels "
                         "drift quickly. Schedule via /api/sspm/run_all on "
                         "cron."),
@@ -190,6 +217,7 @@ SLACK_WORKSPACE_AUDIT_FINDING_RULES = [
     rule_token_invalid,
     rule_auth_error,
     rule_users_no_2fa,
+    rule_2fa_not_available,
     rule_public_external_channels,
     rule_risky_oauth_apps,
     rule_channels_default_retention,

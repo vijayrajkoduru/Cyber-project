@@ -151,6 +151,7 @@ async def _run(req: PhsAuditRequest, ctx: ScanContext):
         sync_config_data, sync_status, _ = await _graph_get(
             client, token, f"{GRAPH_BETA}/directory/onPremisesSynchronization")
         phs_enabled = None
+        phs_flag_explicit = False   # did the sync-config feature flag set it?
         sync_features: dict = {}
         adconnect_hosts: list[str] = []
         if sync_status == 200:
@@ -160,8 +161,10 @@ async def _run(req: PhsAuditRequest, ctx: ScanContext):
                                        if isinstance(v, bool)})
                 if feat.get("passwordHashSyncEnabled") is True:
                     phs_enabled = True
+                    phs_flag_explicit = True
                 elif feat.get("passwordHashSyncEnabled") is False and phs_enabled is None:
                     phs_enabled = False
+                    phs_flag_explicit = True
                 # adcs / hostname clues in 'configuration'
                 conf = cfg.get("configuration") or {}
                 synchost = (conf.get("synchronizationServer") or
@@ -171,11 +174,21 @@ async def _run(req: PhsAuditRequest, ctx: ScanContext):
         else:
             ctx.state["phs_audit_sync_config_status"] = sync_status
 
-        # Fallback: if v1.0 had onPremisesLastPasswordSyncDateTime set, PHS is enabled
+        # ZERO-FP: NEVER override an explicit feature flag from a weak fallback,
+        # and NEVER fabricate phs_enabled=True purely from a last-password-sync
+        # timestamp (which can persist after PHS is disabled). If the explicit
+        # flag is missing and only the timestamp hints at PHS, mark the result
+        # INCONCLUSIVE (INFO) rather than asserting a HIGH PHS-enabled finding.
         if phs_enabled is None and on_prem_password_sync_enabled:
-            phs_enabled = True
+            ctx.state["phs_audit_phs_inconclusive"] = True
+            ctx.state["phs_audit_phs_inconclusive_reason"] = (
+                "passwordHashSyncEnabled feature flag was not readable, but "
+                "organization.onPremisesLastPasswordSyncDateTime is populated. "
+                "A past timestamp does not prove PHS is currently enabled, so "
+                "PHS state is reported inconclusive (not graded HIGH).")
 
         ctx.state["phs_audit_phs_enabled"] = phs_enabled
+        ctx.state["phs_audit_phs_flag_explicit"] = phs_flag_explicit
         ctx.state["phs_audit_sync_features"] = sync_features
         ctx.state["phs_audit_adconnect_hosts"] = adconnect_hosts
 
@@ -207,6 +220,8 @@ INTEL_FIELDS = [
     ("On-prem sync enabled?",    "phs_audit_on_prem_sync_enabled"),
     ("Last on-prem sync",        "phs_audit_last_sync"),
     ("Password Hash Sync?",      "phs_audit_phs_enabled"),
+    ("PHS flag explicit?",       "phs_audit_phs_flag_explicit"),
+    ("PHS state inconclusive?",  "phs_audit_phs_inconclusive"),
     ("Sync features",            "phs_audit_sync_features"),
     ("AD Connect host(s)",       "phs_audit_adconnect_hosts"),
     ("MSOL_ service accounts",   "phs_audit_msol_accounts"),

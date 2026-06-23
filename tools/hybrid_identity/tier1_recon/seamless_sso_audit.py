@@ -186,8 +186,23 @@ async def _run(req: SeamlessSsoRequest, ctx: ScanContext):
         ctx.source(f"tenant {tenant} not resolvable")
         return
 
-    sso_flag = "ENABLED" if realm.get("desktop_sso_enabled") else (
-        "DISABLED" if realm.get("desktop_sso_enabled") is False else "UNKNOWN")
+    # ZERO-FP: distinguish a confirmed Seamless-SSO state (True/False) from an
+    # INCONCLUSIVE read (GetUserRealm failed to parse, or DesktopSsoEnabled was
+    # absent / non-boolean). Inconclusive must surface as INFO, not silently
+    # pass as if SSO were disabled.
+    dse = realm.get("desktop_sso_enabled")
+    realm_parse_failed = bool(realm.get("realm_error")) or (
+        realm.get("realm_status") not in (None, 200))
+    if dse is None or realm_parse_failed:
+        ctx.state["seamless_sso_inconclusive"] = True
+        ctx.state["seamless_sso_inconclusive_reason"] = (
+            realm.get("realm_error")
+            or (f"GetUserRealm HTTP {realm.get('realm_status')}"
+                if realm.get("realm_status") not in (None, 200) else None)
+            or "DesktopSsoEnabled flag absent or non-boolean in GetUserRealm XML")
+
+    sso_flag = "ENABLED" if dse is True else (
+        "DISABLED" if dse is False else "INCONCLUSIVE")
     ctx.source(f"Seamless SSO {sso_flag}; "
                f"namespace={realm.get('namespace_type') or '?'}; "
                f"tenant_id={oid.get('tenant_id') or '?'}")
@@ -201,6 +216,7 @@ INTEL_FIELDS = [
     ("Cloud instance",         "seamless_sso_cloud_instance"),
     ("Federation AuthURL",     "seamless_sso_authurl"),
     ("Seamless SSO enabled?",  "seamless_sso_desktop_sso_enabled"),
+    ("SSO read inconclusive?", "seamless_sso_inconclusive"),
     ("OpenID config",          "seamless_sso_openid"),
     ("GetUserRealm response",  "seamless_sso_realm"),
     ("Autodiscover probe",     "seamless_sso_autodiscover"),

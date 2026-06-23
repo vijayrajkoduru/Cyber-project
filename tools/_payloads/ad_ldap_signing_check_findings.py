@@ -28,21 +28,35 @@ def rule_positive(s):
 
 
 def rule_cleartext_only(s):
-    # Graded (LOW) ONLY when we actually observed 389 open but 636 closed.
+    # ZERO-FP: "389 open and 636 closed" is NOT proof that the DC fails to
+    # require LDAP signing / channel binding. Signing and CBT are enforced on
+    # the 389 connection itself (StartTLS / SASL sign+seal), independently of
+    # whether LDAPS (636) is offered. Modern, patched AD enforces signing by
+    # default, and 636 may simply be closed because no server-auth certificate
+    # is installed - which does NOT make 389 a cleartext-credential channel.
+    # Proving signing is not required needs an authenticated unsigned bind
+    # (valid creds). Therefore this observation is emitted as an INFO advisory,
+    # not a graded LOW false positive.
     if not s.get("ad_ldap_cleartext_only"):
         return None
-    return {"name": "Cleartext LDAP (389) reachable, LDAPS (636) not available",
-            "severity": "LOW", "cvss": "3.7",
+    return {"name": "LDAPS (636) not reachable; LDAP signing enforcement requires a credentialed check (advisory)",
+            "severity": "INFO",
             "cwe": "CWE-319", "owasp": "A02:2021",
             "evidence": ("Port 389 answered an LDAP bind while port 636 (LDAPS) did not "
-                         "respond — clients have no encrypted LDAP option, easing "
-                         "LDAP credential interception and NTLM-relay-to-LDAP downgrade."),
-            "remediation": ("Enable LDAPS on the DC (install a server-auth certificate from "
-                            "your enterprise CA), then enforce LDAP signing "
-                            "('Domain controller: LDAP server signing requirements' = "
-                            "'Require signing') and LDAP channel binding "
-                            "('Domain controller: LDAP server channel binding token "
-                            "requirements' = 'Always'). This blocks ntlmrelayx -> LDAP.")}
+                         "respond. NOTE: this does NOT prove credentials traverse the wire "
+                         "in cleartext - LDAP signing and channel binding are enforced on the "
+                         "389 connection (SASL sign+seal / StartTLS) independently of whether "
+                         "LDAPS is offered, and patched DCs enforce signing by default. 636 "
+                         "may simply be closed because no server-auth certificate is installed. "
+                         "Whether the DC actually requires signing can only be confirmed with a "
+                         "valid account (attempt an unsigned simple bind and observe rejection)."),
+            "remediation": ("[ADVISORY - credentialed check needed] Confirm signing enforcement "
+                            "via: nxc ldap <dc> -u user -p pass -M ldap-checker, or the DC's "
+                            "Directory Service event 2889 audit. Recommended hardening regardless: "
+                            "install a server-auth certificate to enable LDAPS (636), and ensure "
+                            "'Domain controller: LDAP server signing requirements' = 'Require "
+                            "signing' and 'LDAP server channel binding token requirements' = "
+                            "'Always'. These block ntlmrelayx -> LDAP.")}
 
 
 def rule_signing_advisory(s):
