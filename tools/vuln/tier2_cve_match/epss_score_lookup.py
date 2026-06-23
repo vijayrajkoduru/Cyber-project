@@ -34,11 +34,18 @@ def _r_high(s):
     he = s.get("high_epss") or []
     if not he: return None
     lst = ", ".join(f"{x['cve']} (EPSS {x['epss']*100:.1f}%, CVSS {x['cvss']})" for x in he[:4])
-    sev = "HIGH" if he[0]["epss"] >= 0.5 else "MEDIUM"
-    return {"name": f"{len(he)} CVE(s) on '{s.get('product','')}' have elevated exploit probability (EPSS)",
-            "severity": sev, "cvss": max(t["cvss"] for t in he) or 7.0, "cwe": "CWE-1395",
-            "evidence": f"FIRST EPSS: {lst}. Version-inferred - confirm patch level.",
-            "remediation": "Prioritise patching CVEs with high EPSS first; upgrade to the latest release."}
+    # ZERO-FP: the product/version is INFERRED from a banner and the CVEs are
+    # NVD KEYWORD candidates - we have NOT confirmed this exact version is in
+    # any CVE's affected range. EPSS measures exploit PROBABILITY in the wild;
+    # it raises PRIORITY, not CONFIDENCE. A high EPSS on an unconfirmed,
+    # version-inferred candidate must NOT become a HIGH finding. So we cap a
+    # version-inferred match at MEDIUM regardless of EPSS, and call out that
+    # EPSS is priority context only. (A genuine HIGH would require a confirmed
+    # version-in-range CVE, which this banner+keyword path cannot prove.)
+    return {"name": f"{len(he)} candidate CVE(s) on '{s.get('product','')}' have elevated exploit probability (EPSS) - version-inferred",
+            "severity": "MEDIUM", "cvss": min(6.9, max(t["cvss"] for t in he) or 5.0), "cwe": "CWE-1395",
+            "evidence": f"FIRST EPSS (priority signal, not proof): {lst}. Version-inferred, NOT range-confirmed - EPSS raises patch priority but does not confirm this exact version is affected; verify against each CVE's affected range.",
+            "remediation": "Confirm the exact version against each CVE's affected range; prioritise patching the high-EPSS CVEs first if in range, and upgrade to the latest release."}
 def _r_clean(s):
     if (s.get("tested") or 0) < 1 or (s.get("high_epss") or []): return None
     if not s.get("product"):

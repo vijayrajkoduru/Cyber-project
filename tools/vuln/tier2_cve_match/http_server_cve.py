@@ -77,10 +77,18 @@ def _r_cve(s):
         return None
     h = hits[0]
     top = ", ".join(f"{c} ({sc})" for c, sc in h["top"])
-    return _enrich({"name": f"Server '{h['product']}' maps to {h['count']} high-severity CVE(s) (version-based)",
-            "severity": "MEDIUM", "cvss": 5.3, "cwe": "CWE-1395",
-            "evidence": f"NVD: {top}. Version-inferred - confirm patch level (backports may apply).",
-            "remediation": "Upgrade to the latest patched release; suppress version banners (server_tokens off)."})
+    # ZERO-FP: the CVE ids here are from an NVD KEYWORD search on
+    # "<server> <version>". NVD keyword search routinely returns CVEs for
+    # UNRELATED products and other versions, and we never confirm the matched
+    # CPE equals the detected server NOR that the detected version is inside
+    # each CVE's affected range. A high CVSS on a keyword candidate is not
+    # proof this server is vulnerable. So this is a version-INFERRED reference
+    # -> LOW, not MEDIUM. (Distro backports also routinely patch the CVE while
+    # the banner version stays the same.)
+    return _enrich({"name": f"Server '{h['product']}' has candidate CVEs (version-inferred, not range-confirmed)",
+            "severity": "LOW", "cwe": "CWE-1395",
+            "evidence": f"NVD keyword candidates: {top}. Version-inferred, NOT range-confirmed - the matched CVEs may be for other products/versions, and backports may apply. Verify the exact version against each CVE's affected CPE range.",
+            "remediation": "Confirm the exact server build; if it is inside an affected range, upgrade to the latest patched release. Suppress version banners (server_tokens off)."})
 
 
 def _r_disclosure(s):

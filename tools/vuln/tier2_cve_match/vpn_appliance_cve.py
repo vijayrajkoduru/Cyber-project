@@ -17,17 +17,28 @@ async def gather(ctx):
     for name, path, kws, ref in _SIGS:
         r = await asyncio.to_thread(http_get, base + path)
         if not r: continue
+        # ZERO-FP: only treat the path as an appliance login surface when the
+        # vendor marker is actually emitted by that page AND the page exists
+        # (not a SPA 200 catch-all / soft-404). We require a non-redirect 2xx
+        # on the appliance-specific path before considering the keyword.
+        status = int(r.get("status") or 0)
         blob = (str(r.get("headers", {})) + (r.get("body", "") or "")[:4000]).lower()
-        if any(k in blob for k in kws):
+        if 200 <= status < 400 and any(k in blob for k in kws):
             found.append({"name": name, "ref": ref})
     ctx.source("http"); ctx.state["probed"] = 1; ctx.state["appliances"] = found
 def _r(s):
     f = s.get("appliances") or []
     if not f: return None
     x = f[0]
-    return {"name": f"Internet-exposed VPN/edge appliance: {x['name']}", "severity": "MEDIUM", "cvss": 6.5, "cwe": "CWE-1395",
-            "evidence": f"Appliance login surface detected (SUSPECTED - verify firmware): {x['name']}. Associated KEV CVEs: {x['ref']}.",
-            "remediation": "Confirm firmware patch level; these appliances are heavily targeted (CISA KEV). Restrict mgmt access, enable MFA."}
+    # ZERO-FP: this is a vendor KEYWORD match on a login-portal path - there is
+    # NO firmware/version and NO affected-range check, so the associated KEV
+    # CVEs are reference context, not proof. A bare vendor keyword (e.g.
+    # 'ivanti'/'fortinet') reflected on a page does not establish a graded
+    # vulnerability. Reference-only LOW; the KEV CVEs raise PRIORITY for manual
+    # firmware verification, not CONFIDENCE. Never MEDIUM/HIGH from keyword alone.
+    return {"name": f"Possible internet-exposed VPN/edge appliance: {x['name']} (version unconfirmed)", "severity": "LOW", "cwe": "CWE-1395",
+            "evidence": f"Appliance login-surface keyword matched (SUSPECTED - version-inferred, NOT range-confirmed): {x['name']}. Associated KEV CVEs for this product family (verify firmware against each affected range): {x['ref']}.",
+            "remediation": "Confirm the exact firmware version against the listed CVE ranges; these appliances are heavily targeted (CISA KEV). Restrict mgmt access, enable MFA."}
 def _r_clean(s):
     if not s.get("probed") or (s.get("appliances") or []): return None
     return {"name": "No known VPN/edge appliance login surface exposed", "severity": "POSITIVE", "evidence": "No Fortinet/Pulse/Citrix/Ivanti/SonicWall signatures matched."}

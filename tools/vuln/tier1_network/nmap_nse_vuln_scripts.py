@@ -1,5 +1,5 @@
 """Real nmap NSE vuln-script scan (curated fast scripts) - primary Kali engine. VL-FORGE Vuln §1 #2/#4/#5/#8."""
-import asyncio, shutil
+import asyncio, re, shutil
 import xml.etree.ElementTree as ET
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
@@ -9,6 +9,16 @@ router = APIRouter()
 _PORTS = "21,22,23,25,80,110,135,139,143,443,445,993,995,1433,3306,3389,5432,5900,6379,8080,8443,9200,11211,27017"
 _SCRIPTS = ("ssl-heartbleed,ssl-poodle,ssl-dh-params,ssl-ccs-injection,smb-vuln-ms17-010,smb-vuln-ms08-067,"
             "smb-vuln-cve-2017-7494,rdp-vuln-ms12-020,http-shellshock,http-vuln-cve2017-5638,ftp-vsftpd-backdoor,ftp-proftpd-backdoor")
+# The exact set of NSE vuln-script ids we run. Only a "VULNERABLE" verdict from
+# one of THESE ids is graded - a stray 'VULNERABLE' word from any other script
+# output is ignored.
+_KNOWN_VULN_IDS = frozenset(_SCRIPTS.split(","))
+# nmap's vulns library prints a structured verdict line. The ONLY state that is
+# a confirmed positive is exactly "VULNERABLE". We must NOT fire on
+# "NOT VULNERABLE", "LIKELY VULNERABLE", or "VULNERABLE (DoS)" maybe-states,
+# nor on the literate "State: " label appearing without that exact verdict.
+_VERDICT = re.compile(r"\bState:\s*VULNERABLE\b", re.I)
+_NEGATED = re.compile(r"\bState:\s*(?:NOT\s+VULNERABLE|LIKELY\s+VULNERABLE|UNKNOWN)\b", re.I)
 _T = 50; _MAX = 30
 async def _run(host):
     if not shutil.which("nmap"):
@@ -39,8 +49,16 @@ def _parse(xml):
                 svc = port.find("service"); ports.append(f"{pid}/{svc.get('name','?') if svc is not None else '?'}")
             for scr in port.iter("script"):
                 o = scr.get("output") or ""
-                if "VULNERABLE" in o.upper():
-                    vulns.append({"port": pid, "id": scr.get("id",""), "output": " ".join(o.split())[:300]})
+                sid = scr.get("id", "")
+                # ZERO-FP: grade ONLY when (a) the script is one of OUR known
+                # vuln-script ids, and (b) its structured "State: VULNERABLE"
+                # verdict line is present, and (c) it is not a NOT/LIKELY/
+                # UNKNOWN state. The bare word 'VULNERABLE' appearing anywhere
+                # in output (e.g. in a reference URL, a "not vulnerable"
+                # sentence, or a maybe-state) is NOT a confirmed verdict and
+                # must not produce a HIGH finding.
+                if sid in _KNOWN_VULN_IDS and _VERDICT.search(o) and not _NEGATED.search(o):
+                    vulns.append({"port": pid, "id": sid, "output": " ".join(o.split())[:300]})
     return vulns, ports
 async def gather(ctx):
     res, err = await _run(str(ctx.host))

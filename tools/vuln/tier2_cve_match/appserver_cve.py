@@ -27,8 +27,16 @@ async def gather(ctx):
                     return
 def _r_cve(s):
     if not s.get("cve_top"): return None
-    return {"name": f"App server '{s.get('version')}' maps to {s.get('cve_count')} high-severity CVE(s)", "severity": "MEDIUM", "cvss": 6.8, "cwe": "CWE-1395",
-            "evidence": f"NVD: {', '.join(s['cve_top'])}. Version-inferred - confirm patch level.", "remediation": "Upgrade the application server; remove management endpoints from public access."}
+    # ZERO-FP: these CVE ids come from an NVD KEYWORD search on the banner
+    # "<product> <version>" - they are candidate CVEs for the product, NOT
+    # proof that THIS version is affected. NVD keyword search returns CVEs
+    # across unrelated versions (and sometimes unrelated products), and we do
+    # not range-check the detected version against each CVE's affected range.
+    # So this is a version-INFERRED association -> LOW, not MEDIUM. A graded
+    # finding requires the exact version to be confirmed inside an affected
+    # range, which this banner-only path cannot establish.
+    return {"name": f"App server '{s.get('version')}' has candidate CVEs (version-inferred, not range-confirmed)", "severity": "LOW", "cwe": "CWE-1395",
+            "evidence": f"NVD keyword candidates: {', '.join(s['cve_top'])}. Version-inferred, NOT range-confirmed - verify the exact version against each CVE's affected range before treating as exploitable.", "remediation": "Confirm the exact app-server build; if it falls inside an affected range, upgrade and remove management endpoints from public access."}
 def _r_disc(s):
     if not (s.get("appserver") or []) or s.get("cve_top"): return None
     return {"name": f"Application server disclosed: {', '.join(s['appserver'])}", "severity": "LOW", "cwe": "CWE-200",
