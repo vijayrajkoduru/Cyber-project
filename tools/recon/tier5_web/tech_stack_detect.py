@@ -24,6 +24,15 @@ _SIGS={
     "ASP.NET":[r"X-AspNet-Version",r"__VIEWSTATE"],
     "Express.js":[r"X-Powered-By:\s*Express"],
 }
+# Techs whose SINGLE marker is unique+authoritative (header/CDN host) — a lone
+# match is acceptable proof. Everything else requires >=2 corroborating
+# markers, OR (for multi-pattern techs) a single STRONG header marker.
+_SINGLE_OK={"Shopify","Express.js","Nginx","Apache","IIS","Cloudflare"}
+# Strong header-only markers that are authoritative even alone (server-set,
+# not echoable from a request body / 404 page).
+_STRONG_MARKERS=[r"X-Drupal",r"X-AspNet-Version",r"X-Powered-By:\s*PHP",
+    r"X-Powered-By:\s*Express",r"ng-version",r"__NEXT_DATA__",r"cf-ray",
+    r"server:\s*nginx",r"server:\s*apache",r"server:\s*microsoft-iis"]
 def _g(u):
     try:
         return requests.get(u,timeout=10,verify=False,allow_redirects=True,
@@ -37,9 +46,17 @@ async def gather(ctx):
     blob_low=blob.lower()
     detected=[]
     for tech,patterns in _SIGS.items():
-        for p in patterns:
-            if re.search(p,blob,re.I):
-                detected.append(tech); break
+        matched=[p for p in patterns if re.search(p,blob,re.I)]
+        if not matched: continue
+        # Zero-FP gate: a lone substring on a body (e.g. 'wp-content' echoed by a
+        # 404/search page) is NOT proof. Require one of:
+        #   - >=2 corroborating markers, OR
+        #   - a single authoritative server-set header marker, OR
+        #   - the tech is in the single-OK allowlist (unique CDN host / Server).
+        strong=any(re.search(sm,blob,re.I) for sm in _STRONG_MARKERS
+                   if sm in patterns)
+        if len(matched)>=2 or strong or tech in _SINGLE_OK:
+            detected.append(tech)
     detected=sorted(set(detected))
     if detected: ctx.source(f"detected-{len(detected)}")
     ctx.state["technologies"]=detected

@@ -10,7 +10,7 @@ as a MEDIUM intel finding rather than a HIGH finding. This prevents
 generic-substring matches (e.g. 'public-app' from an unrelated company)
 from triggering false HIGH alerts on customer reports.
 """
-import asyncio
+import asyncio, re
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, recon_host
 from tools._vl_core import ScanContext, run_scanner
@@ -19,6 +19,36 @@ from tools.recon._cloud_helpers import bucket_candidates
 from tools.recon._targeting import get_org_name
 
 router = APIRouter()
+
+# Org names shorter than this, or generic dictionary words, are too ambiguous
+# for a substring/token match to PROVE ownership (e.g. 'app', 'web', 'api'
+# match thousands of unrelated buckets). Such matches are capped at LOW.
+_MIN_ORG_LEN = 5
+_GENERIC_ORGS = {"app", "web", "api", "dev", "test", "prod", "data", "cloud",
+                 "site", "main", "demo", "staging", "admin", "portal", "store",
+                 "shop", "blog", "mail", "info", "team", "group", "co", "inc"}
+
+def _ownership_confidence(org_name, bucket_name):
+    """HIGH only when the org name appears as a distinct TOKEN (delimited by
+    bucket-name separators) AND the org name is specific enough to be a real
+    brand. Generic/short org names -> LOW even on a substring hit, so a
+    competitor's 'backup-app-prod' does not match brand 'app' as HIGH."""
+    if not org_name:
+        return "LOW"
+    org = org_name.lower()
+    bn = (bucket_name or "").lower()
+    if len(org) < _MIN_ORG_LEN or org in _GENERIC_ORGS:
+        return "LOW"
+    # token-boundary match: org must be a whole segment split on - _ . /
+    tokens = [t for t in re.split(r"[-_.\s/]+", bn) if t]
+    if org in tokens:
+        return "HIGH"
+    # also accept the org appearing as a contiguous token-run start (e.g.
+    # 'vulnuslab' inside 'vulnuslabbackups') only if the boundary before it is a
+    # separator — i.e. it begins a segment.
+    if re.search(r'(^|[-_.\s/])' + re.escape(org), bn):
+        return "HIGH"
+    return "LOW"
 
 
 async def gather(ctx: ScanContext):
@@ -34,11 +64,10 @@ async def gather(ctx: ScanContext):
         url = f"https://storage.googleapis.com/{name}/"
         c, _, b = await fetch(url, timeout=4)
         if c in (200, 403) and (b"NoSuchBucket" not in b) and (b"<ListBucketResult" in b or b"AccessDenied" in b):
-            # Ownership confidence: bucket name must CONTAIN the customer's
-            # brand string. With the cloud_helpers fix above this should
-            # always be True, but we double-check to harden against any
-            # cross-cutting permutation logic in future.
-            confidence = "HIGH" if org_name and org_name in name.lower() else "LOW"
+            # Ownership confidence: org name must appear as a distinct TOKEN in
+            # the bucket name AND be specific enough to be a real brand (not a
+            # short/generic word). A bare substring is not proof of ownership.
+            confidence = _ownership_confidence(org_name, name)
             return {"bucket": name, "status": c,
                     "listable": (c == 200 and b"<ListBucketResult" in b),
                     "ownership_confidence": confidence}

@@ -36,16 +36,36 @@ def _get(url):
                             headers=hdrs)
     except Exception: return None
 
+# SPA shell markers — if a "200 JSON" body actually contains these, it is the
+# index.html single-page-app shell being soft-served for every path, NOT a real
+# JSON API. (Some SPA hosts mislabel the index.html Content-Type as JSON.)
+_SPA_SHELL_MARKERS = ("<!doctype html", "<html", '<div id="root"', "<div id='root'",
+                      '<div id="app"', "<div id='app'", "__next_data__", "<script type=\"module\"")
+
+def _looks_like_spa_shell(body_snip):
+    bl = (body_snip or "").lower()
+    return any(m in bl for m in _SPA_SHELL_MARKERS)
+
 def _probe(base, path):
     p = path if path.startswith("/") else "/" + path
     r = _get(base + p)
     if not r: return None
     if r.status_code in (404, 0): return None
     ct = r.headers.get("Content-Type","").lower()
-    is_json = "json" in ct or "javascript" in ct
+    body_snip = ""
+    try:
+        body_snip = (r.content or b"")[:2048].decode("utf-8", "ignore")
+    except Exception:
+        body_snip = ""
+    spa_shell = _looks_like_spa_shell(body_snip)
+    # Content-Type alone is not enough: an SPA host may mislabel index.html as
+    # JSON. Treat a hit as JSON only if the CT says JSON AND the body does NOT
+    # look like an HTML SPA shell.
+    is_json = ("json" in ct or "javascript" in ct) and not spa_shell
     is_auth = r.status_code in (401, 403)
     return {"path": p, "status": r.status_code, "ct": ct[:40],
-            "is_json": is_json, "is_auth": is_auth, "size": len(r.content or b"")}
+            "is_json": is_json, "is_auth": is_auth, "spa_shell": spa_shell,
+            "size": len(r.content or b"")}
 
 async def gather(ctx: ScanContext):
     base = web_url(ctx.host).rstrip("/")
@@ -67,11 +87,14 @@ async def gather(ctx: ScanContext):
     # If the nonsense path "exists" and is not JSON, the site soft-200s every
     # path (SPA fallback). Drop hits matching that status+size; keep real
     # JSON/auth endpoints (genuine API surface differs from index.html).
-    spa = bool(_bl and not _bl["is_json"])
+    spa = bool(_bl and (not _bl["is_json"] or _bl.get("spa_shell")))
     if spa:
         _bs, _bsz = _bl["status"], _bl["size"]
         hits = [h for h in hits if h["is_json"] or h["is_auth"]
                 or not (h["status"] == _bs and abs(h["size"] - _bsz) <= 64)]
+    # Independent of size-delta: never treat an HTML SPA shell body as a real
+    # endpoint, even if the baseline detection above missed it.
+    hits = [h for h in hits if not h.get("spa_shell")]
     ctx.state["spa_catchall"] = spa
     ctx.state["hits"] = hits
     ctx.state["hits_count"] = len(hits)

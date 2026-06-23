@@ -35,10 +35,15 @@ async def gather(ctx):
 def _r_vulns(s):
     v=s.get("vulns") or []
     if not v: return None
-    return {"name":f"Shodan-known vulnerabilities ({len(v)})","severity":"HIGH","cvss":7.5,
+    # Shodan's `vulns` are CPE/version-inferred from Shodan's last index of this
+    # IP — NOT confirmed against the target during this scan. They are often
+    # stale (post-patch) or version-guessed. Grade MEDIUM (intel), not HIGH;
+    # confirmation requires active version/PoC verification by the webapp/vuln
+    # module.
+    return {"name":f"Shodan-aggregated vulnerabilities ({len(v)})","severity":"MEDIUM","cvss":5.0,
         "cwe":"CWE-1395","owasp":"A06:2021",
-        "evidence":f"CVEs: {', '.join(v[:5])}",
-        "remediation":"Patch each CVE. Verify Shodan's attribution by checking actual service versions."}
+        "evidence":f"CVEs from Shodan index (NOT verified against target this scan): {', '.join(v[:5])}",
+        "remediation":"Shodan aggregated data, not verified against target this scan. Confirm each CVE by checking the actual live service version before patching/prioritising."}
 def _r_ports(s):
     p=s.get("ports") or []
     if not p: return None

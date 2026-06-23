@@ -45,9 +45,20 @@ async def gather(ctx):
         urls=re.findall(r"<loc>([^<]+)</loc>",sitemap.text[:50000])
         ctx.state["sitemap_xml_urls"]=urls[:30]
         ctx.state["sitemap_url_count"]=len(urls)
+_SENSITIVE_SEGMENTS=["admin","internal","staging","backup","test","dev","secret","api","_internal"]
+def _has_sensitive_segment(path):
+    """Match a sensitive keyword only as a full PATH SEGMENT, not a bare
+    substring. '/admin/' or '/admin' hits; '/api/admin-notes' or
+    '/developers' or '/latest' does NOT (no 'admin'/'dev'/'test' segment)."""
+    # Split on path + common separators so 'admin-notes' is its own token only
+    # when it equals the keyword; the keyword must be a standalone segment.
+    segs=[seg for seg in re.split(r"[/]", (path or "").lower()) if seg]
+    # also strip query / fragment off the last segment
+    segs=[re.split(r"[?#]",seg)[0] for seg in segs]
+    return any(k in segs for k in _SENSITIVE_SEGMENTS)
 def _r_disclosed(s):
     dis=s.get("disallow_paths") or []
-    sensitive=[d for d in dis if any(k in d.lower() for k in ["admin","internal","staging","backup","test","dev","secret","api","_internal"])]
+    sensitive=[d for d in dis if _has_sensitive_segment(d)]
     if not sensitive: return None
     return {"name":f"Sensitive paths in robots.txt ({len(sensitive)})","severity":"LOW","cwe":"CWE-200",
         "evidence":"Sample: "+", ".join(sensitive[:5]),
