@@ -19,11 +19,16 @@ def rule_positive_emit(s):
 def rule_no_server_verify(s):
     if not s.get("is_ios"): return None
     if not s.get("storekit_users") or s.get("server_validate_endpoints"): return None
-    return {"name": "StoreKit IAP without Apple server-side receipt verification",
-            "severity": "HIGH", "cvss": "7.5",
+    # presence != vuln: Apple's verifyReceipt / App Store Server API call
+    # legitimately runs on the backend (the client forwards the receipt/JWS),
+    # so its absence from the .ipa is not proof of missing verification -> INFO.
+    return {"name": "StoreKit IAP present; confirm Apple server-side receipt verification",
+            "severity": "INFO",
             "cwe": "CWE-345", "owasp": "M3:2023",
-            "evidence": f"StoreKit users: {', '.join((s.get('storekit_users') or [])[:6])}",
-            "remediation": "Forward receipt / JWS to your backend; backend calls Apple verifyReceipt (legacy) or App Store Server API (StoreKit2) to confirm authenticity + check refund status. Client-side validation alone is replay-vulnerable."}
+            "evidence": (f"StoreKit users: {', '.join((s.get('storekit_users') or [])[:6])} "
+                         "| No client-visible Apple verify endpoint; backend verification is out of scope "
+                         "for static IPA analysis."),
+            "remediation": "Verify the backend receives the receipt / JWS and calls Apple verifyReceipt (legacy) or App Store Server API (StoreKit2) to confirm authenticity + refund status. Client-side validation alone would be replay-vulnerable."}
 
 
 STOREKIT_RECEIPT_AUDIT_FINDING_RULES = [rule_positive_emit, rule_no_server_verify]

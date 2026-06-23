@@ -11,10 +11,14 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.clipboard_api_audit_findings import CLIPBOARD_API_AUDIT_FINDING_RULES
+from tools._payloads.mobile._fp_gates import is_app_code_path
 
 router = APIRouter()
 
 CLIPBOARD_MARKERS = ("ClipboardManager", "setPrimaryClip", "android/content/ClipData")
+# A clipboard *write* is the risky sink. A bare ClipboardManager reference may be
+# a read/paste-listener — not a leak. "presence != usage".
+CLIPBOARD_WRITE_MARKERS = ("setPrimaryClip", "ClipData;->newPlainText", "ClipData;->newHtmlText")
 SENSITIVE_CLASS_HINTS = ("password", "login", "auth", "payment", "card",
                          "wallet", "otp", "pin", "biometric", "secret")
 SCAN_MAX_FILES = 2500
@@ -32,8 +36,9 @@ async def gather(ctx: ScanContext):
         ctx.state["clipboard_api_audit_error"] = str(e)
         return
 
-    clipboard_files = []
-    sensitive_clipboard_files = []
+    clipboard_files = []            # any clipboard reference (intel)
+    clipboard_write_files = []      # files that actually WRITE to the clipboard
+    sensitive_clipboard_files = []  # write + sensitively-named class (graded)
     files_scanned = 0
     for p in unpacked.rglob("*.smali"):
         if files_scanned >= SCAN_MAX_FILES:
@@ -43,6 +48,13 @@ async def gather(ctx: ScanContext):
         except (OSError, UnicodeDecodeError):
             continue
         files_scanned += 1
+        try:
+            rel = str(p.relative_to(unpacked))
+        except ValueError:
+            rel = p.name
+        # "presence != usage": ignore clipboard refs inside bundled SDKs / tests.
+        if not is_app_code_path(rel):
+            continue
 
         uses_clipboard = any(m in txt for m in CLIPBOARD_MARKERS)
         if not uses_clipboard:
@@ -50,23 +62,32 @@ async def gather(ctx: ScanContext):
         if len(clipboard_files) < 20:
             clipboard_files.append(p.name)
 
+        # The real sink is a clipboard WRITE, not a bare manager reference.
+        writes_clipboard = any(m in txt for m in CLIPBOARD_WRITE_MARKERS)
+        if not writes_clipboard:
+            continue
+        if len(clipboard_write_files) < 20:
+            clipboard_write_files.append(p.name)
+
         name_lc = p.name.lower()
         if any(h in name_lc for h in SENSITIVE_CLASS_HINTS):
             if len(sensitive_clipboard_files) < 20:
                 sensitive_clipboard_files.append(p.name)
 
     ctx.state["clipboard_files"] = clipboard_files
+    ctx.state["clipboard_write_files"] = clipboard_write_files
     ctx.state["sensitive_clipboard_files"] = sensitive_clipboard_files
     ctx.state["files_scanned"] = files_scanned
-    # Sensitive use of clipboard is the real finding
-    ctx.state["clipboard_api_audit_total"] = len(sensitive_clipboard_files) or (
-        1 if clipboard_files else 0)
+    # A real finding requires an actual clipboard WRITE in a sensitively-named
+    # class. A bare ClipboardManager reference (read/listener) is not graded.
+    ctx.state["clipboard_api_audit_total"] = len(sensitive_clipboard_files)
     ctx.source(f"{files_scanned} smali files")
 
 
 INTEL_FIELDS = [
     ("Clipboard caller files", "clipboard_files"),
-    ("Sensitive clipboard callers", "sensitive_clipboard_files"),
+    ("Clipboard WRITE callers", "clipboard_write_files"),
+    ("Sensitive clipboard writers", "sensitive_clipboard_files"),
 ]
 
 

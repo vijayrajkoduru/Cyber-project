@@ -17,6 +17,14 @@ MAGISK_PATH_RE = re.compile(r'/sbin/\.magisk|/data/adb/magisk|/data/adb/modules|
 ZYGISK_RE = re.compile(r'zygisk|libzygisk|/data/adb/zygisk')
 RIRU_RE = re.compile(r'riru|libriru|/data/misc/riru')
 DAEMON_SOCKET_RE = re.compile(r'@magisk|MAGISKHIDE|magiskd|prop_service')
+# presence != usage: a bare "magisk"/"zygisk" substring in a .so can come from
+# an unrelated dependency string table. For native libs, require a *contextual*
+# marker (a path the app would stat() or a known framework symbol), not just
+# the brand name, before counting it as a detection mechanism.
+MAGISK_SO_CONTEXT_RE = re.compile(
+    rb'/sbin/\.magisk|/data/adb/magisk|/data/adb/modules|com\.topjohnwu\.magisk|MagiskHide|magiskhide')
+ZYGISK_SO_CONTEXT_RE = re.compile(rb'/data/adb/zygisk|libzygisk|zygisk_companion|zygisk_module')
+RIRU_SO_CONTEXT_RE = re.compile(rb'/data/misc/riru|/data/adb/riru|libriru|riru_module')
 SCAN_MAX_FILES = 3000
 
 
@@ -35,9 +43,14 @@ async def gather(ctx: ScanContext):
             try: blob = p.read_bytes()
             except OSError: continue
             files_scanned += 1
-            if b"magisk" in blob.lower(): magisk_check.append(p.name)
-            if b"zygisk" in blob.lower(): zygisk_check.append(p.name)
-            if b"riru" in blob.lower(): riru_check.append(p.name)
+            low = blob.lower()
+            # Require a contextual path/symbol, not just the brand substring.
+            if MAGISK_SO_CONTEXT_RE.search(low) and len(magisk_check) < 20:
+                magisk_check.append(p.name)
+            if ZYGISK_SO_CONTEXT_RE.search(low) and len(zygisk_check) < 20:
+                zygisk_check.append(p.name)
+            if RIRU_SO_CONTEXT_RE.search(low) and len(riru_check) < 20:
+                riru_check.append(p.name)
             continue
         if p.suffix not in (".smali", ".swift", ".m", ".h"): continue
         try: txt = p.read_text(errors="ignore")

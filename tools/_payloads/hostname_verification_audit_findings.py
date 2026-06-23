@@ -4,11 +4,28 @@
 def rule_positive_emit(s):
     if s.get("hostname_verification_audit_total"):
         return None
-    return {"name": "No TLS-bypass overrides detected",
+    return {"name": "No TLS-bypass overrides detected in shipping code",
             "severity": "POSITIVE",
-            "evidence": f"{s.get('files_scanned', 0)} files scanned - no ALLOW_ALL / empty TrustManager / disabled iOS trust",
+            "evidence": f"{s.get('files_scanned', 0)} files scanned - no ALLOW_ALL / empty TrustManager / disabled iOS trust on a live TLS path",
             "remediation": "Continue relying on system default TLS validation; never override HostnameVerifier.",
             "cwe": "CWE-295", "owasp": "M3:2023"}
+
+
+def rule_test_only_bypass(s):
+    # Bypass markers found only in test/mock/sample harness paths, or an
+    # ALLOW_ALL constant not wired into any TLS path. presence != usage.
+    if s.get("hostname_verification_audit_total"):
+        return None
+    t = s.get("test_only_bypass_hits") or []
+    if not t:
+        return None
+    return {"name": f"TLS-bypass marker(s) in test/mock or unused context only ({len(t)} file(s))",
+            "severity": "INFO",
+            "cwe": "CWE-295", "owasp": "M3:2023",
+            "evidence": ("Markers in: " + ", ".join(t[:6]) + ". These are in test/mock/sample paths or an "
+                         "ALLOW_ALL constant not plumbed into a TLS socket factory - not a shipping bypass."),
+            "remediation": ("Confirm these are excluded from release builds (debug-only source sets / ProGuard "
+                            "stripping). No action needed for production TLS if so.")}
 
 
 def rule_tls_bypass(s):
@@ -31,4 +48,4 @@ def rule_tls_bypass(s):
                             "TLS traffic with this bypass.")}
 
 
-HOSTNAME_VERIFICATION_AUDIT_FINDING_RULES = [rule_positive_emit, rule_tls_bypass]
+HOSTNAME_VERIFICATION_AUDIT_FINDING_RULES = [rule_positive_emit, rule_tls_bypass, rule_test_only_bypass]

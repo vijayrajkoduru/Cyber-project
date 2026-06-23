@@ -11,6 +11,7 @@ from tools._shared import ScanRequest, verify_scan_quota
 from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.sqlite_usage_audit_findings import SQLITE_USAGE_AUDIT_FINDING_RULES
+from tools._payloads.mobile._fp_gates import is_app_code_path
 
 router = APIRouter()
 
@@ -32,7 +33,8 @@ async def gather(ctx: ScanContext):
         ctx.state["sqlite_usage_audit_error"] = str(e)
         return
 
-    sqlite_files = []
+    sqlite_files = []          # all callers (intel)
+    app_sqlite_files = []      # callers in APP code only (excludes lib/test)
     sqlcipher_files = []
     db_names = set()
     sensitive_db_names = []
@@ -46,10 +48,17 @@ async def gather(ctx: ScanContext):
         except (OSError, UnicodeDecodeError):
             continue
         files_scanned += 1
+        try:
+            rel = str(p.relative_to(unpacked))
+        except ValueError:
+            rel = p.name
+        app_code = is_app_code_path(rel)
 
         if "SQLiteDatabase" in txt or "SQLiteOpenHelper" in txt:
             if len(sqlite_files) < 20:
                 sqlite_files.append(p.name)
+            if app_code and len(app_sqlite_files) < 20:
+                app_sqlite_files.append(p.name)
             for m in DB_NAME_RE.finditer(txt):
                 name = m.group(1)
                 db_names.add(name)
@@ -62,12 +71,14 @@ async def gather(ctx: ScanContext):
                 sqlcipher_files.append(p.name)
 
     findings_total = 0
-    if sqlite_files and not sqlcipher_files:
+    # Only the app's own unencrypted SQLite usage is a real posture finding.
+    if app_sqlite_files and not sqlcipher_files:
         findings_total += 1
-    if sensitive_db_names:
-        findings_total += 1
+    # A DB NAME containing "auth"/"wallet"/etc is just a name, not evidence of
+    # a sensitive write -> reported at INFO (does not bump findings_total).
 
     ctx.state["sqlite_files"] = sqlite_files
+    ctx.state["app_sqlite_files"] = app_sqlite_files
     ctx.state["sqlcipher_files"] = sqlcipher_files
     ctx.state["db_names"] = sorted(db_names)[:20]
     ctx.state["sensitive_db_names"] = sensitive_db_names
@@ -78,9 +89,10 @@ async def gather(ctx: ScanContext):
 
 INTEL_FIELDS = [
     ("SQLite caller files", "sqlite_files"),
+    ("SQLite callers in app code", "app_sqlite_files"),
     ("SQLCipher caller files", "sqlcipher_files"),
     ("DB names found", "db_names"),
-    ("Sensitive DB names", "sensitive_db_names"),
+    ("Sensitive-looking DB names", "sensitive_db_names"),
 ]
 
 

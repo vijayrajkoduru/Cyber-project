@@ -71,7 +71,10 @@ async def gather(ctx: ScanContext):
     ctx.state["uses_jwt_lib"] = uses_jwt
     ctx.state["jwt_libs_found"] = jwt_libs_found
     ctx.state["embedded_jwts"] = full_jwts
-    ctx.state["hardcoded_jwt_secret_audit_total"] = len(full_jwts) + (3 if uses_jwt else 0)
+    # "presence != usage": merely bundling a JWT library is NOT a finding — that
+    # is reported separately at INFO. The graded total counts only actual
+    # embedded JWT tokens leaked in the bundle.
+    ctx.state["hardcoded_jwt_secret_audit_total"] = len(full_jwts)
     ctx.state["files_scanned"] = files_scanned
     ctx.source(f"JWT-lib={uses_jwt}, embedded JWTs={len(full_jwts)}")
 

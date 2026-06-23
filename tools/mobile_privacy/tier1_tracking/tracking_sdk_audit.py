@@ -52,6 +52,16 @@ def _load_trackers():
 
 TRACKERS = _load_trackers()
 SCAN_MAX_FILES = 5000
+# presence != active tracking: an SDK on the classpath may be a transitive dep
+# that is never initialized. Look for an actual init/usage call site to
+# distinguish bundled-but-dormant from actively-tracking.
+INIT_MARKERS_RE = re.compile(
+    r'\.initialize\s*\(|\.getInstance\s*\(|\.init\s*\(|setAnalyticsCollectionEnabled|'
+    r'logEvent\s*\(|trackEvent\s*\(|\.start\s*\(|configureWithOptions|'
+    r'FirebaseApp\.initializeApp|\.activate\s*\(|\.setUserId\s*\(|identify\s*\(',
+    re.IGNORECASE)
+CODE_SUFFIXES = (".smali", ".swift", ".m", ".java", ".js")
+CODE_SCAN_MAX = 4000
 
 
 async def gather(ctx: ScanContext):
@@ -63,24 +73,49 @@ async def gather(ctx: ScanContext):
     detected = {}
     files_scanned = 0
     paths_blob = ""
+    code_blob = ""
+    code_scanned = 0
     for p in unpacked.rglob("*"):
         if files_scanned >= SCAN_MAX_FILES: break
         if not p.is_file(): continue
         paths_blob += str(p) + "\n"
         files_scanned += 1
+        if code_scanned < CODE_SCAN_MAX and p.suffix in CODE_SUFFIXES:
+            try:
+                code_blob += p.read_text(errors="ignore")[:4000]
+                code_scanned += 1
+            except (OSError, UnicodeDecodeError):
+                pass
     for name, pattern in TRACKERS.items():
         if re.search(pattern, paths_blob, re.IGNORECASE):
             detected[name] = True
-    findings_total = 1 if len(detected) >= 3 else 0
+    # Active vs. dormant: count trackers whose package marker co-occurs with an
+    # init/usage call site somewhere in code.
+    active = []
+    for name, pattern in TRACKERS.items():
+        if name not in detected:
+            continue
+        # Use a lightweight class-name token from the pattern's last path segment.
+        token = re.split(r'[\\/|]', pattern)[-1].strip()
+        if token and re.search(re.escape(token), code_blob, re.IGNORECASE) and INIT_MARKERS_RE.search(code_blob):
+            active.append(name)
+    active_count = len(active)
+    # Only grade when we see active initialization of multiple trackers;
+    # presence-only is downgraded to INFO by the rules.
+    findings_total = 1 if (len(detected) >= 3 and active_count >= 1) else 0
     ctx.state["detected_trackers"] = sorted(detected.keys())
+    ctx.state["active_trackers"] = sorted(active)
     ctx.state["tracker_count"] = len(detected)
+    ctx.state["active_tracker_count"] = active_count
     ctx.state["files_scanned"] = files_scanned
     ctx.state["tracking_sdk_audit_total"] = findings_total
-    ctx.source(f"{files_scanned} paths")
+    ctx.source(f"{files_scanned} paths + {code_scanned} code")
 
 
 INTEL_FIELDS = [("Detected tracker SDKs", "detected_trackers"),
-                ("Tracker count", "tracker_count")]
+                ("Tracker count", "tracker_count"),
+                ("Actively-initialized trackers", "active_trackers"),
+                ("Active tracker count", "active_tracker_count")]
 
 
 @router.post("/api/mobile_privacy/tracking_sdk_audit")

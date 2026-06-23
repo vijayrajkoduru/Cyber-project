@@ -8,6 +8,7 @@ Scans DEX bytecode for the known-dangerous setter combos.
 
 MASVS-PLATFORM-5 / MSTG-PLATFORM-5.
 """
+import re
 from pathlib import Path
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota
@@ -15,6 +16,7 @@ from tools._vl_core import ScanContext, run_scanner
 from tools._vl_core.binary_cache import get_unpacked
 from tools._payloads.webview_config_audit_findings import \
     WEBVIEW_CONFIG_AUDIT_FINDING_RULES
+from tools._payloads.mobile._fp_gates import is_app_code_path
 
 router = APIRouter()
 
@@ -25,8 +27,8 @@ RISKY_CONFIGS = [
     ("setAllowFileAccessFromFileURLs",      "file→file XSS allowed",     "high"),
     ("setAllowUniversalAccessFromFileURLs", "universal file access",     "critical"),
     ("setAllowContentAccess",               "content:// access enabled", "low"),
-    ("setMixedContentMode0",          "mixed content allowed (HTTP in HTTPS)", "high"),
-    ("setSavePassword",                     "password autosave",         "medium"),
+    ("setMixedContentMode",                 "mixed content mode set (verify not MIXED_CONTENT_ALWAYS_ALLOW)", "high"),
+    ("setSavePassword",                     "password autosave",         "high"),
     ("setDomStorageEnabled",                "DOM storage enabled",       "low"),
 ]
 
@@ -41,30 +43,64 @@ async def gather(ctx: ScanContext):
     except Exception as e:
         ctx.state["webview_config_audit_error"] = str(e); return
 
+    # Boolean-enable setters: a hit only matters when the value is TRUE. In smali
+    # that's a const 0x1 moved into the arg register just before the invoke.
+    bool_setters = {"setAllowFileAccess", "setAllowFileAccessFromFileURLs",
+                    "setAllowUniversalAccessFromFileURLs", "setAllowContentAccess",
+                    "setJavaScriptEnabled", "setSavePassword", "setDomStorageEnabled"}
+
+    def _enabled_true(text, marker):
+        # smali: a `const/4 vX, 0x1` (true) loaded within a few lines before the
+        # setX(Z)V invoke. If we only ever see `0x0` (false) near the setter, the
+        # config is safe and should not be flagged.
+        pat = re.compile(r"const(?:/4|/16)?\s+v\d+,\s*0x1\b(?:[^\n]*\n){0,4}?[^\n]*"
+                         + re.escape(marker), re.MULTILINE)
+        return bool(pat.search(text))
+
     hits = []
     files_scanned = 0
     for f in unpacked.rglob("*"):
         if not f.is_file(): continue
         if f.suffix not in (".dex", ".smali") and "classes" not in f.name: continue
+        is_smali = f.suffix == ".smali"
         try:
             data = f.read_bytes()[:10_000_000]
         except Exception: continue
         files_scanned += 1
+        try:
+            rel = f.relative_to(unpacked).as_posix()
+        except ValueError:
+            rel = f.name
+        # "presence != usage": .dex is multidex (can't attribute to app vs SDK);
+        # per-class .smali can. Only app-code smali is graded; .dex/SDK -> context.
+        app_code = is_smali and is_app_code_path(rel)
+        text = data.decode("latin-1", errors="ignore") if is_smali else ""
         for marker, desc, sev in RISKY_CONFIGS:
-            # Look for the setter name + the value 'true' / non-zero byte nearby
-            if marker.encode() in data:
-                hits.append({"setter": marker, "desc": desc, "severity": sev,
-                              "file": f.relative_to(unpacked).as_posix()})
+            if marker.encode() not in data:
+                continue
+            # For boolean setters in smali, require the value to actually be TRUE.
+            if is_smali and marker in bool_setters:
+                confirmed = _enabled_true(text, marker)
+            else:
+                confirmed = not is_smali  # dex hit: unattributable -> not confirmed-true
+            hits.append({"setter": marker, "desc": desc, "severity": sev,
+                          "file": rel,
+                          "app_code": bool(app_code),
+                          "confirmed": bool(confirmed)})
 
     ctx.state["webview_risky_setters"] = hits[:30]
-    ctx.state["webview_config_audit_total"] = len(hits)
+    # Only app-code, value-confirmed setters drive the graded total.
+    graded = [h for h in hits if h["app_code"] and h["confirmed"]]
+    ctx.state["webview_graded_setters"] = graded[:30]
+    ctx.state["webview_config_audit_total"] = len(graded)
     ctx.state["files_scanned"] = files_scanned
     ctx.source(f"scanned {files_scanned} DEX/smali files")
 
 
 INTEL_FIELDS = [
-    ("Risky WebView setters", "webview_config_audit_total"),
-    ("Files scanned",         "files_scanned"),
+    ("Risky WebView setters (graded)", "webview_config_audit_total"),
+    ("All risky setter references",    "webview_risky_setters"),
+    ("Files scanned",                  "files_scanned"),
 ]
 
 

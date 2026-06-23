@@ -52,9 +52,14 @@ async def gather(ctx: ScanContext):
         if not hints: continue
         if not any(re.search(h, code_blob) for h in hints):
             overask.append(perm)
-    findings_total = 1 if overask else 0
+    # This is a PARTIAL code scan (per-file capped at 8000 chars, file count
+    # capped). A permission used past those caps is missed, so "declared but
+    # not found" is NOT proof of over-ask -> the rules treat it as INFO.
+    partial_scan = files_scanned >= SCAN_MAX_FILES
+    findings_total = 0  # never grade over-ask from a heuristic partial scan
     ctx.state["declared_permissions"] = declared[:30]
     ctx.state["overasked_permissions"] = overask
+    ctx.state["partial_scan"] = partial_scan
     ctx.state["files_scanned"] = files_scanned
     ctx.state["permission_overask_audit_total"] = findings_total
     ctx.source(f"{files_scanned} files")

@@ -2,7 +2,8 @@
 
 
 def rule_positive_emit(s):
-    if s.get("permission_overask_audit_total"):
+    # Only positive when no candidate over-ask was found at all.
+    if s.get("overasked_permissions"):
         return None
     return {"name": "Declared permissions all used in code",
             "severity": "POSITIVE",
@@ -14,11 +15,19 @@ def rule_positive_emit(s):
 def rule_overask(s):
     oa = s.get("overasked_permissions") or []
     if not oa: return None
-    return {"name": f"{len(oa)} permission(s) declared but never invoked in code",
-            "severity": "MEDIUM", "cvss": "4.0",
+    # presence != over-ask: a heuristic partial code scan can't prove a
+    # permission is unused (usage may live past the per-file/byte caps, in
+    # reflection, or in a library). Report as INFO for manual confirmation,
+    # never a graded MEDIUM.
+    return {"name": f"{len(oa)} permission(s) declared with no usage found in partial code scan",
+            "severity": "INFO",
             "cwe": "CWE-250", "owasp": "M9:2023",
-            "evidence": "Permissions: " + ", ".join(oa[:8]),
-            "remediation": "Remove unused <uses-permission> entries. Play Store + Apple App Review penalize unjustified permission requests."}
+            "evidence": ("Permissions: " + ", ".join(oa[:8])
+                         + " | NOTE: heuristic scan (per-file/byte capped); absence of a usage marker is "
+                         "not proof the permission is unused."),
+            "remediation": ("Manually confirm whether each is genuinely unused (check reflection, libraries, "
+                            "and full source). Remove truly-unused <uses-permission> entries; Play Store + "
+                            "Apple App Review penalize unjustified permission requests.")}
 
 
 PERMISSION_OVERASK_AUDIT_FINDING_RULES = [rule_positive_emit, rule_overask]

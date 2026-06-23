@@ -15,9 +15,13 @@ def rule_proxy_defenses(s):
     defenses = s.get("proxy_defenses") or {}
     if not defenses:
         return None
+    # presence != usage: only the patterns that *force* a no-proxy / direct path
+    # actually block interception. A bare OkHttp .proxy() call or a
+    # ConnectivityManager.getProxyHost read is ordinary networking, not a
+    # bypass -> keep those at INFO. NO_PROXY/DIRECT + ProxySelector.setDefault
+    # are the explicit blockers worth a MEDIUM.
     explicit_block = any(k in defenses for k in ("Proxy.NO_PROXY OkHttp config",
-                                                   "ProxySelector setDefault",
-                                                   "OkHttp .proxy() explicit"))
+                                                   "ProxySelector setDefault"))
     sev = "MEDIUM" if explicit_block else "INFO"
     return {"name": f"{len(defenses)} proxy-defense pattern(s) - traffic interception may fail",
             "severity": sev, "cvss": "4.5" if sev == "MEDIUM" else None,

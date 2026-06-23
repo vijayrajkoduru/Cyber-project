@@ -17,6 +17,19 @@ router = APIRouter()
 EXPORTED_RE = re.compile(r'<(activity|service|receiver)\b[^>]*android:exported="true"[^>]*>', re.IGNORECASE)
 PERM_RE = re.compile(r'android:permission="')
 LAUNCHER_RE = re.compile(r'android\.intent\.category\.LAUNCHER')
+# Application-level permission applies to every child component that doesn't
+# override it (inherited/group permission). Detect it so we don't flag
+# components already gated at the <application> level.
+APP_PERM_RE = re.compile(r'<application\b[^>]*android:permission="')
+# Known SDK / library component packages: an exported component owned by a
+# third-party SDK is the SDK's surface, not the app's vuln. presence != vuln.
+SDK_PACKAGE_PREFIXES = (
+    "com.google.", "com.facebook.", "com.firebase", "firebase",
+    "com.android.", "androidx.", "android.support.", "com.crashlytics",
+    "io.branch", "com.adjust", "com.appsflyer", "com.onesignal",
+    "com.amazon.", "com.microsoft.", "com.huawei.", "com.unity3d",
+    "com.rnfirebase", "io.flutter", "com.facebook.react", "expo.modules",
+)
 # Sensitive exported-component name hints sourced from the shared AI-curated
 # mobile pool; inline tuple is the fallback.
 _SENSITIVE_HINTS_FALLBACK = ("login", "pin", "password", "auth", "payment", "card",
@@ -36,6 +49,7 @@ async def gather(ctx: ScanContext):
     except Exception as e: ctx.state["exported_activity_audit_error"] = str(e); return
     exposed = []
     sensitive_exposed = []
+    sdk_skipped = []
     files_scanned = 0
     for p in unpacked.rglob("*.xml"):
         if files_scanned >= SCAN_MAX_FILES: break
@@ -43,14 +57,23 @@ async def gather(ctx: ScanContext):
         try: txt = p.read_text(errors="ignore")
         except (OSError, UnicodeDecodeError): continue
         files_scanned += 1
+        # Inherited permission: if <application> declares android:permission,
+        # every child component without its own permission is already gated.
+        app_has_perm = bool(APP_PERM_RE.search(txt))
         for m in EXPORTED_RE.finditer(txt):
             block = m.group(0)
             kind = m.group(1)
             is_launcher = LAUNCHER_RE.search(txt[max(0, m.start()-200):m.end()+400]) is not None
-            has_perm = bool(PERM_RE.search(block))
+            has_perm = bool(PERM_RE.search(block)) or app_has_perm
             name_m = re.search(r'android:name="([^"]+)"', block)
             name = name_m.group(1) if name_m else "(unknown)"
             if has_perm or is_launcher:
+                continue
+            # SDK / library components are not the app's vuln surface.
+            nl = name.lstrip(".").lower()
+            if any(nl.startswith(pref) for pref in SDK_PACKAGE_PREFIXES):
+                if len(sdk_skipped) < 30:
+                    sdk_skipped.append({"kind": kind, "name": name[:80]})
                 continue
             entry = {"kind": kind, "name": name[:80]}
             if any(h in name.lower() for h in SENSITIVE_HINTS):
@@ -63,13 +86,15 @@ async def gather(ctx: ScanContext):
     if exposed: findings_total += 1
     ctx.state["exposed_components"] = exposed
     ctx.state["sensitive_exposed_components"] = sensitive_exposed
+    ctx.state["sdk_components_skipped"] = sdk_skipped
     ctx.state["files_scanned"] = files_scanned
     ctx.state["exported_activity_audit_total"] = findings_total
     ctx.source(f"{files_scanned} manifests")
 
 
 INTEL_FIELDS = [("Exported (non-sensitive)", "exposed_components"),
-                ("Exported sensitive", "sensitive_exposed_components")]
+                ("Exported sensitive", "sensitive_exposed_components"),
+                ("SDK/library exports (excluded)", "sdk_components_skipped")]
 
 
 @router.post("/api/mobile_ipc/exported_activity_audit")
