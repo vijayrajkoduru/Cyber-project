@@ -48,10 +48,35 @@ def rule_pta_agent_per_host(s):
     }
 
 
+def rule_inconclusive(s):
+    if not s.get("pta_audit_inconclusive"):
+        return None
+    if s.get("pta_audit_missing_creds") or s.get("pta_audit_auth_error"):
+        return None
+    return {
+        "name": "PTA agent inventory inconclusive — agent collection not readable",
+        "severity": "INFO",
+        "cwe": "N/A",
+        "evidence": (
+            "Graph authenticated, but the onPremisesPublishingProfiles "
+            "agentGroups collection could not be read: "
+            f"{s.get('pta_audit_inconclusive_reason') or 'unknown error'}. "
+            "PTA-agent presence (or absence) is NOT asserted — no clean "
+            "POSITIVE is claimed off a failed read."),
+        "remediation": (
+            "Grant the app registration OnPremisesPublishingProfiles.Read.All "
+            "(application) + Policy.Read.All and admin-consent, then re-run. "
+            "Transient Graph errors: simply re-run."),
+    }
+
+
 def rule_no_pta_agents(s):
     if s.get("pta_audit_missing_creds") or s.get("pta_audit_auth_error"):
         return None
     if not s.get("pta_audit_authenticated"):
+        return None
+    # Do NOT assert a clean POSITIVE if the agent collection wasn't readable.
+    if s.get("pta_audit_inconclusive") or not s.get("pta_audit_agents_read_ok"):
         return None
     if (s.get("pta_audit_pta_only_count") or 0) > 0:
         return None
@@ -140,6 +165,7 @@ def rule_auth_error(s):
 
 PTA_AGENT_AUDIT_FINDING_RULES = [
     rule_pta_agent_per_host,
+    rule_inconclusive,
     rule_no_pta_agents,
     rule_appproxy_only,
     rule_recent_signins,

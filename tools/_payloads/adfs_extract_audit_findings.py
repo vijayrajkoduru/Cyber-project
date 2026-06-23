@@ -66,25 +66,55 @@ def rule_unknown_adfs_version(s):
 def rule_wia_bypass(s):
     if not s.get("adfs_audit_wia_bypass_surface"):
         return None
+    # ZERO-FP: CVE-2017-11774 is version-specific (legacy ADFS + unpatched
+    # Outlook). A WIA endpoint answering without a 401 challenge is a SURFACE
+    # observation, not proof of the CVE. Grade HIGH only when the ADFS version
+    # is KNOWN-legacy (the CVE precondition is met); when the version is
+    # unknown, report the observed surface as INFO and DO NOT assume the CVE.
+    is_legacy = bool(s.get("adfs_audit_is_legacy"))
+    version_known = bool(s.get("adfs_audit_version_label"))
+    if is_legacy:
+        return {
+            "name": ("CVE-2017-11774 precondition met — WIA endpoint reachable "
+                     "on legacy ADFS without auth challenge"),
+            "severity": "HIGH", "cvss": "7.8",
+            "cwe": "CWE-287", "owasp": "A07:2021",
+            "mitre": "T1190",
+            "evidence": (f"POST {s.get('adfs_audit_target_url')}/adfs/ls/wia "
+                         f"returned HTTP {s.get('adfs_audit_wia_status')} instead "
+                         "of a 401 challenge, AND the ADFS version is "
+                         f"{s.get('adfs_audit_version_label')} (legacy). This "
+                         "combination is the CVE-2017-11774 precondition "
+                         "(Outlook home-page RCE chain abusing an ADFS "
+                         "auth-bypass)."),
+            "remediation": (
+                "1. Apply MS17-014 / KB4022715 (Outlook security update) — "
+                "addresses the Outlook side of the chain. "
+                "2. Patch ADFS to latest cumulative update / upgrade off legacy. "
+                "3. Restrict WIA endpoint to internal IP ranges only (Web "
+                "Application Proxy ingress rule). "
+                "4. Disable WIA on the ADFS proxy if external clients only need "
+                "form-based auth."),
+        }
+    # Version not legacy / not known -> surface-only, advisory INFO.
     return {
-        "name": ("CVE-2017-11774 surface — ADFS WIA endpoint responds without "
-                  "auth challenge"),
-        "severity": "HIGH", "cvss": "7.8",
-        "cwe": "CWE-287", "owasp": "A07:2021",
+        "name": ("ADFS WIA endpoint responds without auth challenge "
+                 "(surface observed — CVE not confirmed)"),
+        "severity": "INFO",
+        "cwe": "CWE-287",
         "mitre": "T1190",
         "evidence": (f"POST {s.get('adfs_audit_target_url')}/adfs/ls/wia "
                      f"returned HTTP {s.get('adfs_audit_wia_status')} instead "
-                     "of 401 challenge. The WIA endpoint is the precondition "
-                     "for CVE-2017-11774 (Outlook home-page RCE chain that "
-                     "abuses an ADFS auth-bypass)."),
+                     "of a 401 challenge. This is the CVE-2017-11774 surface, "
+                     "but the ADFS version was "
+                     + ("not legacy" if version_known else "not disclosed")
+                     + " — the CVE is NOT asserted on this target. Review the "
+                     "WIA exposure and patch level directly."),
         "remediation": (
-            "1. Apply MS17-014 / KB4022715 (Outlook security update) — "
-            "addresses the Outlook side of the chain. "
-            "2. Patch ADFS to latest cumulative update. "
-            "3. Restrict WIA endpoint to internal IP ranges only (Web "
-            "Application Proxy ingress rule). "
-            "4. Disable WIA on the ADFS proxy if external clients only need "
-            "form-based auth."),
+            "Confirm the ADFS + Outlook patch level (Get-HotFix on the ADFS "
+            "server; latest Outlook security update). Restrict the WIA endpoint "
+            "to internal IP ranges at the Web Application Proxy, or disable it "
+            "if external clients only need form-based auth."),
     }
 
 

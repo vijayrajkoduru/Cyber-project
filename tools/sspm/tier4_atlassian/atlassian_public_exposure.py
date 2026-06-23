@@ -123,8 +123,17 @@ async def gather(ctx: ScanContext):
         ctx.state["atlassian_jira_version"] = (
             si_body.get("version") if isinstance(si_body, dict) else "")
 
+        # Track raw endpoint statuses so 401/403 ("exists & protected") is
+        # NEVER confused with 200 ("anonymously readable"). Only HTTP 200 with
+        # actual data is graded as an anonymous-exposure finding (zero-FP).
+        endpoint_statuses = {}
+        protected_endpoints = []   # answered 401/403 -> exists but locked down
+
         # 2. Anonymous Jira projects
         pr_status, pr_body = await _get(client, f"{base}/rest/api/2/project")
+        endpoint_statuses["jira_project"] = pr_status
+        if pr_status in (401, 403):
+            protected_endpoints.append("jira_project")
         anon_projects = []
         if pr_status == 200 and isinstance(pr_body, list):
             for p in pr_body[:50]:
@@ -138,6 +147,9 @@ async def gather(ctx: ScanContext):
             client,
             f"{base}/rest/api/2/search?jql=order%20by%20created%20DESC"
             "&maxResults=1&fields=summary")
+        endpoint_statuses["jira_search"] = se_status
+        if se_status in (401, 403):
+            protected_endpoints.append("jira_search")
         anon_issue_total = 0
         if se_status == 200 and isinstance(se_body, dict):
             try:
@@ -147,6 +159,9 @@ async def gather(ctx: ScanContext):
 
         # 4. Anonymous Confluence spaces
         sp_status, sp_body = await _get(client, f"{base}/wiki/rest/api/space?limit=10")
+        endpoint_statuses["confluence_space"] = sp_status
+        if sp_status in (401, 403):
+            protected_endpoints.append("confluence_space")
         anon_spaces = []
         if sp_status == 200 and isinstance(sp_body, dict):
             for sp in (sp_body.get("results") or [])[:25]:
@@ -158,6 +173,9 @@ async def gather(ctx: ScanContext):
 
         # 5. Anonymous Confluence content
         ct_status, ct_body = await _get(client, f"{base}/wiki/rest/api/content?limit=1")
+        endpoint_statuses["confluence_content"] = ct_status
+        if ct_status in (401, 403):
+            protected_endpoints.append("confluence_content")
         anon_content_total = 0
         if ct_status == 200 and isinstance(ct_body, dict):
             try:
@@ -173,6 +191,8 @@ async def gather(ctx: ScanContext):
     ctx.state["atlassian_anon_issue_total"] = anon_issue_total
     ctx.state["atlassian_anon_spaces"] = anon_spaces
     ctx.state["atlassian_anon_content_total"] = anon_content_total
+    ctx.state["atlassian_endpoint_statuses"] = endpoint_statuses
+    ctx.state["atlassian_protected_endpoints"] = sorted(set(protected_endpoints))
     ctx.state["atlassian_evaluated"] = True
     ctx.source(
         f"{site}: anon-projects={len(anon_projects)}, anon-issues={anon_issue_total}, "
@@ -299,13 +319,21 @@ def rule_locked_down(s):
     if (s.get("atlassian_anon_projects") or s.get("atlassian_anon_issue_total")
             or s.get("atlassian_anon_spaces") or s.get("atlassian_anon_content_total")):
         return None
+    protected = s.get("atlassian_protected_endpoints") or []
+    protected_note = (
+        (f"Protected endpoints returned 401/403 (exists & authenticated-only): "
+         f"{', '.join(protected)}. ") if protected else "")
     return {
         "name": f"Atlassian site {s.get('atlassian_site')} blocks anonymous "
                 f"access (good)",
         "severity": "INFO",
         "evidence": (
             "The site exists but every anonymous Jira/Confluence REST endpoint "
-            "we probed returned no data — anonymous browsing appears disabled. "
+            "we probed either required authentication or returned no data — "
+            "anonymous browsing appears disabled. "
+            f"{protected_note}"
+            "A 401/403 means the endpoint EXISTS but is protected — it is NOT "
+            "an anonymous-exposure finding and is never graded as one. "
             "Internal posture (Atlassian Access policies, group schemes, guest "
             "inventory) still needs an admin token."
         ),
@@ -359,6 +387,8 @@ INTEL_FIELDS = [
     ("Anon Jira issue total",     "atlassian_anon_issue_total"),
     ("Anon-visible Confluence spaces", "atlassian_anon_spaces"),
     ("Anon Confluence content count",  "atlassian_anon_content_total"),
+    ("Endpoint HTTP statuses",         "atlassian_endpoint_statuses"),
+    ("Protected (401/403) endpoints",  "atlassian_protected_endpoints"),
 ]
 
 

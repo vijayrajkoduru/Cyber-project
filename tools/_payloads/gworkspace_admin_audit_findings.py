@@ -137,6 +137,30 @@ def rule_admins_no_hwkey(s):
     }
 
 
+def rule_hwkey_field_unavailable(s):
+    rows = s.get("gworkspace_admins_hwkey_field_unavailable") or []
+    if not rows:
+        return None
+    sample = ", ".join(r.get("email", "?") for r in rows[:5])
+    extra = f" (+{len(rows)-5} more)" if len(rows) > 5 else ""
+    return {
+        "name": (f"Hardware security-key status not available for {len(rows)} "
+                 "admin(s) on this Workspace edition"),
+        "severity": "INFO",
+        "evidence": (f"The Directory API did not populate the "
+                     "securityKeyAuthenticatorEnrolled field for these "
+                     f"admin(s): {sample}{extra}. This field is exposed on "
+                     "Enterprise editions; its absence is NOT evidence of a "
+                     "missing key, so no posture grade is assigned."),
+        "remediation": ("To grade hardware-key coverage, run this audit on a "
+                        "Workspace Enterprise edition (or via Advanced "
+                        "Protection enrolment reporting). FIDO2 keys remain "
+                        "the recommended second factor for all admins."),
+        "cwe": "CWE-1391",
+        "iso27001": "A.8.5",
+    }
+
+
 def rule_admins_dormant(s):
     rows = s.get("gworkspace_admins_dormant") or []
     if not rows:
@@ -199,12 +223,17 @@ def rule_positive(s):
     if s.get("gworkspace_admin_audit_api_error"):     return None
     if (s.get("gworkspace_admin_audit_total") or 0) > 0: return None
     if not s.get("gworkspace_total_admins"):          return None
+    hwkey_na = s.get("gworkspace_admins_hwkey_field_unavailable") or []
+    hwkey_note = ("hardware-key coverage on every admin, "
+                  if not hwkey_na else
+                  "no hardware-key gaps among admins where the field is "
+                  "reported, ")
     return {
         "name": "Workspace admin posture meets CISA ScubaGoggles baseline",
         "severity": "POSITIVE",
         "evidence": (f"Audited {s.get('gworkspace_total_admins', 0)} admin(s) "
                      f"of {s.get('gworkspace_total_users', 0)} user(s). 100% "
-                     "2SV enrolment, hardware-key coverage on every admin, "
+                     f"2SV enrolment, {hwkey_note}"
                      "no dormant super-admins, no suspended-still-admin."),
         "remediation": ("Re-audit monthly — admin set drifts as roles are "
                         "added. Schedule via /api/sspm/run_all on cron."),
@@ -220,6 +249,7 @@ GWORKSPACE_ADMIN_AUDIT_FINDING_RULES = [
     rule_api_error,
     rule_admins_no_2sv,
     rule_admins_no_hwkey,
+    rule_hwkey_field_unavailable,
     rule_admins_dormant,
     rule_suspended_admins,
     rule_positive,

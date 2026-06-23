@@ -57,8 +57,14 @@ def rule_domain_breaches(s):
         if n and n not in names:
             names.append(n)
     count = len(names)
-    sev = "HIGH" if count > 3 else "MEDIUM" if count > 1 else "LOW"
-    cvss = "7.5" if sev == "HIGH" else "5.3" if sev == "MEDIUM" else "3.7"
+    # ZERO-FP severity: a single confirmed breach is a credential-reuse risk
+    # (MEDIUM), not a HIGH on its own. Severity scales with breach count:
+    #   1-3 breaches -> MEDIUM (credential-reuse risk)
+    #   >3 breaches  -> HIGH (broad, repeated exposure)
+    # Older breaches may already be resolved (passwords since rotated), so a
+    # single historic breach is not graded high.
+    sev = "HIGH" if count > 3 else "MEDIUM"
+    cvss = "7.5" if sev == "HIGH" else "5.3"
     sample = ", ".join(names[:8]) + ("..." if count > 8 else "")
     return {
         "name": f"Domain appears in {count} known data breach(es)",
@@ -69,7 +75,11 @@ def rule_domain_breaches(s):
                      f"domain in {count} disclosed breach(es): {sample}. Credentials "
                      "from these breaches are circulated in combo lists and fuel "
                      "credential-stuffing and password-spray campaigns against the "
-                     "organisation's accounts."),
+                     "organisation's accounts. NOTE: older breaches may already be "
+                     "resolved (affected passwords since rotated / accounts "
+                     "deactivated); confirm currency before treating as live "
+                     "exposure. Severity reflects credential-reuse risk: a single "
+                     "breach is MEDIUM, repeated exposure (>3 breaches) is HIGH."),
         "remediation": ("Force a password reset for affected accounts and require "
                         "phishing-resistant MFA (passkeys / FIDO2). Reject known-"
                         "breached passwords at set-time (Pwned Passwords k-anonymity "

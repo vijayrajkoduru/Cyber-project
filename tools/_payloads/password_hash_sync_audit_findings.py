@@ -48,11 +48,34 @@ def rule_phs_enabled(s):
     }
 
 
+def rule_phs_inconclusive(s):
+    if not s.get("phs_audit_phs_inconclusive"):
+        return None
+    return {
+        "name": "Password Hash Sync state inconclusive (feature flag not readable)",
+        "severity": "INFO",
+        "cwe": "N/A",
+        "mitre": "T1556.007",
+        "evidence": (
+            f"For tenant {s.get('phs_audit_tenant_id') or '?'}: "
+            + str(s.get("phs_audit_phs_inconclusive_reason")
+                  or "passwordHashSyncEnabled could not be read explicitly.")),
+        "remediation": (
+            "Grant the app registration Synchronization.Read.All (application) "
+            "+ admin-consent so the onPremisesSynchronization feature flags "
+            "are readable, then re-run. PHS state is not graded until the "
+            "explicit feature flag is observed."),
+    }
+
+
 def rule_on_prem_sync_only(s):
     if s.get("phs_audit_on_prem_sync_enabled") is not True:
         return None
     if s.get("phs_audit_phs_enabled") is True:
         # already covered by PHS rule
+        return None
+    if s.get("phs_audit_phs_inconclusive"):
+        # covered by the dedicated inconclusive INFO rule
         return None
     return {
         "name": "Hybrid identity sync ENABLED (likely PTA or federated, not PHS)",
@@ -143,6 +166,7 @@ def rule_auth_error(s):
 
 PASSWORD_HASH_SYNC_AUDIT_FINDING_RULES = [
     rule_phs_enabled,
+    rule_phs_inconclusive,
     rule_on_prem_sync_only,
     rule_no_sync,
     rule_msol_enumerated,

@@ -28,8 +28,16 @@ READ-ONLY: only GET calls; no posture changes are written.
 Findings:
   - INFO       : credentials missing  |  Graph auth failed
   - LOW        : current score < 70% of max
-  - MEDIUM     : per "Not Implemented" control with maxScore >= 5
-  - HIGH       : per "Not Implemented" control mapped to MFA / CA / legacy auth
+  - MEDIUM     : per "Not Implemented" control with explicit maxScore >= 5
+  - LOW        : per "Not Implemented" control with explicit maxScore in [1,5)
+  - INFO       : per "Not Implemented" control whose maxScore is NOT known
+                 (unverifiable impact — never graded from a name keyword)
+
+ZERO-FP NOTE: severity is derived ONLY from the explicit numeric maxScore the
+Graph control profile reports for that control id. We do NOT infer HIGH from a
+substring of the control NAME (e.g. "mfa"/"conditional access") — a name
+keyword is not evidence of risk magnitude, and a missing/zero maxScore means
+the impact is unverifiable, so that control is reported INFO, not graded.
 """
 from __future__ import annotations
 import asyncio
@@ -43,15 +51,10 @@ from tools._payloads.m365_security_score_findings import (
 
 router = APIRouter()
 
-# Controls flagged HIGH when "Not Implemented" — these map directly to
-# the highest-impact M365 posture failures (MFA off, legacy auth open,
-# conditional access bypass) per CISA / ScubaGear baselines.
-_HIGH_RISK_CONTROL_NAMES = (
-    "mfa", "multifactor", "conditional access", "legacy authentication",
-    "block legacy", "self-service password reset", "password reset",
-    "atp safe attachments", "atp safe links", "anti-phishing",
-    "privileged identity", "global admin",
-)
+# Severity is graded from the explicit numeric maxScore the Graph control
+# profile reports — NOT from a substring of the control name. Keyword-name
+# matching produced false HIGH severities (any "mfa"-named control became HIGH
+# regardless of its real impact / whether it was even verifiable).
 
 
 class M365SecurityScoreRequest(ScanRequest):
@@ -105,14 +108,18 @@ async def _graph_get(client, url: str, token: str) -> dict:
         return {"_error": f"{type(e).__name__}: {str(e)[:160]}", "_status": 0}
 
 
-def _classify_control(name: str, max_score) -> str:
-    n = (name or "").lower()
-    if any(k in n for k in _HIGH_RISK_CONTROL_NAMES):
-        return "HIGH"
+def _classify_control(name: str, max_score, max_score_known: bool = True) -> str:
+    """Grade ONLY from the explicit numeric maxScore the control profile
+    reports. If the maxScore is not known (no matching profile / non-numeric),
+    the impact is unverifiable on a black-box read -> INFO (never graded)."""
     try:
         m = float(max_score or 0)
     except (TypeError, ValueError):
         m = 0
+        max_score_known = False
+    # Unverifiable impact: profile didn't supply a usable maxScore.
+    if not max_score_known or m <= 0:
+        return "INFO"
     if m >= 5:
         return "MEDIUM"
     return "LOW"
@@ -213,17 +220,23 @@ async def gather(ctx: ScanContext):
     not_implemented = []
     for c in weak_controls:
         prof = by_name.get((c.get("name") or "").lower())
+        max_known = False
         if prof:
+            mv = prof.get("maxScore")
             try:
-                c["max"] = float(prof.get("maxScore") or 0)
+                if mv is not None:
+                    c["max"] = float(mv)
+                    max_known = True
             except (TypeError, ValueError):
                 pass
             c["title"] = prof.get("title") or c.get("name")
             c["remediation"] = (prof.get("remediation") or "")[:400]
             c["service"] = prof.get("service") or ""
+        c["max_score_known"] = max_known
         if (c.get("implementation_status") or "").lower() == "notimplemented" \
                 or (c.get("current") or 0) == 0:
-            sev = _classify_control(c.get("name") or "", c.get("max") or 0)
+            sev = _classify_control(c.get("name") or "", c.get("max") or 0,
+                                    max_score_known=max_known)
             c["severity"] = sev
             not_implemented.append(c)
 

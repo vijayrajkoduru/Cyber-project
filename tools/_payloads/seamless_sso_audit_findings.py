@@ -77,6 +77,29 @@ def rule_managed_no_sso(s):
     }
 
 
+def rule_inconclusive(s):
+    if not s.get("seamless_sso_inconclusive"):
+        return None
+    if s.get("seamless_sso_tenant_missing"):
+        return None
+    return {
+        "name": "Seamless SSO state could not be determined (inconclusive)",
+        "severity": "INFO",
+        "cwe": "N/A",
+        "evidence": (
+            f"For tenant {s.get('seamless_sso_tenant') or '?'} the "
+            "GetUserRealm read did not return a usable DesktopSsoEnabled value: "
+            f"{s.get('seamless_sso_inconclusive_reason') or 'unknown'}. "
+            "No Seamless SSO posture (enabled OR disabled) is asserted — the "
+            "probe did not silently pass."),
+        "remediation": (
+            "Re-run with options.probe_upn set to a real UPN in the tenant's "
+            "primary domain (admin@<tenant>.onmicrosoft.com). If the tenant is "
+            "federated, run adfs_extract_audit instead. Transient HTTP errors: "
+            "simply re-run."),
+    }
+
+
 def rule_autodiscover_open(s):
     a = s.get("seamless_sso_autodiscover") or {}
     if not a.get("autodiscover_reachable"):
@@ -127,6 +150,7 @@ SEAMLESS_SSO_AUDIT_FINDING_RULES = [
     rule_sso_enabled,
     rule_federated_tenant,
     rule_managed_no_sso,
+    rule_inconclusive,
     rule_autodiscover_open,
     rule_tenant_missing,
     rule_httpx_missing,

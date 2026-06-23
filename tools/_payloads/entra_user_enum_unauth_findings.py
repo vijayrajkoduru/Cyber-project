@@ -24,7 +24,7 @@ def rule_high_disclosure(s):
         "cwe": "CWE-204", "owasp": "A07:2021",
         "mitre": "T1087.004",
         "evidence": (f"login.microsoftonline.com/common/GetCredentialType returned "
-                     f"IfExistsResult=0/5/6 for {n} probed UPNs in tenant "
+                     f"IfExistsResult=0 (EXISTS) for {n} probed UPNs in tenant "
                      f"{s.get('entra_user_enum_tenant') or '<unknown>'}. "
                      f"Top valid UPNs: {sample}. This is the same enumeration "
                      "primitive used by o365creeper and AADInternals "
@@ -54,8 +54,8 @@ def rule_medium_disclosure(s):
         "severity": "MEDIUM", "cvss": "4.3",
         "cwe": "CWE-204", "owasp": "A07:2021",
         "mitre": "T1087.004",
-        "evidence": (f"GetCredentialType returned IfExistsResult=0/5/6 for {n} probed "
-                     f"UPNs in tenant {s.get('entra_user_enum_tenant') or '<unknown>'}. "
+        "evidence": (f"GetCredentialType returned IfExistsResult=0 (EXISTS) for {n} "
+                     f"probed UPNs in tenant {s.get('entra_user_enum_tenant') or '<unknown>'}. "
                      f"Valid UPNs: {sample}. Unauthenticated information disclosure."),
         "remediation": ("See HIGH variant of this rule. Even small leaks chain "
                         "into MFA-fatigue / password-spray (MSOLSpray) attacks."),

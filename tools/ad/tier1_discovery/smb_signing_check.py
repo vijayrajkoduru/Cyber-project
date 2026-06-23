@@ -62,10 +62,12 @@ async def gather(ctx: ScanContext):
         except Exception: pass
 
     findings = []
+    # Only the "signing NOT required" case is a finding. "Signing required" is
+    # the POSITIVE/hardened case and is surfaced by rule_positive from
+    # smb_server_info.signing_required - emitting it here too would double-report
+    # the same fact (once as a finding row, once as a POSITIVE).
     if "signing_required" in result and result["signing_required"] is False:
         findings.append({"check": "smb_signing_not_required", "server": result.get("server_name", "")})
-    if "signing_required" in result and result["signing_required"] is True:
-        findings.append({"check": "smb_signing_required", "server": result.get("server_name", "")})
 
     ctx.state["smb_signing_findings"] = findings
     ctx.state["smb_server_info"] = result

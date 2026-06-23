@@ -247,6 +247,14 @@ class KerberoastAudit(MethodologyScanner):
         ctx.state["dc_ip"] = dc_ip
         ctx.state["domain"] = domain
         ctx.state["bind_user"] = user
+        # ZERO-FP grading input: an extracted RC4 TGS is only CRITICAL when the
+        # service-account password is actually crackable, which depends on the
+        # domain password policy. A 20+ char random / gMSA password is
+        # computationally uncrackable even with RC4. We do NOT assume a weak
+        # policy; CRITICAL is only emitted when the customer/operator confirms a
+        # weak service-account password policy via this flag.
+        ctx.state["weak_password_policy_confirmed"] = bool(
+            opts.get("weak_password_policy_confirmed"))
         return True
 
     # ── STAGE 2: FINGERPRINT ─────────────────────────────────────

@@ -85,12 +85,22 @@ def _check_user(domain: str, username: str, dc_ip: str):
             pass
         # Some impacket builds raise KerberosError carrying the AS-REP when
         # pre-auth is not required; treat an explicit "no pre-auth" message as
-        # roastable, otherwise treat as a benign non-roastable outcome.
+        # roastable.
         msg = str(e).lower()
         if "preauth" in msg and ("not" in msg or "without" in msg):
             return "roastable"
-        return "preauth_required"
+        # ZERO-FP: a KerberosError whose code is NOT the explicit
+        # "pre-auth required" / "principal unknown" KDC decision does NOT prove
+        # the account is safe. It could be a clock-skew, a different KDC error,
+        # or a transport-level failure surfaced as a KerberosError. Never assume
+        # "preauth_required" (which reads as safe). Return an explicit error so
+        # the account is counted as untested, not as a POSITIVE.
+        return "error"
     except Exception:
+        # Network timeout / KDC unreachable / unexpected exception: explicitly
+        # NOT a safe outcome. Returning "error" keeps the account out of the
+        # "tested" pool so a transient failure never masquerades as "pre-auth
+        # required" (safe).
         return "error"
 
 
@@ -156,6 +166,11 @@ async def gather(ctx: ScanContext):
     ctx.state["ad_asrep_unknown_users"] = unknown
     ctx.state["ad_asrep_errors"] = errors
     ctx.state["ad_asrep_roast_total"] = len(roastable)
+    # ZERO-FP: if nothing actually completed a KDC pre-auth decision (every
+    # submitted user errored / KDC unreachable / clock skew), we must NOT emit a
+    # clean POSITIVE - we tested nothing. Flag an honest "unreachable" advisory.
+    if tested <= 0 and not roastable:
+        ctx.state["ad_asrep_no_decision"] = True
     ctx.source(f"tested {len(users)} users -> {len(roastable)} roastable, "
                f"{preauth_required} preauth-required, {unknown} unknown")
 

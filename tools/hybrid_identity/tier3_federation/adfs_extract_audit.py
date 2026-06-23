@@ -212,7 +212,18 @@ async def _run(req: AdfsExtractRequest, ctx: ScanContext):
         wia_bypass_surface = wia_status in (200, 302)
         ctx.state["adfs_audit_wia_bypass_surface"] = wia_bypass_surface
         if wia_bypass_surface:
-            cve_signals.append("CVE-2017-11774 WIA endpoint reachable without auth challenge")
+            # ZERO-FP: only call it a CVE-2017-11774 signal when the version is
+            # KNOWN-legacy (the CVE precondition). On unknown/non-legacy
+            # versions record it as a surface observation, not a CVE claim.
+            if is_legacy:
+                cve_signals.append(
+                    "CVE-2017-11774 precondition met — WIA endpoint reachable "
+                    "without auth challenge on legacy ADFS")
+            else:
+                cve_signals.append(
+                    "WIA endpoint reachable without auth challenge "
+                    "(surface only — ADFS version not known-vulnerable, "
+                    "CVE-2017-11774 not asserted)")
 
         # (d) AADInternals-style policy store probe
         ps_url = adfs_url + POLICY_STORE_PATH

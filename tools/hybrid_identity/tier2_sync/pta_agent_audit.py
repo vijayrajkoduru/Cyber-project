@@ -123,6 +123,28 @@ async def _run(req: PtaAuditRequest, ctx: ScanContext):
                        "/agentGroups?$expand=agents")
         agents_data, agents_status = await _graph_get(client, token, agents_url)
 
+        # ZERO-FP: a non-200 status, a transport error, or a response with no
+        # 'value' array means the agent collection was NOT readable — this is
+        # INCONCLUSIVE, not "0 PTA agents". Asserting a clean POSITIVE off a
+        # failed read is a false negative.
+        agents_read_ok = (agents_status == 200
+                          and "_transport_error" not in agents_data
+                          and isinstance(agents_data.get("value"), list))
+        ctx.state["pta_audit_agents_read_ok"] = agents_read_ok
+        if not agents_read_ok:
+            ctx.state["pta_audit_inconclusive"] = True
+            err = agents_data.get("_transport_error")
+            if not err:
+                graph_err = agents_data.get("error")
+                if isinstance(graph_err, dict):
+                    err = graph_err.get("message")
+                else:
+                    err = graph_err
+            ctx.state["pta_audit_inconclusive_reason"] = (
+                f"agentGroups read returned HTTP {agents_status}"
+                + (f": {str(err)[:160]}" if err else "")
+                + ". OnPremisesPublishingProfiles.Read.All may be missing.")
+
         pta_agents: list[dict] = []
         agent_groups: list[dict] = []
         for group in (agents_data.get("value") or []):
@@ -182,6 +204,7 @@ async def _run(req: PtaAuditRequest, ctx: ScanContext):
 INTEL_FIELDS = [
     ("Tenant ID",                   "pta_audit_tenant_id"),
     ("Authenticated to Graph?",     "pta_audit_authenticated"),
+    ("Agent collection readable?",  "pta_audit_agents_read_ok"),
     ("PTA agent groups",            "pta_audit_agent_groups"),
     ("Total connector agents",      "pta_audit_agent_count"),
     ("PTA-only agents",             "pta_audit_pta_only_count"),

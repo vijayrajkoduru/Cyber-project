@@ -172,13 +172,18 @@ async def gather(ctx: ScanContext):
     # ── Classify ──
     users_no_2fa = []
     bot_user_id = (auth.get("user_id") or "").lower()
+    twofa_field_seen = False   # did ANY human user expose the has_2fa field?
     for u in users:
         if u.get("deleted") or u.get("is_bot"):
             continue
         if u.get("id", "").lower() == bot_user_id:
             continue
         # Slack returns has_2fa for human users on paid workspaces; on free
-        # plan field absent. We only flag if it's explicitly False.
+        # plan the field is ABSENT for everyone. We only grade a 2FA gap when
+        # the field is explicitly present AND False (zero-FP). Absence of the
+        # field across the whole workspace = "not available on this plan".
+        if "has_2fa" in u:
+            twofa_field_seen = True
         if u.get("has_2fa") is False and not u.get("is_restricted") \
                 and not u.get("is_ultra_restricted"):
             users_no_2fa.append({
@@ -238,6 +243,9 @@ async def gather(ctx: ScanContext):
     ctx.state["slack_total_channels"] = len(channels)
     ctx.state["slack_total_apps"] = len(apps)
     ctx.state["slack_users_no_2fa"] = users_no_2fa
+    # True only when at least one human user exposed the has_2fa flag; if it's
+    # False the workspace plan does not surface 2FA state (do NOT claim 2FA-clean).
+    ctx.state["slack_2fa_field_available"] = twofa_field_seen
     ctx.state["slack_public_external_channels"] = public_external
     ctx.state["slack_risky_oauth_apps"] = risky_oauth_apps
     ctx.state["slack_channels_default_retention"] = channels_default_retention
@@ -255,6 +263,7 @@ INTEL_FIELDS = [
     ("Total channels audited",         "slack_total_channels"),
     ("Total OAuth apps audited",       "slack_total_apps"),
     ("Members without 2FA",            "slack_users_no_2fa"),
+    ("2FA state available on plan?",   "slack_2fa_field_available"),
     ("Externally-shared channels",     "slack_public_external_channels"),
     ("OAuth apps with risky scopes",   "slack_risky_oauth_apps"),
     ("Channels on default retention",  "slack_channels_default_retention"),
