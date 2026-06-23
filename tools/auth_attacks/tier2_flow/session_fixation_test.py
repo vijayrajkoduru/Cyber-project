@@ -50,16 +50,53 @@ class SessionFixationTestRequest(ScanRequest):
 
 
 def _detect_session_cookie(cookies: dict, hint: Optional[str]) -> Optional[str]:
-    """Pick the most-likely session cookie out of a jar."""
+    """Pick the session cookie out of a jar - session-pattern names only.
+
+    Zero-FP: do NOT fall back to "the first cookie". A tracking / analytics /
+    CSRF / consent cookie must never be mistaken for the session identifier -
+    that would let rotation/fixation be graded against the wrong cookie.
+    If no session-like name matches, return None and let rule_no_session_cookie
+    handle it (and the customer can pass options.session_cookie_name).
+    """
     if hint and hint in cookies:
         return hint
     for name in cookies.keys():
         if _SESSION_NAME_PATTERN.search(name):
             return name
-    # Fall back to first cookie - some frameworks use opaque names
-    if cookies:
-        return list(cookies.keys())[0]
     return None
+
+
+# Redirect Location values that mean "login did NOT succeed" - bounced back to
+# an auth challenge rather than into the authenticated app.
+_AUTH_BOUNCE_PATTERN = re.compile(
+    r"(/login|/signin|/sign-in|/auth|/sso|/mfa|/2fa|/otp|/verify|/challenge|"
+    r"error|failed|denied|invalid)",
+    re.IGNORECASE,
+)
+
+
+def _looks_protected_redirect(location: str, login_url: str) -> bool:
+    """A post-login 302 only proves success if it points AWAY from the login
+    page / any auth-challenge - i.e. into the authenticated app."""
+    if not location:
+        return False
+    loc = location.strip()
+    if not loc:
+        return False
+    # A redirect back to (essentially) the same login URL is not a success.
+    try:
+        from urllib.parse import urljoin, urlparse
+        abs_loc = urljoin(login_url, loc)
+        lp = urlparse(abs_loc)
+        up = urlparse(login_url)
+        # Same path as the login page => bounced back to login, not authed.
+        if lp.path and up.path and lp.path.rstrip("/") == up.path.rstrip("/"):
+            return False
+    except Exception:
+        pass
+    if _AUTH_BOUNCE_PATTERN.search(loc):
+        return False
+    return True
 
 
 def _redact_cookie(val: str) -> str:
@@ -106,30 +143,68 @@ async def gather(ctx: ScanContext):
     post_cookies: dict = {}
     login_worked = False
     body_marker = False
+    baseline_marker = False
+    protected_redirect = False
 
     async with httpx.AsyncClient(verify=False, timeout=DEFAULT_TIMEOUT,
                                  follow_redirects=True) as client:
-        # Step 1 - GET login page, capture pre-auth session cookie(s)
+        # Step 1 - GET login page, capture pre-auth session cookie(s).
+        # This unauthenticated response is ALSO our baseline: if the
+        # success_marker is already present here (catch-all / SPA returns the
+        # same "logout"/"dashboard" shell to everyone), the marker proves
+        # nothing post-login.
         try:
             r1 = await client.get(url)
             pre_cookies = dict(client.cookies)
             ctx.state["sf_pre_status"] = r1.status_code
+            baseline_marker = success_marker in (r1.text or "").lower()
         except Exception as e:
             ctx.state["sf_error"] = f"pre-login GET failed: {e}"
             ctx.source(f"pre-login fetch failed: {e}")
             return
 
-        # Step 2 - POST credentials, keep the same client (cookies persist)
+        # Step 2 - POST credentials, keep the same client (cookies persist).
+        # Use follow_redirects=False so we can inspect the raw Location header
+        # of the login response and judge whether it points into the app.
         post_data = {username_field: username, password_field: password}
         post_data.update({k: str(v) for k, v in extra_fields.items()})
         try:
-            r2 = await client.post(url, data=post_data)
+            r2 = await client.post(url, data=post_data, follow_redirects=False)
+            post_status = r2.status_code
+            post_location = r2.headers.get("location") or ""
+            ctx.state["sf_post_status"] = post_status
+            ctx.state["sf_post_location"] = post_location[:300]
+
+            # Marker only counts as a real signal if it appears AFTER auth and
+            # did NOT already appear in the unauthenticated baseline (a catch-all
+            # shell shows the same "logout"/"dashboard" text to everyone).
+            if 300 <= post_status < 400:
+                # A 30x redirect carries no body; judge the Location target and,
+                # if it points into the protected app, follow it once to read the
+                # landing page for the marker.
+                protected_redirect = _looks_protected_redirect(post_location, url)
+                if protected_redirect:
+                    try:
+                        from urllib.parse import urljoin
+                        r3 = await client.get(urljoin(url, post_location))
+                        body_marker = (success_marker in (r3.text or "").lower()
+                                       and not baseline_marker)
+                    except Exception:
+                        pass
+            else:
+                # Non-redirect (200/4xx/5xx): evaluate the marker on the direct
+                # body; a 4xx/5xx body almost never carries the success marker.
+                body_marker = (success_marker in (r2.text or "").lower()
+                               and not baseline_marker)
+
             post_cookies = dict(client.cookies)
-            ctx.state["sf_post_status"] = r2.status_code
-            body_marker = success_marker in (r2.text or "").lower()
-            # Heuristic for login success - either marker present, or post-login
-            # response is 200/302 to a different URL than the login page
-            login_worked = body_marker or (r2.status_code in (200, 302, 303))
+
+            # Zero-FP login-success gate: status alone is NEVER proof (a
+            # catch-all returns 200/302 to everything). Require a REAL signal:
+            #   - a post-auth marker that the unauthenticated baseline lacked, OR
+            #   - a redirect whose Location points into a protected area
+            #     (away from the login page / any auth challenge).
+            login_worked = bool(body_marker or protected_redirect)
         except Exception as e:
             ctx.state["sf_error"] = f"login POST failed: {e}"
             ctx.source(f"login POST failed: {e}")
@@ -141,6 +216,8 @@ async def gather(ctx: ScanContext):
 
     ctx.state["sf_login_worked"] = login_worked
     ctx.state["sf_body_marker_present"] = body_marker
+    ctx.state["sf_baseline_marker_present"] = baseline_marker
+    ctx.state["sf_protected_redirect"] = protected_redirect
     ctx.state["sf_session_cookie_name"] = session_name
     ctx.state["sf_pre_cookies"] = list(pre_cookies.keys())
     ctx.state["sf_post_cookies"] = list(post_cookies.keys())
@@ -173,7 +250,10 @@ async def gather(ctx: ScanContext):
 INTEL_FIELDS = [
     ("Pre-login status",            "sf_pre_status"),
     ("Post-login status",           "sf_post_status"),
+    ("Post-login redirect",         "sf_post_location"),
     ("Login marker present",        "sf_body_marker_present"),
+    ("Baseline marker present",     "sf_baseline_marker_present"),
+    ("Protected redirect observed", "sf_protected_redirect"),
     ("Session cookie name",         "sf_session_cookie_name"),
     ("Pre-login cookies",           "sf_pre_cookies"),
     ("Post-login cookies",          "sf_post_cookies"),

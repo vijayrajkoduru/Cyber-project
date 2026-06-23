@@ -130,6 +130,39 @@ def rule_replay_skipped(s):
     }
 
 
+def rule_suppressed_unprotected(s):
+    # The unauthenticated baseline of protected_url was NOT denied, so the URL
+    # is public / SPA / not genuinely behind auth. The bypass tests were
+    # suppressed to avoid false positives - report INFO (inconclusive), never
+    # a CRITICAL bypass and never a POSITIVE "gate held".
+    if not s.get("mfa_bypass_suppressed_unprotected"):
+        return None
+    # If the page itself looked authed unauthenticated, the HIGH rule covers it.
+    if s.get("mfa_protected_url_not_actually_protected"):
+        return None
+    return {
+        "name": "MFA bypass test inconclusive - protected_url is not actually protected",
+        "severity": "INFO",
+        "cwe": "CWE-1006",
+        "evidence": (
+            f"An unauthenticated GET of the supplied protected URL returned "
+            f"status {s.get('mfa_unauth_baseline_status', '?')} "
+            f"(location {s.get('mfa_unauth_baseline_location') or 'n/a'}) and was "
+            "NOT denied (no 401/403 and no redirect to a login/MFA challenge). "
+            "Because the URL is reachable without authentication, the skip / "
+            "cookie-forge / replay bypass tests cannot distinguish a real bypass "
+            "from a public page, so they were suppressed to avoid a false positive."
+        ),
+        "remediation": (
+            "Re-run with options.protected_url set to a resource that genuinely "
+            "requires a completed MFA login (an unauthenticated request to it "
+            "should return 401/403 or redirect to the login/MFA page). "
+            "If the URL above is meant to be protected, fix the access control - "
+            "it is currently reachable without authenticating."
+        ),
+    }
+
+
 def rule_positive(s):
     if s.get("mfa_input_missing"):
         return None
@@ -138,6 +171,10 @@ def rule_positive(s):
     if s.get("mfa_bypass_modes"):
         return None
     if s.get("mfa_protected_url_not_actually_protected"):
+        return None
+    # Suppressed because the URL was not actually protected => not a real
+    # "gate held" result; rule_suppressed_unprotected reports it as INFO.
+    if s.get("mfa_bypass_suppressed_unprotected"):
         return None
     return {
         "name": "MFA gate held against skip / cookie-forge / replay / unauth-baseline tests",
@@ -163,6 +200,7 @@ MFA_BYPASS_TEST_FINDING_RULES = [
     rule_high_unauth_open,
     rule_input_missing,
     rule_httpx_missing,
+    rule_suppressed_unprotected,
     rule_replay_skipped,
     rule_positive,
 ]
