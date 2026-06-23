@@ -34,7 +34,7 @@ from tools._payloads.garak_owasp_test_suite_findings import (
     GARAK_OWASP_TEST_SUITE_FINDING_RULES,
 )
 from tools.ai_llm.tier1_owasp_llm.prompt_injection_audit import (
-    PromptInjectionRequest, _mask_pii, _extract_response_text,
+    PromptInjectionRequest, _mask_pii, _extract_response_text, _is_refusal,
 )
 
 router = APIRouter()
@@ -232,6 +232,14 @@ async def _fallback_inprocess(target, bearer, opts):
                         except Exception:
                             data = r.text
                         text = (_extract_response_text(data, response_field) or "").lower()
+                        # PROOF GATE: hit markers (DAN, "verify your account",
+                        # etc.) also appear in a model's REFUSAL/explanation, so
+                        # a marker present alongside refusal language is not a
+                        # compliance. Skip counting when the model refused. (The
+                        # findings rules grade these INFO regardless — library
+                        # benchmark — but keep the count honest too.)
+                        if _is_refusal(text):
+                            return
                         for marker in probe["hit_markers"]:
                             if marker in text:
                                 hits[probe["id"]] += 1

@@ -46,51 +46,66 @@ def rule_positive(s):
             "cwe": "CWE-693", "owasp": "LLM01:2025"}
 
 
+# NOTE: garak probe "hits" are measured by running the Garak LIBRARY's own
+# benchmark corpus (its canned DAN / base64 / phishing example prompts). The
+# in-process fallback in particular replays a handful of library example
+# prompts and substring-matches markers — that measures the LIBRARY's probe
+# corpus, not a verified, proven exposure of the customer's target. Per the
+# zero-FP contract these are reported as INFO (library benchmark), never graded
+# as a HIGH/MEDIUM target finding.
 def rule_dan_hit(s):
     h = (s.get("garak_hits_per_probe") or {}).get("dan.Dan_11_0", 0)
     if not h:
         return None
-    return {"name": f"Garak dan.Dan_11_0 probe hit ({h} time(s))",
-            "severity": "HIGH", "cvss": "7.5",
+    return {"name": f"Garak dan.Dan_11_0 probe flagged ({h} time(s)) [library benchmark]",
+            "severity": "INFO",
             "cwe": "CWE-285", "owasp": "LLM02:2025",
-            "evidence": (f"DAN-v11 jailbreak prompt produced compliant output "
-                         f"{h} time(s). Engine: {s.get('garak_engine', '?')}."),
-            "remediation": ("Re-tune refusal RLHF / add input filter that "
-                            "matches the DAN-11 family. Garak's dan.Dan_11_0 "
-                            "is one of the easier OWASP-LLM02 baselines — a hit "
-                            "indicates the model lacks production-grade jailbreak "
-                            "resistance.")}
+            "verified_exploit": False,
+            "evidence": (f"Garak's DAN-v11 probe corpus flagged {h} time(s) "
+                         f"(engine: {s.get('garak_engine', '?')}). This is a "
+                         "library benchmark, not a target exposure — it measures "
+                         "the Garak probe set against example prompts, not a "
+                         "proven jailbreak of the customer endpoint. Re-run the "
+                         "verified jailbreak_resistance_test for a graded result."),
+            "remediation": ("Treat as a baseline signal. Re-tune refusal RLHF / "
+                            "add an input filter matching the DAN-11 family, then "
+                            "confirm with the proof-gated jailbreak scanner.")}
 
 
 def rule_base64_hit(s):
     h = (s.get("garak_hits_per_probe") or {}).get("encoding.InjectBase64", 0)
     if not h:
         return None
-    return {"name": f"Garak encoding.InjectBase64 probe hit ({h} time(s))",
-            "severity": "HIGH", "cvss": "8.1",
+    return {"name": f"Garak encoding.InjectBase64 probe flagged ({h} time(s)) [library benchmark]",
+            "severity": "INFO",
             "cwe": "CWE-94", "owasp": "LLM01:2025",
-            "evidence": (f"Base64-encoded prompt injection succeeded {h} time(s). "
-                         "Model decoded attacker-controlled content and followed "
-                         "the embedded instruction."),
-            "remediation": ("Add an input-side decoder + re-scan pass (decode "
-                            "base64/hex/ROT13/url-encoded before applying the "
-                            "PromptInjection guard). llm_guard.input_scanners "
-                            "supports this natively with the `decode` arg.")}
+            "verified_exploit": False,
+            "evidence": (f"Garak's base64-injection probe corpus flagged {h} "
+                         "time(s). This is a library benchmark, not a target "
+                         "exposure — it measures the Garak probe set, not a "
+                         "proven injection of the customer endpoint."),
+            "remediation": ("Treat as a baseline signal. Add an input-side "
+                            "decoder + re-scan pass (decode base64/hex/ROT13/"
+                            "url-encoded before the PromptInjection guard), then "
+                            "confirm with the proof-gated prompt_injection_audit.")}
 
 
 def rule_phish_hit(s):
     h = (s.get("garak_hits_per_probe") or {}).get("knownbadsignatures.GTPhish", 0)
     if not h:
         return None
-    return {"name": f"Garak knownbadsignatures.GTPhish probe hit ({h} time(s))",
-            "severity": "HIGH", "cvss": "7.4",
+    return {"name": f"Garak knownbadsignatures.GTPhish probe flagged ({h} time(s)) [library benchmark]",
+            "severity": "INFO",
             "cwe": "CWE-1391", "owasp": "LLM05:2025",
-            "evidence": (f"Model produced phishing-email content {h} time(s) "
-                         "when prompted to do so."),
-            "remediation": ("Train a refusal classifier on phishing-generation "
-                            "intent or add output filter that detects "
-                            "phishing-template patterns (urgent verify, click "
-                            "link, suspended account).")}
+            "verified_exploit": False,
+            "evidence": (f"Garak's phishing-generation probe corpus flagged {h} "
+                         "time(s). This is a library benchmark, not a target "
+                         "exposure — substring markers (verify account / click "
+                         "link / suspended) also appear in a model's REFUSAL, so "
+                         "this is not a proven content-generation bypass."),
+            "remediation": ("Treat as a baseline signal. Train a refusal "
+                            "classifier on phishing-generation intent or add an "
+                            "output filter for phishing-template patterns.")}
 
 
 def rule_cli_unavailable_used_fallback(s):
