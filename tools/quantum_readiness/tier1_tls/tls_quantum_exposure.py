@@ -7,8 +7,11 @@ Detection-only, zero new dependency:
   - a hand-rolled TLS 1.3 ClientHello probe -> does the server offer/select a
     post-quantum HYBRID group (X25519MLKEM768)?  (no OpenSSL 3.5 / sslyze needed)
 
-All findings are advisory/LOW (a CRQC does not exist today). The probe is
-conservative - ambiguity reports "not observed", never a false positive.
+All findings are ADVISORY-BY-DESIGN / INFO (a cryptographically-relevant
+quantum computer (CRQC) does not exist today, so none of these is a live,
+exploitable vulnerability — they are a future-theoretical risk posture under
+the harvest-now-decrypt-later model). The probe is conservative - ambiguity
+reports "not observed", never a false positive.
 
 Hardened end-to-end: a payload-loader hiccup can't stop the route registering,
 gather() can never raise, and the endpoint always returns a valid 200 - so the
@@ -201,11 +204,14 @@ async def gather(ctx):
 def _r_hndl(s):
     if not s.get("reachable") or s.get("pqc_status") == "supported":
         return None
-    return {"name": "No post-quantum key exchange (harvest-now-decrypt-later exposure)",
-            "severity": "LOW", "cvss": 3.1, "cwe": "CWE-327", "owasp": "A02:2021",
-            "evidence": ("TLS negotiates a classical key exchange and the server did not "
-                         "offer a post-quantum hybrid (X25519MLKEM768). An adversary recording "
-                         "this traffic today can decrypt it once a CRQC exists."),
+    return {"name": "[ADVISORY-BY-DESIGN] No post-quantum key exchange (harvest-now-decrypt-later posture)",
+            "severity": "INFO", "cwe": "CWE-327", "owasp": "A02:2021",
+            "evidence": ("Future-theoretical risk posture (a CRQC does not exist today, so "
+                         "this is NOT a live vulnerability). TLS negotiates a classical key "
+                         "exchange and the server did not offer a post-quantum hybrid "
+                         "(X25519MLKEM768). Under the harvest-now-decrypt-later model, an "
+                         "adversary recording this traffic today could decrypt it only once a "
+                         "CRQC exists."),
             "compliance": PQC_COMPLIANCE,
             "remediation": "Enable a hybrid PQC key exchange (X25519MLKEM768) on the TLS terminator."}
 
@@ -222,10 +228,12 @@ def _r_pubkey(s):
     kt = s.get("key_type")
     if not s.get("reachable") or not kt:
         return None
-    return {"name": f"Quantum-vulnerable certificate key ({kt})",
+    return {"name": f"[ADVISORY-BY-DESIGN] Quantum-vulnerable certificate key ({kt})",
             "severity": "INFO", "cwe": "CWE-327",
-            "evidence": (f"Certificate public key is {kt} and is signed with {s.get('cert_sig') or 'unknown'} - "
-                         "both are breakable by Shor's algorithm on a future quantum computer."),
+            "evidence": (f"Future-theoretical risk posture (a CRQC does not exist today). "
+                         f"Certificate public key is {kt} and is signed with {s.get('cert_sig') or 'unknown'} - "
+                         "both would be breakable by Shor's algorithm on a future quantum computer, "
+                         "not by any live attack."),
             "compliance": PQC_COMPLIANCE,
             "remediation": "Track CA support for ML-DSA (FIPS 204) certificates per the NIST IR 8547 timeline."}
 
@@ -237,10 +245,12 @@ def _r_symmetric(s):
     margin, verdict = symmetric_margin(name, bits)
     if verdict != "weak":
         return None
-    return {"name": f"Symmetric cipher below long-term quantum margin ({name})",
-            "severity": "LOW", "cvss": 2.6, "cwe": "CWE-326",
-            "evidence": (f"{name} ({bits}-bit) gives ~{margin}-bit effective strength under Grover's "
-                         "algorithm. AES-256 is advised for data that must stay secret for 10+ years."),
+    return {"name": f"[ADVISORY-BY-DESIGN] Symmetric cipher below long-term quantum margin ({name})",
+            "severity": "INFO", "cwe": "CWE-326",
+            "evidence": (f"Future-theoretical risk posture (a CRQC does not exist today). "
+                         f"{name} ({bits}-bit) gives ~{margin}-bit effective strength under Grover's "
+                         "algorithm. AES-256 is advised for data that must stay secret for 10+ years. "
+                         "This is a long-horizon hygiene note, not a live vulnerability."),
             "compliance": PQC_COMPLIANCE,
             "remediation": "Prefer AES-256-GCM / ChaCha20 for long-lived confidentiality."}
 

@@ -62,13 +62,17 @@ def rule_no_monitor_capable(s):
     if s.get("monitor_capable_count"):
         return None
     names = ", ".join(i["ifname"] for i in ifs)
-    return {"name": "Wireless interface(s) present but none support monitor mode",
-            "severity": "MEDIUM",
-            "evidence": f"iw phy info shows no 'monitor' in supported interface_modes for: {names}",
-            "remediation": ("The on-board adapter (often Intel iwlwifi) cannot do "
-                            "monitor mode reliably. Use an external chipset proven "
-                            "for monitor mode (Atheros AR9271, MediaTek MT7612U, "
-                            "RTL8812AU). Re-run audit after attaching one."),
+    # Lacking monitor mode is a SCANNER CAPABILITY note, not a vulnerability of
+    # the target — it just means this host cannot perform Wi-Fi capture. INFO.
+    return {"name": "Wireless interface(s) present but none support monitor mode (capability note)",
+            "severity": "INFO",
+            "evidence": (f"iw phy info shows no 'monitor' in supported interface_modes for: {names}. "
+                         "This is a limitation of the SCANNER adapter, not a security "
+                         "finding about any target."),
+            "remediation": ("To enable Wi-Fi capture from this host, use an external "
+                            "chipset proven for monitor mode (Atheros AR9271, MediaTek "
+                            "MT7612U, RTL8812AU) and re-run the audit. No action is "
+                            "required if Wi-Fi auditing is not needed on this host."),
             "cwe": "CWE-1188", "owasp": "A05:2021"}
 
 

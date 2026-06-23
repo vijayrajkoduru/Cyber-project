@@ -1,8 +1,11 @@
 """csp_bypass_audit - findings rules.
 
-Severity model (CSP is a defense-in-depth layer designed to fail closed
-— each weakness materially weakens defense against XSS / clickjacking):
-  CRITICAL - no CSP at all (page is unmitigated against reflected XSS)
+Severity model (CSP is a defense-in-depth layer — its absence/weakness
+is a MISSING MITIGATION, not a demonstrated exploit; other controls
+[output encoding, framework auto-escaping, WAF] may still block XSS):
+  HIGH     - no CSP at all (no defense-in-depth XSS mitigation layer;
+             downgraded from CRITICAL — a missing header is not a proven
+             exploit and other controls may apply)
   HIGH     - each individual bypass class (unsafe-inline, JSONP host, etc.)
   INFO     - report-only mode (CSP gathers data but doesn't block)
   POSITIVE - strict-CSP best practice (nonces/hashes, object-src 'none',
@@ -15,15 +18,21 @@ def rule_no_csp(s):
         return None
     return {
         "name": "No Content-Security-Policy present on target URL",
-        "severity": "CRITICAL",
-        "cvss": "7.5",
+        "severity": "HIGH",
+        "cvss": "6.1",
         "cwe": "CWE-1021",
         "owasp": "A05:2021",
+        "verified_exploit": False,
         "evidence": (f"GET {s.get('csp_target_url')} returned no "
                      "Content-Security-Policy response header and no "
                      "<meta http-equiv='Content-Security-Policy'> tag was "
-                     "found in the rendered HTML. Any reflected or stored "
-                     "XSS on this page executes with no mitigation layer."),
+                     "found in the rendered HTML. CSP is a defense-in-depth "
+                     "layer, so its absence is a MISSING MITIGATION rather "
+                     "than a demonstrated exploit — other controls (output "
+                     "encoding, framework auto-escaping, a WAF) may still "
+                     "block XSS. However, should a reflected or stored XSS "
+                     "exist on this page it would execute with no CSP "
+                     "mitigation layer to contain it."),
         "remediation": (
             "Deploy a strict CSP that pins script-src to a nonce or hash, "
             "locks object-src 'none', base-uri 'self', and frame-ancestors "

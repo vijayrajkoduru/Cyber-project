@@ -1,14 +1,19 @@
 """cors_preflight_audit - findings rules.
 
-Severity model:
+Severity model (HIGH/CRITICAL require a CREDENTIALED cross-origin read;
+reflection WITHOUT Allow-Credentials cannot steal cookie-authenticated
+data, so it is MEDIUM):
   CRITICAL - Reflected/wildcard Origin + Allow-Credentials: true
              (attacker page reads authenticated responses)
   CRITICAL - "null" Origin allowed with credentials
              (sandboxed iframe / data: URL primitives)
-  HIGH     - Reflected Origin without credentials
-             (still reads public + IP-bound internal APIs)
-  HIGH     - Null Origin accepted without credentials
-  HIGH     - Mistyped / suffix-bypass / subdomain wildcard accepted
+  MEDIUM   - Reflected Origin without credentials (no credentialed data
+             theft; only non-cookie-authenticated responses are readable)
+  HIGH     - Null Origin accepted without credentials (uniquely easy
+             attacker primitive — sandbox/data:/file:// forge the Origin)
+  MEDIUM   - Mistyped / suffix-bypass / subdomain wildcard accepted
+             without credentials (broken origin check, but no credentialed
+             read)
   MEDIUM   - HTTP downgrade accepted (mixed-content read)
   INFO     - Probe failed / target unreachable / no ACAO at all
   POSITIVE - ACAO present, locks to explicit origin(s), no reflection
@@ -112,16 +117,23 @@ def rule_reflected_no_creds(s):
         return None
     return {
         "name": "CORS misconfig — Origin reflected (no credentials)",
-        "severity": "HIGH",
-        "cvss": "7.5",
+        "severity": "MEDIUM",
+        "cvss": "5.3",
         "cwe": "CWE-942",
         "owasp": "A05:2021",
-        "evidence": _ev_list(rs),
+        "verified_exploit": False,
+        "evidence": (
+            _ev_list(rs)
+            + " — NOTE: Allow-Credentials is not true, so this does NOT "
+            "permit a credentialed (cookie-authenticated) cross-origin "
+            "read; impact is limited to responses that are not protected "
+            "by the victim's session cookies."
+        ),
         "remediation": (
-            "Even without credentials, reflected Origin lets any attacker "
-            "page READ this API's responses — exposing public data, "
-            "internal IP-bound endpoints (LAN dashboards, cloud metadata "
-            "services). Lock down to an explicit allowlist."
+            "Without credentials, reflected Origin still lets any attacker "
+            "page READ this API's non-authenticated responses — exposing "
+            "public data and internal IP-bound endpoints (LAN dashboards, "
+            "cloud metadata services). Lock down to an explicit allowlist."
         ),
     }
 
@@ -145,7 +157,11 @@ def rule_null_no_creds(s):
 
 
 def rule_mistype_or_bypass(s):
-    rs = s.get("cors_mistype_or_bypass") or []
+    # Bypasses accepted WITH credentials are already covered (CRITICAL) by
+    # rule_reflected_with_creds — here we report only the no-credentials
+    # case, which is MEDIUM (broken origin check, but no credentialed read).
+    rs = [r for r in (s.get("cors_mistype_or_bypass") or [])
+          if (r.get("acac") or "").strip().lower() != "true"]
     if not rs:
         return None
     flavours: set = set()
@@ -157,12 +173,16 @@ def rule_mistype_or_bypass(s):
                 flavours.add(k)
     return {
         "name": ("CORS allowlist bypass via Origin mistype / suffix / "
-                  "subdomain match"),
-        "severity": "HIGH",
-        "cvss": "7.4",
+                  "subdomain match (no credentials)"),
+        "severity": "MEDIUM",
+        "cvss": "5.3",
         "cwe": "CWE-942",
         "owasp": "A05:2021",
+        "verified_exploit": False,
         "evidence": (f"Bypass patterns accepted: {', '.join(sorted(flavours))}. "
+                     f"Allow-Credentials is not true, so no credentialed "
+                     f"cross-origin read is possible — this indicates a "
+                     f"broken origin-validation check. "
                      f"{_ev_list(rs)}"),
         "remediation": (
             "Replace substring / endsWith / startsWith origin checks with "

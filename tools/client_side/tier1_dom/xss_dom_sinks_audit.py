@@ -26,9 +26,12 @@ JS source with regex for two layers:
     - localStorage.getItem / sessionStorage.getItem
     - event.data inside addEventListener("message", ...)
 
-A finding goes CRITICAL when a confirmed source flows into a sink in
-the SAME function (regex co-occurrence inside the same JS block /
-50-char window). HIGH for "sink exists, no source proximity verified".
+A finding goes CRITICAL ONLY when a confirmed source flows into a sink
+in the SAME function (regex co-occurrence inside the same JS block /
+proximity window) — a proven source→sink taint flow. A sink existing
+WITHOUT a co-occurring source is graded LOW (a code-review pointer, not
+a proven exploit), to avoid false-positives on sites that use
+innerHTML / document.write only with static / trusted values.
 Static analysis only — does not execute or fuzz the page.
 
 Customer input via ScanRequest:

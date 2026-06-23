@@ -140,11 +140,20 @@ async def gather(ctx: ScanContext):
 
     handshake_present = False
     eapol_packets = 0
+    handshake_validated = False
+    msg_nums_seen: list[int] = []
     aps_seen, clients_seen = 0, 0
 
     if cap_path and os.path.exists(cap_path):
         eapol_packets = _count_eapol(cap_path)
-        handshake_present = eapol_packets >= 4
+        # ZERO-FP: a raw EAPOL count >= 4 does NOT mean a complete crackable
+        # 4-way handshake — it can be retransmits of the same message, beacons,
+        # or an incomplete exchange. HIGH requires a VALIDATED full sequence
+        # (at minimum M1+M2, ideally M1-M4) confirmed via tshark's EAPOL
+        # message-number field.
+        msg_nums_seen = _eapol_msg_numbers(cap_path)
+        handshake_validated = _is_full_handshake(msg_nums_seen)
+        handshake_present = handshake_validated
         ctx.state["capture_bytes"] = os.path.getsize(cap_path)
 
     # Parse the CSV for AP+client counts
@@ -157,13 +166,23 @@ async def gather(ctx: ScanContext):
         aps_seen, clients_seen = _parse_airodump_csv(csv_path)
 
     ctx.state["handshake_captured"] = handshake_present
+    ctx.state["handshake_validated"] = handshake_validated
+    ctx.state["eapol_msg_numbers"] = sorted(set(msg_nums_seen))
+    # Partial = some EAPOL frames seen but not a validated full sequence.
+    ctx.state["handshake_partial"] = bool(
+        eapol_packets and not handshake_validated
+    )
     ctx.state["eapol_packets"] = eapol_packets
     ctx.state["aps_observed"] = aps_seen
     ctx.state["clients_observed"] = clients_seen
     ctx.state["scan_duration_sec"] = duration
     ctx.state["target_label"] = target
     ctx.state["wpa_handshake_capture_audit_total"] = 1 if handshake_present else 0
-    ctx.source(f"airodump captured {eapol_packets} EAPOL pkt(s) in {duration}s")
+    ctx.source(
+        f"airodump captured {eapol_packets} EAPOL pkt(s) in {duration}s; "
+        f"msg-nums={sorted(set(msg_nums_seen)) or 'none'}; "
+        f"validated_handshake={handshake_validated}"
+    )
 
     _cleanup_tmpdir(tmp_dir)
 
@@ -200,6 +219,49 @@ def _count_eapol(cap_path: str) -> int:
         return 0
 
 
+def _eapol_msg_numbers(cap_path: str) -> list[int]:
+    """Return the list of 4-way-handshake message numbers (1..4) observed,
+    using tshark's wlan_rsna_eapol.keydes.msgnr field. Without tshark we
+    cannot reliably tell M1 from M2/M3/M4, so we return [] (the caller then
+    treats the capture as UNVALIDATED — never HIGH on a raw byte count)."""
+    tshark = shutil.which("tshark")
+    if not tshark:
+        return []
+    try:
+        import subprocess
+        r = subprocess.run(
+            [tshark, "-r", cap_path, "-Y", "eapol", "-T", "fields",
+             "-e", "wlan_rsna_eapol.keydes.msgnr"],
+            capture_output=True, text=True, timeout=25,
+        )
+    except Exception:
+        return []
+    nums: list[int] = []
+    for ln in r.stdout.splitlines():
+        ln = ln.strip()
+        if not ln:
+            continue
+        # A frame can carry multiple comma-separated values in tshark output.
+        for tok in ln.replace(",", " ").split():
+            try:
+                n = int(tok)
+            except ValueError:
+                continue
+            if 1 <= n <= 4:
+                nums.append(n)
+    return nums
+
+
+def _is_full_handshake(msg_nums: list[int]) -> bool:
+    """A crackable WPA/WPA2 handshake needs, at minimum, M1 (ANonce) plus M2
+    (SNonce + MIC) so the PSK can be brute-forced offline; a complete M1-M4
+    is the gold standard. We require BOTH M1 and M2 present. A bare set of
+    EAPOL frames with no resolved message numbers (no tshark / malformed) is
+    NOT a validated handshake."""
+    s = set(msg_nums)
+    return 1 in s and 2 in s
+
+
 def _parse_airodump_csv(csv_path: str) -> tuple[int, int]:
     aps, clients = 0, 0
     try:
@@ -230,7 +292,8 @@ INTEL_FIELDS = [("Target", "target_label"),
                 ("APs observed", "aps_observed"),
                 ("Clients observed", "clients_observed"),
                 ("EAPOL packets", "eapol_packets"),
-                ("Handshake captured", "handshake_captured"),
+                ("EAPOL message numbers", "eapol_msg_numbers"),
+                ("Handshake captured (validated)", "handshake_captured"),
                 ("Capture file size (B)", "capture_bytes")]
 
 

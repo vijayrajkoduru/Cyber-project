@@ -3,7 +3,9 @@ key exchange, and flag its quantum-vulnerable host keys.
 
 Detection-only, zero dependency: reads the server banner + the SSH_MSG_KEXINIT
 packet off the socket and parses the advertised name-lists. No login is
-attempted. Advisory/LOW.
+attempted. All findings are ADVISORY-BY-DESIGN / INFO: a CRQC does not exist
+today, so these are a future-theoretical risk posture under the
+harvest-now-decrypt-later model, NOT a live vulnerability.
 
 Hardened end-to-end: defensive payload import (route always registers),
 gather() can never raise, endpoint always returns a valid 200 - so the scanner
@@ -106,11 +108,13 @@ async def gather(ctx):
 def _r_no_pqc_kex(s):
     if not s.get("reachable") or s.get("pqc_kex"):
         return None
-    return {"name": "SSH key exchange has no post-quantum option",
-            "severity": "LOW", "cvss": 3.1, "cwe": "CWE-327",
-            "evidence": ("Server's offered SSH key exchange list contains only classical "
-                         f"algorithms ({', '.join((s.get('kex') or [])[:4])}...). Recorded sessions "
-                         "are harvest-now-decrypt-later exposed."),
+    return {"name": "[ADVISORY-BY-DESIGN] SSH key exchange has no post-quantum option (harvest-now-decrypt-later posture)",
+            "severity": "INFO", "cwe": "CWE-327",
+            "evidence": ("Future-theoretical risk posture (a CRQC does not exist today, so this "
+                         "is NOT a live vulnerability). The server's offered SSH key exchange list "
+                         f"contains only classical algorithms ({', '.join((s.get('kex') or [])[:4])}...). "
+                         "Under harvest-now-decrypt-later, recorded sessions could be decrypted only "
+                         "once a CRQC exists."),
             "compliance": PQC_COMPLIANCE,
             "remediation": "Enable mlkem768x25519-sha256 (OpenSSH 9.9+) as the preferred SSH KEX."}
 
@@ -129,10 +133,12 @@ def _r_host_keys(s):
         return None
     if not any(host_key_is_vulnerable(a) for a in hk):
         return None
-    return {"name": "SSH host keys are quantum-vulnerable",
+    return {"name": "[ADVISORY-BY-DESIGN] SSH host keys are quantum-vulnerable",
             "severity": "INFO", "cwe": "CWE-327",
-            "evidence": (f"Host-key algorithms ({', '.join(hk[:4])}) are RSA/ECDSA/Ed25519 - all "
-                         "breakable by Shor's algorithm. No PQC SSH host-key standard exists yet."),
+            "evidence": (f"Future-theoretical risk posture (a CRQC does not exist today). "
+                         f"Host-key algorithms ({', '.join(hk[:4])}) are RSA/ECDSA/Ed25519 - all "
+                         "would be breakable by Shor's algorithm on a future quantum computer, not by "
+                         "any live attack. No PQC SSH host-key standard exists yet."),
             "compliance": PQC_COMPLIANCE,
             "remediation": "Track the IETF PQC SSH host-key work; rotate to PQC host keys when standardised."}
 

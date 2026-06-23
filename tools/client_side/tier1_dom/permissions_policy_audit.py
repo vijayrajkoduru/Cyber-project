@@ -20,16 +20,18 @@ This probe fetches the URL, parses the Permissions-Policy (and legacy
 Feature-Policy) header, and flags the SENSITIVE features that are left
 at their permissive default (no header, or feature explicitly = `*`).
 
-Severity model — this is a defense-in-depth control, so the default
-posture is reported as LOW/INFO and only the highest-risk capabilities
-(usb/serial/hid/bluetooth + camera/microphone) left wide-open are
-MEDIUM, because their absence is a missing mitigation rather than a
-demonstrated exploit:
+Severity model — this is a defense-in-depth control, so a MISSING header
+is reported as INFO (a gap, not a demonstrated exploit), and only the
+highest-risk capabilities (usb/serial/hid/bluetooth + camera/microphone)
+EXPLICITLY left wide-open (`*`) are MEDIUM, because their absence is a
+missing mitigation rather than a demonstrated exploit:
 
-  MEDIUM  - usb/serial/hid/bluetooth/camera/microphone allowed for `*`
-            (any embedded origin can prompt for device/AV access)
-  LOW     - no Permissions-Policy header at all (all features at the
-            permissive browser default)
+  MEDIUM  - usb/serial/hid/bluetooth/camera/microphone explicitly set to
+            `*` (any embedded origin can prompt for device/AV access — an
+            observed permissive value, not just an absent header)
+  INFO    - no Permissions-Policy header at all (all features at the
+            permissive browser default — a defense-in-depth gap only,
+            NOT a demonstrated exploit; downgraded from LOW)
   INFO    - header present but a sensitive feature defaults open
   INFO    - fetch failed
   POSITIVE- header present and locks the sensitive set to 'self'/'none'
@@ -213,7 +215,7 @@ def rule_device_av_open(s):
         "cwe": "CWE-272",
         "cwe_name": "Least Privilege Violation",
         "owasp": "A05:2021",
-        "verified_exploit": True,
+        "verified_exploit": False,
         "evidence": (
             f"Permissions-Policy on {s.get('pp_target_url')} grants `*` "
             f"(any origin) for: {', '.join(feats)}. Any embedded third-party "
@@ -263,19 +265,23 @@ def rule_header_absent(s):
         return None
     return {
         "name": "No Permissions-Policy header (powerful browser APIs at permissive default)",
-        "severity": "LOW",
-        "cvss": "3.1",
+        "severity": "INFO",
+        "cvss": "0.0",
         "cwe": "CWE-272",
         "cwe_name": "Least Privilege Violation",
         "owasp": "A05:2021",
-        "verified_exploit": True,
+        "verified_exploit": False,
         "evidence": (
             f"GET {s.get('pp_target_url')} returned neither a "
             "Permissions-Policy nor a legacy Feature-Policy header. Powerful "
             "capabilities (camera, microphone, geolocation, usb, serial, "
-            "hid, bluetooth, payment) fall back to their browser default, "
-            "so embedded frames / injected content can request them with no "
-            "site-level restriction."
+            "hid, bluetooth, payment) fall back to their browser default. "
+            "This is informational only: a missing header is a "
+            "defense-in-depth gap, NOT a demonstrated exploit — modern "
+            "browsers gate these APIs behind a user prompt and a secure "
+            "context regardless of the header, and no exploited feature "
+            "path is shown here. It would only matter if combined with an "
+            "HTML-injection / embedded-frame foothold."
         ),
         "remediation": (
             "Add a restrictive Permissions-Policy header that disables "

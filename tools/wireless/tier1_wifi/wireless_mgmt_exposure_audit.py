@@ -84,9 +84,16 @@ _AP_SIGNATURES: list[tuple[str, list[str]]] = [
     ("TP-Link AP / Omada", [r"tp-link", r"tplink", r"omada", r"archer\b"]),
     ("Netgear AP / WAC", [r"netgear", r"\bwac\d", r"\bwax\d"]),
     ("Mist / Juniper Wireless", [r"\bmist\b", r"juniper.*wireless"]),
-    ("Generic AP admin panel", [r"access point", r"wireless settings",
-                                r"\bssid\b", r"wlan settings", r"wi-?fi setup",
-                                r"wpa2?-?(psk|personal|enterprise)"]),
+]
+
+# GENERIC, low-specificity markers. These strings ("access point", "SSID",
+# "wlan settings", ...) appear on countless unrelated pages (docs, blogs,
+# product marketing, any router brochure) and are NOT proof that the live
+# response is a wireless-admin management plane. A generic-only match is
+# reported as INFO context, never as a graded vendor-confirmed exposure.
+_GENERIC_AP_MARKERS: list[str] = [
+    r"access point", r"wireless settings", r"\bssid\b", r"wlan settings",
+    r"wi-?fi setup", r"wpa2?-?(psk|personal|enterprise)",
 ]
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
@@ -145,17 +152,32 @@ def _http_fetch_blocking(host: str, port: int, scheme: str) -> tuple[int, dict, 
         return 0, {}, ""
 
 
-def _match_ap_signature(server: str, title: str, body: str) -> str:
-    """Return the matched vendor label, or '' if no wireless signature matched."""
+def _match_ap_signature(server: str, title: str, body: str) -> tuple[str, str]:
+    """Return (vendor_label, match_kind).
+
+    match_kind is:
+      "vendor"  - matched an EXACT vendor signature (UniFi, Cisco WLC, ...) ->
+                  graded exposure (high confidence this is a wireless admin plane)
+      "generic" - matched only a low-specificity AP marker ("access point",
+                  "SSID", ...) which any page can contain -> INFO context, NOT
+                  graded (zero false positives)
+      ""        - no match at all
+    """
     blob = f"{server} {title} {body}".lower()
     for vendor, patterns in _AP_SIGNATURES:
         for pat in patterns:
             try:
                 if re.search(pat, blob, re.I):
-                    return vendor
+                    return vendor, "vendor"
             except Exception:
                 continue
-    return ""
+    for pat in _GENERIC_AP_MARKERS:
+        try:
+            if re.search(pat, blob, re.I):
+                return "Generic AP marker (unconfirmed)", "generic"
+        except Exception:
+            continue
+    return "", ""
 
 
 async def gather(ctx: ScanContext):
@@ -215,7 +237,8 @@ async def gather(ctx: ScanContext):
         return
 
     # 2) For HTTP/HTTPS ports, fetch the landing page + fingerprint AP/controller.
-    ap_admin_hits: list[dict] = []
+    ap_admin_hits: list[dict] = []      # EXACT vendor matches -> graded
+    generic_marker_hits: list[dict] = []  # generic-only -> INFO context
     plain_web_ports: list[dict] = []
     loop = asyncio.get_event_loop()
     for p in open_ports:
@@ -233,16 +256,25 @@ async def gather(ctx: ScanContext):
         wwwauth = hdrs.get("www-authenticate", "") or ""
         tm = _TITLE_RE.search(body or "")
         title = (tm.group(1).strip() if tm else "")[:120]
-        vendor = _match_ap_signature(f"{server} {wwwauth}", title, body)
+        vendor, kind = _match_ap_signature(f"{server} {wwwauth}", title, body)
         p["status"] = status
         p["server"] = server[:120]
         p["title"] = title
-        if vendor:
+        url = f"{p['scheme']}://{host}:{p['port']}/"
+        if kind == "vendor":
             p["ap_vendor"] = vendor
             ap_admin_hits.append({
                 "port": p["port"], "scheme": p["scheme"], "vendor": vendor,
                 "status": status, "server": server[:120], "title": title,
-                "url": f"{p['scheme']}://{host}:{p['port']}/",
+                "url": url,
+            })
+        elif kind == "generic":
+            # A generic marker is NOT a confirmed wireless admin panel — record
+            # as INFO context only, never as a graded exposure.
+            generic_marker_hits.append({
+                "port": p["port"], "scheme": p["scheme"],
+                "status": status, "server": server[:120], "title": title,
+                "url": url,
             })
         else:
             plain_web_ports.append({"port": p["port"], "scheme": p["scheme"],
@@ -251,6 +283,8 @@ async def gather(ctx: ScanContext):
 
     ctx.state["ap_admin_exposed"] = ap_admin_hits
     ctx.state["ap_admin_exposed_count"] = len(ap_admin_hits)
+    ctx.state["generic_ap_markers"] = generic_marker_hits
+    ctx.state["generic_ap_marker_count"] = len(generic_marker_hits)
     ctx.state["plain_web_ports"] = plain_web_ports
 
     # Plaintext mgmt (telnet/ssh) reachable is context, not by itself a vuln —
@@ -261,7 +295,8 @@ async def gather(ctx: ScanContext):
     ctx.state["wireless_mgmt_exposure_audit_total"] = len(ap_admin_hits) + (1 if telnet_open else 0)
     ctx.source(
         f"{host} ({resolved_ip}): {len(open_ports)} mgmt port(s) reachable, "
-        f"{len(ap_admin_hits)} confirmed wireless-admin panel(s)"
+        f"{len(ap_admin_hits)} confirmed wireless-admin panel(s), "
+        f"{len(generic_marker_hits)} generic-marker-only (unconfirmed)"
     )
 
 
@@ -271,6 +306,7 @@ INTEL_FIELDS = [
     ("Reachable mgmt ports", "open_mgmt_port_count"),
     ("Open mgmt ports", "open_mgmt_ports"),
     ("Confirmed AP/controller admin panels", "ap_admin_exposed"),
+    ("Generic AP markers (unconfirmed)", "generic_ap_markers"),
     ("Other web ports", "plain_web_ports"),
     ("Telnet mgmt reachable", "telnet_mgmt_reachable"),
 ]
