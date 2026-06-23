@@ -264,12 +264,12 @@ def _rule_stale(s):
     if days is None or days < _STALE_DAYS:
         return None
     return {"name": f"OSS dependency repository inactive for {days} days",
-            "severity": "LOW", "cvss": "3.7",
+            "severity": "INFO",
             "cwe": "CWE-1104", "owasp": "A06:2021",
-            "verified_exploit": True,
             "evidence": f"{s.get('gh_repo')} last received a push {days} days ago "
                         f"(staleness window {_STALE_DAYS}d). Prolonged inactivity raises "
-                        "abandonment and slow-CVE-response risk.",
+                        "abandonment and slow-CVE-response risk. Note: many mature projects "
+                        "release infrequently — this is an advisory signal, not a proven vuln.",
             "remediation": "Track the project's activity. Plan a migration path before it is "
                            "fully abandoned; subscribe to its security advisories."}
 
@@ -287,9 +287,8 @@ def _rule_bus_factor(s):
     if cnt == 1 or share >= _BUS_FACTOR_DOMINANCE:
         top = (s.get("gh_top_contributors") or [{}])[0]
         return {"name": f"OSS dependency has bus-factor risk ({cnt} contributor(s))",
-                "severity": "LOW", "cvss": "3.1",
+                "severity": "INFO",
                 "cwe": "CWE-1357", "owasp": "A06:2021",
-                "verified_exploit": True,
                 "evidence": f"{s.get('gh_repo')}: {cnt} contributor(s) on the first page; top "
                             f"author '{top.get('login', '?')}' owns "
                             f"{round((share or 0) * 100)}% of contributions. A single-maintainer "
@@ -307,9 +306,8 @@ def _rule_no_security_policy(s):
     if s.get("gh_has_security_policy"):
         return None
     return {"name": "OSS dependency has no published security policy (SECURITY.md)",
-            "severity": "LOW", "cvss": "2.6",
+            "severity": "INFO",
             "cwe": "CWE-1059", "owasp": "A06:2021",
-            "verified_exploit": True,
             "evidence": f"{s.get('gh_repo')} has no SECURITY.md / security policy per the GitHub "
                         "community profile. There is no documented vulnerability-disclosure "
                         "channel for this dependency.",

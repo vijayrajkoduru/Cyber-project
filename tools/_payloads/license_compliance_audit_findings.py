@@ -39,10 +39,12 @@ def rule_agpl(s):
         return None
     sample = ", ".join(f"{h['pkg']} ({h['license']})" for h in hits[:6])
     return {"name": f"Network-copyleft (AGPL) dependency: {len(hits)} component(s)",
-            "severity": "HIGH", "cvss": "0.0",
+            "severity": "LOW", "cvss": "0.0",
             "cwe": "CWE-1104", "owasp": "N/A",
             "evidence": f"AGPL-family licences detected. Offering an AGPL component over a network "
-                        f"(SaaS) can trigger a source-disclosure obligation. Components: {sample}",
+                        f"(SaaS) can trigger a source-disclosure obligation. This is a distribution/"
+                        f"legal-compliance signal (advisory), not an exploitable vulnerability. "
+                        f"Components: {sample}",
             "remediation": ("Confirm with legal whether AGPL obligations apply to your SaaS distribution. "
                             "Replace with a permissively-licensed equivalent or obtain a commercial licence. "
                             "Track licences in your SBOM (CycloneDX 'licenses' field).")}
@@ -55,10 +57,11 @@ def rule_strong_copyleft(s):
         return None
     sample = ", ".join(f"{h['pkg']} ({h['license']})" for h in hits[:6])
     return {"name": f"Strong-copyleft (GPL) dependency: {len(hits)} component(s)",
-            "severity": "MEDIUM", "cvss": "0.0",
+            "severity": "INFO", "cvss": "0.0",
             "cwe": "CWE-1104", "owasp": "N/A",
             "evidence": f"GPL-family licences detected. Linking/redistributing may impose copyleft "
-                        f"obligations on your codebase. Components: {sample}",
+                        f"obligations on your codebase. This is a distribution/legal-compliance "
+                        f"signal (advisory), not an exploitable vulnerability. Components: {sample}",
             "remediation": ("Review distribution model with legal. For proprietary products, isolate or "
                             "replace GPL components. Maintain an approved-licence allowlist enforced in CI.")}
 

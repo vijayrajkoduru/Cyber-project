@@ -136,6 +136,36 @@ def _rel(root: str, path: str) -> str:
         return os.path.basename(path)
 
 
+def _strip_comments(text: str) -> str:
+    """Drop comment-only lines and trailing #-comments from a Python/TOML/cfg
+    manifest so an advisory pattern only fires on EXECUTABLE (non-comment) text.
+    This kills the common FP of a suspicious pattern appearing in a docstring,
+    comment, or README-style note rather than in code that actually runs at
+    install/build time. Conservative: removes a trailing '#...' only when the
+    '#' is not inside a quoted string on that line."""
+    out_lines = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue  # full-line comment
+        # Trailing comment: cut at the first '#' that is not inside quotes.
+        in_s = in_d = False
+        cut = -1
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == "'" and not in_d:
+                in_s = not in_s
+            elif ch == '"' and not in_s:
+                in_d = not in_d
+            elif ch == "#" and not in_s and not in_d:
+                cut = i
+                break
+            i += 1
+        out_lines.append(line[:cut] if cut >= 0 else line)
+    return "\n".join(out_lines)
+
+
 def _scan_manifest(root: str, path: str, patterns: list[dict]) -> list[dict]:
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -144,9 +174,15 @@ def _scan_manifest(root: str, path: str, patterns: list[dict]) -> list[dict]:
         return []
     base = os.path.basename(path)
     if base == _NPM_MANIFEST:
+        # package.json: already reduced to the install/build lifecycle script
+        # VALUES only (no comments possible in strict JSON), so no stripping.
         text = _npm_script_text(text)
         if not text.strip():
             return []
+    else:
+        # Python/TOML/cfg manifests: match patterns against executable lines
+        # only, not comments/docs (advisory FP reduction).
+        text = _strip_comments(text)
     rel = _rel(root, path)
     hits = []
     for p in patterns:

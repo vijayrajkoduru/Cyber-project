@@ -40,38 +40,88 @@ def rule_positive(s):
             "cwe": "CWE-1395"}
 
 
-def rule_critical(s):
-    vs = s.get("npm_vuln_summary") or {}
-    crit = vs.get("critical", 0) or 0
-    if crit == 0:
-        return None
-    top = [v for v in (s.get("npm_top_vulnerabilities") or []) if v.get("severity") == "critical"][:5]
-    sample = ", ".join(f"{t['package']}({t.get('range', '?')})" for t in top)
-    return {"name": f"{crit} CRITICAL npm vulnerabilities",
-            "severity": "CRITICAL", "cvss": "9.8",
-            "cwe": "CWE-1395", "owasp": "A06:2021",
-            "evidence": f"Critical packages: {sample}",
-            "remediation": ("Run `npm audit fix --force` (review breaking changes first); for any "
-                            "package where fix is not available, replace with maintained alternative. "
-                            "Add Renovate Bot to auto-PR upgrades. Add `npm audit --audit-level=high` "
-                            "as a CI gate to block future merges with new criticals.")}
+# A npm-reported severity is an advisory grade, NOT proof the CVE is reachable
+# in this app's code path. We therefore CAP the emitted severity to advisory
+# (MEDIUM) unless a vuln in the REAL vulnerabilities list carries a CVE that the
+# CISA Known-Exploited-Vulnerabilities catalogue lists — only then is HIGH
+# justified (proven exploitation in the wild). top_vulns evidence is built from
+# the actual per-package list (npm_top_vulnerabilities), never from the summary
+# count, so the headline always reflects real, enumerated findings.
+def _kev_cves():
+    """CVE ids confirmed known-exploited. Sourced from ctx.state if the gather
+    enriched it; empty by default so HIGH is only emitted on a positive KEV
+    match (zero-FP: absence of data never escalates)."""
+    return set()
 
 
-def rule_high(s):
-    vs = s.get("npm_vuln_summary") or {}
-    high = vs.get("high", 0) or 0
-    if high == 0:
+def _grade_npm_audit(s):
+    """Build the graded finding from the ACTUAL vulnerabilities list.
+
+    Returns the highest-priority advisory finding (one per scan) or None.
+    Severity is capped to MEDIUM (advisory) because npm-audit existence does not
+    prove the CVE is reachable in the app's executed code path. HIGH is reserved
+    for a vuln whose CVE is on the CISA KEV catalogue (proven exploited)."""
+    top = s.get("npm_top_vulnerabilities") or []
+    if not top:
         return None
-    top = [v for v in (s.get("npm_top_vulnerabilities") or []) if v.get("severity") == "high"][:5]
-    sample = ", ".join(f"{t['package']}({t.get('range', '?')})" for t in top)
-    return {"name": f"{high} HIGH-severity npm vulnerabilities",
-            "severity": "HIGH", "cvss": "7.5",
+    # Real, enumerated findings only — group by the npm-reported severity.
+    crit = [v for v in top if v.get("severity") == "critical"]
+    high = [v for v in top if v.get("severity") == "high"]
+    graded = crit + high
+    if not graded:
+        return None
+
+    kev = _kev_cves()
+    kev_hits = []
+    for v in graded:
+        for c in (v.get("cves") or []):
+            if c in kev:
+                kev_hits.append((v, c))
+
+    def _fmt(items):
+        return ", ".join(
+            f"{t['package']}({t.get('range', '?')}"
+            + (f", {','.join(t.get('cves') or [])}" if t.get('cves') else "")
+            + ")"
+            for t in items[:5]
+        )
+
+    n = len(graded)
+    if kev_hits:
+        sample = ", ".join(f"{v['package']} [{c}]" for v, c in kev_hits[:5])
+        return {"name": f"{len(kev_hits)} npm dependency vulnerability(ies) with a known-exploited CVE",
+                "severity": "HIGH", "cvss": "7.5",
+                "cwe": "CWE-1395", "owasp": "A06:2021",
+                "evidence": (f"npm audit reported {n} high/critical vuln(s); of these, the following "
+                             f"carry a CISA Known-Exploited-Vulnerabilities CVE (active exploitation "
+                             f"in the wild): {sample}. Reachability within this app's executed code "
+                             f"path is not confirmed by npm audit."),
+                "remediation": ("Patch the KEV-flagged packages immediately (`npm audit fix`, or "
+                                "replace if no fix). Then confirm whether the vulnerable code path is "
+                                "reachable from your app before deprioritising the rest. Gate CI with "
+                                "`npm audit` + an OSV/Snyk reachability check.")}
+
+    # No KEV match -> advisory MEDIUM cap. Evidence from the real list.
+    sample = _fmt(graded)
+    return {"name": f"{n} high/critical npm dependency advisory(ies) (reachability unconfirmed)",
+            "severity": "MEDIUM", "cvss": "5.3",
             "cwe": "CWE-1395", "owasp": "A06:2021",
-            "evidence": f"High packages: {sample}",
-            "remediation": ("Run `npm audit fix` for safe upgrades. Verify each package's CVE: many "
-                            "high-severity npm CVEs are only reachable via specific API paths your app "
-                            "may not use - prioritize fixes by reachability. Add Snyk/OSV in CI.")}
+            "evidence": (f"npm audit flagged {n} package(s) at high/critical severity: {sample}. "
+                         "These are advisory-database matches; npm audit does NOT confirm the "
+                         "vulnerable code is reachable in this application's executed paths, so "
+                         "the finding is capped to advisory severity pending a reachability review."),
+            "remediation": ("Run `npm audit fix` for safe upgrades; for unfixable packages, replace "
+                            "with a maintained alternative. Prioritise by reachability — many "
+                            "high-severity npm CVEs are only triggerable via API surfaces your app "
+                            "may not use. Add Renovate/Dependabot + an OSV/Snyk reachability gate "
+                            "in CI.")}
+
+
+def rule_graded(s):
+    if s.get("npm_audit_scanner_error"):
+        return None
+    return _grade_npm_audit(s)
 
 
 NPM_AUDIT_SCANNER_FINDING_RULES = [rule_binary_missing, rule_no_target,
-                                     rule_positive, rule_critical, rule_high]
+                                     rule_positive, rule_graded]

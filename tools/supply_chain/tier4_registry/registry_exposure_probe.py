@@ -126,11 +126,20 @@ def _classify(path: str, label: str, kind: str, res: dict) -> dict | None:
         detected = True
         anon_listing = True
         proof = "anonymous /-/all returned the full package index"
-    # PyPI/devpi simple index (HTML anchor list).
-    if path == "/simple/" and status == 200 and ("<a href" in body_low and "simple" in body_low):
-        detected = True
-        anon_listing = True
-        proof = "anonymous /simple/ returned a package anchor index"
+    # PyPI/devpi simple index (PEP 503): NOT just the word "simple" (far too
+    # broad — fires on any page that happens to contain it). Require a genuine
+    # simple-index signature: the PEP 503 title 'Links for', OR multiple package
+    # anchors (>=3 <a href> links characteristic of an index, not a one-link
+    # landing page), on an HTML body.
+    if path == "/simple/" and status == 200:
+        anchor_count = body_low.count("<a href")
+        pep503_title = "links for" in body_low  # devpi/warehouse simple-index header
+        index_shape = anchor_count >= 3 and ("</a>" in body_low)
+        if pep503_title or index_shape:
+            detected = True
+            anon_listing = True
+            proof = ("anonymous /simple/ returned a PEP 503 package index "
+                     f"({'Links for' if pep503_title else str(anchor_count) + ' package anchors'})")
     # Nexus server header / repository root.
     server_hdr = (headers.get("server") or "").lower()
     if "nexus" in server_hdr or "x-content-type-options" in headers and "sonatype" in body_low:

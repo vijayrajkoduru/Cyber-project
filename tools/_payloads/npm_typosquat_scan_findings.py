@@ -52,6 +52,9 @@ def rule_list_missing(s):
 
 
 def rule_typo(s):
+    # Only CONFIRMED candidates reach here: the declared name is a distance-1
+    # near-miss of a popular package AND does NOT resolve on the public npm
+    # registry (404). A non-resolving near-miss is genuine typo/confusion risk.
     hits = s.get("npmtypo_candidates") or []
     if not hits:
         return None
@@ -60,13 +63,33 @@ def rule_typo(s):
             "severity": "MEDIUM", "cvss": "5.3",
             "cwe": "CWE-427", "owasp": "A06:2021",
             "evidence": f"Declared npm dependencies are Damerau-edit-distance 1 from popular packages "
-                        f"(single substitution or adjacent transposition): {sample}. A near-miss can be "
-                        f"a typosquat that ships malicious code, but it may also be intentional (a fork, "
-                        f"a scoped variant, or a genuinely similar legitimate name) — verify each.",
+                        f"(single substitution or adjacent transposition) AND do NOT resolve on the "
+                        f"public npm registry (HTTP 404): {sample}. A non-resolving near-miss is a "
+                        f"typo/dependency-confusion risk — the intended package may differ, or an "
+                        f"attacker could register the mistyped name. Verify each.",
             "remediation": ("Verify each flagged package is the one you intended. Replace any typosquat with "
                             "the correct package name, pin exact versions + integrity hashes "
                             "(package-lock.json / npm ci), and enforce a private-registry allowlist to block "
                             "unknown names.")}
+
+
+def rule_typo_resolving(s):
+    # Near-misses whose DECLARED name DOES resolve on npm (200): a genuinely
+    # published package (legit fork / similarly named project). Advisory only —
+    # not graded, since there is no proven confusion primitive.
+    hits = s.get("npmtypo_resolving_near_misses") or []
+    if not hits:
+        return None
+    sample = "; ".join(f"'{h['declared']}' ~ '{h['near']}'" for h in hits[:6])
+    return {"name": f"npm dependency name(s) similar to a popular package: {len(hits)} (advisory)",
+            "severity": "INFO",
+            "cwe": "CWE-427", "owasp": "A06:2021",
+            "evidence": f"These declared dependencies are Damerau-distance 1 from a popular package but "
+                        f"DO resolve on the public npm registry, so they are real published packages "
+                        f"(legitimate fork / scoped variant / similarly named project): {sample}. "
+                        f"Informational only — no typosquat/confusion primitive was confirmed.",
+            "remediation": "Confirm each is the package you intended; if so, no action is required. "
+                           "Pin exact versions + integrity hashes regardless."}
 
 
 def rule_clean(s):
@@ -76,7 +99,10 @@ def rule_clean(s):
         return None
     if (s.get("npmtypo_declared_count") or 0) <= 0:
         return None
-    if s.get("npmtypo_candidates"):
+    # Suppress POSITIVE if any near-miss surfaced (confirmed, resolving, or
+    # unknown) — those carry their own MEDIUM/INFO finding.
+    if (s.get("npmtypo_candidates") or s.get("npmtypo_resolving_near_misses")
+            or s.get("npmtypo_unknown_near_misses")):
         return None
     n = s.get("npmtypo_declared_count") or 0
     return {"name": "No npm typosquat candidates among declared dependencies",
@@ -94,5 +120,6 @@ NPM_TYPOSQUAT_SCAN_FINDING_RULES = [
     rule_no_manifest,
     rule_list_missing,
     rule_typo,
+    rule_typo_resolving,
     rule_clean,
 ]
