@@ -59,6 +59,39 @@ def _http_get(url: str, timeout: float = 5.0, insecure: bool = False) -> tuple:
         return 0, "", {}
 
 
+def _is_registry_v2(code, body, headers) -> bool:
+    """True only when a /v2/ response carries a genuine, ANONYMOUSLY-ACCESSIBLE
+    Docker Registry v2 signature — i.e. anonymous pull/enum is actually possible.
+
+    A bare 200 is NOT sufficient (a CDN/landing page or a 401-challenge page can
+    return 200 bodies). We require BOTH a 200 status AND a Docker Registry v2
+    signal:
+      - the canonical header Docker-Distribution-Api-Version: registry/2.0, OR
+      - the registry's empty-200 JSON body ({} / {"repositories": ...}).
+    A 401 (the normal auth-challenge for a protected registry) returns False even
+    if it carries the registry header — that is the correct, protected posture."""
+    if code != 200:
+        return False
+    try:
+        hdrs = {str(k).lower(): str(v) for k, v in (headers or {}).items()}
+    except Exception:
+        hdrs = {}
+    api_ver = hdrs.get("docker-distribution-api-version", "").lower()
+    if "registry/2.0" in api_ver:
+        return True
+    # Fallback: the registry base endpoint returns an empty JSON object, or a
+    # catalog-shaped object. Plain prose / HTML is NOT a registry, and an
+    # {"errors":[...]} body is an auth/denied response, not anonymous access.
+    b = (body or "").strip()
+    if '"errors"' in b:
+        return False
+    if b in ("{}", "{ }"):
+        return True
+    if b.startswith("{") and '"repositories"' in b:
+        return True
+    return False
+
+
 def _resp(tool, target, findings, tested, summary):
     sev_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0, "POSITIVE": 0}
     top = "INFO"
@@ -111,14 +144,19 @@ def _probe_s3_public(target, req):
                 f"S3 bucket '{bucket}' publicly listable — anonymous LIST succeeded",
                 "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
                 remediation="Apply BlockPublicAccess at account level; remove public ACLs.",
-                evidence_marker=f"GET {url} -> 200 with ListBucketResult"))
+                evidence_marker=f"GET {url} -> 200 with ListBucketResult",
+                verified_exploit=True))
             break
         if code == 200 and "<?xml" in body and "<Error>" not in body:
+            # 200 + generic XML (no <ListBucketResult>) is NOT proof of a public
+            # listable bucket — could be any S3-fronted XML response. Advisory only;
+            # a real listing requires the <ListBucketResult> marker handled above.
             findings.append(wrap_finding(
-                f"S3 bucket '{bucket}' returned XML (likely listable)",
-                "HIGH", cvss="7.5", cwe="CWE-200",
-                remediation="BlockPublicAccess + remove public ACLs.",
-                evidence_marker=f"GET {url} -> 200 XML"))
+                f"S3 bucket '{bucket}' returned 200 + XML without a listing marker (unconfirmed)",
+                "INFO", cvss="0.0", cwe="CWE-200",
+                remediation="Manually verify whether anonymous LIST is possible; if so, apply "
+                            "BlockPublicAccess + remove public ACLs.",
+                evidence_marker=f"GET {url} -> 200 XML (no <ListBucketResult>); unconfirmed, requires authenticated verification"))
             break
         if code == 403 and "AccessDenied" in body:
             findings.append(wrap_finding(
@@ -153,7 +191,8 @@ def _probe_azure_blob_public(target, req):
             f"Azure Blob storage account '{account}' allows anonymous container listing",
             "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
             remediation="Disable anonymous access at storage account level.",
-            evidence_marker=f"GET {url} -> 200 with EnumerationResults"))
+            evidence_marker=f"GET {url} -> 200 with EnumerationResults",
+            verified_exploit=True))
     elif code in (403, 401):
         findings.append(wrap_finding(
             f"Azure Blob '{account}' exists, anonymous access correctly denied",
@@ -181,12 +220,21 @@ def _probe_gcs_bucket_public(target, req):
     url = f"https://storage.googleapis.com/{bucket}/"
     code, body, _ = _http_get(url, timeout=4)
     findings = []
-    if code == 200 and ("<ListBucketResult" in body or "<?xml" in body):
+    if code == 200 and "<ListBucketResult" in body:
         findings.append(wrap_finding(
-            f"GCS bucket '{bucket}' publicly listable",
+            f"GCS bucket '{bucket}' publicly listable — anonymous LIST succeeded",
             "CRITICAL", cvss="9.0", cwe="CWE-200", owasp="A05:2021",
             remediation="Remove allUsers/allAuthenticatedUsers from bucket IAM.",
-            evidence_marker=f"GET {url} -> 200 listable"))
+            evidence_marker=f"GET {url} -> 200 with ListBucketResult",
+            verified_exploit=True))
+    elif code == 200 and "<?xml" in body and "<Error>" not in body:
+        # 200 + generic XML without the listing marker is not proof of a public
+        # listable bucket. Advisory only.
+        findings.append(wrap_finding(
+            f"GCS bucket '{bucket}' returned 200 + XML without a listing marker (unconfirmed)",
+            "INFO", cvss="0.0", cwe="CWE-200",
+            remediation="Manually verify anonymous LIST; if confirmed, remove allUsers/allAuthenticatedUsers from bucket IAM.",
+            evidence_marker=f"GET {url} -> 200 XML (no <ListBucketResult>); unconfirmed, requires authenticated verification"))
     elif code in (401, 403):
         findings.append(wrap_finding(
             f"GCS bucket '{bucket}' exists, access denied (good)",
@@ -200,7 +248,7 @@ def _probe_gcs_bucket_public(target, req):
             remediation="Verify bucket name.",
             evidence_marker=f"GET {url} -> {code}"))
     return {"tool": "gcs_bucket_acl_legacy", "target": target, "scan_time": 0,
-            "vulnerable": code == 200,
+            "vulnerable": findings[0].get("severity") in ("CRITICAL", "HIGH"),
             "severity": findings[0].get("severity", "INFO"),
             "findings": findings, "tests_performed": 1,
             "tests_summary": f"GCS public check on {bucket}",
@@ -232,11 +280,15 @@ def _probe_oidc_discovery(target, req):
                    "id_token token" in (cfg.get("response_types_supported") or []):
                     issues.append("implicit flow (response_type=token) still supported")
                 if issues:
+                    # These are best-practice POSTURE observations from public OIDC
+                    # metadata. On a black-box scan (no client/app context) we cannot
+                    # demonstrate exploitation, so they are advisory, not graded.
                     findings.append(wrap_finding(
-                        f"OIDC discovery — {len(issues)} posture issue(s)",
-                        "MEDIUM", cvss="5.5", cwe="CWE-287",
+                        f"OIDC discovery — {len(issues)} posture observation(s)",
+                        "INFO", cvss="0.0", cwe="CWE-287",
                         remediation="Enforce PKCE; disable implicit flow; require client auth.",
-                        evidence_marker="; ".join(issues)))
+                        evidence_marker="; ".join(issues)
+                                        + " — posture observation; not an exploited finding"))
                 else:
                     findings.append(wrap_finding(
                         "OIDC discovery present, posture looks healthy",
@@ -296,16 +348,22 @@ def _probe_ecr_public_access(target, req):
         return _adv_response("ecr_public_access", target,
             "Target not on public.ecr.aws — skipping live probe",
             "INFO", "0.0", evidence=host)
-    code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
-    is_public = code == 200 and ('"errors"' not in body[:200])
+    code, body, headers = _http_get(f"https://{host}/v2/", timeout=4)
+    # A bare 200 does NOT prove anonymous pull — require a real Docker Registry v2
+    # signature: the Docker-Distribution-Api-Version: registry/2.0 header, or the
+    # registry's empty-200 JSON body shape ({} or {"repositories":...}).
+    is_public = _is_registry_v2(code, body, headers)
     return {"tool": "ecr_public_access", "target": target, "scan_time": 0,
             "vulnerable": is_public, "severity": "HIGH" if is_public else "POSITIVE",
             "findings": [wrap_finding(
-                f"ECR public registry {'allows anonymous /v2 enum' if is_public else 'denied anonymous /v2 enum'}",
+                f"ECR public registry {'allows anonymous /v2 enum (Docker Registry v2 signature confirmed)' if is_public else 'did not expose an anonymous Docker Registry v2 API'}",
                 "HIGH" if is_public else "POSITIVE",
                 cvss="7.0" if is_public else "0.0", cwe="CWE-200",
                 remediation="If unintended, switch to private ECR; require IAM-signed pulls.",
-                evidence_marker=f"GET https://{host}/v2/ -> {code}")],
+                evidence_marker=(f"GET https://{host}/v2/ -> {code}"
+                                 + (" with Docker-Distribution-Api-Version: registry/2.0" if is_public
+                                    else " (no Docker Registry v2 signature)")),
+                **({"verified_exploit": True} if is_public else {}))],
             "tests_performed": 1, "tests_summary": "ECR public anonymous-pull check",
             "raw_data": {"host": host, "status": code}}
 
@@ -317,15 +375,20 @@ def _probe_gcr_public_access(target, req):
         return _adv_response("gcr_public_access", target,
             "Target not on gcr.io / pkg.dev — skipping live probe",
             "INFO", "0.0", evidence=host)
-    code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
+    code, body, headers = _http_get(f"https://{host}/v2/", timeout=4)
+    # Require a real Docker Registry v2 signature, not a bare 200.
+    is_public = _is_registry_v2(code, body, headers)
     return {"tool": "gcr_public_access", "target": target, "scan_time": 0,
-            "vulnerable": code == 200, "severity": "HIGH" if code == 200 else "POSITIVE",
+            "vulnerable": is_public, "severity": "HIGH" if is_public else "POSITIVE",
             "findings": [wrap_finding(
-                f"GCR registry {'allows anonymous /v2 enum' if code == 200 else 'requires auth'}",
-                "HIGH" if code == 200 else "POSITIVE",
-                cvss="7.0" if code == 200 else "0.0", cwe="CWE-200",
+                f"GCR registry {'allows anonymous /v2 enum (Docker Registry v2 signature confirmed)' if is_public else 'did not expose an anonymous Docker Registry v2 API'}",
+                "HIGH" if is_public else "POSITIVE",
+                cvss="7.0" if is_public else "0.0", cwe="CWE-200",
                 remediation="If unintended, require IAM-signed pulls.",
-                evidence_marker=f"GET https://{host}/v2/ -> {code}")],
+                evidence_marker=(f"GET https://{host}/v2/ -> {code}"
+                                 + (" with Docker-Distribution-Api-Version: registry/2.0" if is_public
+                                    else " (no Docker Registry v2 signature)")),
+                **({"verified_exploit": True} if is_public else {}))],
             "tests_performed": 1, "tests_summary": "GCR anonymous-pull check",
             "raw_data": {"host": host, "status": code}}
 
@@ -364,27 +427,72 @@ def _probe_docker_hub_public_image(target, req):
 
 
 def _probe_iac_manifest_exposed(target, req):
-    """Probe for IaC manifests (terraform.tfstate, helm values, ansible inventories)."""
+    """Probe for IaC manifests (terraform.tfstate, helm values, ansible inventories).
+
+    Zero-FP: a 200 with a non-trivial body is NOT proof of an exposed manifest —
+    many sites serve their SPA index.html (or a soft-404 marketing page) for any
+    unknown path. We only grade CRITICAL when the fetched body actually contains a
+    content signature for the requested IaC file type (and is not HTML). A 200 with
+    only harmless prose / HTML is downgraded to INFO (unconfirmed)."""
     base = f"https://{_host(target)}"
-    paths = [".terraform.tfstate", "terraform.tfstate", ".terraform/terraform.tfstate",
-              ".tfvars", "values.yaml", "ansible/inventory", "playbook.yml",
-              ".kube/config", "kustomization.yaml", "deployment.yaml"]
+    # path -> tuple of substrings that prove the body is really that IaC artefact
+    path_sigs = {
+        ".terraform.tfstate":               ('"terraform_version"', '"lineage"', '"resources"'),
+        "terraform.tfstate":                ('"terraform_version"', '"lineage"', '"resources"'),
+        ".terraform/terraform.tfstate":     ('"terraform_version"', '"lineage"', '"resources"'),
+        ".tfvars":                          ("resource ", "variable ", "provider ", "aws_", "region ="),
+        "values.yaml":                      ("image:", "replicaCount", "repository:", "tag:"),
+        "ansible/inventory":                ("[all]", "ansible_host", "ansible_user", "[webservers]"),
+        "playbook.yml":                     ("hosts:", "tasks:", "- name:", "become:"),
+        ".kube/config":                     ("apiVersion", "clusters:", "client-certificate", "current-context"),
+        "kustomization.yaml":               ("resources:", "kind: Kustomization", "patchesStrategicMerge", "namespace:"),
+        "deployment.yaml":                  ("kind: Deployment", "apiVersion: apps", "spec:", "containers:"),
+    }
     leaked = []
-    for p in paths:
-        code, body, _ = _http_get(f"{base}/{p}", timeout=3)
-        if code == 200 and len(body) > 50:
+    fetched_unconfirmed = []
+    for p in path_sigs:
+        code, body, headers = _http_get(f"{base}/{p}", timeout=3)
+        if code != 200 or len(body) <= 50:
+            continue
+        ctype = ((headers or {}).get("Content-Type") or (headers or {}).get("content-type") or "").lower()
+        bl = body.lower()
+        is_html = "text/html" in ctype or "<!doctype html" in bl[:256] or "<html" in bl[:256]
+        sigs = path_sigs.get(p, ())
+        body_matches = any(s.lower() in bl for s in sigs)
+        if body_matches and not is_html:
             leaked.append({"path": p, "size": len(body)})
+        else:
+            # 200 but no real manifest content (likely SPA/soft-404) — note, don't grade.
+            fetched_unconfirmed.append({"path": p, "size": len(body), "html": is_html})
+    if leaked:
+        sev, cvss = "CRITICAL", "9.0"
+        detail = f"IaC manifest exposure: {len(leaked)} files publicly fetchable WITH manifest content"
+        evidence = ", ".join(f"{l['path']} ({l['size']}b)" for l in leaked)
+        verified = True
+    elif fetched_unconfirmed:
+        sev, cvss = "INFO", "0.0"
+        detail = (f"{len(fetched_unconfirmed)} IaC path(s) returned 200 but with no manifest "
+                  f"content signature (likely SPA/soft-404) — unconfirmed")
+        evidence = (", ".join(f"{l['path']} ({l['size']}b{', HTML' if l['html'] else ''})"
+                              for l in fetched_unconfirmed)
+                    + "; unconfirmed, requires authenticated/manual verification")
+        verified = False
+    else:
+        sev, cvss = "POSITIVE", "0.0"
+        detail = "No IaC manifests exposed at common public paths"
+        evidence = "None exposed"
+        verified = False
     return {"tool": "compliance_cis_aws_benchmark", "target": target, "scan_time": 0,
             "vulnerable": bool(leaked),
-            "severity": "CRITICAL" if leaked else "POSITIVE",
+            "severity": sev,
             "findings": [wrap_finding(
-                f"IaC manifest exposure: {len(leaked)} files publicly fetchable",
-                "CRITICAL" if leaked else "POSITIVE",
-                cvss="9.0" if leaked else "0.0", cwe="CWE-538",
+                detail, sev,
+                cvss=cvss, cwe="CWE-538",
                 remediation="Never commit .tfstate or kubeconfig to public webroots.",
-                evidence_marker=", ".join(f"{l['path']} ({l['size']}b)" for l in leaked) or "None exposed")],
-            "tests_performed": len(paths), "tests_summary": "IaC manifest exposure probe",
-            "raw_data": {"leaked": leaked}}
+                evidence_marker=evidence,
+                **({"verified_exploit": True} if verified else {}))],
+            "tests_performed": len(path_sigs), "tests_summary": "IaC manifest exposure probe",
+            "raw_data": {"leaked": leaked, "fetched_unconfirmed": fetched_unconfirmed}}
 
 
 def _probe_s3_bucket_brute(target, req):
@@ -452,17 +560,19 @@ def _probe_s3_bucket_brute(target, req):
             remediation=("Make these buckets private immediately. Set Block "
                           "Public Access at account level. Audit contents before locking down."),
             evidence_marker=(f"Anonymous LIST succeeded on: "
-                              f"{', '.join('https://' + b + '.s3.amazonaws.com/' for b in listable[:5])}")))
+                              f"{', '.join('https://' + b + '.s3.amazonaws.com/' for b in listable[:5])}"),
+            verified_exploit=True))
 
     if private:
+        # 403 AccessDenied = bucket exists but anonymous access is correctly
+        # blocked. That is the desired posture, NOT a proven exposure. Advisory.
         findings.append(wrap_finding(
             f"S3 buckets EXIST but require auth ({len(private)} matched): {', '.join(private[:5])}",
-            "MEDIUM", cvss="5.5", cwe="CWE-200",
-            remediation=("Bucket existence is information disclosure. Consider "
-                          "renaming buckets to harder-to-guess names + apply "
-                          "Block Public Access at account level."),
-            evidence_marker=(f"403 AccessDenied (bucket exists) on: "
-                              f"{', '.join(private[:5])}")))
+            "INFO", cvss="0.0", cwe="CWE-200",
+            remediation=("Bucket existence is minor information disclosure. Optionally "
+                          "rename buckets to harder-to-guess names; access is already denied."),
+            evidence_marker=(f"403 AccessDenied (bucket exists, access denied) on: "
+                              f"{', '.join(private[:5])}; not an exposure — posture observation")))
 
     if not findings:
         findings.append(wrap_finding(
@@ -475,7 +585,7 @@ def _probe_s3_bucket_brute(target, req):
 
     return {"tool": "s3_bucket_brute", "target": target, "scan_time": 0,
             "vulnerable": len(listable) > 0,
-            "severity": "CRITICAL" if listable else ("MEDIUM" if private else "POSITIVE"),
+            "severity": "CRITICAL" if listable else ("INFO" if private else "POSITIVE"),
             "findings": findings,
             "tests_performed": len(candidates),
             "tests_summary": (f"S3 brute: {len(listable)} listable, "
@@ -507,14 +617,19 @@ def _probe_acr_anonymous(target, req):
         return _adv_response("acr_anonymous_pull", target,
             "Target is not an *.azurecr.io registry — ACR anonymous-pull check N/A",
             "INFO", "0.0", evidence=host)
-    code, body, _ = _http_get(f"https://{host}/v2/", timeout=4)
-    anon = code == 200
+    code, body, headers = _http_get(f"https://{host}/v2/", timeout=4)
+    # Require a real Docker Registry v2 signature, not a bare 200 (a 401 challenge
+    # is the normal/correct ACR posture and must not be flagged).
+    anon = _is_registry_v2(code, body, headers)
     return _resp("acr_anonymous_pull", target, [wrap_finding(
-        f"Azure Container Registry {host} {'allows ANONYMOUS pull (/v2 enum succeeded)' if anon else 'requires authentication (good)'}",
+        f"Azure Container Registry {host} {'allows ANONYMOUS pull (Docker Registry v2 signature confirmed)' if anon else 'requires authentication (good)'}",
         "HIGH" if anon else "POSITIVE", cvss="7.0" if anon else "0.0",
         cwe="CWE-200", owasp="A05:2021",
         remediation="Disable anonymous pull (az acr update --name NAME --anonymous-pull-enabled false) unless the registry is intentionally public.",
-        evidence_marker=f"GET https://{host}/v2/ -> {code}")], 1, "ACR anonymous-pull check")
+        evidence_marker=(f"GET https://{host}/v2/ -> {code}"
+                         + (" with Docker-Distribution-Api-Version: registry/2.0" if anon
+                            else " (no Docker Registry v2 signature)")),
+        **({"verified_exploit": True} if anon else {}))], 1, "ACR anonymous-pull check")
 
 
 def _probe_k8s_endpoint(slug, label):
@@ -526,27 +641,46 @@ def _probe_k8s_endpoint(slug, label):
         host = _host(target)
         checks = [(6443, "/version"), (6443, "/healthz"), (443, "/version"),
                   (10250, "/healthz"), (10250, "/pods")]
-        hit = None
+        hit = None          # (port, path, code) for an UNAUTHENTICATED data leak
+        protected = None    # (port, path, code) for an endpoint that exists but enforces auth
         for port, path in checks:
             code, body, _ = _http_get(f"https://{host}:{port}{path}", timeout=4, insecure=True)
             bl = body[:2048].lower()
             if not code:
                 continue
-            is_version = "gitversion" in bl and "major" in bl
+            # A real, UNAUTHENTICATED data exposure only:
+            #   - /version or /pods returning 200 with a k8s signature, OR
+            #   - /healthz returning 200 "ok".
+            # A 401/403 means the endpoint is PROTECTED (authn working) — that is
+            # NOT an exposure, it is the correct posture. Do not flag it.
+            is_version = code == 200 and "gitversion" in bl and "major" in bl
             is_health = path == "/healthz" and code == 200 and bl.strip() == "ok"
-            is_kubelet_pods = path == "/pods" and code in (200, 401, 403)
+            is_kubelet_pods = path == "/pods" and code == 200 and ('"kind"' in bl or '"podlist"' in bl or '"items"' in bl)
             if is_version or is_health or is_kubelet_pods:
                 hit = (port, path, code)
                 break
+            if path in ("/pods", "/version") and code in (401, 403):
+                # Endpoint is present but requires auth — record as positive posture.
+                protected = protected or (port, path, code)
         if hit:
             port, path, code = hit
-            sev = "HIGH" if code == 200 else "MEDIUM"
             findings = [wrap_finding(
-                f"{label}: Kubernetes control-plane/kubelet reachable from the internet (port {port}{path} -> {code})",
-                sev, cvss="7.5" if sev == "HIGH" else "5.5", cwe="CWE-284", owasp="A05:2021",
+                f"{label}: Kubernetes control-plane/kubelet exposed WITHOUT authentication "
+                f"(port {port}{path} -> 200, returned cluster data)",
+                "HIGH", cvss="7.5", cwe="CWE-284", owasp="A05:2021",
                 remediation="Restrict the API server (6443) and kubelet (10250) to private subnets or an "
                             "authorized CIDR allow-list; never expose them publicly; enforce authn + RBAC.",
-                evidence_marker=f"GET https://{host}:{port}{path} -> {code}")]
+                evidence_marker=f"GET https://{host}:{port}{path} -> {code} (unauthenticated cluster data)",
+                verified_exploit=True)]
+        elif protected:
+            port, path, code = protected
+            findings = [wrap_finding(
+                f"{label}: Kubernetes API/kubelet endpoint reachable but ENFORCES authentication "
+                f"(port {port}{path} -> {code}) — correct posture, no exposure",
+                "POSITIVE", cvss="0.0", cwe="N/A",
+                remediation="Endpoint is protected. Optionally restrict network exposure to private "
+                            "subnets / an allow-list for defence-in-depth.",
+                evidence_marker=f"GET https://{host}:{port}{path} -> {code} (auth required)")]
         else:
             findings = [wrap_finding(
                 f"{label}: no public Kubernetes API/kubelet endpoint detected",
