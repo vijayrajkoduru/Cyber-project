@@ -142,6 +142,48 @@ def _is_attacker_host(redirect_url: str, original: str) -> bool:
     return False
 
 
+def _location_carries_attacker_redirect(location: str, mutated_redirect: str,
+                                         original: str) -> bool:
+    """Hard proof the AS actually accepted the malicious redirect_uri.
+
+    Zero-FP: acceptance is NEVER inferred from the absence of an OAuth error.
+    We require POSITIVE evidence in the Location header:
+
+      (1) the Location host is the SAME host the attacker put in the mutated
+          redirect_uri (the AS bounced the flow to exactly the attacker's
+          host) - the strongest signal; OR
+      (2) the Location host is otherwise an attacker-controlled / off-original
+          host (subdomain-takeover pattern, evil/burpcollab tells) - covers
+          cases where the AS rewrites but still lands off-host.
+
+    A Location pointing back at the original/registered host, or any non-host
+    scheme (javascript:/data:), or an empty Location, is NOT acceptance.
+    """
+    if not location:
+        return False
+    try:
+        lp = urlparse(location)
+        mp = urlparse(mutated_redirect)
+        op = urlparse(original)
+    except Exception:
+        return False
+    loc_host = (lp.hostname or "").lower()
+    if not loc_host:
+        # No host in Location (e.g. javascript:/data:/relative) -> cannot prove
+        # an off-host redirect was accepted.
+        return False
+    orig_host = (op.hostname or "").lower()
+    # Location bounced back to the registered host = the AS sanitized it = safe.
+    if loc_host == orig_host:
+        return False
+    # (1) Location host == the host the attacker injected -> definitive accept.
+    mut_host = (mp.hostname or "").lower()
+    if mut_host and loc_host == mut_host:
+        return True
+    # (2) Otherwise require the Location host to be an off-original attacker host.
+    return _is_attacker_host(location, original)
+
+
 async def _send_authorize(client, authorize_url: str, params: dict) -> dict:
     """Send a single /authorize request, capture Location header."""
     try:
@@ -213,12 +255,20 @@ async def gather(ctx: ScanContext):
             r = await _send_authorize(client, authorize_url, params)
             r["attack"] = attack
             r["mutated_redirect_uri"] = mutated
-            # Verdict: status indicates redirect (302/303) AND Location points elsewhere
-            # AND server didn't include an OAuth error
+            # Verdict (zero-FP): acceptance requires POSITIVE proof that the
+            # attacker-controlled redirect host actually appears in the
+            # Location header (i.e. the flow really redirected off-host to the
+            # attacker). The absence of an OAuth error string is NOT proof and
+            # is used only as a guard - an explicit OAuth error still rejects.
+            status = r.get("status") or 0
+            location = r.get("location") or ""
+            off_host_to_attacker = _location_carries_attacker_redirect(
+                location, mutated, original_redirect
+            )
             verdict = (
-                not r.get("rejected") and
-                300 <= (r.get("status") or 0) < 400 and
-                _is_attacker_host(r.get("location") or "", original_redirect)
+                300 <= status < 400 and          # an actual redirect happened
+                off_host_to_attacker and         # ...to the attacker's host
+                not r.get("rejected")            # ...and the AS did not error
             )
             r["accepted"] = verdict
             results.append(r)

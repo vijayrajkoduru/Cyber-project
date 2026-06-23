@@ -59,26 +59,81 @@ class MfaBypassTestRequest(ScanRequest):
     options: Optional[dict] = None
 
 
+# Negative markers: presence of any of these means the response is an
+# auth / MFA challenge page, NOT an authenticated resource - never "authed".
+_MFA_CHALLENGE_WORDS = (
+    "mfa", "two-factor", "two factor", "2fa", "totp", "authenticator",
+    "verify your", "enter the code", "enter code", "verification code",
+    "one-time", "one time passcode", "otp", "security code", "step-up",
+    "step up", "sign in", "log in", "login", "password", "incorrect",
+    "invalid", "denied", "unauthorized", "forbidden",
+)
+
+# Location-path tells that a redirect went BACK to an auth/MFA challenge
+# (i.e. NOT a successful bypass).
+_AUTH_PATH_WORDS = (
+    "/login", "/signin", "/sign-in", "/mfa", "/verify", "/2fa", "/otp",
+    "/auth", "/sso", "/challenge", "/step-up", "/stepup",
+)
+
+# Path tells that a redirect landed in the authenticated app.
+_PROTECTED_PATH_WORDS = (
+    "/dashboard", "/account", "/profile", "/home", "/app", "/settings",
+    "/admin", "/portal", "/console", "/me", "/user",
+)
+
+
 def _response_looks_authed(r, marker: Optional[str]) -> bool:
-    """Heuristic: 200 OK + (marker present OR no MFA challenge in body)."""
+    """Strict proof of an authenticated resource (zero-FP).
+
+    Status alone is NOT proof - a catch-all / SPA shell returns 200 (and
+    "dashboard"/"logout" text) to every path, and a bare 302 proves nothing.
+
+    A response is "authed" only when:
+      - status 200 AND a STRONG post-auth marker is present (customer-supplied
+        marker, or a high-signal authed token) AND no MFA/auth-challenge text
+        is present in the body; OR
+      - a 30x redirect whose Location points to a recognised PROTECTED path and
+        NOT to any auth/MFA challenge path.
+    """
     if r is None:
         return False
-    if r.status_code == 302 or r.status_code == 303:
+
+    # ---- redirect handling: only a protected-area Location counts ----
+    if r.status_code in (301, 302, 303, 307, 308):
         loc = (r.headers.get("location") or "").lower()
-        # Redirect AWAY from MFA challenge towards a dashboard-like URL
-        if any(w in loc for w in ("/login", "/mfa", "/verify", "/2fa", "/challenge")):
+        if not loc:
             return False
-        return True
+        # Bounced back to an auth/MFA challenge => not a bypass.
+        if any(w in loc for w in _AUTH_PATH_WORDS):
+            return False
+        # Require a positive tell that it landed in the protected app; a bare
+        # redirect to "/" or an opaque path is not proof.
+        if any(w in loc for w in _PROTECTED_PATH_WORDS):
+            return True
+        return False
+
+    # ---- non-200, non-redirect => denied / error => not authed ----
     if r.status_code != 200:
         return False
-    body = (r.text or "")[:5000].lower()
+
+    body = (r.text or "")[:8000].lower()
+
+    # Negative markers win: a challenge / error page is NEVER authed, even if a
+    # generic "dashboard" word also appears in nav/boilerplate.
+    if any(w in body for w in _MFA_CHALLENGE_WORDS):
+        return False
+
+    # A customer-supplied marker is the strongest signal we have.
     if marker and marker.lower() in body:
         return True
-    # Default heuristic: MFA challenge keywords absent + has 'logout' or similar authed signal
-    mfa_words = ("mfa", "two-factor", "2fa", "totp", "authenticator", "verify your", "enter the code")
-    if any(w in body for w in mfa_words):
-        return False
-    if any(w in body for w in ("logout", "sign out", "dashboard", "profile", "settings", "welcome back")):
+
+    # No customer marker: require a strong post-auth token. Generic single
+    # words like "dashboard"/"profile"/"settings" are NOT sufficient on their
+    # own (they appear in public nav shells); require an explicit session/sign
+    # -out affordance which a public page would not render.
+    strong_authed = ("log out", "logout", "sign out", "signout", "welcome back")
+    if any(w in body for w in strong_authed):
         return True
     return False
 
@@ -119,6 +174,55 @@ async def gather(ctx: ScanContext):
             return r1
         except Exception as e:
             return None
+
+    # ---- (d FIRST) Unauthenticated baseline of protected_url --------------
+    # This MUST run before grading any bypass. A bypass is only meaningful if
+    # the protected URL is ACTUALLY protected: an unauthenticated GET must be
+    # denied (401/403 or redirect to an auth/MFA challenge). If the URL is
+    # public / a SPA shell that returns the same authed-looking page to
+    # everyone, the "skip"/"forge"/"replay" tests would all trivially "pass" -
+    # that is a false positive, so we SUPPRESS the bypass tests and (if the
+    # page itself looks authed) emit only the HIGH unauth-open finding.
+    url_is_protected = False
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=DEFAULT_TIMEOUT,
+                                     follow_redirects=False) as c4:
+            r = await c4.get(protected_url, follow_redirects=False)
+            base_status = r.status_code
+            base_loc = (r.headers.get("location") or "").lower()
+            ctx.state["mfa_unauth_baseline_status"] = base_status
+            ctx.state["mfa_unauth_baseline_location"] = base_loc[:300]
+            base_authed = _response_looks_authed(r, marker)
+            # "Denied" = explicit auth status, OR a redirect to a login/MFA
+            # challenge, OR simply a non-authed response (not the authed shell).
+            denied_status = base_status in (401, 403)
+            redirect_to_auth = (
+                base_status in (301, 302, 303, 307, 308)
+                and any(w in base_loc for w in _AUTH_PATH_WORDS)
+            )
+            url_is_protected = (denied_status or redirect_to_auth
+                                or not base_authed)
+            ctx.state["mfa_url_is_protected"] = url_is_protected
+            # If unauth GET returns authed content, the resource isn't actually
+            # behind auth (or auth is client-side only) - this is the HIGH case.
+            if base_authed:
+                ctx.state["mfa_protected_url_not_actually_protected"] = True
+                findings.setdefault("accepted", []).append("protected_url_unauth_open")
+    except Exception as e:
+        ctx.state["mfa_baseline_error"] = str(e)[:200]
+
+    if not url_is_protected:
+        # Public / SPA / unauth-open target: do NOT run or grade the bypass
+        # tests - any "success" would be a false positive. Record why.
+        ctx.state["mfa_bypass_suppressed_unprotected"] = True
+        ctx.state["mfa_skip_step_accepted"] = False
+        accepted = findings.get("accepted") or []
+        ctx.state["mfa_bypass_modes"] = accepted
+        ctx.source(
+            "protected_url is not actually protected (unauth baseline not "
+            "denied); bypass tests suppressed to avoid false positives"
+        )
+        return
 
     # ---- (a) Skip MFA: access protected URL with post-login session ----
     try:
@@ -207,19 +311,6 @@ async def gather(ctx: ScanContext):
     else:
         ctx.state["mfa_replay_skipped"] = True
 
-    # ---- (d) Direct protected URL (no login at all) — sanity baseline ----
-    try:
-        async with httpx.AsyncClient(verify=False, timeout=DEFAULT_TIMEOUT,
-                                     follow_redirects=False) as c4:
-            r = await c4.get(protected_url, follow_redirects=False)
-            ctx.state["mfa_unauth_baseline_status"] = r.status_code
-            # If unauth GET returns 200 + dashboard, the resource isn't authed at all
-            if _response_looks_authed(r, marker):
-                ctx.state["mfa_protected_url_not_actually_protected"] = True
-                findings.setdefault("accepted", []).append("protected_url_unauth_open")
-    except Exception as e:
-        ctx.state["mfa_baseline_error"] = str(e)[:200]
-
     accepted = findings.get("accepted") or []
     ctx.state["mfa_bypass_modes"] = accepted
     ctx.source(f"4 MFA-bypass tests run, {len(accepted)} succeeded")
@@ -235,6 +326,8 @@ INTEL_FIELDS = [
     ("MFA replay protected status",     "mfa_replay_protected_status"),
     ("MFA replay accepted",             "mfa_replay_accepted"),
     ("Unauth baseline status",          "mfa_unauth_baseline_status"),
+    ("Unauth baseline location",        "mfa_unauth_baseline_location"),
+    ("protected_url genuinely protected","mfa_url_is_protected"),
     ("Bypass modes succeeded",          "mfa_bypass_modes"),
 ]
 
