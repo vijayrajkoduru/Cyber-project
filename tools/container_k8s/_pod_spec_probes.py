@@ -413,13 +413,19 @@ def _probe_container_runas_root(target, req):
                           "that ships as root."),
             evidence_marker=", ".join(root_hits[:5])))
     if unset_hits:
+        # Zero-FP: an UNSET runAsUser is the K8s default (the image decides the
+        # UID). That is default behavior, not a proven misconfiguration — the
+        # image may well run as a non-root user. Defense-in-depth advice -> INFO.
+        # (An image that actually ships as root is caught by runAsUser:0 above
+        # or by the dedicated runAsNonRoot/PSA probes.)
         findings.append(wrap_finding(
             f"runAsUser unset on {len(unset_hits)} container(s) - "
-            f"will use image default (often root)",
-            "MEDIUM", cvss="5.5", cwe="CWE-250",
-            remediation=("Set runAsUser explicitly to a non-zero UID, or set "
-                          "runAsNonRoot: true to fail-fast at admission for "
-                          "root-only images."),
+            f"uses image default UID (often, but not always, root)",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: set runAsUser explicitly to a "
+                          "non-zero UID, or set runAsNonRoot: true to fail-fast "
+                          "at admission for root-only images. Unset is the K8s "
+                          "default — advisory only, not a vulnerability."),
             evidence_marker=", ".join(unset_hits[:5])))
     if not findings:
         findings.append(wrap_finding(
@@ -455,13 +461,19 @@ def _probe_container_no_readonly_rootfs(target, req):
                 rw_hits.append(label)
 
     if rw_hits:
+        # Zero-FP: readOnlyRootFilesystem defaults to false (writable) in K8s.
+        # A writable rootfs is the default and only matters POST-compromise
+        # (an attacker who already has code-exec can drop files). Defense-in-
+        # depth hardening -> INFO, not a graded vulnerability.
         return _build_resp("container_no_readonly_rootfs", target, [wrap_finding(
             f"readOnlyRootFilesystem not enabled on {len(rw_hits)} container(s)",
-            "MEDIUM", cvss="5.5", cwe="CWE-732",
-            remediation=("Set securityContext.readOnlyRootFilesystem: true. "
-                          "Use emptyDir volumes for paths that need write access "
-                          "(/tmp, /var/cache, etc.). Stops attackers from writing "
-                          "malware to the container filesystem post-compromise."),
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: set securityContext."
+                          "readOnlyRootFilesystem: true. Use emptyDir volumes "
+                          "for paths that need write access (/tmp, /var/cache, "
+                          "etc.). Stops an attacker from writing malware to the "
+                          "container filesystem AFTER a compromise. Writable "
+                          "rootfs is the K8s default — advisory only."),
             evidence_marker=f"Writable rootfs: {', '.join(rw_hits[:5])}; "
                               f"read-only: {len(ro_hits)}")], total,
             f"readOnlyRootFilesystem audit ({len(rw_hits)} writable)")
@@ -497,16 +509,23 @@ def _probe_container_allow_priv_escalation(target, req):
                 bad.append(label)
 
     if bad:
+        # Zero-FP: allowPrivilegeEscalation defaults to true in K8s, so "not
+        # explicitly false" is the out-of-the-box state of essentially every
+        # pod that hasn't been hardened. That is default behavior, not a proven
+        # exploitable misconfiguration -> defense-in-depth INFO. (Actual
+        # privilege primitives — privileged:true, dangerous CAP_ADD — are graded
+        # by their own probes.)
         return _build_resp("container_allow_priv_escalation", target, [wrap_finding(
             f"allowPrivilegeEscalation not explicitly false on {len(bad)} container(s)",
-            "HIGH", cvss="7.5", cwe="CWE-250",
-            remediation=("Set securityContext.allowPrivilegeEscalation: false. "
-                          "Default is true, which permits setuid binaries inside "
-                          "the container to gain capabilities the pod did not "
-                          "originally have."),
-            evidence_marker=f"Escalation-allowed: {', '.join(bad[:5])}; "
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: set securityContext."
+                          "allowPrivilegeEscalation: false. Default is true, "
+                          "which permits setuid binaries inside the container to "
+                          "gain capabilities the pod did not originally have. "
+                          "The default is normal K8s behavior — advisory only."),
+            evidence_marker=f"Escalation-allowed (default): {', '.join(bad[:5])}; "
                               f"explicit-false: {len(good)}")], total,
-            f"allowPrivilegeEscalation audit ({len(bad)} not-locked-down)")
+            f"allowPrivilegeEscalation audit ({len(bad)} at default)")
     return _build_resp("container_allow_priv_escalation", target, [wrap_finding(
         f"All {len(good)} container(s) have allowPrivilegeEscalation:false",
         "POSITIVE", cvss="0.0", cwe="N/A",
@@ -540,13 +559,17 @@ def _probe_container_seccomp_unset(target, req):
 
     total = len(bad) + len(good)
     if bad:
+        # Zero-FP: an unset seccompProfile is the K8s default for pods that
+        # haven't opted into RuntimeDefault. That is default behavior, not a
+        # proven exploitable misconfiguration -> defense-in-depth INFO.
         return _build_resp("container_seccomp_unset", target, [wrap_finding(
             f"seccompProfile unset on {len(bad)} container(s)",
-            "MEDIUM", cvss="5.5", cwe="CWE-693",
-            remediation=("Set securityContext.seccompProfile.type: RuntimeDefault "
-                          "(or Localhost for custom profile). Blocks ~80% of "
-                          "syscalls the container doesn't need - kills most "
-                          "container-escape kernel exploits before they execute."),
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: set securityContext.seccompProfile."
+                          "type: RuntimeDefault (or Localhost for a custom "
+                          "profile). Blocks ~80% of syscalls the container "
+                          "doesn't need — hardens against container-escape "
+                          "kernel exploits. Unset is the K8s default — advisory."),
             evidence_marker=f"No seccomp: {', '.join(bad[:5])}; "
                               f"with seccomp: {len(good)}")], total,
             f"seccompProfile audit ({len(bad)} unset)")
@@ -587,13 +610,18 @@ def _probe_container_apparmor_unset(target, req):
 
     total = len(bad) + len(good)
     if bad:
+        # Zero-FP: an unset AppArmor profile is the K8s default. Default
+        # behavior, not a proven exploitable misconfiguration -> defense-in-
+        # depth INFO.
         return _build_resp("container_apparmor_unset", target, [wrap_finding(
             f"AppArmor not set on {len(bad)} container(s)",
-            "MEDIUM", cvss="5.5", cwe="CWE-693",
-            remediation=("Add pod annotation 'container.apparmor.security.beta."
-                          "kubernetes.io/<container>: runtime/default' (legacy) "
-                          "or securityContext.appArmorProfile.type: RuntimeDefault "
-                          "(K8s 1.30+). Complements seccomp at the LSM layer."),
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: add pod annotation 'container."
+                          "apparmor.security.beta.kubernetes.io/<container>: "
+                          "runtime/default' (legacy) or securityContext."
+                          "appArmorProfile.type: RuntimeDefault (K8s 1.30+). "
+                          "Complements seccomp at the LSM layer. Unset is the "
+                          "K8s default — advisory only."),
             evidence_marker=f"No AppArmor: {', '.join(bad[:5])}; "
                               f"with AppArmor: {len(good)}")], total,
             f"AppArmor audit ({len(bad)} unset)")

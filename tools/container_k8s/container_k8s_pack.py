@@ -512,20 +512,28 @@ def _probe_k8s_api(target, req):
             findings.append(wrap_finding(
                 f"kube-apiserver on {port}/tcp serves /version to anonymous "
                 "callers (public-info-viewer default) and is internet-reachable",
-                "MEDIUM", cvss="5.5", cwe="CWE-306", owasp="A05:2021",
+                "LOW", cvss="3.1", cwe="CWE-200", owasp="A05:2021",
                 remediation="Restrict the API server to a bastion/VPN/allow-list. "
                             "The version string aids targeted CVE selection even "
-                            "when full auth is enforced.",
-                evidence_marker=f"TCP/{port} open; /version → 200 (K8s fingerprint)"))
+                            "when full auth is enforced. Minor info leak — not a "
+                            "direct compromise.",
+                evidence_marker=f"TCP/{port} open; /version → 200 (K8s fingerprint, "
+                                "anonymous version disclosure)"))
         else:
+            # Zero-FP: a reachable API server that REQUIRES auth (401/403) is the
+            # expected, default posture for every managed control plane with a
+            # public endpoint (EKS/GKE/AKS). Edge reachability with RBAC enforced
+            # is not a proven misconfiguration -> advisory/INFO, never graded.
             findings.append(wrap_finding(
                 f"kube-apiserver on {port}/tcp is internet-reachable "
                 "(auth required for /version)",
-                "MEDIUM", cvss="5.5", cwe="CWE-306", owasp="A05:2021",
-                remediation="Place the API server behind a private endpoint / "
-                            "allow-list. Edge reachability widens the attack "
-                            "surface even with RBAC enforced.",
-                evidence_marker=f"TCP/{port} open; /version → {code} (K8s fingerprint)"))
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="Optional hardening: place the API server behind a "
+                            "private endpoint / IP allow-list to shrink the "
+                            "attack surface. Auth is enforced here, so this is "
+                            "advisory only — not a vulnerability.",
+                evidence_marker=f"TCP/{port} open; /version → {code} (K8s "
+                                "fingerprint; auth required — secure default)"))
     if not findings:
         findings.append(wrap_finding("K8s API not externally reachable",
             "POSITIVE", cvss="0.0", cwe="N/A",
@@ -888,14 +896,35 @@ def _probe_traefik_ingress(target, req):
     host = _host(target)
     findings = []
     # Traefik default API port is 8080; dashboard usually behind /dashboard/
+    # Zero-FP: a stray "traefik" token (error page, Server-header echo, WAF
+    # block page) is NOT proof the dashboard/API is reachable. Each endpoint
+    # is graded ONLY when the response carries the actual Traefik dashboard
+    # HTML or a real API JSON document for that endpoint.
     exposed = []
-    for port_path in ("/dashboard/", "/api/rawdata", "/api/version", ":8080/dashboard/"):
+    saw_traefik_token = False
+    # (path, [content fingerprints proving this specific endpoint is live])
+    endpoints = [
+        ("/dashboard/", ('id="root"', "traefik labs", "<title>traefik",
+                         "dashboard", "_app/", "ariane")),
+        ("/api/rawdata", ('"routers"', '"middlewares"', '"services"',
+                          '"entryPoints"')),
+        ("/api/version", ('"version"', '"codename"', '"startdate"')),
+        (":8080/dashboard/", ('id="root"', "traefik labs", "<title>traefik",
+                              "dashboard", "_app/", "ariane")),
+        (":8080/api/rawdata", ('"routers"', '"middlewares"', '"services"',
+                               '"entryPoints"')),
+    ]
+    for port_path, fps in endpoints:
         for scheme in ("https", "http"):
-            url = f"{scheme}://{host}{port_path}" if not port_path.startswith(":") \
-                  else f"{scheme}://{host}{port_path}"
+            url = f"{scheme}://{host}{port_path}"
             c, hdrs, b = _http_get_insecure(url, timeout=3)
             srv = (hdrs.get("Server") or "").lower()
-            if c == 200 and ("traefik" in b.lower() or "traefik" in srv):
+            bl = (b or "").lower()
+            if "traefik" in bl or "traefik" in srv:
+                saw_traefik_token = True
+            # Require the actual dashboard HTML / API JSON for THIS endpoint —
+            # not just the word "traefik" appearing somewhere in the response.
+            if c == 200 and any(fp in bl for fp in fps):
                 exposed.append(url)
                 break
     if exposed:
@@ -904,7 +933,20 @@ def _probe_traefik_ingress(target, req):
             "HIGH", cvss="8.0", cwe="CWE-306",
             remediation="Disable Traefik dashboard (api.dashboard=false) or restrict to "
                         "internal network with auth middleware.",
-            evidence_marker=f"Exposed: {', '.join(exposed[:3])}"))
+            evidence_marker=f"Exposed: {', '.join(exposed[:3])} "
+                            "(actual dashboard HTML / API JSON content confirmed)"))
+    elif saw_traefik_token:
+        # "traefik" appeared in a response (Server header / error page) but no
+        # endpoint returned real dashboard/API content. Detection-only -> INFO,
+        # never graded: a stray token is not a proven exposure.
+        findings.append(wrap_finding(
+            "Traefik signature seen, but dashboard/API not exposed",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Keep the Traefik dashboard/API private (api.dashboard="
+                        "false or behind auth middleware). No dashboard HTML or "
+                        "API JSON was reachable — advisory only.",
+            evidence_marker="'traefik' token observed but no /dashboard/ or /api/* "
+                            "returned real dashboard HTML / API JSON content"))
     else:
         findings.append(wrap_finding("Traefik dashboard/API not publicly reachable",
             "POSITIVE", cvss="0.0", cwe="N/A",
@@ -1083,28 +1125,42 @@ def _probe_istio_gateway_mtls(target, req):
 
     # Decision logic - only flag when we have a real signal
     if multi_cluster_open and tls_results.get(15443):
-        # Port 15443 is Istio-specific. Any TLS without mTLS here = HIGH.
+        # Port 15443 is the Istio multi-cluster gateway, which SHOULD require
+        # client certs for cross-cluster traffic. We cannot, however, prove mTLS
+        # is disabled merely because our handshake completed — a server that
+        # requests a client cert still completes the server side of the
+        # handshake. So this is MEDIUM advisory (verify mTLS), not a proven HIGH.
         info = tls_results[15443]
         cert_bytes = info.get("cert_bytes", 0)
         if cert_bytes > 0:
             findings.append(wrap_finding(
-                "Istio multi-cluster gateway :15443 reachable with mTLS DISABLED",
-                "HIGH", cvss="7.5", cwe="CWE-295",
-                remediation="Set tls.mode=MUTUAL on Istio Gateway resource. "
-                            ":15443 must require client cert for cross-cluster traffic.",
-                evidence_marker=(f"Port :15443 TLS handshake completed without "
-                                  f"CertificateRequest; server cert {cert_bytes}B")))
+                "Istio multi-cluster gateway :15443 reachable — verify mTLS is enforced",
+                "MEDIUM", cvss="5.3", cwe="CWE-295",
+                remediation="Confirm tls.mode=MUTUAL on the Istio Gateway "
+                            "resource so :15443 requires a client cert for "
+                            "cross-cluster traffic. This probe completed the "
+                            "server handshake but cannot by itself prove mTLS is "
+                            "off — verify manually.",
+                evidence_marker=(f"Port :15443 TLS handshake completed; server "
+                                  f"cert {cert_bytes}B (client-cert requirement "
+                                  "not confirmed from a single handshake)")))
 
     if istio_fingerprinted and tls_results.get(443):
+        # Zero-FP: a public HTTPS gateway on :443 completing TLS without
+        # requesting a client cert is the NORMAL, default behavior of every
+        # internet-facing ingress. This is not a misconfiguration -> INFO.
         info = tls_results[443]
         cert_bytes = info.get("cert_bytes", 0)
         if cert_bytes > 0:
             findings.append(wrap_finding(
-                "Istio-fingerprinted gateway on :443 completes TLS without client-cert request",
-                "HIGH", cvss="7.5", cwe="CWE-295",
-                remediation="Set tls.mode=MUTUAL on Gateway resource if zero-trust required. "
-                            "Otherwise document the intentional public-facing posture.",
-                evidence_marker=f"{fp_evidence}; TLS server cert {cert_bytes}B; no CertificateRequest"))
+                "Istio-fingerprinted gateway on :443 serves public TLS (no client-cert request)",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation="This is the expected posture for a public-facing "
+                            "ingress. If a zero-trust / mTLS-only edge is "
+                            "required, set tls.mode=MUTUAL on the Gateway "
+                            "resource. Advisory only — not a vulnerability.",
+                evidence_marker=f"{fp_evidence}; TLS server cert {cert_bytes}B; "
+                                "no CertificateRequest (normal for public :443)"))
 
     if not findings:
         if istio_fingerprinted:
@@ -1213,21 +1269,24 @@ def _probe_istio_audit(target, req):
             evidence_marker=metrics_leak))
 
     if exposed_ports and not metrics_leak:
-        # No HTTP fingerprint confirmed (metrics_leak handles that case above).
-        # These ports are istiod-reserved; internet-reachability of them is the
-        # finding itself. Severity stays MEDIUM here (no positive istiod content
-        # confirmation) to honour zero-FP — we report the reachable reserved
-        # ports without asserting istiod is definitely running.
+        # Zero-FP: a bare open TCP port on an istiod-reserved number is NOT a
+        # proven istiod exposure. The grading path requires a positive HTTP
+        # fingerprint proving the Istio control plane actually responds (handled
+        # by the metrics_leak branch above). Without that confirmation we cannot
+        # assert istiod is running — many unrelated services bind 15xxx ports —
+        # so this is advisory/INFO, not a graded vulnerability.
         labels = ", ".join(f"{p}/{lbl}" for p, lbl in exposed_ports)
         findings.append(wrap_finding(
-            f"istiod-reserved control-plane port(s) reachable externally: {labels}",
-            "MEDIUM", cvss="5.5", cwe="CWE-306", owasp="A05:2021",
+            f"istiod-reserved control-plane port(s) open externally: {labels}",
+            "INFO", cvss="0.0", cwe="N/A",
             remediation="Istiod control-plane ports (15010 plaintext XDS, 15012 "
-                        "XDS mTLS, 15017 webhook) must be in-cluster only. Block "
-                        "them at the edge / NetworkPolicy. If these are not istiod, "
-                        "confirm what binds these reserved ports.",
+                        "XDS mTLS, 15017 webhook) should be in-cluster only. "
+                        "Confirm what binds these reserved ports; if istiod, block "
+                        "them at the edge / NetworkPolicy. No istiod HTTP content "
+                        "was confirmed, so this is advisory only — not graded.",
             evidence_marker=f"TCP open on istiod-reserved ports: {labels} "
-                            "(no positive HTTP istiod content confirmation)"))
+                            "(no positive HTTP istiod content confirmation — "
+                            "open port alone is not a proven exposure)"))
 
     if not findings:
         findings.append(wrap_finding(
@@ -1275,13 +1334,19 @@ def _probe_linkerd_audit(target, req):
                         "Block 8085/8086/9990 at the edge.",
             evidence_marker=f"Linkerd fingerprint on /metrics; ports: {[p for p, _ in exposed_ports]}"))
     elif exposed_ports:
+        # Zero-FP: bare open TCP ports without a Linkerd-viz HTTP fingerprint
+        # (the tap_confirmed branch above) are not a proven exposure — many
+        # services bind these port numbers. Advisory/INFO, not graded.
         labels = ", ".join(f"{p}/{lbl}" for p, lbl in exposed_ports)
         findings.append(wrap_finding(
-            f"Linkerd port(s) reachable externally: {labels}",
-            "MEDIUM", cvss="5.5", cwe="CWE-306",
-            remediation="Linkerd control / proxy ports should not be externally reachable. "
-                        "Bind to cluster network only.",
-            evidence_marker=f"TCP open: {labels}"))
+            f"Linkerd-reserved port(s) open externally: {labels}",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation="Linkerd control / proxy ports should not be externally "
+                        "reachable. Confirm what binds these ports; if Linkerd, "
+                        "bind to cluster network only. No Linkerd HTTP content "
+                        "was confirmed, so this is advisory only — not graded.",
+            evidence_marker=f"TCP open: {labels} (no Linkerd HTTP fingerprint "
+                            "confirmed — open port alone is not a proven exposure)"))
     else:
         findings.append(wrap_finding(
             "Linkerd control plane not externally reachable",
@@ -1920,14 +1985,21 @@ def _probe_image_distroless(target, req):
                               f"shells={found_shells or 'none'}; "
                               f"pkg-mgrs={found_pkg_mgrs or 'none'}")))
     else:
+        # Zero-FP: a full-OS base image (package count + shells + pkg-mgrs) is a
+        # normal, supported choice — not a misconfiguration. The larger surface
+        # only matters POST-compromise (more tools for an attacker who already
+        # has code execution), which is advisory, not a graded vulnerability.
+        # Actual CVEs in those packages are graded by the Trivy/Grype probes.
         findings.append(wrap_finding(
             f"Image is FULL-OS based: {total_pkgs} packages incl. "
             + (", ".join(found_pkg_mgrs[:3]) if found_pkg_mgrs else "no pkg-mgr"),
-            "MEDIUM", cvss="5.5", cwe="CWE-1357",
-            remediation=("Switch production image to distroless/Wolfi/Chainguard. "
-                          "Full-OS bases include shells, package managers, and "
-                          "utility binaries that expand the attack surface for "
-                          "post-exploitation and container escape."),
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: switch production images to "
+                          "distroless/Wolfi/Chainguard. Full-OS bases include "
+                          "shells, package managers, and utility binaries that "
+                          "give an attacker more to work with AFTER a compromise. "
+                          "Surface size alone is not a vulnerability; see the "
+                          "Trivy/Grype probes for actual CVEs."),
             evidence_marker=(f"Syft: {total_pkgs} pkgs; "
                               f"shells={','.join(found_shells)}; "
                               f"pkg-mgrs={','.join(found_pkg_mgrs)}; "

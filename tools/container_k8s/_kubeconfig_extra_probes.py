@@ -272,14 +272,21 @@ def _probe_k8s_tls_min_version(target, req):
                 remediation="Continue modern TLS posture.",
                 evidence_marker=f"Current: --tls-min-version={ver}")], 1,
                 f"strong TLS {ver}")
+    # Zero-FP: an unset --tls-min-version is the K8s default. Modern Kubernetes
+    # defaults the apiserver minimum to TLS 1.2 (it does NOT negotiate 1.0/1.1
+    # out of the box), so "not explicitly set" is the secure default — not a
+    # proven weak-TLS misconfiguration. Hardening hygiene -> INFO. (An actually
+    # weak explicit value is graded HIGH in the branch above.)
     return _build_resp("k8s_tls_min_version", target, [wrap_finding(
-        "kube-apiserver --tls-min-version not explicitly set (default may be weak)",
-        "MEDIUM", cvss="5.5", cwe="CWE-326",
-        remediation=("Explicitly set --tls-min-version=VersionTLS12 to "
-                      "kube-apiserver. Default historical behaviour allowed "
-                      "TLS 1.0/1.1."),
-        evidence_marker="No --tls-min-version flag in apiserver args")], 1,
-        "TLS minimum version unset")
+        "kube-apiserver --tls-min-version not explicitly set (uses K8s default, TLS 1.2)",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation=("Hardening hygiene: explicitly set --tls-min-version="
+                      "VersionTLS12 (or TLS13) to make the floor unambiguous. "
+                      "The default already declines TLS 1.0/1.1 on current K8s — "
+                      "advisory only, not a vulnerability."),
+        evidence_marker="No --tls-min-version flag in apiserver args "
+                        "(K8s default minimum is TLS 1.2)")], 1,
+        "TLS minimum version at default")
 
 
 def _probe_k8s_cni_plugin_audit(target, req):
@@ -316,15 +323,22 @@ def _probe_k8s_cni_plugin_audit(target, req):
         # NetworkPolicy-supporting CNIs
         np_capable = {"calico", "cilium", "weave-net", "kube-router", "canal"}
         np_ok = any(c in np_capable for c in detected)
-        sev = "POSITIVE" if np_ok else "MEDIUM"
-        cvss = "0.0" if np_ok else "5.5"
+        # Zero-FP: which CNI is installed is an inventory observation. A CNI that
+        # doesn't enforce NetworkPolicy (e.g. flannel) is a common, supported
+        # choice — clusters may enforce segmentation elsewhere or not need
+        # pod-level policy. This is a defense-in-depth recommendation, not a
+        # proven misconfiguration -> INFO either way.
+        sev = "POSITIVE" if np_ok else "INFO"
         msg = (f"CNI plugin(s) detected: {', '.join(detected)}"
-                + (" (NetworkPolicy supported)" if np_ok else " (NetworkPolicy NOT supported)"))
+                + (" (NetworkPolicy supported)" if np_ok else " (NetworkPolicy NOT enforced by this CNI)"))
         return _build_resp("k8s_cni_plugin_audit", target, [wrap_finding(
-            msg, sev, cvss=cvss, cwe="N/A" if np_ok else "CWE-732",
+            msg, sev, cvss="0.0", cwe="N/A",
             remediation=("Continue current CNI." if np_ok else
-                          "Switch to a NetworkPolicy-capable CNI (Calico, "
-                          "Cilium, Weave Net) for traffic segmentation."),
+                          "Defense-in-depth: if you rely on Kubernetes "
+                          "NetworkPolicy for pod-level segmentation, use a "
+                          "NetworkPolicy-capable CNI (Calico, Cilium, Weave Net). "
+                          "This CNI won't enforce NetworkPolicy objects — "
+                          "advisory only."),
             evidence_marker=f"Detected: {detected}")], 1,
             f"CNI: {', '.join(detected)}")
     return _build_resp("k8s_cni_plugin_audit", target, [wrap_finding(
@@ -367,27 +381,32 @@ def _probe_rbac_pod_serviceaccount_token(target, req):
             safe_pods += 1
         else:
             automount_pods.append(f"{ns}/{pod['metadata']['name']}")
-    if len(automount_pods) > 10:
+    # Zero-FP: automountServiceAccountToken defaults to TRUE in Kubernetes, so
+    # "not explicitly false" is the out-of-the-box behavior for most workloads,
+    # not a proven misconfiguration. This is defense-in-depth hardening advice
+    # (reduce token blast-radius), so it is reported INFO/advisory regardless of
+    # count — never graded LOW/MEDIUM on an inventory count of a default.
+    if automount_pods:
         return _build_resp("rbac_pod_serviceaccount_token", target, [wrap_finding(
-            f"{len(automount_pods)} pod(s) have automountServiceAccountToken!=false",
-            "MEDIUM", cvss="5.5", cwe="CWE-269",
-            remediation=("Set automountServiceAccountToken: false on Pods/SA "
-                          "that don't need to call the K8s API. Default-true "
-                          "lets every pod read its SA token from /var/run/"
-                          "secrets/kubernetes.io/serviceaccount and call the "
-                          "API with that token - useful pivot for attackers."),
-            evidence_marker=f"Automount: {len(automount_pods)}, locked-down: {safe_pods}; "
-                              f"first 5: {automount_pods[:5]}")], 1,
-            f"{len(automount_pods)} pods auto-mount SA token")
+            f"{len(automount_pods)} pod(s) use the default SA token auto-mount "
+            f"(automountServiceAccountToken!=false)",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: set automountServiceAccountToken: "
+                          "false on Pods/SA that don't need to call the K8s API. "
+                          "Default-true is normal K8s behavior — it lets a pod "
+                          "read its SA token from /var/run/secrets/kubernetes.io/"
+                          "serviceaccount. Tightening this reduces token "
+                          "blast-radius but is not itself a vulnerability."),
+            evidence_marker=f"Automount (default): {len(automount_pods)}, "
+                              f"locked-down: {safe_pods}; first 5: "
+                              f"{automount_pods[:5]}")], 1,
+            f"{len(automount_pods)} pods use default SA token auto-mount")
     return _build_resp("rbac_pod_serviceaccount_token", target, [wrap_finding(
-        f"SA token auto-mount audit: {len(automount_pods)} pods, "
-        f"{safe_pods} locked-down",
-        "LOW" if automount_pods else "POSITIVE",
-        cvss="3.0" if automount_pods else "0.0",
-        cwe="CWE-269" if automount_pods else "N/A",
-        remediation=("Audit which pods actually need K8s API access; "
-                      "set automountServiceAccountToken:false on the rest."),
-        evidence_marker=f"Automount:{len(automount_pods)}, locked:{safe_pods}")], 1,
+        f"SA token auto-mount audit: all {safe_pods} pod(s) locked-down",
+        "POSITIVE", cvss="0.0", cwe="N/A",
+        remediation="Continue setting automountServiceAccountToken:false where "
+                    "pods don't need K8s API access.",
+        evidence_marker=f"Automount:0, locked:{safe_pods}")], 1,
         "SA token audit")
 
 
@@ -412,15 +431,19 @@ def _probe_rbac_clusterrolebinding_audit(target, req):
     crbs = data.get("items", [])
     user_crbs = [c for c in crbs if not (c.get("metadata", {}).get("name", "")
                                            .startswith("system:"))]
-    sev = "INFO"
-    if len(user_crbs) > 50:
-        sev = "LOW"
+    # Zero-FP: a raw count of ClusterRoleBindings is inventory, not a proven
+    # misconfiguration — a large cluster legitimately has many bindings. The
+    # graded RBAC risks (cluster-admin overuse, secrets:get, exec, impersonate)
+    # are covered by their own dedicated probes. This is always advisory/INFO.
     return _build_resp("rbac_clusterrolebinding_audit", target, [wrap_finding(
-        f"ClusterRoleBindings: {len(crbs)} total, {len(user_crbs)} non-system",
-        sev, cvss="3.0" if sev == "LOW" else "0.0", cwe="N/A",
+        f"ClusterRoleBindings inventory: {len(crbs)} total, "
+        f"{len(user_crbs)} non-system",
+        "INFO", cvss="0.0", cwe="N/A",
         remediation=("Audit non-system CRBs quarterly. Each binding grants "
                       "cluster-wide permissions to its subjects. Consider "
-                      "namespaced Roles + RoleBindings where possible."),
+                      "namespaced Roles + RoleBindings where possible. The count "
+                      "alone is not a vulnerability — see the dedicated RBAC "
+                      "probes for over-privilege findings."),
         evidence_marker=f"Total CRBs: {len(crbs)}, non-system: {len(user_crbs)}")], 1,
         f"CRB inventory ({len(user_crbs)} non-system)")
 
@@ -449,14 +472,18 @@ def _probe_rbac_aggregate_role_audit(target, req):
             name = cr.get("metadata", {}).get("name", "?")
             if not name.startswith("system:"):
                 aggregated.append(name)
-    if len(aggregated) > 5:
+    if aggregated:
+        # Zero-FP: aggregationRule is a normal, built-in K8s RBAC feature (the
+        # default `admin`/`edit`/`view` ClusterRoles use it). A count of roles
+        # that use it is inventory, not a proven misconfiguration -> INFO.
         return _build_resp("rbac_aggregate_role_audit", target, [wrap_finding(
-            f"{len(aggregated)} non-system ClusterRoles use aggregationRule",
-            "LOW", cvss="3.0", cwe="CWE-269",
+            f"{len(aggregated)} non-system ClusterRole(s) use aggregationRule",
+            "INFO", cvss="0.0", cwe="N/A",
             remediation=("aggregationRule lets ClusterRoles auto-grow when "
-                          "labels match. Easy to misconfigure - a malicious "
-                          "label can grant unintended permissions. Audit "
-                          "matchLabels selectors."),
+                          "labels match — a normal RBAC feature. It CAN be "
+                          "misconfigured (a stray label granting unintended "
+                          "permissions), so audit the matchLabels selectors. "
+                          "Using it is not itself a vulnerability — advisory."),
             evidence_marker=f"Aggregated CRs: {aggregated[:10]}")], 1,
             f"{len(aggregated)} aggregated CRs")
     return _build_resp("rbac_aggregate_role_audit", target, [wrap_finding(
@@ -505,13 +532,19 @@ def _probe_envoy_filter_audit(target, req):
                 risky.append(f"{name} (lua filter)")
                 break
     if risky:
+        # Zero-FP: a Lua EnvoyFilter is a legitimate Istio feature deployed by
+        # trusted mesh operators. Its mere presence is "could be abused", not a
+        # proven exploitable misconfiguration -> advisory/INFO. We surface it so
+        # an operator can review the inline_code, but we do not grade it.
         return _build_resp("envoy_filter_audit", target, [wrap_finding(
             f"EnvoyFilter contains Lua filter(s): {len(risky)} resource(s)",
-            "MEDIUM", cvss="5.5", cwe="CWE-94",
-            remediation=("Lua filters execute arbitrary code in Envoy. "
-                          "Audit the inline_code for safety + ensure only "
-                          "trusted operators can create EnvoyFilters."),
-            evidence_marker=f"Risky filters: {risky[:5]}")], 1,
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Lua filters execute arbitrary code in Envoy — a "
+                          "powerful but legitimate Istio feature. Audit the "
+                          "inline_code for safety and ensure only trusted "
+                          "operators can create EnvoyFilters. Presence alone is "
+                          "not a vulnerability — advisory only."),
+            evidence_marker=f"Lua filters: {risky[:5]}")], 1,
             f"{len(risky)} Lua filters")
     return _build_resp("envoy_filter_audit", target, [wrap_finding(
         f"{len(filters)} EnvoyFilter resource(s) - no Lua/inline_code patterns",
