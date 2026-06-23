@@ -56,6 +56,7 @@ def init_db():
             "ALTER TABLE users ADD COLUMN scans_used INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN usage_period TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN modules TEXT DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN tokens_valid_after TEXT DEFAULT ''",
         ):
             try:
                 con.execute(_ddl)

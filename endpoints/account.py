@@ -16,6 +16,7 @@ import datetime
 import os
 import re
 import sqlite3
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -102,11 +103,11 @@ async def change_password(req: ChangePassword, request: Request, payload=Depends
             raise HTTPException(404, "User not found")
         if not verify_password(req.current_password, row["password_hash"]):
             raise HTTPException(403, "Current password is incorrect")
-        con.execute("UPDATE users SET password_hash=?, updated_at=? WHERE id=?",
-                    (hash_password(req.new_password), _now(), row["id"]))
+        con.execute("UPDATE users SET password_hash=?, updated_at=?, tokens_valid_after=? WHERE id=?",
+                    (hash_password(req.new_password), _now(), str(int(time.time())), row["id"]))
     audit_log("change_password", actor=row["username"], request=request)
     return {"ok": True,
-            "note": "Password updated. Existing sessions stay valid until their token expires (≤7 days)."}
+            "note": "Password updated. All existing sessions are now invalidated — please log in again."}
 
 
 @router.post("/api/account/email")
