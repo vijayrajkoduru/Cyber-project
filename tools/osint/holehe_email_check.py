@@ -149,10 +149,13 @@ def _do_scan(req: ScanRequest) -> dict:
                            if unreliable_services else "")
         findings.append(wrap_finding(
             f"Email registered on {len(found)} service(s) (sentinel-verified)",
-            severity="MEDIUM" if len(found) >= 5 else "LOW",
-            cwe="CWE-200", cvss="3.7" if len(found) < 5 else "5.3",
+            # Account-existence enumeration is public-by-design OSINT, NOT a
+            # breach: knowing an email has a Spotify/GitHub account is not an
+            # exposure. INFO baseline; LOW max when widely reused.
+            severity="LOW" if len(found) >= 5 else "INFO",
+            cwe="CWE-200", cvss="0.0",
             owasp="A05:2021",
-            verified_exploit=True,
+            verified_exploit=False,
             remediation="Each registered service = candidate breach pivot. "
                         "For exec/security-team emails: ALWAYS use email aliases "
                         "(+work, +banking, +social) to compartmentalize. Run "
@@ -171,7 +174,8 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="holehe_email_check", target=req.target, findings=findings,
-        tests_performed=len(SERVICES), vulnerable=bool(found),
+        tests_performed=len(SERVICES),
+        vulnerable=False,  # account-existence enumeration is OSINT, not a breach
         tests_summary=(f"sentinel-checked {len(SERVICES)} services "
                         f"({reliable_count} reliable); "
                         f"real email found on {len(found)}, clean on {len(clean)}"),

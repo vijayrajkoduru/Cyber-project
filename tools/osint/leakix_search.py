@@ -73,30 +73,40 @@ def _do_scan(req: ScanRequest) -> dict:
     if leaks:
         leak_types = sorted({l.get("event_source") or l.get("plugin") or "?"
                               for l in leaks})
+        # Being INDEXED by LeakIX is third-party intel, not a self-verified
+        # live exposure (entries can be stale, deduped, or already remediated).
+        # Default LOW; the customer must confirm the leak is still live before
+        # treating it as a graded exposure.
         findings.append(wrap_finding(
-            f"LeakIX FLAGGED — {len(leaks)} leak(s) for {target}",
-            severity="CRITICAL", cvss="9.0", cwe="CWE-200",
+            f"LeakIX indexed {len(leaks)} potential leak(s) for {target}",
+            severity="LOW", cvss="3.1", cwe="CWE-200",
             owasp="A05:2021",
-            remediation="Each leak is a confirmed exposure. Read each entry, "
-                        "patch or close the exposing service, rotate any credentials "
-                        "that may have been visible.",
-            evidence_marker=f"leak_types: {', '.join(leak_types[:10])} (CONFIRMED via LeakIX)"))
+            remediation="LeakIX-indexed entries are unverified third-party intel — "
+                        "they may be stale or already remediated. VERIFY each entry "
+                        "is still live, then patch/close the exposing service and "
+                        "rotate any credentials that may have been visible.",
+            evidence_marker=f"leak_types: {', '.join(leak_types[:10])} "
+                            f"(LeakIX-indexed, freshness UNVERIFIED)"))
 
     if services:
         risky_services = [s for s in services if any(k in str(s).lower() for k in
                           ("elastic", "mongodb", "redis", "memcache", "couchdb",
                            "kibana", "jenkins", "ftp", "rdp", "smb"))]
         if risky_services:
+            # An indexed open service is not proof of an exploitable exposure
+            # (it may be authenticated / firewalled since the scan). INFO.
             findings.append(wrap_finding(
-                f"Exposed sensitive services: {len(risky_services)}",
-                severity="HIGH", cvss="7.5", cwe="CWE-668",
+                f"LeakIX indexed {len(risky_services)} sensitive service(s)",
+                severity="INFO", cvss="0.0", cwe="CWE-668",
                 owasp="A05:2021",
-                remediation="Mgmt/database services should not be internet-facing. "
-                            "Firewall to known IPs or VPN.",
+                remediation="Indexed mgmt/database services are informational — "
+                            "an open port is not proof of exploitability. Confirm "
+                            "the service is still reachable AND unauthenticated, then "
+                            "firewall to known IPs or VPN.",
                 evidence_marker=" | ".join(
                     f"{s.get('protocol','?')}:{s.get('port','?')}"
                     for s in risky_services[:10]
-                ) + " (CONFIRMED via LeakIX scan)"))
+                ) + " (LeakIX-indexed, exposure UNVERIFIED)"))
 
     if not findings:
         findings.append(wrap_finding(
@@ -108,7 +118,8 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="leakix_search", target=req.target, findings=findings,
-        tests_performed=1, vulnerable=bool(leaks),
+        tests_performed=1,
+        vulnerable=False,  # indexed != exploitable — unverified third-party intel
         tests_summary=f"LeakIX: {len(services)} svc / {len(leaks)} leaks",
         raw_data={"services": services[:10], "leaks": leaks[:10]})
 

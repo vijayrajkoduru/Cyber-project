@@ -142,7 +142,9 @@ def _do_scan(req: ScanRequest) -> dict:
         findings.append(wrap_finding(
             f"Metadata extracted from {len(results)} public document(s) — "
             f"reveals author / software / creation time",
-            severity="MEDIUM", cvss="4.0",
+            # Document metadata on a publicly-published file is public-by-design
+            # information disclosure, not a proven exposure. INFO.
+            severity="INFO", cvss="0.0",
             cwe="CWE-200", owasp="A05:2021",
             remediation=("Strip document metadata before publishing — use "
                         "ExifTool (-all=) for PDF, or set Trust Center → "
@@ -159,7 +161,7 @@ def _do_scan(req: ScanRequest) -> dict:
     return standard_response(
         tool="document_metadata", target=req.target, findings=findings,
         tests_performed=len(docs),
-        vulnerable=len(results) > 0,
+        vulnerable=False,  # published-doc metadata is public-by-design info, not an exposure
         tests_summary=f"{len(docs)} docs crawled; {len(results)} had metadata",
         raw_data={"results": results[:20]})
 

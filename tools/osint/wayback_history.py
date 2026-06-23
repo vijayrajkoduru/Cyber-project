@@ -7,6 +7,7 @@ admin paths, deleted endpoints, dev subdomains, etc.).
 VL-FOUNDRY Layer 6: 7-check DoD compliant.
 """
 import asyncio
+import re
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
@@ -63,28 +64,38 @@ def _do_scan(req: ScanRequest) -> dict:
     urls = [row[0] for row in rows if len(row) >= 1]
     first, last = (min(timestamps), max(timestamps)) if timestamps else ("?", "?")
 
-    # Flag old/sensitive paths exposed in archive
+    # Flag old/sensitive paths exposed in archive.
+    # Match on a PATH-SEGMENT BOUNDARY (not a bare substring) so e.g.
+    # "/administrator-news" or "/developers" don't false-match "/admin"/"/dev".
     sensitive_markers = ("/admin", "/backup", "/.git", "/.env", "/wp-admin",
                          "/phpmyadmin", "/test", "/staging", "/dev", "/api/v1",
                          "/.well-known", "/sitemap")
-    sensitive = [u for u in urls
-                  if any(m in u.lower() for m in sensitive_markers)]
+    # A marker matches when, after the path of the URL, the marker is followed
+    # by a segment/extension/query boundary (/, ?, #, ., : or end-of-string).
+    _boundary = re.compile(
+        "(?:" + "|".join(re.escape(m) for m in sensitive_markers)
+        + r")(?=$|[/?#.:&;])")
+    sensitive = [u for u in urls if _boundary.search(u.lower())]
 
     findings = []
     if sensitive:
         sample = sensitive[:8]
         findings.append(wrap_finding(
             f"{len(sensitive)} sensitive path(s) archived in Wayback Machine",
-            severity="MEDIUM", cvss="4.0",
+            # Archived public URLs are public-by-design historical references,
+            # not a live exposure (the resources may be long gone). INFO.
+            severity="INFO", cvss="0.0",
             cwe="CWE-200", owasp="A05:2021",
             remediation=("Archived paths reveal historical attack surface. "
-                        "Submit removal requests at archive.org/about/removal "
-                        "for paths exposing credentials or PII."),
+                        "Informational only — verify whether each path is still "
+                        "live before treating it as an exposure. Submit removal "
+                        "requests at archive.org/about/removal for paths "
+                        "exposing credentials or PII."),
             evidence_marker="; ".join(sample)))
     findings.append(wrap_finding(
         f"Wayback timeline: {len(rows)} unique URLs archived "
         f"({first[:8]} → {last[:8]})",
-        "POSITIVE" if not sensitive else "LOW",
+        "POSITIVE",
         cwe="CWE-200", owasp="A05:2021",
         remediation="Wayback Machine archives are passive references; "
                     "treat as historical-content reconnaissance.",
@@ -93,7 +104,7 @@ def _do_scan(req: ScanRequest) -> dict:
     return standard_response(
         tool="wayback_history", target=req.target, findings=findings,
         tests_performed=1,
-        vulnerable=len(sensitive) > 0,
+        vulnerable=False,  # archived URLs are historical OSINT, not a live exposure
         tests_summary=f"Wayback CDX: {len(rows)} URLs ({first[:8]}-{last[:8]}); "
                       f"{len(sensitive)} sensitive paths",
         raw_data={"snapshot_count": len(rows),

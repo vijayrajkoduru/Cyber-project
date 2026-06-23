@@ -75,33 +75,40 @@ def _do_scan(req: ScanRequest) -> dict:
                 continue
 
     findings = []
-    # Group hits by severity, emit one finding per CRIT/HIGH dork class
+    # Group hits by severity, emit one finding per CRIT/HIGH dork class.
     crit_high = [h for h in hits if h["severity"] in ("CRITICAL", "HIGH")]
     med_low = [h for h in hits if h["severity"] in ("MEDIUM", "LOW")]
 
+    # NOTE: this scanner only observes that a DDG result PAGE is non-empty for
+    # a dork — it does NOT fetch the result URL/content. A non-empty result
+    # page is NOT proof that a real secret is exposed (the page may merely
+    # mention the domain, or the dork may match benign content). Therefore
+    # dork-category presence is NEVER graded; it is reported as INFO with a
+    # manual-review note. To grade these, fetch + confirm the actual result.
     if crit_high:
         sample = [h["dork"] for h in crit_high[:8]]
-        worst = "CRITICAL" if any(h["severity"] == "CRITICAL" for h in crit_high) else "HIGH"
         findings.append(wrap_finding(
-            f"{len(crit_high)} high-risk dork(s) returned results "
-            f"(credentials, secrets, sensitive files)",
-            worst, cvss="9.1" if worst == "CRITICAL" else "7.5",
+            f"{len(crit_high)} high-risk dork(s) returned search results "
+            f"(potential credentials, secrets, sensitive files) — UNVERIFIED",
+            severity="INFO", cvss="0.0",
             cwe="CWE-200", owasp="A05:2021",
-            remediation=("Audit each indexed URL — remove sensitive content "
-                        "from public web, add robots.txt + meta noindex, "
-                        "rotate any exposed credential, file removal requests "
-                        "with Google/Bing webmaster tools."),
-            evidence_marker="; ".join(sample)))
+            remediation=("A non-empty dork result page is not proof of a real "
+                        "exposure — the result URL/content was not fetched. "
+                        "MANUALLY open each indexed URL: if it exposes credentials "
+                        "or sensitive content, remove it from the public web, add "
+                        "robots.txt + meta noindex, rotate any exposed credential, "
+                        "and file removal requests with Google/Bing webmaster tools."),
+            evidence_marker="; ".join(sample) + " (dork result page non-empty, content UNVERIFIED)"))
     if med_low:
         sample = [h["dork"] for h in med_low[:5]]
         findings.append(wrap_finding(
-            f"{len(med_low)} informational dork(s) returned results "
+            f"{len(med_low)} informational dork(s) returned search results "
             f"(public docs, admin paths, third-party mentions)",
-            severity="LOW", cvss="2.5",
+            severity="INFO", cvss="0.0",
             cwe="CWE-200", owasp="A05:2021",
-            remediation="Informational — review for sensitive content; consider "
-                        "noindex on admin paths.",
-            evidence_marker="; ".join(sample)))
+            remediation="Informational — manually review each result for sensitive "
+                        "content; consider noindex on admin paths.",
+            evidence_marker="; ".join(sample) + " (content UNVERIFIED)"))
     if not hits:
         findings.append(wrap_finding(
             f"No hits across {len(dorks)} OSINT dorks",
@@ -113,7 +120,7 @@ def _do_scan(req: ScanRequest) -> dict:
     return standard_response(
         tool="search_dorks", target=req.target, findings=findings,
         tests_performed=len(dorks),
-        vulnerable=len(crit_high) > 0,
+        vulnerable=False,  # dork-page presence is unverified — never graded without fetching result content
         tests_summary=f"{len(dorks)} DDG dorks; {len(hits)} returned results",
         raw_data={"hits": hits[:50]})
 

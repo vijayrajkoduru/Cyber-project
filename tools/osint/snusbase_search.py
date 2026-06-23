@@ -35,16 +35,30 @@ def _do_scan(req: ScanRequest) -> dict:
         return standard_response(tool="snusbase_search", target=req.target, findings=[],
             tests_performed=1, vulnerable=False, skipped_reason="non-JSON")
     total = data.get("size", 0)
+    # Breach-search hits must be tiered by COUNT + ATTRIBUTION, not "any hit".
+    # The /v3 size field gives no freshness/confidence signal, so we cap at LOW
+    # (manual-review) by default and only tier upward on large, clearly
+    # attributable result counts. Never HIGH from raw size alone.
+    if total <= 0:
+        sev, cvss = "POSITIVE", "0.0"
+        note = "no records"
+    elif total >= 50:
+        sev, cvss = "MEDIUM", "5.3"
+        note = "high record count — likely attributable, verify freshness"
+    else:
+        sev, cvss = "LOW", "3.1"
+        note = "manual-review — unverified freshness/attribution"
     return standard_response(
         tool="snusbase_search", target=req.target,
         findings=[wrap_finding(
             f"Snusbase: {total} record(s) for '{q}'",
-            severity="HIGH" if total > 0 else "POSITIVE",
-            cvss="7.5" if total > 0 else "0.0",
+            severity=sev, cvss=cvss,
             cwe="CWE-359", owasp="A07:2021",
-            remediation="If hits — force password rotation + audit recent logins.",
-            evidence_marker=f"size={total} (CONFIRMED via Snusbase)")],
-        tests_performed=1, vulnerable=bool(total),
+            remediation="Confirm each record is attributable to the target and "
+                        "from a recent breach before acting. If confirmed — force "
+                        "password rotation + audit recent logins.",
+            evidence_marker=f"size={total} [{note}] (via Snusbase)")],
+        tests_performed=1, vulnerable=total >= 50,
         tests_summary=f"Snusbase: {total} records", raw_data={"total": total})
 
 

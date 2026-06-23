@@ -77,17 +77,21 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = []
     if vulns:
+        # InternetDB CVEs are INFERRED from the banner/CPE version Shodan last
+        # saw — there is no patch-level or live-exploit confirmation, so a CVE
+        # count is NOT proof of exploitability. Cap at MEDIUM.
         findings.append(wrap_finding(
-            f"InternetDB lists {len(vulns)} CVE(s) on this host",
-            severity="CRITICAL" if len(vulns) >= 3 else "HIGH",
-            cwe="CWE-1395", cvss="9.0" if len(vulns) >= 3 else "7.5",
+            f"InternetDB lists {len(vulns)} version-inferred CVE(s) on this host",
+            severity="MEDIUM" if len(vulns) >= 3 else "LOW",
+            cwe="CWE-1395", cvss="5.3" if len(vulns) >= 3 else "3.1",
             owasp="A06:2021",
-            remediation="Patch immediately. Shodan-published CVEs are scraped "
-                        "by mass-exploitation actors within hours. Cross-reference "
-                        "each CVE in NVD for the patched version of the affected component.",
+            remediation="These CVEs are version-inferred from Shodan's last banner "
+                        "scan and are UNCONFIRMED (no patch/version verification). "
+                        "Confirm the actual installed version before treating as "
+                        "exploitable, then patch. Cross-reference each CVE in NVD.",
             evidence_marker=f"vulns: {', '.join(vulns[:10])}"
                               + (' ...' if len(vulns) > 10 else '')
-                              + " (CONFIRMED via Shodan InternetDB)"))
+                              + " (version-inferred, UNCONFIRMED — no patch/version check)"))
 
     risky_ports = [p for p in ports if p in
                     (21, 22, 23, 135, 137, 139, 445, 1433, 3306, 3389, 5432,

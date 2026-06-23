@@ -22,6 +22,33 @@ _PASTE_SITES = ["pastebin.com", "gist.github.com", "ghostbin.com",
 _RESULT_LINK_RE = re.compile(r'<a[^>]+href="(https?://[^"]+)"[^>]*class="result__a"',
                               re.IGNORECASE)
 
+# Secret-like markers that, when present in a paste body ALONGSIDE the target
+# domain, indicate an actually-attributable leak (not just a mention).
+_SECRET_MARKERS = re.compile(
+    r"(?i)\b(?:AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24,}|ghp_[A-Za-z0-9]{36}|"
+    r"AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|"
+    r"password\s*[:=]|passwd\s*[:=]|api[_-]?key\s*[:=]|secret\s*[:=]|"
+    r"BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY)")
+
+
+def _fetch_paste_body(url: str, req) -> str:
+    """Fetch a raw-ish paste body for confirmation. Returns lowercased text."""
+    raw = url
+    # pastebin.com/<id> -> pastebin.com/raw/<id>; gist -> append /raw
+    if "pastebin.com/" in url and "/raw/" not in url:
+        raw = url.replace("pastebin.com/", "pastebin.com/raw/")
+    elif "gist.github.com/" in url and not url.endswith("/raw"):
+        raw = url.rstrip("/") + "/raw"
+    r = safe_get(raw, req=req, timeout=5,
+                 headers={"User-Agent": "Mozilla/5.0 (VulnusLab OSINT)"})
+    if r is None or r.status_code != 200:
+        # fall back to the original URL
+        r = safe_get(url, req=req, timeout=5,
+                     headers={"User-Agent": "Mozilla/5.0 (VulnusLab OSINT)"})
+    if r is None or r.status_code != 200:
+        return ""
+    return (r.text or "")[:200000].lower()
+
 
 def _query_site(site: str, target: str, req) -> list[str]:
     q = f'site:{site} "{target}"'.replace(" ", "+")
@@ -58,16 +85,46 @@ def _do_scan(req: ScanRequest) -> dict:
                 continue
 
     findings = []
+    confirmed = []
     if all_links:
         sample = all_links[:10]
-        sev = "HIGH" if len(all_links) >= 3 else "MEDIUM"
+        # CONFIRMATION GATE: a search-engine hit alone is NOT a proven leak —
+        # the page may merely mention the domain. Fetch each paste body and
+        # only grade when it both references the target AND contains a
+        # target-attributable secret marker. Unconfirmed hits stay INFO.
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            body_futs = {pool.submit(_fetch_paste_body, l, req): l
+                          for l in all_links[:10]}
+            for fut in body_futs:
+                link = body_futs[fut]
+                try:
+                    body = fut.result(timeout=7)
+                except Exception:
+                    continue
+                if body and target in body and _SECRET_MARKERS.search(body):
+                    confirmed.append(link)
+
+        if confirmed:
+            sev = "HIGH" if len(confirmed) >= 3 else "MEDIUM"
+            findings.append(wrap_finding(
+                f"{len(confirmed)} paste(s) contain target-attributable secrets",
+                sev, cvss="6.5" if sev == "MEDIUM" else "7.5",
+                cwe="CWE-200", owasp="A05:2021",
+                remediation=("Each confirmed paste references the target AND "
+                            "contains credential/secret markers. Review, rotate "
+                            "exposed keys, and file takedown via the paste-site "
+                            "abuse process."),
+                evidence_marker="; ".join(confirmed[:10])
+                                  + " (CONFIRMED — body contains target + secret marker)"))
+        # All indexed hits (confirmed or not) reported as INFO for visibility.
         findings.append(wrap_finding(
             f"{len(all_links)} indexed paste(s) reference target domain",
-            sev, cvss="6.5" if sev == "MEDIUM" else "7.5",
+            severity="INFO", cvss="0.0",
             cwe="CWE-200", owasp="A05:2021",
-            remediation=("Review each paste; if it contains credentials or "
-                        "internal data, rotate keys and file takedown via "
-                        "the paste-site abuse process."),
+            remediation=("Search-engine indexing of a paste mentioning the "
+                        "domain is not proof of a leak. Manually review each "
+                        "paste body; only treat as an exposure if it contains "
+                        "credentials or internal data."),
             evidence_marker="; ".join(sample)))
     else:
         findings.append(wrap_finding(
@@ -80,9 +137,10 @@ def _do_scan(req: ScanRequest) -> dict:
     return standard_response(
         tool="pastebin_search", target=req.target, findings=findings,
         tests_performed=len(_PASTE_SITES),
-        vulnerable=len(all_links) > 0,
-        tests_summary=f"{len(_PASTE_SITES)} paste sites via DDG; {len(all_links)} hits",
-        raw_data={"links": all_links[:30]})
+        vulnerable=len(confirmed) > 0,  # only a confirmed-body leak is graded
+        tests_summary=(f"{len(_PASTE_SITES)} paste sites via DDG; {len(all_links)} hits; "
+                       f"{len(confirmed)} body-confirmed"),
+        raw_data={"links": all_links[:30], "confirmed": confirmed[:30]})
 
 
 @router.post("/api/osint/pastebin_search")

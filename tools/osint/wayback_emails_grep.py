@@ -92,8 +92,10 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = [wrap_finding(
         f"Wayback Machine — {len(emails_found)} @{domain} email(s) in archive",
-        severity="MEDIUM" if len(emails_found) >= 5 else "LOW",
-        cvss="3.7", cwe="CWE-200", owasp="A05:2021",
+        # Historically-archived public-page emails are public-by-design OSINT,
+        # not an active exposure — the pages were already public. INFO.
+        severity="INFO",
+        cvss="0.0", cwe="CWE-200", owasp="A05:2021",
         remediation="Historical email leakage via archived pages. Wayback "
                     "cannot easily be made to remove old captures, so these "
                     "remain enumerable forever. Cross-check each with HIBP "
@@ -103,7 +105,8 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="wayback_emails_grep", target=req.target, findings=findings,
-        tests_performed=scanned, vulnerable=True,
+        tests_performed=scanned,
+        vulnerable=False,  # archived public-page emails are OSINT, not an exposure
         tests_summary=f"{len(emails_found)} emails from {scanned} snapshots",
         raw_data={"emails": sorted(emails_found), "scanned_snapshots": scanned})
 
