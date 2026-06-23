@@ -149,13 +149,21 @@ def _probe_escape_user_namespace_audit(target, req):
                           "the host instead of root."),
             evidence_marker=", ".join(hits[:5])))
     if no_remap:
+        # Zero-FP: hostUsers is a K8s 1.30+ feature. On the vast majority of
+        # clusters the field is simply unset because the feature doesn't exist
+        # yet (or UserNamespacesSupport isn't enabled). An unset field is the
+        # default/normal state, not a proven misconfiguration -> advisory/INFO.
         findings.append(wrap_finding(
-            f"hostUsers field unset on {len(no_remap)} pod(s) (defaults to host UID share pre-1.30)",
-            "LOW", cvss="3.0", cwe="CWE-250",
-            remediation=("Explicitly set hostUsers:false once your cluster is "
-                          "on K8s 1.30+ with UserNamespacesSupport enabled. "
-                          "On older clusters this finding is informational only."),
-            evidence_marker=f"{len(no_remap)} pod(s) without explicit hostUsers field"))
+            f"hostUsers field unset on {len(no_remap)} pod(s) "
+            f"(default; only takes effect on K8s 1.30+)",
+            "INFO", cvss="0.0", cwe="N/A",
+            remediation=("Defense-in-depth: once your cluster is on K8s 1.30+ "
+                          "with UserNamespacesSupport enabled, explicitly set "
+                          "hostUsers:false to remap container UID 0 to an "
+                          "unprivileged host UID. On older clusters this field "
+                          "has no effect — advisory only, not a vulnerability."),
+            evidence_marker=f"{len(no_remap)} pod(s) without explicit hostUsers "
+                            "field (default state; feature is K8s 1.30+ only)"))
     if not findings:
         findings.append(wrap_finding(
             f"User namespace remapping enabled ({len(pods)} pod spec(s) audited)",
@@ -189,9 +197,14 @@ def _probe_k8s_admission_controller_audit(target, req):
                           "Check provider console for enabled admission plugins."),
             evidence_marker=f"kubectl exit {ec}; stderr: {err[-200:]}")], 1,
             "admission controller audit (apiserver hidden)")
-    expected = {"PodSecurity", "ResourceQuota", "LimitRanger",
-                "ServiceAccount", "MutatingAdmissionWebhook",
-                "ValidatingAdmissionWebhook", "NodeRestriction"}
+    # Critical = real exploitable gap if disabled (admission bypass for
+    # privileged pods / node identity). Advisory = enabled-by-default in modern
+    # K8s or hardening hygiene, so absence from the EXPLICIT list is not proof
+    # it's off (we only see --enable-admission-plugins, not the default set).
+    critical = {"PodSecurity", "NodeRestriction", "ServiceAccount"}
+    advisory_set = {"ResourceQuota", "LimitRanger", "MutatingAdmissionWebhook",
+                    "ValidatingAdmissionWebhook"}
+    expected = critical | advisory_set
     enabled_match = ""
     for token in (out or "").split(","):
         if "--enable-admission-plugins" in token:
@@ -199,18 +212,35 @@ def _probe_k8s_admission_controller_audit(target, req):
             break
     enabled = set(p.strip() for p in enabled_match.split(",") if p.strip())
     missing = sorted(expected - enabled)
+    missing_critical = sorted(critical - enabled)
     if missing:
+        if missing_critical:
+            # A genuinely security-critical admission plugin is absent from the
+            # explicit enable list -> real, exploitable gap. Severity reflects
+            # WHICH plugin is missing, not the count.
+            sev, cvss = "HIGH", "7.5"
+            head = (f"Critical admission plugin(s) not enabled: "
+                    f"{', '.join(missing_critical)}")
+        else:
+            # Only default-on / hardening-hygiene plugins absent from the
+            # explicit list -> advisory only (they may well be defaulted on).
+            sev, cvss = "INFO", "0.0"
+            head = (f"{len(missing)} hardening-hygiene admission plugin(s) not "
+                    f"in the explicit enable list (may be default-on)")
         return _kc_resp("k8s_admission_controller_audit", target, [wrap_finding(
-            f"{len(missing)} security-relevant admission plugin(s) missing",
-            "MEDIUM" if len(missing) < 3 else "HIGH",
-            cvss="6.0" if len(missing) < 3 else "7.5",
-            cwe="CWE-693",
+            head,
+            sev, cvss=cvss, cwe="CWE-693" if sev != "INFO" else "N/A",
             remediation=("Add to --enable-admission-plugins: " +
                           ", ".join(missing) +
-                          ". These plugins enforce pod security standards, "
-                          "resource limits, identity, and webhook policies."),
-            evidence_marker=f"Enabled: {sorted(enabled) or '(none parseable)'}; missing: {missing}")], 1,
-            f"admission audit ({len(missing)} missing)")
+                          ". PodSecurity + NodeRestriction enforce pod security "
+                          "standards and node identity; the rest are "
+                          "defense-in-depth (several are enabled by default in "
+                          "modern K8s, so absence from the explicit list is not "
+                          "proof they are off)."),
+            evidence_marker=f"Enabled: {sorted(enabled) or '(none parseable)'}; "
+                            f"missing: {missing}; critical-missing: "
+                            f"{missing_critical or 'none'}")], 1,
+            f"admission audit ({len(missing)} not explicitly enabled)")
     return _kc_resp("k8s_admission_controller_audit", target, [wrap_finding(
         f"All {len(expected)} security-relevant admission plugins enabled",
         "POSITIVE", cvss="0.0", cwe="N/A",
@@ -254,14 +284,21 @@ def _probe_k8s_certificate_rotation(target, req):
                 remediation="Continue current rotation posture.",
                 evidence_marker="kubelet-config ConfigMap: rotateCertificates: true"))
         else:
+            # Zero-FP: rotateCertificates DEFAULTS to true in modern kubelet.
+            # Its absence from the kubelet-config ConfigMap means the default
+            # (rotation ON) is in effect — not that rotation is disabled. We
+            # cannot prove it's off, so this is advisory/INFO, not a graded HIGH.
             findings.append(wrap_finding(
-                f"Kubelet certificate rotation NOT enabled ({node_count} node(s))",
-                "HIGH", cvss="7.5", cwe="CWE-324",
-                remediation=("Set rotateCertificates: true in kubelet config. "
-                              "Without rotation, kubelet certs expire and "
-                              "force manual re-bootstrapping. Also enable "
-                              "RotateKubeletServerCertificate feature gate."),
-                evidence_marker="kubelet-config ConfigMap: rotateCertificates absent or false"))
+                f"Kubelet certificate rotation not explicitly set ({node_count} node(s); default is enabled)",
+                "INFO", cvss="0.0", cwe="N/A",
+                remediation=("Hardening hygiene: explicitly set "
+                              "rotateCertificates: true in kubelet config to make "
+                              "it unambiguous (the default is already true on "
+                              "modern kubelet). Also enable the "
+                              "RotateKubeletServerCertificate feature gate for "
+                              "server-cert rotation. Advisory only."),
+                evidence_marker="kubelet-config ConfigMap: rotateCertificates "
+                                "absent (default-true in effect)"))
     else:
         findings.append(wrap_finding(
             "kubelet-config ConfigMap not found (managed cluster?)",
@@ -303,23 +340,42 @@ def _probe_rbac_audit_via_rbac_tool(target, req):
             evidence_marker=f"first 300 chars: {out[:300]}")], 1, "rbac parse error")
     items = data.get("items", []) if isinstance(data, dict) else []
     sensitive = []
+    human_cluster_admin = []   # User/Group bound to cluster-admin (real risk)
     for crb in items:
         role = (crb.get("roleRef") or {}).get("name", "")
         if role in ("cluster-admin", "admin", "edit"):
             for sub in (crb.get("subjects") or []):
-                sensitive.append(f"{sub.get('kind','?')}/{sub.get('namespace','-')}/{sub.get('name','?')} -> {role}")
+                kind = sub.get("kind", "?")
+                label = (f"{kind}/{sub.get('namespace','-')}/"
+                         f"{sub.get('name','?')} -> {role}")
+                sensitive.append(label)
+                if role == "cluster-admin" and kind != "ServiceAccount":
+                    human_cluster_admin.append(label)
     if sensitive:
+        # Zero-FP: do NOT grade on a raw count of bindings. `admin`/`edit` are
+        # namespaced built-in roles bound routinely (every team that owns a
+        # namespace), and automation SAs legitimately hold cluster-admin. The
+        # only clearly-elevated signal is a HUMAN identity (User/Group) holding
+        # cluster-admin -> HIGH; everything else is MEDIUM advisory (review).
+        if human_cluster_admin:
+            sev, cvss = "HIGH", "8.0"
+            head = (f"{len(human_cluster_admin)} human identity(ies) "
+                    f"(User/Group) bound to cluster-admin")
+        else:
+            sev, cvss = "MEDIUM", "5.0"
+            head = (f"{len(sensitive)} binding(s) to cluster-admin / admin / "
+                    f"edit (review for least-privilege)")
         return _kc_resp("rbac_audit_via_rbac_tool", target, [wrap_finding(
-            f"{len(sensitive)} principal(s) bound to cluster-admin / admin / edit",
-            "HIGH" if len(sensitive) > 3 else "MEDIUM",
-            cvss="8.0" if len(sensitive) > 3 else "6.0",
-            cwe="CWE-269",
-            remediation=("Review bindings to cluster-admin/admin/edit. Replace "
-                          "with least-privilege roles scoped to specific "
-                          "namespaces and verbs. Service accounts almost never "
-                          "need cluster-admin."),
+            head,
+            sev, cvss=cvss, cwe="CWE-269",
+            remediation=("Review bindings to cluster-admin/admin/edit. A human "
+                          "(User/Group) with cluster-admin is high-risk; replace "
+                          "with least-privilege roles + break-glass. ServiceAccts "
+                          "that need broad roles (CI/CD, operators) are common — "
+                          "scope them down where possible. The count alone is not "
+                          "a vulnerability."),
             evidence_marker="; ".join(sensitive[:10]),
-        )], len(items), f"rbac audit ({len(sensitive)} overprivileged binding(s))")
+        )], len(items), f"rbac audit ({len(sensitive)} elevated binding(s))")
     return _kc_resp("rbac_audit_via_rbac_tool", target, [wrap_finding(
         f"No cluster-admin / admin / edit ClusterRoleBindings to non-system principals ({len(items)} CRB(s) audited)",
         "POSITIVE", cvss="0.0", cwe="N/A",
@@ -367,23 +423,34 @@ def _probe_service_mesh_mtls_off(target, req):
         else:
             permissive.append(line)
     if not items:
+        # Zero-FP: Istio's DEFAULT mode with no PeerAuthentication is PERMISSIVE
+        # auto-mTLS — sidecar-to-sidecar traffic is still encrypted; it merely
+        # also accepts plaintext from non-mesh clients. That is the documented
+        # default, not "no enforcement" / plaintext-only -> MEDIUM advisory
+        # (tighten to STRICT for zero-trust), never HIGH.
         return _kc_resp("service_mesh_mtls_off", target, [wrap_finding(
-            "Mesh installed but ZERO PeerAuthentication resources",
-            "HIGH", cvss="7.5", cwe="CWE-319",
-            remediation=("Create a mesh-wide PeerAuthentication in istio-system "
-                          "namespace with mtls.mode: STRICT. Without it, "
-                          "service-to-service traffic falls back to plaintext."),
-            evidence_marker="0 PeerAuthentication resources cluster-wide",
-        )], 1, "service mesh mTLS audit (no enforcement)")
+            "No PeerAuthentication resources (Istio default PERMISSIVE auto-mTLS in effect)",
+            "MEDIUM", cvss="4.8", cwe="CWE-319",
+            remediation=("For a zero-trust posture, create a mesh-wide "
+                          "PeerAuthentication in istio-system with "
+                          "mtls.mode: STRICT. The Istio default (PERMISSIVE) "
+                          "still encrypts sidecar-to-sidecar traffic but also "
+                          "accepts plaintext from non-mesh clients."),
+            evidence_marker="0 PeerAuthentication resources cluster-wide "
+                            "(Istio default PERMISSIVE auto-mTLS)",
+        )], 1, "service mesh mTLS audit (default PERMISSIVE)")
     if permissive:
+        # PERMISSIVE is the Istio default and still encrypts mesh traffic; it
+        # only allows plaintext fallback. A real (but not HIGH) zero-trust gap.
         return _kc_resp("service_mesh_mtls_off", target, [wrap_finding(
             f"{len(permissive)} PeerAuthentication(s) not in STRICT mtls mode",
-            "HIGH", cvss="7.5", cwe="CWE-319",
-            remediation=("Set mtls.mode: STRICT on all PeerAuthentication "
-                          "resources. PERMISSIVE allows plaintext fallback "
-                          "and defeats the mesh's transport security guarantee."),
+            "MEDIUM", cvss="4.8", cwe="CWE-319",
+            remediation=("For zero-trust, set mtls.mode: STRICT on all "
+                          "PeerAuthentication resources. PERMISSIVE (the Istio "
+                          "default) still encrypts mesh traffic but allows "
+                          "plaintext fallback from non-mesh clients."),
             evidence_marker="; ".join(permissive[:5]),
-        )], len(items), f"service mesh mTLS audit ({len(permissive)} weak)")
+        )], len(items), f"service mesh mTLS audit ({len(permissive)} permissive)")
     return _kc_resp("service_mesh_mtls_off", target, [wrap_finding(
         f"All {len(strict)} PeerAuthentication(s) in STRICT mtls mode",
         "POSITIVE", cvss="0.0", cwe="N/A",

@@ -324,6 +324,8 @@ def _probe_rbac_cluster_admin_overuse(target, req):
             remediation="Retry.",
             evidence_marker=out[:200])], 1, "parse error")
     cluster_admin_subjects = []
+    human_subjects = []   # User / Group subjects (real over-privilege smell)
+    sa_subjects = []      # ServiceAccount subjects (automation — expected)
     for crb in data.get("items", []):
         if (crb.get("roleRef") or {}).get("name") != "cluster-admin":
             continue
@@ -334,21 +336,42 @@ def _probe_rbac_cluster_admin_overuse(target, req):
             # Skip built-in system bindings
             if kind == "Group" and name in ("system:masters",):
                 continue
-            cluster_admin_subjects.append(
-                f"{kind}/{name}" + (f" (ns={ns})" if ns else ""))
+            label = f"{kind}/{name}" + (f" (ns={ns})" if ns else "")
+            cluster_admin_subjects.append(label)
+            if kind == "ServiceAccount":
+                sa_subjects.append(label)
+            else:
+                # User or Group — a human/identity holding cluster-admin
+                human_subjects.append(label)
     if len(cluster_admin_subjects) > 0:
-        sev = "CRITICAL" if len(cluster_admin_subjects) > 3 else "HIGH"
-        cvss = "9.0" if sev == "CRITICAL" else "8.0"
+        # Zero-FP: do NOT grade CRITICAL on a bare subject count. Legit
+        # platforms bind cluster-admin to a handful of automation SAs (CI/CD,
+        # GitOps controllers, cluster operators) — that is expected, not a
+        # vulnerability. CRITICAL is reserved for a clearly over-privileged
+        # HUMAN identity (User/Group) holding cluster-admin; SA-only bindings
+        # are MEDIUM advisory (review least-privilege).
+        if human_subjects:
+            sev, cvss = "CRITICAL", "9.0"
+            headline = (f"{len(human_subjects)} human identity(ies) "
+                        f"(User/Group) bound to cluster-admin")
+            evid = f"human cluster-admin subjects: {human_subjects[:10]}"
+        else:
+            sev, cvss = "MEDIUM", "5.0"
+            headline = (f"{len(sa_subjects)} ServiceAccount(s) bound to "
+                        f"cluster-admin (automation — review least-privilege)")
+            evid = f"SA cluster-admin subjects: {sa_subjects[:10]}"
         return _build_resp("rbac_cluster_admin_overuse", target, [wrap_finding(
-            f"{len(cluster_admin_subjects)} non-system subject(s) bound to cluster-admin",
+            headline,
             sev, cvss=cvss, cwe="CWE-269", owasp="A01:2021",
-            remediation=("cluster-admin = root on the cluster. Each subject "
-                          "bound to it can do anything (delete namespaces, "
-                          "exfiltrate secrets, deploy malicious workloads). "
-                          "Audit each binding + replace with least-privilege "
-                          "ClusterRoles or namespaced Roles."),
-            evidence_marker=f"cluster-admin subjects: {cluster_admin_subjects[:10]}")], 1,
-            f"{len(cluster_admin_subjects)} cluster-admin overuse")
+            remediation=("cluster-admin = root on the cluster. A human "
+                          "identity (User/Group) bound to it is high-risk and "
+                          "should be replaced with least-privilege roles + "
+                          "break-glass. ServiceAccounts that genuinely need "
+                          "cluster-admin (CI/CD, operators) are common but "
+                          "should still be scoped down where possible. Audit "
+                          "each binding."),
+            evidence_marker=evid)], 1,
+            f"{len(cluster_admin_subjects)} cluster-admin binding(s)")
     return _build_resp("rbac_cluster_admin_overuse", target, [wrap_finding(
         "Only system:masters group bound to cluster-admin",
         "POSITIVE", cvss="0.0", cwe="N/A",
