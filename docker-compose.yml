@@ -220,7 +220,7 @@ services:
     container_name: lab_pwd_ad
     hostname: dc01.vlrange.local
     environment:
-    - DOMAIN=VLRANGE
+    - DOMAIN=VLRANGE.LOCAL
     - DOMAIN_DC=dc=vlrange,dc=local
     - DOMAIN_EMAIL=vlrange.local
     - DOMAINPASS=VLrange_Admin_2026!
