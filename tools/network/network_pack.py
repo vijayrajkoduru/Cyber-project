@@ -73,6 +73,70 @@ def _tcp_banner(host: str, port: int, timeout: float = 2.0) -> str:
         return ""
 
 
+def _probe_database_services(ip: str, timeout: float = 2.5) -> list:
+    """Protocol-confirm a database service rather than assuming it from the port
+    number. Returns [{"port","service","evidence"}] for each port that actually
+    speaks the expected wire protocol. A port being open is NOT enough — the
+    handshake/response must match (zero-FP). Covers MySQL/MariaDB, PostgreSQL,
+    Redis."""
+    confirmed = []
+
+    # ── 3306 MySQL/MariaDB: server sends a handshake greeting on connect ──
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.settimeout(timeout)
+            if s.connect_ex((ip, 3306)) == 0:
+                greet = s.recv(256)
+                # Greeting: 3-byte len + seq(0x00) + protocol_version(0x0a) then
+                # NUL-terminated server version string. Validate the framing.
+                if (len(greet) >= 6 and greet[3] == 0x00 and greet[4] == 0x0a):
+                    ver = greet[5:].split(b"\x00", 1)[0].decode("latin-1", "ignore")
+                    confirmed.append({"port": 3306, "service": "MySQL/MariaDB",
+                                      "evidence": f"protocol-10 handshake, version {ver[:40] or '?'}"})
+                elif b"mysql" in greet.lower() or b"mariadb" in greet.lower():
+                    confirmed.append({"port": 3306, "service": "MySQL/MariaDB",
+                                      "evidence": "handshake banner names MySQL/MariaDB"})
+    except Exception:
+        pass
+
+    # ── 5432 PostgreSQL: answer a startup packet with 'R'(auth)/'E'(error) ──
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.settimeout(timeout)
+            if s.connect_ex((ip, 5432)) == 0:
+                # StartupMessage: int32 length, int32 protocol 196608, "user\0probe\0\0"
+                body = b"\x00\x03\x00\x00user\x00vl_probe\x00\x00"
+                pkt = (len(body) + 4).to_bytes(4, "big") + body
+                s.sendall(pkt)
+                resp = s.recv(64)
+                # First byte 'R' = AuthenticationRequest, 'E' = ErrorResponse —
+                # both PROVE a Postgres backend (vs random TCP service).
+                if resp and resp[:1] in (b"R", b"E"):
+                    confirmed.append({"port": 5432, "service": "PostgreSQL",
+                                      "evidence": f"startup answered with '{resp[:1].decode()}' message"})
+    except Exception:
+        pass
+
+    # ── 6379 Redis: RESP — replies to PING with +PONG or -ERR/-NOAUTH ──
+    try:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+            s.settimeout(timeout)
+            if s.connect_ex((ip, 6379)) == 0:
+                s.sendall(b"PING\r\n")
+                resp = s.recv(128)
+                low = resp.lower()
+                # RESP frames start +/-/:/$/*; PONG or an auth-required error proves Redis.
+                if resp[:1] in (b"+", b"-", b":", b"$", b"*") and (
+                        b"pong" in low or b"noauth" in low or b"err" in low or
+                        b"wrongpass" in low or b"operation not permitted" in low):
+                    confirmed.append({"port": 6379, "service": "Redis",
+                                      "evidence": f"RESP reply to PING: {resp[:40].decode('latin-1','ignore').strip()}"})
+    except Exception:
+        pass
+
+    return confirmed
+
+
 def _scan_ports(host: str, ports: list, timeout: float = 1.0) -> dict:
     """Concurrent TCP connect scan. Returns {port: True/False}."""
     out = {}
@@ -84,6 +148,97 @@ def _scan_ports(host: str, ports: list, timeout: float = 1.0) -> dict:
             except Exception:
                 out[p] = False
     return out
+
+
+# ─── CDN / cloud-edge awareness (mirrors tools/webapp/portscan.py) ───
+# A host behind Cloudflare / Akamai / Fastly / a cloud LB shows many "open"
+# edge ports that belong to the SHARED CDN edge, NOT the customer origin.
+# Those ports are not the customer's exposure and must never be graded.
+# Each entry: cdn-name -> list of lowercased regexes; ANY match on the
+# lowercased HTTP status-line + headers PROVES we reached that CDN edge.
+_CDN_SIGNATURES = {
+    "cloudflare": [r"server:\s*cloudflare", r"\bcf-ray:", r"\bcf-cache-status:",
+                   r"\b__cfduid", r"\bcf-request-id:"],
+    "akamai":     [r"server:\s*akamaighost", r"\bx-akamai", r"\bakamai",
+                   r"\bx-cache:\s*tcp_(hit|miss)\b.*akamai"],
+    "fastly":     [r"server:\s*fastly", r"x-served-by:\s*cache-", r"\bx-fastly",
+                   r"\bfastly-"],
+    "cloudfront": [r"server:\s*cloudfront", r"\bx-amz-cf-id:", r"\bx-amz-cf-pop:",
+                   r"via:\s*[^\n]*cloudfront"],
+    "azure-edge": [r"\bx-azure-ref:", r"server:\s*ecacc", r"\bx-msedge-ref:"],
+    "google":     [r"server:\s*gws", r"\bvia:\s*1\.1 google", r"server:\s*gfe"],
+}
+
+
+def _http_head_headers(ip: str, host: str, port: int, tls: bool,
+                       timeout: float = 4.0) -> str:
+    """Fetch the status line + response headers over HTTP(S) and return them
+    lowercased (header block only). Returns "" on any connection/TLS error."""
+    try:
+        sock = socket.create_connection((ip, port), timeout=timeout)
+    except Exception:
+        return ""
+    try:
+        if tls:
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            try:
+                sock = ctx.wrap_socket(sock, server_hostname=host)
+            except Exception:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+                return ""
+        sock.settimeout(timeout)
+        req = (b"GET / HTTP/1.1\r\nHost: " + host.encode() +
+               b"\r\nUser-Agent: VulnusLab-NetScan\r\nAccept: */*\r\n"
+               b"Connection: close\r\n\r\n")
+        sock.sendall(req)
+        buf = b""
+        # Only the header block is needed for CDN signatures (~first 8KB).
+        while len(buf) < 8192:
+            try:
+                chunk = sock.recv(2048)
+            except Exception:
+                break
+            if not chunk:
+                break
+            buf += chunk
+            if b"\r\n\r\n" in buf:
+                break
+        head = buf.split(b"\r\n\r\n", 1)[0]
+        return head.decode("utf-8", errors="replace").lower()
+    except Exception:
+        return ""
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def _detect_cdn(host: str, ip: str) -> str:
+    """Return the CDN/cloud-edge name if the host's web response PROVES a known
+    edge (Cloudflare / Akamai / Fastly / CloudFront / Azure / Google), else "".
+
+    Probes 443 (TLS) then 80 — a confirmed CDN edge means any open-port COUNT is
+    the CDN's, not the customer origin, so it must not be graded.
+    """
+    for port, tls in ((443, True), (80, False)):
+        head = _http_head_headers(ip, host, port, tls)
+        if not head:
+            continue
+        for cdn, pats in _CDN_SIGNATURES.items():
+            for pat in pats:
+                try:
+                    if re.search(pat, head):
+                        return cdn
+                except re.error:
+                    continue
+    return ""
 
 
 def _wrap(slug, target, title, sev, cvss, evidence, remed=""):
@@ -108,23 +263,39 @@ def _probe_nmap_syn_scan(target, req):
                               "INFO", "0.0", evidence=f"Could not resolve {host}")
     results = _scan_ports(ip, TOP_TCP_PORTS, timeout=1.0)
     opens = sorted([p for p, o in results.items() if o])
+    cdn = _detect_cdn(host, ip)
     findings = []
-    if opens:
+    if opens and cdn:
+        # CDN/cloud-edge fronted: the open ports belong to the SHARED edge, not
+        # the customer origin. Never graded — INFO with a CDN note (zero-FP).
+        findings.append(wrap_finding(
+            f"{len(opens)} open ports observed on {host} ({ip}) are CDN edge ports, not origin",
+            "INFO", cvss="0.0", cwe="CWE-200",
+            remediation=f"Host fronted by {cdn}; these ports terminate at the shared CDN edge, "
+                        "not your origin. Audit exposure at the origin host directly.",
+            evidence_marker=f"CDN edge: {cdn}; edge ports: {', '.join(str(p) for p in opens)}"))
+    elif opens:
+        # Not CDN-fronted: a raw open-port COUNT is NOT proof of a vulnerability.
+        # Reporting that ports are open is INFO; cap any count-driven concern at
+        # LOW (a wide footprint warrants review, but is not itself a finding).
+        sev = "INFO" if len(opens) <= 5 else "LOW"
         findings.append(wrap_finding(
             f"Live TCP port scan — {len(opens)} open ports on {host} ({ip})",
-            "INFO" if len(opens) <= 5 else ("MEDIUM" if len(opens) <= 15 else "HIGH"),
-            cvss="3.0" if len(opens) <= 5 else "5.5",
+            sev, cvss="0.0" if sev == "INFO" else "3.1",
             cwe="CWE-200",
-            remediation="Close ports not required for business function; firewall non-essential services.",
+            remediation="Open ports alone are not a vulnerability. Confirm each exposed service "
+                        "is intended and access-controlled; firewall non-essential services.",
             evidence_marker=f"Open: {', '.join(str(p) for p in opens)}"))
+    top_sev = findings[0].get("severity") if findings else "INFO"
     return {"tool":"nmap_syn_scan","target":target,"scan_time":0,
-            "vulnerable": len(opens) > 5, "severity": "MEDIUM" if len(opens) > 5 else "INFO",
+            "vulnerable": False,
+            "severity": top_sev,
             "findings": findings or [wrap_finding(f"No top-45 TCP ports open on {host}",
                 "POSITIVE", cvss="0.0", cwe="N/A", remediation="Continue least-exposure posture.",
                 evidence_marker=f"Scanned {len(TOP_TCP_PORTS)} ports — all closed")],
             "tests_performed": len(TOP_TCP_PORTS),
             "tests_summary": f"TCP connect scan of {len(TOP_TCP_PORTS)} ports on {host}",
-            "raw_data": {"open_ports": opens, "ip": ip}}
+            "raw_data": {"open_ports": opens, "ip": ip, "cdn": cdn or None}}
 
 def _probe_nmap_udp_scan(target, req):
     """UDP probe — limited to DNS/NTP/SNMP/SSDP common UDP."""
@@ -132,23 +303,80 @@ def _probe_nmap_udp_scan(target, req):
     if not ip:
         return _adv_response("nmap_udp_scan", target, "DNS resolution failed",
                               "INFO", "0.0", evidence=host)
-    udp_ports = [53, 67, 68, 123, 137, 161, 500, 514, 520, 1900, 4500, 5353]
-    confirmed_open = 0       # actual UDP datagram reply received (real service)
-    open_or_filtered = 0     # timeout — no reply, cannot be confirmed
+    # Service-specific UDP probes. A bare datagram reply (ICMP noise / a
+    # firewall's stateless echo / an unrelated service) is NOT proof a port is
+    # open. We send a PROTOCOL-CORRECT request and only count the port "open"
+    # when the reply VALIDATES against that protocol's response shape (zero-FP).
+    # ports without a known probe are probed-but-only-confirmable on a valid reply.
+    _DNS_PROBE = (bytes([0x13, 0x37, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00,
+                         0x00, 0x00, 0x00, 0x00]) + bytes([6]) + b"google" +
+                  bytes([3]) + b"com" + bytes([0, 0, 1, 0, 1]))
+    # NTP v3 client mode-3 request (mode/version in first byte = 0x1b).
+    _NTP_PROBE = b"\x1b" + b"\x00" * 47
+    # SNMPv2c GetRequest for sysDescr.0 (community "public").
+    _SNMP_PROBE = bytes.fromhex(
+        "302902010104067075626c6963a01c0204"
+        "1337133702010002010030"
+        "0e300c06082b060102010101000500")
+
+    def _valid_dns(req_bytes, resp):
+        # XID must echo (bytes 0-1) and QR bit set (response).
+        return (len(resp) >= 4 and resp[0] == req_bytes[0] and
+                resp[1] == req_bytes[1] and (resp[2] & 0x80) == 0x80)
+
+    def _valid_ntp(resp):
+        # NTP reply: server mode (4) in low 3 bits; payload >= 48 bytes.
+        return len(resp) >= 48 and (resp[0] & 0x07) == 4
+
+    def _valid_snmp(resp):
+        # SNMP message is an ASN.1 SEQUENCE (0x30) carrying INTEGER version.
+        return len(resp) >= 2 and resp[0] == 0x30
+
+    # (port, probe-bytes, validator) — only these carry a protocol validator.
+    _UDP_PROBES = [
+        (53, _DNS_PROBE, lambda r: _valid_dns(_DNS_PROBE, r)),
+        (5353, _DNS_PROBE, lambda r: _valid_dns(_DNS_PROBE, r)),  # mDNS
+        (123, _NTP_PROBE, _valid_ntp),
+        (161, _SNMP_PROBE, _valid_snmp),
+    ]
+    other_ports = [67, 68, 137, 500, 514, 520, 1900, 4500]
+    udp_ports = [p for p, _, _ in _UDP_PROBES] + other_ports
+    confirmed_open = 0       # protocol-valid reply received (real service)
+    open_or_filtered = 0     # no reply / unvalidated reply — cannot be confirmed
     confirmed_ports = []
-    for port in udp_ports:
+    for port, probe, validator in _UDP_PROBES:
+        try:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
+                s.settimeout(1.5)
+                s.sendto(probe, (ip, port))
+                try:
+                    data, src = s.recvfrom(2048)
+                    # Reply must come FROM the target and VALIDATE the protocol.
+                    if src and src[0] == ip and validator(data):
+                        confirmed_open += 1
+                        confirmed_ports.append(port)
+                    else:
+                        open_or_filtered += 1   # reply did not match protocol
+                except socket.timeout:
+                    open_or_filtered += 1      # silence — open|filtered, UNCONFIRMED
+                except OSError:
+                    pass                       # ICMP unreachable -> port closed
+        except Exception:
+            pass
+    # Ports with no protocol-specific probe: probed but NOT confirmable. A bare
+    # reply here is not proof of service — count as open|filtered only.
+    for port in other_ports:
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
                 s.settimeout(1.0)
-                s.sendto(b"\x00\x00", (ip, port))
+                s.sendto(b"\x00", (ip, port))
                 try:
                     s.recvfrom(512)
-                    confirmed_open += 1        # got a real datagram reply
-                    confirmed_ports.append(port)
+                    open_or_filtered += 1      # reply but UNVALIDATED -> not graded
                 except socket.timeout:
-                    open_or_filtered += 1      # open|filtered — UNCONFIRMED (silence)
+                    open_or_filtered += 1
                 except OSError:
-                    pass                       # ICMP unreachable -> port closed
+                    pass
         except Exception:
             pass
     findings = []
@@ -196,6 +424,13 @@ def _probe_nmap_version_detect(target, req):
     for p in common:
         b = _tcp_banner(ip, p, timeout=2.0)
         if b: services[p] = b[:120]
+
+    # Database ports must NOT be named/graded from the port number alone. Only
+    # confirm a DB service when the wire protocol actually proves it (zero-FP):
+    #   3306 MySQL  -> handshake greeting carries the version + protocol byte
+    #   5432 Postgres-> rejects/answers a startup packet (auth-request 'R')
+    #   6379 Redis  -> RESP-speaking: replies to PING with +PONG / -ERR / RESP frame
+    confirmed_db = _probe_database_services(ip)
     findings = []
     if services:
         findings.append(wrap_finding(
@@ -203,15 +438,26 @@ def _probe_nmap_version_detect(target, req):
             "INFO", cvss="0.0", cwe="CWE-200",
             remediation="Disable banner disclosure on production services where not required.",
             evidence_marker="; ".join(f"{p}: {b[:60]}" for p,b in services.items())))
+    if confirmed_db:
+        db_names = ", ".join("{}:{}".format(d["service"], d["port"]) for d in confirmed_db)
+        db_evidence = "; ".join("{}/{}: {}".format(d["port"], d["service"], d["evidence"])
+                                for d in confirmed_db)
+        findings.append(wrap_finding(
+            f"Database service(s) protocol-confirmed exposed: {db_names}",
+            "MEDIUM", cvss="5.3", cwe="CWE-200",
+            remediation="Restrict database ports to application/admin networks; never expose "
+                        "MySQL/PostgreSQL/Redis to the public internet.",
+            evidence_marker=db_evidence))
     return {"tool":"nmap_version_detect","target":target,"scan_time":0,
-            "vulnerable": False, "severity": "INFO",
+            "vulnerable": bool(confirmed_db),
+            "severity": "MEDIUM" if confirmed_db else "INFO",
             "findings": findings or [wrap_finding(
                 "No service banners harvested", "INFO", cvss="0.0", cwe="N/A",
                 remediation="Continue minimal-banner posture.",
                 evidence_marker=f"Probed {common}")],
             "tests_performed": len(common),
             "tests_summary": f"Banner grab on {len(common)} common service ports",
-            "raw_data": {"ip": ip, "services": services}}
+            "raw_data": {"ip": ip, "services": services, "confirmed_db": confirmed_db}}
 
 def _probe_nmap_os_detect(target, req):
     """OS fingerprint via TCP/IP stack characteristics (TTL + window)."""
@@ -234,16 +480,22 @@ def _probe_nmap_os_detect(target, req):
                 os_guess = "Linux/Unix" if "nginx" in server_hdr.lower() or "apache" in server_hdr.lower() else \
                            "Windows" if "iis" in server_hdr.lower() or "microsoft" in server_hdr.lower() else \
                            "Unknown"
+                # The Server header is set by the front-most HTTP layer (often a
+                # reverse proxy / CDN / load balancer), NOT necessarily the OS of
+                # the origin. This is a LOW-CONFIDENCE guess — INFO only, never graded.
                 return {"tool":"nmap_os_detect","target":target,"scan_time":0,
                         "vulnerable": False, "severity": "INFO",
                         "findings":[wrap_finding(
-                            f"OS likely: {os_guess} (heuristic from Server header)",
+                            f"OS guess (low confidence): {os_guess} — heuristic from Server "
+                            f"header, which may be a reverse proxy/CDN, not the origin OS",
                             "INFO", cvss="0.0", cwe="CWE-200",
-                            remediation="Remove or randomize Server header to reduce fingerprintability.",
-                            evidence_marker=f"Server: {server_hdr}")],
+                            remediation="Treat as informational only; the Server header reflects the "
+                                        "edge HTTP layer, not necessarily the host OS.",
+                            evidence_marker=f"Server: {server_hdr or '(none)'} (reverse-proxy caveat applies)")],
                         "tests_performed": 1,
-                        "tests_summary": "OS heuristic from HTTP Server header",
-                        "raw_data": {"ip": ip, "server": server_hdr, "os_guess": os_guess}}
+                        "tests_summary": "OS heuristic from HTTP Server header (low confidence)",
+                        "raw_data": {"ip": ip, "server": server_hdr, "os_guess": os_guess,
+                                     "confidence": "low"}}
     except Exception:
         pass
     return _adv_response("nmap_os_detect", target, "OS detection inconclusive — no probeable HTTP port",
@@ -313,31 +565,45 @@ def _probe_masscan_full_range(target, req):
         results = _scan_ports(ip, top200, timeout=0.6)
         opens = sorted([p for p, o in results.items() if o])
 
-    sev = "HIGH" if len(opens) > 20 else ("MEDIUM" if len(opens) > 10 else
-                                            ("LOW" if len(opens) > 3 else "INFO"))
-    cvss = "6.0" if sev == "HIGH" else "5.0" if sev == "MEDIUM" else "3.0" if sev == "LOW" else "0.0"
     engine = "real masscan binary" if using_real else "Python socket fallback"
-    if opens:
+    cdn = _detect_cdn(host, ip) if opens else ""
+    if opens and cdn:
+        # CDN/cloud-edge fronted: a wide "open" footprint is the SHARED edge's,
+        # not the customer origin. Never graded — INFO with a CDN note (zero-FP).
+        finding = wrap_finding(
+            f"{len(opens)} open ports on {host} are CDN edge ports, not origin (engine: {engine})",
+            "INFO", cvss="0.0", cwe="CWE-200",
+            remediation=f"Host fronted by {cdn}; these ports terminate at the shared CDN edge, "
+                        "not your origin. Audit the origin host directly.",
+            evidence_marker=(f"CDN edge: {cdn}; edge ports: {', '.join(str(p) for p in opens[:40])}"
+                              f"{' ... +' + str(len(opens)-40) + ' more' if len(opens)>40 else ''}"))
+        sev = "INFO"
+    elif opens:
+        # Not CDN-fronted: a raw open-port COUNT is NOT proof of a vulnerability.
+        # Listing open ports is INFO; a wide footprint warrants review (cap LOW).
+        sev = "INFO" if len(opens) <= 10 else "LOW"
+        cvss = "0.0" if sev == "INFO" else "3.1"
         finding = wrap_finding(
             f"{len(opens)} TCP ports open on {host} (engine: {engine})",
             sev, cvss=cvss, cwe="CWE-200",
-            remediation="Audit each exposed service. Close ports not required for "
-                        "business function. Apply firewall allow-lists at the edge.",
+            remediation="Open ports alone are not a vulnerability. Confirm each exposed service "
+                        "is intended and access-controlled; apply firewall allow-lists at the edge.",
             evidence_marker=(f"Open ports: {', '.join(str(p) for p in opens[:40])}"
                               f"{' ... +' + str(len(opens)-40) + ' more' if len(opens)>40 else ''}"))
     else:
+        sev = "POSITIVE"
         finding = wrap_finding(
             f"Wide port scan: no open ports detected on {host}",
             "POSITIVE", cvss="0.0", cwe="N/A",
             remediation="Continue minimal-exposure posture.",
             evidence_marker=f"Engine: {engine}; 0 of probed ports responded")
     return {"tool": "masscan_full_range", "target": target, "scan_time": 0,
-            "vulnerable": len(opens) > 10,
-            "severity": sev if opens else "POSITIVE",
+            "vulnerable": False,
+            "severity": sev,
             "findings": [finding],
             "tests_performed": len(opens) or 1024,
             "tests_summary": f"masscan ({engine}): {len(opens)} open",
-            "raw_data": {"ip": ip, "open_ports": opens, "engine": engine}}
+            "raw_data": {"ip": ip, "open_ports": opens, "engine": engine, "cdn": cdn or None}}
 
 def _probe_rustscan_top_ports(target, req):
     return _probe_nmap_syn_scan(target, req) | {"tool":"rustscan_top_ports"}
@@ -379,6 +645,7 @@ def _probe_naabu_fast_scan(target, req):
                 continue
     opens = sorted(set(opens))
 
+    cdn = _detect_cdn(host, ip) if opens else ""
     if not opens:
         finding = wrap_finding(
             f"naabu fast scan: no open top-1000 ports on {host}",
@@ -386,21 +653,32 @@ def _probe_naabu_fast_scan(target, req):
             remediation="Continue minimal-exposure posture.",
             evidence_marker=f"naabu -top-ports 1000 against {ip}: 0 open")
         sev = "POSITIVE"
+    elif cdn:
+        # CDN-fronted: open ports belong to the shared edge, not the origin.
+        sev = "INFO"
+        finding = wrap_finding(
+            f"naabu: {len(opens)} open ports on {host} are CDN edge ports, not origin",
+            "INFO", cvss="0.0", cwe="CWE-200",
+            remediation=f"Host fronted by {cdn}; these ports terminate at the shared CDN edge. "
+                        "Audit the origin host directly.",
+            evidence_marker=f"CDN edge: {cdn}; edge ports: {', '.join(str(p) for p in opens[:40])}")
     else:
-        sev = "HIGH" if len(opens) > 20 else ("MEDIUM" if len(opens) > 10 else "LOW")
-        cvss = "6.0" if sev == "HIGH" else "5.0" if sev == "MEDIUM" else "3.0"
+        # Raw open-port COUNT is not proof of vulnerability — INFO, cap LOW for a wide footprint.
+        sev = "INFO" if len(opens) <= 10 else "LOW"
+        cvss = "0.0" if sev == "INFO" else "3.1"
         finding = wrap_finding(
             f"naabu: {len(opens)} open ports of top 1000 on {host}",
             sev, cvss=cvss, cwe="CWE-200",
-            remediation="Close ports not required for business function.",
+            remediation="Open ports alone are not a vulnerability. Confirm each exposed service "
+                        "is intended and access-controlled.",
             evidence_marker=f"Open: {', '.join(str(p) for p in opens[:40])}")
     return {"tool": "naabu_fast_scan", "target": target, "scan_time": 0,
-            "vulnerable": len(opens) > 10,
+            "vulnerable": False,
             "severity": sev,
             "findings": [finding],
             "tests_performed": 1000,
             "tests_summary": f"naabu real binary: {len(opens)} open",
-            "raw_data": {"ip": ip, "open_ports": opens, "engine": "naabu"}}
+            "raw_data": {"ip": ip, "open_ports": opens, "engine": "naabu", "cdn": cdn or None}}
 
 def _probe_unicornscan(target, req):
     return _probe_nmap_udp_scan(target, req) | {"tool":"unicornscan_advisory"}
@@ -515,26 +793,39 @@ def _probe_dns_open_resolver(target, req):
         return _adv_response("dns_open_resolver_check", target, "DNS resolution failed",
                               "INFO", "0.0", evidence=host)
     try:
-        # Build a simple A query for google.com
-        query = bytes([0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        # Build a simple A query for google.com with a known XID (0x1234).
+        _XID = (0x12, 0x34)
+        query = bytes([_XID[0], _XID[1], 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                         6])+b"google"+bytes([3])+b"com"+bytes([0, 0, 1, 0, 1])
         with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
             s.settimeout(3.0)
             s.sendto(query, (ip, 53))
             try:
-                data, _ = s.recvfrom(512)
-                # Check ANCOUNT (bytes 6-7) > 0 = open recursive
-                if len(data) >= 8 and (data[6] | data[7]) > 0:
+                data, src = s.recvfrom(512)
+                # Zero-FP gating before flagging an open resolver:
+                #   (1) reply must come FROM the target host (not a spoof/relay),
+                #   (2) DNS XID must echo our request (bytes 0-1),
+                #   (3) QR bit set (this IS a response, byte 2 high bit),
+                #   (4) ANCOUNT (bytes 6-7) > 0 (it actually RESOLVED the external name).
+                src_ok = bool(src) and src[0] == ip
+                xid_ok = len(data) >= 2 and data[0] == _XID[0] and data[1] == _XID[1]
+                qr_ok = len(data) >= 3 and (data[2] & 0x80) == 0x80
+                ancount_ok = len(data) >= 8 and (data[6] | data[7]) > 0
+                if src_ok and xid_ok and qr_ok and ancount_ok:
                     return {"tool":"dns_open_resolver_check","target":target,"scan_time":0,
                             "vulnerable": True, "severity": "HIGH",
                             "findings":[wrap_finding(
                                 "Open DNS resolver — recursive query for external domain succeeded",
                                 "HIGH", cvss="7.0", cwe="CWE-918",
                                 remediation="Disable recursion for external clients; use views/ACLs.",
-                                evidence_marker=f"{ip}:53 answered recursive query (ANCOUNT > 0)")],
+                                evidence_marker=f"{ip}:53 answered recursive query (XID echoed, QR set, ANCOUNT > 0)")],
                             "tests_performed": 1,
                             "tests_summary": "Open recursive DNS resolver check",
-                            "raw_data": {"ip": ip, "anscount_bytes": list(data[6:8])}}
+                            "raw_data": {"ip": ip, "anscount_bytes": list(data[6:8]),
+                                         "src_match": src_ok, "xid_match": xid_ok}}
+                # A reply that fails XID/source/QR/ANCOUNT validation is NOT proof
+                # of an open resolver (firewall echo / NXDOMAIN / spoof) — treated
+                # as "refused/non-recursive" (POSITIVE), never graded.
                 return {"tool":"dns_open_resolver_check","target":target,"scan_time":0,
                         "vulnerable": False, "severity": "POSITIVE",
                         "findings":[wrap_finding(
@@ -665,23 +956,43 @@ def _probe_subdomain_takeover(target, req):
             "dnspython not installed — CNAME takeover probe skipped",
             "INFO", "0.0", evidence="Install dnspython to enable the takeover check.")
     sig_map = dict(_TAKEOVER_SIGS)
+    # The customer's own apex/registrable domain — a CNAME that resolves back to
+    # the customer's OWN infra (e.g. host.example.com -> cdn.example.com) is NOT
+    # a third-party takeover candidate. Strip leading "www." for a fair compare.
+    own_apex = host[4:] if host.startswith("www.") else host
     findings = []; flagged = []
     for cn in cnames:
-        svc = next((s for s, _ in _TAKEOVER_SIGS if s in cn), None)
+        # Exact suffix match: the CNAME must END WITH a known takeover-service
+        # domain (e.g. "foo.s3.amazonaws.com" endswith "s3.amazonaws.com"), not
+        # merely CONTAIN the substring somewhere (which false-positives on names
+        # like "amazonaws.com.attacker.example"). Pick the longest match.
+        matches = [s for s, _ in _TAKEOVER_SIGS
+                   if cn == s or cn.endswith("." + s)]
+        svc = max(matches, key=len) if matches else None
         if not svc:
+            continue
+        # Skip CNAMEs that point at the customer's OWN domain — that is the
+        # customer's infrastructure, not an unclaimed third-party resource.
+        if cn == own_apex or cn.endswith("." + own_apex):
             continue
         body_all = ""
         for scheme in ("https", "http"):
             _, body = _http_get(f"{scheme}://{host}/", timeout=4)
             body_all += " " + body.lower()
+        # Only grade HIGH when the provider's UNCLAIMED-resource fingerprint is
+        # actually present in the body (proves the resource is dangling/claimable).
         if sig_map[svc] in body_all:
             flagged.append(f"{host} -> {cn} ({svc})")
         else:
+            # CNAME points at a takeover-prone service but the resource still
+            # answers / shows no dangling signature -> almost certainly CLAIMED.
+            # Informational only, never graded as a takeover.
             findings.append(wrap_finding(
-                f"CNAME to takeover-prone service '{svc}' — verify the target resource is still owned",
-                "LOW", cvss="3.1", cwe="CWE-350",
-                remediation="Remove dangling CNAMEs; confirm the third-party resource is claimed.",
-                evidence_marker=f"{host} -> {cn}"))
+                f"CNAME to third-party service '{svc}' — resource appears claimed (no dangling signature)",
+                "INFO", cvss="0.0", cwe="CWE-350",
+                remediation="No takeover indicator found. Track this dependency and remove the "
+                            "CNAME if the third-party resource is ever decommissioned.",
+                evidence_marker=f"{host} -> {cn} (no unclaimed-resource fingerprint in response)"))
     if flagged:
         findings.insert(0, wrap_finding(
             f"Subdomain takeover POSSIBLE — {len(flagged)} dangling CNAME(s) with unclaimed-resource fingerprint",
@@ -735,11 +1046,38 @@ def _probe_nsec_walk(target, req):
     except Exception:
         pass
     if len(names) > 1:
-        findings = [wrap_finding(
-            f"DNSSEC NSEC zone-walk enumerated {len(names)} record(s) — full zone contents disclosable",
-            "MEDIUM", cvss="5.3", cwe="CWE-200",
-            remediation="Migrate from NSEC to NSEC3 (adequate iterations / opt-out) to block zone walking.",
-            evidence_marker=", ".join(names[:8]) + (" ..." if len(names) > 8 else ""))]
+        # NSEC walkability alone discloses zone contents, but the SENSITIVITY of
+        # what it reveals drives the grade. Walking only the apex/www is not a
+        # material exposure (INFO); revealing non-public/sensitive names (admin,
+        # internal, vpn, staging, db, mail, etc.) is the real risk (MEDIUM).
+        _SENSITIVE = ("admin", "internal", "intranet", "vpn", "dev", "test",
+                      "staging", "stage", "uat", "qa", "db", "database", "sql",
+                      "mail", "smtp", "git", "jenkins", "ci", "backup", "ftp",
+                      "ssh", "rdp", "panel", "portal", "api-internal", "corp",
+                      "private", "secret", "vault", "grafana", "kibana", "k8s")
+        apex = host[4:] if host.startswith("www.") else host
+        sensitive_hits = []
+        for n in names:
+            label = n[:-(len(apex) + 1)] if n.endswith("." + apex) else n
+            label_l = label.lower()
+            if label_l and label_l not in ("www",) and any(
+                    tok in label_l for tok in _SENSITIVE):
+                sensitive_hits.append(n)
+        if sensitive_hits:
+            findings = [wrap_finding(
+                f"DNSSEC NSEC zone-walk revealed {len(sensitive_hits)} sensitive name(s) "
+                f"of {len(names)} enumerated — non-public hostnames disclosed",
+                "MEDIUM", cvss="5.3", cwe="CWE-200",
+                remediation="Migrate from NSEC to NSEC3 (adequate iterations / opt-out) to block zone walking.",
+                evidence_marker="Sensitive: " + ", ".join(sensitive_hits[:8]) +
+                                (" ..." if len(sensitive_hits) > 8 else ""))]
+        else:
+            findings = [wrap_finding(
+                f"DNSSEC NSEC zone-walk enumerated {len(names)} record(s) — only public/expected names",
+                "INFO", cvss="0.0", cwe="CWE-200",
+                remediation="Walkable NSEC is best-practice-against, but no sensitive names were "
+                            "revealed here. Consider NSEC3 to harden against future enumeration.",
+                evidence_marker=", ".join(names[:8]) + (" ..." if len(names) > 8 else ""))]
     else:
         findings = [wrap_finding(
             "No NSEC zone-walk possible (NSEC3 in use or DNSSEC not signed)",
