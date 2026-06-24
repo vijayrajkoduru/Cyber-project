@@ -28,10 +28,50 @@ _BATCH = _BASE / "batches";   _BATCH.mkdir(parents=True, exist_ok=True)
 def _safe(s): return "".join(c for c in s if c.isalnum() or c in ".-_")
 def _target_dir(t):
     d = _HIST / _safe(t); d.mkdir(parents=True, exist_ok=True); return d
-def _scan_id(target, ts): return hashlib.sha1(f"{target}-{ts}".encode()).hexdigest()[:12]
+def _scan_id(target, ts, salt=""): return hashlib.sha1(f"{target}-{ts}-{salt}".encode()).hexdigest()[:12]
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 def _valid_id(s): return bool(_ID_RE.match(s or ""))
+
+# ───────────────── Org scoping (Phase 2.1 Step 3) ─────────────────
+# Scan history lives in a flat per-target dir shared by all tenants, so each
+# record is TAGGED with org_id and FILTERED on read. Records written before
+# org tagging (no org_id) are grandfathered as visible so existing data is
+# never orphaned. Result: cross-tenant isolation (org A can't read org B's
+# scans) while everyone in one org shares results.
+def _caller_org(payload):
+    """Resolve the caller's org id from the JWT claim, else a DB lookup.
+    None only if RBAC is unavailable -> caller falls back to legacy visibility."""
+    if isinstance(payload, dict):
+        oid = payload.get("org_id")
+        if oid:
+            return oid
+        sub = payload.get("sub")
+        if sub:
+            try:
+                from tools.auth._orgs import get_user_org_role
+                oid, _ = get_user_org_role(sub)
+                return oid
+            except Exception:
+                return None
+    return None
+
+def _org_can_see(rec, oid):
+    """A record is visible if it belongs to the caller's org, or it predates
+    org tagging (legacy, no org_id -> grandfathered)."""
+    rec_oid = (rec or {}).get("org_id")
+    return (not rec_oid) or (oid is not None and rec_oid == oid)
+
+def _load_rec(target, sid):
+    if not _valid_id(sid):
+        return None
+    f = _target_dir(target) / f"{sid}.json"
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 def _url_is_safe(url):
     """Return (ok, reason). Blocks non-http(s) schemes and any URL that
@@ -88,23 +128,29 @@ def _extract_findings(rec):
     return out
 
 @router.post("/api/recon/scan/save")
-async def save_scan(req: SaveScanReq, _=Depends(verify_scan_quota)):
+async def save_scan(req: SaveScanReq, payload=Depends(verify_scan_quota)):
+    oid = _caller_org(payload)
+    sub = str(payload.get("sub", "")) if isinstance(payload, dict) else ""
     ts = int(time.time())
-    sid = _scan_id(req.target, ts)
+    sid = _scan_id(req.target, ts, sub)
     record = {"scan_id": sid, "target": req.target, "timestamp": ts,
+              "org_id": oid, "owner_id": sub,
               "results": req.scan_results, "metadata": req.metadata or {}}
     out = _target_dir(req.target) / f"{sid}.json"
     out.write_text(json.dumps(record, default=str), encoding="utf-8")
-    # Trigger webhooks
+    # Trigger webhooks (org-scoped inside _fire_webhooks)
     asyncio.create_task(_fire_webhooks(req.target, record))
     return {"ok": True, "scan_id": sid}
 
 @router.get("/api/recon/scan/history")
-async def list_history(target: str = Query(...), _=Depends(verify_scan_quota)):
+async def list_history(target: str = Query(...), payload=Depends(verify_scan_quota)):
+    oid = _caller_org(payload)
     items = []
     for f in sorted(_target_dir(target).glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
+            if not _org_can_see(rec, oid):
+                continue
             findings = _extract_findings(rec)
             sev_count = {"CRITICAL":0,"HIGH":0,"MEDIUM":0,"LOW":0,"INFO":0}
             for fn in findings:
@@ -115,15 +161,7 @@ async def list_history(target: str = Query(...), _=Depends(verify_scan_quota)):
         except Exception: continue
     return {"target":target,"scan_count":len(items),"scans":items}
 
-@router.get("/api/recon/scan/diff")
-async def diff_scans(target: str = Query(...), a: str = Query(...), b: str = Query(...),
-                      _=Depends(verify_scan_quota)):
-    d = _target_dir(target)
-    fa, fb = d / f"{a}.json", d / f"{b}.json"
-    if not fa.exists() or not fb.exists():
-        raise HTTPException(404, "scan_id not found")
-    ra = json.loads(fa.read_text(encoding="utf-8"))
-    rb = json.loads(fb.read_text(encoding="utf-8"))
+def _diff_records(ra, rb, a, b):
     findings_a = _extract_findings(ra); findings_b = _extract_findings(rb)
     def fh(f): return hashlib.md5(f"{f['tool']}|{f['name']}|{f['severity']}".encode()).hexdigest()
     set_a = {fh(f):f for f in findings_a}
@@ -137,23 +175,39 @@ async def diff_scans(target: str = Query(...), a: str = Query(...), b: str = Que
             "unchanged_count":len(unchanged),
             "delta":{"new":len(new),"resolved":len(resolved),"net":len(new)-len(resolved)}}
 
+@router.get("/api/recon/scan/diff")
+async def diff_scans(target: str = Query(...), a: str = Query(...), b: str = Query(...),
+                      payload=Depends(verify_scan_quota)):
+    oid = _caller_org(payload)
+    ra = _load_rec(target, a); rb = _load_rec(target, b)
+    if ra is None or rb is None or not _org_can_see(ra, oid) or not _org_can_see(rb, oid):
+        raise HTTPException(404, "scan_id not found")
+    return _diff_records(ra, rb, a, b)
+
 # ═════════════════════════════════════════════════════════════
 # SESSION 2: Compare-to-last shortcut (auto-finds previous scan)
 # ═════════════════════════════════════════════════════════════
 
 @router.get("/api/recon/scan/diff_to_last")
 async def diff_to_last(target: str = Query(...), current_scan_id: str = Query(...),
-                        _=Depends(verify_scan_quota)):
+                        payload=Depends(verify_scan_quota)):
     """Find the scan immediately before current_scan_id and diff against it."""
+    oid = _caller_org(payload)
     d = _target_dir(target)
-    scans = sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-    current_idx = None
-    for i, f in enumerate(scans):
-        if f.stem == current_scan_id: current_idx = i; break
-    if current_idx is None: raise HTTPException(404, "current scan not found")
-    if current_idx + 1 >= len(scans):
+    # Only consider scans this org may see, so 'previous' never crosses tenants.
+    visible = []
+    for f in sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        rec = _load_rec(target, f.stem)
+        if rec and _org_can_see(rec, oid):
+            visible.append(f.stem)
+    if current_scan_id not in visible:
+        raise HTTPException(404, "current scan not found")
+    idx = visible.index(current_scan_id)
+    if idx + 1 >= len(visible):
         return {"first_scan": True, "message": "No previous scan to compare against"}
-    return await diff_scans(target=target, a=scans[current_idx+1].stem, b=current_scan_id)
+    prev = visible[idx + 1]
+    ra = _load_rec(target, prev); rb = _load_rec(target, current_scan_id)
+    return _diff_records(ra, rb, prev, current_scan_id)
 
 # ═════════════════════════════════════════════════════════════
 # SESSION 3: Webhooks (Slack / Jira / SIEM / generic POST)
@@ -178,6 +232,7 @@ async def webhook_configure(cfg: WebhookConfig, payload=Depends(verify_scan_quot
     rec = cfg.dict()
     rec["webhook_id"] = wid
     rec["owner"] = str(payload.get("sub", ""))
+    rec["org_id"] = _caller_org(payload)
     rec["created"] = int(time.time())
     (_HOOKS / f"{wid}.json").write_text(json.dumps(rec), encoding="utf-8")
     return {"ok": True, "webhook_id": wid}
@@ -212,12 +267,19 @@ async def webhook_delete(webhook_id: str, payload=Depends(verify_scan_quota)):
     return {"ok": True}
 
 async def _fire_webhooks(target: str, scan_record: dict):
-    """Called after scan saves. Fires all matching webhooks."""
+    """Called after scan saves. Fires all matching webhooks (org-scoped)."""
     findings = _extract_findings(scan_record)
     if not findings: return
+    scan_oid = scan_record.get("org_id")
     for hf in _HOOKS.glob("*.json"):
         try:
             cfg = json.loads(hf.read_text(encoding="utf-8"))
+            # Org isolation: a scan only fires its own org's webhooks. Legacy
+            # untagged hooks/scans (no org_id) are grandfathered so existing
+            # integrations keep working.
+            hook_oid = cfg.get("org_id")
+            if scan_oid and hook_oid and hook_oid != scan_oid:
+                continue
             # Target filter
             if cfg.get("target_filter") and cfg["target_filter"] not in target: continue
             # Severity filter
@@ -289,6 +351,7 @@ async def schedule_create(req: ScheduleReq, payload=Depends(verify_scan_quota)):
     rec = req.dict()
     rec["schedule_id"] = sid
     rec["owner"] = sub
+    rec["org_id"] = _caller_org(payload)
     rec["created"] = int(time.time())
     rec["next_run"] = int(time.time()) + req.interval_hours * 3600
     rec["last_run"] = None
@@ -405,10 +468,10 @@ async def _run_batch(bid: str):
 
 @router.get("/api/recon/scan/export")
 async def export_scan(target: str = Query(...), scan_id: str = Query(...),
-                       format: str = Query("json"), _=Depends(verify_scan_quota)):
-    f = _target_dir(target) / f"{scan_id}.json"
-    if not f.exists(): raise HTTPException(404)
-    rec = json.loads(f.read_text(encoding="utf-8"))
+                       format: str = Query("json"), payload=Depends(verify_scan_quota)):
+    oid = _caller_org(payload)
+    rec = _load_rec(target, scan_id)
+    if rec is None or not _org_can_see(rec, oid): raise HTTPException(404)
     findings = _extract_findings(rec)
     if format == "csv":
         buf = io.StringIO()
