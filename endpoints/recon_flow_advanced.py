@@ -1,10 +1,18 @@
-"""VL-FLOW Sessions 7-13: Advanced workflow features."""
-import asyncio, json, os, hashlib, hmac, time, uuid, base64, requests
+"""VL-FLOW Sessions 7-13: Advanced workflow features.
+
+Phase 2.1 hardening: every per-tenant store (screenshots, signatures, brands,
+collab, rules) is namespaced under the caller's org_id so one tenant can no
+longer read/list/delete/overwrite another's data. export_bb reads the SHARED
+org-tagged scan-history store and is filtered with org_can_see (same gate as
+recon_flow.export_scan). The custom-rule engine no longer uses eval().
+"""
+import asyncio, json, os, hashlib, hmac, time, uuid, base64, re, requests
 from pathlib import Path
 from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from tools._shared import verify_scan_quota
+from tools._core.flow_scope import caller_org as _caller_org, org_can_see as _org_can_see
 
 router = APIRouter()
 _BASE = Path(os.environ.get("VL_FLOW_DIR", "/app/vl_flow_data"))
@@ -12,6 +20,18 @@ for sub in ["screenshots","signatures","brands","collab","templates","rules"]:
     (_BASE/sub).mkdir(parents=True, exist_ok=True)
 
 _SIGN_KEY = os.environ.get("VL_FLOW_SIGN_KEY","vulnuslab-default-key-change-me").encode()
+
+_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+def _valid_id(s): return bool(_ID_RE.match(s or ""))
+def _safe(s): return "".join(c for c in (s or "") if c.isalnum() or c in ".-_")
+
+def _store(payload, name):
+    """Per-org subdirectory of a VL-FLOW store. Tenant isolation: every read/
+    write/list/delete operates only inside the caller's org dir."""
+    oid = _safe(_caller_org(payload) or "_legacy")
+    d = _BASE / name / oid
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 # ═════════════════════════════════════════════════════════════
 # SESSION 7: Per-finding screenshot (headless capture)
@@ -23,10 +43,10 @@ class ScreenshotReq(BaseModel):
     full_page: Optional[bool] = False
 
 @router.post("/api/recon/finding/screenshot")
-async def capture_screenshot(req: ScreenshotReq, _=Depends(verify_scan_quota)):
+async def capture_screenshot(req: ScreenshotReq, payload=Depends(verify_scan_quota)):
     """Capture URL screenshot. Tries Playwright → screenshotapi.io fallback → error."""
-    fid = req.finding_id or uuid.uuid4().hex[:12]
-    out = _BASE/"screenshots"/f"{fid}.png"
+    fid = _safe(req.finding_id) or uuid.uuid4().hex[:12]
+    out = _store(payload,"screenshots")/f"{fid}.png"
     # Try Playwright (if installed in container)
     try:
         from playwright.async_api import async_playwright
@@ -56,8 +76,9 @@ async def capture_screenshot(req: ScreenshotReq, _=Depends(verify_scan_quota)):
             "remediation":"Install playwright: pip install playwright && playwright install chromium  | OR set SCREENSHOTAPI_KEY env var"}
 
 @router.get("/api/recon/finding/screenshot/{finding_id}")
-async def get_screenshot(finding_id: str, _=Depends(verify_scan_quota)):
-    f = _BASE/"screenshots"/f"{finding_id}.png"
+async def get_screenshot(finding_id: str, payload=Depends(verify_scan_quota)):
+    if not _valid_id(finding_id): raise HTTPException(404)
+    f = _store(payload,"screenshots")/f"{finding_id}.png"
     if not f.exists(): raise HTTPException(404)
     return {"finding_id":finding_id,"base64":base64.b64encode(f.read_bytes()).decode("ascii"),
             "size":f.stat().st_size}
@@ -71,14 +92,15 @@ class SignReq(BaseModel):
     content_hash: str   # SHA-256 of PDF bytes (from frontend)
 
 @router.post("/api/recon/pdf/sign")
-async def sign_pdf(req: SignReq, _=Depends(verify_scan_quota)):
+async def sign_pdf(req: SignReq, payload=Depends(verify_scan_quota)):
     """Sign a report — returns HMAC-SHA256 + timestamp. Use to verify integrity."""
     ts = int(time.time())
-    payload = f"{req.report_id}|{req.content_hash}|{ts}"
-    sig = hmac.new(_SIGN_KEY, payload.encode(), hashlib.sha256).hexdigest()
+    payload_str = f"{req.report_id}|{req.content_hash}|{ts}"
+    sig = hmac.new(_SIGN_KEY, payload_str.encode(), hashlib.sha256).hexdigest()
     rec = {"report_id":req.report_id,"content_hash":req.content_hash,
            "signed_at":ts,"signature":sig,"algorithm":"HMAC-SHA256"}
-    (_BASE/"signatures"/f"{req.report_id}.json").write_text(json.dumps(rec), encoding="utf-8")
+    (_store(payload,"signatures")/f"{_safe(req.report_id) or uuid.uuid4().hex[:12]}.json").write_text(
+        json.dumps(rec), encoding="utf-8")
     return rec
 
 class VerifyReq(BaseModel):
@@ -97,7 +119,7 @@ async def verify_pdf(req: VerifyReq, _=Depends(verify_scan_quota)):
             "verification":"HMAC-SHA256 match" if valid else "TAMPERED — signatures don't match"}
 
 # ═════════════════════════════════════════════════════════════
-# SESSION 9: White-label branding
+# SESSION 9: White-label branding (per-org)
 # ═════════════════════════════════════════════════════════════
 
 class BrandConfig(BaseModel):
@@ -109,23 +131,24 @@ class BrandConfig(BaseModel):
     footer_text: Optional[str] = None
 
 @router.post("/api/recon/brand/configure")
-async def brand_configure(cfg: BrandConfig, _=Depends(verify_scan_quota)):
-    (_BASE/"brands"/f"{cfg.customer_id}.json").write_text(
-        json.dumps(cfg.dict()), encoding="utf-8")
+async def brand_configure(cfg: BrandConfig, payload=Depends(verify_scan_quota)):
+    cid = _safe(cfg.customer_id)
+    if not cid: raise HTTPException(400, "invalid customer_id")
+    (_store(payload,"brands")/f"{cid}.json").write_text(json.dumps(cfg.dict()), encoding="utf-8")
     return {"ok":True,"customer_id":cfg.customer_id}
 
 @router.get("/api/recon/brand/{customer_id}")
-async def brand_get(customer_id: str, _=Depends(verify_scan_quota)):
-    f = _BASE/"brands"/f"{customer_id}.json"
+async def brand_get(customer_id: str, payload=Depends(verify_scan_quota)):
+    f = _store(payload,"brands")/f"{_safe(customer_id)}.json"
     if not f.exists():
         return {"customer_id":customer_id,"company_name":"VulnusLab",
                 "logo_url":None,"primary_color":"#1e40af","accent_color":"#3b82f6"}
     return json.loads(f.read_text(encoding="utf-8"))
 
 @router.get("/api/recon/brand")
-async def brand_list(_=Depends(verify_scan_quota)):
+async def brand_list(payload=Depends(verify_scan_quota)):
     out = []
-    for f in (_BASE/"brands").glob("*.json"):
+    for f in (_store(payload,"brands")).glob("*.json"):
         try: out.append(json.loads(f.read_text(encoding="utf-8")))
         except Exception: pass
     return {"count":len(out),"brands":out}
@@ -137,12 +160,18 @@ async def brand_list(_=Depends(verify_scan_quota)):
 @router.get("/api/recon/scan/export_bb")
 async def export_bb(target: str = Query(...), scan_id: str = Query(...),
                      platform: str = Query("hackerone"),
-                     _=Depends(verify_scan_quota)):
+                     payload=Depends(verify_scan_quota)):
     """Export findings as HackerOne / Bugcrowd submission format."""
-    safe_t = "".join(c for c in target if c.isalnum() or c in ".-_")
-    f = _BASE/"history"/safe_t/f"{scan_id}.json"
+    if not _valid_id(scan_id): raise HTTPException(404)
+    f = _BASE/"history"/_safe(target)/f"{scan_id}.json"
     if not f.exists(): raise HTTPException(404)
-    rec = json.loads(f.read_text(encoding="utf-8"))
+    try:
+        rec = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        raise HTTPException(404)
+    # Tenant isolation: the history store is shared across orgs and org-tagged;
+    # only return a record the caller's org owns (or a grandfathered legacy one).
+    if not _org_can_see(rec, _caller_org(payload)): raise HTTPException(404)
     findings = []
     for tool, data in (rec.get("results") or {}).items():
         if isinstance(data, dict):
@@ -169,7 +198,7 @@ async def export_bb(target: str = Query(...), scan_id: str = Query(...),
             "submission_count":len(out),"submissions":out}
 
 # ═════════════════════════════════════════════════════════════
-# SESSION 11: Pentester collaboration (per-finding workflow state)
+# SESSION 11: Pentester collaboration (per-finding workflow state, per-org)
 # ═════════════════════════════════════════════════════════════
 
 _VALID_STATES = ["NEW","TRIAGING","CONFIRMED","FALSE_POSITIVE","PATCHED","VERIFIED","WONT_FIX"]
@@ -183,10 +212,11 @@ class FindingStatusReq(BaseModel):
     assigned_to: Optional[str] = None
 
 @router.post("/api/recon/finding/status")
-async def set_finding_status(req: FindingStatusReq, _=Depends(verify_scan_quota)):
+async def set_finding_status(req: FindingStatusReq, payload=Depends(verify_scan_quota)):
     if req.new_state not in _VALID_STATES:
         raise HTTPException(400,f"state must be one of {_VALID_STATES}")
-    collab_dir = _BASE/"collab"/req.target
+    if not _valid_id(req.finding_hash): raise HTTPException(400,"invalid finding_hash")
+    collab_dir = _store(payload,"collab")/_safe(req.target)
     collab_dir.mkdir(parents=True, exist_ok=True)
     f = collab_dir/f"{req.finding_hash}.json"
     history = []
@@ -201,13 +231,14 @@ async def set_finding_status(req: FindingStatusReq, _=Depends(verify_scan_quota)
     return {"ok":True,"current_state":req.new_state,"history_length":len(history)}
 
 @router.get("/api/recon/finding/history/{target}/{finding_hash}")
-async def get_finding_history(target: str, finding_hash: str, _=Depends(verify_scan_quota)):
-    f = _BASE/"collab"/target/f"{finding_hash}.json"
+async def get_finding_history(target: str, finding_hash: str, payload=Depends(verify_scan_quota)):
+    if not _valid_id(finding_hash): raise HTTPException(400,"invalid finding_hash")
+    f = _store(payload,"collab")/_safe(target)/f"{finding_hash}.json"
     if not f.exists(): return {"current_state":"NEW","history":[]}
     return json.loads(f.read_text(encoding="utf-8"))
 
 # ═════════════════════════════════════════════════════════════
-# SESSION 12: Per-industry report templates
+# SESSION 12: Per-industry report templates (static, read-only)
 # ═════════════════════════════════════════════════════════════
 
 _TEMPLATES = {
@@ -238,7 +269,7 @@ async def template_get(template_id: str, _=Depends(verify_scan_quota)):
     return {"template_id":template_id, **_TEMPLATES[template_id]}
 
 # ═════════════════════════════════════════════════════════════
-# SESSION 13: Custom rule engine (YAML upload + JSON eval)
+# SESSION 13: Custom rule engine (per-org; NO eval)
 # ═════════════════════════════════════════════════════════════
 
 class CustomRule(BaseModel):
@@ -251,53 +282,74 @@ class CustomRule(BaseModel):
     enabled: bool = True
 
 @router.post("/api/recon/rules/upload")
-async def rule_upload(rule: CustomRule, _=Depends(verify_scan_quota)):
-    rid = rule.rule_id or uuid.uuid4().hex[:12]
+async def rule_upload(rule: CustomRule, payload=Depends(verify_scan_quota)):
+    rid = _safe(rule.rule_id) or uuid.uuid4().hex[:12]
     rec = rule.dict()
     rec["rule_id"]=rid
     rec["created"]=int(time.time())
-    (_BASE/"rules"/f"{rid}.json").write_text(json.dumps(rec), encoding="utf-8")
+    (_store(payload,"rules")/f"{rid}.json").write_text(json.dumps(rec), encoding="utf-8")
     return {"ok":True,"rule_id":rid}
 
 @router.get("/api/recon/rules/list")
-async def rule_list(_=Depends(verify_scan_quota)):
+async def rule_list(payload=Depends(verify_scan_quota)):
     out=[]
-    for f in (_BASE/"rules").glob("*.json"):
+    for f in (_store(payload,"rules")).glob("*.json"):
         try: out.append(json.loads(f.read_text(encoding="utf-8")))
         except Exception: pass
     return {"count":len(out),"rules":out}
 
 @router.delete("/api/recon/rules/{rule_id}")
-async def rule_delete(rule_id: str, _=Depends(verify_scan_quota)):
-    f = _BASE/"rules"/f"{rule_id}.json"
+async def rule_delete(rule_id: str, payload=Depends(verify_scan_quota)):
+    if not _valid_id(rule_id): raise HTTPException(400,"invalid rule_id")
+    f = _store(payload,"rules")/f"{rule_id}.json"
     if not f.exists(): raise HTTPException(404)
     f.unlink()
     return {"ok":True}
 
 class EvalReq(BaseModel):
     scan_data: dict   # the r{} object
-    
+
+def _resolve_path(data, dotted):
+    """Walk a dict/list by a dotted key path. Pure data access — NO eval, so a
+    user-uploaded rule condition can never execute code (the old eval() with an
+    empty __builtins__ was escapable to RCE via __class__/__subclasses__)."""
+    cur = data
+    for part in dotted.split("."):
+        part = part.strip()
+        if isinstance(cur, dict) and part in cur:
+            cur = cur[part]
+        elif isinstance(cur, list) and part.lstrip("-").isdigit() and -len(cur) <= int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            return None
+    return cur
+
 @router.post("/api/recon/rules/evaluate")
-async def rules_evaluate(req: EvalReq, _=Depends(verify_scan_quota)):
+async def rules_evaluate(req: EvalReq, payload=Depends(verify_scan_quota)):
     """Evaluate all enabled rules against scan data. Returns matching findings."""
     matches=[]
-    for f in (_BASE/"rules").glob("*.json"):
+    for f in (_store(payload,"rules")).glob("*.json"):
         try:
             rule=json.loads(f.read_text(encoding="utf-8"))
             if not rule.get("enabled",True): continue
-            # Simple eval: split "X contains Y" or "X == Y"
             cond=rule.get("condition","")
             tokens=cond.split()
             if "contains" in tokens:
-                idx=tokens.index("contains")
-                lhs=" ".join(tokens[:idx])
-                rhs=" ".join(tokens[idx+1:]).strip('"\'')
-                val=eval(f"req.scan_data.{lhs}",{"req":req,"__builtins__":{}}) if "." in lhs else None
-                if val and rhs in str(val):
-                    matches.append({"rule_id":rule["rule_id"],"name":rule["name"],
-                        "severity":rule["severity"],"cwe":rule.get("cwe"),
-                        "evidence":f"Condition matched: {cond}",
-                        "remediation":rule.get("remediation","")})
+                op="contains"; idx=tokens.index("contains")
+            elif "==" in tokens:
+                op="=="; idx=tokens.index("==")
+            else:
+                continue
+            lhs=" ".join(tokens[:idx]).strip()
+            rhs=" ".join(tokens[idx+1:]).strip().strip('"\'')
+            val=_resolve_path(req.scan_data, lhs) if lhs else None
+            hit = (op=="contains" and val is not None and rhs in str(val)) or \
+                  (op=="==" and val is not None and str(val)==rhs)
+            if hit:
+                matches.append({"rule_id":rule["rule_id"],"name":rule["name"],
+                    "severity":rule["severity"],"cwe":rule.get("cwe"),
+                    "evidence":f"Condition matched: {cond}",
+                    "remediation":rule.get("remediation","")})
         except Exception: continue
     return {"match_count":len(matches),"matches":matches}
 

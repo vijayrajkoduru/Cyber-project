@@ -29,22 +29,34 @@ def role_meets(role: str, minimum: str) -> bool:
     return _ROLE_RANK.get(role or "", 0) >= _ROLE_RANK.get(minimum, 99)
 
 
+def role_rank(role: str) -> int:
+    """Numeric rank of a role (unknown -> 0). For tier-aware authority checks."""
+    return _ROLE_RANK.get(role or "", 0)
+
+
+def personal_org_id(user_id: str) -> str:
+    """Deterministic id for a user's personal org. Same input -> same id, so
+    concurrent workers creating it converge (INSERT OR IGNORE) instead of
+    racing to two different uuid4 orgs for the same user."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "vulnuslab:personal-org:" + str(user_id)))
+
+
 def get_or_create_personal_org(user_id: str, username: str = "", plan: str = "trial") -> str:
     """Return the user's existing org id, or create a personal org (user=Owner)
-    if they have none. Idempotent — safe to call on every login."""
+    if they have none. Idempotent + race-safe across uvicorn workers."""
     with get_db() as con:
         row = con.execute(
             "SELECT org_id FROM org_members WHERE user_id=? ORDER BY added_at LIMIT 1",
             (user_id,)).fetchone()
         if row:
             return row["org_id"]
-        oid = str(uuid.uuid4())
+        oid = personal_org_id(user_id)   # deterministic -> no duplicate orgs on race
         now = _now()
         con.execute(
-            "INSERT INTO orgs (id, name, plan, owner_user_id, created_at) VALUES (?,?,?,?,?)",
+            "INSERT OR IGNORE INTO orgs (id, name, plan, owner_user_id, created_at) VALUES (?,?,?,?,?)",
             (oid, username or user_id, plan or "trial", user_id, now))
         con.execute(
-            "INSERT INTO org_members (org_id, user_id, role, added_at) VALUES (?,?,?,?)",
+            "INSERT OR IGNORE INTO org_members (org_id, user_id, role, added_at) VALUES (?,?,?,?)",
             (oid, user_id, "owner", now))
         return oid
 
@@ -78,16 +90,28 @@ def list_members(org_id: str):
             "WHERE m.org_id=? ORDER BY m.added_at", (org_id,)).fetchall()]
 
 
-def add_member(org_id: str, user_id: str, role: str = "member", invited_by: str = None):
+def add_member(org_id: str, user_id: str, role: str = "member", invited_by: str = None) -> bool:
+    """Add a NEW member. Returns False if already a member (caller should use
+    change_role) — never silently overwrites an existing role, which would let
+    invite bypass change_role's owner guards."""
     if role not in VALID_ROLES:
         role = "member"
     with get_db() as con:
+        exists = con.execute(
+            "SELECT 1 FROM org_members WHERE org_id=? AND user_id=?",
+            (org_id, user_id)).fetchone()
+        if exists:
+            return False
         con.execute(
-            "INSERT OR REPLACE INTO org_members (org_id, user_id, role, added_at, invited_by) "
+            "INSERT INTO org_members (org_id, user_id, role, added_at, invited_by) "
             "VALUES (?,?,?,?,?)", (org_id, user_id, role, _now(), invited_by))
+        return True
 
 
 def change_role(org_id: str, user_id: str, role: str) -> bool:
+    """Returns False if the role is invalid, the change would strand the org with
+    no owner, or user_id is not a member of org_id (0 rows affected) — so the API
+    reports a truthful result and never writes an audit entry for a no-op."""
     if role not in VALID_ROLES:
         return False
     with get_db() as con:
@@ -101,24 +125,26 @@ def change_role(org_id: str, user_id: str, role: str) -> bool:
                 (org_id, user_id)).fetchone()
             if cur and cur["role"] == "owner" and owners <= 1:
                 return False
-        con.execute("UPDATE org_members SET role=? WHERE org_id=? AND user_id=?",
-                    (role, org_id, user_id))
-        return True
+        res = con.execute("UPDATE org_members SET role=? WHERE org_id=? AND user_id=?",
+                          (role, org_id, user_id))
+        return res.rowcount > 0   # False if user_id isn't a member of this org
 
 
 def remove_member(org_id: str, user_id: str) -> bool:
     with get_db() as con:
         cur = con.execute("SELECT role FROM org_members WHERE org_id=? AND user_id=?",
                           (org_id, user_id)).fetchone()
-        if cur and cur["role"] == "owner":
+        if not cur:
+            return False  # not a member -> truthful no-op (no forged audit entry)
+        if cur["role"] == "owner":
             owners = con.execute(
                 "SELECT COUNT(*) c FROM org_members WHERE org_id=? AND role='owner'",
                 (org_id,)).fetchone()["c"]
             if owners <= 1:
                 return False  # don't strand an org with no owner
-        con.execute("DELETE FROM org_members WHERE org_id=? AND user_id=?",
-                    (org_id, user_id))
-        return True
+        res = con.execute("DELETE FROM org_members WHERE org_id=? AND user_id=?",
+                          (org_id, user_id))
+        return res.rowcount > 0
 
 
 def write_audit(action: str, actor_id: str = None, actor_name: str = None,

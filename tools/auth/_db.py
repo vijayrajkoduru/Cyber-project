@@ -103,14 +103,17 @@ def init_db():
                 "WHERE NOT EXISTS (SELECT 1 FROM org_members m WHERE m.user_id = u.id)"
             ).fetchall()
             for uid, uname, uplan, ucreated in orphans:
-                oid = str(uuid.uuid4())
+                # Deterministic personal-org id (uuid5) + INSERT OR IGNORE so two
+                # uvicorn workers cold-starting at once converge on ONE org for
+                # the user instead of racing to two different uuid4 orgs.
+                oid = str(uuid.uuid5(uuid.NAMESPACE_URL, "vulnuslab:personal-org:" + str(uid)))
                 ts = ucreated or (datetime.datetime.utcnow().isoformat() + "Z")
                 con.execute(
-                    "INSERT INTO orgs (id, name, plan, owner_user_id, created_at) "
+                    "INSERT OR IGNORE INTO orgs (id, name, plan, owner_user_id, created_at) "
                     "VALUES (?, ?, ?, ?, ?)",
                     (oid, uname or uid, uplan or "trial", uid, ts))
                 con.execute(
-                    "INSERT INTO org_members (org_id, user_id, role, added_at) "
+                    "INSERT OR IGNORE INTO org_members (org_id, user_id, role, added_at) "
                     "VALUES (?, ?, 'owner', ?)", (oid, uid, ts))
         except Exception:
             pass

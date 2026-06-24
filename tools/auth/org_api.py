@@ -11,10 +11,28 @@ from tools._shared import verify_token, require_org_role
 from tools.auth._db import get_db
 from tools.auth._orgs import (
     get_user_org_role, get_org, list_members, add_member, change_role,
-    remove_member, get_audit, write_audit, VALID_ROLES,
+    remove_member, get_audit, write_audit, VALID_ROLES, role_rank,
 )
 
 router = APIRouter()
+
+
+def _can_assign(caller_role: str, new_role: str, target_role: str = None) -> bool:
+    """Tier-aware authority. An owner may grant/modify any role. Anyone else may
+    only grant a role STRICTLY below their own and only act on a target STRICTLY
+    below their own — so an admin can't mint/grant 'owner', can't promote anyone
+    to admin, and can't demote/modify a peer admin or the owner."""
+    cr = role_rank(caller_role)
+    if cr >= role_rank("owner"):
+        return True
+    return cr > role_rank(new_role) and cr > role_rank(target_role or "")
+
+
+def _can_act_on(caller_role: str, target_role: str) -> bool:
+    """True if caller may remove/act on a member of `target_role` (owner may act
+    on anyone; others only on someone strictly below their own tier)."""
+    cr = role_rank(caller_role)
+    return cr >= role_rank("owner") or cr > role_rank(target_role or "")
 
 
 def _ip(request: Request) -> str:
@@ -28,9 +46,16 @@ def _ip(request: Request) -> str:
 
 
 def _org_id(payload) -> str:
-    oid = payload.get("org_id")
+    """Resolve the caller's org, verifying CURRENT membership in their claimed org
+    (a removed/moved user can't keep operating on a stale org_id claim). Falls
+    back to their default org."""
+    sub = payload.get("sub")
+    claimed = payload.get("org_id")
+    oid = None
+    if claimed:
+        oid, _ = get_user_org_role(sub, claimed)
     if not oid:
-        oid, _ = get_user_org_role(payload.get("sub"))
+        oid, _ = get_user_org_role(sub)
     if not oid:
         raise HTTPException(404, "No organization for this account")
     return oid
@@ -39,7 +64,8 @@ def _org_id(payload) -> str:
 @router.get("/api/org")
 def my_org(payload=Depends(verify_token)):
     oid = _org_id(payload)
-    return {"org": get_org(oid) or {}, "my_role": payload.get("org_role")}
+    _, role = get_user_org_role(payload.get("sub"), oid)   # authoritative role
+    return {"org": get_org(oid) or {}, "my_role": role}
 
 
 @router.get("/api/org/members")
@@ -66,7 +92,11 @@ def invite(req: InviteReq, request: Request, payload=Depends(require_org_role("a
         # Full email-invite (send a signup link to an unregistered address) is
         # Step 2.5; for now only existing registered users can be added.
         raise HTTPException(404, "No registered user with that email/username")
-    add_member(oid, u["id"], req.role, invited_by=payload.get("sub"))
+    # Tier-aware authority: an admin can't invite someone as admin/owner.
+    if not _can_assign(payload.get("org_role"), req.role, None):
+        raise HTTPException(403, "You cannot grant a role at or above your own.")
+    if not add_member(oid, u["id"], req.role, invited_by=payload.get("sub")):
+        raise HTTPException(409, "User is already a member — change their role instead.")
     write_audit("user_invite", actor_id=payload.get("sub"),
                 actor_name=payload.get("username"), org_id=oid,
                 target=req.email, detail=f"role={req.role}", ip=_ip(request))
@@ -83,8 +113,15 @@ def set_role(user_id: str, req: RoleReq, request: Request,
     oid = _org_id(payload)
     if req.role not in VALID_ROLES:
         raise HTTPException(400, f"Invalid role. Allowed: {sorted(VALID_ROLES)}")
+    # Tier-aware authority: an admin can't grant 'owner'/'admin' nor modify a
+    # peer-or-higher (only an owner can). Look up the target's CURRENT role first.
+    _, target_role = get_user_org_role(user_id, oid)
+    if not target_role:
+        raise HTTPException(404, "Not a member of this organization")
+    if not _can_assign(payload.get("org_role"), req.role, target_role):
+        raise HTTPException(403, "You cannot assign that role or modify that member.")
     if not change_role(oid, user_id, req.role):
-        raise HTTPException(400, "Would strand the org without an owner")
+        raise HTTPException(400, "Not a member, or the change would strand the org without an owner")
     write_audit("role_change", actor_id=payload.get("sub"),
                 actor_name=payload.get("username"), org_id=oid,
                 target=user_id, detail=f"role={req.role}", ip=_ip(request))
@@ -94,6 +131,12 @@ def set_role(user_id: str, req: RoleReq, request: Request,
 @router.delete("/api/org/members/{user_id}")
 def remove(user_id: str, request: Request, payload=Depends(require_org_role("admin"))):
     oid = _org_id(payload)
+    _, target_role = get_user_org_role(user_id, oid)
+    if not target_role:
+        raise HTTPException(404, "Not a member of this organization")
+    # An admin can't remove a peer admin or the owner — only an owner can.
+    if not _can_act_on(payload.get("org_role"), target_role):
+        raise HTTPException(403, "You cannot remove that member.")
     if not remove_member(oid, user_id):
         raise HTTPException(400, "Cannot remove the last owner")
     write_audit("user_remove", actor_id=payload.get("sub"),
