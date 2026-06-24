@@ -46,6 +46,38 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_email ON users(email);
+
+        -- RBAC / Teams (Phase 2.1) -----------------------------------------
+        CREATE TABLE IF NOT EXISTS orgs (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            plan TEXT DEFAULT 'trial',
+            owner_user_id TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS org_members (
+            org_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member',
+            added_at TEXT NOT NULL,
+            invited_by TEXT,
+            PRIMARY KEY (org_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_member_user ON org_members(user_id);
+
+        -- Audit log (Phase 2.1) — append-only -----------------------------
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            org_id TEXT,
+            actor_id TEXT,
+            actor_name TEXT,
+            action TEXT NOT NULL,
+            target TEXT,
+            detail TEXT,
+            ip TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_org ON audit_log(org_id, id);
     """)
     # Migrate pre-existing DBs that lack the billing columns (ALTER throws once
     # the column exists -> caught). Runs once per process.
@@ -62,6 +94,26 @@ def init_db():
                 con.execute(_ddl)
             except Exception:
                 pass
+        # Backfill (Phase 2.1): every existing user gets a personal org as
+        # Owner, so today's single-user behaviour is preserved exactly — orgs
+        # can just now hold more members. Idempotent (only users with no org).
+        try:
+            orphans = con.execute(
+                "SELECT u.id, u.username, u.plan, u.created_at FROM users u "
+                "WHERE NOT EXISTS (SELECT 1 FROM org_members m WHERE m.user_id = u.id)"
+            ).fetchall()
+            for uid, uname, uplan, ucreated in orphans:
+                oid = str(uuid.uuid4())
+                ts = ucreated or (datetime.datetime.utcnow().isoformat() + "Z")
+                con.execute(
+                    "INSERT INTO orgs (id, name, plan, owner_user_id, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (oid, uname or uid, uplan or "trial", uid, ts))
+                con.execute(
+                    "INSERT INTO org_members (org_id, user_id, role, added_at) "
+                    "VALUES (?, ?, 'owner', ?)", (oid, uid, ts))
+        except Exception:
+            pass
         _SCHEMA_MIGRATED = True
     con.commit()
     con.close()
