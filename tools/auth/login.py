@@ -89,11 +89,24 @@ async def auth_login(req: LoginRequest, request: Request):
     if user["status"] != "active":
         raise HTTPException(403, f"Account is {user['status']}")
 
+    # Phase 2.1: ensure the user has an org (personal, Owner) so the JWT can
+    # carry org_id + org_role for RBAC. Fail-safe — degrades to no-org on error.
+    _org_id = None
+    _org_role = None
+    try:
+        from tools.auth._orgs import get_or_create_personal_org, get_user_org_role
+        get_or_create_personal_org(user["id"], user["username"], user["plan"])
+        _org_id, _org_role = get_user_org_role(user["id"])
+    except Exception as exc:
+        _log.warning("org ensure on login failed for %s: %s", user["id"], exc)
+
     payload = {
         "sub":      user["id"],
         "username": user["username"],
         "role":     user["role"],
         "plan":     user["plan"],
+        "org_id":   _org_id,
+        "org_role": _org_role,
         "iat":      datetime.datetime.utcnow(),
         "exp":      datetime.datetime.utcnow() + datetime.timedelta(hours=TOKEN_TTL_HOURS),
     }
@@ -106,15 +119,13 @@ async def auth_login(req: LoginRequest, request: Request):
         except Exception as exc:
             _log.warning("zone lazy-init failed for %s: %s", user["id"], exc)
 
-    # Phase 2.1: ensure the user has an org (personal, Owner) + record the login
-    # in the audit trail. Fail-safe — login must NEVER break if this errors.
+    # Phase 2.1: record the login in the audit trail. Fail-safe.
     try:
-        from tools.auth._orgs import get_or_create_personal_org, write_audit
-        _oid = get_or_create_personal_org(user["id"], user["username"], user["plan"])
+        from tools.auth._orgs import write_audit
         write_audit("login", actor_id=user["id"], actor_name=user["username"],
-                    org_id=_oid, ip=_client_ip(request))
+                    org_id=_org_id, ip=_client_ip(request))
     except Exception as exc:
-        _log.warning("org/audit on login failed for %s: %s", user["id"], exc)
+        _log.warning("login audit failed for %s: %s", user["id"], exc)
 
     return {
         "token":        token,

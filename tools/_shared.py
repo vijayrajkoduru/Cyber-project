@@ -118,6 +118,27 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     return payload
 
 
+def require_org_role(minimum: str):
+    """FastAPI dependency factory enforcing org RBAC (viewer<member<admin<owner).
+    Returns the JWT payload with org_id/org_role populated; 403 if the caller's
+    role is below `minimum`. Pre-RBAC tokens (no org_role) resolve from the DB so
+    existing sessions keep working without a forced re-login."""
+    def _dep(payload=Depends(verify_token)):
+        try:
+            from tools.auth._orgs import role_meets, get_user_org_role
+        except Exception:
+            return payload  # RBAC layer unavailable -> don't hard-block scans
+        role = payload.get("org_role")
+        if not role:  # token issued before RBAC existed -> resolve from DB
+            oid, role = get_user_org_role(payload.get("sub"))
+            payload["org_id"] = oid
+            payload["org_role"] = role
+        if not role_meets(role, minimum):
+            raise HTTPException(403, f"Requires '{minimum}' role or higher")
+        return payload
+    return _dep
+
+
 INTERNAL_FANOUT_HEADER = "x-vl-internal-fanout"
 
 
