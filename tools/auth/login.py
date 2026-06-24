@@ -106,6 +106,16 @@ async def auth_login(req: LoginRequest, request: Request):
         except Exception as exc:
             _log.warning("zone lazy-init failed for %s: %s", user["id"], exc)
 
+    # Phase 2.1: ensure the user has an org (personal, Owner) + record the login
+    # in the audit trail. Fail-safe — login must NEVER break if this errors.
+    try:
+        from tools.auth._orgs import get_or_create_personal_org, write_audit
+        _oid = get_or_create_personal_org(user["id"], user["username"], user["plan"])
+        write_audit("login", actor_id=user["id"], actor_name=user["username"],
+                    org_id=_oid, ip=_client_ip(request))
+    except Exception as exc:
+        _log.warning("org/audit on login failed for %s: %s", user["id"], exc)
+
     return {
         "token":        token,
         "access_token": token,
