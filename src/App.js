@@ -23569,6 +23569,228 @@ function RedTeamConsole({ token }) {
   );
 }
 
+// ─── Phase 2.1: Team / Organization (RBAC) ─────────────────────────────
+// Every account owns a personal org; this panel manages its members + roles.
+// Mutations are admin/owner-only (backend re-enforces via require_org_role).
+function TeamOrgPanel({ token }) {
+  const [org, setOrg]         = useState(null);
+  const [myRole, setMyRole]   = useState("");
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg]         = useState("");
+  const [msgErr, setMsgErr]   = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [invEmail, setInvEmail]     = useState("");
+  const [invRole, setInvRole]       = useState("member");
+  const [busy, setBusy]             = useState(false);
+  const me = (typeof localStorage !== "undefined" && localStorage.getItem("cyberUser")) || "";
+
+  const ROLES = ["viewer", "member", "admin", "owner"];
+  const canManage = myRole === "admin" || myRole === "owner";
+  const flash = (m, err) => { setMsg(m); setMsgErr(!!err); };
+  const roleColor = (r) => r === "owner" ? "#f59e0b" : r === "admin" ? "#3b9eff" : r === "member" ? "#5dffa6" : "#8a94a8";
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const o = await api("/api/org", "GET", null, token);
+      setOrg(o.org || null);
+      setMyRole(o.my_role || "");
+      const mb = await api("/api/org/members", "GET", null, token);
+      setMembers(Array.isArray(mb.members) ? mb.members : []);
+      flash("", false);
+    } catch (e) {
+      flash("Could not load your organization: " + (e.message || e), true);
+    }
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const sendInvite = async () => {
+    if (!invEmail.trim()) { flash("Enter an email or username.", true); return; }
+    setBusy(true);
+    try {
+      const r = await api("/api/org/invite", "POST", { email: invEmail.trim(), role: invRole }, token);
+      flash("Added " + (r.added || invEmail) + " as " + (r.role || invRole) + ".", false);
+      setInvEmail(""); setInvRole("member"); setShowInvite(false);
+      await load();
+    } catch (e) {
+      flash(e.status === 404
+        ? "No registered user with that email/username. They must create a VulnusLab account first."
+        : "Invite failed: " + (e.message || e), true);
+    }
+    setBusy(false);
+  };
+
+  const changeRole = async (uid, role) => {
+    try {
+      await api("/api/org/members/" + uid + "/role", "POST", { role }, token);
+      flash("Role updated.", false);
+      await load();
+    } catch (e) {
+      flash(e.status === 400 ? "That change would leave the org without an owner." : "Could not change role: " + (e.message || e), true);
+      await load();
+    }
+  };
+
+  const removeMember = async (uid, uname) => {
+    if (typeof window !== "undefined" && !window.confirm("Remove " + (uname || "this member") + " from the organization?")) return;
+    try {
+      await api("/api/org/members/" + uid, "DELETE", null, token);
+      flash("Member removed.", false);
+      await load();
+    } catch (e) {
+      flash(e.status === 400 ? "Cannot remove the last owner." : "Could not remove member: " + (e.message || e), true);
+    }
+  };
+
+  return (
+    <div className="fade" style={{padding:24,fontFamily:"Inter,sans-serif"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,flexWrap:"wrap"}}>
+        <div>
+          <h2 style={{fontSize:20,fontWeight:800,color:"#ffffff",margin:0}}>Team &amp; Organization</h2>
+          <p style={{fontSize:12,color:"#5a6478",margin:0}}>
+            {org ? org.name : "Your organization"} · your role: <span style={{color:roleColor(myRole),fontWeight:700}}>{myRole || "—"}</span>
+          </p>
+        </div>
+        <button onClick={load} style={{marginLeft:"auto",background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Refresh</button>
+        {canManage && <button onClick={()=>{setInvEmail("");setInvRole("member");setShowInvite(true);}} style={{background:"linear-gradient(135deg,#1d4ed8,#3b9eff)",border:"none",color:"#fff",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>+ Invite member</button>}
+      </div>
+
+      {msg && <div style={{background:msgErr?"#450a0a":"#052e16",border:msgErr?"1px solid #991b1b":"1px solid #166534",borderRadius:8,padding:"10px 16px",color:msgErr?"#ffa3b0":"#5dffa6",fontSize:13,marginBottom:16,whiteSpace:"pre-wrap"}}>{msg}</div>}
+
+      {!canManage && !loading && <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:"10px 16px",color:"#8a94a8",fontSize:12,marginBottom:16}}>You have read-only access to the team. Ask an admin or owner to manage members.</div>}
+
+      {loading ? <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>Loading…</div> : (
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {members.length === 0 && <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>No members yet.</div>}
+          {members.map(m => {
+            const isMe = m.username && me && m.username.toLowerCase() === me.toLowerCase();
+            return (
+              <div key={m.user_id} style={{background:"#0d1320",border:"1px solid #1c2435",borderLeft:"4px solid "+roleColor(m.role),borderRadius:10,padding:"14px 18px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:200}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                      <span style={{fontSize:15,fontWeight:700,color:"#ffffff"}}>{m.username || m.user_id}</span>
+                      {isMe && <span style={{fontSize:10,color:"#5a6478",background:"#1c2435",padding:"2px 8px",borderRadius:4}}>you</span>}
+                    </div>
+                    <div style={{fontSize:12,color:"#5a6478"}}>{m.email || ""}</div>
+                  </div>
+                  {canManage ? (
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <select value={m.role} onChange={e=>changeRole(m.user_id, e.target.value)}
+                        style={{background:"#0a0e17",border:"1px solid #1c2435",color:roleColor(m.role),borderRadius:6,padding:"6px 10px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                        {ROLES.map(r => <option key={r} value={r} style={{color:"#d8deea"}}>{r}</option>)}
+                      </select>
+                      {!isMe && <button onClick={()=>removeMember(m.user_id, m.username)} style={{background:"#1c0000",border:"1px solid #7f1d1d",color:"#ff6b82",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>Remove</button>}
+                    </div>
+                  ) : (
+                    <span style={{fontSize:11,fontWeight:700,color:roleColor(m.role),background:"#0a0e17",border:"1px solid #1c2435",padding:"4px 10px",borderRadius:6,textTransform:"uppercase"}}>{m.role}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showInvite && (
+        <div onClick={()=>setShowInvite(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:14,width:"100%",maxWidth:420,padding:28}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontSize:17,fontWeight:800,color:"#d8deea"}}>Invite member</div>
+              <button onClick={()=>setShowInvite(false)} style={{background:"none",border:"1px solid #1c2435",color:"#8a94a8",borderRadius:6,width:28,height:28,cursor:"pointer",fontSize:16}}>×</button>
+            </div>
+            <div style={{fontSize:12,color:"#5a6478",marginBottom:16}}>The person must already have a VulnusLab account — enter their account email or username.</div>
+            <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Email or username</label>
+            <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="teammate@company.com"
+              style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:14}}/>
+            <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Role</label>
+            <select value={invRole} onChange={e=>setInvRole(e.target.value)}
+              style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:20}}>
+              <option value="viewer">viewer — read results only</option>
+              <option value="member">member — run scans</option>
+              <option value="admin">admin — manage team</option>
+              <option value="owner">owner — full control</option>
+            </select>
+            <button onClick={sendInvite} disabled={busy} style={{width:"100%",background:busy?"#1c2435":"linear-gradient(135deg,#1d4ed8,#3b9eff)",border:"none",borderRadius:7,padding:"12px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"wait":"pointer"}}>{busy?"Adding…":"Add to organization"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Phase 2.1: Org audit log (security event trail) ───────────────────
+function AuditLogPanel({ token }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState("");
+  const [q, setQ]             = useState("");
+
+  const load = async () => {
+    setLoading(true); setErr("");
+    try {
+      const d = await api("/api/org/audit", "GET", null, token);
+      setRows(Array.isArray(d.audit) ? d.audit : []);
+    } catch (e) {
+      setErr(e.status === 403
+        ? "The audit log requires an admin or owner role in your organization."
+        : "Could not load the audit log: " + (e.message || e));
+      setRows([]);
+    }
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const actionColor = (a) => {
+    a = (a || "").toLowerCase();
+    if (a.includes("remove") || a.includes("delete")) return "#ff6b82";
+    if (a.includes("role"))   return "#f59e0b";
+    if (a.includes("invite") || a.includes("add")) return "#5dffa6";
+    if (a.includes("login"))  return "#3b9eff";
+    return "#8a94a8";
+  };
+  const fmt = (ts) => { try { return new Date(ts).toLocaleString(); } catch (_) { return ts || ""; } };
+  const filtered = q.trim()
+    ? rows.filter(r => JSON.stringify(r).toLowerCase().includes(q.trim().toLowerCase()))
+    : rows;
+
+  return (
+    <div className="fade" style={{padding:24,fontFamily:"Inter,sans-serif"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,flexWrap:"wrap"}}>
+        <div>
+          <h2 style={{fontSize:20,fontWeight:800,color:"#ffffff",margin:0}}>Audit Log</h2>
+          <p style={{fontSize:12,color:"#5a6478",margin:0}}>Security events in your organization (most recent first)</p>
+        </div>
+        <button onClick={load} style={{marginLeft:"auto",background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Refresh</button>
+      </div>
+
+      {err && <div style={{background:"#450a0a",border:"1px solid #991b1b",borderRadius:8,padding:"10px 16px",color:"#ffa3b0",fontSize:13,marginBottom:16}}>{err}</div>}
+
+      {!err && <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Filter by action, user, target, IP…"
+        style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:16}}/>}
+
+      {loading ? <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>Loading…</div> : (!err && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {filtered.length === 0 && <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>No activity recorded yet.</div>}
+          {filtered.map((r, i) => (
+            <div key={i} style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:8,padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:(r.target||r.detail)?6:0}}>
+                <span style={{fontSize:10,fontWeight:800,color:"#0a0e17",background:actionColor(r.action),padding:"2px 8px",borderRadius:4,textTransform:"uppercase",letterSpacing:0.5}}>{r.action||"event"}</span>
+                <span style={{fontSize:13,color:"#d8deea",fontWeight:600}}>{r.actor_name||"—"}</span>
+                <span style={{marginLeft:"auto",fontSize:11,color:"#5a6478",fontFamily:"JetBrains Mono,monospace"}}>{fmt(r.ts)}</span>
+              </div>
+              {(r.target || r.detail) && <div style={{fontSize:12,color:"#8a94a8"}}>{r.target ? <span>target: <strong style={{color:"#c3ccda"}}>{r.target}</strong></span> : null}{(r.target && r.detail) ? " · " : ""}{r.detail || ""}</div>}
+              {r.ip && <div style={{fontSize:11,color:"#5a6478",marginTop:4,fontFamily:"JetBrains Mono,monospace"}}>IP {r.ip}</div>}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AdminPanel({ token }) {
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -25267,11 +25489,13 @@ export default function App() {
         {active === "guide"     && <GuideModule/>}
         {active === "apikeys"   && <ApiKeysModule token={token}/>}
         {active === "credvault" && <CredentialVaultModule token={token}/>}
+        {active === "team"      && <TeamOrgPanel token={token}/>}
+        {active === "audit"     && <AuditLogPanel token={token}/>}
         {/* ComingSoon fallback: only render if `active` is NOT a real module id
             AND NOT one of the special internal view ids. Built dynamically from
             MODULES so new modules can never drift back into "under development". */}
         {!MODULES.map(m=>m.id).concat([
-            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys","credvault","redteam"
+            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys","credvault","redteam","team","audit"
           ]).includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
@@ -25365,6 +25589,8 @@ export default function App() {
           {[
             {id:"health",  icon:"", label:"System Health"},
             {id:"history", icon:"", label:"Scan History"},
+            {id:"team",    icon:"", label:"Team & Organization"},
+            {id:"audit",   icon:"", label:"Audit Log"},
             {id:"settings",icon:"",  label:"Settings"},
             ...(isSuperAdmin ? [{id:"adminpanel", icon:"", label:"Admin Panel"}] : []),
             ...(isSuperAdmin ? [{id:"redteam", icon:"", label:"Red Team"}] : []),
