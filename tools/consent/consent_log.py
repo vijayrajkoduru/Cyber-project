@@ -44,6 +44,13 @@ def _init_db():
         """)
         c.execute("CREATE INDEX IF NOT EXISTS idx_consent_target ON consent_log(target)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_consent_ts ON consent_log(ts)")
+        # Phase 2.1 Step 3: org scoping. Guarded ALTER so existing consent DBs
+        # gain the column without a migration script (raises once it exists).
+        try:
+            c.execute("ALTER TABLE consent_log ADD COLUMN org_id TEXT")
+        except Exception:
+            pass
+        c.execute("CREATE INDEX IF NOT EXISTS idx_consent_org ON consent_log(org_id)")
 
 
 class ConsentBody(BaseModel):
@@ -61,8 +68,19 @@ async def log_consent(body: ConsentBody, request: Request,
         return {"ok": False, "error": f"db init failed: {e}"}
 
     user_email = ""
+    org_id = ""
     if isinstance(payload, dict):
         user_email = payload.get("sub") or payload.get("email") or ""
+        org_id = payload.get("org_id") or ""
+        if not org_id:
+            sub = payload.get("sub")
+            if sub:
+                try:
+                    from tools.auth._orgs import get_user_org_role
+                    org_id, _ = get_user_org_role(sub)
+                except Exception:
+                    org_id = ""
+        org_id = org_id or ""
 
     # Per-plan quota gate. One consent_log call == one scan, so this is the
     # single place that meters scans. If the user is over their monthly cap
@@ -100,10 +118,10 @@ async def log_consent(body: ConsentBody, request: Request,
     try:
         with _DB_LOCK, sqlite3.connect(_DB_PATH) as c:
             c.execute(
-                "INSERT INTO consent_log (ts, user_email, target, module, client_ip, user_agent) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO consent_log (ts, user_email, org_id, target, module, client_ip, user_agent) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                 user_email, body.target, body.module, client_ip,
+                 user_email, org_id, body.target, body.module, client_ip,
                  (body.user_agent or "")[:500]))
         return {"ok": True, "plan": q.get("effective_plan"),
                 "used": q.get("used"), "cap": q.get("cap"), "remaining": q.get("remaining")}
