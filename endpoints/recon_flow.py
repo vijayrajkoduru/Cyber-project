@@ -33,34 +33,12 @@ def _scan_id(target, ts, salt=""): return hashlib.sha1(f"{target}-{ts}-{salt}".e
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 def _valid_id(s): return bool(_ID_RE.match(s or ""))
 
-# ───────────────── Org scoping (Phase 2.1 Step 3) ─────────────────
+# ───────────────── Org scoping (Phase 2.1 Step 3 + hardening) ─────────────────
 # Scan history lives in a flat per-target dir shared by all tenants, so each
-# record is TAGGED with org_id and FILTERED on read. Records written before
-# org tagging (no org_id) are grandfathered as visible so existing data is
-# never orphaned. Result: cross-tenant isolation (org A can't read org B's
-# scans) while everyone in one org shares results.
-def _caller_org(payload):
-    """Resolve the caller's org id from the JWT claim, else a DB lookup.
-    None only if RBAC is unavailable -> caller falls back to legacy visibility."""
-    if isinstance(payload, dict):
-        oid = payload.get("org_id")
-        if oid:
-            return oid
-        sub = payload.get("sub")
-        if sub:
-            try:
-                from tools.auth._orgs import get_user_org_role
-                oid, _ = get_user_org_role(sub)
-                return oid
-            except Exception:
-                return None
-    return None
-
-def _org_can_see(rec, oid):
-    """A record is visible if it belongs to the caller's org, or it predates
-    org tagging (legacy, no org_id -> grandfathered)."""
-    rec_oid = (rec or {}).get("org_id")
-    return (not rec_oid) or (oid is not None and rec_oid == oid)
+# record is TAGGED with org_id and FILTERED on read (legacy untagged records
+# grandfathered). The membership-verifying helpers live in tools._core.flow_scope
+# so this router and recon_flow_advanced.py share ONE implementation (no drift).
+from tools._core.flow_scope import caller_org as _caller_org, org_can_see as _org_can_see
 
 def _load_rec(target, sid):
     if not _valid_id(sid):
@@ -423,12 +401,13 @@ class BatchReq(BaseModel):
     tiers: Optional[List[str]] = None
 
 @router.post("/api/recon/scan/batch")
-async def batch_scan(req: BatchReq, _=Depends(verify_scan_quota)):
+async def batch_scan(req: BatchReq, payload=Depends(verify_scan_quota)):
     """Queue a batch of targets to scan. Returns batch_id."""
     if not req.targets: raise HTTPException(400, "no targets")
     if len(req.targets) > 50: raise HTTPException(400, "max 50 targets per batch")
     bid = uuid.uuid4().hex[:12]
     rec = {"batch_id":bid,"targets":req.targets,"tiers":req.tiers,
+           "org_id":_caller_org(payload),"owner":str(payload.get("sub","")) if isinstance(payload,dict) else "",
            "created":int(time.time()),"status":"queued",
            "results":{}}
     (_BATCH / f"{bid}.json").write_text(json.dumps(rec), encoding="utf-8")
@@ -436,10 +415,13 @@ async def batch_scan(req: BatchReq, _=Depends(verify_scan_quota)):
     return {"ok":True,"batch_id":bid,"target_count":len(req.targets)}
 
 @router.get("/api/recon/scan/batch/{batch_id}")
-async def batch_status(batch_id: str, _=Depends(verify_scan_quota)):
+async def batch_status(batch_id: str, payload=Depends(verify_scan_quota)):
+    if not _valid_id(batch_id): raise HTTPException(400, "invalid batch_id")
     f = _BATCH / f"{batch_id}.json"
     if not f.exists(): raise HTTPException(404)
-    return json.loads(f.read_text(encoding="utf-8"))
+    rec = json.loads(f.read_text(encoding="utf-8"))
+    if not _org_can_see(rec, _caller_org(payload)): raise HTTPException(404)
+    return rec
 
 async def _run_batch(bid: str):
     f = _BATCH / f"{bid}.json"
@@ -478,8 +460,11 @@ async def export_scan(target: str = Query(...), scan_id: str = Query(...),
         w = csv.DictWriter(buf, fieldnames=["tool","severity","name","cwe","evidence","remediation"])
         w.writeheader()
         for f_ in findings: w.writerow(f_)
+        # _safe() strips quotes/semicolons/CRLF so the attacker-controlled target
+        # can't break out of the quoted filename (header/filename injection).
+        fn = f"vlrecon-{_safe(target)}-{_safe(scan_id)}.csv"
         return PlainTextResponse(buf.getvalue(),
-            headers={"Content-Disposition": f'attachment; filename="vlrecon-{target}-{scan_id}.csv"'})
+            headers={"Content-Disposition": f'attachment; filename="{fn}"'})
     elif format == "json":
         return rec
     else:

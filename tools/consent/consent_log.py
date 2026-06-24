@@ -28,9 +28,23 @@ _DB_PATH = os.environ.get("CONSENT_DB_PATH", "/app/data/consent_audit.db")
 _DB_LOCK = threading.Lock()
 
 
+def _connect():
+    """Connect with WAL + busy_timeout so the 4 uvicorn workers that share this
+    DB wait briefly for the lock instead of immediately failing 'database is
+    locked' and silently dropping a legal consent record (the in-process
+    threading.Lock gives no cross-process protection)."""
+    c = sqlite3.connect(_DB_PATH, timeout=10)
+    try:
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA busy_timeout=5000")
+    except Exception:
+        pass
+    return c
+
+
 def _init_db():
     os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
-    with sqlite3.connect(_DB_PATH) as c:
+    with _connect() as c:
         c.execute("""
             CREATE TABLE IF NOT EXISTS consent_log (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,7 +130,7 @@ async def log_consent(body: ConsentBody, request: Request,
         client_ip = fwd.split(",")[0].strip() or client_ip
 
     try:
-        with _DB_LOCK, sqlite3.connect(_DB_PATH) as c:
+        with _DB_LOCK, _connect() as c:
             c.execute(
                 "INSERT INTO consent_log (ts, user_email, org_id, target, module, client_ip, user_agent) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
