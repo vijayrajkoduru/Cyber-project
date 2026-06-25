@@ -72,20 +72,33 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=1, vulnerable=False,
             tests_summary="No CT records found")
 
-    interesting = [s for s in subs if any(k in s for k in
-                    ("dev", "staging", "test", "uat", "qa", "internal",
-                     "admin", "vpn", "api", "git", "jenkins", "jira", "k8s"))]
+    # CT-logged subdomains are PUBLIC inventory, not an exposure — api.<domain>
+    # is normally an intended public service. Only internal/pre-prod-looking
+    # names warrant a LOW; generic api/dev/admin names are INFO inventory.
+    _INTERNAL = ("internal", "vpn", "jenkins", "jira", "staging", "uat", "qa", "k8s")
+    _GENERIC = ("dev", "test", "admin", "api", "git")
+    internalish = [s for s in subs if any(k in s for k in _INTERNAL)]
+    generic = [s for s in subs if any(k in s for k in _GENERIC) and s not in internalish]
+    interesting = internalish + generic
 
     findings = []
-    if interesting:
+    if internalish:
         findings.append(wrap_finding(
-            f"INTERESTING subdomains exposed via CT logs ({len(interesting)})",
-            severity="MEDIUM", cwe="CWE-200", cvss="5.3", owasp="A05:2021",
-            remediation="Pre-prod / admin subdomains should NEVER be exposed to "
-                        "the public internet. Move them behind VPN or Cloudflare Access. "
-                        "CT logs publish every cert issued — even private CAs leak.",
-            evidence_marker=" | ".join(interesting[:25])
-                              + (' ...' if len(interesting) > 25 else '')))
+            f"Internal/pre-prod-looking subdomains in CT logs ({len(internalish)})",
+            severity="LOW", cvss="3.1", cwe="CWE-200", owasp="A05:2021",
+            remediation="These CT-logged subdomains look like internal/pre-prod systems "
+                        "(internal/vpn/jenkins/jira/staging/uat/k8s). CT is public, so issuing "
+                        "a cert advertises their existence. Confirm which are meant to be "
+                        "public; put the rest behind a VPN or use a wildcard / private CA.",
+            evidence_marker=" | ".join(internalish[:25]) + (' ...' if len(internalish) > 25 else '')))
+    if generic:
+        findings.append(wrap_finding(
+            f"Subdomain inventory from CT logs ({len(generic)} api/dev/admin-style)",
+            severity="INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
+            remediation="CT-logged subdomains (api/dev/test/admin/git) — attack-surface "
+                        "inventory, not an exposure (e.g. api.<domain> is normally public). "
+                        "Use as a recon target list.",
+            evidence_marker=" | ".join(generic[:25]) + (' ...' if len(generic) > 25 else '')))
 
     findings.append(wrap_finding(
         f"CT logs reveal {len(subs)} subdomains for {domain}",
@@ -97,8 +110,8 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="crtsh_full_certs", target=req.target, findings=findings,
-        tests_performed=1, vulnerable=bool(interesting),
-        tests_summary=f"crt.sh: {len(subs)} subdomains ({len(interesting)} interesting), {len(issuers)} CAs",
+        tests_performed=1, vulnerable=bool(internalish),
+        tests_summary=f"crt.sh: {len(subs)} subdomains ({len(interesting)} of interest), {len(issuers)} CAs",
         raw_data={"subdomains": subs, "interesting": interesting,
                    "issuers": list(issuers)[:20], "total_certs": len(data)})
 
