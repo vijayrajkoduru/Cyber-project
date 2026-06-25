@@ -163,11 +163,21 @@ def write_audit(action: str, actor_id: str = None, actor_name: str = None,
         pass
 
 
-def get_audit(org_id: str, limit: int = 500):
+def get_audit(org_id: str, limit: int = 100, offset: int = 0):
+    """A page of audit rows (most recent first). Paginated so the full compliance
+    history is reachable, not silently capped at one page."""
     with get_db() as con:
         return [dict(r) for r in con.execute(
             "SELECT ts, actor_name, action, target, detail, ip FROM audit_log "
-            "WHERE org_id=? ORDER BY id DESC LIMIT ?", (org_id, int(limit))).fetchall()]
+            "WHERE org_id=? ORDER BY id DESC LIMIT ? OFFSET ?",
+            (org_id, int(limit), int(offset))).fetchall()]
+
+
+def count_audit(org_id: str) -> int:
+    """Total audit rows for the org (so the UI can page through everything)."""
+    with get_db() as con:
+        r = con.execute("SELECT COUNT(*) c FROM audit_log WHERE org_id=?", (org_id,)).fetchone()
+        return r["c"] if r else 0
 
 
 def purge_old_audit(days: int = 365):

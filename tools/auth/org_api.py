@@ -11,7 +11,8 @@ from tools._shared import verify_token, require_org_role
 from tools.auth._db import get_db
 from tools.auth._orgs import (
     get_user_org_role, get_org, list_members, add_member, change_role,
-    remove_member, get_audit, write_audit, VALID_ROLES, role_rank,
+    remove_member, get_audit, count_audit, purge_old_audit, write_audit,
+    VALID_ROLES, role_rank,
 )
 
 router = APIRouter()
@@ -146,9 +147,42 @@ def remove(user_id: str, request: Request, payload=Depends(require_org_role("adm
 
 
 @router.get("/api/org/audit")
-def audit(payload=Depends(require_org_role("admin"))):
-    return {"audit": get_audit(_org_id(payload))}
+def audit(limit: int = 100, offset: int = 0, payload=Depends(require_org_role("admin"))):
+    oid = _org_id(payload)
+    limit = max(1, min(int(limit), 500))
+    offset = max(0, int(offset))
+    return {"audit": get_audit(oid, limit, offset), "total": count_audit(oid),
+            "limit": limit, "offset": offset}
+
+
+_purge_started = False
 
 
 def register(app):
     app.include_router(router)
+
+    @app.on_event("startup")
+    async def _start_audit_purge():
+        # Enforce audit retention (purge_old_audit was previously dead code, so the
+        # log grew unbounded). Runs once on boot, then daily. Idempotent across
+        # workers (DELETE WHERE ts < cutoff). Retention is env-tunable.
+        global _purge_started
+        if _purge_started:
+            return
+        _purge_started = True
+        import asyncio
+        import os
+
+        async def _loop():
+            try:
+                days = int(os.getenv("VL_AUDIT_RETENTION_DAYS", "365"))
+            except Exception:
+                days = 365
+            while True:
+                try:
+                    purge_old_audit(days=days)
+                except Exception:
+                    pass
+                await asyncio.sleep(86400)  # daily
+
+        asyncio.create_task(_loop())
