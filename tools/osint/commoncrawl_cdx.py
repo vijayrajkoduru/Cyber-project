@@ -72,21 +72,34 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=1, vulnerable=False,
             tests_summary="No CC captures")
 
-    interesting = [u for u in urls if any(k in u for k in
-                    ("/admin", "/api/", "/.git", "/.env", "/config", "/backup",
-                     "/swagger", "/graphql", "phpinfo", "/internal", "/staging",
-                     "/dev", "/test", "/v1/", "/v2/", ".sql", ".bak"))]
+    # A crawled URL is not an exposure by itself — these are PUBLIC crawl records.
+    # Only secret/config markers warrant a (passive) LOW worth manual review;
+    # api/admin/dev/test path substrings appear in countless benign public URLs,
+    # so they are INFO attack-surface inventory, not a graded exposure.
+    _SECRET = ("/.git", "/.env", "/config", "/backup", "phpinfo", ".sql", ".bak")
+    _INV = ("/admin", "/api/", "/swagger", "/graphql", "/internal", "/staging",
+            "/dev", "/test", "/v1/", "/v2/")
+    secretish = sorted(u for u in urls if any(k in u for k in _SECRET))
+    inv = sorted(u for u in urls if any(k in u for k in _INV) and u not in secretish)
+    interesting = secretish + inv
 
     findings = []
-    if interesting:
+    if secretish:
         findings.append(wrap_finding(
-            f"CC INTERESTING urls ({len(interesting)})",
-            severity="MEDIUM", cwe="CWE-200", cvss="5.3", owasp="A05:2021",
-            remediation="Same logic as wayback_cdx_search: passive crawl preservation. "
-                        "If any are sensitive, audit each. CC can be requested to "
-                        "remove via DMCA but is generally not removable.",
-            evidence_marker=" | ".join(sorted(interesting)[:15]) +
-                              (' ...' if len(interesting) > 15 else '')))
+            f"Crawled URLs matching config/secret patterns ({len(secretish)})",
+            severity="LOW", cwe="CWE-200", cvss="3.1", owasp="A05:2021",
+            remediation="These public-crawl URLs match secret/config patterns (.git/.env/"
+                        ".sql/backup/phpinfo). Passive evidence only — verify each isn't "
+                        "actually serving sensitive content; if it is, remove it and rotate "
+                        "any leaked secrets (crawl caches are hard to purge).",
+            evidence_marker=" | ".join(secretish[:15]) + (' ...' if len(secretish) > 15 else '')))
+    if inv:
+        findings.append(wrap_finding(
+            f"Crawled app/admin URLs — attack-surface inventory ({len(inv)})",
+            severity="INFO", cwe="CWE-200", cvss="0.0", owasp="A05:2021",
+            remediation="Public URLs containing api/admin/dev/test paths — recon inventory, "
+                        "not an exposure on their own. Use as a target list for deeper review.",
+            evidence_marker=" | ".join(inv[:15]) + (' ...' if len(inv) > 15 else '')))
 
     findings.append(wrap_finding(
         f"Common Crawl {CDX_INDEX}: {len(urls)} unique URL(s) for {domain}",
@@ -98,7 +111,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="commoncrawl_cdx", target=req.target, findings=findings,
-        tests_performed=1, vulnerable=bool(interesting),
+        tests_performed=1, vulnerable=bool(secretish),
         tests_summary=f"CC: {len(urls)} URLs ({len(interesting)} interesting)",
         raw_data={"url_count": len(urls), "interesting": interesting[:30],
                    "sample": sorted(urls)[:50], "index": CDX_INDEX})
