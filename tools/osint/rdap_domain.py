@@ -87,22 +87,41 @@ def _do_scan(req: ScanRequest) -> dict:
             f"ns={','.join(ns[:5])}"
         ))]
 
-    # Flag concerning statuses
-    risky = [s for s in statuses if "hold" in s.lower() or "delete" in s.lower()
-              or "transfer" in s.lower() and "prohibited" not in s.lower()]
-    if risky:
+    # EPP status classification. *Prohibited locks (clientDeleteProhibited,
+    # clientTransferProhibited, clientUpdateProhibited, server*Prohibited) are
+    # PROTECTIVE — the registrant/registry set them to PREVENT unauthorized
+    # delete/transfer/hijack. They are GOOD hygiene, never "concerning". Only
+    # statuses meaning the domain is DISABLED or BEING REMOVED are risky.
+    def _norm(s): return s.lower().replace(" ", "")
+    _BAD = ("clienthold", "serverhold", "pendingdelete", "redemptionperiod",
+            "pendingrestore", "inactive")
+    concerning = [s for s in statuses
+                  if "prohibited" not in _norm(s) and any(b in _norm(s) for b in _BAD)]
+    protective = [s for s in statuses if "prohibited" in _norm(s)]
+
+    if concerning:
+        _bad_now = any(("hold" in _norm(s)) or ("delete" in _norm(s))
+                       or ("redemption" in _norm(s)) for s in concerning)
         findings.append(wrap_finding(
-            f"Domain has concerning status: {', '.join(risky)}",
-            severity="MEDIUM" if any("delete" in s.lower() for s in risky) else "LOW",
+            f"Domain has a disabling/expiring status: {', '.join(concerning)}",
+            severity="MEDIUM" if _bad_now else "LOW",
             cwe="CWE-1395",
-            remediation="If 'pendingDelete' — renew NOW or lose the domain. "
-                        "If 'clientHold' / 'serverHold' — registrar disabled the domain "
-                        "(usually for payment / abuse). Contact registrar immediately.",
-            evidence_marker=f"RDAP status field = {risky} (CONFIRMED via RDAP)"))
+            remediation="'pendingDelete' / 'redemptionPeriod' — renew NOW or lose the "
+                        "domain. 'clientHold' / 'serverHold' — the domain is disabled "
+                        "(DNS not published), usually for non-payment or abuse; contact "
+                        "your registrar. 'inactive' — no nameservers configured.",
+            evidence_marker=f"RDAP status = {concerning} (CONFIRMED via RDAP)"))
+    elif protective:
+        findings.append(wrap_finding(
+            f"Domain has registrar protection locks ({len(protective)})",
+            severity="POSITIVE", cwe="CWE-200",
+            remediation="No action needed — these locks PREVENT unauthorized deletion, "
+                        "transfer, and hijack of the domain. This is recommended hygiene.",
+            evidence_marker=f"RDAP status = {protective} (protective locks — good practice)"))
 
     return standard_response(
         tool="rdap_domain", target=req.target, findings=findings,
-        tests_performed=1, vulnerable=bool(risky),
+        tests_performed=1, vulnerable=bool(concerning),
         tests_summary=f"RDAP record + {len(ns)} nameservers",
         raw_data={"events": events, "registrar": registrar, "ns": ns, "status": statuses})
 

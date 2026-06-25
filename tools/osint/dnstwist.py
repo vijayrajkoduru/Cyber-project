@@ -144,22 +144,34 @@ def _do_scan(req: ScanRequest) -> dict:
     for entry, has_mx in zip(resolved, mx_flags):
         entry["mx"] = bool(has_mx)
 
+    # Aggregate into at most TWO findings (mail-capable vs passive) instead of one
+    # per domain — a famous brand has hundreds of typosquats, and 50 separate
+    # findings + evidence cards is noise, not signal. Full list stays in raw_data.
+    def _summ(entries, limit=30):
+        s = ", ".join(f"{e['domain']} -> {e['ip']}" for e in entries[:limit])
+        return s + (f" (+{len(entries) - limit} more)" if len(entries) > limit else "")
+
+    mail_ready = [e for e in resolved if e["mx"]]
+    passive = [e for e in resolved if not e["mx"]]
+
     findings = []
-    for entry in resolved:
-        if entry["mx"]:
-            sev, cvss = "LOW", "3.1"
-            verdict = "MX present (mail-capable, phishing-ready)"
-        else:
-            sev, cvss = "INFO", "0.0"
-            verdict = "no MX (passive squat — could be parked / unrelated business)"
+    if mail_ready:
         findings.append(wrap_finding(
-            f"Lookalike domain registered: {entry['domain']} -> {entry['ip']}",
-            sev, cvss=cvss,
-            cwe="CWE-345", owasp="A07:2021",
-            remediation=("If this domain isn't yours: register defensively, monitor for "
-                        "phishing campaigns, file abuse reports with the registrar. If yours: "
-                        "consolidate to canonical domain and 301-redirect."),
-            evidence_marker=f"DNS A: {entry['domain']} -> {entry['ip']} | {verdict}"))
+            f"{len(mail_ready)} mail-capable lookalike domain(s) registered (phishing-ready)",
+            "LOW", cvss="3.1", cwe="CWE-345", owasp="A07:2021",
+            remediation=("These typosquats resolve AND have MX records, so they can send mail "
+                        "impersonating you. If they aren't yours: monitor for phishing, file "
+                        "registrar abuse reports, and consider defensively registering the "
+                        "highest-risk variants. If yours: consolidate and 301-redirect."),
+            evidence_marker=f"MX-present lookalikes ({len(mail_ready)}): {_summ(mail_ready)}"))
+    if passive:
+        findings.append(wrap_finding(
+            f"{len(passive)} lookalike domain(s) registered without mail (passive squat)",
+            "INFO", cvss="0.0", cwe="CWE-345", owasp="A07:2021",
+            remediation=("These typosquats resolve but have no MX (parked, an unrelated "
+                        "business, or registrar-held). Informational — review only the ones "
+                        "that could plausibly be weaponized against your brand."),
+            evidence_marker=f"no-MX lookalikes ({len(passive)}): {_summ(passive)}"))
 
     if not findings:
         findings.append(wrap_finding(

@@ -93,20 +93,45 @@ def _do_scan(req: ScanRequest) -> dict:
                               + (' ...' if len(vulns) > 10 else '')
                               + " (version-inferred, UNCONFIRMED — no patch/version check)"))
 
-    risky_ports = [p for p in ports if p in
-                    (21, 22, 23, 135, 137, 139, 445, 1433, 3306, 3389, 5432,
-                     5900, 6379, 9200, 11211, 27017)]
-    if risky_ports:
+    # Tier exposed ports by REAL risk. An open port is not a vulnerability by
+    # itself — severity reflects how dangerous that service is when reachable.
+    # SSH/FTP are frequently intended (git-over-SSH, bastion, SFTP), so they are
+    # advisory LOW, not MEDIUM/HIGH; and on CDN/cloud edges they are suppressed.
+    _CRIT = {23: "Telnet", 445: "SMB", 137: "NetBIOS", 139: "NetBIOS", 3389: "RDP",
+             5900: "VNC", 6379: "Redis", 11211: "Memcached", 27017: "MongoDB",
+             9200: "Elasticsearch"}
+    _MED = {1433: "MSSQL", 3306: "MySQL", 5432: "PostgreSQL", 135: "MSRPC"}
+    _MGMT = {22: "SSH", 21: "FTP"}
+    _is_cdn = bool({t.lower() for t in tags} & {"cdn", "cloud"})
+
+    crit = [p for p in ports if p in _CRIT]
+    med = [p for p in ports if p in _MED]
+    mgmt = [p for p in ports if p in _MGMT]
+    if crit:
         findings.append(wrap_finding(
-            f"Sensitive service ports exposed: {risky_ports}",
-            severity="HIGH" if any(p in (23, 445, 3389, 6379, 11211, 27017)
-                                      for p in risky_ports) else "MEDIUM",
-            cwe="CWE-668", cvss="7.5",
-            owasp="A05:2021",
-            remediation="Restrict via firewall to known source IPs. Mgmt ports "
-                        "(SSH, RDP) behind VPN. Database ports never internet-facing. "
-                        "Telnet (23) and SMB (445) should be off entirely.",
-            evidence_marker=f"risky-ports: {risky_ports} (CONFIRMED via Shodan)"))
+            f"High-risk service port(s) internet-facing: {[f'{p}/{_CRIT[p]}' for p in crit]}",
+            severity="HIGH", cwe="CWE-668", cvss="7.5", owasp="A05:2021",
+            remediation="These services are commonly unauthenticated or heavily attacked "
+                        "and should not be internet-facing. Firewall to known IPs / move "
+                        "behind a VPN; disable Telnet and SMB entirely.",
+            evidence_marker=f"ports={crit} (CONFIRMED via Shodan InternetDB)"))
+    if med:
+        findings.append(wrap_finding(
+            f"Database/RPC port(s) internet-facing: {[f'{p}/{_MED[p]}' for p in med]}",
+            severity="MEDIUM", cwe="CWE-668", cvss="5.3", owasp="A05:2021",
+            remediation="Database/RPC ports should not be publicly reachable. Bind to a "
+                        "private interface and restrict by firewall.",
+            evidence_marker=f"ports={med} (CONFIRMED via Shodan InternetDB)"))
+    if mgmt and not _is_cdn:
+        findings.append(wrap_finding(
+            f"Management port reachable: {[f'{p}/{_MGMT[p]}' for p in mgmt]}",
+            severity="LOW", cwe="CWE-668", cvss="3.1", owasp="A05:2021",
+            remediation="SSH/FTP being reachable is not itself a vulnerability. If this is "
+                        "an intended service (git-over-SSH, a bastion host, SFTP), treat "
+                        "as informational. Otherwise restrict to known source IPs or place "
+                        "behind a VPN and enforce key-only authentication.",
+            evidence_marker=f"ports={mgmt} (reachable — likely an intended service)"))
+    risky_ports = crit + med
 
     findings.append(wrap_finding(
         f"InternetDB summary for {ip}",
