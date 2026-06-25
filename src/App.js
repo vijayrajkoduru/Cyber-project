@@ -1166,7 +1166,10 @@ function generatePDF(reportData) {
       const code = "A" + m[1].padStart(2, "0");
       if (_owaspMap[code]) _owaspMap[code].push(f);
     });
-    const _failCats = OWASP_2021.filter(([c]) => _owaspMap[c].length > 0).length;
+    // A category FAILs only on a MEDIUM+ finding; LOW-only is hardening (amber),
+    // none is a clean PASS — so the grade tracks real risk, not minor LOW notes.
+    const _isGradedSev = (f) => ["CRITICAL","HIGH","MEDIUM"].includes(String(f.severity||"").toUpperCase());
+    const _failCats = OWASP_2021.filter(([c]) => (_owaspMap[c]||[]).some(_isGradedSev)).length;
     const _passCats = 10 - _failCats;
     const _owaspGrade = _passCats >= 9 ? "A" : _passCats >= 7 ? "B" : _passCats >= 5 ? "C" : _passCats >= 3 ? "D" : "F";
     const _gradeColor = _owaspGrade === "A" ? [15,118,82] : _owaspGrade === "B" ? [22,163,74] :
@@ -1193,24 +1196,27 @@ function generatePDF(reportData) {
     y = tableHeader(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
     OWASP_2021.forEach(([code, name], i) => {
       const matches = _owaspMap[code];
-      const passing = matches.length === 0;
+      const failed  = matches.some(_isGradedSev);     // MEDIUM+ present -> FAIL
+      const lowOnly = !failed && matches.length > 0;   // LOW/INFO only -> hardening
+      const barC = failed ? [162,28,28] : lowOnly ? [202,138,4] : [15,118,82];
+      const stBg = failed ? [254,226,226] : lowOnly ? [254,243,199] : [220,252,231];
+      const stFg = failed ? [162,28,28] : lowOnly ? [202,138,4] : [15,118,82];
+      const stTx = failed ? "FAIL" : lowOnly ? "LOW" : "PASS";
       const rowH = 8;
       chk(rowH + 1);
       fillR(margin, y, contentW, rowH, i%2===0 ? LIGHT : WHITE);
       hline(margin, y, pageW-margin, y, BORDER, 0.2);
-      fillR(margin, y, 1.5, rowH, passing ? [15,118,82] : [162,28,28]); // pass/fail accent
+      fillR(margin, y, 1.5, rowH, barC); // pass/low/fail accent
       doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
       doc.text(code+":2021", margin+4, y+5.5);
       doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor(...DARK);
       doc.text(name, margin+24, y+5.5);
       // Status pill
-      const stBg = passing ? [220,252,231] : [254,226,226];
-      const stFg = passing ? [15,118,82]  : [162,28,28];
       rrect(margin+106, y+1.5, 18, 5, 1, stBg);
       doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor(...stFg);
-      doc.text(passing ? "PASS" : "FAIL", margin+(passing?112:111.5), y+5);
-      // Breakdown — severity counts when failing, plain "Clear" when passing
-      if (passing) {
+      doc.text(stTx, margin+111.5, y+5);
+      // Breakdown — severity counts when there are findings, "Clear" when none
+      if (!failed && !lowOnly) {
         doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(15,118,82);
         doc.text("No findings in this category", margin+128, y+5.5);
       } else {
@@ -1218,7 +1224,7 @@ function generatePDF(reportData) {
         matches.forEach(f => { if (sc[f.severity] !== undefined) sc[f.severity]++; });
         const parts = ["CRITICAL","HIGH","MEDIUM","LOW"].filter(s => sc[s] > 0).map(s => `${sc[s]} ${s}`);
         doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...GRAY);
-        doc.text(parts.join(" · ") || `${matches.length} finding(s)`, margin+128, y+5.5);
+        doc.text((parts.join(" · ") || `${matches.length} finding(s)`) + (lowOnly ? " (hardening)" : ""), margin+128, y+5.5);
       }
       y += rowH;
     });
@@ -10638,7 +10644,10 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
       const code = "A" + m[1].padStart(2, "0");
       if (_R_owaspMap[code]) _R_owaspMap[code].push(f);
     });
-    const _R_failCats = _R_OWASP_2021.filter(([c]) => _R_owaspMap[c].length > 0).length;
+    // A category FAILs only on a MEDIUM+ finding; LOW-only is hardening (amber),
+    // none is a clean PASS — so the grade tracks real risk, not minor LOW notes.
+    const _R_isGradedSev = (f) => ["CRITICAL","HIGH","MEDIUM"].includes(String(f.severity||"").toUpperCase());
+    const _R_failCats = _R_OWASP_2021.filter(([c]) => (_R_owaspMap[c]||[]).some(_R_isGradedSev)).length;
     const _R_passCats = 10 - _R_failCats;
     const _R_grade = _R_passCats >= 9 ? "A" : _R_passCats >= 7 ? "B" : _R_passCats >= 5 ? "C" : _R_passCats >= 3 ? "D" : "F";
     const _R_gradeColor = _R_grade === "A" ? [15,118,82] : _R_grade === "B" ? [22,163,74] :
@@ -10659,20 +10668,23 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
     _R_OWASP_2021.forEach(([code, name], i) => {
       const matches = _R_owaspMap[code];
-      const passing = matches.length === 0;
+      const failed  = matches.some(_R_isGradedSev);    // MEDIUM+ present -> FAIL
+      const lowOnly = !failed && matches.length > 0;    // LOW/INFO only -> hardening
+      const barC = failed ? [162,28,28] : lowOnly ? [202,138,4] : [15,118,82];
+      const stBg = failed ? [254,226,226] : lowOnly ? [254,243,199] : [220,252,231];
+      const stFg = failed ? [162,28,28] : lowOnly ? [202,138,4] : [15,118,82];
+      const stTx = failed ? "FAIL" : lowOnly ? "LOW" : "PASS";
       chk(9);
       fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
-      fillR(margin, y, 1.5, 8, passing ? [15,118,82] : [162,28,28]);
+      fillR(margin, y, 1.5, 8, barC);
       doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor.apply(doc, DARK);
       doc.text(code+":2021", margin+4, y+5.5);
       doc.setFont("Arial","normal"); doc.setFontSize(8);
       doc.text(name, margin+24, y+5.5);
-      const stBg = passing ? [220,252,231] : [254,226,226];
-      const stFg = passing ? [15,118,82] : [162,28,28];
       rrect(margin+106, y+1.5, 18, 5, 1, stBg);
       doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, stFg);
-      doc.text(passing ? "PASS" : "FAIL", margin+(passing?112:111.5), y+5);
-      if (passing) {
+      doc.text(stTx, margin+111.5, y+5);
+      if (!failed && !lowOnly) {
         doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(15,118,82);
         doc.text("No findings in this category", margin+128, y+5.5);
       } else {
@@ -10680,7 +10692,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
         matches.forEach(f => { if (_sc[f.severity] !== undefined) _sc[f.severity]++; });
         const parts = ["CRITICAL","HIGH","MEDIUM","LOW"].filter(s => _sc[s] > 0).map(s => `${_sc[s]} ${s}`);
         doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor.apply(doc, GRAY);
-        doc.text(parts.join(" · ") || `${matches.length} finding(s)`, margin+128, y+5.5);
+        doc.text((parts.join(" · ") || `${matches.length} finding(s)`) + (lowOnly ? " (hardening)" : ""), margin+128, y+5.5);
       }
       y += 8;
     });
@@ -15205,7 +15217,13 @@ function generateUniversalVLReport(opts) {
       const _catMap     = _isAiLlmOwasp ? _llmMap : _owaspMap;
       const _codeSuffix = _isAiLlmOwasp ? "2025" : "2021";
       const _owaspTitle = _isAiLlmOwasp ? "OWASP LLM Top 10 - 2025 Coverage" : "OWASP Top 10 - 2021 Coverage";
-      const _passCats = Object.values(_catMap).filter(arr => arr.length === 0).length;
+      // A category FAILs only when it carries a MEDIUM+ finding. A LOW/INFO-only
+      // category is a minor hardening note (amber), not a failure; no findings is
+      // a clean PASS. This keeps the OWASP grade consistent with the risk score —
+      // a LOW-only recon scan is an A, not a contradictory "C" next to MINIMAL risk.
+      const _isGradedSev = (f) => ["CRITICAL","HIGH","MEDIUM"].includes(String(f.severity||"").toUpperCase());
+      const _catFailed = (arr) => (arr||[]).some(_isGradedSev);
+      const _passCats = _catList.filter(([code]) => !_catFailed(_catMap[code])).length;
       const _failCats = 10 - _passCats;
       const _grade =
         _passCats === 10 ? "A" :
@@ -15229,29 +15247,33 @@ function generateUniversalVLReport(opts) {
       doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor.apply(doc, _ogColor);
       doc.text(_owaspUnreliable ? "?" : _grade, margin+10, y+11);
       doc.setFont("Arial","bold"); doc.setFontSize(12); doc.setTextColor.apply(doc, DARK);
-      doc.text(_owaspUnreliable ? "OWASP coverage NOT ASSESSED" : `${_passCats}/10 OWASP categories passing`, margin+28, y+7);
+      doc.text(_owaspUnreliable ? "OWASP coverage NOT ASSESSED" : `${_passCats}/10 categories clear of MEDIUM+ findings`, margin+28, y+7);
       doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc, GRAY);
       doc.text(_owaspUnreliable
         ? "Scan was insufficient/partial - 'PASS' below means no finding was produced, NOT proof the category is secure."
-        : (_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`), margin+28, y+12);
+        : (_failCats === 0 ? "No category carries a MEDIUM or higher finding - LOW items (if any) are hardening only." : `${_failCats} category(ies) carry a MEDIUM+ finding - prioritize those rows.`), margin+28, y+12);
       y += 19;
       y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
       _catList.forEach(([code, name], i) => {
         const matches = _catMap[code] || [];
-        const passing = matches.length === 0;
+        const failed  = matches.some(_isGradedSev);     // MEDIUM+ present -> FAIL
+        const lowOnly = !failed && matches.length > 0;   // LOW/INFO only -> hardening
+        // green = clean PASS, amber = LOW-only hardening, red = MEDIUM+ failure
+        const barC = failed ? [162,28,28] : lowOnly ? [202,138,4] : [15,118,82];
+        const stBg = failed ? [254,226,226] : lowOnly ? [254,243,199] : [220,252,231];
+        const stFg = failed ? [162,28,28] : lowOnly ? [202,138,4] : [15,118,82];
+        const stTx = failed ? "FAIL" : lowOnly ? "LOW" : "PASS";
         chk(9);
         fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
-        fillR(margin, y, 1.5, 8, passing ? [15,118,82] : [162,28,28]);
+        fillR(margin, y, 1.5, 8, barC);
         doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor.apply(doc, DARK);
         doc.text(code+":"+_codeSuffix, margin+4, y+5.5);
         doc.setFont("Arial","normal"); doc.setFontSize(8);
         doc.text(name, margin+24, y+5.5);
-        const stBg = passing ? [220,252,231] : [254,226,226];
-        const stFg = passing ? [15,118,82] : [162,28,28];
         rrect(margin+106, y+1.5, 18, 5, 1, stBg);
         doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, stFg);
-        doc.text(passing ? "PASS" : "FAIL", margin+(passing?112:111.5), y+5);
-        if (passing) {
+        doc.text(stTx, margin+111.5, y+5);
+        if (!failed && !lowOnly) {
           doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(15,118,82);
           doc.text("No findings in this category", margin+128, y+5.5);
         } else {
@@ -15259,7 +15281,7 @@ function generateUniversalVLReport(opts) {
           matches.forEach(f => { const s = String(f.severity||"").toUpperCase(); if (_sc[s] !== undefined) _sc[s]++; });
           const parts = ["CRITICAL","HIGH","MEDIUM","LOW"].filter(s => _sc[s] > 0).map(s => `${_sc[s]} ${s}`);
           doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor.apply(doc, GRAY);
-          doc.text(parts.join(" - ") || `${matches.length} finding(s)`, margin+128, y+5.5);
+          doc.text((parts.join(" - ") || `${matches.length} finding(s)`) + (lowOnly ? " (hardening)" : ""), margin+128, y+5.5);
         }
         y += 8;
       });
