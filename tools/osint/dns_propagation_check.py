@@ -9,6 +9,7 @@ for the same record type and reports disagreement. Useful for:
 Real probe. Zero false positives — each resolver answers for itself.
 """
 import asyncio
+import ipaddress
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
@@ -28,6 +29,17 @@ RESOLVERS = [
     ("AdGuard",      "94.140.14.14"),
     ("CleanBrowsing", "185.228.168.9"),
 ]
+
+
+def _is_bogon(ip: str) -> bool:
+    """True for a private / loopback / link-local / reserved / multicast IP — a
+    public resolver returning one signals poisoning or a split-horizon leak."""
+    try:
+        a = ipaddress.ip_address(ip)
+        return (a.is_private or a.is_loopback or a.is_link_local
+                or a.is_reserved or a.is_unspecified or a.is_multicast)
+    except Exception:
+        return False
 
 
 def _query(resolver_ip, name, rtype):
@@ -72,18 +84,42 @@ def _do_scan(req: ScanRequest) -> dict:
             unique_answers.add(tuple(ans))
 
     findings = []
+    vuln = False
     if len(unique_answers) > 1:
         evidence = " | ".join(f"{r}={','.join(a) if a else 'NXDOMAIN'}"
                                 for r, a in results.items())
-        findings.append(wrap_finding(
-            f"DNS DISAGREEMENT — {len(unique_answers)} different answers across resolvers",
-            severity="MEDIUM", cwe="CWE-829", cvss="5.3",
-            owasp="A05:2021",
-            remediation="Could be: (1) recent DNS change still propagating, "
-                        "(2) GeoDNS by design, (3) DNS poisoning / hijack. "
-                        "Re-run in 1 hour — if still disagreeing without GeoDNS, "
-                        "investigate registrar / nameservers.",
-            evidence_marker=evidence + " (CONFIRMED via multi-resolver query)"))
+        all_ips = [ip for a in results.values() for ip in a]
+        bogon = sorted({ip for ip in all_ips if _is_bogon(ip)})
+        some_nx = any(not a for a in results.values()) and any(a for a in results.values())
+        # Differing PUBLIC answers across resolvers is the normal signature of
+        # GeoDNS / anycast / CDN steering — not poisoning. Only a private/bogon
+        # answer (split-horizon leak / cache poisoning) is a real exposure.
+        if bogon:
+            vuln = True
+            findings.append(wrap_finding(
+                f"DNS poisoning / split-horizon leak suspected — non-public IP returned ({len(unique_answers)} answer-sets)",
+                severity="MEDIUM", cwe="CWE-829", cvss="5.3", owasp="A05:2021",
+                remediation="A private/bogon IP from a public resolver indicates cache "
+                            "poisoning or a split-horizon DNS leak. Verify your "
+                            "authoritative records and investigate the offending resolver.",
+                evidence_marker=evidence + f" | bogon={bogon} (CONFIRMED via multi-resolver query)"))
+        elif some_nx:
+            findings.append(wrap_finding(
+                f"DNS partially resolving — some resolvers NXDOMAIN, others answer ({len(unique_answers)} answer-sets)",
+                severity="LOW", cwe="CWE-829", cvss="3.1", owasp="A05:2021",
+                remediation="A recent DNS change is still propagating, or a takedown is in "
+                            "progress. Re-check in ~1 hour; if it persists, review your "
+                            "nameservers and TTLs.",
+                evidence_marker=evidence + " (CONFIRMED via multi-resolver query)"))
+        else:
+            findings.append(wrap_finding(
+                f"DNS answers vary across resolvers — GeoDNS / anycast (normal for CDN-fronted sites)",
+                severity="INFO", cwe="CWE-200", cvss="0.0",
+                remediation="Differing PUBLIC IPs per resolver is the expected signature of "
+                            "GeoDNS / anycast / a CDN steering each region to a nearby edge — "
+                            "no action. If you do NOT use GeoDNS, re-check in ~1h; persistent "
+                            "disagreement then warrants a registrar / nameserver review.",
+                evidence_marker=evidence + " (all public IPs — GeoDNS pattern)"))
     elif unique_answers:
         ans = list(unique_answers)[0]
         findings.append(wrap_finding(
@@ -102,7 +138,7 @@ def _do_scan(req: ScanRequest) -> dict:
     return standard_response(
         tool="dns_propagation_check", target=req.target, findings=findings,
         tests_performed=len(RESOLVERS),
-        vulnerable=len(unique_answers) > 1,
+        vulnerable=vuln,
         tests_summary=f"queried {len(RESOLVERS)} resolvers; {len(unique_answers)} distinct answer-set(s)",
         raw_data={"results": results})
 
