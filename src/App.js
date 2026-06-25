@@ -556,6 +556,11 @@ function Login(props) {
   const [pFocus,setPF]   = useState(false);
   const [p2Focus,setP2F] = useState(false);
   const [showPw,setShow] = useState(false);
+  const [sso,setSso]     = useState(null);   // {enabled,name} when OIDC is configured
+
+  useEffect(() => {
+    api("/api/auth/sso/status","GET").then(d => { if (d && d.enabled) setSso(d); }).catch(()=>{});
+  }, []);
 
   const switchMode = (m) => { setMode(m); setErr(""); setOk(""); };
 
@@ -749,6 +754,26 @@ function Login(props) {
             </>
           )}
         </button>
+
+        {/* SSO (only when an OIDC provider is configured) */}
+        {sso && sso.enabled && (
+          <>
+            <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 0 16px"}}>
+              <div style={{flex:1,height:1,background:"rgba(51,65,85,0.6)"}}/>
+              <span style={{fontSize:10,color:"#5a6478",letterSpacing:2,fontFamily:"monospace"}}>OR</span>
+              <div style={{flex:1,height:1,background:"rgba(51,65,85,0.6)"}}/>
+            </div>
+            <button onClick={()=>{ window.location.href = API + "/api/auth/sso/login"; }} style={{
+              width:"100%", border:"1px solid rgba(59,158,255,0.4)", borderRadius:12, padding:"14px",
+              background:"rgba(2,6,23,0.7)", color:"#d8deea", fontSize:12, fontWeight:700, cursor:"pointer",
+              letterSpacing:2, textTransform:"uppercase", marginBottom:20,
+              display:"flex", alignItems:"center", justifyContent:"center", gap:10
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b9eff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Sign in with {sso.name || "SSO"}
+            </button>
+          </>
+        )}
 
         {/* Switch mode link */}
         <div style={{textAlign:"center",marginBottom:16}}>
@@ -25285,6 +25310,26 @@ export default function App() {
     localStorage.setItem("cyberUser", u);
     localStorage.setItem("cyberPlan", p);
   };
+
+  // SSO callback lands here as  <frontend>/#sso_token=<jwt>  — adopt it as a login.
+  useEffect(() => {
+    const h = (typeof window !== "undefined" && window.location.hash) || "";
+    if (h.indexOf("sso_token=") >= 0) {
+      const t = decodeURIComponent(h.split("sso_token=")[1].split("&")[0]);
+      try {
+        let b = t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/");
+        while (b.length % 4) b += "=";
+        const c = JSON.parse(atob(b));
+        handleLogin(t, c.role || "user", c.username || "", c.plan || "trial");
+      } catch (_) {
+        localStorage.setItem("cyberToken", t); setToken(t);
+      }
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    } else if (h.indexOf("sso_error=") >= 0) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    // eslint-disable-next-line
+  }, []);
 
   const handleLogout = () => {
     // Nuclear logout — abort every in-flight scan request, then wipe ALL local state.
