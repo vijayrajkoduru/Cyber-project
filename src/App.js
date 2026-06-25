@@ -23723,25 +23723,31 @@ function TeamOrgPanel({ token }) {
 
 // ─── Phase 2.1: Org audit log (security event trail) ───────────────────
 function AuditLogPanel({ token }) {
+  const PAGE = 100;
   const [rows, setRows]       = useState([]);
+  const [total, setTotal]     = useState(0);
   const [loading, setLoading] = useState(true);
+  const [more, setMore]       = useState(false);
   const [err, setErr]         = useState("");
   const [q, setQ]             = useState("");
 
-  const load = async () => {
-    setLoading(true); setErr("");
+  const load = async (off = 0) => {
+    if (off === 0) setLoading(true); else setMore(true);
+    setErr("");
     try {
-      const d = await api("/api/org/audit", "GET", null, token);
-      setRows(Array.isArray(d.audit) ? d.audit : []);
+      const d = await api("/api/org/audit?limit=" + PAGE + "&offset=" + off, "GET", null, token);
+      const page = Array.isArray(d.audit) ? d.audit : [];
+      setRows(prev => off === 0 ? page : prev.concat(page));
+      setTotal(typeof d.total === "number" ? d.total : page.length);
     } catch (e) {
       setErr(e.status === 403
         ? "The audit log requires an admin or owner role in your organization."
         : "Could not load the audit log: " + (e.message || e));
-      setRows([]);
+      if (off === 0) setRows([]);
     }
-    setLoading(false);
+    setLoading(false); setMore(false);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { load(0); /* eslint-disable-next-line */ }, []);
 
   const actionColor = (a) => {
     a = (a || "").toLowerCase();
@@ -23761,9 +23767,9 @@ function AuditLogPanel({ token }) {
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,flexWrap:"wrap"}}>
         <div>
           <h2 style={{fontSize:20,fontWeight:800,color:"#ffffff",margin:0}}>Audit Log</h2>
-          <p style={{fontSize:12,color:"#5a6478",margin:0}}>Security events in your organization (most recent first)</p>
+          <p style={{fontSize:12,color:"#5a6478",margin:0}}>Security events in your organization · showing {rows.length}{total>rows.length?(" of "+total):""}</p>
         </div>
-        <button onClick={load} style={{marginLeft:"auto",background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Refresh</button>
+        <button onClick={()=>load(0)} style={{marginLeft:"auto",background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Refresh</button>
       </div>
 
       {err && <div style={{background:"#450a0a",border:"1px solid #991b1b",borderRadius:8,padding:"10px 16px",color:"#ffa3b0",fontSize:13,marginBottom:16}}>{err}</div>}
@@ -23772,6 +23778,7 @@ function AuditLogPanel({ token }) {
         style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:16}}/>}
 
       {loading ? <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>Loading…</div> : (!err && (
+        <>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {filtered.length === 0 && <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>No activity recorded yet.</div>}
           {filtered.map((r, i) => (
@@ -23786,6 +23793,15 @@ function AuditLogPanel({ token }) {
             </div>
           ))}
         </div>
+        {!q.trim() && rows.length < total && (
+          <div style={{textAlign:"center",marginTop:16}}>
+            <button onClick={()=>load(rows.length)} disabled={more}
+              style={{background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",padding:"9px 18px",borderRadius:8,cursor:more?"wait":"pointer",fontSize:12,fontWeight:600}}>
+              {more ? "Loading…" : ("Load older events (" + (total - rows.length) + " more)")}
+            </button>
+          </div>
+        )}
+        </>
       ))}
     </div>
   );
