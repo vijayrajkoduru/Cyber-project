@@ -107,21 +107,33 @@ def _do_scan(req: ScanRequest) -> dict:
             tests_performed=1+len(sample_idx), vulnerable=False,
             tests_summary="No Disallow paths")
 
-    interesting = [p for p in all_paths if any(k in p.lower() for k in
-                    ("admin", "internal", "test", "dev", "staging", "api",
-                     "swagger", "graphql", "private", "backup", "config",
-                     "/.git", "/.env", "wp-admin", "phpinfo"))]
+    # A robots.txt Disallow is a public "don't index" hint, not a live exposure —
+    # many of these paths are long gone. Only secret/config markers warrant a
+    # passive LOW worth testing; generic admin/api/dev paths are INFO inventory.
+    _SECRET = ("/.git", "/.env", "backup", "config", "phpinfo", "private", ".sql", ".bak")
+    _INV = ("admin", "internal", "test", "dev", "staging", "api", "swagger", "graphql", "wp-admin")
+    secretish = sorted(p for p in all_paths if any(k in p.lower() for k in _SECRET))
+    inv = sorted(p for p in all_paths if any(k in p.lower() for k in _INV) and p not in secretish)
+    interesting = secretish + inv
 
     findings = []
-    if interesting:
+    if secretish:
         findings.append(wrap_finding(
-            f"INTERESTING robots-disallowed paths ({len(interesting)})",
-            severity="MEDIUM", cwe="CWE-200", cvss="5.3", owasp="A05:2021",
-            remediation="Each Disallow entry told search engines 'don't index this' "
-                        "but the URL was LIVE at some point. Test each — many will "
-                        "still be reachable today. Customer's modern robots.txt may "
-                        "have removed them but the endpoints often remain.",
-            evidence_marker=" | ".join(sorted(interesting)[:15])))
+            f"Robots-disallowed paths matching config/secret patterns ({len(secretish)})",
+            severity="LOW", cwe="CWE-200", cvss="3.1", owasp="A05:2021",
+            remediation="A historical robots.txt told crawlers to skip these, but they were "
+                        "LIVE when added and match secret/config patterns (.git/.env/backup/"
+                        "config). Test each — if still reachable and sensitive, remove it and "
+                        "rotate any exposed secrets.",
+            evidence_marker=" | ".join(secretish[:15]) + (' ...' if len(secretish) > 15 else '')))
+    if inv:
+        findings.append(wrap_finding(
+            f"Robots-disallowed app/admin paths — inventory ({len(inv)})",
+            severity="INFO", cwe="CWE-200", cvss="0.0", owasp="A05:2021",
+            remediation="Historical robots.txt Disallow entries (admin/api/dev/test) — recon "
+                        "inventory of paths once live. Use as a review target list; many no "
+                        "longer exist.",
+            evidence_marker=" | ".join(inv[:15]) + (' ...' if len(inv) > 15 else '')))
 
     findings.append(wrap_finding(
         f"Wayback robots.txt: {len(snapshots)} versions, {len(all_paths)} unique paths",
@@ -136,7 +148,7 @@ def _do_scan(req: ScanRequest) -> dict:
     return standard_response(
         tool="wayback_robots_history", target=req.target, findings=findings,
         tests_performed=1+len(sample_idx),
-        vulnerable=bool(interesting),
+        vulnerable=bool(secretish),
         tests_summary=f"{len(snapshots)} robots versions / {len(all_paths)} paths",
         raw_data={"all_paths": sorted(all_paths), "interesting": interesting,
                    "snapshot_count": len(snapshots),
