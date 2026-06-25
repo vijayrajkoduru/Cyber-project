@@ -78,6 +78,22 @@ def init_db():
             ip TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_audit_org ON audit_log(org_id, id);
+
+        -- Org-scoped API keys (Phase 2.4) — only the SHA-256 hash is stored ---
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id TEXT PRIMARY KEY,
+            org_id TEXT NOT NULL,
+            name TEXT,
+            key_hash TEXT NOT NULL,
+            prefix TEXT,
+            role TEXT DEFAULT 'member',
+            created_by TEXT,
+            created_at TEXT NOT NULL,
+            last_used TEXT,
+            revoked INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_apikey_org ON api_keys(org_id);
+        CREATE INDEX IF NOT EXISTS idx_apikey_hash ON api_keys(key_hash);
     """)
     # Migrate pre-existing DBs that lack the billing columns (ALTER throws once
     # the column exists -> caught). Runs once per process.

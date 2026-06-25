@@ -200,6 +200,44 @@ def verify_admin(payload=Depends(verify_token)):
     return payload
 
 
+def _api_key_from_request(request: Request) -> str:
+    """Extract an API key from X-API-Key, or a 'Bearer vl_...' Authorization
+    header (so curl -H 'Authorization: Bearer vl_live_...' works too)."""
+    k = request.headers.get("x-api-key", "").strip()
+    if k:
+        return k
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        tok = auth[7:].strip()
+        if tok.startswith("vl_"):
+            return tok
+    return ""
+
+
+def api_principal(request: Request):
+    """Dependency for the public /api/v1 surface. Authenticates an org-scoped
+    API key and returns a JWT-shaped payload (sub/org_id/org_role + via=apikey)
+    so org-scoping (caller_org) and downstream logic work unchanged."""
+    key = _api_key_from_request(request)
+    if not key:
+        raise HTTPException(401, "Missing API key (send X-API-Key or 'Authorization: Bearer vl_live_...')")
+    try:
+        from tools.auth._apikeys import verify_api_key
+        info = verify_api_key(key)
+    except Exception:
+        info = None
+    if not info:
+        raise HTTPException(401, "Invalid or revoked API key")
+    return {
+        "sub": info.get("created_by") or ("apikey:" + info["key_id"]),
+        "org_id": info["org_id"],
+        "org_role": info.get("role") or "member",
+        "via": "apikey",
+        "key_id": info["key_id"],
+        "key_name": info.get("name"),
+    }
+
+
 # ── HTTP helper — Trust-First (adaptive timeout + retry + 429-aware) ──
 _BROWSER_HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
