@@ -35,7 +35,7 @@ async def gather(ctx):
 def _r_historical(s):
     n=s.get("historical_ip_count") or 0
     if n==0: return None
-    sev="INFO" if n<5 else ("LOW" if n<20 else "MEDIUM")
+    sev="INFO" if n<10 else "LOW"   # historical-IP count = recon inventory, not a vuln (never MEDIUM)
     return {"name":f"{n} historical IPs in passive DNS","severity":sev,"cwe":"T1590.005",
         "evidence":"Sample: "+", ".join((s.get("historical_ips") or [])[:5]),
         "remediation":"Old IPs may still serve content / have origin-IP leaks. Check via origin_ip_bypass."}

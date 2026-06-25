@@ -56,7 +56,7 @@ async def gather(ctx):
 def _r_subs(s):
     n=s.get("subdomain_count") or 0
     if n==0: return None
-    sev="INFO" if n<20 else ("LOW" if n<100 else "MEDIUM")
+    sev="INFO" if n<50 else "LOW"   # subdomain count = attack-surface inventory, not a vuln (never MEDIUM)
     return {"name":f"{n} subdomains via CT logs","severity":sev,"cwe":"T1596.001",
         "evidence":"Sample: "+", ".join((s.get("subdomains") or [])[:5]),
         "remediation":"CT logs are public — assume all subdomains discoverable."}
