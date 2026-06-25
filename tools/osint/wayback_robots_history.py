@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 25
@@ -58,7 +59,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="wayback_robots_history", target=req.target,
             findings=[wrap_finding(
                 f"Wayback has no robots.txt snapshots for {domain}",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Either robots.txt never existed or Wayback didn't capture.",
                 evidence_marker="CDX returned no rows (CONFIRMED)")],
             tests_performed=1, vulnerable=False,
@@ -101,7 +102,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="wayback_robots_history", target=req.target,
             findings=[wrap_finding(
                 f"Wayback robots history for {domain} — 0 Disallow paths across {len(sample_idx)} snapshots",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="No paths advertised in robots.txt history.",
                 evidence_marker=f"{len(snapshots)} versions, 0 Disallow paths (CONFIRMED)")],
             tests_performed=1+len(sample_idx), vulnerable=False,
@@ -120,7 +121,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if secretish:
         findings.append(wrap_finding(
             f"Robots-disallowed paths matching config/secret patterns ({len(secretish)})",
-            severity="LOW", cwe="CWE-200", cvss="3.1", owasp="A05:2021",
+            severity=(sev := grade.hardening()), cwe="CWE-200", cvss=grade.cvss_for(sev), owasp="A05:2021",
             remediation="A historical robots.txt told crawlers to skip these, but they were "
                         "LIVE when added and match secret/config patterns (.git/.env/backup/"
                         "config). Test each — if still reachable and sensitive, remove it and "
@@ -129,7 +130,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if inv:
         findings.append(wrap_finding(
             f"Robots-disallowed app/admin paths — inventory ({len(inv)})",
-            severity="INFO", cwe="CWE-200", cvss="0.0", owasp="A05:2021",
+            severity=(inv_sev := grade.inventory(len(inv))), cwe="CWE-200", cvss=grade.cvss_for(inv_sev), owasp="A05:2021",
             remediation="Historical robots.txt Disallow entries (admin/api/dev/test) — recon "
                         "inventory of paths once live. Use as a review target list; many no "
                         "longer exist.",
@@ -137,7 +138,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings.append(wrap_finding(
         f"Wayback robots.txt: {len(snapshots)} versions, {len(all_paths)} unique paths",
-        severity="POSITIVE" if not interesting else "INFO", cwe="CWE-200",
+        severity=(grade.protective() if not interesting else grade.info()), cwe="CWE-200",
         remediation="Sample paths: " + ", ".join(sorted(all_paths)[:6]),
         evidence_marker=(
             f"snapshots_sampled={len(sample_idx)} | "

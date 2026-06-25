@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 15
@@ -38,7 +39,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="github_org_intel", target=req.target,
             findings=[wrap_finding(
                 f"GitHub org '{org}' does not exist or is private",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="No public footprint.",
                 evidence_marker="HTTP 404 from /orgs/{org}")],
             tests_performed=1, vulnerable=False,
@@ -69,7 +70,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = [wrap_finding(
         f"GitHub org intel — {data.get('login')}",
-        severity="POSITIVE", cwe="CWE-200",
+        severity=grade.info(), cwe="CWE-200",
         remediation="Public org data. Each public member is a recon pivot "
                     "(github_user_intel + email_pattern_guess + LinkedIn).",
         evidence_marker=(
@@ -83,7 +84,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if data.get("email"):
         findings.insert(0, wrap_finding(
             f"Org-level email exposed in GitHub profile: {data.get('email')}",
-            severity="LOW", cwe="CWE-359",
+            severity=grade.inventory(), cwe="CWE-359",
             remediation="Most orgs intentionally publish a contact email; "
                         "expected for security@/abuse@ but review if it's a personal alias.",
             evidence_marker=f"orgs/{org} email field = {data.get('email')} (CONFIRMED)"))

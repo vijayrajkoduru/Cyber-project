@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -79,7 +80,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="hibp_breaches_domain", target=req.target,
             findings=[wrap_finding(
                 f"{domain} has NO public breaches in HIBP",
-                severity="POSITIVE", cwe="CWE-1395",
+                severity=grade.protective(), cwe="CWE-1395",
                 remediation="No HIBP-tracked breaches. Continue monitoring (HIBP "
                             "adds breaches as they surface).",
                 evidence_marker="HIBP returned 0 breaches (CONFIRMED)")],
@@ -97,8 +98,10 @@ def _do_scan(req: ScanRequest) -> dict:
                   if weak_match else "")
     findings = [wrap_finding(
         f"{domain} appears in {len(breaches)} breach(es) — {total_accounts:,} accounts exposed (CONFIRMED via Domain field)",
-        severity="HIGH" if total_accounts >= 100000 else "MEDIUM",
-        cvss="7.5" if total_accounts >= 100000 else "5.3",
+        severity=(sev := grade.exposure(
+            confirmed=True,
+            impact="enables" if total_accounts >= 100000 else "aids")),
+        cvss=grade.cvss_for(sev),
         cwe="CWE-359", owasp="A05:2021",
         verified_exploit=True,
         remediation="For each breach: identify affected users, force password "

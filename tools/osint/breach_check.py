@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -80,13 +81,15 @@ def _do_scan(req: ScanRequest) -> dict:
                   f"{b.get('PwnCount', 0):,} accounts)" for b in verified_breaches[:5]]
         total = sum(b.get("PwnCount", 0) for b in verified_breaches)
         sensitive = any(b.get("IsSensitive") for b in verified_breaches)
-        sev = "HIGH" if sensitive or total > 100000 else "MEDIUM"
+        sev = grade.exposure(
+            confirmed=True,
+            impact="enables" if (sensitive or total > 100000) else "aids")
         weak_note = (f" [{len(weak_match)} additional title-only matches dropped]"
                       if weak_match else "")
         findings.append(wrap_finding(
             f"{len(verified_breaches)} breach(es) include credentials from {target} "
             f"(total: {total:,} accounts) (CONFIRMED via Domain field)",
-            sev, cvss="7.5" if sev == "HIGH" else "5.5",
+            sev, cvss=grade.cvss_for(sev),
             cwe="CWE-200", owasp="A07:2021",
             verified_exploit=True,
             remediation=("Force password rotation for all users on this domain. "
@@ -98,14 +101,14 @@ def _do_scan(req: ScanRequest) -> dict:
         sample = [b.get("Name", "?") for b in weak_match[:5]]
         findings.append(wrap_finding(
             f"{len(weak_match)} breach(es) mention {target} (SUSPECTED, title/description match only)",
-            severity="LOW", cvss="3.1",
+            severity=(sev := grade.hardening()), cvss=grade.cvss_for(sev),
             cwe="CWE-200", owasp="A07:2021",
             remediation="Manually review each breach; Domain field did not match target.",
             evidence_marker="; ".join(sample)))
     else:
         findings.append(wrap_finding(
             "No breaches in HIBP reference this domain",
-            severity="POSITIVE",
+            severity=grade.protective(),
             cwe="CWE-200", owasp="A07:2021",
             remediation="No known breach exposure — subscribe to HIBP domain "
                         "monitoring to get notified on future breaches.",

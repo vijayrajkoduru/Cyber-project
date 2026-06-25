@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_post, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 35
@@ -43,7 +44,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="llm_image_to_text", target=req.target,
             findings=[wrap_finding(
                 "Image-to-text OSINT requires a vision-capable LLM API key",
-                severity="INFO", cwe="CWE-1395",
+                severity=grade.advisory(), cwe="CWE-1395",
                 remediation="Pass an OpenAI-compatible API key as auth_bearer "
                             "with access to a vision model. Set OSINT_LLM_MODEL to "
                             "a vision model (default gpt-4o-mini supports vision).",
@@ -94,7 +95,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if pii:
         findings.append(wrap_finding(
             f"EXPOSED PII in image: {len(pii)} item(s)",
-            severity="HIGH", cvss="7.5", cwe="CWE-359",
+            severity=(sev := grade.exposure(confirmed=True, impact='enables')),
+            cvss=grade.cvss_for(sev), cwe="CWE-359",
             owasp="A05:2021",
             remediation="If this is YOUR image (e.g. on your website / social): "
                         "remove, blur, or replace. PII in images is indexed by Google "
@@ -106,8 +108,10 @@ def _do_scan(req: ScanRequest) -> dict:
         findings.append(wrap_finding(
             f"Image geolocated: {location.get('city','?')}, {location.get('country','?')} "
             f"(confidence {location.get('confidence',0)}%)",
-            severity="MEDIUM" if location.get("confidence", 0) >= 75 else "LOW",
-            cwe="CWE-359", cvss="4.3",
+            # An LLM geolocation guess is only "confirmed" at high confidence; a
+            # 50-74% guess is a signal, so it caps down to LOW ("prove, don't guess").
+            severity=(gsev := grade.exposure(confirmed=location.get("confidence", 0) >= 75, impact='aids')),
+            cwe="CWE-359", cvss=grade.cvss_for(gsev),
             remediation="If this image is from a private location and you don't "
                         "want it geolocated, strip EXIF metadata and blur any landmarks / "
                         "signs / license plates before sharing.",
@@ -116,7 +120,7 @@ def _do_scan(req: ScanRequest) -> dict:
     findings.append(wrap_finding(
         f"Image OSINT — {len(text_seen)} text, {result.get('people_count', 0)} people, "
         f"{len(result.get('objects', []))} objects",
-        severity="POSITIVE" if not pii else "INFO",
+        severity=grade.protective() if not pii else grade.info(),
         cwe="CWE-200",
         remediation="Reverse-search the image (Yandex / TinEye / Google Lens) "
                     "for additional context / earlier appearances.",

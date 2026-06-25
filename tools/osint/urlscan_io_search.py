@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -62,7 +63,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="urlscan_io_search", target=req.target,
             findings=[wrap_finding(
                 f"urlscan.io: 0 prior scans for {domain}",
-                severity="POSITIVE", cwe="CWE-1395",
+                severity=grade.protective(), cwe="CWE-1395",
                 remediation="No historical urlscan record. Domain hasn't been "
                             "publicly investigated. If your domain has any "
                             "exposed assets you don't want indexed: just don't "
@@ -79,7 +80,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if malicious:
         findings.append(wrap_finding(
             f"urlscan FLAGGED — {len(malicious)} scan(s) on {domain} marked malicious",
-            severity="HIGH", cvss="7.5", cwe="CWE-829",
+            severity=(sev := grade.exposure(confirmed=True, impact='enables')),
+            cvss=grade.cvss_for(sev), cwe="CWE-829",
             owasp="A06:2021",
             remediation="Public scans of this domain returned malicious verdict. "
                         "Investigate each scan ID at https://urlscan.io/result/<uuid>. "
@@ -92,7 +94,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings.append(wrap_finding(
         f"urlscan.io: {len(results)} prior scan(s) for {domain}",
-        severity="POSITIVE" if not malicious else "INFO", cwe="CWE-200",
+        severity=grade.protective() if not malicious else grade.info(), cwe="CWE-200",
         remediation="Public scan history. Review entries for unusual paths / "
                     "phishing-clone attempts. Cross-reference with phishtank.",
         evidence_marker=f"sample: {' | '.join(page_urls[:6])}"))

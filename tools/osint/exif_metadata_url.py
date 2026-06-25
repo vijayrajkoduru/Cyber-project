@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 18
@@ -74,7 +75,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="exif_metadata_url", target=req.target,
             findings=[wrap_finding(
                 f"Image at {url} has no EXIF metadata",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Image is properly sanitized — no metadata leakage. "
                             "Either stripped by upload pipeline or screenshot.",
                 evidence_marker=f"size: {img.size} | format: {img.format} | no EXIF (CONFIRMED)")],
@@ -97,7 +98,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if lat is not None and lon is not None:
         findings.append(wrap_finding(
             f"GPS COORDINATES in EXIF: {lat:.6f}, {lon:.6f}",
-            severity="HIGH", cvss="7.5", cwe="CWE-359",
+            severity=(sev := grade.exposure(confirmed=True, impact='enables')),
+            cvss=grade.cvss_for(sev), cwe="CWE-359",
             owasp="A05:2021",
             remediation="Strip EXIF before uploading user-facing images. Most "
                         "phone cameras embed GPS by default. Use exiftool / Pillow "
@@ -118,7 +120,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if interesting_tags.get("BodySerialNumber") or interesting_tags.get("LensSerialNumber"):
         findings.append(wrap_finding(
             "Camera SERIAL NUMBER in EXIF — direct device fingerprint",
-            severity="MEDIUM", cwe="CWE-359",
+            severity=grade.exposure(confirmed=True, impact='aids'), cwe="CWE-359",
             remediation="Camera serials tie all photos taken with the same body "
                         "to a single identity. Strip before publishing.",
             evidence_marker=f"serials: {interesting_tags.get('BodySerialNumber','')}"
@@ -126,7 +128,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings.append(wrap_finding(
         f"EXIF metadata extracted ({len(exif)} tags)",
-        severity="INFO" if (lat or interesting_tags.get("BodySerialNumber")) else "POSITIVE",
+        severity=grade.info() if (lat or interesting_tags.get("BodySerialNumber")) else grade.protective(),
         cwe="CWE-200",
         remediation="Review tags for PII; strip via exiftool if uploaded by users.",
         evidence_marker=" | ".join(f"{k}={v}" for k, v in interesting_tags.items())))

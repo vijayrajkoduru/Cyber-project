@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 25
@@ -98,7 +99,7 @@ def _do_scan(req: ScanRequest) -> dict:
             vuln = True
             findings.append(wrap_finding(
                 f"DNS poisoning / split-horizon leak suspected — non-public IP returned ({len(unique_answers)} answer-sets)",
-                severity="MEDIUM", cwe="CWE-829", cvss="5.3", owasp="A05:2021",
+                severity=(_sev := grade.exposure(confirmed=True, impact='aids')), cwe="CWE-829", cvss=grade.cvss_for(_sev), owasp="A05:2021",
                 remediation="A private/bogon IP from a public resolver indicates cache "
                             "poisoning or a split-horizon DNS leak. Verify your "
                             "authoritative records and investigate the offending resolver.",
@@ -106,7 +107,7 @@ def _do_scan(req: ScanRequest) -> dict:
         elif some_nx:
             findings.append(wrap_finding(
                 f"DNS partially resolving — some resolvers NXDOMAIN, others answer ({len(unique_answers)} answer-sets)",
-                severity="LOW", cwe="CWE-829", cvss="3.1", owasp="A05:2021",
+                severity=(_sev := grade.hardening()), cwe="CWE-829", cvss=grade.cvss_for(_sev), owasp="A05:2021",
                 remediation="A recent DNS change is still propagating, or a takedown is in "
                             "progress. Re-check in ~1 hour; if it persists, review your "
                             "nameservers and TTLs.",
@@ -114,7 +115,7 @@ def _do_scan(req: ScanRequest) -> dict:
         else:
             findings.append(wrap_finding(
                 f"DNS answers vary across resolvers — GeoDNS / anycast (normal for CDN-fronted sites)",
-                severity="INFO", cwe="CWE-200", cvss="0.0",
+                severity=(_sev := grade.info()), cwe="CWE-200", cvss=grade.cvss_for(_sev),
                 remediation="Differing PUBLIC IPs per resolver is the expected signature of "
                             "GeoDNS / anycast / a CDN steering each region to a nearby edge — "
                             "no action. If you do NOT use GeoDNS, re-check in ~1h; persistent "
@@ -124,13 +125,13 @@ def _do_scan(req: ScanRequest) -> dict:
         ans = list(unique_answers)[0]
         findings.append(wrap_finding(
             f"DNS consistent across {len([r for r in results.values() if r])} resolver(s) — {','.join(ans)}",
-            severity="POSITIVE", cwe="CWE-200",
+            severity=grade.protective(), cwe="CWE-200",
             remediation="DNS is propagated consistently. No action.",
             evidence_marker=f"All resolvers returned {ans} (CONFIRMED)"))
     else:
         findings.append(wrap_finding(
             f"NXDOMAIN — {name} has no A record on any resolver",
-            severity="INFO", cwe="CWE-200",
+            severity=grade.info(), cwe="CWE-200",
             remediation="Hostname does not resolve. Either typo or genuinely not registered.",
             evidence_marker="All 8 resolvers returned no A records (CONFIRMED)")
         )

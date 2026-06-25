@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, safe_post, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 30
@@ -57,7 +58,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="llm_entity_extraction", target=req.target,
             findings=[wrap_finding(
                 "LLM entity extraction requires an LLM API key",
-                severity="INFO", cwe="CWE-1395",
+                severity=grade.advisory(), cwe="CWE-1395",
                 remediation=(
                     "Pass an OpenAI-compatible API key as auth_bearer in the scan "
                     "request (or set OSINT_LLM_KEY env var on the backend). Supported: "
@@ -110,7 +111,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="llm_entity_extraction", target=req.target,
             findings=[wrap_finding(
                 "LLM extracted 0 entities from input",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Text contains no recognizable PII / corporate / "
                             "infrastructure entities.",
                 evidence_marker=f"LLM model={model} returned empty extraction (CONFIRMED)")],
@@ -119,8 +120,8 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = [wrap_finding(
         f"LLM extracted {total} entit{'y' if total == 1 else 'ies'} from input",
-        severity="MEDIUM" if (counts.get("emails", 0) + counts.get("phones", 0)) > 0 else "INFO",
-        cwe="CWE-200", cvss="5.3" if counts.get("emails") else "0.0",
+        severity=(sev := grade.inventory(total, low_at=10)), cvss=grade.cvss_for(sev),
+        cwe="CWE-200",
         owasp="A05:2021",
         remediation="Each extracted entity is a recon pivot. Cross-reference "
                     "emails with HIBP + Hudson Rock, people with LinkedIn / Sherlock, "

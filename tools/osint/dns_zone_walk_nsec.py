@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 15
@@ -58,7 +59,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="dns_zone_walk_nsec", target=req.target,
             findings=[wrap_finding(
                 f"{domain} is NOT DNSSEC-signed",
-                severity="INFO", cwe="CWE-345",
+                severity=grade.info(), cwe="CWE-345",
                 remediation="Without DNSSEC, this whole class of attack doesn't "
                             "apply. But DNSSEC is recommended for high-value zones — "
                             "consider signing.",
@@ -84,7 +85,8 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="dns_zone_walk_nsec", target=req.target,
             findings=[wrap_finding(
                 f"{domain} uses NSEC (unhashed) — WALKABLE",
-                severity="MEDIUM", cvss="5.3", cwe="CWE-200",
+                severity=(sev := grade.exposure(confirmed=True, impact='aids')),
+                cvss=grade.cvss_for(sev), cwe="CWE-200",
                 owasp="A05:2021",
                 remediation="Migrate from NSEC to NSEC3 (hashed). NSEC reveals "
                             "next-existing-name in the zone, which is iterable into "
@@ -101,7 +103,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="dns_zone_walk_nsec", target=req.target,
             findings=[wrap_finding(
                 f"{domain} uses NSEC3 (hashed) — properly protected from walking",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="DNSSEC + NSEC3 correctly configured. Use modern "
                             "iteration count (≤ 10) per RFC 9276 guidance.",
                 evidence_marker="NSEC3 record observed (CONFIRMED via NXDOMAIN probe)")],
@@ -113,7 +115,7 @@ def _do_scan(req: ScanRequest) -> dict:
         tool="dns_zone_walk_nsec", target=req.target,
         findings=[wrap_finding(
             f"{domain} is DNSSEC-signed but NSEC type indeterminate",
-            severity="INFO", cwe="CWE-345",
+            severity=grade.info(), cwe="CWE-345",
             remediation="Use dnssec-debugger or dig +dnssec to inspect manually.",
             evidence_marker="DNSKEY present but NXDOMAIN probe didn't return NSEC/NSEC3")],
         tests_performed=2, vulnerable=False,

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 # Reuse the project-wide entropy + allowlist helpers (same logic as the webapp
 # secrets fix) so a regex match is only graded when the captured blob is
@@ -129,7 +130,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="github_secrets_scan", target=req.target,
             findings=[wrap_finding(
                 f"{name} has no public repos to scan",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="No public repos = no exposed-commit attack surface.",
                 evidence_marker="0 repos (CONFIRMED)")],
             tests_performed=1, vulnerable=False,
@@ -198,7 +199,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="github_secrets_scan", target=req.target,
             findings=[wrap_finding(
                 f"GH {name}: {scanned} commit-diffs scanned, 0 high-confidence secrets",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="No high-confidence secret patterns in recent commits. "
                             "Continue rotating commit-secret scanning (gitleaks/trufflehog) "
                             "in CI.",
@@ -214,7 +215,8 @@ def _do_scan(req: ScanRequest) -> dict:
         ]
         findings.append(wrap_finding(
             f"LEAKED SECRETS — {len(secret_hits)} hit(s) in recent commits of {name}",
-            severity="CRITICAL", cvss="9.8", cwe="CWE-798",
+            severity=(sev := grade.exposure(confirmed=True, impact="critical")),
+            cvss=grade.cvss_for(sev), cwe="CWE-798",
             owasp="A07:2021",
             remediation="EACH leaked secret must be ROTATED IMMEDIATELY at the "
                         "issuing provider (AWS / Stripe / etc.). Then either rewrite "
@@ -230,7 +232,7 @@ def _do_scan(req: ScanRequest) -> dict:
         ]
         findings.append(wrap_finding(
             f"{len(weak_hits)} key-shaped string(s) failed the entropy/allowlist gate",
-            severity="INFO", cvss="0.0", cwe="CWE-798",
+            severity=(sev := grade.info()), cvss=grade.cvss_for(sev), cwe="CWE-798",
             owasp="A07:2021",
             remediation="These matched a secret-shaped regex but are low-entropy or "
                         "contain test/example/placeholder markers — likely fixtures "

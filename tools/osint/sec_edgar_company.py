@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -50,7 +51,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="sec_edgar_company", target=req.target,
             findings=[wrap_finding(
                 f"No SEC EDGAR registration found for '{q}'",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Not a US-listed public company (or name doesn't "
                             "match SEC ticker mapping). For non-US: try OpenCorporates.",
                 evidence_marker="No CIK match (CONFIRMED)")],
@@ -88,7 +89,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = [wrap_finding(
         f"SEC EDGAR — {sub_data.get('name', company_title)} ({ticker}, CIK {cik})",
-        severity="POSITIVE", cwe="CWE-200",
+        severity=grade.info(), cwe="CWE-200",
         remediation="Public regulatory data. Pull the latest 10-K Item 1C "
                     "(cybersecurity disclosures, mandatory since Dec 2023) for "
                     "the target's security posture and material incidents.",
@@ -100,7 +101,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if cyber_8k_recent:
         findings.append(wrap_finding(
             f"CYBERSECURITY 8-K(s) since SEC rule (Dec 2023): {len(cyber_8k_recent)}",
-            severity="MEDIUM", cwe="CWE-200",
+            severity=grade.advisory(), cwe="CWE-200",
             remediation="Per SEC rules, public companies must file 8-K within "
                         "4 business days of a material cybersecurity incident. Read "
                         "these filings — they reveal known incidents and may indicate "
