@@ -23807,6 +23807,147 @@ function AuditLogPanel({ token }) {
   );
 }
 
+// ─── Phase 2.4: org-scoped API keys + programmatic access ──────────────
+function ApiAccessPanel({ token }) {
+  const [keys, setKeys]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState("");
+  const [msg, setMsg]         = useState("");
+  const [msgErr, setMsgErr]   = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName]       = useState("");
+  const [role, setRole]       = useState("member");
+  const [busy, setBusy]       = useState(false);
+  const [newKey, setNewKey]   = useState("");   // plaintext, shown once
+  const base = (typeof window !== "undefined" ? window.location.origin : "");
+  const flash = (m, e) => { setMsg(m); setMsgErr(!!e); };
+
+  const load = async () => {
+    setLoading(true); setErr("");
+    try {
+      const d = await api("/api/org/keys", "GET", null, token);
+      setKeys(Array.isArray(d.keys) ? d.keys : []);
+    } catch (e) {
+      setErr(e.status === 403 ? "API keys require an admin or owner role in your organization."
+                              : "Could not load API keys: " + (e.message || e));
+      setKeys([]);
+    }
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const create = async () => {
+    setBusy(true);
+    try {
+      const d = await api("/api/org/keys", "POST", { name: name.trim() || "API key", role }, token);
+      setNewKey(d.api_key || "");
+      setShowCreate(false); setName(""); setRole("member");
+      flash("Key created — copy it now, it won't be shown again.", false);
+      await load();
+    } catch (e) {
+      flash(e.status === 403 ? "You can't issue a key at or above your own role." : "Error: " + (e.message || e), true);
+    }
+    setBusy(false);
+  };
+
+  const revoke = async (id) => {
+    if (typeof window !== "undefined" && !window.confirm("Revoke this key? Any integration using it stops working immediately.")) return;
+    try { await api("/api/org/keys/" + id, "DELETE", null, token); flash("Key revoked.", false); await load(); }
+    catch (e) { flash("Error: " + (e.message || e), true); }
+  };
+
+  const copy = (t) => { try { navigator.clipboard.writeText(t); flash("Copied to clipboard.", false); } catch (_) {} };
+  const roleColor = (r) => r === "owner" ? "#f59e0b" : r === "admin" ? "#3b9eff" : r === "member" ? "#5dffa6" : "#8a94a8";
+  const fmt = (ts) => ts ? (() => { try { return new Date(ts).toLocaleString(); } catch (_) { return ts; } })() : "never";
+  const mono = { fontFamily:"JetBrains Mono,monospace" };
+
+  return (
+    <div className="fade" style={{padding:24,fontFamily:"Inter,sans-serif"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,flexWrap:"wrap"}}>
+        <div>
+          <h2 style={{fontSize:20,fontWeight:800,color:"#ffffff",margin:0}}>API Access</h2>
+          <p style={{fontSize:12,color:"#5a6478",margin:0}}>Programmatic, org-scoped access to your scan results</p>
+        </div>
+        <button onClick={load} style={{marginLeft:"auto",background:"#1c2435",border:"1px solid #1c2435",color:"#8a94a8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Refresh</button>
+        {!err && <button onClick={()=>{setName("");setRole("member");setShowCreate(true);}} style={{background:"linear-gradient(135deg,#1d4ed8,#3b9eff)",border:"none",color:"#fff",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>+ Create key</button>}
+      </div>
+
+      {msg && <div style={{background:msgErr?"#450a0a":"#052e16",border:msgErr?"1px solid #991b1b":"1px solid #166534",borderRadius:8,padding:"10px 16px",color:msgErr?"#ffa3b0":"#5dffa6",fontSize:13,marginBottom:16}}>{msg}</div>}
+      {err && <div style={{background:"#450a0a",border:"1px solid #991b1b",borderRadius:8,padding:"10px 16px",color:"#ffa3b0",fontSize:13,marginBottom:16}}>{err}</div>}
+
+      {newKey && (
+        <div style={{background:"#06231a",border:"1px solid #166534",borderRadius:10,padding:16,marginBottom:20}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#5dffa6",marginBottom:8}}>Your new API key — copy it now, it will NOT be shown again:</div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <code style={{...mono,flex:1,minWidth:240,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontSize:13,wordBreak:"break-all"}}>{newKey}</code>
+            <button onClick={()=>copy(newKey)} style={{background:"#166534",border:"none",color:"#5dffa6",padding:"8px 14px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:700}}>Copy</button>
+            <button onClick={()=>setNewKey("")} style={{background:"#1c2435",border:"none",color:"#8a94a8",padding:"8px 14px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:600}}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? <div style={{textAlign:"center",padding:40,color:"#5a6478"}}>Loading…</div> : (!err && (
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
+          {keys.length === 0 && <div style={{textAlign:"center",padding:30,color:"#5a6478"}}>No API keys yet. Create one to call the API.</div>}
+          {keys.map(k => (
+            <div key={k.id} style={{background:"#0d1320",border:"1px solid #1c2435",borderLeft:"4px solid "+(k.revoked?"#5a6478":roleColor(k.role)),borderRadius:10,padding:"14px 18px",opacity:k.revoked?0.6:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:220}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                    <span style={{fontSize:15,fontWeight:700,color:"#ffffff"}}>{k.name || "API key"}</span>
+                    <span style={{fontSize:10,fontWeight:700,color:roleColor(k.role),background:"#0a0e17",border:"1px solid #1c2435",padding:"2px 8px",borderRadius:4,textTransform:"uppercase"}}>{k.role}</span>
+                    {k.revoked ? <span style={{fontSize:10,color:"#ff6b82",background:"#1c0000",padding:"2px 8px",borderRadius:4,fontWeight:700}}>REVOKED</span> : null}
+                  </div>
+                  <div style={{...mono,fontSize:12,color:"#5a6478"}}>{k.prefix}…&nbsp;&nbsp;·&nbsp;&nbsp;last used: {fmt(k.last_used)}</div>
+                </div>
+                {!k.revoked && <button onClick={()=>revoke(k.id)} style={{background:"#1c0000",border:"1px solid #7f1d1d",color:"#ff6b82",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>Revoke</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {!err && (
+        <div style={{background:"#0d1320",border:"1px solid #1c2435",borderRadius:10,padding:18}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#c3ccda",marginBottom:10}}>Using the API</div>
+          <div style={{fontSize:12,color:"#8a94a8",marginBottom:10}}>Authenticate every request with your key: header <code style={{...mono,color:"#3b9eff"}}>X-API-Key: vl_live_…</code> (or <code style={{...mono,color:"#3b9eff"}}>Authorization: Bearer vl_live_…</code>). All responses are scoped to your organization.</div>
+          <pre style={{...mono,background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"12px 14px",color:"#d8deea",fontSize:12,overflowX:"auto",whiteSpace:"pre",margin:0}}>{
+`curl ${base}/api/v1/me \\
+  -H "X-API-Key: vl_live_..."
+
+curl "${base}/api/v1/scans?target=example.com" \\
+  -H "X-API-Key: vl_live_..."
+
+curl "${base}/api/v1/scan?target=example.com&scan_id=ID" \\
+  -H "X-API-Key: vl_live_..."`
+          }</pre>
+        </div>
+      )}
+
+      {showCreate && (
+        <div onClick={()=>setShowCreate(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#0d1320",border:"1px solid #0e3a55",borderRadius:14,width:"100%",maxWidth:420,padding:28}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontSize:17,fontWeight:800,color:"#d8deea"}}>Create API key</div>
+              <button onClick={()=>setShowCreate(false)} style={{background:"none",border:"1px solid #1c2435",color:"#8a94a8",borderRadius:6,width:28,height:28,cursor:"pointer",fontSize:16}}>×</button>
+            </div>
+            <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Name</label>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. CI pipeline"
+              style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:14}}/>
+            <label style={{display:"block",color:"#8a94a8",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Role (scope)</label>
+            <select value={role} onChange={e=>setRole(e.target.value)}
+              style={{width:"100%",background:"#0a0e17",border:"1px solid #1c2435",borderRadius:6,padding:"10px 14px",color:"#d8deea",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:20}}>
+              <option value="viewer">viewer — read results</option>
+              <option value="member">member — read results</option>
+            </select>
+            <button onClick={create} disabled={busy} style={{width:"100%",background:busy?"#1c2435":"linear-gradient(135deg,#1d4ed8,#3b9eff)",border:"none",borderRadius:7,padding:"12px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:busy?"wait":"pointer"}}>{busy?"Creating…":"Create key"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPanel({ token }) {
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -25507,11 +25648,12 @@ export default function App() {
         {active === "credvault" && <CredentialVaultModule token={token}/>}
         {active === "team"      && <TeamOrgPanel token={token}/>}
         {active === "audit"     && <AuditLogPanel token={token}/>}
+        {active === "api_access" && <ApiAccessPanel token={token}/>}
         {/* ComingSoon fallback: only render if `active` is NOT a real module id
             AND NOT one of the special internal view ids. Built dynamically from
             MODULES so new modules can never drift back into "under development". */}
         {!MODULES.map(m=>m.id).concat([
-            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys","credvault","redteam","team","audit"
+            "dashboard","health","metasploit","guide","adminpanel","settings","history","apikeys","credvault","redteam","team","audit","api_access"
           ]).includes(active) && <ComingSoon topic={topic}/>}
       </>
     );
@@ -25607,6 +25749,7 @@ export default function App() {
             {id:"history", icon:"", label:"Scan History"},
             {id:"team",    icon:"", label:"Team & Organization"},
             {id:"audit",   icon:"", label:"Audit Log"},
+            {id:"api_access", icon:"", label:"API Access"},
             {id:"settings",icon:"",  label:"Settings"},
             ...(isSuperAdmin ? [{id:"adminpanel", icon:"", label:"Admin Panel"}] : []),
             ...(isSuperAdmin ? [{id:"redteam", icon:"", label:"Red Team"}] : []),

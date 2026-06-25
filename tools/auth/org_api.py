@@ -155,6 +155,47 @@ def audit(limit: int = 100, offset: int = 0, payload=Depends(require_org_role("a
             "limit": limit, "offset": offset}
 
 
+# ─── API keys (Phase 2.4) — issue/list/revoke org-scoped keys ───────────────
+class KeyReq(BaseModel):
+    name: str = "API key"
+    role: str = "member"
+
+
+@router.post("/api/org/keys")
+def create_key(req: KeyReq, request: Request, payload=Depends(require_org_role("admin"))):
+    oid = _org_id(payload)
+    if req.role not in VALID_ROLES:
+        raise HTTPException(400, f"Invalid role. Allowed: {sorted(VALID_ROLES)}")
+    # A key can't carry more authority than the admin minting it.
+    if not _can_assign(payload.get("org_role"), req.role, None):
+        raise HTTPException(403, "You cannot issue a key with a role at or above your own.")
+    from tools.auth._apikeys import create_api_key
+    kid, plaintext, prefix = create_api_key(oid, req.name, req.role, payload.get("sub"))
+    write_audit("api_key_create", actor_id=payload.get("sub"),
+                actor_name=payload.get("username"), org_id=oid,
+                target=(req.name or "")[:80], detail=f"role={req.role}", ip=_ip(request))
+    return {"ok": True, "id": kid, "api_key": plaintext, "prefix": prefix,
+            "warning": "Store this key now — it is shown only once and cannot be retrieved again."}
+
+
+@router.get("/api/org/keys")
+def list_keys(payload=Depends(require_org_role("admin"))):
+    from tools.auth._apikeys import list_api_keys
+    return {"keys": list_api_keys(_org_id(payload))}
+
+
+@router.delete("/api/org/keys/{key_id}")
+def revoke_key(key_id: str, request: Request, payload=Depends(require_org_role("admin"))):
+    oid = _org_id(payload)
+    from tools.auth._apikeys import revoke_api_key
+    if not revoke_api_key(oid, key_id):
+        raise HTTPException(404, "API key not found")
+    write_audit("api_key_revoke", actor_id=payload.get("sub"),
+                actor_name=payload.get("username"), org_id=oid,
+                target=key_id, ip=_ip(request))
+    return {"ok": True}
+
+
 _purge_started = False
 
 

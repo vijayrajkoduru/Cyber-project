@@ -13,6 +13,10 @@ def caller_org(payload):
     unavailable (so a DB outage degrades gracefully instead of breaking scans)."""
     if not isinstance(payload, dict):
         return None
+    # An API key is bound to its org at issuance — trust that binding directly
+    # (the key's validity does not depend on its creator's current membership).
+    if payload.get("via") == "apikey":
+        return payload.get("org_id")
     sub = payload.get("sub")
     claimed = payload.get("org_id")
     if not sub:
