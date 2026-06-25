@@ -85,17 +85,34 @@ def _do_scan(req: ScanRequest) -> dict:
             pass
 
     subs = sorted(subs)
-    interesting = [s for s in subs if any(k in s for k in
-                    ("dev", "staging", "test", "uat", "qa", "internal", "admin",
-                     "vpn", "api", "git", "jenkins", "jira"))]
+    # CT-logged subdomains are PUBLIC inventory, not an exposure — api.<domain>
+    # is normally an intended public service. Only subdomains that look like
+    # internal/pre-prod tooling (which usually should NOT be public) warrant a
+    # LOW; generic api/dev/test/admin names are INFO attack-surface inventory.
+    _INTERNAL = ("internal", "vpn", "jenkins", "jira", "staging", "uat", "qa")
+    _GENERIC = ("dev", "test", "admin", "api", "git")
+    internalish = [s for s in subs if any(k in s for k in _INTERNAL)]
+    generic = [s for s in subs if any(k in s for k in _GENERIC) and s not in internalish]
+    interesting = internalish + generic
 
     findings = []
-    if interesting:
+    if internalish:
         findings.append(wrap_finding(
-            f"CertSpotter INTERESTING subdomains ({len(interesting)})",
-            severity="MEDIUM", cvss="5.3", cwe="CWE-200", owasp="A05:2021",
-            remediation="Pre-prod/admin subdomains exposed via CT. Move behind VPN.",
-            evidence_marker=" | ".join(interesting[:15])))
+            f"Internal/pre-prod-looking subdomains in CT logs ({len(internalish)})",
+            severity="LOW", cvss="3.1", cwe="CWE-200", owasp="A05:2021",
+            remediation="These CT-logged subdomains look like internal/pre-prod systems "
+                        "(internal/vpn/jenkins/jira/staging/uat). CT is public, so issuing a "
+                        "cert advertises their existence. Confirm which are meant to be public; "
+                        "put the rest behind a VPN or use a wildcard / private CA.",
+            evidence_marker=" | ".join(internalish[:15])))
+    if generic:
+        findings.append(wrap_finding(
+            f"Subdomain inventory from CT logs ({len(generic)} api/dev/admin-style)",
+            severity="INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
+            remediation="CT-logged subdomains (api/dev/test/admin/git) — attack-surface "
+                        "inventory, not an exposure (e.g. api.<domain> is normally public). "
+                        "Use as a recon target list.",
+            evidence_marker=" | ".join(generic[:15])))
 
     findings.append(wrap_finding(
         f"CertSpotter: {len(certs)} issuances / {len(subs)} unique subs for {domain}",
@@ -110,7 +127,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     return standard_response(
         tool="certspotter_history", target=req.target, findings=findings,
-        tests_performed=1, vulnerable=bool(interesting),
+        tests_performed=1, vulnerable=bool(internalish),
         tests_summary=f"CertSpotter: {len(certs)} certs / {len(subs)} subs",
         raw_data={"subdomains": subs, "interesting": interesting,
                    "issuers": sorted(issuers), "active": active, "expired": expired})
