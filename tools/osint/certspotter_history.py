@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 18
@@ -99,7 +100,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if internalish:
         findings.append(wrap_finding(
             f"Internal/pre-prod-looking subdomains in CT logs ({len(internalish)})",
-            severity="LOW", cvss="3.1", cwe="CWE-200", owasp="A05:2021",
+            severity=(isev := grade.hardening()), cvss=grade.cvss_for(isev),
+            cwe="CWE-200", owasp="A05:2021",
             remediation="These CT-logged subdomains look like internal/pre-prod systems "
                         "(internal/vpn/jenkins/jira/staging/uat). CT is public, so issuing a "
                         "cert advertises their existence. Confirm which are meant to be public; "
@@ -108,7 +110,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if generic:
         findings.append(wrap_finding(
             f"Subdomain inventory from CT logs ({len(generic)} api/dev/admin-style)",
-            severity="INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
+            severity=(gsev := grade.inventory()), cvss=grade.cvss_for(gsev),
+            cwe="CWE-200", owasp="A05:2021",
             remediation="CT-logged subdomains (api/dev/test/admin/git) — attack-surface "
                         "inventory, not an exposure (e.g. api.<domain> is normally public). "
                         "Use as a recon target list.",

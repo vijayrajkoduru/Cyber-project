@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 15
@@ -104,7 +105,7 @@ def _do_scan(req: ScanRequest) -> dict:
                        or ("redemption" in _norm(s)) for s in concerning)
         findings.append(wrap_finding(
             f"Domain has a disabling/expiring status: {', '.join(concerning)}",
-            severity="MEDIUM" if _bad_now else "LOW",
+            severity=(grade.exposure(confirmed=True, impact="aids") if _bad_now else grade.hardening()),
             cwe="CWE-1395",
             remediation="'pendingDelete' / 'redemptionPeriod' — renew NOW or lose the "
                         "domain. 'clientHold' / 'serverHold' — the domain is disabled "
@@ -114,7 +115,7 @@ def _do_scan(req: ScanRequest) -> dict:
     elif protective:
         findings.append(wrap_finding(
             f"Domain has registrar protection locks ({len(protective)})",
-            severity="POSITIVE", cwe="CWE-200",
+            severity=grade.protective(), cwe="CWE-200",
             remediation="No action needed — these locks PREVENT unauthorized deletion, "
                         "transfer, and hijack of the domain. This is recommended hygiene.",
             evidence_marker=f"RDAP status = {protective} (protective locks — good practice)"))

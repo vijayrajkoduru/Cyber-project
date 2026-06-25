@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 10
@@ -82,8 +83,9 @@ def _do_scan(req: ScanRequest) -> dict:
         # count is NOT proof of exploitability. Cap at MEDIUM.
         findings.append(wrap_finding(
             f"InternetDB lists {len(vulns)} version-inferred CVE(s) on this host",
-            severity="MEDIUM" if len(vulns) >= 3 else "LOW",
-            cwe="CWE-1395", cvss="5.3" if len(vulns) >= 3 else "3.1",
+            severity=(vsev := grade.exposure(confirmed=False,
+                      impact="enables" if len(vulns) >= 3 else "aids")),
+            cwe="CWE-1395", cvss=grade.cvss_for(vsev),
             owasp="A06:2021",
             remediation="These CVEs are version-inferred from Shodan's last banner "
                         "scan and are UNCONFIRMED (no patch/version verification). "
@@ -110,7 +112,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if crit:
         findings.append(wrap_finding(
             f"High-risk service port(s) internet-facing: {[f'{p}/{_CRIT[p]}' for p in crit]}",
-            severity="HIGH", cwe="CWE-668", cvss="7.5", owasp="A05:2021",
+            severity=(csev := grade.exposure(confirmed=True, impact="enables")),
+            cwe="CWE-668", cvss=grade.cvss_for(csev), owasp="A05:2021",
             remediation="These services are commonly unauthenticated or heavily attacked "
                         "and should not be internet-facing. Firewall to known IPs / move "
                         "behind a VPN; disable Telnet and SMB entirely.",
@@ -118,14 +121,16 @@ def _do_scan(req: ScanRequest) -> dict:
     if med:
         findings.append(wrap_finding(
             f"Database/RPC port(s) internet-facing: {[f'{p}/{_MED[p]}' for p in med]}",
-            severity="MEDIUM", cwe="CWE-668", cvss="5.3", owasp="A05:2021",
+            severity=(msev := grade.exposure(confirmed=True, impact="aids")),
+            cwe="CWE-668", cvss=grade.cvss_for(msev), owasp="A05:2021",
             remediation="Database/RPC ports should not be publicly reachable. Bind to a "
                         "private interface and restrict by firewall.",
             evidence_marker=f"ports={med} (CONFIRMED via Shodan InternetDB)"))
     if mgmt and not _is_cdn:
         findings.append(wrap_finding(
             f"Management port reachable: {[f'{p}/{_MGMT[p]}' for p in mgmt]}",
-            severity="LOW", cwe="CWE-668", cvss="3.1", owasp="A05:2021",
+            severity=(gsev := grade.hardening()),
+            cwe="CWE-668", cvss=grade.cvss_for(gsev), owasp="A05:2021",
             remediation="SSH/FTP being reachable is not itself a vulnerability. If this is "
                         "an intended service (git-over-SSH, a bastion host, SFTP), treat "
                         "as informational. Otherwise restrict to known source IPs or place "
