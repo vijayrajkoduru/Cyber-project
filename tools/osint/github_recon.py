@@ -13,6 +13,7 @@ from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._payloads.osint.osint_dorks import OSINT_DORKS  # registers L5 curation usage
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 20
@@ -71,7 +72,8 @@ def _do_scan(req: ScanRequest) -> dict:
         findings.append(wrap_finding(
             f"GitHub code search returned {sum(h['count'] for h in high_hits)} "
             f"high-risk hits (env/json/credentials)",
-            severity="HIGH", cvss="7.5",
+            severity=(sev := grade.exposure(confirmed=True, impact="enables")),
+            cvss=grade.cvss_for(sev),
             cwe="CWE-538", owasp="A05:2021",
             remediation=("Audit hits with: gh search code '\"{target}\" extension:env'. "
                         "Open file removal requests with GitHub Trust & Safety; rotate "
@@ -80,16 +82,18 @@ def _do_scan(req: ScanRequest) -> dict:
     low_hits = [h for h in hits if h["severity"] != "HIGH"]
     if low_hits:
         sample = [f"{h['query']} ({h['count']} results)" for h in low_hits[:3]]
+        _ref_count = sum(h['count'] for h in low_hits)
         findings.append(wrap_finding(
-            f"GitHub mentions: {sum(h['count'] for h in low_hits)} public references",
-            severity="LOW", cvss="2.0",
+            f"GitHub mentions: {_ref_count} public references",
+            severity=(sev := grade.inventory(n=_ref_count, low_at=50)),
+            cvss=grade.cvss_for(sev),
             cwe="CWE-200", owasp="A05:2021",
             remediation="Informational — review any non-employee commits referencing target.",
             evidence_marker="; ".join(sample)))
     if not hits:
         findings.append(wrap_finding(
             "No GitHub code hits for target",
-            severity="POSITIVE",
+            severity=grade.protective(),
             cwe="CWE-538", owasp="A05:2021",
             remediation="Clean GitHub surface — no env/config leakage detected.",
             evidence_marker=f"{len(_QUERIES)} queries, 0 hits"))

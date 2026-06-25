@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 try:
     from tools._payloads.osint.email_patterns import EMAIL_PATTERNS
@@ -76,7 +77,7 @@ def _do_scan(req: ScanRequest) -> dict:
         sample = [f"{h['email']} → {h.get('name', '?')}" for h in hits[:8]]
         findings.append(wrap_finding(
             f"{len(hits)} Gravatar profile(s) found for role-based emails",
-            severity="LOW", cvss="2.0",
+            severity=(sev := grade.inventory(len(hits), low_at=1)), cvss=grade.cvss_for(sev),
             cwe="CWE-200", owasp="A05:2021",
             remediation=("Gravatar links email to a public photo/profile — "
                         "informational. If sensitive, employees can delete "
@@ -85,7 +86,7 @@ def _do_scan(req: ScanRequest) -> dict:
     else:
         findings.append(wrap_finding(
             f"No Gravatar profiles for {len(emails)} role emails",
-            severity="POSITIVE",
+            severity=grade.protective(),
             cwe="CWE-200", owasp="A05:2021",
             remediation="Clean — role mailboxes not linked to identity profiles.",
             evidence_marker=f"{len(emails)} role emails probed, 0 hits"))

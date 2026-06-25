@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -47,7 +48,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="leakix_search", target=req.target,
             findings=[wrap_finding(
                 f"LeakIX has no scans for {target}",
-                severity="POSITIVE", cwe="CWE-1395",
+                severity=grade.protective(), cwe="CWE-1395",
                 remediation="No exposed-asset records in LeakIX. Re-scan periodically.",
                 evidence_marker="LeakIX 404 (CONFIRMED)")],
             tests_performed=1, vulnerable=False,
@@ -79,7 +80,7 @@ def _do_scan(req: ScanRequest) -> dict:
         # treating it as a graded exposure.
         findings.append(wrap_finding(
             f"LeakIX indexed {len(leaks)} potential leak(s) for {target}",
-            severity="LOW", cvss="3.1", cwe="CWE-200",
+            severity=(sev := grade.hardening()), cvss=grade.cvss_for(sev), cwe="CWE-200",
             owasp="A05:2021",
             remediation="LeakIX-indexed entries are unverified third-party intel — "
                         "they may be stale or already remediated. VERIFY each entry "
@@ -97,7 +98,7 @@ def _do_scan(req: ScanRequest) -> dict:
             # (it may be authenticated / firewalled since the scan). INFO.
             findings.append(wrap_finding(
                 f"LeakIX indexed {len(risky_services)} sensitive service(s)",
-                severity="INFO", cvss="0.0", cwe="CWE-668",
+                severity=(sev := grade.info()), cvss=grade.cvss_for(sev), cwe="CWE-668",
                 owasp="A05:2021",
                 remediation="Indexed mgmt/database services are informational — "
                             "an open port is not proof of exploitability. Confirm "
@@ -111,7 +112,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if not findings:
         findings.append(wrap_finding(
             f"LeakIX: {len(services)} service(s) indexed, 0 leaks",
-            severity="POSITIVE", cwe="CWE-200",
+            severity=grade.protective(), cwe="CWE-200",
             remediation="LeakIX has indexed this host but found no leaks. Public "
                         "service inventory is fine; just confirm each port is intentional.",
             evidence_marker=f"services={len(services)} leaks=0 (CONFIRMED)"))

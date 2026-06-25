@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -68,7 +69,8 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="feodotracker_ip", target=req.target,
             findings=[wrap_finding(
                 f"BANKING TROJAN C2 — {ip} listed on Feodo Tracker",
-                severity="CRITICAL", cvss="9.8", cwe="CWE-829",
+                severity=(sev := grade.exposure(confirmed=True, impact='critical')),
+                cvss=grade.cvss_for(sev), cwe="CWE-829",
                 owasp="A06:2021",
                 remediation="If outbound: BLOCK at egress firewall immediately, "
                             "investigate the source endpoint for Emotet/Dridex/TrickBot/QakBot "
@@ -84,7 +86,7 @@ def _do_scan(req: ScanRequest) -> dict:
         tool="feodotracker_ip", target=req.target,
         findings=[wrap_finding(
             f"{ip} NOT in Feodo Tracker active C2 list",
-            severity="POSITIVE", cwe="CWE-1395",
+            severity=grade.protective(), cwe="CWE-1395",
             remediation="No active banking-trojan C2 association. Re-check daily "
                         "as the blocklist is rebuilt every 5 min.",
             evidence_marker=f"checked against {len(ips)}-entry blocklist (CONFIRMED clean)")],

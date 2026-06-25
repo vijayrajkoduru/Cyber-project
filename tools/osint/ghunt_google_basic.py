@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 12
@@ -46,7 +47,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="ghunt_google_basic", target=req.target,
             findings=[wrap_finding(
                 f"No public Google profile signals for {email}",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Account either doesn't exist or has all public "
                             "profile features disabled (good privacy hygiene).",
                 evidence_marker="no profile photo, no public-form resolution (CONFIRMED)")],
@@ -55,7 +56,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = [wrap_finding(
         f"Google account {email} has public profile signals",
-        severity="LOW", cwe="CWE-359",
+        severity=grade.hardening(), cwe="CWE-359",
         remediation="Profile photo / display name visible via Google services. "
                     "For privacy: review Google Account → Privacy → Personal info "
                     "visibility. For full GHunt deep recon (Maps reviews, Calendar "

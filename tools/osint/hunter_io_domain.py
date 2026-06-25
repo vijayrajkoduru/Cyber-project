@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 10
@@ -17,7 +18,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="hunter_io_domain", target=req.target,
             findings=[wrap_finding(
                 "Hunter.io domain-search requires API key",
-                severity="POSITIVE", cwe="CWE-1395",
+                severity=grade.advisory(), cwe="CWE-1395",
                 remediation="Register free at hunter.io (25 searches/mo free, "
                             "$49/mo plus). Pass auth_bearer=API_KEY. Returns "
                             "email pattern + known employee emails for a domain.",
@@ -41,8 +42,8 @@ def _do_scan(req: ScanRequest) -> dict:
         tool="hunter_io_domain", target=req.target,
         findings=[wrap_finding(
             f"Hunter.io {domain}: pattern={pattern}, {len(emails)} emails found",
-            severity="MEDIUM" if len(emails) > 0 else "POSITIVE",
-            cvss="5.3" if emails else "0.0",
+            severity=(sev := grade.inventory(len(emails), low_at=10)),
+            cvss=grade.cvss_for(sev),
             cwe="CWE-359", owasp="A05:2021",
             remediation="Public email enumeration. For high-risk employees: "
                         "rotate to non-pattern addresses or use email aliases.",

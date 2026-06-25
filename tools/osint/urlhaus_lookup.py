@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_post, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 10
@@ -55,7 +56,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="urlhaus_lookup", target=req.target,
             findings=[wrap_finding(
                 f"URLhaus has NO malicious entries for {target}",
-                severity="POSITIVE", cwe="CWE-1395",
+                severity=grade.protective(), cwe="CWE-1395",
                 remediation="Not on the abuse.ch malware blocklist as of this scan. "
                             "Re-scan periodically as new URLs are added daily.",
                 evidence_marker="URLhaus query_status=no_results (CONFIRMED)")],
@@ -76,7 +77,8 @@ def _do_scan(req: ScanRequest) -> dict:
     findings = [wrap_finding(
         f"URLhaus FLAGGED — {len(threats)} malicious URL(s) "
         f"({len(active)} currently active) for {target}",
-        severity="CRITICAL", cvss="9.0", cwe="CWE-829",
+        severity=(sev := grade.exposure(confirmed=True, impact='critical')),
+        cvss=grade.cvss_for(sev), cwe="CWE-829",
         owasp="A06:2021",
         remediation="This host has hosted malware per abuse.ch. If this is YOUR "
                     "host: server is compromised — isolate, investigate, rebuild. "

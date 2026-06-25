@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 30
@@ -55,7 +56,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="wayback_cdx_search", target=req.target,
             findings=[wrap_finding(
                 f"No archived URLs found for {domain}",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Either never crawled or robots.txt blocked Wayback. "
                             "Fresh or low-profile domain.",
                 evidence_marker="CDX returned 0 records (CONFIRMED)")],
@@ -79,7 +80,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if secretish:
         findings.append(wrap_finding(
             f"Archived URLs matching config/secret patterns ({len(secretish)}) on {domain}",
-            severity="LOW", cwe="CWE-200", cvss="3.1", owasp="A05:2021",
+            severity=(sev := grade.hardening()), cwe="CWE-200", cvss=grade.cvss_for(sev), owasp="A05:2021",
             remediation="Wayback preserves URLs even after deletion. These match secret/"
                         "config patterns (.git/.env/.sql/backup/phpinfo) — verify each isn't "
                         "archiving sensitive content; if it is, request Wayback removal "
@@ -88,7 +89,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if inv:
         findings.append(wrap_finding(
             f"Archived app/admin URLs — attack-surface inventory ({len(inv)}) on {domain}",
-            severity="INFO", cwe="CWE-200", cvss="0.0", owasp="A05:2021",
+            severity=(sev := grade.inventory(len(inv))), cwe="CWE-200", cvss=grade.cvss_for(sev), owasp="A05:2021",
             remediation="Archived public URLs containing api/admin/login/dev/internal paths — "
                         "recon inventory, not an exposure on their own (e.g. Go 'internal/' "
                         "package paths and docs match these). Use as a review target list.",
@@ -96,7 +97,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings.append(wrap_finding(
         f"Wayback Machine has {len(urls)} unique URL(s) for {domain}",
-        severity="POSITIVE" if not interesting else "INFO",
+        severity=grade.protective() if not interesting else grade.info(),
         cwe="CWE-200",
         remediation="Public archive. Useful for finding deprecated endpoints, "
                     "outdated docs, and historical attack surface.",

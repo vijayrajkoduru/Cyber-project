@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 40
@@ -65,7 +66,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="commoncrawl_cdx", target=req.target,
             findings=[wrap_finding(
                 f"CC index {CDX_INDEX}: no captures for {domain}",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Either domain not crawled in this index or genuinely "
                             "low-visibility. Try wayback_cdx_search for broader coverage.",
                 evidence_marker=f"CC {CDX_INDEX} returned 0 records (CONFIRMED)")],
@@ -87,7 +88,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if secretish:
         findings.append(wrap_finding(
             f"Crawled URLs matching config/secret patterns ({len(secretish)})",
-            severity="LOW", cwe="CWE-200", cvss="3.1", owasp="A05:2021",
+            severity=(sev := grade.hardening()), cwe="CWE-200",
+            cvss=grade.cvss_for(sev), owasp="A05:2021",
             remediation="These public-crawl URLs match secret/config patterns (.git/.env/"
                         ".sql/backup/phpinfo). Passive evidence only — verify each isn't "
                         "actually serving sensitive content; if it is, remove it and rotate "
@@ -96,14 +98,15 @@ def _do_scan(req: ScanRequest) -> dict:
     if inv:
         findings.append(wrap_finding(
             f"Crawled app/admin URLs — attack-surface inventory ({len(inv)})",
-            severity="INFO", cwe="CWE-200", cvss="0.0", owasp="A05:2021",
+            severity=(sev := grade.inventory(len(inv))), cwe="CWE-200",
+            cvss=grade.cvss_for(sev), owasp="A05:2021",
             remediation="Public URLs containing api/admin/dev/test paths — recon inventory, "
                         "not an exposure on their own. Use as a target list for deeper review.",
             evidence_marker=" | ".join(inv[:15]) + (' ...' if len(inv) > 15 else '')))
 
     findings.append(wrap_finding(
         f"Common Crawl {CDX_INDEX}: {len(urls)} unique URL(s) for {domain}",
-        severity="POSITIVE" if not interesting else "INFO",
+        severity=grade.protective() if not interesting else grade.info(),
         cwe="CWE-200",
         remediation="Cross-reference with wayback_cdx_search for union coverage. "
                     "Each URL is a recon-target candidate.",

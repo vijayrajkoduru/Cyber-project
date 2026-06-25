@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 15
@@ -45,7 +46,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="github_user_intel", target=req.target,
             findings=[wrap_finding(
                 f"GitHub user '{username}' does not exist",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="No public footprint — no remediation needed.",
                 evidence_marker="HTTP 404 from /users/{username}")],
             tests_performed=1, vulnerable=False,
@@ -84,7 +85,8 @@ def _do_scan(req: ScanRequest) -> dict:
     if public_email:
         pii_findings.append(wrap_finding(
             f"PUBLIC email exposed in GitHub profile: {public_email}",
-            severity="MEDIUM", cwe="CWE-359", cvss="5.3", owasp="A05:2021",
+            severity=(sev := grade.inventory()), cwe="CWE-359",
+            cvss=grade.cvss_for(sev), owasp="A05:2021",
             remediation="If you don't want this email indexed by recruiters / "
                         "spammers / threat-actors, remove it from your GitHub "
                         "profile settings (Settings → Public profile → Email).",
@@ -102,7 +104,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings = pii_findings + [wrap_finding(
         f"GitHub profile intel — {data.get('login')}",
-        severity="POSITIVE", cwe="CWE-200",
+        severity=grade.info(), cwe="CWE-200",
         remediation="Public profile data. For recon: cross-reference name + "
                     "company + email pattern guess + LinkedIn enum.",
         evidence_marker=summary_evidence)]

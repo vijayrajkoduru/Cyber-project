@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 25
@@ -65,7 +66,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="crtsh_full_certs", target=req.target,
             findings=[wrap_finding(
                 f"No CT certificate records found for {domain}",
-                severity="POSITIVE", cwe="CWE-200",
+                severity=grade.protective(), cwe="CWE-200",
                 remediation="Either the domain has never had a public cert "
                             "(internal-only?) or CT logging is suppressed (rare).",
                 evidence_marker="crt.sh returned 0 records (CONFIRMED)")],
@@ -85,7 +86,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if internalish:
         findings.append(wrap_finding(
             f"Internal/pre-prod-looking subdomains in CT logs ({len(internalish)})",
-            severity="LOW", cvss="3.1", cwe="CWE-200", owasp="A05:2021",
+            severity=(sev := grade.hardening()), cvss=grade.cvss_for(sev), cwe="CWE-200", owasp="A05:2021",
             remediation="These CT-logged subdomains look like internal/pre-prod systems "
                         "(internal/vpn/jenkins/jira/staging/uat/k8s). CT is public, so issuing "
                         "a cert advertises their existence. Confirm which are meant to be "
@@ -94,7 +95,7 @@ def _do_scan(req: ScanRequest) -> dict:
     if generic:
         findings.append(wrap_finding(
             f"Subdomain inventory from CT logs ({len(generic)} api/dev/admin-style)",
-            severity="INFO", cvss="0.0", cwe="CWE-200", owasp="A05:2021",
+            severity=(sev := grade.inventory(len(generic))), cvss=grade.cvss_for(sev), cwe="CWE-200", owasp="A05:2021",
             remediation="CT-logged subdomains (api/dev/test/admin/git) — attack-surface "
                         "inventory, not an exposure (e.g. api.<domain> is normally public). "
                         "Use as a recon target list.",
@@ -102,7 +103,7 @@ def _do_scan(req: ScanRequest) -> dict:
 
     findings.append(wrap_finding(
         f"CT logs reveal {len(subs)} subdomains for {domain}",
-        severity="POSITIVE" if not interesting else "INFO",
+        severity=grade.inventory(len(subs)),
         cwe="CWE-200",
         remediation="Subdomain enumeration via CT is standard recon — own the "
                     "list before attackers do. Cross-reference with dnstwist + Amass.",

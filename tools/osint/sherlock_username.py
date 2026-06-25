@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 35
@@ -136,8 +137,8 @@ def _do_scan(req: ScanRequest) -> dict:
             # Public profile existence is public-by-design OSINT, not an
             # exposure in itself. INFO baseline; LOW max only when the handle
             # is reused widely enough to materially aid identity correlation.
-            severity="LOW" if len(found) >= 5 else "INFO",
-            cwe="CWE-200", cvss="0.0",
+            severity=(sev := grade.inventory(len(found), low_at=5)),
+            cwe="CWE-200", cvss=grade.cvss_for(sev),
             remediation="Username reuse across platforms allows attacker to "
                         "build full identity profile. For high-risk users (execs, "
                         "security team), use platform-unique usernames or random handles.",
@@ -145,13 +146,13 @@ def _do_scan(req: ScanRequest) -> dict:
     if ambiguous:
         findings.append(wrap_finding(
             f"Ambiguous on {len(ambiguous)} platform(s) — needs manual verify",
-            severity="INFO", cwe="CWE-200",
+            severity=grade.info(), cwe="CWE-200",
             remediation="Manually visit each URL; platform may have updated their 404 markers.",
             evidence_marker=" | ".join(f"{l} ({d})" for l, d in ambiguous[:10])))
     if not findings:
         findings.append(wrap_finding(
             f"Username '{username}' not found on any of {len(SITES)} platforms",
-            severity="POSITIVE", cwe="CWE-200",
+            severity=grade.protective(), cwe="CWE-200",
             remediation="Either the username is genuinely fresh or your platform "
                         "list missed where they post. Consider a deeper Sherlock run (400+ sites).",
             evidence_marker=f"all {len(SITES)} platforms returned CLEAN markers"))

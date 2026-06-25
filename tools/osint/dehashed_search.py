@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 10
@@ -35,7 +36,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="dehashed_search", target=req.target,
             findings=[wrap_finding(
                 "DeHashed search requires API key (email:api_key via auth_bearer)",
-                severity="POSITIVE", cwe="CWE-1395",
+                severity=grade.advisory(), cwe="CWE-1395",
                 remediation="Subscribe at https://dehashed.com ($5/mo entry). "
                             "Pass auth_bearer as 'your-email@example.com:YOUR_API_KEY'. "
                             "DeHashed has 14B+ records — deepest paid breach DB.",
@@ -66,7 +67,7 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="dehashed_search", target=req.target,
             findings=[wrap_finding(
                 f"DeHashed: 0 entries for '{q}'",
-                severity="POSITIVE", cwe="CWE-1395",
+                severity=grade.protective(), cwe="CWE-1395",
                 remediation="Not in DeHashed breach corpus.",
                 evidence_marker="total=0 (CONFIRMED)")],
             tests_performed=1, vulnerable=False,
@@ -75,8 +76,10 @@ def _do_scan(req: ScanRequest) -> dict:
         tool="dehashed_search", target=req.target,
         findings=[wrap_finding(
             f"DeHashed: {total:,} entry/ies for '{q}'",
-            severity="HIGH" if total >= 10 else "MEDIUM",
-            cvss="7.5" if total >= 10 else "5.3",
+            severity=(sev := grade.exposure(
+                confirmed=True,
+                impact='enables' if total >= 10 else 'aids')),
+            cvss=grade.cvss_for(sev),
             cwe="CWE-359", owasp="A07:2021",
             remediation="Each entry includes password/hash + source-breach. "
                         "Force password rotation for affected users + monitor "

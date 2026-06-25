@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, safe_post, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 30
@@ -152,8 +153,8 @@ def _do_scan(req: ScanRequest) -> dict:
             # Account-existence enumeration is public-by-design OSINT, NOT a
             # breach: knowing an email has a Spotify/GitHub account is not an
             # exposure. INFO baseline; LOW max when widely reused.
-            severity="LOW" if len(found) >= 5 else "INFO",
-            cwe="CWE-200", cvss="0.0",
+            severity=(sev := grade.inventory(len(found), low_at=5)),
+            cwe="CWE-200", cvss=grade.cvss_for(sev),
             owasp="A05:2021",
             verified_exploit=False,
             remediation="Each registered service = candidate breach pivot. "
@@ -165,7 +166,7 @@ def _do_scan(req: ScanRequest) -> dict:
     else:
         findings.append(wrap_finding(
             f"Email not found on any of {reliable_count} reliable services",
-            severity="POSITIVE", cwe="CWE-200",
+            severity=grade.protective(), cwe="CWE-200",
             remediation="Either email is fresh / private or our checks missed it. "
                         "Run github_user_intel + sherlock_username for username-based pivots.",
             evidence_marker=(f"{len(clean)} services CLEAN, {len(ambig)} ambiguous"

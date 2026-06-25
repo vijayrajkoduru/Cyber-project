@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 router = APIRouter()
 WALL_CLOCK_S = 10
@@ -83,19 +84,20 @@ def _do_scan(req: ScanRequest) -> dict:
             tool="hibp_passwords", target="(redacted)",
             findings=[wrap_finding(
                 "Password NOT found in HIBP breach corpus",
-                severity="POSITIVE", cwe="CWE-521", owasp="A07:2021",
+                severity=grade.protective(), cwe="CWE-521", owasp="A07:2021",
                 remediation="No action — this password has not appeared in any "
                             "of HIBP's 800M+ breached credentials. Continue rotating regularly.",
                 evidence_marker=f"SHA-1 prefix {prefix}…: 0 appearances")],
             tests_performed=1, vulnerable=False,
             tests_summary="HIBP Pwned Passwords k-anonymity check (CONFIRMED clean)")
 
-    severity = "CRITICAL" if count > 100000 else "HIGH" if count > 1000 else "MEDIUM"
+    _impact = "critical" if count > 100000 else "enables" if count > 1000 else "aids"
+    severity = grade.exposure(confirmed=True, impact=_impact)
     return standard_response(
         tool="hibp_passwords", target="(redacted)",
         findings=[wrap_finding(
             f"Password found in HIBP breach corpus — appears {count:,} times",
-            severity=severity, cwe="CWE-521", cvss="7.5",
+            severity=severity, cwe="CWE-521", cvss=grade.cvss_for(severity),
             owasp="A07:2021",
             remediation="ROTATE THIS PASSWORD IMMEDIATELY. It has been exposed "
                         "in known breaches and is on every credential-stuffing wordlist. "

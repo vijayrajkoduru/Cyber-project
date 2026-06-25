@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota,
                             safe_get, wrap_finding, standard_response)
 from tools._vl_core.verify import vl_verify
+from tools._core import grade
 
 try:
     from tools._payloads.osint.social_handles import (
@@ -146,7 +147,8 @@ def _do_scan(req: ScanRequest) -> dict:
         sample = [f"{h['platform']}: {h['url']}" for h in hits[:15]]
         findings.append(wrap_finding(
             f"{len(hits)} social media account(s) match org-derived handles (sentinel-verified)",
-            severity="LOW", cvss="2.0",
+            severity=(sev := grade.inventory(len(hits), low_at=15)),
+            cvss=grade.cvss_for(sev),
             cwe="CWE-200", owasp="A05:2021",
             verified_exploit=True,
             remediation=("Defensively register matching handles you don't own; "
@@ -158,7 +160,7 @@ def _do_scan(req: ScanRequest) -> dict:
     else:
         findings.append(wrap_finding(
             f"No social handles match brand '{brand}' on probed platforms",
-            severity="POSITIVE",
+            severity=grade.protective(),
             cwe="CWE-200", owasp="A05:2021",
             remediation="No social surface — handles available for defensive registration.",
             evidence_marker=(f"{tests} probes, 0 hits"
