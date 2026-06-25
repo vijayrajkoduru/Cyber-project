@@ -44,6 +44,7 @@ AUTH_ATTACKS_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("jwks_exposure_audit",    "/api/auth_attacks/jwks_exposure_audit"),
     ],
     "tier2_flow": [
+        ("login_discovery_audit",  "/api/auth_attacks/login_discovery_audit"),
         ("oauth_redirect_audit",   "/api/auth_attacks/oauth_redirect_audit"),
         ("session_fixation_test",  "/api/auth_attacks/session_fixation_test"),
         ("oidc_discovery_audit",   "/api/auth_attacks/oidc_discovery_audit"),
