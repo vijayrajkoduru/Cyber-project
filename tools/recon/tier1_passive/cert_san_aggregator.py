@@ -43,7 +43,7 @@ async def gather(ctx):
 def _r_many(s):
     n=s.get("san_count") or 0
     if n<10: return None
-    sev="INFO" if n<50 else ("LOW" if n<200 else "MEDIUM")
+    sev="INFO" if n<50 else "LOW"   # SAN count = attack-surface inventory, not a vuln (never MEDIUM)
     return {"name":f"{n} SANs across CT + live cert","severity":sev,"cwe":"T1596.001",
         "evidence":"Sample: "+", ".join((s.get("all_sans") or [])[:5]),
         "remediation":"SAN list = subdomain attack surface map."}
