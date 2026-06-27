@@ -20,10 +20,16 @@ def test_writable_base_uses_default_when_writable(tmp_path, monkeypatch):
 
 
 def test_writable_base_falls_back_when_unwritable(monkeypatch):
+    # Force the container default to be uncreatable. We mock mkdir to raise
+    # rather than relying on a "/nonexistent" path being unwritable — that
+    # assumption is false when the process runs as root (CI/Docker), where
+    # root can mkdir anywhere.
+    import pathlib
     monkeypatch.delenv("VL_TEST_BASE3", raising=False)
-    # /this-root-does-not-exist is not creatable -> must fall back, never raise
-    p = writable_base("VL_TEST_BASE3", "/this-root-does-not-exist-xyz/data")
-    assert str(p).startswith(tempfile.gettempdir())
+    monkeypatch.setattr(pathlib.Path, "mkdir",
+                        lambda *a, **k: (_ for _ in ()).throw(OSError("denied")))
+    p = writable_base("VL_TEST_BASE3", "/some/container/path/data")
+    assert str(p).startswith(tempfile.gettempdir())   # fell back, never raised
     assert p.name == "data"
 
 
