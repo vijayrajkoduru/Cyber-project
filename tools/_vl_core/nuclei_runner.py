@@ -144,7 +144,11 @@ def run_nuclei(req, tags: list[str], *,
             f"{name} [{obj.get('template-id','')}]",
             sev, cvss=str(cvss), cwe=cwe, owasp="A06:2021",
             remediation=remediation[:300],
-            verified_exploit=True,  # Nuclei templates verify with payload
+            # audit #43: don't blanket-claim verified_exploit. Many nuclei
+            # templates are info/detection/tech-fingerprint matches; marking
+            # them all "verified" let advisory findings bypass the severity
+            # cap. Only treat HIGH/CRITICAL matches as demonstrated.
+            verified_exploit=(sev in ("CRITICAL", "HIGH")),
             evidence_marker=f"matched-at={url} (nuclei,{','.join(tags)})"))
         parsed.append({"template": obj.get("template-id"), "name": name,
                        "severity": sev, "matched_at": url})
