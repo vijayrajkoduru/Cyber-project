@@ -79,9 +79,21 @@ def _decompile_apktool(apk: Path, out: Path) -> bool:
         return False
 
 
+# Decompression-bomb caps (audit #19). Tunable via env.
+import os as _os
+_MAX_UNZIP_BYTES = int(_os.getenv("VL_MAX_UNZIP_BYTES", str(1024 * 1024 * 1024)))  # 1 GiB
+_MAX_UNZIP_ENTRIES = int(_os.getenv("VL_MAX_UNZIP_ENTRIES", "50000"))
+
+
 def _unpack_zipfile(archive: Path, out: Path) -> bool:
     try:
         with zipfile.ZipFile(archive) as z:
+            infos = z.infolist()
+            # Reject decompression bombs before writing anything to disk.
+            if len(infos) > _MAX_UNZIP_ENTRIES:
+                return False
+            if sum(i.file_size for i in infos) > _MAX_UNZIP_BYTES:
+                return False
             z.extractall(out)
         return True
     except (zipfile.BadZipFile, OSError):
@@ -105,11 +117,10 @@ def get_unpacked(path: str | Path) -> Path:
     if out_dir.is_dir() and any(out_dir.iterdir()):
         return out_dir
 
-    # Cache miss — unpack
-    tmp = out_dir.with_suffix(".tmp")
-    if tmp.exists():
-        shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True, exist_ok=True)
+    # Cache miss — unpack into a per-call-unique staging dir so concurrent
+    # scanners / uvicorn workers don't share one ".tmp" path and corrupt
+    # each other's extraction (audit #14).
+    tmp = Path(tempfile.mkdtemp(dir=str(CACHE_ROOT), prefix=f"{digest}.", suffix=".tmp"))
 
     kind = _detect_kind(p)
     ok = False
@@ -132,10 +143,15 @@ def get_unpacked(path: str | Path) -> Path:
         shutil.rmtree(tmp, ignore_errors=True)
         raise RuntimeError(f"unpack failed for {p} (kind={kind})")
 
-    # Atomic swap
-    if out_dir.exists():
-        shutil.rmtree(out_dir, ignore_errors=True)
-    tmp.rename(out_dir)
+    # Publish atomically. If another worker won the race and already
+    # published out_dir, discard our staging copy and use theirs.
+    try:
+        tmp.rename(out_dir)
+    except OSError:
+        shutil.rmtree(tmp, ignore_errors=True)
+        if out_dir.is_dir() and any(out_dir.iterdir()):
+            return out_dir
+        raise
     return out_dir
 
 

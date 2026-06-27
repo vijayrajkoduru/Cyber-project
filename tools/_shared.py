@@ -102,6 +102,44 @@ def is_contained_artifact(target: str) -> bool:
     return False
 
 
+# ── SSRF-safe outbound URL validation (anti-SSRF) ───────────────────
+def is_safe_external_url(url: str):
+    """Validate a user-supplied outbound URL (e.g. a webhook target).
+
+    Returns (ok: bool, reason: str). Rejects non-http(s) schemes and any
+    host that resolves to a loopback / link-local / private / reserved
+    address. Re-checking this at *send* time (not just configure time)
+    defends against DNS-rebinding. Blocks SSRF to 169.254.169.254 cloud
+    metadata, 127.0.0.1, 10.x/172.16.x/192.168.x internal services, etc.
+    """
+    import socket
+    import ipaddress
+    from urllib.parse import urlparse
+    try:
+        u = urlparse(url or "")
+    except Exception:
+        return False, "unparseable URL"
+    if u.scheme not in ("http", "https"):
+        return False, "URL must use http or https"
+    host = u.hostname
+    if not host:
+        return False, "URL has no host"
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False, "host does not resolve"
+    for info in infos:
+        ip = info[4][0]
+        try:
+            addr = ipaddress.ip_address(ip)
+        except Exception:
+            return False, f"unparseable resolved address {ip}"
+        if (addr.is_private or addr.is_loopback or addr.is_link_local
+                or addr.is_reserved or addr.is_multicast or addr.is_unspecified):
+            return False, f"host resolves to disallowed address {ip}"
+    return True, ""
+
+
 # ── JWT auth ────────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 bearer = HTTPBearer(auto_error=False)
