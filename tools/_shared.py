@@ -58,6 +58,50 @@ def writable_base(env_var: str, container_default: str):
     except OSError:
         return Path(tempfile.gettempdir()) / cand.name
 
+
+# ── Local-artifact path containment (anti-LFI) ──────────────────────
+def artifact_roots():
+    """Directories the binary/mobile-analysis scanners are allowed to read
+    uploaded files from. Anything outside these is treated as a path-
+    traversal / arbitrary-file-read attempt."""
+    import tempfile
+    from pathlib import Path
+    roots = [
+        writable_base("VL_UPLOAD_DIR", "/uploads") / "mobile_static",
+        Path(tempfile.gettempdir()) / "vl_binary_cache",
+        Path("/tmp/vl_uploads"),
+    ]
+    for extra in os.environ.get("VL_ARTIFACT_ROOTS", "").split(os.pathsep):
+        if extra.strip():
+            roots.append(Path(extra.strip()))
+    return roots
+
+
+def is_contained_artifact(target: str) -> bool:
+    """True iff `target` resolves to a path inside an allowed upload/cache
+    dir. Defends the bof/mobile_static scanners against being pointed at
+    arbitrary files (e.g. /app/data/users.db, the JWT secret, /etc/passwd).
+
+    Uses resolve() so a symlink staged inside the upload dir that points
+    out of it is rejected (resolve() follows the link to its real target).
+    """
+    if not target or not isinstance(target, str):
+        return False
+    from pathlib import Path
+    try:
+        p = Path(target).resolve()
+    except Exception:
+        return False
+    for root in artifact_roots():
+        try:
+            rr = root.resolve()
+            if p == rr or p.is_relative_to(rr):
+                return True
+        except Exception:
+            continue
+    return False
+
+
 # ── JWT auth ────────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 bearer = HTTPBearer(auto_error=False)
