@@ -52,6 +52,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Anti-LFI guard for binary-analysis scanners ─────────────────────
+# The bof + mobile_static scanners take ScanRequest.target as a filesystem
+# path to an uploaded binary. Without containment, an authenticated user
+# could point them at /app/data/users.db, the JWT secret, /etc/passwd, etc.
+# Enforce once here (covers the orchestrators AND every individual scanner
+# endpoint) instead of in all 60+ scanner modules.
+import json as _json
+from fastapi.responses import JSONResponse as _JSONResponse
+from tools._shared import is_contained_artifact as _is_contained_artifact
+
+_ARTIFACT_PREFIXES = ("/api/bof/", "/api/mobile_static/")
+_ARTIFACT_EXEMPT = {"/api/mobile_static/upload"}
+
+
+@app.middleware("http")
+async def _artifact_path_guard(request, call_next):
+    path = request.url.path
+    if (request.method == "POST"
+            and path not in _ARTIFACT_EXEMPT
+            and any(path.startswith(p) for p in _ARTIFACT_PREFIXES)):
+        body = await request.body()
+        if body:
+            try:
+                target = (_json.loads(body) or {}).get("target")
+            except Exception:
+                target = None
+            if isinstance(target, str) and target and not _is_contained_artifact(target):
+                return _JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid target: binary-analysis scanners only "
+                             "accept files uploaded via /api/mobile_static/upload."},
+                )
+        # Re-arm the receive channel so the downstream handler can still read
+        # the body we just consumed (BaseHTTPMiddleware gotcha).
+        async def _receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+        request._receive = _receive
+    return await call_next(request)
+
 # ── Required env ────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 if not JWT_SECRET:
