@@ -6,8 +6,9 @@ Returns BOTH:
   - 'token' alias kept for backward compatibility with curl scripts
 """
 import os
+import time
 import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from jose import jwt
 
@@ -27,6 +28,29 @@ router = APIRouter()
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 TOKEN_TTL_HOURS = 24 * 7
 
+# ── Brute-force throttle (audit #8): in-process sliding window ───────
+# Limits login attempts per (client IP + username). In-process is fine for
+# a single instance; move to Redis if/when the API scales horizontally.
+_LOGIN_WINDOW_SEC = int(os.getenv("LOGIN_THROTTLE_WINDOW", "300"))
+_LOGIN_MAX_ATTEMPTS = int(os.getenv("LOGIN_THROTTLE_MAX", "10"))
+_login_attempts: dict[str, list[float]] = {}
+
+
+def _throttle_key(request: Request, username: str) -> str:
+    ip = request.client.host if request and request.client else "?"
+    return f"{ip}:{username.lower()}"
+
+
+def _login_allowed(key: str) -> bool:
+    now = time.time()
+    hits = [t for t in _login_attempts.get(key, []) if now - t < _LOGIN_WINDOW_SEC]
+    _login_attempts[key] = hits
+    return len(hits) < _LOGIN_MAX_ATTEMPTS
+
+
+def _record_attempt(key: str):
+    _login_attempts.setdefault(key, []).append(time.time())
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -34,7 +58,12 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/api/auth/login")
-async def auth_login(req: LoginRequest):
+async def auth_login(req: LoginRequest, request: Request):
+    key = _throttle_key(request, req.username)
+    if not _login_allowed(key):
+        raise HTTPException(429, "Too many login attempts; please wait and try again.")
+    _record_attempt(key)
+
     with get_db() as con:
         user = con.execute(
             "SELECT id, username, email, password_hash, role, plan, status "
