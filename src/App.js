@@ -21019,6 +21019,16 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         headers: {"Content-Type":"application/json", "Authorization":`Bearer ${token}`},
         body: JSON.stringify(runBody),
       });
+      // audit #6: guard before getReader(). A 401/402/429 (auth expiry, plan
+      // expired, rate-limit) used to be fed into the NDJSON parser as garbage,
+      // leaving every tile stuck on "queued" forever.
+      if (!r.ok) {
+        let errText = "";
+        try { errText = (await r.text()).slice(0, 200); } catch (_) {}
+        if (r.status === 401) { try { _onAuthExpired && _onAuthExpired(); } catch (_) {} }
+        throw new Error(`HTTP ${r.status} starting scan: ${errText || r.statusText || "no body"}`);
+      }
+      if (!r.body) throw new Error("Streaming not supported by browser/proxy — no response.body");
       const reader = r.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
@@ -21093,6 +21103,16 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       }
     } catch(e) {
       console.error("run_all failed", e);
+      // audit #6: don't leave tiles spinning on "queued" after a stream
+      // failure — surface the error on every scanner that never reported.
+      const _msg = e?.message || String(e);
+      setResults(p => {
+        const next = {...p};
+        for (const k of Object.keys(next)) {
+          if (next[k] && next[k].status === "queued") next[k] = {...next[k], status:"error", message:_msg};
+        }
+        return next;
+      });
     } finally {
       setRunning(false);
       // Save scan to history (use a ref-style read of current results)
