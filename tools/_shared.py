@@ -134,16 +134,64 @@ class ScanRequest(BaseModel):
     api_spec_url: Optional[str] = None      # OpenAPI / Swagger spec URL (APISec)
 
 
+# Short-TTL cache of DB user rows so per-request re-validation doesn't hammer
+# SQLite during a fan-out (one orchestrator scan -> dozens of internal calls,
+# all the same sub). TTL is small so suspend/role/plan changes take effect
+# within seconds, not the 7-day token lifetime. Tests set TTL=0 for determinism.
+_AUTH_CACHE_TTL = float(os.getenv("VL_AUTH_CACHE_TTL", "15"))
+_user_row_cache: dict = {}
+
+
+def _live_user(sub: str):
+    """Fetch the user row for `sub`, cached for _AUTH_CACHE_TTL seconds.
+    Returns the dict row, None if the user no longer exists, or the string
+    'ERROR' if the DB lookup failed (caller fails open for availability)."""
+    now = time.time()
+    if _AUTH_CACHE_TTL > 0:
+        hit = _user_row_cache.get(sub)
+        if hit and now - hit[0] < _AUTH_CACHE_TTL:
+            return hit[1]
+    try:
+        from tools.auth._db import get_user_by_id
+        row = get_user_by_id(sub)
+    except Exception as e:
+        logging.getLogger("vulnuslab.auth").warning("user re-validation DB error: %s", e)
+        return "ERROR"
+    if _AUTH_CACHE_TTL > 0:
+        _user_row_cache[sub] = (now, row)
+    return row
+
+
 def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
-    """Decode JWT. Raises 401 if missing/invalid. Every tool endpoint
-    that requires auth depends on this."""
+    """Decode JWT, then re-validate against the live DB account (audit #4).
+
+    Raises 401 if missing/invalid token, if the user no longer exists, or if
+    the account is not active. Role/plan/expiry are sourced from the DB row —
+    NOT trusted from the (up-to-7-day-old) token — so admin suspend, role
+    demotion, and plan changes take effect within _AUTH_CACHE_TTL seconds.
+    """
     if not creds:
         raise HTTPException(401, "Missing Authorization header")
     try:
         payload = _jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
     except Exception as e:
         raise HTTPException(401, f"Invalid token: {e}")
-    _USER_CTX.set(payload.get("sub", "unknown"))
+
+    sub = payload.get("sub")
+    row = _live_user(sub)
+    if row == "ERROR":
+        pass  # DB unavailable — fail open on token claims to preserve uptime
+    elif row is None:
+        raise HTTPException(401, "Account no longer exists")
+    else:
+        if row.get("status") != "active":
+            raise HTTPException(403, f"Account is {row.get('status')}")
+        # Authoritative live values override token claims.
+        payload["role"] = row.get("role", payload.get("role"))
+        payload["plan"] = row.get("plan", payload.get("plan"))
+        payload["plan_expires_at"] = row.get("plan_expires_at")
+
+    _USER_CTX.set(sub or "unknown")
     return payload
 
 
@@ -168,14 +216,63 @@ def is_internal_fanout(request: Optional[Request]) -> bool:
     return any(client_ip.startswith(p) for p in _INTERNAL_TRUSTED_PREFIXES)
 
 
+# Per-plan daily scan caps (audit #2). None = unlimited. Plans not listed
+# fall back to the trial cap. Tunable via env for ops.
+_PLAN_DAILY_LIMITS = {
+    "trial":      int(os.getenv("QUOTA_TRIAL_PER_DAY", "5")),
+    "pro":        int(os.getenv("QUOTA_PRO_PER_DAY", "200")),
+    "team":       int(os.getenv("QUOTA_TEAM_PER_DAY", "1000")),
+    "enterprise": None,
+    "unlimited":  None,
+    "superadmin": None,
+}
+
+
+def _plan_expired(plan_expires_at) -> bool:
+    if not plan_expires_at:
+        return False
+    try:
+        exp = datetime.datetime.fromisoformat(str(plan_expires_at).replace("Z", ""))
+        return datetime.datetime.utcnow() > exp
+    except Exception:
+        return False  # unparseable -> don't lock the user out
+
+
 def verify_scan_quota(request: Request, payload=Depends(verify_token)):
-    """VL-PRIME: verify_token + per-plan quota check. Internal orchestrator
-    fan-out (signed marker from 127.0.0.1/172.x/10.x/192.168.x) bypasses
-    quota counting so one user scan that fans out to N scanners costs 1
-    unit, not N. Without this exemption the limiter 429's most scanners."""
+    """verify_token + per-plan quota + expiry enforcement (audit #2, #5).
+
+    Internal orchestrator fan-out (signed marker from a trusted internal IP)
+    bypasses counting so one user scan that fans out to N scanners costs 1
+    unit, not N. Admins/superadmins and unlimited plans are uncapped.
+    """
     if is_internal_fanout(request):
         return payload
-    # TODO: per-plan quota check when billing module is wired
+
+    role = (payload.get("role") or "user").lower()
+    plan = (payload.get("plan") or "trial").lower()
+    if role in ("admin", "superadmin"):
+        return payload
+
+    # Plan expiry (trial or lapsed paid plan).
+    if _plan_expired(payload.get("plan_expires_at")):
+        raise HTTPException(402, "Your plan has expired. Please upgrade to continue scanning.")
+
+    limit = _PLAN_DAILY_LIMITS.get(plan, _PLAN_DAILY_LIMITS["trial"])
+    if limit is None:
+        return payload  # unlimited plan
+
+    sub = payload.get("sub")
+    if not sub:
+        return payload
+    try:
+        from tools.auth._db import bump_scan_usage
+        used = bump_scan_usage(sub)
+    except Exception:
+        return payload  # never block a scan on a quota-bookkeeping failure
+    if used > limit:
+        raise HTTPException(
+            429, f"Daily scan limit reached for the {plan} plan ({limit}/day). "
+                 "Upgrade your plan or try again tomorrow.")
     return payload
 
 

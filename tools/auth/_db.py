@@ -40,10 +40,53 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_email ON users(email);
+
+        -- Per-user daily scan counter for quota enforcement (audit #2).
+        CREATE TABLE IF NOT EXISTS scan_usage (
+            user_id TEXT NOT NULL,
+            day TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (user_id, day)
+        );
     """)
+    # Migration: add plan_expires_at to pre-existing DBs (audit #5).
+    cols = [r[1] for r in con.execute("PRAGMA table_info(users)")]
+    if "plan_expires_at" not in cols:
+        con.execute("ALTER TABLE users ADD COLUMN plan_expires_at TEXT")
     con.commit()
     con.close()
     _seed_admin()
+
+
+def get_user_by_id(user_id: str):
+    """Return the user row as a dict, or None. Used by verify_token to
+    re-validate the live account state on each request (audit #4)."""
+    if not user_id:
+        return None
+    with get_db() as con:
+        row = con.execute(
+            "SELECT id, username, email, role, plan, status, plan_expires_at "
+            "FROM users WHERE id=?",
+            (user_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def bump_scan_usage(user_id: str) -> int:
+    """Atomically increment today's scan count for a user and return the new
+    total. UTC day buckets. Used by the quota gate (audit #2)."""
+    day = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO scan_usage (user_id, day, count) VALUES (?, ?, 1) "
+            "ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1",
+            (user_id, day),
+        )
+        row = con.execute(
+            "SELECT count FROM scan_usage WHERE user_id=? AND day=?",
+            (user_id, day),
+        ).fetchone()
+    return int(row["count"]) if row else 1
 
 
 def _seed_admin():
