@@ -291,6 +291,12 @@ function _scanRelease() {
   if (next) next();
 }
 
+// Central auth-expiry handler (audit #49). App registers a callback that
+// wipes the session + returns to Login. Without this, once a token expired
+// every request just 401'd silently and the UI looked broken/stuck.
+let _onAuthExpired = null;
+export function setAuthExpiredHandler(fn) { _onAuthExpired = fn; }
+
 async function api(path, method, body, token) {
   // API-TIMEOUT-V2-SCOPED — scan endpoints need long timeouts (Nuclei = 13k templates,
   // WPScan enumeration, XSS canary fuzzing). Auth/general endpoints stay tight.
@@ -329,6 +335,12 @@ async function api(path, method, body, token) {
       try { detail = (await res.text()).slice(0, 300); } catch (_) { detail = ""; }
     }
     if (!detail || !String(detail).trim()) detail = res.statusText || "(no detail)";
+    // Auth expired / revoked: clear the session and bounce to Login instead of
+    // silently 401'ing forever (audit #49). Skip the auth endpoints themselves
+    // (a 401 there is just "wrong password").
+    if (res.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/register")) {
+      if (_onAuthExpired) { try { _onAuthExpired(); } catch (_) {} }
+    }
     const err = new Error(`HTTP ${res.status} on ${path}: ${detail}`);
     err.status = res.status;
     err.path = path;
@@ -3993,11 +4005,11 @@ function WebAppModule(props) {
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Session Cookie</div>
-                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);localStorage.setItem("cyberAuthCookie",e.target.value);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={authCookie} onChange={e=>{setAuthCookie(e.target.value);}} placeholder="PHPSESSID=abc123" style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                   <div style={{flex:1,minWidth:240}}>
                     <div style={{fontSize:10,color:"#64748b",marginBottom:3,fontWeight:600}}>Bearer Token</div>
-                    <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);localStorage.setItem("cyberAuthBearer",e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                    <input value={authBearer} onChange={e=>{setAuthBearer(e.target.value);}} placeholder="eyJhbGciOiJI..." style={{width:"100%",background:"#020617",border:"1px solid #1e3a8a",borderRadius:5,padding:"8px 11px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
                   </div>
                 </div>
                 {(authCookie||authBearer) && (
@@ -23594,6 +23606,12 @@ export default function App() {
   const [trialInfo, setTrialInfo] = useState(null);
   const [billingInfo, setBillingInfo] = useState(null);
   const [upgrading, setUpgrading] = useState(false);
+
+  // Wire the central 401 handler to the nuclear logout (audit #49).
+  useEffect(() => {
+    setAuthExpiredHandler(() => { try { handleLogout(); } catch (_) {} });
+    return () => setAuthExpiredHandler(null);
+  }, []);
 
   useEffect(() => {
     api("/api/health").then(() => setBE(true)).catch(() => setBE(false));
