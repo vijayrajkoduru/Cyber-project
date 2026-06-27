@@ -13,12 +13,12 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from pydantic import BaseModel
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, writable_base
 
 router = APIRouter()
 
 # ─────────────────────── Storage ───────────────────────
-_BASE = Path(os.environ.get("VL_FLOW_DIR", "/app/vl_flow_data"))
+_BASE = writable_base("VL_FLOW_DIR", "/app/vl_flow_data")
 _HIST = _BASE / "history";    _HIST.mkdir(parents=True, exist_ok=True)
 _HOOKS = _BASE / "webhooks";  _HOOKS.mkdir(parents=True, exist_ok=True)
 _SCHED = _BASE / "schedules"; _SCHED.mkdir(parents=True, exist_ok=True)

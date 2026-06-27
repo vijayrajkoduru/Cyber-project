@@ -29,6 +29,35 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+
+def writable_base(env_var: str, container_default: str):
+    """Resolve a data directory that works both in Docker and on a dev host.
+
+    Order of preference:
+      1. $env_var if set (explicit override).
+      2. ``container_default`` (e.g. ``/app/vl_prime_data``) when it is
+         creatable — this is the path used inside the container image.
+      3. A host-writable fallback under the system temp dir, used when the
+         container default is not writable (e.g. running outside Docker,
+         where ``/app`` / ``/uploads`` don't exist). This keeps module
+         auto-discovery from failing at import time on a dev machine.
+
+    Returns a ``pathlib.Path``. Never raises — directory creation is best
+    effort so importing a module can't crash boot.
+    """
+    import tempfile
+    from pathlib import Path
+
+    override = os.environ.get(env_var)
+    if override:
+        return Path(override)
+    cand = Path(container_default)
+    try:
+        cand.mkdir(parents=True, exist_ok=True)
+        return cand
+    except OSError:
+        return Path(tempfile.gettempdir()) / cand.name
+
 # ── JWT auth ────────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 bearer = HTTPBearer(auto_error=False)

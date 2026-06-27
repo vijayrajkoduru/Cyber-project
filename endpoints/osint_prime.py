@@ -27,12 +27,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, writable_base
 
 
 router = APIRouter()
 
-_BASE = Path(os.environ.get("VL_PRIME_DIR", "/app/vl_prime_data")) / "osint"
+_BASE = writable_base("VL_PRIME_DIR", "/app/vl_prime_data") / "osint"
 for sub in ["per_source", "scanner_stats", "api_key_health"]:
     (_BASE / sub).mkdir(parents=True, exist_ok=True)
 

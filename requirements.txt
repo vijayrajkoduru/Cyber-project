@@ -11,4 +11,5 @@ dnspython==2.7.0
 python-whois==0.9.4
 PyYAML==6.0.2
 bcrypt==3.2.2
+mmh3==4.1.0  # MurmurHash3 — used by recon/favicon_hash for Shodan favicon pivoting
 anthropic>=0.45.0

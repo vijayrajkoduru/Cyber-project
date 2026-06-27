@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, writable_base
 from tools._framework.orchestrator import (
     run_module_parallel, run_module_streaming,
 )
@@ -27,7 +27,7 @@ router = APIRouter()
 
 
 # ─── Upload pipeline ─────────────────────────────────────────────
-UPLOAD_DIR = Path("/uploads/mobile_static")
+UPLOAD_DIR = writable_base("VL_UPLOAD_DIR", "/uploads") / "mobile_static"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
 VALID_MAGIC = (
