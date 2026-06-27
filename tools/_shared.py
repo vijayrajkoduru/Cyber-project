@@ -440,6 +440,17 @@ def standard_response(*, tool: str, target: str, findings: list,
         vulnerable = any(f.get("severity") in ("CRITICAL", "HIGH", "MEDIUM")
                          for f in findings)
 
+    # Top-level severity = worst finding severity (audit #3). The frontend's
+    # ModuleAutoPanel derives tile colour, the severity filter, and the
+    # histograms from payload.severity; without this it defaulted every
+    # scan to INFO, hiding real CRITICAL/HIGH findings at a glance.
+    _SEV_ORDER = ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    rollup_severity = "INFO"
+    for f in findings:
+        s = str(f.get("severity") or "INFO").upper()
+        if s in _SEV_ORDER and _SEV_ORDER.index(s) > _SEV_ORDER.index(rollup_severity):
+            rollup_severity = s
+
     # Runtime validation (Gap 6 fix — finding_schema.py is now WIRED, not dead)
     if os.environ.get("VL_VALIDATE_FINDINGS") == "1":
         try:
@@ -455,6 +466,7 @@ def standard_response(*, tool: str, target: str, findings: list,
         "scan_id":         str(uuid.uuid4()),
         "target":          target,
         "tool":            tool,
+        "severity":        rollup_severity,
         "findings":        findings,
         "total":           len(findings),
         "vulnerable":      vulnerable,

@@ -21038,7 +21038,18 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                 }}));
               } else {
                 const f = payload.findings || [];
-                const sev = payload.severity || "INFO";
+                // audit #3: fall back to the worst finding severity when a tool
+                // doesn't emit a top-level severity, instead of defaulting to
+                // INFO (which hid CRITICAL/HIGH findings in tiles/filters/charts).
+                let sev = payload.severity;
+                if (!sev) {
+                  const _SO = ["INFO","LOW","MEDIUM","HIGH","CRITICAL"];
+                  sev = "INFO";
+                  for (const _x of f) {
+                    const _s = String(_x.severity||"INFO").toUpperCase();
+                    if (_SO.indexOf(_s) > _SO.indexOf(sev)) sev = _s;
+                  }
+                }
                 const start = (initial[ev.tool] || {}).started || Date.now();
                 done++;
                 setResults(p => ({...p, [ev.tool]: {
