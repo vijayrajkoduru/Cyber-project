@@ -197,15 +197,20 @@ def _autoload(directory: str, label: str) -> None:
         rel = module_path.relative_to(Path(__file__).parent)
         import_path = ".".join(rel.with_suffix("").parts)
 
-        if _HEAL_AVAILABLE:
-            module, status = _heal_load(import_path, module_path)
-        else:
-            try:
+        try:
+            if _HEAL_AVAILABLE:
+                module, status = _heal_load(import_path, module_path)
+            else:
                 module = importlib.import_module(import_path)
                 status = "loaded"
-            except Exception as exc:
-                log.error("Failed to load %s %s: %s", label, import_path, exc)
-                module, status = None, "quarantined"
+        except (Exception, SystemExit) as exc:
+            # Catch SystemExit too: a tool module that runs argparse or
+            # sys.exit() at import time would otherwise raise SystemExit
+            # (NOT an Exception), escape this guard, and kill the whole boot —
+            # surfacing as an opaque "process exited with code 2" under
+            # pytest / uvicorn. One bad module must never take down discovery.
+            log.error("Failed to load %s %s: %s", label, import_path, exc)
+            module, status = None, "quarantined"
 
         if module is None:
             failed.append(import_path)
@@ -218,7 +223,7 @@ def _autoload(directory: str, label: str) -> None:
                 module.register(app)
                 loaded += 1
                 log.info("Loaded %s: %s (%s)", label, import_path, status)
-            except Exception as exc:
+            except (Exception, SystemExit) as exc:
                 failed.append(import_path)
                 log.error("register(app) failed for %s: %s", import_path, exc)
         else:
