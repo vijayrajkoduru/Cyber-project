@@ -27,7 +27,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Run tests
-        run: pytest
+        run: |
+          set +e
+          python -m pytest -rA --tb=long -p no:cacheprovider > pytest-out.txt 2>&1
+          code=$?
+          echo "===== PYTEST OUTPUT ====="
+          cat pytest-out.txt
+          if [ $code -ne 0 ]; then
+            # Surface the failing tail as an annotation (readable via the API)
+            msg=$(tail -50 pytest-out.txt | tr '\n' '~' | tr -d '\r' | cut -c1-1900)
+            echo "::error title=pytest failed (code $code)::$msg"
+          fi
+          exit $code
 
   backend-syntax:
     name: Backend syntax (compileall)
