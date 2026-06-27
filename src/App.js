@@ -22280,8 +22280,12 @@ function AdminPanel({ token }) {
   const [search, setSearch]     = useState("");
   const [msg, setMsg]           = useState("");
   const [msgIsError, setMsgIsError] = useState(false);
-  const [extDays, setExtDays]   = useState(30);
-  const [selPlan, setSelPlan]   = useState("pro");
+  // Per-user (keyed by username) so changing one row's dropdown doesn't move
+  // every other row's selection (audit #15).
+  const [extDays, setExtDays]   = useState({});
+  const [selPlan, setSelPlan]   = useState({});
+  const _ext  = (u) => extDays[u] ?? 30;
+  const _plan = (u) => selPlan[u] ?? "pro";
 
   const _errStr = (e) => {
     const m = (e && e.message) ? String(e.message) : "";
@@ -22415,11 +22419,11 @@ function AdminPanel({ token }) {
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                     {/* Extend */}
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                      <select value={extDays} onChange={e=>setExtDays(Number(e.target.value))}
+                      <select value={_ext(u.username)} onChange={e=>{const v=Number(e.target.value);setExtDays(p=>({...p,[u.username]:v}));}}
                         style={{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
                         {[7,14,30,60,90,180,365].map(d=><option key={d} value={d}>{d} days</option>)}
                       </select>
-                      <button onClick={()=>act(`/api/admin/users/${u.username}/extend`,"POST",{days:extDays,plan:selPlan})}
+                      <button onClick={()=>act(`/api/admin/users/${u.username}/extend`,"POST",{days:_ext(u.username),plan:_plan(u.username)})}
                         style={{background:"#166534",border:"none",color:"#4ade80",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                         + Extend
                       </button>
@@ -22427,11 +22431,11 @@ function AdminPanel({ token }) {
 
                     {/* Plan */}
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                      <select value={selPlan} onChange={e=>setSelPlan(e.target.value)}
+                      <select value={_plan(u.username)} onChange={e=>{const v=e.target.value;setSelPlan(p=>({...p,[u.username]:v}));}}
                         style={{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:6,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>
                         {["trial","pro","enterprise","pro_lifetime"].map(p=><option key={p} value={p}>{p}</option>)}
                       </select>
-                      <button onClick={()=>act(`/api/admin/users/${u.username}/plan`,"POST",{plan:selPlan})}
+                      <button onClick={()=>act(`/api/admin/users/${u.username}/plan`,"POST",{plan:_plan(u.username)})}
                         style={{background:"#1e3a8a",border:"none",color:"#60a5fa",padding:"6px 12px",borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:700}}>
                         Set Plan
                       </button>
