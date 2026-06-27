@@ -52,7 +52,11 @@ async def auth_register(req: RegisterRequest):
         raise HTTPException(400, "Password must be at most 72 bytes")
 
     user_id = str(uuid.uuid4())
-    now = datetime.datetime.utcnow().isoformat() + "Z"
+    now_dt = datetime.datetime.utcnow()
+    now = now_dt.isoformat() + "Z"
+    # Trial expires 7 days after signup (audit #5).
+    trial_days = int(os.getenv("TRIAL_DAYS", "7"))
+    plan_expires_at = (now_dt + datetime.timedelta(days=trial_days)).isoformat() + "Z"
 
     with get_db() as con:
         if con.execute("SELECT 1 FROM users WHERE LOWER(username)=LOWER(?)",
@@ -62,10 +66,10 @@ async def auth_register(req: RegisterRequest):
                        (req.email,)).fetchone():
             raise HTTPException(409, "Email already registered")
         con.execute(
-            "INSERT INTO users (id, username, email, password_hash, role, plan, status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO users (id, username, email, password_hash, role, plan, status, created_at, plan_expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (user_id, req.username, req.email, hash_password(req.password),
-             "user", "trial", "active", now),
+             "user", "trial", "active", now, plan_expires_at),
         )
 
     # Provision the user's zone: /data/users/<user_id>/ with default files.

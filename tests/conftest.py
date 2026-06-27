@@ -17,6 +17,7 @@ os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
 os.environ["USERS_DB"] = os.path.join(_TMP, "users.db")
 os.environ.setdefault("ADMIN_PASSWORD", "")          # skip admin seeding
 os.environ.setdefault("CORS_ORIGINS", "*")
+os.environ["VL_AUTH_CACHE_TTL"] = "0"                 # no caching -> deterministic re-validation
 
 # Redirect the per-user data zone (hardcoded to /data/users in source)
 # into the temp dir so register/login can't touch the real filesystem.
@@ -71,6 +72,10 @@ def _clean_users_table():
         try:
             con = sqlite3.connect(os.environ["USERS_DB"])
             con.execute("DELETE FROM users")
+            try:
+                con.execute("DELETE FROM scan_usage")
+            except Exception:
+                pass
             con.commit()
             con.close()
         except Exception:

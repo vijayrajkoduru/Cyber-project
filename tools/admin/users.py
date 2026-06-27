@@ -64,22 +64,36 @@ async def change_plan(username: str, req: PlanRequest, _=Depends(verify_admin_or
     valid = {"trial", "pro", "enterprise", "superadmin"}
     if req.plan not in valid:
         raise HTTPException(400, f"Invalid plan. Must be one of: {sorted(valid)}")
+    # Trial gets a 7-day window; paid plans don't expire until explicitly
+    # changed/extended, so clear any inherited expiry (audit #5).
+    if req.plan == "trial":
+        expires = (datetime.datetime.utcnow() + datetime.timedelta(days=7)).isoformat() + "Z"
+    else:
+        expires = None
     with get_db() as con:
-        result = con.execute("UPDATE users SET plan=? WHERE username=?", (req.plan, username))
+        result = con.execute(
+            "UPDATE users SET plan=?, plan_expires_at=? WHERE username=?",
+            (req.plan, expires, username))
         if result.rowcount == 0:
             raise HTTPException(404, f"User '{username}' not found")
-    return {"ok": True, "username": username, "plan": req.plan}
+    return {"ok": True, "username": username, "plan": req.plan, "plan_expires_at": expires}
 
 
 @router.post("/api/admin/users/{username}/extend")
 async def extend_plan(username: str, req: ExtendRequest, _=Depends(verify_admin_or_super)):
     if req.days < 0 or req.days > 3650:
         raise HTTPException(400, "days must be between 0 and 3650")
+    # Grant access for `days` from now and persist it (audit #5) — previously
+    # the days were accepted but never written, so plans never actually lapsed.
+    expires = (datetime.datetime.utcnow() + datetime.timedelta(days=req.days)).isoformat() + "Z"
     with get_db() as con:
-        result = con.execute("UPDATE users SET plan=? WHERE username=?", (req.plan, username))
+        result = con.execute(
+            "UPDATE users SET plan=?, plan_expires_at=? WHERE username=?",
+            (req.plan, expires, username))
         if result.rowcount == 0:
             raise HTTPException(404, f"User '{username}' not found")
-    return {"ok": True, "username": username, "extended_days": req.days, "plan": req.plan}
+    return {"ok": True, "username": username, "extended_days": req.days,
+            "plan": req.plan, "plan_expires_at": expires}
 
 
 @router.delete("/api/admin/users/{username}")
