@@ -72,6 +72,19 @@ def get_user_by_id(user_id: str):
     return dict(row) if row else None
 
 
+def get_scan_usage(user_id: str) -> int:
+    """Today's scan count for a user, without incrementing (audit #27/46)."""
+    if not user_id:
+        return 0
+    day = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    with get_db() as con:
+        row = con.execute(
+            "SELECT count FROM scan_usage WHERE user_id=? AND day=?",
+            (user_id, day),
+        ).fetchone()
+    return int(row["count"]) if row else 0
+
+
 def bump_scan_usage(user_id: str) -> int:
     """Atomically increment today's scan count for a user and return the new
     total. UTC day buckets. Used by the quota gate (audit #2)."""
