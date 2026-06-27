@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, writable_base
 
 router = APIRouter()
-_BASE = Path(os.environ.get("VL_FLOW_DIR", "/app/vl_flow_data"))
+_BASE = writable_base("VL_FLOW_DIR", "/app/vl_flow_data")
 for sub in ["screenshots","signatures","brands","collab","templates","rules"]:
     (_BASE/sub).mkdir(parents=True, exist_ok=True)
 

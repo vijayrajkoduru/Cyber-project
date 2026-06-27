@@ -29,13 +29,13 @@ import os
 import time
 from pathlib import Path
 from fastapi import APIRouter, Depends, Request
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, writable_base
 
 router = APIRouter()
 
 # Reuse the shared base dir for cache/audit so vuln + recon don't
 # fragment storage. Subdir under it is vuln-specific.
-_BASE = Path(os.environ.get("VL_PRIME_DIR", "/app/vl_prime_data")) / "vuln"
+_BASE = writable_base("VL_PRIME_DIR", "/app/vl_prime_data") / "vuln"
 for sub in ["per_tier", "cve_intel", "scanner_stats"]:
     (_BASE / sub).mkdir(parents=True, exist_ok=True)
 

@@ -30,12 +30,12 @@ import os
 import time
 from pathlib import Path
 from fastapi import APIRouter, Depends
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, writable_base
 
 router = APIRouter()
 
 # Reuse the shared base dir so vuln + webapp + recon don't fragment storage.
-_BASE = Path(os.environ.get("VL_PRIME_DIR", "/app/vl_prime_data")) / "webapp"
+_BASE = writable_base("VL_PRIME_DIR", "/app/vl_prime_data") / "webapp"
 for sub in ["per_tier", "scanner_stats", "session_freshness"]:
     (_BASE / sub).mkdir(parents=True, exist_ok=True)
 
