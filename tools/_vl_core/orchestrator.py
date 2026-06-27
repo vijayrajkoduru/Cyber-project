@@ -355,8 +355,11 @@ async def run_module_streaming(
                     tool_name, result, dur = task.result()
                 except Exception as e:
                     # Synthesize a failed result so the frontend gets a proper
-                    # tool_complete event instead of mysterious silence
-                    tool_name = "unknown_tool"
+                    # tool_complete event instead of mysterious silence.
+                    # Unique key per crash — `results` is keyed by tool_name, so
+                    # a shared "unknown_tool" key made N concurrent crashes
+                    # overwrite one entry and undercount the summary (audit #41).
+                    tool_name = f"crashed_task_{len(results) + 1}"
                     result = {
                         "ok": False, "_failed": True,
                         "error": f"task crashed: {type(e).__name__}: {str(e)[:200]}",

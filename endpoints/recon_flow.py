@@ -13,7 +13,26 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from pydantic import BaseModel
+import datetime as _dt
+from jose import jwt as _jose_jwt
 from tools._shared import verify_scan_quota, writable_base, is_safe_external_url
+
+# Internal scheduler/batch runs call the public API over localhost. They must
+# carry a valid JWT (verify_token now re-validates against the DB) AND the
+# internal-fanout marker so they don't 401 and so quota counts the user once
+# (audit #13). Mint a short-lived token for the schedule/batch owner.
+_JWT_SECRET = os.getenv("JWT_SECRET", "")
+_FANOUT_TOKEN = os.getenv("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal")
+
+
+def _service_headers(user_id: str) -> dict:
+    if not user_id or not _JWT_SECRET:
+        return {}
+    tok = _jose_jwt.encode(
+        {"sub": user_id, "role": "user",
+         "exp": _dt.datetime.utcnow() + _dt.timedelta(hours=1)},
+        _JWT_SECRET, algorithm="HS256")
+    return {"Authorization": f"Bearer {tok}", "x-vl-internal-fanout": _FANOUT_TOKEN}
 
 router = APIRouter()
 
@@ -221,9 +240,10 @@ class ScheduleReq(BaseModel):
     tiers: Optional[List[str]] = None  # subset of tier subdirs to scan
 
 @router.post("/api/recon/schedule/create")
-async def schedule_create(req: ScheduleReq, _=Depends(verify_scan_quota)):
+async def schedule_create(req: ScheduleReq, payload=Depends(verify_scan_quota)):
     sid = uuid.uuid4().hex[:12]
     rec = req.dict()
+    rec["user_id"] = payload.get("sub")     # owner, for authenticated internal runs
     rec["schedule_id"] = sid
     rec["created"] = int(time.time())
     rec["next_run"] = int(time.time()) + req.interval_hours * 3600
@@ -256,19 +276,25 @@ async def _schedule_worker():
                 try:
                     rec = json.loads(sf.read_text(encoding="utf-8"))
                     if rec.get("next_run", 0) > now: continue
-                    # Trigger scan via internal HTTP call
+                    # Trigger scan via authenticated internal HTTP call.
                     print(f"[schedule] firing {rec['target']} (schedule {rec['schedule_id']})")
                     try:
                         r = await asyncio.to_thread(requests.post,
                             "http://localhost:8000/api/recon/run_all",
                             json={"target":rec["target"], "tiers":rec.get("tiers")},
+                            headers=_service_headers(rec.get("user_id")),
                             timeout=300)
                         if r.status_code == 200:
                             rec["last_run"] = now
-                            rec["next_run"] = now + rec["interval_hours"]*3600
-                            sf.write_text(json.dumps(rec), encoding="utf-8")
+                        else:
+                            print(f"[schedule] run_all returned {r.status_code}")
                     except Exception as e:
                         print(f"[schedule] fire failed: {e}")
+                    finally:
+                        # Always advance next_run so a failing schedule can't
+                        # busy-loop every 60s (audit #13).
+                        rec["next_run"] = now + rec["interval_hours"]*3600
+                        sf.write_text(json.dumps(rec), encoding="utf-8")
                 except Exception: continue
             await asyncio.sleep(60)
         except Exception as e:
@@ -284,12 +310,13 @@ class BatchReq(BaseModel):
     tiers: Optional[List[str]] = None
 
 @router.post("/api/recon/scan/batch")
-async def batch_scan(req: BatchReq, _=Depends(verify_scan_quota)):
+async def batch_scan(req: BatchReq, payload=Depends(verify_scan_quota)):
     """Queue a batch of targets to scan. Returns batch_id."""
     if not req.targets: raise HTTPException(400, "no targets")
     if len(req.targets) > 50: raise HTTPException(400, "max 50 targets per batch")
     bid = uuid.uuid4().hex[:12]
     rec = {"batch_id":bid,"targets":req.targets,"tiers":req.tiers,
+           "user_id":payload.get("sub"),
            "created":int(time.time()),"status":"queued",
            "results":{}}
     (_BATCH / f"{bid}.json").write_text(json.dumps(rec), encoding="utf-8")
@@ -314,7 +341,8 @@ async def _run_batch(bid: str):
                 try:
                     r = await asyncio.to_thread(requests.post,
                         "http://localhost:8000/api/recon/run_all",
-                        json={"target":target,"tiers":rec.get("tiers")}, timeout=600)
+                        json={"target":target,"tiers":rec.get("tiers")},
+                        headers=_service_headers(rec.get("user_id")), timeout=600)
                     return target, r.status_code, len(r.content) if r.content else 0
                 except Exception as e: return target, 0, str(e)[:100]
         results = await asyncio.gather(*[one(t) for t in rec["targets"]])
