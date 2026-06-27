@@ -13,7 +13,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from pydantic import BaseModel
-from tools._shared import verify_scan_quota, writable_base
+from tools._shared import verify_scan_quota, writable_base, is_safe_external_url
 
 router = APIRouter()
 
@@ -137,6 +137,11 @@ _SEV_ORDER = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
 
 @router.post("/api/recon/webhook/configure")
 async def webhook_configure(cfg: WebhookConfig, _=Depends(verify_scan_quota)):
+    # Anti-SSRF: reject webhook URLs that point at internal/metadata hosts
+    # (audit #12). Re-checked at send time too (DNS-rebinding).
+    ok, reason = is_safe_external_url(cfg.url)
+    if not ok:
+        raise HTTPException(400, f"Refusing webhook URL: {reason}")
     wid = uuid.uuid4().hex[:12]
     rec = cfg.dict()
     rec["webhook_id"] = wid
@@ -166,6 +171,11 @@ async def _fire_webhooks(target: str, scan_record: dict):
     for hf in _HOOKS.glob("*.json"):
         try:
             cfg = json.loads(hf.read_text(encoding="utf-8"))
+            # Anti-SSRF re-check at send time (defends DNS-rebinding) — audit #12
+            ok, reason = is_safe_external_url(cfg.get("url", ""))
+            if not ok:
+                print(f"[webhook] {hf.name} skipped: unsafe url ({reason})")
+                continue
             # Target filter
             if cfg.get("target_filter") and cfg["target_filter"] not in target: continue
             # Severity filter
