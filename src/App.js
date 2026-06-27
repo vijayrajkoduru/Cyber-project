@@ -7734,7 +7734,7 @@ function MobileStaticModule({token, apiUrl}) {
   const [samples, setSamples] = React.useState([]);
 
   React.useEffect(() => {
-    fetch("/api/mobile_static/samples", {
+    fetch(`${API}/api/mobile_static/samples`, {
       headers: {Authorization: `Bearer ${token}`}
     })
       .then(r => r.ok ? r.json() : {samples: []})
@@ -7755,7 +7755,7 @@ function MobileStaticModule({token, apiUrl}) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch("/api/mobile_static/upload", {
+      const r = await fetch(`${API}/api/mobile_static/upload`, {
         method: "POST",
         headers: {Authorization: `Bearer ${token}`},
         body: fd,
@@ -7879,7 +7879,7 @@ function MobileStorageModule({token, apiUrl}) {
 
   React.useEffect(() => {
     // Reuse mobile_static's /samples endpoint (same APK pool, same upload dir)
-    fetch("/api/mobile_static/samples", {headers: {Authorization:`Bearer ${token}`}})
+    fetch(`${API}/api/mobile_static/samples`, {headers: {Authorization:`Bearer ${token}`}})
       .then(r => r.ok ? r.json() : {samples: []})
       .then(d => setSamples(d.samples || []))
       .catch(() => setSamples([]));
@@ -7898,7 +7898,7 @@ function MobileStorageModule({token, apiUrl}) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch("/api/mobile_static/upload", {
+      const r = await fetch(`${API}/api/mobile_static/upload`, {
         method: "POST",
         headers: {Authorization: `Bearer ${token}`},
         body: fd,
@@ -8021,7 +8021,7 @@ function MobileRuntimeModule({token, apiUrl}) {
   const [samples, setSamples] = React.useState([]);
 
   React.useEffect(() => {
-    fetch("/api/mobile_static/samples", {headers:{Authorization:`Bearer ${token}`}})
+    fetch(`${API}/api/mobile_static/samples`, {headers:{Authorization:`Bearer ${token}`}})
       .then(r => r.ok ? r.json() : {samples:[]})
       .then(d => setSamples(d.samples || []))
       .catch(() => setSamples([]));
@@ -8040,7 +8040,7 @@ function MobileRuntimeModule({token, apiUrl}) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch("/api/mobile_static/upload", {
+      const r = await fetch(`${API}/api/mobile_static/upload`, {
         method:"POST", headers:{Authorization:`Bearer ${token}`}, body:fd,
       });
       if (!r.ok) {
@@ -8154,7 +8154,7 @@ function MobileCryptoModule({token, apiUrl}) {
   const [samples, setSamples] = React.useState([]);
 
   React.useEffect(() => {
-    fetch("/api/mobile_static/samples", {headers: {Authorization:`Bearer ${token}`}})
+    fetch(`${API}/api/mobile_static/samples`, {headers: {Authorization:`Bearer ${token}`}})
       .then(r => r.ok ? r.json() : {samples: []})
       .then(d => setSamples(d.samples || []))
       .catch(() => setSamples([]));
@@ -8173,7 +8173,7 @@ function MobileCryptoModule({token, apiUrl}) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch("/api/mobile_static/upload", {
+      const r = await fetch(`${API}/api/mobile_static/upload`, {
         method: "POST", headers: {Authorization: `Bearer ${token}`}, body: fd,
       });
       if (!r.ok) {
@@ -8281,7 +8281,7 @@ function MobileNetworkModule({token, apiUrl}) {
   const [samples, setSamples] = React.useState([]);
 
   React.useEffect(() => {
-    fetch("/api/mobile_static/samples", {headers: {Authorization:`Bearer ${token}`}})
+    fetch(`${API}/api/mobile_static/samples`, {headers: {Authorization:`Bearer ${token}`}})
       .then(r => r.ok ? r.json() : {samples: []})
       .then(d => setSamples(d.samples || []))
       .catch(() => setSamples([]));
@@ -8300,7 +8300,7 @@ function MobileNetworkModule({token, apiUrl}) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const r = await fetch("/api/mobile_static/upload", {
+      const r = await fetch(`${API}/api/mobile_static/upload`, {
         method: "POST", headers: {Authorization: `Bearer ${token}`}, body: fd,
       });
       if (!r.ok) {
