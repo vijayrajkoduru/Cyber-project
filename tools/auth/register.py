@@ -46,6 +46,10 @@ async def auth_register(req: RegisterRequest):
         raise HTTPException(400, "Invalid email address")
     if len(req.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
+    # bcrypt silently truncates at 72 bytes — reject longer passwords so two
+    # different long passwords can't collide to the same hash (audit #7).
+    if len(req.password.encode("utf-8")) > 72:
+        raise HTTPException(400, "Password must be at most 72 bytes")
 
     user_id = str(uuid.uuid4())
     now = datetime.datetime.utcnow().isoformat() + "Z"

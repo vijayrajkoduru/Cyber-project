@@ -405,7 +405,11 @@ def wrap_finding(detail: str, severity: str, **kw) -> dict:
         f["verified_exploit"] = True
     else:
         try:
-            from tools._framework.severity_policy import is_advisory, _RANK
+            # Import from the real module: the _framework shim does
+            # `import *`, which drops underscore-private names like _RANK,
+            # so importing _RANK via the shim raised ImportError and the
+            # whole advisory cap was silently dead (audit #9).
+            from tools._vl_core.severity_policy import is_advisory, _RANK
             blob_name = detail or ""
             blob_evi = f["evidence_marker"] or ""
             cur_rank = _RANK.get(str(severity).upper(), 0)
