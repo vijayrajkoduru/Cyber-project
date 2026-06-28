@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from jose import jwt
 
-from tools.auth._db import get_db, verify_password
+from tools.auth._db import get_db, verify_password, record_audit
 
 # Lazy zone init — covers existing users who registered before USERZONE shipped.
 try:
@@ -71,11 +71,20 @@ async def auth_login(req: LoginRequest, request: Request):
             (req.username,),
         ).fetchone()
 
+    _ip = request.client.host if request and request.client else None
+
     if not user or not verify_password(req.password, user["password_hash"]):
+        record_audit("auth.login_failed", actor_name=req.username, ip=_ip,
+                     status="fail", detail="invalid credentials")
         raise HTTPException(401, "Invalid username or password")
 
     if user["status"] != "active":
+        record_audit("auth.login_blocked", actor_id=user["id"],
+                     actor_name=user["username"], ip=_ip, status="fail",
+                     detail=f"status={user['status']}")
         raise HTTPException(403, f"Account is {user['status']}")
+
+    record_audit("auth.login", actor_id=user["id"], actor_name=user["username"], ip=_ip)
 
     payload = {
         "sub":      user["id"],
