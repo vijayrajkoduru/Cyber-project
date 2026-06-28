@@ -91,15 +91,17 @@ async def auth_register(req: RegisterRequest):
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
-    # Email verification + audit (both best-effort — never block signup).
+    # Welcome email (with plan + verification link) + audit. Both best-effort —
+    # never block signup on email/audit failure.
     try:
         from tools.auth._db import create_email_token, record_audit
-        from tools._core.email_send import send_verification_email
-        record_audit("auth.register", actor_id=user_id, actor_name=req.username)
+        from tools._core.email_send import send_welcome_email
+        record_audit("auth.register", actor_id=user_id, actor_name=req.username,
+                     detail=f"plan=trial email={req.email}")
         verify_token_str = create_email_token(user_id, purpose="verify")
-        send_verification_email(req.email, verify_token_str)
+        send_welcome_email(req.email, req.username, "trial", verify_token=verify_token_str)
     except Exception as exc:
-        _log.warning("post-register email/audit failed for %s: %s", user_id, exc)
+        _log.warning("post-register welcome email/audit failed for %s: %s", user_id, exc)
 
     return {
         "token":        token,
