@@ -28,19 +28,17 @@ const C = {
 };
 
 export default function EnterpriseSettings({ api, token, role }) {
-  const [tab, setTab] = useState("keys");
+  const [tab, setTab] = useState("mfa");
   const isAdmin = role === "admin" || role === "superadmin";
   return (
     <div style={C.wrap}>
       <div style={C.h1}>Account &amp; Security</div>
-      <div style={C.sub}>API keys, two-factor authentication, and your organizations.</div>
+      <div style={C.sub}>Two-factor authentication and your organizations.</div>
       <div style={C.tabs}>
-        <div style={C.tab(tab === "keys")} onClick={() => setTab("keys")}>API Keys</div>
         <div style={C.tab(tab === "mfa")} onClick={() => setTab("mfa")}>Two-Factor (MFA)</div>
         <div style={C.tab(tab === "orgs")} onClick={() => setTab("orgs")}>Organizations</div>
         {isAdmin && <div style={C.tab(tab === "audit")} onClick={() => setTab("audit")}>Audit Log</div>}
       </div>
-      {tab === "keys" && <ApiKeys api={api} token={token} />}
       {tab === "mfa" && <Mfa api={api} token={token} />}
       {tab === "orgs" && <Orgs api={api} token={token} />}
       {tab === "audit" && isAdmin && <AuditLog api={api} token={token} />}
@@ -85,93 +83,6 @@ function AuditLog({ api, token }) {
         </div>
       ))}
       {(data.items || []).length === 0 && <div style={C.sub}>No events.</div>}
-    </div>
-  );
-}
-
-// ── API Keys ────────────────────────────────────────────────────────
-function ApiKeys({ api, token }) {
-  const [keys, setKeys] = useState([]);
-  const [name, setName] = useState("");
-  const [secret, setSecret] = useState("");
-  const [err, setErr] = useState("");
-
-  const load = useCallback(async () => {
-    try { setKeys((await api("/api/auth/api-keys", "GET", null, token)).keys || []); }
-    catch (e) { setErr(e.message); }
-  }, [api, token]);
-  useEffect(() => { load(); }, [load]);
-
-  const create = async () => {
-    setErr(""); setSecret("");
-    try {
-      const r = await api("/api/auth/api-keys", "POST", { name: name || "api-key" }, token);
-      setSecret(r.secret); setName(""); load();
-    } catch (e) { setErr(e.message); }
-  };
-  const revoke = async (id) => {
-    if (!window.confirm("Revoke this API key? Anything using it will stop working.")) return;
-    try { await api(`/api/auth/api-keys/${id}`, "DELETE", null, token); load(); }
-    catch (e) { setErr(e.message); }
-  };
-
-  const base = (typeof window !== "undefined" && window.location.origin) || "https://app.vulnuslab.com";
-  const sample = secret || "vlk_YOUR_API_KEY";
-  const curlExample =
-    `curl ${base}/api/auth/me \\\n  -H "Authorization: Bearer ${sample}"`;
-  const copy = (txt) => { try { navigator.clipboard.writeText(txt); } catch (_) {} };
-
-  return (
-    <div>
-      {err && <div style={C.err}>{err}</div>}
-      <div style={C.card}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...C.input, flex: 1 }} placeholder="Key name (e.g. ci-pipeline)"
-                 value={name} onChange={(e) => setName(e.target.value)} />
-          <button style={C.btn} onClick={create}>Create key</button>
-        </div>
-        {secret && (
-          <div style={{ marginTop: 12 }}>
-            <div style={C.ok}>Copy this now — it will not be shown again:</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ ...C.mono, flex: 1 }}>{secret}</div>
-              <button style={C.btnGhost} onClick={() => copy(secret)}>Copy</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* How to use — visible always; fills in the real key right after creation */}
-      <div style={C.card}>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Using your API key</div>
-        <div style={C.sub}>
-          Send it as a Bearer token on any endpoint — same access as your account, your plan's quota applies.
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 8 }}>
-          <pre style={{ ...C.mono, color: "#cbd5e1", background: "#020617", border: "1px solid #1e293b",
-                        borderRadius: 6, padding: 12, flex: 1, overflowX: "auto", margin: 0 }}>{curlExample}</pre>
-          <button style={C.btnGhost} onClick={() => copy(curlExample)}>Copy</button>
-        </div>
-        <div style={{ ...C.sub, marginTop: 8 }}>
-          Example: run a scan →{" "}
-          <span style={C.mono}>POST {base}/api/recon/run_all</span> with body{" "}
-          <span style={C.mono}>{'{"target":"example.com"}'}</span>. Discover all endpoints at{" "}
-          <span style={C.mono}>{base}/api/manifest</span>.
-        </div>
-      </div>
-      <div style={C.card}>
-        {keys.length === 0 && <div style={C.sub}>No API keys yet.</div>}
-        {keys.map((k) => (
-          <div key={k.id} style={C.row}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{k.name}</div>
-              <div style={C.sub}>vlk_{k.prefix}… · created {String(k.created_at).slice(0, 10)}
-                {k.revoked ? " · revoked" : ""}</div>
-            </div>
-            {!k.revoked && <button style={C.btnDanger} onClick={() => revoke(k.id)}>Revoke</button>}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
