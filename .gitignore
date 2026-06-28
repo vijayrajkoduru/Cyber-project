@@ -47,6 +47,7 @@ backend_p345.py
 ruff
 .env
 *.env
+.env*
 users.db
 *.db
 
