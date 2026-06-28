@@ -125,57 +125,47 @@ Anything beyond these 7 = future polish, NOT a blocker.
 | **Forge module `<name>`** | ALL remaining tools in a module | 2-4 weeks | Multiple batches with checkpoints |
 | **Forge all** | Every remaining tool across every module | 6-10 weeks | Big commitment — multi-month roadmap |
 
-## What "Forge module Recon" actually means
+## What "Forge module `<name>`" actually means
 
-It commits to building all 32 remaining Recon tools but executed as 5 batches:
+It commits to taking one module to 100.0 on the scoreboard, executed as
+tier-by-tier batches:
 
 ```
-Batch 1 (Tier 1, 5 tools)  →  ship checkpoint  →  you say "next" or "pause"
-Batch 2 (Tier 2, 7 tools)  →  ship checkpoint  →  you say "next" or "pause"
-Batch 3 (Tier 3, 5 tools)  →  ship checkpoint
-Batch 4 (Tier 4, 5 tools)  →  ship checkpoint
-Batch 5 (Tier 5, 6 tools)  →  module complete
+Batch 1 (tier 1)  →  ship checkpoint  →  you say "next" or "pause"
+Batch 2 (tier 2)  →  ship checkpoint  →  you say "next" or "pause"
+...                →  module hits 100.0 on .vl-foundry-scores.json
 ```
 
-Each batch = self-verified 7/7 per tool + one PDF showing the batch result.
+Each batch = self-verified 7/7 per tool + scoreboard re-scored. **All modules
+are currently at 100.0** (see status below), so today "Forge `<module>`" means
+hold-the-line / regression-fix work, not net-new building.
 
-## Recommended starting points
+## VL-FORGE status — SOURCE OF TRUTH
 
-- **Today**: `Forge tier 1` — 9 high-impact tools in 2-3 days
-- **This week**: `Forge family DNS` — Subdomains + Cert Trans + Zone Transfer + Amass
-- **This month**: `Forge module Recon` — finish all 32 tools
+> ⚠️ **Do not hardcode "remaining" counts here — they go stale.** The
+> authoritative scoreboard is `.vl-foundry-scores.json` (written by
+> `scripts/pre_commit_score.py`). For a live per-layer breakdown of any module:
+>
+> ```bash
+> python scripts/score_module.py <module> --verbose
+> ```
 
-## Module list for Forge module commands
+**As of 2026-06-28: ALL 24 modules score 100.0 — the forge roadmap is complete.**
 
-- `Forge module Recon`    — 32 tools remaining (3 done)
-- `Forge module Webapp`   — 54 tools to re-forge through framework
-- `Forge module Vuln`     — 9 tools (already AI-wired, light polish)
-- `Forge module OSINT`    — 11 tools, framework-wrap
-- `Forge module Exploit`  — 7 tools (already complete)
-- `Forge module BOF`      — 7 phases (already complete)
+recon · network · webapp · vuln · cloud · container_k8s · osint · apisec ·
+exploit · bof · password · pivot · tunnel · iot_ot · and all `mobile_*` —
+every one at 100.0.
 
-## Tools already FORGED (3 — done)
+History: Recon was the first module forged (154/154 real across ~30 sessions,
+mid-2026). The final gaps were closed on 2026-06-28 — pivot & tunnel
+(78.3→100, canonical PROBES dict), container_k8s & cloud (wired real probes
+that were missing from the techniques list), webapp (97.9→100: wired 3
+forgotten scanners + good-state findings + a scorer that now recognizes
+route-aliases, aggregators, and nuclei/Playwright patterns), and vuln (→100).
 
-- WHOIS Lookup       (2026-05-22) — 6 sources, 29 rules
-- DNS Records        (2026-05-23) — 11 sources, 22 rules
-- DNS Recon          (2026-05-23) — 8 sources, 13 rules
-
-## Tools REMAINING (32) — by Tier
-
-**Tier 1 (high customer value):**
-Subdomain Discovery · Cert Transparency · WAF/CDN Fingerprint · TLS Deep Audit · Port-Scan family (Fast/Deep/Service/OS/Banner)
-
-**Tier 2 (web content discovery):**
-Directory Enumeration · JS Endpoint Extractor · Wayback Machine · robots+sitemap · BFS Crawler · Parameter Discovery · Favicon Fingerprint
-
-**Tier 3 (cloud + infra):**
-Cloud Bucket Finder · Bucket Permissions · ASN/IP Ownership · CDN Origin Discovery · DNS Zone Transfer
-
-**Tier 4 (threat intel + passive):**
-OSINT Harvesting · Shodan Lookup · Free Shodan (InternetDB) · CVE Matching (NVD) · Deep Subdomain (amass)
-
-**Tier 5 (app-specific):**
-Source Map Exposure · API Docs Discovery · WordPress wp-json Enum · Admin Panel Exposure · JS Library CVE · Git Repo Exposure
+If a module ever dips below 100, it's almost always **L4 orchestrator** — a
+real probe present in PROBES but missing from the `T`/techniques list the
+orchestrator fans out, or a filename/route alias — not real quality debt.
 
 ## Deploy pattern after a Forge
 
