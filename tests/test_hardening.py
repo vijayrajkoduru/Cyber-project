@@ -36,3 +36,14 @@ def test_no_wildcard_cors(client):
 def test_global_exception_handler_registered(client):
     import main
     assert Exception in main.app.exception_handlers
+
+
+def test_rate_limit_returns_429_when_exceeded(client, monkeypatch):
+    import main
+    monkeypatch.setattr(main, "_RATE_LIMIT_PER_MIN", 3)
+    main._rate_hits.clear()
+    # /api/health is exempt, so hit a non-exempt endpoint (401s still count).
+    codes = [client.get("/api/auth/me").status_code for _ in range(5)]
+    assert 429 in codes
+    assert codes[:3] == [401, 401, 401]   # first 3 under the limit
+    main._rate_hits.clear()

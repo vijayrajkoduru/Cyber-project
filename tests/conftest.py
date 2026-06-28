@@ -22,6 +22,7 @@ os.environ.setdefault(
 os.environ.setdefault("ADMIN_PASSWORD", "")          # skip admin seeding
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 os.environ["VL_AUTH_CACHE_TTL"] = "0"                 # no caching -> deterministic re-validation
+os.environ.setdefault("RATE_LIMIT_PER_MIN", "100000") # effectively off for the suite (shared testclient IP)
 
 # Redirect the per-user data zone (hardcoded to /data/users in source)
 # into the temp dir so register/login can't touch the real filesystem.

@@ -70,8 +70,11 @@ app.add_middleware(
 # Enforce once here (covers the orchestrators AND every individual scanner
 # endpoint) instead of in all 60+ scanner modules.
 import json as _json
+import time as _time
+from collections import deque as _deque
 from fastapi.responses import JSONResponse as _JSONResponse
 from tools._shared import is_contained_artifact as _is_contained_artifact
+from tools._shared import is_internal_fanout as _is_internal_fanout
 
 _ARTIFACT_PREFIXES = ("/api/bof/", "/api/mobile_static/")
 _ARTIFACT_EXEMPT = {"/api/mobile_static/upload"}
@@ -124,6 +127,41 @@ async def _security_headers(request, call_next):
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
+
+
+# ── Global rate limiting ────────────────────────────────────────────
+# Simple in-process sliding-window limiter per client IP. Protects every
+# endpoint from abuse/DoS (the audit only added a login-specific throttle).
+# Health checks and trusted internal orchestrator fan-out are exempt. NOTE:
+# in-process means the cap is per-uvicorn-worker; move to Redis for a hard
+# cluster-wide limit. Tunable via RATE_LIMIT_PER_MIN (0 disables).
+_RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "300"))
+_RATE_WINDOW = 60.0
+_rate_hits: dict = {}
+_RATE_EXEMPT_PREFIXES = ("/api/health",)
+
+
+@app.middleware("http")
+async def _rate_limit(request, call_next):
+    limit = _RATE_LIMIT_PER_MIN
+    path = request.url.path
+    if (limit > 0
+            and not any(path.startswith(p) for p in _RATE_EXEMPT_PREFIXES)
+            and not _is_internal_fanout(request)):
+        ip = request.client.host if request.client else "?"
+        now = _time.monotonic()
+        dq = _rate_hits.get(ip)
+        if dq is None:
+            dq = _rate_hits[ip] = _deque()
+        while dq and now - dq[0] > _RATE_WINDOW:
+            dq.popleft()
+        if len(dq) >= limit:
+            return _JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please slow down."},
+            )
+        dq.append(now)
+    return await call_next(request)
 
 
 # ── Global exception handler ────────────────────────────────────────
