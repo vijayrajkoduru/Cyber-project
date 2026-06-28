@@ -42,7 +42,7 @@ ALLOWED_DROP = 2.0  # points — refactors can dip slightly
 # Known modules to track. New modules auto-added on first green run.
 KNOWN_MODULES = ("recon", "vuln", "webapp", "osint", "exploit",
                  "password", "bof", "pivot", "tunnel", "container_k8s",
-                 "webapp", "cloud")
+                 "webapp", "cloud", "vuln")
 
 
 def staged_modules() -> set[str]:

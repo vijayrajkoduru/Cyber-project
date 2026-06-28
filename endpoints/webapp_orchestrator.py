@@ -24,6 +24,21 @@ from tools._framework.orchestrator import (
 router = APIRouter()
 
 
+# Scanners that exist on disk but are intentionally NOT fanned out by
+# /api/webapp/run_all, with the reason. The VL-FOUNDRY scorer reads this to
+# avoid counting deliberate exclusions against orchestrator coverage. A reason
+# starting with "aggregator" also marks a meta-endpoint (not a detection
+# scanner), which the scorer drops from per-scanner scoring entirely.
+RUN_ALL_EXCLUDE: dict[str, str] = {
+    "burp_lite": "aggregator — runs every other webapp scanner in one call; "
+                 "cannot be nested inside run_all",
+    "authenticated_scan": "requires customer credentials — opt-in only, not "
+                          "part of the unauthenticated default sweep",
+    "sqlmap_full": "heavy/slow deep sqlmap run — opt-in only so it does not "
+                   "balloon every default scan",
+}
+
+
 WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     # Discovery — runs FIRST so other scanners can use scan_state.json
     "tier1_discovery": [

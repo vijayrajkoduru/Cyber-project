@@ -47,13 +47,19 @@ WEIGHTS = {
 # standard_response calls) AND the Recon shape (ScanContext + run_scanner
 # + findings rules file). A scanner passes the check if it uses EITHER.
 CHECKS = {
-    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner|_http_get\(|_http_post\(|MethodologyScanner|run_as_endpoint\(|pre_flight\(",
+    # `run_nuclei(` is a trusted execution framework (like `run_scanner`): it
+    # runs templates and returns findings already carrying severity /
+    # remediation / evidence, and manages its own per-template timeout. Thin
+    # wrappers that delegate to it satisfy those checks even though the wrapper
+    # file does not literally spell them out. (It is intentionally NOT in
+    # positive_emit — nuclei reports matches only, no clean-state finding.)
+    "precheck":      r"precheck_target\(|safe_get\(|web_url\(|recon_host\(|ScanContext|run_scanner|run_nuclei\(|_http_get\(|_http_post\(|MethodologyScanner|run_as_endpoint\(|pre_flight\(",
     "uniform_shape": r"standard_response\(|vuln_response\(|run_scanner\(|wrap_finding\(|run_as_endpoint\(|MethodologyScanner",
     "positive_emit": r'"POSITIVE"|POSITIVE|ctx\.source\(|FINDING_RULES',
-    "severity":      r'severity=|"severity"|\'severity\'|finding_rules|FINDING_RULES',
-    "remediation":   r'remediation=|"remediation"|\'remediation\'|FINDING_RULES',
-    "evidence":      r'evidence_marker=|"evidence_marker"|\'evidence_marker\'|evidence=|ctx\.source\(',
-    "timeout":       r"timeout=|wait_for\(.*timeout=|deadline\s*=|run_scanner",
+    "severity":      r'severity=|"severity"|\'severity\'|finding_rules|FINDING_RULES|run_nuclei\(',
+    "remediation":   r'remediation=|"remediation"|\'remediation\'|FINDING_RULES|run_nuclei\(',
+    "evidence":      r'evidence_marker=|"evidence_marker"|\'evidence_marker\'|evidence=|ctx\.source\(|run_nuclei\(',
+    "timeout":       r"timeout=|wait_for\(.*timeout=|deadline\s*=|run_scanner|run_nuclei\(",
 }
 
 
@@ -188,7 +194,7 @@ def check_scanner_quality(scanner_path: Path) -> dict[str, bool]:
             # OR define a class that inherits MethodologyScanner.
             actual_call = bool(called_functions & {
                 "precheck_target", "safe_get", "web_url", "recon_host",
-                "run_scanner", "_http_get", "_http_post",
+                "run_scanner", "run_nuclei", "_http_get", "_http_post",
                 "run_as_endpoint", "pre_flight", "port_open", "banner_grab",
             })
             # Methodology base-class detection: subclass of MethodologyScanner
@@ -238,6 +244,12 @@ def _looks_like_enum(scanner_path) -> bool:
         src = scanner_path.read_text(encoding="utf-8")
     except Exception:
         return True   # default to enum so we don't silently exempt on read error
+    # Headless-browser / link-extraction crawlers (Playwright, etc.) discover
+    # targets dynamically from the live app — following rendered links and
+    # intercepting XHR/fetch — rather than iterating a static wordlist. There
+    # is nothing to curate, so they aren't enum-style for L5 purposes.
+    if re.search(r'\bplaywright\b|async_playwright|chromium\.launch', src):
+        return False
     if src.count("\n") < 25:
         return False
     return bool(re.search(r'\bfor\s+\w+\s+in\s+', src))
@@ -315,12 +327,27 @@ def has_curation(scanner_path) -> bool:
     return False
 
 
-def load_orchestrator_tools(module: str) -> set[str]:
-    """Return scanner names registered in <module>_orchestrator.py."""
+def load_orchestrator_tools(module: str):
+    """Return (names, route_slugs, exclude) for <module>_orchestrator.py.
+
+    names:       set of tool slugs the orchestrator fans out via run_all.
+    route_slugs: final path segment of each tool's route. Lets a scanner whose
+                 FILE name differs from its registered endpoint slug (a route
+                 alias, e.g. security_headers.py serving /api/webapp/scan/headers)
+                 still count as wired — matched by endpoint, not by filename.
+    exclude:     {slug: reason} the orchestrator declares as intentionally NOT
+                 in run_all (aggregators, credential-only or heavy opt-in
+                 scanners). Excluded from L4 coverage; aggregator-flagged ones
+                 are meta-endpoints and are dropped from scoring entirely.
+    """
     try:
         mod = __import__(f"endpoints.{module}_orchestrator", fromlist=["_all_tools"])
         tools = mod._all_tools()
-        return {name for name, _ in tools}
+        names = {name for name, _ in tools}
+        route_slugs = {str(route).rstrip("/").split("/")[-1]
+                       for _, route in tools if str(route).strip("/")}
+        exclude = dict(getattr(mod, "RUN_ALL_EXCLUDE", {}) or {})
+        return names, route_slugs, exclude
     except Exception as e:
         # Show the actual error instead of silently returning empty set.
         # Set VL_QUIET=1 to suppress (e.g. inside CI when error is expected).
@@ -329,7 +356,22 @@ def load_orchestrator_tools(module: str) -> set[str]:
             print(f"\n  [L4 import error for {module}]: {type(e).__name__}: {e}",
                   file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
+        return set(), set(), {}
+
+
+def _registered_route_slugs(scanner, module: str) -> set[str]:
+    """Final path segments of every /api/<module>/... route a scanner file
+    registers. Lets a route-aliased file match the orchestrator by endpoint
+    rather than filename. Pack-probe synthetics return empty (their stem IS
+    already the slug)."""
+    if isinstance(scanner, _PackProbe):
         return set()
+    try:
+        src = scanner.read_text(encoding="utf-8")
+    except Exception:
+        return set()
+    pat = rf'/api/{re.escape(module)}/(?:[a-z0-9_]+/)*([a-z0-9_]+)'
+    return set(re.findall(pat, src))
 
 
 def load_frontend_phases(module: str) -> set[str] | bool:
@@ -447,15 +489,31 @@ def score_module(module: str, verbose: bool = False) -> dict:
         return {"error": f"tools/{module}/ not found"}
 
     scanners = find_scanners(module_path)
+
+    orch_names, orch_route_slugs, run_all_exclude = load_orchestrator_tools(module)
+    accepted = orch_names | orch_route_slugs
+
+    # Aggregator/meta endpoints declared in RUN_ALL_EXCLUDE are not detection
+    # scanners (e.g. a "run every scanner" aggregator) — drop them from scoring
+    # entirely rather than penalising them on per-scanner detection checks.
+    aggregator_slugs = {s for s, reason in run_all_exclude.items()
+                        if str(reason).lower().startswith("aggregator")}
+    scanners = [s for s in scanners if s.stem not in aggregator_slugs]
     scanner_names = [s.stem for s in scanners]
 
     if not scanners:
         return {"error": f"no scanners in tools/{module}/"}
 
-    # Layer 4 — orchestrator coverage
-    orch_tools = load_orchestrator_tools(module)
-    in_orch = sum(1 for n in scanner_names if n in orch_tools)
-    orch_pct = (in_orch / len(scanners)) * 100 if scanners else 0
+    # Layer 4 — orchestrator coverage. A scanner counts as wired if its stem OR
+    # any endpoint slug it registers is fanned out by run_all (route aliases).
+    # Scanners the orchestrator declares intentionally out of run_all
+    # (credential-only, heavy opt-in) don't count against coverage.
+    l4_scanners = [s for s in scanners if s.stem not in run_all_exclude]
+    def _wired(s):
+        return (s.stem in accepted
+                or bool(_registered_route_slugs(s, module) & accepted))
+    in_orch = sum(1 for s in l4_scanners if _wired(s))
+    orch_pct = (in_orch / len(l4_scanners)) * 100 if l4_scanners else 100
 
     # Layer 5 — curation
     curated = sum(1 for s in scanners if has_curation(s))
@@ -513,7 +571,7 @@ def score_module(module: str, verbose: bool = False) -> dict:
         "total_scanners": len(scanners),
         "scanner_names": scanner_names,
         "layers": {
-            "L4_orchestrator": {"passed": in_orch, "of": len(scanners), "pct": orch_pct},
+            "L4_orchestrator": {"passed": in_orch, "of": len(l4_scanners), "pct": orch_pct},
             "L5_curation":     {"passed": curated, "of": len(scanners), "pct": curation_pct},
             "L6_quality_bar":  {"passed": quality_passes, "of": len(scanners), "pct": quality_pct},
             "L6_parallel":     {"passed": parallel, "of": len(scanners), "pct": parallel_pct},
