@@ -55,6 +55,7 @@ def _record_attempt(key: str):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    mfa_code: str | None = None
 
 
 @router.post("/api/auth/login")
@@ -66,7 +67,8 @@ async def auth_login(req: LoginRequest, request: Request):
 
     with get_db() as con:
         user = con.execute(
-            "SELECT id, username, email, password_hash, role, plan, status "
+            "SELECT id, username, email, password_hash, role, plan, status, "
+            "mfa_enabled, mfa_secret "
             "FROM users WHERE LOWER(username)=LOWER(?)",
             (req.username,),
         ).fetchone()
@@ -83,6 +85,23 @@ async def auth_login(req: LoginRequest, request: Request):
                      actor_name=user["username"], ip=_ip, status="fail",
                      detail=f"status={user['status']}")
         raise HTTPException(403, f"Account is {user['status']}")
+
+    # MFA gate: if enabled, a valid TOTP code is required to complete login.
+    if user.get("mfa_enabled"):
+        if not req.mfa_code:
+            record_audit("auth.mfa_required", actor_id=user["id"],
+                         actor_name=user["username"], ip=_ip, status="pending")
+            raise HTTPException(401, "MFA code required", headers={"X-MFA-Required": "1"})
+        try:
+            import pyotp
+            valid = pyotp.TOTP(user["mfa_secret"]).verify(req.mfa_code.strip(), valid_window=1)
+        except ImportError:
+            _log.error("pyotp not installed but user %s has MFA enabled", user["id"])
+            raise HTTPException(500, "MFA verification unavailable")
+        if not valid:
+            record_audit("auth.mfa_failed", actor_id=user["id"],
+                         actor_name=user["username"], ip=_ip, status="fail")
+            raise HTTPException(401, "Invalid MFA code")
 
     record_audit("auth.login", actor_id=user["id"], actor_name=user["username"], ip=_ip)
 
