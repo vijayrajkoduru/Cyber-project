@@ -1,14 +1,18 @@
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
-pydantic==2.9.0
-python-jose[cryptography]==3.3.0
-cryptography>=42.0.0
+# Security note: floors below are set to patched versions (pip-audit clean as
+# of 2026-06-28, except the tracked FastAPI/Starlette upgrade in
+# docs/SECURITY-DEBT.md). Use >= floors so security patch releases are picked
+# up on rebuild; the lockstep is the Docker image, not this file.
+fastapi==0.115.6
+uvicorn[standard]>=0.32.1
+pydantic>=2.10.4
+python-jose[cryptography]>=3.4.0        # CVE-2024-33663 / CVE-2024-33664
+cryptography>=43.0.1
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.12
-requests==2.32.3
-aiohttp==3.10.10
-dnspython==2.7.0
-python-whois==0.9.4
-PyYAML==6.0.2
+python-multipart>=0.0.18                 # multipart DoS CVEs
+requests>=2.32.4                         # CVE-2024-47081 (.netrc credential leak)
+aiohttp>=3.13.5                          # clears the 3.10.x CVE backlog
+dnspython>=2.7.0
+python-whois>=0.9.4
+PyYAML>=6.0.2
 bcrypt==3.2.2
 anthropic>=0.45.0
