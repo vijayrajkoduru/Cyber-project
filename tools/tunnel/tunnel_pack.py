@@ -99,7 +99,6 @@ def _tcp_banner(host: str, port: int, timeout: float = 2.5) -> str:
 
 # ═══════════════ §1 — SSH Tunnel Primitives (10) ═══════════════
 
-@router.post("/api/tunnel/ssh_local_forward_advisory")
 def ssh_local_forward_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     host = _host(req.target)
     banner = _tcp_banner(host, 22)
@@ -121,7 +120,6 @@ def ssh_local_forward_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
                  raw={"banner": banner})
 
 
-@router.post("/api/tunnel/ssh_remote_forward_advisory")
 def ssh_remote_forward_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ssh_remote_forward_advisory", req.target,
         "ssh -R reverse forward primitive — attacker exposes attacker-side port via target's SSH client.",
@@ -130,7 +128,6 @@ def ssh_remote_forward_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Post-compromise primitive — detect via egress monitoring of SSH to untrusted hosts.")
 
 
-@router.post("/api/tunnel/ssh_dynamic_socks5_advisory")
 def ssh_dynamic_socks5_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ssh_dynamic_socks5_advisory", req.target,
         "ssh -D dynamic SOCKS5 — attacker tunnels arbitrary TCP via SSH session.",
@@ -139,7 +136,6 @@ def ssh_dynamic_socks5_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Detect via unusual SSH bandwidth + connection duration in NetFlow.")
 
 
-@router.post("/api/tunnel/ssh_proxyjump_advisory")
 def ssh_proxyjump_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ssh_proxyjump_advisory", req.target,
         "ssh -J ProxyJump multi-hop pivot.",
@@ -148,7 +144,6 @@ def ssh_proxyjump_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Legitimate jump architecture if intentional; flag chained jumps in audit logs.")
 
 
-@router.post("/api/tunnel/ssh_proxycommand_advisory")
 def ssh_proxycommand_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ssh_proxycommand_advisory", req.target,
         "ssh ProxyCommand — arbitrary shell command as SSH transport (corkscrew/socat).",
@@ -157,7 +152,6 @@ def ssh_proxycommand_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Often combined with corkscrew for HTTP-CONNECT egress bypass.")
 
 
-@router.post("/api/tunnel/sshuttle_advisory")
 def sshuttle_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("sshuttle_advisory", req.target,
         "sshuttle — transparent VPN-over-SSH (no server-side install required).",
@@ -166,7 +160,6 @@ def sshuttle_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="sshuttle uses iptables PREROUTING — detect via auditd iptables rule add.")
 
 
-@router.post("/api/tunnel/ssh_detached_advisory")
 def ssh_detached_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ssh_detached_advisory", req.target,
         "ssh -N -f — detached tunnel running as background daemon.",
@@ -175,7 +168,6 @@ def ssh_detached_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Persistence pattern; falcon/EDR rule: ssh -N -f from user shell.")
 
 
-@router.post("/api/tunnel/ssh_config_match_advisory")
 def ssh_config_match_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ssh_config_match_advisory", req.target,
         "SSH config Match host blocks — per-target ProxyCommand auto-pivot.",
@@ -184,7 +176,6 @@ def ssh_config_match_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Stealthy persistence — config-as-code review.")
 
 
-@router.post("/api/tunnel/ssh_agent_forward_advisory")
 def ssh_agent_forward_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ssh_agent_forward_advisory", req.target,
         "SSH agent forwarding (-A) — compromised intermediate can hijack agent socket.",
@@ -193,7 +184,6 @@ def ssh_agent_forward_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Classic lateral movement primitive — see CVE-2023-38408 family.")
 
 
-@router.post("/api/tunnel/openssh_socks_advisory")
 def openssh_socks_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("openssh_socks_advisory", req.target,
         "OpenSSH built-in SOCKS — no extra client tool needed for pivot.",
@@ -204,7 +194,6 @@ def openssh_socks_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 # ═══════════════ §2 — Reverse Tunneling Tools (12) ═══════════════
 
-@router.post("/api/tunnel/chisel_fingerprint")
 def chisel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target)
     findings, intel = [], {}
@@ -230,7 +219,6 @@ def chisel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
                  what_checked="Chisel server fingerprint via HTTP probe", raw=intel)
 
 
-@router.post("/api/tunnel/ligolo_ng_advisory")
 def ligolo_ng_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ligolo_ng_advisory", req.target,
         "Ligolo-ng TUN-based reverse tunnel — faster than chisel, harder to fingerprint.",
@@ -239,7 +227,6 @@ def ligolo_ng_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Modern (2023+) post-exploit tool; flag rapid lateral movement after agent install.")
 
 
-@router.post("/api/tunnel/rsockstun_advisory")
 def rsockstun_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("rsockstun_advisory", req.target,
         "Rsockstun — reverse SOCKS over TLS with built-in retry.",
@@ -247,7 +234,6 @@ def rsockstun_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="Block outbound TLS to non-allowlisted SNIs; deploy TLS interception on egress proxy.")
 
 
-@router.post("/api/tunnel/socat_advisory")
 def socat_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("socat_advisory", req.target,
         "socat — Swiss-army-knife relay; arbitrary protocol bridging.",
@@ -256,7 +242,6 @@ def socat_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Common in red-team toolkits; not legitimate on most prod systems.")
 
 
-@router.post("/api/tunnel/ncat_listen_advisory")
 def ncat_listen_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ncat_listen_advisory", req.target,
         "ncat --listen — encrypted bind shell / relay.",
@@ -264,7 +249,6 @@ def ncat_listen_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="auditd rule on /usr/bin/ncat exec; block bind shells via SELinux/AppArmor.")
 
 
-@router.post("/api/tunnel/plink_advisory")
 def plink_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("plink_advisory", req.target,
         "plink.exe (PuTTY) — Windows reverse SSH tunnel.",
@@ -273,7 +257,6 @@ def plink_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Common LOLBAS for Windows-side tunneling.")
 
 
-@router.post("/api/tunnel/frp_fingerprint")
 def frp_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target)
     findings, intel = [], {}
@@ -299,7 +282,6 @@ def frp_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
                  what_checked="frp fingerprint via HTTP probe", raw=intel)
 
 
-@router.post("/api/tunnel/regeorg_advisory")
 def regeorg_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("regeorg_advisory", req.target,
         "reGeorg (legacy) — webshell tunnel using only HTTP GET/POST.",
@@ -308,7 +290,6 @@ def regeorg_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Detect via 'tunnel.php' / 'tunnel.jsp' filenames + sustained POST traffic.")
 
 
-@router.post("/api/tunnel/neo_regeorg_advisory")
 def neo_regeorg_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("neo_regeorg_advisory", req.target,
         "Neo-reGeorg — modern reGeorg fork with encryption and more polyglots.",
@@ -316,7 +297,6 @@ def neo_regeorg_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="WAF rule: alert on POST with high-entropy body to webshell-pattern URIs.")
 
 
-@router.post("/api/tunnel/pivotnacci_advisory")
 def pivotnacci_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("pivotnacci_advisory", req.target,
         "Pivotnacci — SOCKS server through HTTP webshells (modern).",
@@ -324,7 +304,6 @@ def pivotnacci_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="Inspect webshell file upload + entropy on body; alert on long-lived HTTP sessions.")
 
 
-@router.post("/api/tunnel/stunnel_advisory")
 def stunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("stunnel_advisory", req.target,
         "stunnel TLS wrapper — wraps plaintext protocols in TLS.",
@@ -332,7 +311,6 @@ def stunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="JA3/JA4 fingerprint outbound TLS — flag self-signed certs + stunnel default OpenSSL signature.")
 
 
-@router.post("/api/tunnel/manual_creative_tunnel_chain_advisory")
 def manual_creative_tunnel_chain_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("manual_creative_tunnel_chain_advisory", req.target,
         "Manual creative tunnel chain — analyst-only.",
@@ -342,7 +320,6 @@ def manual_creative_tunnel_chain_advisory(req: ScanRequest, _=Depends(verify_sca
 
 # ═══════════════ §3 — DNS / ICMP Tunneling (8) ═══════════════
 
-@router.post("/api/tunnel/dnscat2_advisory")
 def dnscat2_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("dnscat2_advisory", req.target,
         "dnscat2 — DNS-tunnel C2; encrypted, authenticated.",
@@ -351,7 +328,6 @@ def dnscat2_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         evidence="Splunk/Zeek rule: subdomain length > 40 + entropy > 4.0 → dnscat2 signature.")
 
 
-@router.post("/api/tunnel/iodine_advisory")
 def iodine_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("iodine_advisory", req.target,
         "iodine — IP-over-DNS; high-throughput DNS tunnel.",
@@ -359,7 +335,6 @@ def iodine_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="Same DNS anomaly detection as dnscat2. Block outbound DNS to non-corp resolvers.")
 
 
-@router.post("/api/tunnel/dnstunnel_advisory")
 def dnstunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("dnstunnel_advisory", req.target,
         "DNStunnel (legacy) — TXT/NULL record exfil.",
@@ -367,7 +342,6 @@ def dnstunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="Alert on TXT-record query bursts; rate-limit TXT queries per source.")
 
 
-@router.post("/api/tunnel/doh_tunnel_fingerprint")
 def doh_tunnel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target)
     findings, intel = [], {}
@@ -395,7 +369,6 @@ def doh_tunnel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
                  what_checked="DoH endpoint exposure check", raw=intel)
 
 
-@router.post("/api/tunnel/ptunnel_advisory")
 def ptunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("ptunnel_advisory", req.target,
         "ptunnel — TCP-over-ICMP echo.",
@@ -403,7 +376,6 @@ def ptunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="Block outbound ICMP echo at egress firewall; if allowed, rate-limit + payload-length cap.")
 
 
-@router.post("/api/tunnel/hans_advisory")
 def hans_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("hans_advisory", req.target,
         "hans — IP-over-ICMP tunnel.",
@@ -411,7 +383,6 @@ def hans_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="Default-deny outbound ICMP except monitored ping-checks.")
 
 
-@router.post("/api/tunnel/icmp_tunnel_advisory")
 def icmp_tunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("icmp_tunnel_advisory", req.target,
         "icmp-tunnel — covert channel via ICMP type 8 payload.",
@@ -419,7 +390,6 @@ def icmp_tunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="ICMP payload-length anomaly detection (>32 bytes); JA-style ICMP fingerprinting.")
 
 
-@router.post("/api/tunnel/manual_covert_channel_advisory")
 def manual_covert_channel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("manual_covert_channel_advisory", req.target,
         "Manual creative covert channel — analyst-only.",
@@ -429,7 +399,6 @@ def manual_covert_channel_advisory(req: ScanRequest, _=Depends(verify_scan_quota
 
 # ═══════════════ §4 — HTTP / HTTPS Tunneling (8) ═══════════════
 
-@router.post("/api/tunnel/http_connect_probe")
 def http_connect_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Live probe: does the target permit HTTP CONNECT to arbitrary host:port?"""
     host = _host(req.target)
@@ -470,7 +439,6 @@ def http_connect_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
                  raw=intel)
 
 
-@router.post("/api/tunnel/regeorg_signature_probe")
 def regeorg_signature_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     base = web_url(req.target)
     findings = []
@@ -495,7 +463,6 @@ def regeorg_signature_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
                  what_checked="Webshell-tunnel filename signature probes")
 
 
-@router.post("/api/tunnel/corkscrew_advisory")
 def corkscrew_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("corkscrew_advisory", req.target,
         "corkscrew — SSH-over-HTTPS via CONNECT proxy.",
@@ -503,7 +470,6 @@ def corkscrew_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="If CONNECT must be allowed, restrict to allow-listed destination ports/hosts.")
 
 
-@router.post("/api/tunnel/stunnel_https_advisory")
 def stunnel_https_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("stunnel_https_advisory", req.target,
         "stunnel wrapping arbitrary protocol in HTTPS.",
@@ -511,7 +477,6 @@ def stunnel_https_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="JA3/JA4 outbound TLS fingerprinting; alert on uncommon TLS fingerprints to public IPs.")
 
 
-@router.post("/api/tunnel/chisel_http2_fallback_advisory")
 def chisel_http2_fallback_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("chisel_http2_fallback_advisory", req.target,
         "Chisel HTTP/2 fallback mode — bypasses strict HTTP/1.1 inspection.",
@@ -519,7 +484,6 @@ def chisel_http2_fallback_advisory(req: ScanRequest, _=Depends(verify_scan_quota
         remediation="WAF must support full HTTP/2 stream inspection; degrade non-HTTP/2 traffic to HTTP/1.1.")
 
 
-@router.post("/api/tunnel/frp_https_advisory")
 def frp_https_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("frp_https_advisory", req.target,
         "frp HTTPS mode — domain-fronted reverse proxy.",
@@ -527,7 +491,6 @@ def frp_https_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="Validate SNI ↔ destination IP at egress; block domain fronting via TLS inspection.")
 
 
-@router.post("/api/tunnel/cloudfront_fronted_https_advisory")
 def cloudfront_fronted_https_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("cloudfront_fronted_https_advisory", req.target,
         "Custom HTTPS C2 tunnel with CloudFront / Azure Front Door domain fronting.",
@@ -535,7 +498,6 @@ def cloudfront_fronted_https_advisory(req: ScanRequest, _=Depends(verify_scan_qu
         remediation="Disable cross-domain fronting on CDNs (AWS / Azure tightened in 2023+); enforce SNI alignment.")
 
 
-@router.post("/api/tunnel/manual_http_tunnel_advisory")
 def manual_http_tunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("manual_http_tunnel_advisory", req.target,
         "Manual creative HTTP tunnel — analyst-only.",
@@ -545,7 +507,6 @@ def manual_http_tunnel_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
 
 # ═══════════════ §5 — Modern Tunneling (WireGuard / QUIC) (10) ═══════════════
 
-@router.post("/api/tunnel/wireguard_userspace_probe")
 def wireguard_userspace_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Probe UDP 51820 (WireGuard default)."""
     host = _host(req.target)
@@ -567,7 +528,6 @@ def wireguard_userspace_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
                  tested=1, what_checked="WireGuard default UDP port 51820")
 
 
-@router.post("/api/tunnel/tailscale_lateral_probe")
 def tailscale_lateral_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Probe Tailscale port (UDP 41641 / TCP 41641) plus magic DNS .ts.net presence."""
     host = _host(req.target)
@@ -589,7 +549,6 @@ def tailscale_lateral_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
                  what_checked="Tailscale port + hostname fingerprint")
 
 
-@router.post("/api/tunnel/zerotier_lateral_probe")
 def zerotier_lateral_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Probe ZeroTier UDP 9993."""
     host = _host(req.target)
@@ -611,7 +570,6 @@ def zerotier_lateral_probe(req: ScanRequest, _=Depends(verify_scan_quota)):
                  what_checked="ZeroTier default port 9993")
 
 
-@router.post("/api/tunnel/cloudflared_fingerprint")
 def cloudflared_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Detect Cloudflare-Tunnel-backed origins via CF-RAY header + server fingerprint."""
     base = web_url(req.target)
@@ -645,7 +603,6 @@ def cloudflared_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
                  raw=intel)
 
 
-@router.post("/api/tunnel/ngrok_localtunnel_fingerprint")
 def ngrok_localtunnel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)):
     """Detect Ngrok / localtunnel by hostname pattern + server header."""
     host = _host(req.target)
@@ -670,7 +627,6 @@ def ngrok_localtunnel_fingerprint(req: ScanRequest, _=Depends(verify_scan_quota)
                  raw=intel)
 
 
-@router.post("/api/tunnel/quic_http3_advisory")
 def quic_http3_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("quic_http3_advisory", req.target,
         "QUIC / HTTP3 tunnel — covert channel via UDP/443.",
@@ -678,7 +634,6 @@ def quic_http3_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="QUIC-aware NSM (Zeek 5+) for HTTP/3 metadata; SNI inspection at egress.")
 
 
-@router.post("/api/tunnel/lightway_advisory")
 def lightway_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("lightway_advisory", req.target,
         "Lightway VPN — ExpressVPN's wolfSSL-based protocol.",
@@ -686,7 +641,6 @@ def lightway_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
         remediation="JA3/JA4 fingerprint outbound TLS; alert on Lightway-specific signatures.")
 
 
-@router.post("/api/tunnel/manual_wg_config_exfil_advisory")
 def manual_wg_config_exfil_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("manual_wg_config_exfil_advisory", req.target,
         "Manual WireGuard config exfiltration — analyst-only.",
@@ -694,7 +648,6 @@ def manual_wg_config_exfil_advisory(req: ScanRequest, _=Depends(verify_scan_quot
         remediation="See Manual Tests panel.")
 
 
-@router.post("/api/tunnel/manual_tailscale_acl_bypass_advisory")
 def manual_tailscale_acl_bypass_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("manual_tailscale_acl_bypass_advisory", req.target,
         "Manual Tailscale ACL bypass — analyst-only.",
@@ -702,13 +655,76 @@ def manual_tailscale_acl_bypass_advisory(req: ScanRequest, _=Depends(verify_scan
         remediation="See Manual Tests panel.")
 
 
-@router.post("/api/tunnel/manual_vpn_pivot_chain_advisory")
 def manual_vpn_pivot_chain_advisory(req: ScanRequest, _=Depends(verify_scan_quota)):
     return _adv("manual_vpn_pivot_chain_advisory", req.target,
         "Manual creative VPN-pivot chain — analyst-only.",
         sev="INFO", cvss="0.0", cwe="N/A",
         remediation="See Manual Tests panel.")
 
+
+
+# ─── PROBES: every /api/tunnel/<slug> endpoint (48) ───────────────────
+# Single source of truth — drives route registration below and lets the
+# scorer enumerate the module's probes (slug == handler function name).
+PROBES = {
+    # §1 SSH Tunnel Primitives (10)
+    "ssh_local_forward_advisory": ssh_local_forward_advisory,
+    "ssh_remote_forward_advisory": ssh_remote_forward_advisory,
+    "ssh_dynamic_socks5_advisory": ssh_dynamic_socks5_advisory,
+    "ssh_proxyjump_advisory": ssh_proxyjump_advisory,
+    "ssh_proxycommand_advisory": ssh_proxycommand_advisory,
+    "sshuttle_advisory": sshuttle_advisory,
+    "ssh_detached_advisory": ssh_detached_advisory,
+    "ssh_config_match_advisory": ssh_config_match_advisory,
+    "ssh_agent_forward_advisory": ssh_agent_forward_advisory,
+    "openssh_socks_advisory": openssh_socks_advisory,
+    # §2 Reverse Tunneling Tools (12)
+    "chisel_fingerprint": chisel_fingerprint,
+    "ligolo_ng_advisory": ligolo_ng_advisory,
+    "rsockstun_advisory": rsockstun_advisory,
+    "socat_advisory": socat_advisory,
+    "ncat_listen_advisory": ncat_listen_advisory,
+    "plink_advisory": plink_advisory,
+    "frp_fingerprint": frp_fingerprint,
+    "regeorg_advisory": regeorg_advisory,
+    "neo_regeorg_advisory": neo_regeorg_advisory,
+    "pivotnacci_advisory": pivotnacci_advisory,
+    "stunnel_advisory": stunnel_advisory,
+    "manual_creative_tunnel_chain_advisory": manual_creative_tunnel_chain_advisory,
+    # §3 DNS / ICMP Tunneling (8)
+    "dnscat2_advisory": dnscat2_advisory,
+    "iodine_advisory": iodine_advisory,
+    "dnstunnel_advisory": dnstunnel_advisory,
+    "doh_tunnel_fingerprint": doh_tunnel_fingerprint,
+    "ptunnel_advisory": ptunnel_advisory,
+    "hans_advisory": hans_advisory,
+    "icmp_tunnel_advisory": icmp_tunnel_advisory,
+    "manual_covert_channel_advisory": manual_covert_channel_advisory,
+    # §4 HTTP / HTTPS Tunneling (8)
+    "http_connect_probe": http_connect_probe,
+    "regeorg_signature_probe": regeorg_signature_probe,
+    "corkscrew_advisory": corkscrew_advisory,
+    "stunnel_https_advisory": stunnel_https_advisory,
+    "chisel_http2_fallback_advisory": chisel_http2_fallback_advisory,
+    "frp_https_advisory": frp_https_advisory,
+    "cloudfront_fronted_https_advisory": cloudfront_fronted_https_advisory,
+    "manual_http_tunnel_advisory": manual_http_tunnel_advisory,
+    # §5 Modern Tunneling — WireGuard / QUIC (10)
+    "wireguard_userspace_probe": wireguard_userspace_probe,
+    "tailscale_lateral_probe": tailscale_lateral_probe,
+    "zerotier_lateral_probe": zerotier_lateral_probe,
+    "cloudflared_fingerprint": cloudflared_fingerprint,
+    "ngrok_localtunnel_fingerprint": ngrok_localtunnel_fingerprint,
+    "quic_http3_advisory": quic_http3_advisory,
+    "lightway_advisory": lightway_advisory,
+    "manual_wg_config_exfil_advisory": manual_wg_config_exfil_advisory,
+    "manual_tailscale_acl_bypass_advisory": manual_tailscale_acl_bypass_advisory,
+    "manual_vpn_pivot_chain_advisory": manual_vpn_pivot_chain_advisory,
+}
+
+
+for _slug, _handler in PROBES.items():
+    router.add_api_route(f"/api/tunnel/{_slug}", _handler, methods=["POST"])
 
 def register(app):
     app.include_router(router)
