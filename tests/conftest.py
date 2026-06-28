@@ -20,7 +20,7 @@ os.environ.setdefault(
     "DATABASE_URL",
     "postgresql+psycopg2://vluser:vlpass@localhost:55432/vulnuslab")
 os.environ.setdefault("ADMIN_PASSWORD", "")          # skip admin seeding
-os.environ.setdefault("CORS_ORIGINS", "*")
+os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 os.environ["VL_AUTH_CACHE_TTL"] = "0"                 # no caching -> deterministic re-validation
 
 # Redirect the per-user data zone (hardcoded to /data/users in source)

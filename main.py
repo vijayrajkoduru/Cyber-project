@@ -41,9 +41,20 @@ app = FastAPI(
 )
 
 # ── CORS ────────────────────────────────────────────────────────────
-# Production: comma-separated origins in .env (e.g. https://app.vulnuslab.com)
-# Dev: defaults to "*" so the React dev server on :3000 can talk to us
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+# Production: comma-separated origins in .env (e.g. https://app.vulnuslab.com).
+# We never default to "*" — a wildcard with allow_credentials=True is both a
+# security risk and rejected by browsers. If CORS_ORIGINS is unset we fall back
+# to the local React dev origins and log a warning.
+_cors_env = os.getenv("CORS_ORIGINS", "").strip()
+if _cors_env:
+    CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
+else:
+    CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    log.warning("CORS_ORIGINS not set — defaulting to localhost dev origins. "
+                "Set CORS_ORIGINS to your real frontend origin(s) in production.")
+if "*" in CORS_ORIGINS:
+    log.warning("CORS_ORIGINS contains '*' with credentials enabled — browsers "
+                "will reject this and it is unsafe. Use explicit origins.")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -90,6 +101,39 @@ async def _artifact_path_guard(request, call_next):
             return {"type": "http.request", "body": body, "more_body": False}
         request._receive = _receive
     return await call_next(request)
+
+
+# ── Security response headers ───────────────────────────────────────
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    # API serves JSON only — lock the CSP right down.
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+}
+
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    response = await call_next(request)
+    for k, v in _SECURITY_HEADERS.items():
+        response.headers.setdefault(k, v)
+    # Only advertise HSTS over HTTPS (harmless, browsers ignore it on http).
+    if request.url.scheme == "https":
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
+# ── Global exception handler ────────────────────────────────────────
+# Unhandled errors must return a clean JSON envelope, never a stack trace.
+# HTTPException / RequestValidationError keep their own (more specific)
+# handlers — this only catches the truly-unexpected 500s.
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request, exc):
+    log.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return _JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 # ── Required env ────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
