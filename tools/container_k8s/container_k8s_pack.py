@@ -62,6 +62,9 @@ from tools.container_k8s._kubeconfig_probes import (
 from tools.container_k8s._escape_cve_probes import (
     _probe_escape_leaky_vessels_runc,
     _probe_escape_containerd_2022_23648,
+    _probe_escape_dirty_pipe,
+    _probe_escape_cgroup_release_agent,
+    _probe_escape_runc_proc_self_exe,
 )
 from tools.container_k8s._kubeconfig_extra_probes import (
     _probe_secrets_etcd_unencrypted,
@@ -2179,9 +2182,12 @@ PROBES = {
     "secrets_in_env_var":             _probe_secrets_in_env_var,
     "secrets_in_configmap":           _probe_secrets_in_env_var,  # similar pattern
     "kube_bench_node":                _probe_kube_bench_node,
-    # Container escape CVE detectors (kubeconfig - node runtime version)
+    # Container escape CVE detectors (kubeconfig - node runtime/kernel version)
     "escape_leaky_vessels_runc_2024": _probe_escape_leaky_vessels_runc,
     "escape_containerd_cve_2022_23648": _probe_escape_containerd_2022_23648,
+    # VL-FORGE 2026-06-28: kernel/runtime-version escape CVEs upgraded from
+    # static advisory placeholders to live version-comparison probes.
+    "escape_dirty_pipe_2022_0847":    _probe_escape_dirty_pipe,
     # Extra K8s cluster probes (kubeconfig)
     "secrets_etcd_unencrypted":       _probe_secrets_etcd_unencrypted,
     "vault_csi_audit":                _probe_vault_csi_audit,
@@ -2213,9 +2219,9 @@ PROBES = {
     "manual_secrets_review":          _abd_manual_secrets_review,
     "manual_escape_research":         _abd_manual_escape,
     "manual_mesh_review":             _abd_manual_mesh,
-    "escape_cgroup_release_agent":    _abd_escape_cgroup,
+    "escape_cgroup_release_agent":    _probe_escape_cgroup_release_agent,
     "escape_kernel_keyring":          _abd_escape_kernel_keyring,
-    "escape_proc_self_exe":           _abd_escape_proc_self_exe,
+    "escape_proc_self_exe":           _probe_escape_runc_proc_self_exe,
     # Forged scaffolds (2026-06-02) — 7 techniques previously marked
     # [NOT IMPLEMENTED] now have live probes that honestly SKIP when their
     # required input (pod_spec_yaml or kubeconfig) is missing.
@@ -2327,9 +2333,10 @@ T = [
     ("vault_csi_audit", "Vault CSI audit.", "MEDIUM", "5.5"),
     ("sealed_secrets_audit", "SealedSecrets audit.", "MEDIUM", "5.5"),
     ("manual_secrets_review", "Manual secrets review.", "INFO", "0.0"),
-    # §8 Container Escape CVEs (9)
+    # §8 Container Escape CVEs (10)
     ("escape_leaky_vessels_runc_2024", "Leaky Vessels runc (CVE-2024-21626).", "HIGH", "8.6"),
     ("escape_containerd_cve_2022_23648", "containerd (CVE-2022-23648).", "HIGH", "7.5"),
+    ("escape_dirty_pipe_2022_0847", "Dirty Pipe kernel escape (CVE-2022-0847).", "HIGH", "7.8"),
     ("escape_docker_socket_mount", "Docker socket escape.", "CRITICAL", "9.5"),
     ("escape_cap_sys_admin_chain", "CAP_SYS_ADMIN escape chain.", "HIGH", "8.0"),
     ("escape_kernel_keyring", "Kernel keyring escape.", "HIGH", "7.5"),
