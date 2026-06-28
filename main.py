@@ -173,6 +173,15 @@ async def _unhandled_exception_handler(request, exc):
     log.exception("Unhandled error on %s %s", request.method, request.url.path)
     return _JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+# ── Observability (metrics + request-id + structured access log) ────
+# Dependency-free, fail-open. Adds /api/metrics (Prometheus). Optional Sentry
+# activates only if SENTRY_DSN is set. Installed defensively — never crash boot.
+try:
+    from tools._core.observability import install_observability
+    install_observability(app)
+except Exception as _obs_exc:  # pragma: no cover
+    log.error("observability install failed (continuing): %s", _obs_exc)
+
 # ── Required env ────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 if not JWT_SECRET:
