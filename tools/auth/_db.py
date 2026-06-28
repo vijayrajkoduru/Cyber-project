@@ -138,6 +138,20 @@ _SCHEMA_DDL = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_apikey_user ON api_keys(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_apikey_prefix ON api_keys(prefix)",
+    # ── Enterprise Phase 2: email verification + MFA (idempotent ALTERs) ─
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled INTEGER DEFAULT 0",
+    """
+    CREATE TABLE IF NOT EXISTS email_tokens (
+        token      TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL,
+        purpose    TEXT NOT NULL DEFAULT 'verify',
+        expires_at TEXT NOT NULL,
+        used       INTEGER NOT NULL DEFAULT 0
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_emailtok_user ON email_tokens(user_id)",
 ]
 
 _schema_ready = False
@@ -349,3 +363,73 @@ def resolve_api_key(full_secret: str):
             "FROM users WHERE id=?",
             (match["user_id"],),
         ).fetchone()
+
+
+# ── Enterprise: email verification ──────────────────────────────────
+def create_email_token(user_id: str, purpose: str = "verify", ttl_hours: int = 48) -> str:
+    """Mint a single-use email token (e.g. for verify / password reset)."""
+    import secrets as _secrets
+    tok = _secrets.token_urlsafe(32)
+    exp = (datetime.datetime.utcnow() + datetime.timedelta(hours=ttl_hours)).isoformat() + "Z"
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO email_tokens (token, user_id, purpose, expires_at, used) "
+            "VALUES (?, ?, ?, ?, 0)",
+            (tok, user_id, purpose, exp),
+        )
+    return tok
+
+
+def consume_email_token(token: str, purpose: str = "verify"):
+    """Validate + burn a token. Returns user_id on success, else None."""
+    if not token:
+        return None
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+    with get_db() as con:
+        row = con.execute(
+            "SELECT user_id, expires_at, used FROM email_tokens WHERE token=? AND purpose=?",
+            (token, purpose),
+        ).fetchone()
+        if not row or row["used"] or row["expires_at"] < now:
+            return None
+        con.execute("UPDATE email_tokens SET used=1 WHERE token=?", (token,))
+        return row["user_id"]
+
+
+def mark_email_verified(user_id: str) -> None:
+    with get_db() as con:
+        con.execute("UPDATE users SET email_verified=1 WHERE id=?", (user_id,))
+
+
+def is_email_verified(user_id: str) -> bool:
+    with get_db() as con:
+        row = con.execute("SELECT email_verified FROM users WHERE id=?", (user_id,)).fetchone()
+    return bool(row and row["email_verified"])
+
+
+# ── Enterprise: MFA / TOTP ──────────────────────────────────────────
+def set_mfa_secret(user_id: str, secret: str) -> None:
+    """Store a pending TOTP secret (mfa not enabled until a code is verified)."""
+    with get_db() as con:
+        con.execute("UPDATE users SET mfa_secret=? WHERE id=?", (secret, user_id))
+
+
+def enable_mfa(user_id: str) -> None:
+    with get_db() as con:
+        con.execute("UPDATE users SET mfa_enabled=1 WHERE id=?", (user_id,))
+
+
+def disable_mfa(user_id: str) -> None:
+    with get_db() as con:
+        con.execute("UPDATE users SET mfa_enabled=0, mfa_secret=NULL WHERE id=?", (user_id,))
+
+
+def get_mfa(user_id: str):
+    """Return {'enabled': bool, 'secret': str|None} for a user."""
+    with get_db() as con:
+        row = con.execute(
+            "SELECT mfa_enabled, mfa_secret FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+    if not row:
+        return {"enabled": False, "secret": None}
+    return {"enabled": bool(row["mfa_enabled"]), "secret": row["mfa_secret"]}
