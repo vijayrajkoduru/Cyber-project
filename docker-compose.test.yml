@@ -1,0 +1,32 @@
+# Throwaway PostgreSQL for running the backend test suite locally.
+#
+# The test suite is a full Postgres cutover: tests/conftest.py defaults
+# DATABASE_URL to postgresql+psycopg2://vluser:vlpass@localhost:55432/vulnuslab,
+# so pytest needs a Postgres listening on :55432. This file provides exactly
+# that — ephemeral (tmpfs, no on-disk volume), so it starts clean every time
+# and leaves nothing behind.
+#
+#   docker compose -f docker-compose.test.yml up -d --wait   # start + wait healthy
+#   pytest
+#   docker compose -f docker-compose.test.yml down           # tear down
+#
+# Or use the wrapper: scripts/test-db.sh up | down
+services:
+  test-postgres:
+    image: postgres:16
+    container_name: vl_test_pg
+    environment:
+      POSTGRES_USER: vluser
+      POSTGRES_PASSWORD: vlpass
+      POSTGRES_DB: vulnuslab
+    ports:
+      - "55432:5432"
+    # Ephemeral data dir — wiped when the container stops. No persistence
+    # wanted for a test DB, and it makes startup faster.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vluser -d vulnuslab"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

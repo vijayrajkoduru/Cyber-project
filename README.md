@@ -2,6 +2,21 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Backend test suite
+
+The Python backend tests run on PostgreSQL (full cutover — no SQLite). They
+expect a Postgres on `localhost:55432`, which `tests/conftest.py` uses by
+default. Start a throwaway one, then run pytest:
+
+```bash
+scripts/test-db.sh up      # starts an ephemeral Postgres on :55432 (docker-compose.test.yml)
+pytest
+scripts/test-db.sh down    # tear it down when finished
+```
+
+To point the tests at a different database, set `DATABASE_URL` before running
+pytest (this is how CI does it).
+
 ## Available Scripts
 
 In the project directory, you can run:
