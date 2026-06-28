@@ -152,7 +152,31 @@ _SCHEMA_DDL = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_emailtok_user ON email_tokens(user_id)",
+    # ── Enterprise Phase 3: organizations + RBAC membership ───────────
+    """
+    CREATE TABLE IF NOT EXISTS organizations (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        owner_id   TEXT NOT NULL,
+        plan       TEXT DEFAULT 'team',
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS org_members (
+        org_id    TEXT NOT NULL,
+        user_id   TEXT NOT NULL,
+        role      TEXT NOT NULL DEFAULT 'member',
+        added_at  TEXT NOT NULL,
+        PRIMARY KEY (org_id, user_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_orgmem_user ON org_members(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_orgmem_org ON org_members(org_id)",
 ]
+
+# Org role hierarchy — higher number = more privilege.
+ORG_ROLES = {"member": 1, "admin": 2, "owner": 3}
 
 _schema_ready = False
 _seeded = False
@@ -433,3 +457,97 @@ def get_mfa(user_id: str):
     if not row:
         return {"enabled": False, "secret": None}
     return {"enabled": bool(row["mfa_enabled"]), "secret": row["mfa_secret"]}
+
+
+# ── Enterprise: organizations + RBAC ────────────────────────────────
+def create_org(name: str, owner_id: str, plan: str = "team"):
+    """Create an org and make the creator its owner (atomic)."""
+    oid = str(uuid.uuid4())
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO organizations (id, name, owner_id, plan, created_at) "
+            "VALUES (?, ?, ?, ?, ?)", (oid, name, owner_id, plan, now))
+        con.execute(
+            "INSERT INTO org_members (org_id, user_id, role, added_at) "
+            "VALUES (?, ?, 'owner', ?)", (oid, owner_id, now))
+    return {"id": oid, "name": name, "owner_id": owner_id, "plan": plan, "created_at": now}
+
+
+def get_org(org_id: str):
+    with get_db() as con:
+        return con.execute(
+            "SELECT id, name, owner_id, plan, created_at FROM organizations WHERE id=?",
+            (org_id,)).fetchone()
+
+
+def list_user_orgs(user_id: str):
+    """Orgs the user belongs to, with their role in each."""
+    with get_db() as con:
+        return con.execute(
+            "SELECT o.id, o.name, o.plan, o.created_at, m.role "
+            "FROM organizations o JOIN org_members m ON m.org_id=o.id "
+            "WHERE m.user_id=? ORDER BY o.created_at", (user_id,)).fetchall()
+
+
+def get_member_role(org_id: str, user_id: str):
+    """Return the user's role string in the org, or None if not a member."""
+    with get_db() as con:
+        row = con.execute(
+            "SELECT role FROM org_members WHERE org_id=? AND user_id=?",
+            (org_id, user_id)).fetchone()
+    return row["role"] if row else None
+
+
+def has_org_role(org_id: str, user_id: str, min_role: str) -> bool:
+    role = get_member_role(org_id, user_id)
+    if not role:
+        return False
+    return ORG_ROLES.get(role, 0) >= ORG_ROLES.get(min_role, 99)
+
+
+def list_org_members(org_id: str):
+    with get_db() as con:
+        return con.execute(
+            "SELECT m.user_id, m.role, m.added_at, u.username, u.email "
+            "FROM org_members m JOIN users u ON u.id=m.user_id "
+            "WHERE m.org_id=? ORDER BY m.added_at", (org_id,)).fetchall()
+
+
+def add_org_member(org_id: str, user_id: str, role: str = "member") -> bool:
+    if role not in ORG_ROLES:
+        return False
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO org_members (org_id, user_id, role, added_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (org_id, user_id) DO UPDATE SET role=EXCLUDED.role",
+            (org_id, user_id, role, now))
+    return True
+
+
+def set_member_role(org_id: str, user_id: str, role: str) -> bool:
+    if role not in ORG_ROLES:
+        return False
+    with get_db() as con:
+        r = con.execute("UPDATE org_members SET role=? WHERE org_id=? AND user_id=?",
+                        (role, org_id, user_id))
+        return r.rowcount > 0
+
+
+def remove_org_member(org_id: str, user_id: str) -> bool:
+    """Remove a member. Refuses to remove the org owner (must transfer first)."""
+    org = get_org(org_id)
+    if org and org["owner_id"] == user_id:
+        return False
+    with get_db() as con:
+        r = con.execute("DELETE FROM org_members WHERE org_id=? AND user_id=?",
+                        (org_id, user_id))
+        return r.rowcount > 0
+
+
+def find_user_by_email(email: str):
+    with get_db() as con:
+        return con.execute(
+            "SELECT id, username, email FROM users WHERE LOWER(email)=LOWER(?)",
+            (email,)).fetchone()
