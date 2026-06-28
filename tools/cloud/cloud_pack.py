@@ -532,6 +532,7 @@ T = [
     ("gcs_bucket_acl_legacy", "GCS legacy ACL.", "MEDIUM", "5.5"),
     ("gcs_bucket_logging_off", "GCS logging off.", "MEDIUM", "5.5"),
     ("storage_secret_in_object", "Secret detected in object content.", "CRITICAL", "9.0"),
+    ("s3_bucket_brute", "S3 bucket name brute-force / public-exposure probe.", "HIGH", "7.5"),
     ("manual_storage_review", "Manual storage review.", "INFO", "0.0"),
     # §9 Cloud Network & VPC (8)
     ("vpc_flow_logs_off", "VPC flow logs off.", "MEDIUM", "5.5"),
