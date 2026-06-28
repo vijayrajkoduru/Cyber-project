@@ -123,21 +123,6 @@ _SCHEMA_DDL = [
     "CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)",
     "CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_id)",
     "CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)",
-    # ── Enterprise: programmatic API keys (hashed at rest) ────────────
-    """
-    CREATE TABLE IF NOT EXISTS api_keys (
-        id          TEXT PRIMARY KEY,
-        user_id     TEXT NOT NULL,
-        name        TEXT,
-        prefix      TEXT NOT NULL,
-        key_hash    TEXT NOT NULL,
-        created_at  TEXT NOT NULL,
-        last_used_at TEXT,
-        revoked     INTEGER NOT NULL DEFAULT 0
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_apikey_user ON api_keys(user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_apikey_prefix ON api_keys(prefix)",
     # ── Enterprise Phase 2: email verification + MFA (idempotent ALTERs) ─
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT",
@@ -321,72 +306,6 @@ def list_audit(limit: int = 100, offset: int = 0, actor_id=None, action=None):
         ).fetchone()
     return {"items": rows, "total": int(total["n"]) if total else 0,
             "limit": limit, "offset": offset}
-
-
-# ── Enterprise: API keys ────────────────────────────────────────────
-def create_api_key(user_id: str, name: str = ""):
-    """Mint an API key. Returns (full_secret, row). The full secret is shown
-    ONCE; only its hash is stored. Format: vlk_<prefix>_<random>."""
-    import secrets as _secrets
-    prefix = _secrets.token_hex(4)                  # 8-char public id
-    secret = _secrets.token_urlsafe(32)             # the part we hash
-    full = f"vlk_{prefix}_{secret}"
-    kid = str(uuid.uuid4())
-    now = datetime.datetime.utcnow().isoformat() + "Z"
-    with get_db() as con:
-        con.execute(
-            "INSERT INTO api_keys (id, user_id, name, prefix, key_hash, created_at, revoked) "
-            "VALUES (?, ?, ?, ?, ?, ?, 0)",
-            (kid, user_id, name or "api-key", prefix, _pwd_ctx.hash(full), now),
-        )
-    return full, {"id": kid, "name": name or "api-key", "prefix": prefix,
-                  "created_at": now, "revoked": False}
-
-
-def list_api_keys(user_id: str):
-    """List a user's keys (metadata only — never the secret)."""
-    with get_db() as con:
-        return con.execute(
-            "SELECT id, name, prefix, created_at, last_used_at, revoked "
-            "FROM api_keys WHERE user_id=? ORDER BY created_at DESC",
-            (user_id,),
-        ).fetchall()
-
-
-def revoke_api_key(user_id: str, key_id: str) -> bool:
-    with get_db() as con:
-        r = con.execute(
-            "UPDATE api_keys SET revoked=1 WHERE id=? AND user_id=? AND revoked=0",
-            (key_id, user_id),
-        )
-        return r.rowcount > 0
-
-
-def resolve_api_key(full_secret: str):
-    """Verify an incoming API key. Returns the owning user row (active only)
-    or None. Matches by prefix then bcrypt-verifies the full secret."""
-    if not full_secret or not full_secret.startswith("vlk_"):
-        return None
-    parts = full_secret.split("_", 2)
-    if len(parts) != 3:
-        return None
-    prefix = parts[1]
-    with get_db() as con:
-        candidates = con.execute(
-            "SELECT id, user_id, key_hash FROM api_keys WHERE prefix=? AND revoked=0",
-            (prefix,),
-        ).fetchall()
-        match = next((c for c in candidates
-                      if verify_password(full_secret, c["key_hash"])), None)
-        if not match:
-            return None
-        con.execute("UPDATE api_keys SET last_used_at=? WHERE id=?",
-                    (datetime.datetime.utcnow().isoformat() + "Z", match["id"]))
-        return con.execute(
-            "SELECT id, username, email, role, plan, status, plan_expires_at "
-            "FROM users WHERE id=?",
-            (match["user_id"],),
-        ).fetchone()
 
 
 # ── Enterprise: email verification ──────────────────────────────────

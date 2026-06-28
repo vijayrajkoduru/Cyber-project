@@ -210,25 +210,6 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     """
     if not creds:
         raise HTTPException(401, "Missing Authorization header")
-
-    # Programmatic API key (Authorization: Bearer vlk_...) — resolve to the
-    # owning user and synthesise a JWT-equivalent payload so downstream code
-    # is identical whether the caller used a JWT or an API key.
-    if creds.credentials.startswith("vlk_"):
-        try:
-            from tools.auth._db import resolve_api_key
-            row = resolve_api_key(creds.credentials)
-        except Exception as e:
-            raise HTTPException(401, f"API key validation error: {e}")
-        if not row:
-            raise HTTPException(401, "Invalid or revoked API key")
-        if row.get("status") != "active":
-            raise HTTPException(403, f"Account is {row.get('status')}")
-        _USER_CTX.set(row.get("id") or "unknown")
-        return {"sub": row.get("id"), "username": row.get("username"),
-                "role": row.get("role"), "plan": row.get("plan"),
-                "plan_expires_at": row.get("plan_expires_at"), "auth": "api_key"}
-
     try:
         payload = _jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
     except Exception as e:
