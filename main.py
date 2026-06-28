@@ -66,6 +66,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Observability + rate limiting ───────────────────────────────────
+# Both are dependency-free and fail-open: a bug in either must never take the
+# API down. Observability adds /api/metrics (Prometheus) + request-id +
+# structured access logs + optional Sentry (active only if SENTRY_DSN set).
+# Rate limiting is per-IP, env-tunable (RATE_LIMIT_PER_MIN), disable with
+# RATE_LIMIT_ENABLED=0. Installed defensively so neither can crash boot.
+try:
+    from tools._core.observability import install_observability
+    install_observability(app)
+except Exception as _obs_exc:  # pragma: no cover
+    log.error("observability install failed (continuing): %s", _obs_exc)
+try:
+    from tools._core.ratelimit import install_rate_limit
+    install_rate_limit(app)
+except Exception as _rl_exc:  # pragma: no cover
+    log.error("rate-limit install failed (continuing): %s", _rl_exc)
+
 # ── Required env ────────────────────────────────────────────────────
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 if not JWT_SECRET:

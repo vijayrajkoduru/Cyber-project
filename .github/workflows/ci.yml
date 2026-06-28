@@ -49,6 +49,13 @@ jobs:
           assert loaded > 0, "no tools loaded — boot is broken"
           PY
 
+      - name: Tests (pytest — gating)
+        env:
+          JWT_SECRET: ci-smoke-secret
+        run: |
+          pip install -r requirements-dev.txt
+          python -m pytest tests/ -q
+
   frontend:
     name: Frontend (test + build)
     runs-on: ubuntu-latest
@@ -97,13 +104,29 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Report-only for now (does not fail the build) — flip to gating once the
-      # current dependency set is clean.
-      - name: pip-audit — dependency CVEs (report-only)
+      # GATING: fails the build on any dependency CVE except the explicitly
+      # tracked exceptions in docs/SECURITY-DEBT.md (Starlette CVEs that require
+      # a coordinated FastAPI major upgrade). pip+wheel are upgraded first so
+      # build-tooling advisories (not shipped to prod) don't wedge the gate.
+      - name: pip-audit — dependency CVEs (gating)
         run: |
+          python -m pip install --quiet --upgrade pip wheel
           python -m pip install --quiet pip-audit
-          if [ -f requirements.txt ]; then pip-audit -r requirements.txt || true; else echo "no requirements.txt"; fi
+          pip-audit -r requirements.txt \
+            --ignore-vuln PYSEC-2026-161 \
+            --ignore-vuln PYSEC-2026-248 \
+            --ignore-vuln PYSEC-2026-249 \
+            --ignore-vuln CVE-2025-54121 \
+            --ignore-vuln CVE-2025-62727 \
+            --ignore-vuln CVE-2026-48817 \
+            --ignore-vuln CVE-2026-48818
 
+      # Report-only BY DESIGN: this is a pentest platform, so its scanner tools
+      # legitimately make outbound requests and run external binaries — the
+      # generic SSRF/command-exec rules fire on intended behaviour. Hard-gating
+      # generic rules here means false positives, not real bugs. Kept visible
+      # for triage; gate a curated ruleset on endpoints/ + main.py separately
+      # when the rule set is tuned (tracked in docs/SECURITY-DEBT.md).
       - name: semgrep — SAST (report-only)
         run: |
           python -m pip install --quiet semgrep
