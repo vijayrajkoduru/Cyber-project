@@ -4,28 +4,29 @@ Exercises verify_scan_quota directly so we don't depend on any heavy scanner
 running — we only care about the gate's accept/deny decision.
 """
 import os
-import sqlite3
 import datetime
 
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
+from sqlalchemy import text
 
 from tools._shared import verify_scan_quota
-from tools.auth._db import init_db
+from tools.auth._db import init_db, _engine
 
 
 def _make_user(user_id, plan="trial", role="user", status="active", expires=None):
     init_db()
-    con = sqlite3.connect(os.environ["USERS_DB"])
-    con.execute(
-        "INSERT OR REPLACE INTO users "
-        "(id, username, email, password_hash, role, plan, status, created_at, plan_expires_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?)",
-        (user_id, user_id, f"{user_id}@e.com", "x", role, plan, status,
-         datetime.datetime.utcnow().isoformat(), expires))
-    con.commit()
-    con.close()
+    with _engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO users "
+            "(id, username, email, password_hash, role, plan, status, created_at, plan_expires_at) "
+            "VALUES (:id,:u,:e,:p,:role,:plan,:status,:created,:exp) "
+            "ON CONFLICT (id) DO UPDATE SET "
+            "role=:role, plan=:plan, status=:status, plan_expires_at=:exp"),
+            {"id": user_id, "u": user_id, "e": f"{user_id}@e.com", "p": "x",
+             "role": role, "plan": plan, "status": status,
+             "created": datetime.datetime.utcnow().isoformat(), "exp": expires})
 
 
 def _fake_request():

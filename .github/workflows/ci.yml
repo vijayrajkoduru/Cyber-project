@@ -14,8 +14,23 @@ jobs:
   backend-tests:
     name: Backend tests (pytest)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vluser
+          POSTGRES_PASSWORD: vlpass
+          POSTGRES_DB: vulnuslab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vluser -d vulnuslab"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       JWT_SECRET: ci-test-secret-not-for-production
+      DATABASE_URL: postgresql+psycopg2://vluser:vlpass@localhost:5432/vulnuslab
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
