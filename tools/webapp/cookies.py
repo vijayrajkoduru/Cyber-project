@@ -45,7 +45,7 @@ def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
     # VL-VERIFY: stamp SPA context. Cookies on a SPA homepage are real
     # cookies under audit; no behavior change, just transparency.
     spa = detect_spa_catchall_sync(url.rstrip("/"))
-    r = safe_get(url, req=req, allow_redirects=True)
+    r = safe_get(url, req=req, allow_redirects=True, timeout=10)
     if r is None:
         return standard_response(tool="cookies", target=req.target,
             findings=[], tests_performed=1, vulnerable=False,
@@ -91,6 +91,13 @@ def scan_cookies(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 "MEDIUM", cvss="5.5", cwe="CWE-352", owasp="A01:2021",
                 remediation="Set SameSite=Lax or Strict on session cookies.",
                 evidence_marker=f"cookie={c.name} samesite={same_site or 'unset'}"))
+    if not findings:
+        findings.append(wrap_finding(
+            ("All observed cookies carry appropriate Secure/HttpOnly/SameSite flags."
+             if analyzed else "No cookies set on the homepage response."),
+            severity="POSITIVE", cvss="0.0", cwe="N/A", owasp="A02:2021",
+            remediation="No action needed; keep enforcing cookie security flags.",
+            evidence_marker=f"{len(analyzed)} cookie(s) analyzed, 0 issues"))
     summary = f"Analyzed {len(analyzed)} cookie(s) for Secure/HttpOnly/SameSite"
     if suppressed:
         summary += f"; {len(suppressed)} framework-CSRF FP(s) suppressed"

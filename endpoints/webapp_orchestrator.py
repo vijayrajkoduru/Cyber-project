@@ -68,6 +68,7 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     # Access Control & Modern API
     "tier7_access": [
         ("idor",            "/api/webapp/scan/idor"),
+        ("idor_detector",   "/api/webapp/idor_detector"),
         ("mass_assignment", "/api/webapp/scan/mass_assignment"),
         ("nosql",           "/api/webapp/scan/nosql"),
         ("access_control",  "/api/webapp/scan/access_control"),
@@ -120,6 +121,8 @@ WEBAPP_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("retire_js",             "/api/webapp/retire_js"),
         ("api_endpoint_fuzz",     "/api/webapp/api_endpoint_fuzz"),
         ("param_reflection",      "/api/webapp/param_reflection"),
+        ("forced_browsing",       "/api/webapp/forced_browsing"),
+        ("subdomain_takeover",    "/api/webapp/scan/subdomain_takeover"),
     ],
     # Tier 12 — Auth & session (pre-existing real implementations now wired in)
     "tier12_auth_session": [
