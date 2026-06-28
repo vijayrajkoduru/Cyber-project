@@ -17,11 +17,11 @@ _RANGES = [
     ("tier5_ciem_multicloud", 60, 70),
     ("tier6_serverless",      70, 80),
     ("tier7_container_reg",   80, 89),
-    ("tier8_storage",         89, 98),
-    ("tier9_network_vpc",     98, 106),
-    ("tier10_secrets_kms",    106, 114),
-    ("tier11_oidc",           114, 120),
-    ("tier12_compliance",     120, 124),
+    ("tier8_storage",         89, 99),
+    ("tier9_network_vpc",     99, 107),
+    ("tier10_secrets_kms",    107, 115),
+    ("tier11_oidc",           115, 121),
+    ("tier12_compliance",     121, 125),
 ]
 
 CLOUD_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
