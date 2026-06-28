@@ -27,8 +27,9 @@ const C = {
             background: r === "owner" ? "#7c2d12" : r === "admin" ? "#1e3a8a" : "#334155", color: "#e2e8f0" }),
 };
 
-export default function EnterpriseSettings({ api, token }) {
+export default function EnterpriseSettings({ api, token, role }) {
   const [tab, setTab] = useState("keys");
+  const isAdmin = role === "admin" || role === "superadmin";
   return (
     <div style={C.wrap}>
       <div style={C.h1}>Account &amp; Security</div>
@@ -37,10 +38,53 @@ export default function EnterpriseSettings({ api, token }) {
         <div style={C.tab(tab === "keys")} onClick={() => setTab("keys")}>API Keys</div>
         <div style={C.tab(tab === "mfa")} onClick={() => setTab("mfa")}>Two-Factor (MFA)</div>
         <div style={C.tab(tab === "orgs")} onClick={() => setTab("orgs")}>Organizations</div>
+        {isAdmin && <div style={C.tab(tab === "audit")} onClick={() => setTab("audit")}>Audit Log</div>}
       </div>
       {tab === "keys" && <ApiKeys api={api} token={token} />}
       {tab === "mfa" && <Mfa api={api} token={token} />}
       {tab === "orgs" && <Orgs api={api} token={token} />}
+      {tab === "audit" && isAdmin && <AuditLog api={api} token={token} />}
+    </div>
+  );
+}
+
+// ── Audit Log (admin) ───────────────────────────────────────────────
+function AuditLog({ api, token }) {
+  const [data, setData] = useState({ items: [], total: 0, offset: 0, limit: 50 });
+  const [err, setErr] = useState("");
+  const load = useCallback(async (offset = 0) => {
+    setErr("");
+    try { setData(await api(`/api/audit/log?limit=50&offset=${offset}`, "GET", null, token)); }
+    catch (e) { setErr(e.message); }
+  }, [api, token]);
+  useEffect(() => { load(0); }, [load]);
+
+  return (
+    <div style={C.card}>
+      {err && <div style={C.err}>{err}</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={C.sub}>{data.total} events</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={C.btnGhost} disabled={data.offset === 0}
+                  onClick={() => load(Math.max(0, data.offset - data.limit))}>Prev</button>
+          <button style={C.btnGhost} disabled={data.offset + data.limit >= data.total}
+                  onClick={() => load(data.offset + data.limit)}>Next</button>
+        </div>
+      </div>
+      {(data.items || []).map((r) => (
+        <div key={r.id} style={C.row}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13 }}>
+              <span style={{ fontWeight: 600 }}>{r.action}</span>
+              {r.status && r.status !== "ok" && <span style={{ color: "#f59e0b", marginLeft: 8 }}>{r.status}</span>}
+            </div>
+            <div style={C.sub}>{r.actor_name || r.actor_id || "—"} · {r.ip || "—"}
+              {r.target ? ` · ${r.target}` : ""}{r.detail ? ` · ${r.detail}` : ""}</div>
+          </div>
+          <div style={{ ...C.sub, whiteSpace: "nowrap" }}>{String(r.ts).replace("T", " ").slice(0, 19)}</div>
+        </div>
+      ))}
+      {(data.items || []).length === 0 && <div style={C.sub}>No events.</div>}
     </div>
   );
 }
