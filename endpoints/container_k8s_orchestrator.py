@@ -20,6 +20,7 @@ _RANGES = [
     ("tier8_escape_cves",    85, 94),
     ("tier9_mesh_ingress",   94, 102),
     ("tier10_ebpf_runtime",  102, 105),
+    ("tier11_controlplane_exposure", 105, 107),
 ]
 
 CONTAINER_K8S_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
