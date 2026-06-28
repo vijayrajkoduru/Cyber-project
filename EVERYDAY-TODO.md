@@ -32,7 +32,7 @@ Once in, run this single command — shows containers + disk + user count:
 cd ~/Cyber-project && \
 echo "=== CONTAINERS ===" && docker compose ps && \
 echo "=== DISK ===" && df -h / && \
-echo "=== USERS ===" && docker exec oscp_backend sqlite3 /app/data/users.db "SELECT username, plan, created_at FROM users;" && \
+echo "=== USERS ===" && docker exec vulnuslab_postgres psql -U vluser -d vulnuslab -c "SELECT username, plan, created_at FROM users;" && \
 echo "=== BACKEND LAST 20 LINES ===" && docker compose logs --tail 20 backend
 ```
 
@@ -98,29 +98,35 @@ Wait until you see `Uvicorn running on http://0.0.0.0:8000`, then `Ctrl+C`.
 
 ## 6. Daily Database Backup (Run Every Morning)
 
-The user DB and scan history live in the Docker volume `cyber-project_scan_data`. **If the VPS dies, you lose everything.** Back it up daily:
+The user DB and scan history live in **PostgreSQL** (`vulnuslab_postgres`
+container, volume `cyber-project_pg_data`). **If the VPS dies, you lose
+everything.** Back it up daily with `pg_dump`:
 
 ```bash
 mkdir -p ~/backups
-docker run --rm \
-  -v cyber-project_scan_data:/data \
-  -v ~/backups:/backup \
-  alpine sh -c "cp /data/users.db /backup/users-$(date +%Y%m%d).db"
+docker exec vulnuslab_postgres pg_dump -U vluser -Fc vulnuslab \
+  > ~/backups/vulnuslab-$(date +%Y%m%d-%H%M).dump
 ls -lh ~/backups/
 ```
 
+The installed cron job (`/root/backup-vulnuslab.sh`, source
+`scripts/backup-vulnuslab.sh`) does this automatically at 3 AM daily.
+
 **Optional — keep only last 14 days of backups:**
 ```bash
-find ~/backups -name "users-*.db" -mtime +14 -delete
+find ~/backups -name "vulnuslab-*.dump" -mtime +14 -delete
 ```
 
 **To restore from a backup (only if something broke):**
 ```bash
-docker compose down
-docker run --rm -v cyber-project_scan_data:/data -v ~/backups:/backup alpine \
-  cp /backup/users-YYYYMMDD.db /data/users.db
-docker compose up -d
+docker compose stop backend
+docker exec -i vulnuslab_postgres \
+  pg_restore -U vluser -d vulnuslab --clean --if-exists \
+  < ~/backups/vulnuslab-YYYYMMDD-HHMM.dump
+docker compose start backend
 ```
+
+See `BACKUP-RESTORE.md` for the full guide.
 
 ---
 
@@ -154,8 +160,8 @@ docker compose restart frontend
 
 ## 9. Weekly Tasks (Every Monday)
 
-- [ ] Check user count: `docker exec oscp_backend sqlite3 /app/data/users.db "SELECT COUNT(*) FROM users;"`
-- [ ] Check scan count: `docker exec oscp_backend sqlite3 /app/data/users.db "SELECT COUNT(*) FROM scans;"`
+- [ ] Check user count: `docker exec vulnuslab_postgres psql -U vluser -d vulnuslab -c "SELECT COUNT(*) FROM users;"`
+- [ ] Check scan count: `docker exec vulnuslab_postgres psql -U vluser -d vulnuslab -c "SELECT COUNT(*) FROM scan_usage;"`
 - [ ] Disk usage trend: `df -h /`
 - [ ] Test register + login with a brand-new test account, then delete it
 - [ ] Pull latest from git even if you didn't push (in case team pushed): `cd ~/Cyber-project && git pull`
@@ -193,7 +199,7 @@ nano ~/Cyber-project/.env
 # Edit the line: ADMIN_PASSWORD=NewStrongPasswordHere
 
 # 2. Delete existing ADMIN row from DB
-docker exec oscp_backend sqlite3 /app/data/users.db "DELETE FROM users WHERE username='ADMIN';"
+docker exec vulnuslab_postgres psql -U vluser -d vulnuslab -c "DELETE FROM users WHERE username='ADMIN';"
 
 # 3. Restart backend — it will reseed ADMIN with the new password
 docker compose restart backend
