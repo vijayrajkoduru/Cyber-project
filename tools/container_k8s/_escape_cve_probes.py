@@ -253,3 +253,224 @@ def _probe_escape_containerd_2022_23648(target, req):
         remediation="N/A for non-containerd runtimes.",
         evidence_marker=f"Runtimes: {[n['runtime_name'] for n in nodes[:5]]}")], 1,
         "no containerd nodes")
+
+
+# ---------------------------------------------------------------------------
+# Kernel-version escape CVEs (VL-FORGE 2026-06-28 — §8 #94/#95/#96 to 100%)
+#
+# nodeInfo exposes kernelVersion (e.g. "5.15.0-91-generic"). Distro kernels
+# back-port stable fixes WITHOUT bumping the upstream X.Y.Z, so a kernel that
+# parses as "vulnerable" by upstream version may already carry the backport.
+# We therefore report findings with an explicit "confirm backport" caveat and
+# never claim certainty — matching the "likely / uncertain" honesty of the
+# runtime-version probes above.
+# ---------------------------------------------------------------------------
+
+def _kernel_upstream(kver):
+    """Parse 'X.Y.Z-<distro>' -> (X, Y, Z); distro suffix stripped. None on fail."""
+    m = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", kver or "")
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
+
+
+def _dirty_pipe_vulnerable(kver):
+    """CVE-2022-0847. Bug introduced in 5.8; fixed 5.16.11 / 5.15.25 / 5.10.102
+    (and 5.17+). True=likely vuln, False=safe, None=unparseable."""
+    t = _kernel_upstream(kver)
+    if t is None:
+        return None
+    maj, mn, pa = t
+    if maj != 5:
+        return False            # <5: bug not yet introduced; >=6: post-fix
+    if mn < 8:
+        return False            # introduced in 5.8
+    if mn == 10:
+        return pa < 102
+    if mn == 15:
+        return pa < 25
+    if mn == 16:
+        return pa < 11
+    if mn >= 17:
+        return False            # fixed upstream
+    return True                 # 5.8/5.9/5.11-5.14 EOL series: no backport line
+
+
+def _cgroup_release_agent_vulnerable(kver):
+    """CVE-2022-0492. Long-standing logic bug; fixed 5.17 and back-ported to
+    5.16.11 / 5.15.25 / 5.10.102 (Feb-2022 stable batch)."""
+    t = _kernel_upstream(kver)
+    if t is None:
+        return None
+    maj, mn, pa = t
+    if maj >= 6:
+        return False
+    if maj < 5:
+        return True             # old kernel, predates fix
+    if mn >= 17:
+        return False
+    if mn == 16:
+        return pa < 11
+    if mn == 15:
+        return pa < 25
+    if mn == 10:
+        return pa < 102
+    return True                 # other 5.x series without a backport line
+
+
+def _probe_escape_dirty_pipe(target, req):
+    """§8 #94 — Dirty Pipe (CVE-2022-0847): arbitrary overwrite of read-only
+    files via pipe page-cache, usable for container-to-host escape."""
+    slug = "escape_dirty_pipe_2022_0847"
+    kc = _get_kubeconfig(req)
+    if kc is None:
+        return _ndr(slug, target)
+    ec, nodes = _get_node_runtimes(kc)
+    if ec == 127:
+        return _build_resp(slug, target, [wrap_finding(
+            "[NOT IMPLEMENTED] kubectl missing", "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend.", evidence_marker="kubectl missing")], 0,
+            "kubectl missing")
+    if ec != 0 or not nodes:
+        return _build_resp(slug, target, [wrap_finding(
+            "Cannot enumerate cluster nodes", "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify kubeconfig has nodes:list permission.",
+            evidence_marker=f"exit {ec}, nodes {len(nodes)}")], 0, "node enum failed")
+
+    vuln, safe, unknown = [], [], []
+    for n in nodes:
+        v = _dirty_pipe_vulnerable(n["kernel"])
+        tag = f"{n['node']} kernel={n['kernel']}"
+        (vuln if v is True else safe if v is False else unknown).append(tag)
+
+    if vuln:
+        return _build_resp(slug, target, [wrap_finding(
+            f"Dirty Pipe CVE-2022-0847 likely on {len(vuln)} node(s)",
+            "HIGH", cvss="7.8", cwe="CWE-281", owasp="A06:2021",
+            remediation=("Patch kernel to >= 5.16.11 / 5.15.25 / 5.10.102 (or "
+                          "5.17+). Distro back-ports may already fix this at the "
+                          "same upstream version — confirm with the vendor "
+                          "advisory before treating as exploitable. Mitigate by "
+                          "dropping CAP_DAC_OVERRIDE and enforcing read-only "
+                          "rootfs + seccomp until patched."),
+            evidence_marker=f"Vulnerable: {vuln[:5]}; Safe: {len(safe)}; Unknown: {len(unknown)}")],
+            len(nodes), f"Dirty Pipe likely on {len(vuln)} nodes")
+    if safe and not unknown:
+        return _build_resp(slug, target, [wrap_finding(
+            f"All {len(safe)} node kernel(s) past the Dirty Pipe fix",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue patch posture.",
+            evidence_marker=f"Safe kernels: {safe[:5]}")], len(nodes), "all nodes patched")
+    return _build_resp(slug, target, [wrap_finding(
+        f"Could not determine Dirty Pipe status on {len(unknown)} node(s)",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation="Inspect kernel version manually + cross-reference CVE-2022-0847.",
+        evidence_marker=f"Unknown: {unknown[:5]}; Safe: {len(safe)}")], len(nodes),
+        "kernel version uncertain")
+
+
+def _probe_escape_cgroup_release_agent(target, req):
+    """§8 #96 — cgroups-v1 release_agent escape (CVE-2022-0492). A privileged
+    or CAP_SYS_ADMIN container on an unpatched kernel can write release_agent
+    and run a host-side binary as root."""
+    slug = "escape_cgroup_release_agent"
+    kc = _get_kubeconfig(req)
+    if kc is None:
+        return _ndr(slug, target)
+    ec, nodes = _get_node_runtimes(kc)
+    if ec == 127:
+        return _build_resp(slug, target, [wrap_finding(
+            "[NOT IMPLEMENTED] kubectl missing", "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend.", evidence_marker="kubectl missing")], 0,
+            "kubectl missing")
+    if ec != 0 or not nodes:
+        return _build_resp(slug, target, [wrap_finding(
+            "Cannot enumerate cluster nodes", "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify kubeconfig has nodes:list permission.",
+            evidence_marker=f"exit {ec}, nodes {len(nodes)}")], 0, "node enum failed")
+
+    vuln, safe, unknown = [], [], []
+    for n in nodes:
+        v = _cgroup_release_agent_vulnerable(n["kernel"])
+        tag = f"{n['node']} kernel={n['kernel']}"
+        (vuln if v is True else safe if v is False else unknown).append(tag)
+
+    if vuln:
+        return _build_resp(slug, target, [wrap_finding(
+            f"cgroup release_agent escape (CVE-2022-0492) reachable on {len(vuln)} node(s)",
+            "HIGH", cvss="7.0", cwe="CWE-269", owasp="A04:2021",
+            remediation=("Patch kernel to >= 5.16.11 / 5.15.25 / 5.10.102 (or "
+                          "5.17+). Exploitation also requires cgroups-v1 + an "
+                          "unconfined container (CAP_SYS_ADMIN or no AppArmor/"
+                          "seccomp); enforce Pod Security 'restricted', drop "
+                          "CAP_SYS_ADMIN, and move to cgroups-v2 to close the "
+                          "path even before patching. Confirm distro back-port "
+                          "status before treating as exploitable."),
+            evidence_marker=f"Vulnerable: {vuln[:5]}; Safe: {len(safe)}; Unknown: {len(unknown)}")],
+            len(nodes), f"release_agent escape likely on {len(vuln)} nodes")
+    if safe and not unknown:
+        return _build_resp(slug, target, [wrap_finding(
+            f"All {len(safe)} node kernel(s) past the CVE-2022-0492 fix",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue patch posture; prefer cgroups-v2.",
+            evidence_marker=f"Safe kernels: {safe[:5]}")], len(nodes), "all nodes patched")
+    return _build_resp(slug, target, [wrap_finding(
+        f"Could not determine CVE-2022-0492 status on {len(unknown)} node(s)",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation="Inspect kernel version + cgroup mode manually.",
+        evidence_marker=f"Unknown: {unknown[:5]}; Safe: {len(safe)}")], len(nodes),
+        "kernel version uncertain")
+
+
+def _probe_escape_runc_proc_self_exe(target, req):
+    """§8 #95 — runc /proc/self/exe overwrite (CVE-2019-5736). Detect via the
+    container-runtime version: docker < 18.09.2 or containerd < 1.2.4 bundle
+    the vulnerable runc."""
+    slug = "escape_proc_self_exe"
+    kc = _get_kubeconfig(req)
+    if kc is None:
+        return _ndr(slug, target)
+    ec, nodes = _get_node_runtimes(kc)
+    if ec == 127:
+        return _build_resp(slug, target, [wrap_finding(
+            "[NOT IMPLEMENTED] kubectl missing", "INFO", cvss="0.0", cwe="N/A",
+            remediation="Rebuild backend.", evidence_marker="kubectl missing")], 0,
+            "kubectl missing")
+    if ec != 0 or not nodes:
+        return _build_resp(slug, target, [wrap_finding(
+            "Cannot enumerate cluster nodes", "INFO", cvss="0.0", cwe="N/A",
+            remediation="Verify kubeconfig has nodes:list permission.",
+            evidence_marker=f"exit {ec}, nodes {len(nodes)}")], 0, "node enum failed")
+
+    vuln, safe, unknown = [], [], []
+    for n in nodes:
+        rt, ver = n["runtime_name"], n["runtime_version"]
+        if rt == "docker":
+            (vuln if _semver_lt(ver, "18.9.2") else safe).append(f"{n['node']} docker={ver}")
+        elif rt == "containerd":
+            (vuln if _semver_lt(ver, "1.2.4") else safe).append(f"{n['node']} containerd={ver}")
+        else:
+            unknown.append(f"{n['node']} runtime={rt}/{ver}")
+
+    if vuln:
+        return _build_resp(slug, target, [wrap_finding(
+            f"runc /proc/self/exe escape (CVE-2019-5736) likely on {len(vuln)} node(s)",
+            "HIGH", cvss="8.6", cwe="CWE-78", owasp="A06:2021",
+            remediation=("Upgrade the container runtime: docker >= 18.09.2 or "
+                          "containerd >= 1.2.4 (both ship patched runc). A "
+                          "malicious image/exec can overwrite the host runc "
+                          "binary and gain root on the node."),
+            evidence_marker=f"Vulnerable: {vuln[:5]}; Safe: {len(safe)}; Unknown: {len(unknown)}")],
+            len(nodes), f"CVE-2019-5736 likely on {len(vuln)} nodes")
+    if safe and not unknown:
+        return _build_resp(slug, target, [wrap_finding(
+            f"All {len(safe)} node runtime(s) ship patched runc",
+            "POSITIVE", cvss="0.0", cwe="N/A",
+            remediation="Continue patch posture.",
+            evidence_marker=f"Patched: {safe[:5]}")], len(nodes), "all nodes patched")
+    return _build_resp(slug, target, [wrap_finding(
+        f"Could not determine CVE-2019-5736 status on {len(unknown)} node(s)",
+        "INFO", cvss="0.0", cwe="N/A",
+        remediation="Inspect runtime version manually + cross-reference CVE-2019-5736.",
+        evidence_marker=f"Unknown: {unknown[:5]}; Safe: {len(safe)}")], len(nodes),
+        "runtime version uncertain")
