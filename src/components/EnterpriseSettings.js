@@ -115,6 +115,12 @@ function ApiKeys({ api, token }) {
     catch (e) { setErr(e.message); }
   };
 
+  const base = (typeof window !== "undefined" && window.location.origin) || "https://app.vulnuslab.com";
+  const sample = secret || "vlk_YOUR_API_KEY";
+  const curlExample =
+    `curl ${base}/api/auth/me \\\n  -H "Authorization: Bearer ${sample}"`;
+  const copy = (txt) => { try { navigator.clipboard.writeText(txt); } catch (_) {} };
+
   return (
     <div>
       {err && <div style={C.err}>{err}</div>}
@@ -127,9 +133,31 @@ function ApiKeys({ api, token }) {
         {secret && (
           <div style={{ marginTop: 12 }}>
             <div style={C.ok}>Copy this now — it will not be shown again:</div>
-            <div style={C.mono}>{secret}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ ...C.mono, flex: 1 }}>{secret}</div>
+              <button style={C.btnGhost} onClick={() => copy(secret)}>Copy</button>
+            </div>
           </div>
         )}
+      </div>
+
+      {/* How to use — visible always; fills in the real key right after creation */}
+      <div style={C.card}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Using your API key</div>
+        <div style={C.sub}>
+          Send it as a Bearer token on any endpoint — same access as your account, your plan's quota applies.
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 8 }}>
+          <pre style={{ ...C.mono, color: "#cbd5e1", background: "#020617", border: "1px solid #1e293b",
+                        borderRadius: 6, padding: 12, flex: 1, overflowX: "auto", margin: 0 }}>{curlExample}</pre>
+          <button style={C.btnGhost} onClick={() => copy(curlExample)}>Copy</button>
+        </div>
+        <div style={{ ...C.sub, marginTop: 8 }}>
+          Example: run a scan →{" "}
+          <span style={C.mono}>POST {base}/api/recon/run_all</span> with body{" "}
+          <span style={C.mono}>{'{"target":"example.com"}'}</span>. Discover all endpoints at{" "}
+          <span style={C.mono}>{base}/api/manifest</span>.
+        </div>
       </div>
       <div style={C.card}>
         {keys.length === 0 && <div style={C.sub}>No API keys yet.</div>}
