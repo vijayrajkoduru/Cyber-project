@@ -70,3 +70,6 @@ src/.cache-buster.js
 
 # Per-module backups (backup_recon.sh archives — local-only, can grow large)
 .recon_backups/
+
+# Local vulnerable-target lab (docker fixtures — not part of the app)
+vulnerable-lab/
