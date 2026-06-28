@@ -19,7 +19,7 @@ router = APIRouter()
 def scan_clickjacking(req: ScanRequest, payload=Depends(verify_scan_quota)):
     url = web_url(req.target)
     spa = detect_spa_catchall_sync(url.rstrip("/"))
-    r = safe_get(url, req=req, allow_redirects=True)
+    r = safe_get(url, req=req, allow_redirects=True, timeout=10)
     if r is None:
         return standard_response(tool="clickjacking", target=req.target,
             findings=[], tests_performed=1, vulnerable=False,
@@ -32,9 +32,15 @@ def scan_clickjacking(req: ScanRequest, payload=Depends(verify_scan_quota)):
     if not xfo and not has_fa:
         findings.append(wrap_finding(
             "No X-Frame-Options and no CSP frame-ancestors — clickjacking possible",
-            "MEDIUM", cvss="6.1", cwe="CWE-1021", owasp="A05:2021",
+            severity="MEDIUM", cvss="6.1", cwe="CWE-1021", owasp="A05:2021",
             remediation="Add 'X-Frame-Options: DENY' OR 'frame-ancestors none' to CSP.",
             evidence_marker="neither X-Frame-Options nor CSP frame-ancestors present"))
+    else:
+        findings.append(wrap_finding(
+            "Frame-embedding protection present — clickjacking mitigated.",
+            severity="POSITIVE", cvss="0.0", cwe="N/A", owasp="A05:2021",
+            remediation="No action needed; keep frame-busting headers enforced.",
+            evidence_marker=f"X-Frame-Options={xfo or 'none'}; CSP frame-ancestors={has_fa}"))
     return standard_response(tool="clickjacking", target=req.target,
         findings=findings, tests_performed=1,
         tests_summary="Frame-embedding protection check",

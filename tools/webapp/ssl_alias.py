@@ -21,7 +21,9 @@ router = APIRouter()
 def scan_ssl(req: ScanRequest, payload=Depends(verify_scan_quota)):
     info = wrap_finding(
         "SSL/TLS analysis delegated — see Recon module's tls_deep scanner",
-        "POSITIVE",
+        severity="POSITIVE", cvss="0.0", cwe="N/A", owasp="A02:2021",
+        remediation=("Run the Recon module's tls_deep scanner (/api/recon/tls_deep) "
+                     "for full handshake, cipher, and certificate analysis."),
         evidence_marker=("Deep TLS handshake / cipher / certificate analysis "
                           "runs as tools/recon/tier7_app/tls_deep.py "
                           "(/api/recon/tls_deep). The Vuln module no longer "

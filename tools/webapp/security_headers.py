@@ -78,7 +78,7 @@ def _xpb(h):
 def scan_security_headers(req, payload):
     url = web_url(req.target)
     spa = detect_spa_catchall_sync(url.rstrip("/"))
-    r = safe_get(url, req=req, allow_redirects=True)
+    r = safe_get(url, req=req, allow_redirects=True, timeout=10)
     if r is None:
         return standard_response(tool="security_headers", target=req.target,
             findings=[], tests_performed=1, vulnerable=False,
@@ -86,8 +86,15 @@ def scan_security_headers(req, payload):
     https = str(r.url).startswith("https://")
     h = dict(r.headers)
     checks = [_csp(h), _hsts(h, https), _xfo(h), _xcto(h), _ref(h), _perm(h), _srv(h), _xpb(h)]
+    findings = [c for c in checks if c]
+    if not findings:
+        findings.append(wrap_finding(
+            "All audited security headers are present and correctly configured.",
+            severity="POSITIVE", cvss="0.0", cwe="N/A", owasp="A05:2021",
+            remediation="No action needed; keep enforcing the security-header baseline.",
+            evidence_marker=f"{len(checks)} header checks passed"))
     return vuln_response(tool="security_headers", target=req.target,
-        findings=[c for c in checks if c], tested=len(checks),
+        findings=findings, tested=len(checks),
         what_checked="9 critical HTTP security headers (CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By)",
         tests_summary="9 header checks: CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By",
         raw_data={"security_headers": {"is_https": https,
