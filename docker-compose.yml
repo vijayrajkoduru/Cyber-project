@@ -10,11 +10,14 @@ services:
     - .env
     environment:
     - WORKERS=4
+    - DATABASE_URL=postgresql+psycopg2://vluser:${POSTGRES_PASSWORD:-vlpass}@postgres:5432/vulnuslab
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
     - scan_data:/app/data
     - ./data:/data
     - /root/backups:/backups
-    - ./users.db:/app/data/users.db
     - ./last_known_good:/app/.last_known_good
     - ./tools/_payloads:/app/tools/_payloads:ro
     # ── Host project mounted read-only so /api/admin/backups can tar
@@ -35,6 +38,24 @@ services:
       timeout: 20s
       retries: 15
       start_period: 120s
+  postgres:
+    image: postgres:16
+    container_name: vulnuslab_postgres
+    environment:
+    - POSTGRES_USER=vluser
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-vlpass}
+    - POSTGRES_DB=vulnuslab
+    volumes:
+    - pg_data:/var/lib/postgresql/data
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vluser -d vulnuslab"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   frontend:
     build:
       context: .
@@ -231,6 +252,7 @@ services:
 
 volumes:
   scan_data: null
+  pg_data: null
   lab_pwd_ad_data: null
   lab_pwd_ad_conf: null
 networks:

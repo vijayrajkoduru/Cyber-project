@@ -14,7 +14,11 @@ import pathlib
 # ── Hermetic environment (must run before app imports) ──────────────
 _TMP = tempfile.mkdtemp(prefix="vl-tests-")
 os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
-os.environ["USERS_DB"] = os.path.join(_TMP, "users.db")
+# Postgres (full cutover). CI sets DATABASE_URL via its postgres service;
+# locally this defaults to the dev docker container on :55432.
+os.environ.setdefault(
+    "DATABASE_URL",
+    "postgresql+psycopg2://vluser:vlpass@localhost:55432/vulnuslab")
 os.environ.setdefault("ADMIN_PASSWORD", "")          # skip admin seeding
 os.environ.setdefault("CORS_ORIGINS", "*")
 os.environ["VL_AUTH_CACHE_TTL"] = "0"                 # no caching -> deterministic re-validation
@@ -27,7 +31,6 @@ try:
 except Exception:
     pass
 
-import sqlite3
 import pytest
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
@@ -69,17 +72,12 @@ def _clean_users_table():
     """Wipe the users table before each test for isolation. The table may
     not exist yet on the first call — that's fine."""
     def _wipe():
-        try:
-            con = sqlite3.connect(os.environ["USERS_DB"])
-            con.execute("DELETE FROM users")
-            try:
-                con.execute("DELETE FROM scan_usage")
-            except Exception:
-                pass
-            con.commit()
-            con.close()
-        except Exception:
-            pass
+        from tools.auth._db import init_db, _engine
+        from sqlalchemy import text
+        init_db()                       # ensure schema exists
+        with _engine.begin() as conn:
+            conn.execute(text("DELETE FROM scan_usage"))
+            conn.execute(text("DELETE FROM users"))
     _wipe()
     yield
     _wipe()

@@ -1,75 +1,176 @@
-"""SQLite user database — schema + admin seed.
+"""PostgreSQL user database — engine, schema, admin seed, query helpers.
 
 Underscore-prefixed file so main.py's tool autoloader skips it.
 Other auth tools import from here.
+
+Backed by SQLAlchemy + psycopg2 with a pooled engine (DATABASE_URL). A thin
+compatibility wrapper lets the rest of the codebase keep using the original
+sqlite-style API — `con.execute("... ?", (a, b)).fetchone()`, `row["col"]`,
+`result.rowcount` — so the auth/admin endpoints didn't need rewriting for
+the SQLite->Postgres cutover.
 """
 import os
 import uuid
-import sqlite3
 import datetime
 from contextlib import contextmanager
-from pathlib import Path
 
 from passlib.context import CryptContext
+from sqlalchemy import create_engine, text
 
-DB_PATH = Path(os.getenv("USERS_DB", "/app/data/users.db"))
+# Postgres is required (full cutover). Format:
+#   postgresql+psycopg2://user:pass@host:5432/dbname
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL env var is required (PostgreSQL), e.g. "
+        "postgresql+psycopg2://user:pass@host:5432/vulnuslab"
+    )
+
+_engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,     # drop dead connections instead of erroring
+    pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+    pool_recycle=1800,
+    future=True,
+)
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def _ensure_dir():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+# ── sqlite-style compatibility shim over a SQLAlchemy connection ─────
+def _to_named(sql: str, params):
+    """Convert positional '?' placeholders to SQLAlchemy ':pN' bind params."""
+    if not params:
+        return sql, {}
+    out, binds, i = [], {}, 0
+    for ch in sql:
+        if ch == "?":
+            key = f"p{i}"
+            out.append(f":{key}")
+            binds[key] = params[i]
+            i += 1
+        else:
+            out.append(ch)
+    return "".join(out), binds
+
+
+class _Result:
+    def __init__(self, cursor_result):
+        self._cr = cursor_result
+
+    @property
+    def rowcount(self):
+        return self._cr.rowcount
+
+    def fetchone(self):
+        row = self._cr.mappings().fetchone()
+        return dict(row) if row is not None else None
+
+    def fetchall(self):
+        return [dict(r) for r in self._cr.mappings().fetchall()]
+
+
+class _Conn:
+    def __init__(self, conn):
+        self._c = conn
+
+    def execute(self, sql, params=None):
+        s, binds = _to_named(sql, params or ())
+        return _Result(self._c.execute(text(s), binds))
+
+
+# ── Schema + seed (idempotent, guarded) ─────────────────────────────
+_SCHEMA_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id              TEXT PRIMARY KEY,
+        username        TEXT UNIQUE NOT NULL,
+        email           TEXT UNIQUE,
+        password_hash   TEXT NOT NULL,
+        role            TEXT DEFAULT 'user',
+        plan            TEXT DEFAULT 'trial',
+        status          TEXT DEFAULT 'active',
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT,
+        plan_expires_at TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_username ON users(username)",
+    "CREATE INDEX IF NOT EXISTS idx_email ON users(email)",
+    """
+    CREATE TABLE IF NOT EXISTS scan_usage (
+        user_id TEXT NOT NULL,
+        day     TEXT NOT NULL,
+        count   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, day)
+    )
+    """,
+]
+
+_schema_ready = False
+_seeded = False
+
+
+def _ensure_schema():
+    global _schema_ready
+    if _schema_ready:
+        return
+    with _engine.begin() as conn:
+        for ddl in _SCHEMA_DDL:
+            conn.execute(text(ddl))
+    _schema_ready = True
+
+
+def _seed_admin():
+    """Create the ADMIN superadmin user from .env ADMIN_PASSWORD. Uses the
+    engine directly (not get_db) to avoid recursion through init_db."""
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    if not admin_password:
+        return
+    with _engine.begin() as conn:
+        c = _Conn(conn)
+        if c.execute("SELECT 1 FROM users WHERE username=?", ("ADMIN",)).fetchone():
+            return
+        now = datetime.datetime.utcnow().isoformat() + "Z"
+        c.execute(
+            "INSERT INTO users (id, username, email, password_hash, role, plan, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), "ADMIN", "admin@vulnuslab.com",
+             _pwd_ctx.hash(admin_password), "superadmin", "superadmin", "active", now),
+        )
 
 
 def init_db():
-    """Create the users table if it doesn't exist. Seeds an ADMIN user
-    on first run using ADMIN_PASSWORD from .env."""
-    _ensure_dir()
-    con = sqlite3.connect(DB_PATH)
-    con.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE,
-            password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'user',
-            plan TEXT DEFAULT 'trial',
-            status TEXT DEFAULT 'active',
-            created_at TEXT NOT NULL,
-            updated_at TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_username ON users(username);
-        CREATE INDEX IF NOT EXISTS idx_email ON users(email);
-
-        -- Per-user daily scan counter for quota enforcement (audit #2).
-        CREATE TABLE IF NOT EXISTS scan_usage (
-            user_id TEXT NOT NULL,
-            day TEXT NOT NULL,
-            count INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (user_id, day)
-        );
-    """)
-    # Migration: add plan_expires_at to pre-existing DBs (audit #5).
-    cols = [r[1] for r in con.execute("PRAGMA table_info(users)")]
-    if "plan_expires_at" not in cols:
-        con.execute("ALTER TABLE users ADD COLUMN plan_expires_at TEXT")
-    con.commit()
-    con.close()
-    _seed_admin()
+    """Ensure schema exists and seed the ADMIN user (both idempotent)."""
+    global _seeded
+    _ensure_schema()
+    if not _seeded:
+        _seed_admin()
+        _seeded = True
 
 
+@contextmanager
+def get_db():
+    """Transactional connection (commits on success, rolls back on error).
+    Schema/seed are ensured on first use."""
+    init_db()
+    with _engine.begin() as conn:
+        yield _Conn(conn)
+
+
+# ── Query helpers ───────────────────────────────────────────────────
 def get_user_by_id(user_id: str):
     """Return the user row as a dict, or None. Used by verify_token to
     re-validate the live account state on each request (audit #4)."""
     if not user_id:
         return None
     with get_db() as con:
-        row = con.execute(
+        return con.execute(
             "SELECT id, username, email, role, plan, status, plan_expires_at "
             "FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
-    return dict(row) if row else None
 
 
 def get_scan_usage(user_id: str) -> int:
@@ -90,52 +191,13 @@ def bump_scan_usage(user_id: str) -> int:
     total. UTC day buckets. Used by the quota gate (audit #2)."""
     day = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     with get_db() as con:
-        con.execute(
-            "INSERT INTO scan_usage (user_id, day, count) VALUES (?, ?, 1) "
-            "ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1",
-            (user_id, day),
-        )
         row = con.execute(
-            "SELECT count FROM scan_usage WHERE user_id=? AND day=?",
+            "INSERT INTO scan_usage (user_id, day, count) VALUES (?, ?, 1) "
+            "ON CONFLICT (user_id, day) DO UPDATE SET count = scan_usage.count + 1 "
+            "RETURNING count",
             (user_id, day),
         ).fetchone()
     return int(row["count"]) if row else 1
-
-
-def _seed_admin():
-    """Create the ADMIN superadmin user from .env ADMIN_PASSWORD."""
-    admin_password = os.getenv("ADMIN_PASSWORD", "")
-    if not admin_password:
-        return
-    con = sqlite3.connect(DB_PATH)
-    try:
-        row = con.execute("SELECT 1 FROM users WHERE username=?", ("ADMIN",)).fetchone()
-        if row:
-            return
-        hashed = _pwd_ctx.hash(admin_password)
-        now = datetime.datetime.utcnow().isoformat() + "Z"
-        con.execute(
-            "INSERT INTO users (id, username, email, password_hash, role, plan, status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), "ADMIN", "admin@vulnuslab.com", hashed,
-             "superadmin", "superadmin", "active", now),
-        )
-        con.commit()
-    finally:
-        con.close()
-
-
-@contextmanager
-def get_db():
-    """Context manager for SQLite connection. Auto-inits schema on first call."""
-    init_db()
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    try:
-        yield con
-        con.commit()
-    finally:
-        con.close()
 
 
 def hash_password(plain: str) -> str:

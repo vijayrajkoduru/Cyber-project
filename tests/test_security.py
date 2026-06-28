@@ -1,9 +1,9 @@
 """JWT verification + DB re-validation + admin gates (audit #4)."""
 import os
-import sqlite3
 import datetime
 
 from jose import jwt
+from sqlalchemy import text
 
 SECRET = os.environ["JWT_SECRET"]
 
@@ -16,11 +16,11 @@ def _register_token(client, username, password="password123"):
 
 
 def _db_update(username, **cols):
-    con = sqlite3.connect(os.environ["USERS_DB"])
-    for k, v in cols.items():
-        con.execute(f"UPDATE users SET {k}=? WHERE username=?", (v, username))
-    con.commit()
-    con.close()
+    from tools.auth._db import _engine
+    with _engine.begin() as conn:
+        for k, v in cols.items():
+            conn.execute(text(f"UPDATE users SET {k}=:v WHERE username=:u"),
+                         {"v": v, "u": username})
 
 
 def _auth(token):
