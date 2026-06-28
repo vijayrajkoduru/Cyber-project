@@ -1831,9 +1831,7 @@ PROBES = {
     "etcd_apiserver_exposure":        _probe_etcd_exposed,
     "kube_bench_master":              _probe_k8s_api,
     "k8s_kubelet_anonymous_auth":     _probe_kubelet,
-    "registry_npm_2fa_audit":         _probe_harbor_registry,
     "opa_kyverno_no_policies":        _probe_k8s_dashboard,
-    "registry_pypi_2fa_audit":        _probe_registry_public,
     # newly forged real probes (2026-06-01)
     "k8s_anonymous_auth":             _probe_k8s_anonymous_auth,
     "k8s_api_server_insecure_port":   _probe_k8s_api_insecure_port,
@@ -2071,6 +2069,9 @@ T = [
     ("falco_runtime_audit", "Falco runtime audit.", "MEDIUM", "5.5"),
     ("tetragon_runtime_audit", "Tetragon (Cilium) runtime audit.", "MEDIUM", "5.5"),
     ("tracee_runtime_audit", "Tracee (Aqua) runtime audit.", "MEDIUM", "5.5"),
+    # §11 Control-plane / Daemon Exposure (2) — live external probes
+    ("docker_daemon_exposed", "Exposed Docker daemon (2375/2376) probe.", "CRITICAL", "9.3"),
+    ("etcd_apiserver_exposure", "etcd / kube-apiserver exposure probe.", "HIGH", "8.0"),
 ]
 
 router = make_advisory_router("container_k8s", T,
