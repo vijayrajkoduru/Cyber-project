@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { jsPDF } from "jspdf";
+import EnterpriseSettings from "./components/EnterpriseSettings";
 
 // Resolves the API base URL. Production builds (no explicit port) use same-origin so
 // requests go through the nginx proxy. Dev (CRA on :3000) defaults to localhost:8000.
@@ -497,8 +498,10 @@ function Login(props) {
   const [pFocus,setPF]   = useState(false);
   const [p2Focus,setP2F] = useState(false);
   const [showPw,setShow] = useState(false);
+  const [mfaCode,setMfaCode] = useState("");      // 2FA code (shown after server asks)
+  const [mfaNeeded,setMfaNeeded] = useState(false);
 
-  const switchMode = (m) => { setMode(m); setErr(""); setOk(""); };
+  const switchMode = (m) => { setMode(m); setErr(""); setOk(""); setMfaNeeded(false); setMfaCode(""); };
 
   const submit = async(e) => {
     e.preventDefault();
@@ -509,10 +512,21 @@ function Login(props) {
         const data = await api("/api/auth/register","POST",{username:u,email,password:p});
         onLogin(data.access_token, data.role, data.username, data.plan||"trial");
       } else {
-        const data = await api("/api/auth/login","POST",{username:u,password:p});
+        const body = {username:u, password:p};
+        if (mfaCode) body.mfa_code = mfaCode.trim();
+        const data = await api("/api/auth/login","POST",body);
         onLogin(data.access_token, data.role, data.username, data.plan||"trial");
       }
-    } catch(e2) { setErr(e2.message); }
+    } catch(e2) {
+      // Server signals MFA is required (or the code was wrong) → reveal the code field.
+      const m = e2.message || "";
+      if (m.includes("MFA code required") || m.includes("Invalid MFA code")) {
+        setMfaNeeded(true);
+        setErr(mfaCode ? "Invalid 2FA code — try again." : "Enter the 6-digit code from your authenticator app.");
+      } else {
+        setErr(m);
+      }
+    }
     setL(false);
   };
 
@@ -651,6 +665,21 @@ function Login(props) {
                 placeholder="Repeat your password"
                 autoComplete="new-password"
                 style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",fontFamily:"'Segoe UI',sans-serif",letterSpacing:0.3}}/>
+            </div>
+          </div>
+        )}
+
+        {/* 2FA code — login only, shown after the server requests it */}
+        {mode==="login" && mfaNeeded && (
+          <div style={{marginBottom:24}}>
+            <label style={{fontSize:10,color:"#60a5fa",fontWeight:700,display:"block",marginBottom:7,letterSpacing:3,textTransform:"uppercase",fontFamily:"monospace"}}>2FA Code</label>
+            <div style={box(true)}>
+              <IconLock c="#3b82f6"/>
+              <input type="text" inputMode="numeric" autoComplete="one-time-code" value={mfaCode}
+                onChange={e=>setMfaCode(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&submit(e)}
+                placeholder="6-digit code from your authenticator" autoFocus
+                style={{flex:1,background:"transparent",border:"none",color:"#e2e8f0",fontSize:14,outline:"none",letterSpacing:2}}/>
             </div>
           </div>
         )}
@@ -23643,6 +23672,19 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  // Email-verification deep link: emails point at /verify-email?token=...
+  // Consume the token on load, tell the user, then strip it from the URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const vtok = params.get("token");
+    if (!vtok || !window.location.pathname.includes("verify-email")) return;
+    api("/api/auth/verify-email", "POST", { token: vtok })
+      .then(() => window.alert("Email verified — you can now sign in."))
+      .catch((e) => window.alert("Email verification failed: " + (e.message || "invalid or expired link")))
+      .finally(() => window.history.replaceState({}, "", "/"));
+  }, []);
+
   useEffect(() => {
     if (token && plan === "trial") {
       api("/api/trial/status","GET",null,token).then(d=>setTrialInfo(d)).catch(()=>{});
@@ -23763,6 +23805,10 @@ export default function App() {
     }
     return (
       <>
+        {/* Enterprise account & security settings (API keys / MFA / orgs) */}
+        <div style={{display: active==="account_security" ? "block" : "none"}}>
+          <EnterpriseSettings api={api} token={token} role={role}/>
+        </div>
         {/* Always-mounted modules — scan survives tab switches */}
         <div style={{display: active==="webapp"   ? "block" : "none"}}>
           <ModuleWithTabs moduleKey="webapp" moduleLabel="Webapp" autoCount={158} manualTests={MANUAL_TESTS_WEBAPP} color="#3b82f6"
@@ -24088,7 +24134,10 @@ export default function App() {
         <div style={{padding:"10px 12px",borderTop:"1px solid #1e293b",flexShrink:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontSize:11,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace",fontWeight:600}}>{username} <span style={{color:"#334155"}}>·</span> <span style={{color:plan==="pro"?"#f59e0b":"#475569"}}>{plan}</span></div>
-            <button onClick={handleLogout} style={{background:"none",border:"none",color:"#475569",fontSize:10,cursor:"pointer",letterSpacing:1}}>Sign out</button>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <button onClick={()=>setActive("account_security")} style={{background:"none",border:"none",color:active==="account_security"?"#22d3ee":"#475569",fontSize:10,cursor:"pointer",letterSpacing:1,fontWeight:600}}>Account</button>
+              <button onClick={handleLogout} style={{background:"none",border:"none",color:"#475569",fontSize:10,cursor:"pointer",letterSpacing:1}}>Sign out</button>
+            </div>
           </div>
           <div style={{textAlign:"center",fontSize:11,color:"#334155",fontFamily:"JetBrains Mono,monospace",marginTop:4}}>{time}</div>
         </div>

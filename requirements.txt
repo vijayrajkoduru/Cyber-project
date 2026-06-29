@@ -15,4 +15,5 @@ SQLAlchemy==2.0.51          # data layer (Postgres engine + pooling)
 psycopg2-binary==2.9.9      # PostgreSQL driver
 alembic==1.13.2             # database migrations
 mmh3==4.1.0  # MurmurHash3 — used by recon/favicon_hash for Shodan favicon pivoting
+pyotp==2.9.0  # TOTP (2FA / MFA) — enterprise login
 anthropic>=0.45.0

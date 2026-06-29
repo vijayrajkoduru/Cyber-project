@@ -106,7 +106,62 @@ _SCHEMA_DDL = [
         PRIMARY KEY (user_id, day)
     )
     """,
+    # ── Enterprise: tamper-evident audit log (who did what, when) ─────
+    """
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id         TEXT PRIMARY KEY,
+        ts         TEXT NOT NULL,
+        actor_id   TEXT,
+        actor_name TEXT,
+        action     TEXT NOT NULL,
+        target     TEXT,
+        ip         TEXT,
+        detail     TEXT,
+        status     TEXT DEFAULT 'ok'
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_id)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)",
+    # ── Enterprise Phase 2: email verification + MFA (idempotent ALTERs) ─
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled INTEGER DEFAULT 0",
+    """
+    CREATE TABLE IF NOT EXISTS email_tokens (
+        token      TEXT PRIMARY KEY,
+        user_id    TEXT NOT NULL,
+        purpose    TEXT NOT NULL DEFAULT 'verify',
+        expires_at TEXT NOT NULL,
+        used       INTEGER NOT NULL DEFAULT 0
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_emailtok_user ON email_tokens(user_id)",
+    # ── Enterprise Phase 3: organizations + RBAC membership ───────────
+    """
+    CREATE TABLE IF NOT EXISTS organizations (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        owner_id   TEXT NOT NULL,
+        plan       TEXT DEFAULT 'team',
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS org_members (
+        org_id    TEXT NOT NULL,
+        user_id   TEXT NOT NULL,
+        role      TEXT NOT NULL DEFAULT 'member',
+        added_at  TEXT NOT NULL,
+        PRIMARY KEY (org_id, user_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_orgmem_user ON org_members(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_orgmem_org ON org_members(org_id)",
 ]
+
+# Org role hierarchy — higher number = more privilege.
+ORG_ROLES = {"member": 1, "admin": 2, "owner": 3}
 
 _schema_ready = False
 _seeded = False
@@ -209,3 +264,209 @@ def verify_password(plain: str, hashed: str) -> bool:
         return _pwd_ctx.verify(plain, hashed)
     except Exception:
         return False
+
+
+# ── Enterprise: audit log ───────────────────────────────────────────
+def record_audit(action: str, *, actor_id=None, actor_name=None, target=None,
+                 ip=None, detail=None, status="ok") -> None:
+    """Append an audit event. Never raises — an audit-write failure must not
+    break the action being audited (logged instead)."""
+    try:
+        with get_db() as con:
+            con.execute(
+                "INSERT INTO audit_log (id, ts, actor_id, actor_name, action, "
+                "target, ip, detail, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), datetime.datetime.utcnow().isoformat() + "Z",
+                 actor_id, actor_name, action, target, ip,
+                 (detail if isinstance(detail, str) else None), status),
+            )
+    except Exception as exc:  # pragma: no cover - audit must never break flow
+        import logging
+        logging.getLogger("vulnuslab.audit").warning("audit write failed: %s", exc)
+
+
+def list_audit(limit: int = 100, offset: int = 0, actor_id=None, action=None):
+    """Read audit events newest-first, with optional filters + pagination."""
+    limit = max(1, min(int(limit), 500))
+    offset = max(0, int(offset))
+    where, params = [], []
+    if actor_id:
+        where.append("actor_id=?"); params.append(actor_id)
+    if action:
+        where.append("action=?"); params.append(action)
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    with get_db() as con:
+        rows = con.execute(
+            f"SELECT id, ts, actor_id, actor_name, action, target, ip, detail, status "
+            f"FROM audit_log {clause} ORDER BY ts DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        ).fetchall()
+        total = con.execute(
+            f"SELECT COUNT(*) AS n FROM audit_log {clause}", tuple(params)
+        ).fetchone()
+    return {"items": rows, "total": int(total["n"]) if total else 0,
+            "limit": limit, "offset": offset}
+
+
+# ── Enterprise: email verification ──────────────────────────────────
+def create_email_token(user_id: str, purpose: str = "verify", ttl_hours: int = 48) -> str:
+    """Mint a single-use email token (e.g. for verify / password reset)."""
+    import secrets as _secrets
+    tok = _secrets.token_urlsafe(32)
+    exp = (datetime.datetime.utcnow() + datetime.timedelta(hours=ttl_hours)).isoformat() + "Z"
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO email_tokens (token, user_id, purpose, expires_at, used) "
+            "VALUES (?, ?, ?, ?, 0)",
+            (tok, user_id, purpose, exp),
+        )
+    return tok
+
+
+def consume_email_token(token: str, purpose: str = "verify"):
+    """Validate + burn a token. Returns user_id on success, else None."""
+    if not token:
+        return None
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+    with get_db() as con:
+        row = con.execute(
+            "SELECT user_id, expires_at, used FROM email_tokens WHERE token=? AND purpose=?",
+            (token, purpose),
+        ).fetchone()
+        if not row or row["used"] or row["expires_at"] < now:
+            return None
+        con.execute("UPDATE email_tokens SET used=1 WHERE token=?", (token,))
+        return row["user_id"]
+
+
+def mark_email_verified(user_id: str) -> None:
+    with get_db() as con:
+        con.execute("UPDATE users SET email_verified=1 WHERE id=?", (user_id,))
+
+
+def is_email_verified(user_id: str) -> bool:
+    with get_db() as con:
+        row = con.execute("SELECT email_verified FROM users WHERE id=?", (user_id,)).fetchone()
+    return bool(row and row["email_verified"])
+
+
+# ── Enterprise: MFA / TOTP ──────────────────────────────────────────
+def set_mfa_secret(user_id: str, secret: str) -> None:
+    """Store a pending TOTP secret (mfa not enabled until a code is verified)."""
+    with get_db() as con:
+        con.execute("UPDATE users SET mfa_secret=? WHERE id=?", (secret, user_id))
+
+
+def enable_mfa(user_id: str) -> None:
+    with get_db() as con:
+        con.execute("UPDATE users SET mfa_enabled=1 WHERE id=?", (user_id,))
+
+
+def disable_mfa(user_id: str) -> None:
+    with get_db() as con:
+        con.execute("UPDATE users SET mfa_enabled=0, mfa_secret=NULL WHERE id=?", (user_id,))
+
+
+def get_mfa(user_id: str):
+    """Return {'enabled': bool, 'secret': str|None} for a user."""
+    with get_db() as con:
+        row = con.execute(
+            "SELECT mfa_enabled, mfa_secret FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+    if not row:
+        return {"enabled": False, "secret": None}
+    return {"enabled": bool(row["mfa_enabled"]), "secret": row["mfa_secret"]}
+
+
+# ── Enterprise: organizations + RBAC ────────────────────────────────
+def create_org(name: str, owner_id: str, plan: str = "team"):
+    """Create an org and make the creator its owner (atomic)."""
+    oid = str(uuid.uuid4())
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO organizations (id, name, owner_id, plan, created_at) "
+            "VALUES (?, ?, ?, ?, ?)", (oid, name, owner_id, plan, now))
+        con.execute(
+            "INSERT INTO org_members (org_id, user_id, role, added_at) "
+            "VALUES (?, ?, 'owner', ?)", (oid, owner_id, now))
+    return {"id": oid, "name": name, "owner_id": owner_id, "plan": plan, "created_at": now}
+
+
+def get_org(org_id: str):
+    with get_db() as con:
+        return con.execute(
+            "SELECT id, name, owner_id, plan, created_at FROM organizations WHERE id=?",
+            (org_id,)).fetchone()
+
+
+def list_user_orgs(user_id: str):
+    """Orgs the user belongs to, with their role in each."""
+    with get_db() as con:
+        return con.execute(
+            "SELECT o.id, o.name, o.plan, o.created_at, m.role "
+            "FROM organizations o JOIN org_members m ON m.org_id=o.id "
+            "WHERE m.user_id=? ORDER BY o.created_at", (user_id,)).fetchall()
+
+
+def get_member_role(org_id: str, user_id: str):
+    """Return the user's role string in the org, or None if not a member."""
+    with get_db() as con:
+        row = con.execute(
+            "SELECT role FROM org_members WHERE org_id=? AND user_id=?",
+            (org_id, user_id)).fetchone()
+    return row["role"] if row else None
+
+
+def has_org_role(org_id: str, user_id: str, min_role: str) -> bool:
+    role = get_member_role(org_id, user_id)
+    if not role:
+        return False
+    return ORG_ROLES.get(role, 0) >= ORG_ROLES.get(min_role, 99)
+
+
+def list_org_members(org_id: str):
+    with get_db() as con:
+        return con.execute(
+            "SELECT m.user_id, m.role, m.added_at, u.username, u.email "
+            "FROM org_members m JOIN users u ON u.id=m.user_id "
+            "WHERE m.org_id=? ORDER BY m.added_at", (org_id,)).fetchall()
+
+
+def add_org_member(org_id: str, user_id: str, role: str = "member") -> bool:
+    if role not in ORG_ROLES:
+        return False
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+    with get_db() as con:
+        con.execute(
+            "INSERT INTO org_members (org_id, user_id, role, added_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (org_id, user_id) DO UPDATE SET role=EXCLUDED.role",
+            (org_id, user_id, role, now))
+    return True
+
+
+def set_member_role(org_id: str, user_id: str, role: str) -> bool:
+    if role not in ORG_ROLES:
+        return False
+    with get_db() as con:
+        r = con.execute("UPDATE org_members SET role=? WHERE org_id=? AND user_id=?",
+                        (role, org_id, user_id))
+        return r.rowcount > 0
+
+
+def remove_org_member(org_id: str, user_id: str) -> bool:
+    """Remove a member. Refuses to remove the org owner (must transfer first)."""
+    org = get_org(org_id)
+    if org and org["owner_id"] == user_id:
+        return False
+    with get_db() as con:
+        r = con.execute("DELETE FROM org_members WHERE org_id=? AND user_id=?",
+                        (org_id, user_id))
+        return r.rowcount > 0
+
+
+def find_user_by_email(email: str):
+    with get_db() as con:
+        return con.execute(
+            "SELECT id, username, email FROM users WHERE LOWER(email)=LOWER(?)",
+            (email,)).fetchone()

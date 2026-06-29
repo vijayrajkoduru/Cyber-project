@@ -286,6 +286,19 @@ def verify_scan_quota(request: Request, payload=Depends(verify_token)):
     if is_internal_fanout(request):
         return payload
 
+    # Activity trace (superuser-visible audit): record each real user-initiated
+    # scan with who/what/where. Internal fan-out is bypassed above, so a scan
+    # that triggers N internal calls is logged once, not N times. Best-effort.
+    try:
+        from tools.auth._db import record_audit
+        _ip = request.client.host if request and request.client else None
+        record_audit("scan.run", actor_id=payload.get("sub"),
+                     actor_name=payload.get("username"),
+                     target=getattr(getattr(request, "url", None), "path", None),
+                     ip=_ip, detail=f"plan={payload.get('plan')}")
+    except Exception:
+        pass
+
     role = (payload.get("role") or "user").lower()
     plan = (payload.get("plan") or "trial").lower()
     if role in ("admin", "superadmin"):
