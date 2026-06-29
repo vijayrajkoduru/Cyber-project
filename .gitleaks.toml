@@ -1,0 +1,41 @@
+# gitleaks config for VulnusLab.
+#
+# This is a security-tooling repo, so it legitimately contains sample secrets:
+# scanner payload wordlists, weak-token test lists, and detection patterns the
+# scanners search for in CUSTOMER targets. Those are not real credentials, so
+# they're allowlisted below. Everything else is scanned with the full default
+# rule set — real .env files, cloud keys, private keys, DB dumps, etc. will
+# still fail the build.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "VulnusLab false positives — scanner payloads, detection patterns, generated artifacts"
+
+paths = [
+  # ── Generated / vendored / cached artifacts (not source) ──
+  '''(^|/)build/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)__pycache__/''',
+  '''\.pyc$''',
+  '''\.map$''',
+  # Snapshot backups that mirror tools/ source verbatim
+  '''(^|/)\.last_known_good/''',
+
+  # ── The scanner's OWN payload / wordlist library ──
+  # Intentional sample secrets (JWTs, key patterns, weak creds) used to probe
+  # customer targets — by design, not real credentials.
+  '''(^|/)tools/_payloads/''',
+
+  # ── Scanner modules that embed detection patterns / sample tokens ──
+  # Each flagged match is a pattern the scanner LOOKS FOR, or an RFC example.
+  '''(^|/)tools/webapp/jwt_scan\.py$''',                       # weak-JWT test list
+  '''(^|/)tools/password/tier4_discovery/exposed_env_scan\.py$''',  # "BEGIN PRIVATE KEY" marker
+  '''(^|/)tools/apisec/apisec_pack\.py$''',                    # RFC6455 Sec-WebSocket-Key example
+
+  # ── Frontend bundle source ──
+  # The flagged match is a `curl … | grep` command string in a scanner
+  # command template, not a credential.
+  '''(^|/)src/App\.js$''',
+]

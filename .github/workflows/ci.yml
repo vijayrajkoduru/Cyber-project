@@ -94,3 +94,22 @@ jobs:
         # CI=false so pre-existing eslint warnings don't fail the build
         # (Create React App treats warnings as errors when CI=true).
         run: CI=false npm run build
+
+  secrets-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so a push to main re-scans every commit; on PRs the
+          # action scans just the PR's commits.
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        # Fails the build on any real secret (cloud key, private key, token,
+        # DB dump, .env). Scanner payloads / detection patterns are allowlisted
+        # in .gitleaks.toml. Pinned to a tag so a fresh image can't change the
+        # gate's behaviour under us. Free for this personal repo (the license
+        # env var is only required for GitHub *Organizations*).
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
