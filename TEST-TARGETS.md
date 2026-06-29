@@ -10,6 +10,56 @@ A curated list of **legally scannable** vulnerable websites you can use to:
 
 ---
 
+## Per-Module Real Targets (all 24 modules)
+
+One authorized, real target for **every** module so you can exercise each end-to-end.
+Reachability column = checked live on 2026-06-28 (`pub` = public internet, `lab` = your
+Docker compose stack, `file` = artifact you download, `self` = self-hosted lab you run).
+
+| Module | Input it takes | Real authorized target | Reach |
+|---|---|---|---|
+| **recon** | domain / host | `scanme.nmap.org` (Nmap explicitly authorizes scanning) | pub ✅ |
+| **vuln** | host / URL | `demo.testfire.net` (Altoro Mutual), `scanme.nmap.org` | pub ✅ |
+| **webapp** | URL | `http://lab_juiceshop:3000`, `http://demo.testfire.net` | lab/pub ✅ |
+| **apisec** | base URL / OpenAPI | `http://lab_vampi:5000` (OWASP VAmPI, in compose); public: `http://rest.vulnweb.com` | lab/pub ✅ |
+| **network** | target IP (ARP/MITM/DNS + portscan) | `lab_metasploitable` (LAN attacks); scan-only: `scanme.nmap.org` | lab/pub ✅ |
+| **cloud** | bucket / domain / region | `flaws.cloud` + `flaws2.cloud` (Scott Piper AWS S3/CloudFront training — explicitly authorized) | pub ✅ |
+| **container_k8s** | image_ref / Dockerfile / kubeconfig | image: `vulnerables/web-dvwa` or `alpine:3.10` (CVE-rich); kubeconfig: **kubernetes-goat** | pub/self |
+| **iot_ot** | firmware / device | OWASP **IoTGoat** firmware image; **DVRF** (Damn Vulnerable Router Firmware) | file ✅ |
+| **osint** | domain / email / handle | your own domain, or `example.com`; only public data — no auth needed | pub ✅ |
+| **password** | hash / service | `lab_pwd_ssh` `lab_pwd_smb` `lab_pwd_web` (`admin/admin`); hashes of `password` (md5/bcrypt/NTLM) | lab |
+| **bof** | binary / host | **exploit.education** (Phoenix / Protostar VMs); or a local vulnerable C binary | self |
+| **exploit** | host | `lab_metasploitable` (Metasploitable 2); VulnHub VMs | lab/file |
+| **pivot** | pivot host / subnet | `lab_pivot_jump` (ssh `admin/admin` on **:2222**) → `lab_pivot_internal` (reachable ONLY through the jump) — in compose | lab ✅ |
+| **tunnel** | pivot host / ports | same dual-homed lab: chisel/ligolo/socat through `lab_pivot_jump` to `lab_pivot_internal:80` | lab ✅ |
+| **mobile_static** | app package id / APK | **InsecureBankv2** `com.android.insecurebankv2` | file ✅ |
+| **mobile_storage** | app package id / APK | **DIVA** `jakhar.aseem.diva` | file ✅ |
+| **mobile_crypto** | app package id / APK | **InsecureBankv2** / DIVA | file ✅ |
+| **mobile_network** | app package id / APK | **InsecureBankv2** (cleartext + weak TLS backend) | file ✅ |
+| **mobile_ipc** | app package id / APK | OWASP **Sieve** `com.mwr.example.sieve` (exported content providers) | file ✅ |
+| **mobile_webview** | app package id / APK | **InsecureBankv2** (vulnerable WebView) | file ✅ |
+| **mobile_runtime** | app package id / APK | InsecureBankv2 (no anti-tamper / anti-debug) | file ✅ |
+| **mobile_privacy** | app package id / APK | DIVA (PII in logs / over-asks permissions) | file ✅ |
+| **mobile_payment** | app package id / APK | InsecureBankv2 (mock transfer flow) | file ✅ |
+| **mobile_ipc / webview / aiml** | app package id | mobile OSINT probes (Play Store / Firebase / VirusTotal / GitHub) run from the **package name** alone — e.g. `com.android.insecurebankv2` | pub ✅ |
+
+> **Note on mobile:** the mobile modules' forge probes are *externally observable* — they
+> query Play Store, App Store, Firebase, VirusTotal and GitHub from the **package
+> name / bundle id**, so a published package id works with no APK upload. For the
+> static/storage/crypto deep checks, download the APK from its repo below.
+
+**Where to get the file/self-hosted targets (all open-source, authorized):**
+- InsecureBankv2 — https://github.com/dineshshetty/Android-InsecureBankv2
+- DIVA (Android) — `jakhar.aseem.diva` (Damn Insecure & Vulnerable App)
+- OWASP Sieve / iGoat (iOS) — https://github.com/OWASP/iGoat
+- OWASP crAPI (API) — https://github.com/OWASP/crAPI
+- OWASP IoTGoat (firmware) — https://github.com/OWASP/IoTGoat
+- kubernetes-goat — https://github.com/madhuakula/kubernetes-goat
+- exploit.education (bof) — https://exploit.education
+- Metasploitable 2 — VulnHub, or the `lab_metasploitable` compose service
+
+---
+
 ## Top picks (best for demos)
 
 | URL | Tech Stack | Why it's good |
@@ -94,8 +144,17 @@ These run in your Docker compose stack — guaranteed reachable:
 | Mutillidae | `http://lab_mutillidae` | `http://YOUR_VPS:8003` | `admin / admin` |
 | bWAPP | `http://lab_bwapp` | `http://YOUR_VPS:8004` | `bee / bug` |
 | Juice Shop | `http://lab_juiceshop:3000` | `http://YOUR_VPS:3000` | self-register |
+| VAmPI (API) | `http://lab_vampi:5000` | — | OWASP vulnerable REST API (apisec) |
+| Pivot jump | `ssh -p 2222 admin@lab_pivot_jump` | — | `admin / admin` — dual-homed jump host (pivot/tunnel) |
+| Pivot internal | `http://lab_pivot_internal` | — | reachable **only** through `lab_pivot_jump` |
 
 **Use internal URLs** (`http://lab_dvwa`) when scanning from the dashboard — they're faster and not rate-limited.
+
+Bring up the new module targets:
+```bash
+docker compose up -d lab_vampi                      # apisec
+docker compose up -d lab_pivot_jump lab_pivot_internal   # pivot + tunnel
+```
 
 ---
 

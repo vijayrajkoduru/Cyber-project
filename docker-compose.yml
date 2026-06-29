@@ -104,6 +104,72 @@ services:
     networks:
     - vulnuslab
 
+  # ── apisec target — OWASP VAmPI (Vulnerable API) ─────────────────────
+  # Lightweight Flask vulnerable REST API. Exercises the apisec module's
+  # OWASP API Top 10 probes (BOLA, broken auth, mass assignment, excessive
+  # data exposure, etc.). Reachable at http://lab_vampi:5000 from the
+  # backend. Set vulnerable=0 for a secured A/B baseline.
+  lab_vampi:
+    image: erev0s/vampi:latest
+    container_name: lab_vampi
+    environment:
+    - vulnerable=1
+    networks:
+    - vulnuslab
+    restart: unless-stopped
+
+  # ── Pivot / Tunnel lab — dual-homed jump host + internal-only target ──
+  # Models a real pivot. lab_pivot_internal sits on the vl_internal network
+  # ONLY, so the backend has NO direct route to it. lab_pivot_jump is
+  # dual-homed (vulnuslab + vl_internal), so the pivot/tunnel scanners must
+  # tunnel through it (SSH / chisel / ligolo / proxychains) to reach
+  # lab_pivot_internal:80.
+  #   jump host : ssh admin/admin on port 2222  (reachable from backend)
+  #   internal  : http://lab_pivot_internal     (reachable ONLY via the jump)
+  lab_pivot_jump:
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: lab_pivot_jump
+    environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=Etc/UTC
+    - PASSWORD_ACCESS=true
+    - USER_NAME=admin
+    - USER_PASSWORD=admin
+    - SUDO_ACCESS=true
+    networks:
+    - vulnuslab
+    - vl_internal
+    restart: unless-stopped
+
+  lab_pivot_internal:
+    image: nginx:alpine
+    container_name: lab_pivot_internal
+    networks:
+    - vl_internal
+    restart: unless-stopped
+
+  # ── Targets that need a cluster / VM (NOT plain containers) ───────────
+  # These three modules can't be modeled as a single compose service —
+  # they need a real Kubernetes cluster or a QEMU/VM. Set them up out of
+  # band; targets for them are documented in TEST-TARGETS.md.
+  #
+  #   container_k8s (kubeconfig path):
+  #     kubernetes-goat needs a kind/minikube cluster. The IMAGE-scan path
+  #     needs no cluster — just point image_ref at vulnerables/web-dvwa or
+  #     alpine:3.10. Cluster setup:
+  #       git clone https://github.com/madhuakula/kubernetes-goat
+  #       cd kubernetes-goat && bash setup-kubernetes-goat.sh
+  #
+  #   iot_ot:
+  #     OWASP IoTGoat ships an OpenWrt firmware image you boot in QEMU:
+  #       https://github.com/OWASP/IoTGoat  (see releases for the .img)
+  #
+  #   bof:
+  #     exploit.education Phoenix/Protostar are downloadable VMs (VirtualBox/
+  #     QEMU): https://exploit.education
+  # ─────────────────────────────────────────────────────────────────────
+
   # ── VL-METHOD Password Range ─────────────────────────────────────────
   # Three deterministic targets that exercise all 7 stages of every
   # Password Attacks scanner. All use admin/admin so quick_probe HITS
@@ -258,3 +324,9 @@ volumes:
 networks:
   vulnuslab:
     driver: bridge
+  # Internal-only bridge for the pivot/tunnel lab: no gateway to the host
+  # or the backend, so lab_pivot_internal is reachable ONLY through the
+  # dual-homed lab_pivot_jump. This is what makes the pivot real.
+  vl_internal:
+    driver: bridge
+    internal: true
