@@ -46,6 +46,28 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
+  forge-score:
+    name: VL-FOUNDRY forge score gate
+    runs-on: ubuntu-latest
+    # No DB/JWT needed: the scorer only imports orchestrators (for L4 wiring)
+    # and inspects source via AST — it never connects to Postgres or auth.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        # Backend deps are required so `endpoints.<module>_orchestrator` import
+        # cleanly (the L4 coverage check imports each orchestrator).
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Gate forge scores against committed baselines
+        # Fails the build if any module regresses >2 pts below its recorded
+        # score in .vl-foundry-scores.json, or falls below the 85 ship floor.
+        run: python scripts/ci_score_gate.py
+
   backend-syntax:
     name: Backend syntax (compileall)
     runs-on: ubuntu-latest
