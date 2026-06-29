@@ -98,6 +98,17 @@ services:
     container_name: lab_webgoat
     networks:
     - vulnuslab
+    # The upstream image's built-in healthcheck calls `curl`, which is NOT
+    # installed in the image, so it reports "unhealthy" forever even while
+    # WebGoat serves fine (its /actuator/health returns 200). Override it with
+    # wget, which IS present, against the same endpoint. start_period covers
+    # WebGoat's ~60-90s JVM boot.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/WebGoat/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
   lab_metasploitable:
     image: tleemcjr/metasploitable2
     container_name: lab_metasploitable
