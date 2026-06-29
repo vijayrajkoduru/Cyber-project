@@ -68,6 +68,36 @@ jobs:
         # score in .vl-foundry-scores.json, or falls below the 85 ship floor.
         run: python scripts/ci_score_gate.py
 
+  dep-audit:
+    name: Dependency CVE audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+      - name: Audit production dependencies
+        # Gates on production requirements.txt (the deployed surface; the
+        # dev/test deps in requirements-dev.txt are not shipped in the image).
+        # The ignored CVEs cannot be fixed without a major upgrade we haven't
+        # validated yet, so they're tracked, not silently dropped:
+        #   starlette 0.47.x — needs the FastAPI 1.x / starlette 1.x migration:
+        #     PYSEC-2026-161, PYSEC-2026-248, PYSEC-2026-249,
+        #     CVE-2025-62727, CVE-2026-48817, CVE-2026-48818
+        #   pyasn1 0.4.8 — held <0.5 by python-jose 3.4.0: CVE-2026-30922
+        # Re-review this list on every dependency bump; a NEW CVE fails the build.
+        run: |
+          pip-audit -r requirements.txt \
+            --ignore-vuln PYSEC-2026-161 \
+            --ignore-vuln PYSEC-2026-248 \
+            --ignore-vuln PYSEC-2026-249 \
+            --ignore-vuln CVE-2025-62727 \
+            --ignore-vuln CVE-2026-48817 \
+            --ignore-vuln CVE-2026-48818 \
+            --ignore-vuln CVE-2026-30922
+
   backend-syntax:
     name: Backend syntax (compileall)
     runs-on: ubuntu-latest
