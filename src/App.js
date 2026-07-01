@@ -3430,7 +3430,6 @@ function WebAppModule(props) {
     // dlPDF runs AFTER scan completes, so "vulnuslab_previousScan_<target>" is
     // the second-most-recent run (the one to diff against). On the first scan
     // this is null and the Remediation Progress section gracefully skips.
-    console.log("[VL] dlPDF entered. target=", target, "allResults keys=", Object.keys(allResults||{}));
     let _prevScan = null;
     try {
       const normTarget = (t => t.startsWith("http://") || t.startsWith("https://") ? t : "http://" + t)((target || "").trim());

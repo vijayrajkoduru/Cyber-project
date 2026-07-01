@@ -234,7 +234,11 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
 
 
 _INTERNAL_FANOUT_HEADER = "x-vl-internal-fanout"
-_INTERNAL_FANOUT_TOKEN = os.getenv("VL_INTERNAL_FANOUT_TOKEN", "vlforge-internal")
+# No insecure default: if VL_INTERNAL_FANOUT_TOKEN is unset we fail CLOSED
+# (empty token never matches a client header), so nobody can forge the
+# internal-fanout marker to skip rate-limits/scan-quota. Set a strong random
+# value in prod .env so legitimate orchestrator fan-out is trusted.
+_INTERNAL_FANOUT_TOKEN = os.getenv("VL_INTERNAL_FANOUT_TOKEN", "").strip()
 _INTERNAL_TRUSTED_IPS = ("127.0.0.1", "::1", "localhost")
 _INTERNAL_TRUSTED_PREFIXES = ("10.", "172.", "192.168.")
 
@@ -245,6 +249,9 @@ def is_internal_fanout(request: Optional[Request]) -> bool:
     HTTP fan-out with VL_INTERNAL_FANOUT_TOKEN; the limiter then knows
     that one user scan triggering N internal calls counts as 1, not N."""
     if request is None:
+        return False
+    # Fail closed when no token is configured — never trust an empty match.
+    if not _INTERNAL_FANOUT_TOKEN:
         return False
     if request.headers.get(_INTERNAL_FANOUT_HEADER, "") != _INTERNAL_FANOUT_TOKEN:
         return False
