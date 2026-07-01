@@ -704,6 +704,11 @@ function Login(props) {
           )}
         </div>
 
+        {/* Privacy link */}
+        <div style={{textAlign:"center",marginBottom:12}}>
+          <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#475569",textDecoration:"none"}}>Privacy Policy</a>
+        </div>
+
         {/* Footer badge */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#1e293b" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
