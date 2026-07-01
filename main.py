@@ -34,6 +34,24 @@ except Exception:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("vulnuslab")
 
+# ── Sentry error monitoring ─────────────────────────────────────────
+# No-op unless SENTRY_DSN is set in the environment, so this is safe to ship
+# and costs nothing until you paste a DSN into prod .env. send_default_pii is
+# left False so request bodies / auth headers are not shipped to Sentry.
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            environment=os.getenv("SENTRY_ENV", "production"),
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+            send_default_pii=False,
+        )
+        log.info("Sentry error monitoring enabled")
+    except Exception as _sentry_exc:  # never let monitoring break boot
+        log.warning("Sentry init failed, continuing without it: %s", _sentry_exc)
+
 app = FastAPI(
     title="VulnusLab API",
     version="2.0.0",
@@ -180,6 +198,12 @@ async def _rate_limit(request, call_next):
 @app.exception_handler(Exception)
 async def _unhandled_exception_handler(request, exc):
     log.exception("Unhandled error on %s %s", request.method, request.url.path)
+    if _SENTRY_DSN:
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass  # monitoring must never mask the original error
     return _JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 # ── Required env ────────────────────────────────────────────────────
