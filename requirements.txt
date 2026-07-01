@@ -16,3 +16,4 @@ psycopg2-binary==2.9.9      # PostgreSQL driver
 alembic==1.13.2             # database migrations
 mmh3==4.1.0  # MurmurHash3 — used by recon/favicon_hash for Shodan favicon pivoting
 anthropic>=0.45.0
+sentry-sdk[fastapi]>=2.0.0   # error monitoring (no-op unless SENTRY_DSN is set)
