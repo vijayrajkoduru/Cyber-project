@@ -9,7 +9,9 @@ COPY src ./src
 # on any legacy unused-var / no-mixed-operators warning. We have those in
 # App.js (9k+ lines, accumulated over time) — fixing them all is a separate
 # cleanup pass. For now, warnings are still printed but don't fail the build.
-RUN CI=false npm run build
+# GENERATE_SOURCEMAP=false: never ship .js.map source maps to the public — they
+# expose the entire original src/App.js (comments, endpoint names, lab creds).
+RUN CI=false GENERATE_SOURCEMAP=false npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/build /usr/share/nginx/html

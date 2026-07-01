@@ -73,3 +73,17 @@ src/.cache-buster.js
 
 # Local vulnerable-target lab (docker fixtures — not part of the app)
 vulnerable-lab/
+
+# Internal ops / build docs — kept locally, NOT published to the public repo.
+# They expose the VPS IP, admin username, backup paths and internal notes.
+DAILY.md
+EVERYDAY-TODO.md
+BACKUP-RESTORE.md
+TEST-TARGETS.md
+BUILD_MODULE_PLAYBOOK.md
+FORGE_PLAYBOOK.md
+STANDARDIZATION-SPEC.md
+mobile_ruff.md
+.scaffold_delete_recon.txt
+.vl-foundry-scores.json
+prompts/

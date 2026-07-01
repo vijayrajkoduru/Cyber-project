@@ -38,6 +38,11 @@ app = FastAPI(
     title="VulnusLab API",
     version="2.0.0",
     description="Pentest platform — Kali-style modular tool architecture",
+    # Disable interactive docs / schema in production — no need to publish the
+    # full API map. (nginx also doesn't proxy these, but fail closed at the app.)
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # ── CORS ────────────────────────────────────────────────────────────
@@ -148,7 +153,11 @@ async def _rate_limit(request, call_next):
     if (limit > 0
             and not any(path.startswith(p) for p in _RATE_EXEMPT_PREFIXES)
             and not _is_internal_fanout(request)):
-        ip = request.client.host if request.client else "?"
+        # Behind nginx the socket peer is always the nginx container IP, which
+        # would collapse every external user into one shared bucket. nginx sets
+        # X-Real-IP to the true client; trust it (backend is loopback-only, so
+        # this header can't be spoofed from outside).
+        ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
         now = _time.monotonic()
         dq = _rate_hits.get(ip)
         if dq is None:
