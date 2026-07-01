@@ -4,8 +4,12 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: vulnuslab_backend
+    # Bind to loopback only: nginx reaches the backend over the internal
+    # `vulnuslab` docker network (http://backend:8000), so the host port is
+    # only for on-box debugging (curl localhost:8000). Publishing it on
+    # 0.0.0.0 exposed the API over plain HTTP, bypassing nginx/TLS.
     ports:
-    - 8000:8000
+    - 127.0.0.1:8000:8000
     env_file:
     - .env
     environment:
