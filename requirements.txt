@@ -1,12 +1,12 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.0
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.4.0    # 3.4.0 fixes CVE-2024-33663 (alg confusion) + CVE-2024-33664 (JWT-bomb DoS)
 cryptography>=42.0.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.12
-requests==2.32.3
-aiohttp==3.10.10
+python-multipart==0.0.18            # 0.0.18 fixes CVE-2024-53981 (malformed-boundary DoS)
+requests==2.32.4                    # 2.32.4 fixes CVE-2024-47081 (.netrc credential leak)
+aiohttp==3.11.11                    # 3.11.x fixes CVE-2024-52304 / CVE-2024-52303 request-smuggling
 dnspython==2.7.0
 python-whois==0.9.4
 PyYAML==6.0.2
