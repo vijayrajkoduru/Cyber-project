@@ -78,9 +78,38 @@ def _build_resp(slug, target, findings, tested, summary):
     }
 
 
+def _kubeconfig_is_safe(kc: str) -> bool:
+    """Reject kubeconfigs that would make kubectl execute a local command.
+
+    A user-supplied kubeconfig with an `exec` credential plugin or an
+    `auth-provider` runs an arbitrary binary the moment kubectl touches it —
+    authenticated RCE (audit). We only accept static credentials (token /
+    client cert). Parse the YAML and reject any user carrying exec/auth-provider;
+    if it won't parse or PyYAML is unavailable, fall back to a conservative
+    string check so we never run kubectl on an un-vetted config."""
+    lowered = kc.lower()
+    try:
+        import yaml
+        doc = yaml.safe_load(kc)
+        if not isinstance(doc, dict):
+            return False
+        for u in doc.get("users") or []:
+            user = (u or {}).get("user") or {}
+            if not isinstance(user, dict):
+                continue
+            if "exec" in user or "auth-provider" in user or "authProvider" in user:
+                return False
+        return True
+    except Exception:
+        return not ("exec" in lowered or "auth-provider" in lowered
+                    or "authprovider" in lowered)
+
+
 def _get_kubeconfig(req) -> Optional[str]:
     kc = getattr(req, "kubeconfig", None)
     if not kc or not isinstance(kc, str) or not kc.strip():
+        return None
+    if not _kubeconfig_is_safe(kc):
         return None
     return kc
 

@@ -73,3 +73,8 @@ src/.cache-buster.js
 
 # Local vulnerable-target lab (docker fixtures — not part of the app)
 vulnerable-lab/
+
+# K8s test-range kubeconfig — contains client cert/key credentials, never commit
+labs/vl_k8s_range/
+*kubeconfig*.yaml
+*kubeconfig*.yml

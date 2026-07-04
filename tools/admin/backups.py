@@ -7,8 +7,11 @@ Provides:
   POST   /api/admin/backups/wipe           — delete ALL backups (nuclear option)
   GET    /api/admin/backups/download/{f}   — stream a backup file as download
 
-The bundle includes users.db + .env + data/ + tools/ + src/ + docker/nginx config
-— enough to fully restore the VPS from scratch.
+The bundle includes data/ + tools/ + src/ + docker/nginx config — the app and
+its state. Secrets (.env) and the credential DB (users.db) are deliberately
+EXCLUDED: this archive is downloadable via the admin API, so bundling secrets
+would let any admin-token/RCE compromise exfiltrate every key. Back those up
+out-of-band (secret manager / encrypted store).
 """
 import datetime
 import os
@@ -32,9 +35,12 @@ PROJECT_ROOT = Path("/host-project")
 # Complete end-to-end coverage: backend + frontend + infra + data + secrets.
 # Restore from this single bundle should produce a working VPS deployment.
 INCLUDE_PATHS = [
-    # ─── Data + secrets (highest criticality) ─────────────────────
-    "users.db",
-    ".env",
+    # ─── Data (highest criticality) ──────────────────────────────
+    # NOTE: secrets are deliberately NOT bundled. `.env` (JWT/vault/payment
+    # keys) and `users.db` (password hashes, MFA secrets) were removed — this
+    # tarball is downloadable via the admin API and any RCE/token compromise
+    # would otherwise exfiltrate every credential. Back up secrets out-of-band
+    # (secret manager / encrypted store), never in the app-served bundle.
     "data",                       # scan history, consent log, user state
 
     # ─── Backend ─────────────────────────────────────────────────
