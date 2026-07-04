@@ -87,8 +87,11 @@ async def add_member(org_id: str, req: AddMemberRequest, request: Request, paylo
 @router.patch("/api/orgs/{org_id}/members/{user_id}")
 async def change_role(org_id: str, user_id: str, req: RoleRequest, request: Request, payload=Depends(verify_token)):
     _require_role(org_id, payload.get("sub"), "admin")
-    if req.role not in ORG_ROLES:
-        raise HTTPException(400, f"Invalid role; one of {list(ORG_ROLES)}")
+    # 'owner' is not assignable via this endpoint — mirrors add_member. Allowing
+    # it let an org admin self-promote to owner (privilege escalation). Ownership
+    # changes must go through an explicit transfer flow, not a role PATCH.
+    if req.role not in ORG_ROLES or req.role == "owner":
+        raise HTTPException(400, "Role must be 'member' or 'admin'")
     org = get_org(org_id)
     if org["owner_id"] == user_id:
         raise HTTPException(409, "Cannot change the owner's role (transfer ownership instead)")

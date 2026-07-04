@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from tools._shared import verify_scan_quota, writable_base
+from tools._shared import verify_scan_quota, verify_admin, writable_base
 
 router = APIRouter()
 _BASE = writable_base("VL_PRIME_DIR", "/app/vl_prime_data")
@@ -165,7 +165,7 @@ def decrypt_at_rest(token: str) -> str:
 
 # ═════════ Admin endpoints ═════════
 @router.get("/api/admin/metrics")
-async def get_metrics(_=Depends(verify_scan_quota)):
+async def get_metrics(_=Depends(verify_admin)):
     return {
         "requests_total": _metrics["requests"],
         "scan_requests": _metrics["scan_requests"],
@@ -177,13 +177,13 @@ async def get_metrics(_=Depends(verify_scan_quota)):
     }
 
 @router.get("/api/admin/quarantine")
-async def get_quarantine(_=Depends(verify_scan_quota)):
+async def get_quarantine(_=Depends(verify_admin)):
     return {"quarantined_scanners": sorted(_quarantined),
             "failure_counts": {k: v for k, v in _scanner_failures.items() if v > 0},
             "threshold": _QUARANTINE_THRESHOLD}
 
 @router.post("/api/admin/quarantine/clear")
-async def clear_quarantine(tool: str = None, _=Depends(verify_scan_quota)):
+async def clear_quarantine(tool: str = None, _=Depends(verify_admin)):
     if tool:
         _quarantined.discard(tool); _scanner_failures[tool] = 0
         return {"ok": True, "cleared": tool}
@@ -191,7 +191,7 @@ async def clear_quarantine(tool: str = None, _=Depends(verify_scan_quota)):
     return {"ok": True, "cleared": "all"}
 
 @router.get("/api/admin/cve_status")
-async def cve_status(_=Depends(verify_scan_quota)):
+async def cve_status(_=Depends(verify_admin)):
     f = _BASE / "cve_cache" / "recent.json"
     if not f.exists():
         return {"synced": False, "message": "CVE sync not yet run (hourly)"}
@@ -201,7 +201,7 @@ async def cve_status(_=Depends(verify_scan_quota)):
             "age_minutes": (int(time.time()) - d.get("synced", 0)) // 60}
 
 @router.get("/api/admin/audit_log")
-async def audit_log(day: str = None, limit: int = 100, _=Depends(verify_scan_quota)):
+async def audit_log(day: str = None, limit: int = 100, _=Depends(verify_admin)):
     day = day or time.strftime("%Y-%m-%d", time.gmtime())
     f = _BASE / "audit" / f"{day}.jsonl"
     if not f.exists():
@@ -211,7 +211,7 @@ async def audit_log(day: str = None, limit: int = 100, _=Depends(verify_scan_quo
             "entries": [json.loads(l) for l in lines if l]}
 
 @router.get("/api/admin/prime_status")
-async def prime_status(_=Depends(verify_scan_quota)):
+async def prime_status(_=Depends(verify_admin)):
     return {
         "session_1_rate_limit": {"active": True, "limit_per_hour": _RATE_LIMIT},
         "session_2_audit_log": {"active": True, "dir": str(_BASE / "audit")},

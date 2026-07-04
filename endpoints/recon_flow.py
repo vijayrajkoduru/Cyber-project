@@ -44,8 +44,11 @@ _SCHED = _BASE / "schedules"; _SCHED.mkdir(parents=True, exist_ok=True)
 _BATCH = _BASE / "batches";   _BATCH.mkdir(parents=True, exist_ok=True)
 
 def _safe(s): return "".join(c for c in s if c.isalnum() or c in ".-_")
-def _target_dir(t):
-    d = _HIST / _safe(t); d.mkdir(parents=True, exist_ok=True); return d
+def _target_dir(uid, t):
+    # Per-user namespace: scan history is tenant-private. Without the uid
+    # segment any authenticated user could read/diff/export another user's
+    # scans (cross-tenant IDOR).
+    d = _HIST / _safe(uid) / _safe(t); d.mkdir(parents=True, exist_ok=True); return d
 def _scan_id(target, ts): return hashlib.sha1(f"{target}-{ts}".encode()).hexdigest()[:12]
 
 # ═════════════════════════════════════════════════════════════
@@ -73,21 +76,21 @@ def _extract_findings(rec):
     return out
 
 @router.post("/api/recon/scan/save")
-async def save_scan(req: SaveScanReq, _=Depends(verify_scan_quota)):
+async def save_scan(req: SaveScanReq, payload=Depends(verify_scan_quota)):
     ts = int(time.time())
     sid = _scan_id(req.target, ts)
     record = {"scan_id": sid, "target": req.target, "timestamp": ts,
               "results": req.scan_results, "metadata": req.metadata or {}}
-    out = _target_dir(req.target) / f"{sid}.json"
+    out = _target_dir(payload["sub"], req.target) / f"{sid}.json"
     out.write_text(json.dumps(record, default=str), encoding="utf-8")
     # Trigger webhooks
     asyncio.create_task(_fire_webhooks(req.target, record))
     return {"ok": True, "scan_id": sid}
 
 @router.get("/api/recon/scan/history")
-async def list_history(target: str = Query(...), _=Depends(verify_scan_quota)):
+async def list_history(target: str = Query(...), payload=Depends(verify_scan_quota)):
     items = []
-    for f in sorted(_target_dir(target).glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for f in sorted(_target_dir(payload["sub"], target).glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
             findings = _extract_findings(rec)
@@ -102,8 +105,8 @@ async def list_history(target: str = Query(...), _=Depends(verify_scan_quota)):
 
 @router.get("/api/recon/scan/diff")
 async def diff_scans(target: str = Query(...), a: str = Query(...), b: str = Query(...),
-                      _=Depends(verify_scan_quota)):
-    d = _target_dir(target)
+                      payload=Depends(verify_scan_quota)):
+    d = _target_dir(payload["sub"], target)
     fa, fb = d / f"{a}.json", d / f"{b}.json"
     if not fa.exists() or not fb.exists():
         raise HTTPException(404, "scan_id not found")
@@ -128,9 +131,9 @@ async def diff_scans(target: str = Query(...), a: str = Query(...), b: str = Que
 
 @router.get("/api/recon/scan/diff_to_last")
 async def diff_to_last(target: str = Query(...), current_scan_id: str = Query(...),
-                        _=Depends(verify_scan_quota)):
+                        payload=Depends(verify_scan_quota)):
     """Find the scan immediately before current_scan_id and diff against it."""
-    d = _target_dir(target)
+    d = _target_dir(payload["sub"], target)
     scans = sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
     current_idx = None
     for i, f in enumerate(scans):
@@ -138,7 +141,8 @@ async def diff_to_last(target: str = Query(...), current_scan_id: str = Query(..
     if current_idx is None: raise HTTPException(404, "current scan not found")
     if current_idx + 1 >= len(scans):
         return {"first_scan": True, "message": "No previous scan to compare against"}
-    return await diff_scans(target=target, a=scans[current_idx+1].stem, b=current_scan_id)
+    return await diff_scans(target=target, a=scans[current_idx+1].stem, b=current_scan_id,
+                            payload=payload)
 
 # ═════════════════════════════════════════════════════════════
 # SESSION 3: Webhooks (Slack / Jira / SIEM / generic POST)
@@ -155,7 +159,7 @@ class WebhookConfig(BaseModel):
 _SEV_ORDER = {"CRITICAL":4,"HIGH":3,"MEDIUM":2,"LOW":1,"INFO":0,"POSITIVE":0}
 
 @router.post("/api/recon/webhook/configure")
-async def webhook_configure(cfg: WebhookConfig, _=Depends(verify_scan_quota)):
+async def webhook_configure(cfg: WebhookConfig, payload=Depends(verify_scan_quota)):
     # Anti-SSRF: reject webhook URLs that point at internal/metadata hosts
     # (audit #12). Re-checked at send time too (DNS-rebinding).
     ok, reason = is_safe_external_url(cfg.url)
@@ -164,22 +168,38 @@ async def webhook_configure(cfg: WebhookConfig, _=Depends(verify_scan_quota)):
     wid = uuid.uuid4().hex[:12]
     rec = cfg.dict()
     rec["webhook_id"] = wid
+    rec["user_id"] = payload.get("sub")   # owner — for tenant-scoped list/delete
     rec["created"] = int(time.time())
     (_HOOKS / f"{wid}.json").write_text(json.dumps(rec), encoding="utf-8")
     return {"ok": True, "webhook_id": wid}
 
 @router.get("/api/recon/webhook/list")
-async def webhook_list(_=Depends(verify_scan_quota)):
+async def webhook_list(payload=Depends(verify_scan_quota)):
+    # Only the caller's own webhooks — the store is global (the fire worker
+    # iterates all users' hooks) but listing must not leak other tenants'
+    # webhook URLs + HMAC secrets (audit: cross-tenant IDOR).
+    uid = payload.get("sub")
     out = []
     for f in _HOOKS.glob("*.json"):
-        try: out.append(json.loads(f.read_text(encoding="utf-8")))
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+            if rec.get("user_id") == uid:
+                out.append(rec)
         except: pass
     return {"count": len(out), "webhooks": out}
 
 @router.delete("/api/recon/webhook/{webhook_id}")
-async def webhook_delete(webhook_id: str, _=Depends(verify_scan_quota)):
+async def webhook_delete(webhook_id: str, payload=Depends(verify_scan_quota)):
     f = _HOOKS / f"{webhook_id}.json"
     if not f.exists(): raise HTTPException(404)
+    try:
+        rec = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        rec = {}
+    # Ownership check — a user may only delete their own webhook (404, not 403,
+    # so another tenant's webhook existence isn't disclosed).
+    if rec.get("user_id") != payload.get("sub"):
+        raise HTTPException(404)
     f.unlink()
     return {"ok": True}
 
@@ -253,17 +273,28 @@ async def schedule_create(req: ScheduleReq, payload=Depends(verify_scan_quota)):
     return {"ok": True, "schedule_id": sid, "next_run": rec["next_run"]}
 
 @router.get("/api/recon/schedule/list")
-async def schedule_list(_=Depends(verify_scan_quota)):
+async def schedule_list(payload=Depends(verify_scan_quota)):
+    # Tenant-scoped: only the caller's own schedules (audit: cross-tenant IDOR).
+    uid = payload.get("sub")
     out = []
     for f in _SCHED.glob("*.json"):
-        try: out.append(json.loads(f.read_text(encoding="utf-8")))
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+            if rec.get("user_id") == uid:
+                out.append(rec)
         except: pass
     return {"count":len(out), "schedules":out}
 
 @router.delete("/api/recon/schedule/{schedule_id}")
-async def schedule_delete(schedule_id: str, _=Depends(verify_scan_quota)):
+async def schedule_delete(schedule_id: str, payload=Depends(verify_scan_quota)):
     f = _SCHED / f"{schedule_id}.json"
     if not f.exists(): raise HTTPException(404)
+    try:
+        rec = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        rec = {}
+    if rec.get("user_id") != payload.get("sub"):
+        raise HTTPException(404)   # owner-only; 404 hides existence
     f.unlink()
     return {"ok": True}
 
@@ -357,8 +388,8 @@ async def _run_batch(bid: str):
 
 @router.get("/api/recon/scan/export")
 async def export_scan(target: str = Query(...), scan_id: str = Query(...),
-                       format: str = Query("json"), _=Depends(verify_scan_quota)):
-    f = _target_dir(target) / f"{scan_id}.json"
+                       format: str = Query("json"), payload=Depends(verify_scan_quota)):
+    f = _target_dir(payload["sub"], target) / f"{_safe(scan_id)}.json"
     if not f.exists(): raise HTTPException(404)
     rec = json.loads(f.read_text(encoding="utf-8"))
     findings = _extract_findings(rec)

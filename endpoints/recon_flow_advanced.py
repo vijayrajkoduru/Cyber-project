@@ -13,6 +13,10 @@ for sub in ["screenshots","signatures","brands","collab","templates","rules"]:
 
 _SIGN_KEY = os.environ.get("VL_FLOW_SIGN_KEY","vulnuslab-default-key-change-me").encode()
 
+def _safe(s):
+    """Strip path-traversal / separator chars from user-supplied path segments."""
+    return "".join(c for c in str(s) if c.isalnum() or c in ".-_")
+
 # ═════════════════════════════════════════════════════════════
 # SESSION 7: Per-finding screenshot (headless capture)
 # ═════════════════════════════════════════════════════════════
@@ -108,24 +112,29 @@ class BrandConfig(BaseModel):
     accent_color: Optional[str] = "#3b82f6"
     footer_text: Optional[str] = None
 
+def _brand_dir(uid):
+    # Per-user namespace — branding is tenant-private (was a global store any
+    # user could read/overwrite/enumerate by customer_id: cross-tenant IDOR).
+    d = _BASE/"brands"/_safe(uid); d.mkdir(parents=True, exist_ok=True); return d
+
 @router.post("/api/recon/brand/configure")
-async def brand_configure(cfg: BrandConfig, _=Depends(verify_scan_quota)):
-    (_BASE/"brands"/f"{cfg.customer_id}.json").write_text(
+async def brand_configure(cfg: BrandConfig, payload=Depends(verify_scan_quota)):
+    (_brand_dir(payload["sub"])/f"{_safe(cfg.customer_id)}.json").write_text(
         json.dumps(cfg.dict()), encoding="utf-8")
     return {"ok":True,"customer_id":cfg.customer_id}
 
 @router.get("/api/recon/brand/{customer_id}")
-async def brand_get(customer_id: str, _=Depends(verify_scan_quota)):
-    f = _BASE/"brands"/f"{customer_id}.json"
+async def brand_get(customer_id: str, payload=Depends(verify_scan_quota)):
+    f = _brand_dir(payload["sub"])/f"{_safe(customer_id)}.json"
     if not f.exists():
         return {"customer_id":customer_id,"company_name":"VulnusLab",
                 "logo_url":None,"primary_color":"#1e40af","accent_color":"#3b82f6"}
     return json.loads(f.read_text(encoding="utf-8"))
 
 @router.get("/api/recon/brand")
-async def brand_list(_=Depends(verify_scan_quota)):
+async def brand_list(payload=Depends(verify_scan_quota)):
     out = []
-    for f in (_BASE/"brands").glob("*.json"):
+    for f in _brand_dir(payload["sub"]).glob("*.json"):
         try: out.append(json.loads(f.read_text(encoding="utf-8")))
         except: pass
     return {"count":len(out),"brands":out}
@@ -137,10 +146,11 @@ async def brand_list(_=Depends(verify_scan_quota)):
 @router.get("/api/recon/scan/export_bb")
 async def export_bb(target: str = Query(...), scan_id: str = Query(...),
                      platform: str = Query("hackerone"),
-                     _=Depends(verify_scan_quota)):
+                     payload=Depends(verify_scan_quota)):
     """Export findings as HackerOne / Bugcrowd submission format."""
-    safe_t = "".join(c for c in target if c.isalnum() or c in ".-_")
-    f = _BASE/"history"/safe_t/f"{scan_id}.json"
+    # Read from the caller's own history namespace (matches recon_flow.save_scan)
+    # so one user can't export another user's scan by guessing target/scan_id.
+    f = _BASE/"history"/_safe(payload["sub"])/_safe(target)/f"{_safe(scan_id)}.json"
     if not f.exists(): raise HTTPException(404)
     rec = json.loads(f.read_text(encoding="utf-8"))
     findings = []
@@ -183,12 +193,12 @@ class FindingStatusReq(BaseModel):
     assigned_to: Optional[str] = None
 
 @router.post("/api/recon/finding/status")
-async def set_finding_status(req: FindingStatusReq, _=Depends(verify_scan_quota)):
+async def set_finding_status(req: FindingStatusReq, payload=Depends(verify_scan_quota)):
     if req.new_state not in _VALID_STATES:
         raise HTTPException(400,f"state must be one of {_VALID_STATES}")
-    collab_dir = _BASE/"collab"/req.target
+    collab_dir = _BASE/"collab"/_safe(payload["sub"])/_safe(req.target)
     collab_dir.mkdir(parents=True, exist_ok=True)
-    f = collab_dir/f"{req.finding_hash}.json"
+    f = collab_dir/f"{_safe(req.finding_hash)}.json"
     history = []
     if f.exists():
         history = json.loads(f.read_text(encoding="utf-8")).get("history",[])
@@ -201,8 +211,8 @@ async def set_finding_status(req: FindingStatusReq, _=Depends(verify_scan_quota)
     return {"ok":True,"current_state":req.new_state,"history_length":len(history)}
 
 @router.get("/api/recon/finding/history/{target}/{finding_hash}")
-async def get_finding_history(target: str, finding_hash: str, _=Depends(verify_scan_quota)):
-    f = _BASE/"collab"/target/f"{finding_hash}.json"
+async def get_finding_history(target: str, finding_hash: str, payload=Depends(verify_scan_quota)):
+    f = _BASE/"collab"/_safe(payload["sub"])/_safe(target)/f"{_safe(finding_hash)}.json"
     if not f.exists(): return {"current_state":"NEW","history":[]}
     return json.loads(f.read_text(encoding="utf-8"))
 
@@ -276,7 +286,31 @@ async def rule_delete(rule_id: str, _=Depends(verify_scan_quota)):
 
 class EvalReq(BaseModel):
     scan_data: dict   # the r{} object
-    
+
+
+def _traverse(data, dotted: str):
+    """Safely resolve a dotted path (e.g. 'http.headers.server') into nested
+    dict/list scan data. Pure structural lookup — NO eval, so a stored rule
+    condition can never execute code (was a 2-request RCE, audit)."""
+    cur = data
+    for part in dotted.strip().split("."):
+        part = part.strip()
+        if not part:
+            return None
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, (list, tuple)):
+            if not part.lstrip("-").isdigit():
+                return None
+            i = int(part)
+            cur = cur[i] if -len(cur) <= i < len(cur) else None
+        else:
+            return None
+        if cur is None:
+            return None
+    return cur
+
+
 @router.post("/api/recon/rules/evaluate")
 async def rules_evaluate(req: EvalReq, _=Depends(verify_scan_quota)):
     """Evaluate all enabled rules against scan data. Returns matching findings."""
@@ -292,7 +326,7 @@ async def rules_evaluate(req: EvalReq, _=Depends(verify_scan_quota)):
                 idx=tokens.index("contains")
                 lhs=" ".join(tokens[:idx])
                 rhs=" ".join(tokens[idx+1:]).strip('"\'')
-                val=eval(f"req.scan_data.{lhs}",{"req":req,"__builtins__":{}}) if "." in lhs else None
+                val=_traverse(req.scan_data, lhs) if "." in lhs else None
                 if val and rhs in str(val):
                     matches.append({"rule_id":rule["rule_id"],"name":rule["name"],
                         "severity":rule["severity"],"cwe":rule.get("cwe"),

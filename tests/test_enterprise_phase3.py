@@ -54,3 +54,51 @@ def test_list_user_orgs_and_find_email():
     assert any(o["id"] == org["id"] and o["role"] == "owner" for o in orgs)
     found = db.find_user_by_email(f"u{owner[:6]}@x.com")
     assert found and found["id"] == owner
+
+
+def _token(uid):
+    """Mint a JWT the org endpoints accept (verify_token re-validates the row)."""
+    import datetime as _dt
+    from jose import jwt
+    return jwt.encode(
+        {"sub": uid, "role": "user", "plan": "trial",
+         "exp": _dt.datetime.utcnow() + _dt.timedelta(hours=1)},
+        os.environ["JWT_SECRET"], algorithm="HS256")
+
+
+def _org_client():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from tools.org import org_api
+    app = FastAPI()
+    org_api.register(app)
+    return TestClient(app)
+
+
+def test_change_role_endpoint_rejects_owner_escalation():
+    """An org ADMIN must not be able to self-promote (or promote anyone) to
+    'owner' via PATCH /members/{uid} — regression for the RBAC privilege-
+    escalation bug (change_role previously allowed req.role == 'owner')."""
+    owner, admin, victim = _mkuser("o"), _mkuser("a"), _mkuser("v")
+    org = db.create_org("EscTest", owner)
+    oid = org["id"]
+    db.add_org_member(oid, admin, "admin")
+    db.add_org_member(oid, victim, "member")
+
+    client = _org_client()
+    hdr = {"Authorization": f"Bearer {_token(admin)}"}
+
+    # admin tries to self-promote to owner -> must be rejected
+    r = client.patch(f"/api/orgs/{oid}/members/{admin}", json={"role": "owner"}, headers=hdr)
+    assert r.status_code == 400, r.text
+    assert db.get_member_role(oid, admin) == "admin"
+
+    # admin tries to promote another member to owner -> must be rejected
+    r = client.patch(f"/api/orgs/{oid}/members/{victim}", json={"role": "owner"}, headers=hdr)
+    assert r.status_code == 400, r.text
+    assert db.get_member_role(oid, victim) == "member"
+
+    # a legitimate member<->admin change still works
+    r = client.patch(f"/api/orgs/{oid}/members/{victim}", json={"role": "admin"}, headers=hdr)
+    assert r.status_code == 200, r.text
+    assert db.get_member_role(oid, victim) == "admin"

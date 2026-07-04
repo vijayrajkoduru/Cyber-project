@@ -420,6 +420,26 @@ def make_req_headers(req: Optional[ScanRequest] = None) -> dict:
     return h
 
 
+class _SafeRedirectSession(_req_lib.Session):
+    """Session that strips credential headers on a CROSS-HOST redirect.
+
+    requests already drops `Authorization` when a redirect changes host
+    (Session.rebuild_auth), but it does NOT drop a `Cookie` header set
+    explicitly on the request — so a captured session cookie would leak to a
+    third-party redirect target (audit: cred leak on cross-host redirect).
+    Extend rebuild_auth to also strip Cookie when the host changes."""
+    def rebuild_auth(self, prepared_request, response):
+        super().rebuild_auth(prepared_request, response)
+        try:
+            from urllib.parse import urlparse
+            orig_host = urlparse(response.request.url).hostname
+            new_host = urlparse(prepared_request.url).hostname
+            if orig_host != new_host and "Cookie" in prepared_request.headers:
+                del prepared_request.headers["Cookie"]
+        except Exception:
+            pass
+
+
 def safe_request(method: str, url: str, *,
                  retries: int = 2,
                  timeout: int = 15,
@@ -457,7 +477,10 @@ def safe_request(method: str, url: str, *,
             if data is not None:   kw["data"] = data
             if json is not None:   kw["json"] = json
             if params is not None: kw["params"] = params
-            r = _req_lib.request(method.upper(), url, **kw)
+            # Use the redirect-safe session so a Cookie/Authorization header
+            # can't leak to a different host across an HTTP redirect.
+            with _SafeRedirectSession() as _sess:
+                r = _sess.request(method.upper(), url, **kw)
             # 429 — honor Retry-After
             if r.status_code == 429 and attempt < retries:
                 ra = r.headers.get("Retry-After", "")

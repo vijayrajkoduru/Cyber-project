@@ -94,6 +94,13 @@ def _unpack_zipfile(archive: Path, out: Path) -> bool:
                 return False
             if sum(i.file_size for i in infos) > _MAX_UNZIP_BYTES:
                 return False
+            # Zip-slip guard: extract each member only if its resolved path stays
+            # within `out` (a crafted "../" entry would otherwise write anywhere).
+            out_res = Path(out).resolve()
+            for info in infos:
+                dest = (out_res / info.filename).resolve()
+                if dest != out_res and out_res not in dest.parents:
+                    return False
             z.extractall(out)
         return True
     except (zipfile.BadZipFile, OSError):

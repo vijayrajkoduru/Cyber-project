@@ -27,7 +27,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
-from tools._shared import verify_scan_quota, writable_base
+from tools._shared import verify_scan_quota, verify_admin, writable_base
 
 
 router = APIRouter()
@@ -107,7 +107,7 @@ def record_api_key_use(key_id: str, source: str, ok: bool) -> None:
 # ═════════ Admin endpoints ═════════
 
 @router.get("/api/admin/osint/metrics")
-def osint_metrics(_=Depends(verify_scan_quota)):
+def osint_metrics(_=Depends(verify_admin)):
     """Top-level health rollup for the OSINT module."""
     total_calls = sum(s["calls"] for s in _scanner_stats.values())
     total_ok = sum(s["ok"] for s in _scanner_stats.values())
@@ -129,7 +129,7 @@ def osint_metrics(_=Depends(verify_scan_quota)):
 
 
 @router.get("/api/admin/osint/scanner_stats")
-def osint_scanner_stats(_=Depends(verify_scan_quota)):
+def osint_scanner_stats(_=Depends(verify_admin)):
     """Per-scanner runtime stats (p50/p99 latency, success rate)."""
     out = []
     for scanner, s in sorted(_scanner_stats.items()):
@@ -150,7 +150,7 @@ def osint_scanner_stats(_=Depends(verify_scan_quota)):
 
 
 @router.get("/api/admin/osint/api_key_health")
-def osint_api_key_health(_=Depends(verify_scan_quota)):
+def osint_api_key_health(_=Depends(verify_admin)):
     """Per (api_key, source) success rate. Use to spot expired/throttled
     keys before customer scans degrade."""
     out = []
@@ -173,7 +173,7 @@ def osint_api_key_health(_=Depends(verify_scan_quota)):
 
 
 @router.get("/api/admin/osint/source_quotas")
-def osint_source_quotas(_=Depends(verify_scan_quota)):
+def osint_source_quotas(_=Depends(verify_admin)):
     """Current per-source rate-limit consumption per client."""
     now = time.time()
     rows = []
@@ -195,7 +195,7 @@ def osint_source_quotas(_=Depends(verify_scan_quota)):
 
 
 @router.get("/api/admin/osint/prime_status")
-def osint_prime_status(_=Depends(verify_scan_quota)):
+def osint_prime_status(_=Depends(verify_admin)):
     """Quick "is everything OK?" status for OSINT VL-PRIME."""
     total_scanners = len(_scanner_stats)
     healthy = sum(1 for s in _scanner_stats.values()
