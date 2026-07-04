@@ -19,6 +19,4 @@ tools:
   - recon/robotsmap
   - recon/crawl
   - recon/favicon
-  - osint/virustotal
-  - osint/abuseipdb
   - osint/dnstwist

@@ -7019,7 +7019,7 @@ function generateOsintPdf(results, target, _pdfConfig) {
   // breakdown for auditor trust. Mirrors the Universal + Recon Scan
   // Coverage section. Counts each OSINT probe against its result key.
   {
-    const _osintProbes = ["geoip","email_osint","recon_ng","spiderfoot","virustotal","abuseipdb","sherlock","hibp","dnstwist","googledorks","maltego"];
+    const _osintProbes = ["geoip","email_osint","recon_ng","spiderfoot","virustotal","sherlock","hibp","dnstwist","googledorks","maltego"];
     let _data = 0, _empty = 0, _skipped = 0, _errored = 0;
     _osintProbes.forEach(k => {
       const r = results[k];
@@ -11392,8 +11392,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
 
     // Subdomains (from §3 scanners)
     const _subs = new Set();
-    ["subdomain_bruteforce","ai_wordlist_subdomain","permutation_gen","passive_aggregation","github_subdomains","virustotal_subdomains","securitytrails_subdomains","wayback_subdomain_extract","amass_passive","search_engine_scrape","crt_search","cert_san_aggregator",
-     "search_engine_scrape","securitytrails_subdomains","virustotal_subdomains","github_subdomains",
+    ["subdomain_bruteforce","ai_wordlist_subdomain","permutation_gen","passive_aggregation","wayback_subdomain_extract","amass_passive","search_engine_scrape","crt_search","cert_san_aggregator",
+     "search_engine_scrape",
      "wayback_subdomain_extract","amass_passive","crt_search","cert_san_aggregator"].forEach(k=>{
       const d = r[k] || {};
       const intel = d.intel || {};
@@ -11532,7 +11532,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     const _ghOrg = r.github_org_recon || {};
     if (_ghOrg.org_name || (_ghOrg.intel||{}).org_name) _inv.push(["GitHub org identified", _ghOrg.org_name || (_ghOrg.intel||{}).org_name]);
 
-    const _socials = ["twitter_mining","facebook_instagram","reddit_search","youtube_channel","tiktok_search"];
+    const _socials = ["twitter_mining","facebook_instagram","reddit_search","tiktok_search"];
     const _socialHits = _socials.filter(k => {
         const d = r[k] || {};
         return d.found || (d.profiles||[]).length > 0 || (d.handles||[]).length > 0;
@@ -11540,8 +11540,8 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     if (_socialHits.length) _inv.push(["Social media presence", `${_socialHits.length} platform(s): ${_socialHits.join(", ")}`]);
 
     // ── Threat intel hits ──
-    const _threatKeys = ["censys_search","shodan_keyed","abuseipdb","threatfox_check",
-                         "greynoise_check","virustotal_full","alienvault_otx","urlhaus_check"];
+    const _threatKeys = ["censys_search","threatfox_check",
+                         ,"urlhaus_check"];
     const _realThreatHits = _threatKeys.filter(k => { const _tr = r[k]; if (!_tr) return false; const _fs = (_tr.findings || (_tr.raw_data && _tr.raw_data.findings) || []); return _fs.some(f => ["CRITICAL","HIGH","MEDIUM"].includes(String((f && f.severity) || "").toUpperCase())); });
     if (_realThreatHits.length) _inv.push(["Threat intel matches", `${_realThreatHits.length} feed(s): ${_realThreatHits.slice(0,4).join(", ")}`]);
 
@@ -12014,11 +12014,7 @@ const RECON_SECTIONS = [
 ];
 
 const SECTION_OF = {
-  "abuseipdb":8,
-  "ai_endpoint_guesser":13,
-  "ai_phishing_pretext_gen":13,
   "ai_wordlist_subdomain":3,
-  "alienvault_otx":8,
   "amass_passive":3,
   "anycast_detect":2,
   "apple_store_search":12,
@@ -12041,7 +12037,6 @@ const SECTION_OF = {
   "crawl_endpoints":5,
   "crosslinked_emails":7,
   "crt_search":1,
-  "dehashed_search":11,
   "dependency_confusion":10,
   "discord_channels":4,
   "dns_0x20":2,
@@ -12060,32 +12055,17 @@ const SECTION_OF = {
   "facebook_instagram":4,
   "favicon_hash":1,
   "firebase_open_db_check":12,
-  "fofa_search":8,
   "gcp_app_engine":6,
   "gcs_bucket_enum":6,
-  "gha_runner_disco":6,
-  "gha_secret_leak_logs":10,
   "ghunt_google_audit":7,
-  "github_code_search":10,
-  "github_oauth_abuse_map":10,
-  "github_org_recon":4,
-  "github_subdomains":3,
-  "gitlab_bitbucket_scan":10,
-  "google_play_search":12,
   "graphql_intro_check":5,
-  "greynoise_check":8,
   "helm_etcd_exposed":6,
   "heroku_enum":6,
-  "hibp_breach_check":7,
-  "hibp_paste_search":11,
   "holehe_email_audit":7,
   "hsts_audit":5,
   "http_banner":5,
   "http_method_enum":5,
-  "hunter_io_email_pattern":7,
   "intelligence_x_search":7,
-  "intelx_paste_leak":11,
-  "iot_device_fingerprint":12,
   "ip_geo":1,
   "ipmi_ilo_discovery":9,
   "ipv6_alive_enum":9,
@@ -12095,13 +12075,8 @@ const SECTION_OF = {
   "lb_detection":2,
   "ldap_anon_bind":9,
   "leakcheck_search":7,
-  "leakix_feed":11,
-  "linkedin_employees":4,
-  "llm_param_inference":13,
-  "llm_wordlist_curator":13,
   "matter_thread_disco":12,
   "misp_feed":8,
-  "mobile_backend_shodan":12,
   "mx_enum":2,
   "npm_package_audit":10,
   "nse_vuln_scan":9,
@@ -12111,12 +12086,10 @@ const SECTION_OF = {
   "osint_industries":4,
   "param_discovery":5,
   "passive_aggregation":3,
-  "passive_dns":1,
   "pastebin_search":4,
   "permutation_gen":3,
   "phoneinfoga_lookup":7,
   "pimeyes_face_search":7,
-  "pypi_package_audit":10,
   "quake360_search":8,
   "ransomware_leak_sites":11,
   "rdap":1,
@@ -12131,17 +12104,13 @@ const SECTION_OF = {
   "sec_edgar":4,
   "security_headers":5,
   "security_txt":5,
-  "securitytrails_subdomains":3,
   "service_version_detect":9,
   "sherlock_username":4,
-  "shodan_keyed":8,
   "smb_netbios_enum":9,
   "snmp_enum":9,
-  "source_code_rag_llm":13,
   "sourcemap_check":5,
   "ssl_labs_grade":5,
   "ssl_tls_audit":5,
-  "stealer_log_search":11,
   "subdomain_bruteforce":3,
   "subdomain_takeover":2,
   "tcp_port_scan":9,
@@ -12156,18 +12125,13 @@ const SECTION_OF = {
   "urlhaus_check":8,
   "uspto_patent":4,
   "vercel_netlify":6,
-  "virustotal_full":8,
-  "virustotal_subdomains":3,
   "voip_sip_enum":9,
   "waf_cdn_detect":5,
   "wayback_subdomain_extract":3,
   "wayback_timeline":1,
   "whois":1,
-  "whois_history":1,
   "wildcard_detection":2,
-  "youtube_channel":4,
   "zone_transfer":2,
-  "zoomeye_search":8,
   "jwt_secret_brute":5,
   "secret_pattern_scanner":10,
   "api_endpoint_brute":5,
@@ -12187,13 +12151,11 @@ const RECON_PHASES = [
   {name:"Domain Age", tool:"domain_age", endpoint:"/api/recon/domain_age", icon:""},
   {name:"Favicon Hash", tool:"favicon_hash", endpoint:"/api/recon/favicon_hash", icon:""},
   {name:"IP Geo", tool:"ip_geo", endpoint:"/api/recon/ip_geo", icon:""},
-  {name:"Passive DNS", tool:"passive_dns", endpoint:"/api/recon/passive_dns", icon:""},
   {name:"RDAP", tool:"rdap", endpoint:"/api/recon/rdap", icon:""},
   {name:"Reverse IP", tool:"reverse_ip", endpoint:"/api/recon/reverse_ip", icon:""},
   {name:"Reverse NS", tool:"reverse_ns", endpoint:"/api/recon/reverse_ns", icon:""},
   {name:"Wayback Timeline", tool:"wayback_timeline", endpoint:"/api/recon/wayback_timeline", icon:""},
   {name:"Whois", tool:"whois", endpoint:"/api/recon/whois", icon:""},
-  {name:"Whois History", tool:"whois_history", endpoint:"/api/recon/whois_history", icon:""},
   // ── §2 ─────────────
   {name:"Anycast Detect", tool:"anycast_detect", endpoint:"/api/recon/anycast_detect", icon:""},
   {name:"Caa Records", tool:"caa_records", endpoint:"/api/recon/caa_records", icon:""},
@@ -12214,20 +12176,15 @@ const RECON_PHASES = [
   // ── §3 ─────────────
   {name:"AI Wordlist Subdomain", tool:"ai_wordlist_subdomain", endpoint:"/api/recon/ai_wordlist_subdomain", icon:""},
   {name:"Amass Passive", tool:"amass_passive", endpoint:"/api/recon/amass_passive", icon:""},
-  {name:"Github Subdomains", tool:"github_subdomains", endpoint:"/api/recon/github_subdomains", icon:""},
   {name:"Passive Aggregation", tool:"passive_aggregation", endpoint:"/api/recon/passive_aggregation", icon:""},
   {name:"Permutation Gen", tool:"permutation_gen", endpoint:"/api/recon/permutation_gen", icon:""},
   {name:"Search Engine Scrape", tool:"search_engine_scrape", endpoint:"/api/recon/search_engine_scrape", icon:""},
-  {name:"Securitytrails Subdomains", tool:"securitytrails_subdomains", endpoint:"/api/recon/securitytrails_subdomains", icon:""},
   {name:"Subdomain Bruteforce", tool:"subdomain_bruteforce", endpoint:"/api/recon/subdomain_bruteforce", icon:""},
-  {name:"Virustotal Subdomains", tool:"virustotal_subdomains", endpoint:"/api/recon/virustotal_subdomains", icon:""},
   {name:"Wayback Subdomain Extract", tool:"wayback_subdomain_extract", endpoint:"/api/recon/wayback_subdomain_extract", icon:""},
   // ── §4 ─────────────
   {name:"Discord Channels", tool:"discord_channels", endpoint:"/api/recon/discord_channels", icon:""},
   {name:"Facebook Instagram", tool:"facebook_instagram", endpoint:"/api/recon/facebook_instagram", icon:""},
-  {name:"Github Org Recon", tool:"github_org_recon", endpoint:"/api/recon/github_org_recon", icon:""},
   {name:"Job Postings", tool:"job_postings", endpoint:"/api/recon/job_postings", icon:""},
-  {name:"Linkedin Employees", tool:"linkedin_employees", endpoint:"/api/recon/linkedin_employees", icon:""},
   {name:"OSINT Industries", tool:"osint_industries", endpoint:"/api/recon/osint_industries", icon:""},
   {name:"Pastebin Search", tool:"pastebin_search", endpoint:"/api/recon/pastebin_search", icon:""},
   {name:"Reddit Search", tool:"reddit_search", endpoint:"/api/recon/reddit_search", icon:""},
@@ -12238,7 +12195,6 @@ const RECON_PHASES = [
   {name:"Trademark Search", tool:"trademark_search", endpoint:"/api/recon/trademark_search", icon:""},
   {name:"Twitter Mining", tool:"twitter_mining", endpoint:"/api/recon/twitter_mining", icon:""},
   {name:"Uspto Patent", tool:"uspto_patent", endpoint:"/api/recon/uspto_patent", icon:""},
-  {name:"Youtube Channel", tool:"youtube_channel", endpoint:"/api/recon/youtube_channel", icon:""},
     {name:"Username Permutation Gen", tool:"username_permutation_gen", endpoint:"/api/recon/username_permutation_gen", icon:""},
 // ── §5 ─────────────
   {name:"Cors Misconfig", tool:"cors_misconfig", endpoint:"/api/recon/cors_misconfig", icon:""},
@@ -12272,7 +12228,6 @@ const RECON_PHASES = [
   {name:"Docker Registry Exposed", tool:"docker_registry_exposed", endpoint:"/api/recon/docker_registry_exposed", icon:""},
   {name:"Gcp App Engine", tool:"gcp_app_engine", endpoint:"/api/recon/gcp_app_engine", icon:""},
   {name:"GCS Bucket Enum", tool:"gcs_bucket_enum", endpoint:"/api/recon/gcs_bucket_enum", icon:""},
-  {name:"Gha Runner Disco", tool:"gha_runner_disco", endpoint:"/api/recon/gha_runner_disco", icon:""},
   {name:"Helm Etcd Exposed", tool:"helm_etcd_exposed", endpoint:"/api/recon/helm_etcd_exposed", icon:""},
   {name:"Heroku Enum", tool:"heroku_enum", endpoint:"/api/recon/heroku_enum", icon:""},
   {name:"K8s API Exposure", tool:"k8s_api_exposure", endpoint:"/api/recon/k8s_api_exposure", icon:""},
@@ -12286,27 +12241,18 @@ const RECON_PHASES = [
   {name:"Email SMTP Validate", tool:"email_smtp_validate", endpoint:"/api/recon/email_smtp_validate", icon:""},
   {name:"Email To Phone Pivot", tool:"email_to_phone_pivot", endpoint:"/api/recon/email_to_phone_pivot", icon:""},
   {name:"Ghunt Google Audit", tool:"ghunt_google_audit", endpoint:"/api/recon/ghunt_google_audit", icon:""},
-  {name:"Hibp Breach Check", tool:"hibp_breach_check", endpoint:"/api/recon/hibp_breach_check", icon:""},
   {name:"Holehe Email Audit", tool:"holehe_email_audit", endpoint:"/api/recon/holehe_email_audit", icon:""},
-  {name:"Hunter Io Email Pattern", tool:"hunter_io_email_pattern", endpoint:"/api/recon/hunter_io_email_pattern", icon:""},
   {name:"Intelligence X Search", tool:"intelligence_x_search", endpoint:"/api/recon/intelligence_x_search", icon:""},
   {name:"Leakcheck Search", tool:"leakcheck_search", endpoint:"/api/recon/leakcheck_search", icon:""},
   {name:"Phoneinfoga Lookup", tool:"phoneinfoga_lookup", endpoint:"/api/recon/phoneinfoga_lookup", icon:""},
   {name:"Pimeyes Face Search", tool:"pimeyes_face_search", endpoint:"/api/recon/pimeyes_face_search", icon:""},
     {name:"Email Pattern Generator", tool:"email_pattern_generator", endpoint:"/api/recon/email_pattern_generator", icon:""},
 // ── §8 ─────────────
-  {name:"Abuseipdb", tool:"abuseipdb", endpoint:"/api/recon/abuseipdb", icon:""},
-  {name:"Alienvault Otx", tool:"alienvault_otx", endpoint:"/api/recon/alienvault_otx", icon:""},
   {name:"Censys Search", tool:"censys_search", endpoint:"/api/recon/censys_search", icon:""},
-  {name:"Fofa Search", tool:"fofa_search", endpoint:"/api/recon/fofa_search", icon:""},
-  {name:"Greynoise Check", tool:"greynoise_check", endpoint:"/api/recon/greynoise_check", icon:""},
   {name:"Misp Feed", tool:"misp_feed", endpoint:"/api/recon/misp_feed", icon:""},
   {name:"Quake360 Search", tool:"quake360_search", endpoint:"/api/recon/quake360_search", icon:""},
-  {name:"Shodan Keyed", tool:"shodan_keyed", endpoint:"/api/recon/shodan_keyed", icon:""},
   {name:"Threatfox Check", tool:"threatfox_check", endpoint:"/api/recon/threatfox_check", icon:""},
   {name:"Urlhaus Check", tool:"urlhaus_check", endpoint:"/api/recon/urlhaus_check", icon:""},
-  {name:"Virustotal Full", tool:"virustotal_full", endpoint:"/api/recon/virustotal_full", icon:""},
-  {name:"Zoomeye Search", tool:"zoomeye_search", endpoint:"/api/recon/zoomeye_search", icon:""},
   // ── §9 ─────────────
   {name:"Banner Grab", tool:"banner_grab", endpoint:"/api/recon/banner_grab", icon:""},
   {name:"Ipmi Ilo Discovery", tool:"ipmi_ilo_discovery", endpoint:"/api/recon/ipmi_ilo_discovery", icon:""},
@@ -12325,35 +12271,17 @@ const RECON_PHASES = [
   {name:"Cargo Go Typosquat", tool:"cargo_go_typosquat", endpoint:"/api/recon/cargo_go_typosquat", icon:""},
   {name:"Dependency Confusion", tool:"dependency_confusion", endpoint:"/api/recon/dependency_confusion", icon:""},
   {name:"Docker Hub Search", tool:"docker_hub_search", endpoint:"/api/recon/docker_hub_search", icon:""},
-  {name:"Gha Secret Leak Logs", tool:"gha_secret_leak_logs", endpoint:"/api/recon/gha_secret_leak_logs", icon:""},
-  {name:"Github Code Search", tool:"github_code_search", endpoint:"/api/recon/github_code_search", icon:""},
-  {name:"Github Oauth Abuse Map", tool:"github_oauth_abuse_map", endpoint:"/api/recon/github_oauth_abuse_map", icon:""},
-  {name:"Gitlab Bitbucket Scan", tool:"gitlab_bitbucket_scan", endpoint:"/api/recon/gitlab_bitbucket_scan", icon:""},
   {name:"Npm Package Audit", tool:"npm_package_audit", endpoint:"/api/recon/npm_package_audit", icon:""},
-  {name:"Pypi Package Audit", tool:"pypi_package_audit", endpoint:"/api/recon/pypi_package_audit", icon:""},
     {name:"Secret Pattern Scanner", tool:"secret_pattern_scanner", endpoint:"/api/recon/secret_pattern_scanner", icon:""},
 // ── §11 ─────────────
-  {name:"Dehashed Search", tool:"dehashed_search", endpoint:"/api/recon/dehashed_search", icon:""},
-  {name:"Hibp Paste Search", tool:"hibp_paste_search", endpoint:"/api/recon/hibp_paste_search", icon:""},
-  {name:"Intelx Paste Leak", tool:"intelx_paste_leak", endpoint:"/api/recon/intelx_paste_leak", icon:""},
-  {name:"Leakix Feed", tool:"leakix_feed", endpoint:"/api/recon/leakix_feed", icon:""},
   {name:"Ransomware Leak Sites", tool:"ransomware_leak_sites", endpoint:"/api/recon/ransomware_leak_sites", icon:""},
-  {name:"Stealer Log Search", tool:"stealer_log_search", endpoint:"/api/recon/stealer_log_search", icon:""},
   // ── §12 ─────────────
   {name:"Apple Store Search", tool:"apple_store_search", endpoint:"/api/recon/apple_store_search", icon:""},
   {name:"Drone Adsb Ais Passive", tool:"drone_adsb_ais_passive", endpoint:"/api/recon/drone_adsb_ais_passive", icon:""},
   {name:"Firebase Open Db Check", tool:"firebase_open_db_check", endpoint:"/api/recon/firebase_open_db_check", icon:""},
-  {name:"Google Play Search", tool:"google_play_search", endpoint:"/api/recon/google_play_search", icon:""},
-  {name:"Iot Device Fingerprint", tool:"iot_device_fingerprint", endpoint:"/api/recon/iot_device_fingerprint", icon:""},
   {name:"Matter Thread Disco", tool:"matter_thread_disco", endpoint:"/api/recon/matter_thread_disco", icon:""},
-  {name:"Mobile Backend Shodan", tool:"mobile_backend_shodan", endpoint:"/api/recon/mobile_backend_shodan", icon:""},
   {name:"Upnp Ssdp Disco", tool:"upnp_ssdp_disco", endpoint:"/api/recon/upnp_ssdp_disco", icon:""},
   // ── §13 ─────────────
-  {name:"AI Endpoint Guesser", tool:"ai_endpoint_guesser", endpoint:"/api/recon/ai_endpoint_guesser", icon:""},
-  {name:"AI Phishing Pretext Gen", tool:"ai_phishing_pretext_gen", endpoint:"/api/recon/ai_phishing_pretext_gen", icon:""},
-  {name:"Llm Param Inference", tool:"llm_param_inference", endpoint:"/api/recon/llm_param_inference", icon:""},
-  {name:"Llm Wordlist Curator", tool:"llm_wordlist_curator", endpoint:"/api/recon/llm_wordlist_curator", icon:""},
-  {name:"Source Code Rag Llm", tool:"source_code_rag_llm", endpoint:"/api/recon/source_code_rag_llm", icon:""},
 ];
 
 
@@ -16200,7 +16128,6 @@ const OSINT_PHASES = [
   {name:"CT Log Emails",         tool:"crtsh_emails",     endpoint:"/api/osint/crtsh_emails",     icon:""},
   {name:"Social Handles",        tool:"social_handles",   endpoint:"/api/osint/social_handles",   icon:""},
   // Tier 3 — Leaks & Code
-  {name:"GitHub Recon",          tool:"github_recon",     endpoint:"/api/osint/github_recon",     icon:""},
   {name:"Pastebin Search",       tool:"pastebin_search",  endpoint:"/api/osint/pastebin_search",  icon:""},
   {name:"Breach Check (HIBP)",   tool:"breach_check",     endpoint:"/api/osint/breach_check",     icon:""},
   // Tier 4 — Metadata & Dorking

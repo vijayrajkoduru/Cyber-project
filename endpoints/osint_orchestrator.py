@@ -35,7 +35,6 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("social_handles",   "/api/osint/social_handles"),
     ],
     "tier3_leaks_code": [
-        ("github_recon",     "/api/osint/github_recon"),
         ("pastebin_search",  "/api/osint/pastebin_search"),
         ("breach_check",     "/api/osint/breach_check"),
     ],
@@ -49,8 +48,6 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("hibp_passwords",       "/api/osint/hibp_passwords"),
         ("email_pattern_guess",  "/api/osint/email_pattern_guess"),
         ("email_validate_mx",    "/api/osint/email_validate_mx"),
-        ("github_user_intel",    "/api/osint/github_user_intel"),
-        ("github_org_intel",     "/api/osint/github_org_intel"),
         ("sherlock_username",    "/api/osint/sherlock_username"),
     ],
     "tier6_domain_infra_deep": [
@@ -73,7 +70,6 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     "tier8_breach_darkweb": [
         ("hibp_breaches_domain", "/api/osint/hibp_breaches_domain"),
         ("hudson_rock_cavalier", "/api/osint/hudson_rock_cavalier"),
-        ("leakix_search",        "/api/osint/leakix_search"),
     ],
     "tier9_corporate_financial": [
         ("sec_edgar_company",    "/api/osint/sec_edgar_company"),
@@ -82,10 +78,6 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("crunchbase_basic",     "/api/osint/crunchbase_basic"),
     ],
     "tier10_ai_llm_osint": [
-        ("llm_entity_extraction","/api/osint/llm_entity_extraction"),
-        ("llm_pretext_draft",    "/api/osint/llm_pretext_draft"),
-        ("llm_disinfo_detect",   "/api/osint/llm_disinfo_detect"),
-        ("llm_image_to_text",    "/api/osint/llm_image_to_text"),
     ],
     # ── VL-FORGE 2026-05-30 round 2: +15 real probes across 4 new tiers ──
     "tier11_social_media": [
@@ -93,20 +85,16 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("reddit_user_history",    "/api/osint/reddit_user_history"),
         ("mastodon_user_lookup",   "/api/osint/mastodon_user_lookup"),
         ("youtube_channel_rss",    "/api/osint/youtube_channel_rss"),
-        ("github_activity_recent", "/api/osint/github_activity_recent"),
     ],
     "tier12_image_geo": [
         ("exif_metadata_url",      "/api/osint/exif_metadata_url"),
-        ("reverse_image_search",   "/api/osint/reverse_image_search"),
         ("osm_location_lookup",    "/api/osint/osm_location_lookup"),
     ],
     "tier13_corporate_extra": [
         ("uk_companies_house",     "/api/osint/uk_companies_house"),
         ("mca_indian_company",     "/api/osint/mca_indian_company"),
-        ("censys_certs_free",      "/api/osint/censys_certs_free"),
     ],
     "tier14_developer_intel": [
-        ("github_secrets_scan",    "/api/osint/github_secrets_scan"),
         ("commoncrawl_cdx",        "/api/osint/commoncrawl_cdx"),
         ("certspotter_history",    "/api/osint/certspotter_history"),
         ("wayback_robots_history", "/api/osint/wayback_robots_history"),
@@ -137,29 +125,12 @@ OSINT_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
     ],
     # ── VL-FORGE round 4: +8 paid-API integrations (advisory + real-probe) ──
     "tier19_paid_api_breach_intel": [
-        ("dehashed_search",            "/api/osint/dehashed_search"),
-        ("intelx_search",              "/api/osint/intelx_search"),
-        ("snusbase_search",            "/api/osint/snusbase_search"),
     ],
     "tier20_paid_api_intel_discovery": [
-        ("hunter_io_domain",           "/api/osint/hunter_io_domain"),
         ("phoneinfoga_lookup",         "/api/osint/phoneinfoga_lookup"),
-        ("securitytrails_passive_dns", "/api/osint/securitytrails_passive_dns"),
-        ("fofa_search",                "/api/osint/fofa_search"),
-        ("zoomeye_search",             "/api/osint/zoomeye_search"),
-        ("domaintools_historical",     "/api/osint/domaintools_historical"),
     ],
     # ── VL-FORGE round 5: +9 enterprise threat-intel + people-search (advisory) ──
     "tier21_enterprise_intel_people": [
-        ("censys_hosts_search",         "/api/osint/censys_hosts_search"),
-        ("greynoise_paid_advisory",     "/api/osint/greynoise_paid_advisory"),
-        ("misp_threat_feed_advisory",   "/api/osint/misp_threat_feed_advisory"),
-        ("mandiant_advantage_advisory", "/api/osint/mandiant_advantage_advisory"),
-        ("crowdstrike_falcon_advisory", "/api/osint/crowdstrike_falcon_advisory"),
-        ("recorded_future_advisory",    "/api/osint/recorded_future_advisory"),
-        ("spokeo_whitepages_advisory",  "/api/osint/spokeo_whitepages_advisory"),
-        ("pimeyes_face_advisory",       "/api/osint/pimeyes_face_advisory"),
-        ("osint_industries_aggregator", "/api/osint/osint_industries_aggregator"),
     ],
 }
 
