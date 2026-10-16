@@ -29,7 +29,7 @@ class ScreenshotReq(BaseModel):
 @router.post("/api/recon/finding/screenshot")
 async def capture_screenshot(req: ScreenshotReq, _=Depends(verify_scan_quota)):
     """Capture URL screenshot. Tries Playwright → screenshotapi.io fallback → error."""
-    fid = req.finding_id or uuid.uuid4().hex[:12]
+    fid = _safe(req.finding_id) if req.finding_id else uuid.uuid4().hex[:12]
     out = _BASE/"screenshots"/f"{fid}.png"
     # Try Playwright (if installed in container)
     try:
@@ -61,7 +61,7 @@ async def capture_screenshot(req: ScreenshotReq, _=Depends(verify_scan_quota)):
 
 @router.get("/api/recon/finding/screenshot/{finding_id}")
 async def get_screenshot(finding_id: str, _=Depends(verify_scan_quota)):
-    f = _BASE/"screenshots"/f"{finding_id}.png"
+    f = _BASE/"screenshots"/f"{_safe(finding_id)}.png"
     if not f.exists(): raise HTTPException(404)
     return {"finding_id":finding_id,"base64":base64.b64encode(f.read_bytes()).decode("ascii"),
             "size":f.stat().st_size}
@@ -82,7 +82,7 @@ async def sign_pdf(req: SignReq, _=Depends(verify_scan_quota)):
     sig = hmac.new(_SIGN_KEY, payload.encode(), hashlib.sha256).hexdigest()
     rec = {"report_id":req.report_id,"content_hash":req.content_hash,
            "signed_at":ts,"signature":sig,"algorithm":"HMAC-SHA256"}
-    (_BASE/"signatures"/f"{req.report_id}.json").write_text(json.dumps(rec), encoding="utf-8")
+    (_BASE/"signatures"/f"{_safe(req.report_id)}.json").write_text(json.dumps(rec), encoding="utf-8")
     return rec
 
 class VerifyReq(BaseModel):
@@ -262,7 +262,7 @@ class CustomRule(BaseModel):
 
 @router.post("/api/recon/rules/upload")
 async def rule_upload(rule: CustomRule, _=Depends(verify_scan_quota)):
-    rid = rule.rule_id or uuid.uuid4().hex[:12]
+    rid = _safe(rule.rule_id) if rule.rule_id else uuid.uuid4().hex[:12]
     rec = rule.dict()
     rec["rule_id"]=rid
     rec["created"]=int(time.time())

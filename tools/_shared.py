@@ -218,7 +218,11 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
     sub = payload.get("sub")
     row = _live_user(sub)
     if row == "ERROR":
-        pass  # DB unavailable — fail open on token claims to preserve uptime
+        # DB unavailable — fail OPEN for ordinary auth (preserve uptime) but mark
+        # the role as NOT live-verified so privileged gates (verify_admin) fail
+        # CLOSED. A demoted admin's stale token role must not satisfy admin checks
+        # during a DB outage.
+        payload["_role_verified"] = False
     elif row is None:
         raise HTTPException(401, "Account no longer exists")
     else:
@@ -228,6 +232,7 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
         payload["role"] = row.get("role", payload.get("role"))
         payload["plan"] = row.get("plan", payload.get("plan"))
         payload["plan_expires_at"] = row.get("plan_expires_at")
+        payload["_role_verified"] = True
 
     _USER_CTX.set(sub or "unknown")
     return payload
@@ -329,7 +334,9 @@ def verify_scan_quota(request: Request, payload=Depends(verify_token)):
 
 def verify_admin(payload=Depends(verify_token)):
     """Admin-only gate. Use on every /api/admin/* endpoint.
-    Raises 403 if the JWT does not carry role='admin'."""
+    Raises 403 if the role was not live-verified against the DB, or is not admin."""
+    if not payload.get("_role_verified"):
+        raise HTTPException(403, "Account state could not be verified; admin access denied")
     if payload.get("role") not in ("admin", "superadmin"):
         raise HTTPException(403, "Admin role required")
     return payload

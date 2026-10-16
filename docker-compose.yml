@@ -4,8 +4,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: vulnuslab_backend
+    # Bind to loopback only — nginx reaches the backend over the compose network
+    # as "backend:8000". Publishing 0.0.0.0:8000 bypassed nginx TLS + login throttle.
     ports:
-    - 8000:8000
+    - 127.0.0.1:8000:8000
     env_file:
     - .env
     environment:

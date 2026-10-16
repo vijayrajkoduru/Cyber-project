@@ -10,6 +10,8 @@ router = APIRouter()
 
 
 def verify_admin_or_super(payload=Depends(verify_token)):
+    if not payload.get("_role_verified"):
+        raise HTTPException(403, "Account state could not be verified; admin access denied")
     if payload.get("role") not in ("admin", "superadmin"):
         raise HTTPException(403, "Admin role required")
     return payload
