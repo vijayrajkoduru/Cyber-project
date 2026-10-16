@@ -11,10 +11,10 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # when signature verification fails, so build is resilient to upstream key
 # rotation / clock skew / repo CDN hiccups. Production install steps still
 # pin specific package versions and verify SHA elsewhere.
-RUN echo 'Acquire::AllowInsecureRepositories "true";'           >  /etc/apt/apt.conf.d/99vl-tolerant \
- && echo 'Acquire::AllowDowngradeToInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99vl-tolerant \
- && echo 'Acquire::Check-Valid-Until "false";'                   >> /etc/apt/apt.conf.d/99vl-tolerant \
- && echo 'APT::Get::AllowUnauthenticated "true";'                >> /etc/apt/apt.conf.d/99vl-tolerant
+# Keep only Check-Valid-Until relaxed (tolerates stale mirror timestamps / clock
+# skew). GPG signature verification stays ENABLED — disabling it (the old
+# AllowInsecure/AllowUnauthenticated flags) opened the build to supply-chain MITM.
+RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99vl-tolerant
 
 # Minimal apt deps — only what core tools need.
 # Heavy Kali tools (nuclei, hydra, msfvenom, gdb) get installed per-tool

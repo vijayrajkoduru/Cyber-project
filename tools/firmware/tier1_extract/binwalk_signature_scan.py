@@ -82,7 +82,7 @@ async def gather(ctx: ScanContext):
     extract_dir = tempfile.mkdtemp(prefix="binwalk_extract_")
     try:
         # 1. Signature scan (binwalk -B)
-        rc, sig_out, sig_err = await _run(["binwalk", "-B", target], TIMEOUT_SIG)
+        rc, sig_out, sig_err = await _run(["binwalk", "-B", "--", target], TIMEOUT_SIG)
         sig_lines = [l for l in sig_out.splitlines() if l.strip() and not l.startswith("DECIMAL")][:MAX_SIG_LINES]
         for label, pat in FS_PATTERNS:
             if pat.search(sig_out):
@@ -92,7 +92,7 @@ async def gather(ctx: ScanContext):
 
         # 2. Extraction (binwalk -e -C extract_dir)
         rc2, ext_out, ext_err = await _run(
-            ["binwalk", "-e", "-q", "-C", extract_dir, target], TIMEOUT_EXTRACT
+            ["binwalk", "-e", "-q", "-C", extract_dir, "--", target], TIMEOUT_EXTRACT
         )
         extracted_files = 0
         total_size = 0

@@ -71,7 +71,10 @@ def restore_snapshot(user_id, snap_name):
             else:
                 child.unlink()
         with tarfile.open(snap, "r:gz") as tar:
-            tar.extractall(zr)
+            # filter="data" blocks path-traversal / absolute-path / device entries
+            # in the archive (CVE-2007-4559 class). Available since the PEP 706
+            # backport in 3.11.4; runtime is 3.11.17.
+            tar.extractall(zr, filter="data")
         log.warning("USER-RESTORE: %s from %s", user_id, snap_name)
         return True
     except Exception as exc:

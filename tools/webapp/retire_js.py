@@ -79,19 +79,27 @@ async def webapp_retire_js(req: ScanRequest, payload=Depends(verify_scan_quota))
     seen = set()
     for body in bodies:
         for lib_name, vuln_re, fixed, cve, sev, desc in _VULN_LIBS:
-            m = re.search(vuln_re, body, re.I)
-            if m and (lib_name, m.group(1)) not in seen:
-                seen.add((lib_name, m.group(1)))
-                detected.append({"library": lib_name, "version": m.group(1), "cve": cve, "fixed_in": fixed})
+            try:
+                m = re.search(vuln_re, body, re.I)
+            except re.error:
+                continue
+            if not m:
+                continue
+            # Some AI-curated signatures have no version capture group; fall back
+            # to the full match so m.group(1) never raises IndexError.
+            version = (m.group(1) if m.re.groups >= 1 and m.group(1) else m.group(0)) or "unknown"
+            if (lib_name, version) not in seen:
+                seen.add((lib_name, version))
+                detected.append({"library": lib_name, "version": version, "cve": cve, "fixed_in": fixed})
                 cvss = {"CRITICAL":"9.8","HIGH":"7.5","MEDIUM":"5.4","LOW":"3.1"}.get(sev, "5.0")
                 findings.append(wrap_finding(
-                    f"Vulnerable library: {lib_name} {m.group(1)} - {desc}",
+                    f"Vulnerable library: {lib_name} {version} - {desc}",
                     sev,
                     cvss=cvss, cwe="CWE-1104",
                     cwe_name="Use of Unmaintained Third-Party Components",
                     owasp="A06:2021",
                     remediation=f"Upgrade {lib_name} to >= {fixed} (CVE: {cve})",
-                    evidence_marker=f"Found '{lib_name} {m.group(1)}' in target's loaded JavaScript",
+                    evidence_marker=f"Found '{lib_name} {version}' in target's loaded JavaScript",
                 ))
 
     return standard_response(
