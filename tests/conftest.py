@@ -8,8 +8,30 @@ reads USERS_DB at import to locate the SQLite file. Setting them here
 no real database, no /app or /data writes.
 """
 import os
+import re
+import sys
 import tempfile
 import pathlib
+
+# ── Production safety guard (MUST run before anything touches the DB) ──
+# The _clean_users_table fixture below runs `DELETE FROM users` before and
+# after EVERY test. If pytest is launched inside the production container,
+# that container's DATABASE_URL points at the live database and this suite
+# would wipe it (this is exactly how prod users were lost on 2026-10-16).
+# Refuse to run unless the target DB is local, or an explicit override is set.
+_ambient_db = os.environ.get("DATABASE_URL", "")
+if (_ambient_db
+        and not re.search(r"@(localhost|127\.0\.0\.1)[:/]", _ambient_db)
+        and os.environ.get("VL_ALLOW_PROD_TESTS") != "1"):
+    sys.stderr.write(
+        "\n*** REFUSING TO RUN TEST SUITE ***\n"
+        "This suite DELETEs the users table before and after every test.\n"
+        "DATABASE_URL is not a local/dev database, so this looks like the\n"
+        "production container - running here would wipe live users.\n"
+        f"  DATABASE_URL = {_ambient_db}\n"
+        "Run tests only against a local test DB, or set VL_ALLOW_PROD_TESTS=1\n"
+        "if you are absolutely certain you want to target this database.\n\n")
+    raise SystemExit(2)
 
 # ── Hermetic environment (must run before app imports) ──────────────
 _TMP = tempfile.mkdtemp(prefix="vl-tests-")
