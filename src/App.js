@@ -4666,32 +4666,52 @@ function SystemHealth() {
   }, []);
   if (loading) return <div style={{textAlign:"center",padding:40,color:"#475569",fontSize:13}}>Checking system health...</div>;
   if (!health)  return <div style={{textAlign:"center",padding:40,color:"#ef4444"}}>Cannot connect to backend</div>;
-  const available = Object.values(health.free_tools).filter(t=>t.available).length;
-  const total     = Object.keys(health.free_tools).length;
+  // /api/health returns: status, version, tools_loaded, tools_failed[], tools_healed[], healing_engine.
+  // (It does NOT return free_tools — guarding here avoids a white-page crash.)
+  const loaded = health.tools_loaded || 0;
+  const failed = Array.isArray(health.tools_failed) ? health.tools_failed : [];
+  const healed = Array.isArray(health.tools_healed) ? health.tools_healed : [];
+  const nm = (x) => (typeof x === "string" ? x : (x && (x.name || x.module)) || JSON.stringify(x));
   return (
     <div className="fade">
       <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:20,marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
           <div>
             <h2 style={{fontSize:16,fontWeight:700,color:"#f1f5f9",marginBottom:2}}>System Health</h2>
-            <p style={{fontSize:12,color:"#64748b"}}>Real-time tool availability on Kali backend</p>
+            <p style={{fontSize:12,color:"#64748b"}}>Backend status and module autoload on the Kali backend</p>
           </div>
-          <div style={{display:"flex",gap:8}}>
-            <Badge label={available+"/"+total+" Available"} color="green"/>
-            <Badge label={"v"+health.version} color="blue"/>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <Badge label={(health.status||"")==="ok"?"online":(health.status||"unknown")} color={(health.status||"")==="ok"?"green":"red"}/>
+            <Badge label={"v"+(health.version||"?")} color="blue"/>
+            <Badge label={loaded+" modules loaded"} color="green"/>
+            {failed.length>0 && <Badge label={failed.length+" failed"} color="red"/>}
+            <Badge label={"healing: "+(health.healing_engine||"?")} color="gray"/>
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-          {Object.entries(health.free_tools).map(([name,info]) => (
-            <div key={name} style={{background:"#020617",border:"1px solid "+(info.available?"#166534":"#7f1d1d"),borderRadius:6,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:12,fontWeight:600,color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",marginBottom:2}}>{name}</div>
-                <div style={{fontSize:10,color:"#94a3b8",fontFamily:"JetBrains Mono,monospace"}}>{info.path||"not found"}</div>
-              </div>
-              <div style={{width:8,height:8,borderRadius:"50%",background:info.available?"#22c55e":"#ef4444",flexShrink:0}}/>
+        {failed.length===0 ? (
+          <div style={{background:"#020617",border:"1px solid #166534",borderRadius:6,padding:"12px 14px",fontSize:12,color:"#86efac"}}>
+            All {loaded} module(s) loaded cleanly — no boot failures.
+          </div>
+        ) : (
+          <div>
+            <div style={{fontSize:12,fontWeight:600,color:"#ef4444",marginBottom:6}}>Failed modules ({failed.length})</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+              {failed.map((f,i) => (
+                <div key={i} style={{background:"#020617",border:"1px solid #7f1d1d",borderRadius:6,padding:"10px 14px",fontSize:11,color:"#fca5a5",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>{nm(f)}</div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+        {healed.length>0 && (
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#eab308",marginBottom:6}}>Self-healed modules ({healed.length})</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+              {healed.map((h,i) => (
+                <div key={i} style={{background:"#020617",border:"1px solid #854d0e",borderRadius:6,padding:"10px 14px",fontSize:11,color:"#fde68a",fontFamily:"JetBrains Mono,monospace",wordBreak:"break-all"}}>{nm(h)}</div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
