@@ -42,16 +42,24 @@ async def gather(ctx):
     ctx.state.update({"open_ports":open_ports,"port_count":len(open_ports),
         "ports_probed":len(ports)})
 def _r_dangerous(s):
-    risky={21:"FTP",23:"Telnet",1433:"MSSQL",3306:"MySQL",5432:"Postgres",
-        27017:"MongoDB",6379:"Redis",9200:"Elasticsearch",2375:"Docker API",
-        11211:"Memcached",5984:"CouchDB",5601:"Kibana"}
+    # An open port is EXPOSURE, not confirmed compromise — grade by what is
+    # exposed, not a blanket CRITICAL. Cleartext-auth services (FTP/Telnet) are a
+    # real hardening issue = MEDIUM; an internet-facing datastore/admin API is
+    # higher impact if unauthenticated = HIGH. Verify each for anon/unauth access.
+    cleartext={21:"FTP",23:"Telnet"}
+    datastores={1433:"MSSQL",3306:"MySQL",5432:"Postgres",27017:"MongoDB",
+        6379:"Redis",9200:"Elasticsearch",2375:"Docker API",11211:"Memcached",
+        5984:"CouchDB",5601:"Kibana"}
     open_ports=s.get("open_ports") or []
-    hits=[(p,risky[p]) for p in open_ports if p in risky]
-    if not hits: return None
-    return {"name":f"Dangerous services exposed ({len(hits)})","severity":"CRITICAL","cvss":9.0,
+    ds=[(p,datastores[p]) for p in open_ports if p in datastores]
+    ct=[(p,cleartext[p]) for p in open_ports if p in cleartext]
+    if not ds and not ct: return None
+    hits=ds+ct
+    sev,cvss=("HIGH",7.5) if ds else ("MEDIUM",5.3)
+    return {"name":f"Sensitive services exposed to internet ({len(hits)})","severity":sev,"cvss":cvss,
         "cwe":"CWE-668","owasp":"A05:2021",
         "evidence":"; ".join(f"{n} on :{p}" for p,n in hits[:5]),
-        "remediation":"Bind to localhost or firewall to trusted IPs. Cleartext + DB services should never face internet."}
+        "remediation":"Restrict to trusted IPs or bind to localhost. Cleartext (FTP/Telnet) and datastore/admin ports should not face the internet. Verify each for anonymous/unauthenticated access — unauth datastores/Docker API are critical."}
 def _r_web(s):
     op=s.get("open_ports") or []
     web=[p for p in op if p in (80,443,8080,8443,8000,8443,3000,5000)]

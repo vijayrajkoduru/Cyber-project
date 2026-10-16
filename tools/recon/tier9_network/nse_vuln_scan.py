@@ -34,7 +34,10 @@ async def gather(ctx):
     cve_pattern=re.compile(r"CVE-\d{4}-\d{4,7}")
     cves=list(set(cve_pattern.findall(output)))
     state_pattern=re.compile(r"VULNERABLE|LIKELY VULNERABLE",re.I)
-    vuln_lines=[ln for ln in output.splitlines() if state_pattern.search(ln)][:20]
+    # "NOT VULNERABLE" contains the substring "VULNERABLE" — exclude those clean
+    # results so an NSE script that cleared a host is never counted as a hit.
+    vuln_lines=[ln for ln in output.splitlines()
+        if state_pattern.search(ln) and "NOT VULNERABLE" not in ln.upper()][:20]
     ctx.state.update({"cves_found":cves[:30],"cve_count":len(cves),
         "vuln_indicators":vuln_lines,"raw_excerpt":output[:2000]})
 def _r_no_nmap(s):
@@ -44,16 +47,20 @@ def _r_no_nmap(s):
 def _r_cves(s):
     cves=s.get("cves_found") or []
     if not cves: return None
-    return {"name":f"NSE vuln scan found {len(cves)} CVE(s)","severity":"HIGH","cvss":7.5,
+    # Version-banner CVE matches are candidates, not confirmations — advisory INFO,
+    # not a graded vulnerability. Confirm each against the exact service version.
+    return {"name":f"NSE listed {len(cves)} version-based CVE candidate(s)","severity":"INFO",
         "cwe":"CWE-1395","owasp":"A06:2021",
-        "evidence":f"Sample: {', '.join(cves[:5])}",
-        "remediation":"Patch affected services. Verify each CVE applicability manually."}
+        "evidence":f"Version-matched, NOT confirmed exploitable — verify each. Sample: {', '.join(cves[:5])}",
+        "remediation":"Cross-check each CVE against the exact service version and vendor advisory before treating it as a vulnerability. NSE version-banner matches are leads, not findings."}
 def _r_vulnerable(s):
     vi=s.get("vuln_indicators") or []
     if not vi: return None
-    return {"name":f"{len(vi)} NSE script flagged VULNERABLE","severity":"HIGH","cwe":"CWE-1395",
+    # Genuine "VULNERABLE" states (NOT VULNERABLE already excluded) are a real
+    # signal but NSE can report version-only states — MEDIUM/suspected, confirm.
+    return {"name":f"NSE scripts reported {len(vi)} vulnerable state(s) — confirm","severity":"MEDIUM","cvss":5.0,"cwe":"CWE-1395",
         "evidence":vi[0][:200] if vi else "",
-        "remediation":"Investigate each VULNERABLE line — confirm + patch."}
+        "remediation":"Manually confirm each reported state before treating it as a vulnerability; some NSE vuln scripts flag on version alone."}
 FINDING_RULES=[_r_cves,_r_vulnerable,_r_no_nmap]
 INTEL_FIELDS=[("IP","ip"),("nmap installed","nmap_installed"),("CVEs","cve_count"),("CVEs list","cves_found")]
 @router.post("/api/recon/nse_vuln_scan")
