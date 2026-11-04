@@ -312,12 +312,14 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     target = req.target.rstrip("/")
     if not target.startswith(("http://", "https://")):
         target = "https://" + target
-    # UNDERSCORE-RESOLVE-V2 — an underscore in the hostname (e.g. the lab
+    # UNDERSCORE handling — an underscore in the hostname (e.g. the lab
     # container "lab_dvwa") makes modern Apache/Tomcat reject every request
-    # with HTTP 400 (strict RFC-9112 hostname rules). Resolve to the IP so the
-    # Host header carries no underscore. Real customer domains have no
-    # underscore, so this is a no-op for them.
-    target = _resolve_underscore(target)
+    # with HTTP 400 (strict RFC-9112 hostname rules). We do NOT rewrite the
+    # URL hostname to an IP: the hostname must stay intact so Docker DNS
+    # resolves it AND so lab detection below still matches "dvwa"/"mutillidae".
+    # Instead every request sends a cleaned Host header via _safe_host_header
+    # (applied per-mode below), which drops the underscore without losing the
+    # name. Real customer domains have no underscore, so this is a no-op.
 
     # ── Bearer mode ──
     if req.auth_type == "bearer":
