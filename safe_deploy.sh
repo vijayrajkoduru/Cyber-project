@@ -49,7 +49,15 @@ deploy() {
     printf "${G}deployed${X}\n"; return
   else
     sleep 10
-    docker ps | grep -q "vulnuslab_$1.*Up" && printf "${G}deployed${X}\n" || { printf "${R}reverting${X}\n"; revert "$1"; }
+    # REVERT-REGEX-FIX — `docker ps` prints STATUS before NAMES, so the old
+    # pattern "vulnuslab_$1.*Up" never matched and EVERY frontend deploy
+    # silently reverted to the previous image (stale bundle served). Use a
+    # column-order-independent running-state filter instead.
+    if [ -n "$(docker ps --filter "name=vulnuslab_$1" --filter "status=running" -q)" ]; then
+      printf "${G}deployed${X}\n"
+    else
+      printf "${R}reverting${X}\n"; revert "$1"
+    fi
   fi
 }
 case "$ACTION" in
