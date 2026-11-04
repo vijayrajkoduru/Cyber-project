@@ -33,6 +33,7 @@ WIRELESS_TOOLS_BY_TIER: dict[str, list[tuple[str, str]]] = {
         ("monitor_mode_capability_audit", "/api/wireless/monitor_mode_capability_audit"),
         ("wpa_handshake_capture_audit",   "/api/wireless/wpa_handshake_capture_audit"),
         ("wps_pin_audit",                 "/api/wireless/wps_pin_audit"),
+        ("handshake_crack_audit",         "/api/wireless/handshake_crack"),
     ],
     "tier2_bluetooth": [
         ("ble_scan_audit",                 "/api/wireless/ble_scan_audit"),
