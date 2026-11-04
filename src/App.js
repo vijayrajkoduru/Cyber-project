@@ -4168,7 +4168,7 @@ function WebAppModule(props) {
               const col={CRITICAL:"#dc2626",HIGH:"#ea580c",MEDIUM:"#ca8a04",LOW:"#16a34a",SAFE:"#16a34a"}[lb];
               return <>
                 <div style={{background:col,borderRadius:6,padding:"11px 16px",color:"#fff",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>RISK: {lb} ({sc}/100)</div>
-                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Report</button>
+                <button onClick={()=>setShowPDFModal(true)} style={{background:"#ef4444",border:"none",borderRadius:6,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Result(pdf)</button>
                 <div style={{position:"relative"}}>
                   <button onClick={()=>setShowExportMenu(v=>!v)} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"11px 16px",color:"#cbd5e1",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
                     Export <span style={{fontSize:10,opacity:0.8}}>{showExportMenu?"▴":"▾"}</span>
@@ -5453,7 +5453,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
             </button>
             <button onClick={() => setShowPDFModal(true)}
               style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              Report
+              Result(pdf)
             </button>
           </div>
         ))
@@ -5475,7 +5475,7 @@ function ModuleShell({title, icon, color, desc, token, apiUrl, attacks, extraInp
               {hasResults && (
                 <button onClick={() => setShowPDFModal(true)}
                   style={{background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                  Report
+                  Result(pdf)
                 </button>
               )}
             </div>
@@ -6529,7 +6529,7 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
             <div style={{fontSize:14, fontWeight:700, color:"#fbbf24"}}>Manual Tests — {moduleLabel}</div>
             <div style={{fontSize:10, color:"#94a3b8", marginTop:2}}>{totalCount} techniques{requiredCount ? (" · " + requiredCount + " required") : ""} · run locally · paste evidence for the PDF</div>
           </div>
-          <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "#374151" : "#7c3aed", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>Export PDF</button>
+          <button onClick={() => { try { generateManualTestsReport({moduleKey, moduleLabel, tests, findings, date: new Date().toLocaleString()}); } catch(e) { alert("PDF error: " + (e.message || e)); } }} disabled={completedCount === 0} style={{background: completedCount === 0 ? "#374151" : "#ef4444", border:"none", borderRadius:6, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor: completedCount === 0 ? "not-allowed" : "pointer", opacity: completedCount === 0 ? 0.5 : 1, whiteSpace:"nowrap"}}>Result(pdf)</button>
         </div>
         <div style={{height:5, background:"#1e293b", borderRadius:3, overflow:"hidden", marginBottom:8}}>
           <div style={{height:"100%", width:`${pct}%`, background: pct === 100 ? "#22c55e" : "#7c3aed", transition:"width 0.3s"}}/>
@@ -7497,7 +7497,7 @@ function OsintModule({token, apiUrl}) {
           </button>
           {Object.keys(results).length>0 && !running && (
             <button style={{...C.btn,background:"#ef4444",marginTop:0}} onClick={() => setShowPDFModal(true)}>
-              Report
+              Result(pdf)
             </button>
           )}
         </div>
@@ -13328,7 +13328,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
           ))}
           {finished && (
             <button onClick={dlReconPDF} style={{marginLeft:"auto",marginRight:12,background:"#ef4444",border:"none",borderRadius:6,padding:"8px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              Report
+              Result(pdf)
             </button>
           )}
         </div>
@@ -14380,6 +14380,11 @@ function generateUniversalVLReport(opts) {
       _posture = "REQUIRES REVIEW"; _pCol = [245,158,11];
     } else if (_sevCount.HIGH + _sevCount.MEDIUM > 5) {
       _posture = "REQUIRES REVIEW"; _pCol = [245,158,11];
+    } else if (_sevCount.MEDIUM > 0) {
+      // MEDIUM findings present — hardening is required, so the posture is
+      // NOT "STRONG". Calling a target with open MEDIUM findings "STRONG"
+      // overstates security and loses the reader's trust.
+      _posture = "HARDENING RECOMMENDED"; _pCol = [202,138,4];
     } else {
       _posture = "STRONG"; _pCol = [16,185,129];
     }
@@ -14439,8 +14444,8 @@ function generateUniversalVLReport(opts) {
         );
       } else if (_totalReal > 0) {
         _paragraphs.push(
-          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed cleanly across ${_scannerCount} scanner(s) with ${_totalReal} finding(s) - all at MEDIUM or LOW severity. The most notable item is "${_topName}". No CRITICAL or HIGH exposures were detected, indicating the externally-visible attack surface is well-controlled.`,
-          `The MEDIUM/LOW findings are typically hardening opportunities: cookie security flags, server-version disclosure, or missing security headers. None are independently exploitable but together they reduce defense-in-depth against client-side and credential-harvesting attacks.`,
+          `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed across ${_scannerCount} scanner(s) with ${_totalReal} finding(s) at MEDIUM or LOW severity. The most notable item is "${_topName}". No CRITICAL or HIGH exposures were detected in the vulnerability classes this scan actively exercised. This is not a clean bill of health: the MEDIUM finding(s) below require remediation, and coverage is limited to the classes listed in the Scan Coverage section.`,
+          `The MEDIUM/LOW findings are typically hardening opportunities: cookie security flags, server-version disclosure, or missing security headers. Individually they may not be directly exploitable, but together they reduce defense-in-depth against client-side and credential-harvesting attacks, and should be closed per SLA.`,
           `Recommended next steps: address findings per SLA cadence (MEDIUM within 30 days, LOW within 90 days) and continue continuous monitoring. Schedule a re-scan on the cadence indicated in the Conclusion section to detect drift.`
         );
       } else {
@@ -17959,10 +17964,10 @@ function ShellPanel({
         {onDownloadReport && (
           <button onClick={downloadReport}
             style={{padding: "9px 18px", fontSize: 12, fontWeight: 800, letterSpacing: 1,
-              background: "linear-gradient(135deg, #ea580c, #c2410c)",
+              background: "#ef4444",
               color: "#fff", border: "none", borderRadius: 6, cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(234,88,12,0.3)"}}>
-            Report
+              boxShadow: "0 4px 12px rgba(239,68,68,0.3)"}}>
+            Result(pdf)
           </button>
         )}
       </div>
@@ -21341,6 +21346,20 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         <span style={{fontSize:28}}>{emoji}</span>
         <h1 style={{fontSize:22, fontWeight:700}}>{moduleLabel}</h1>
         <ModuleTypeBadge moduleKey={moduleKey}/>
+        <button
+          onClick={generatePDF}
+          disabled={running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)}
+          title={
+            completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0
+              ? "Run a scan or complete manual tests first"
+              : `Download PDF (${completedCount} auto + ${Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length} manual)`
+          }
+          style={{marginLeft:"auto", background: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "#334155" : "#ef4444",
+                  border:"none", borderRadius:6, padding:"10px 14px",
+                  color:"#fff", fontWeight:600, fontSize:13,
+                  cursor: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "not-allowed" : "pointer"}}>
+          Result(pdf)
+        </button>
       </div>
 
       {/* Container module: the Target field + TestTargets chips are
@@ -21382,20 +21401,6 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
                   color:"#fff", fontWeight:600, fontSize:13,
                   cursor: !canRun ? "not-allowed" : "pointer"}}>
           {running ? `Running ${progress.done}/${progress.total}` : `Run All (${totalTools})`}
-        </button>
-        <button
-          onClick={generatePDF}
-          disabled={running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)}
-          title={
-            completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0
-              ? "Run a scan or complete manual tests first"
-              : `Download PDF (${completedCount} auto + ${Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length} manual)`
-          }
-          style={{background: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "#334155" : "#10b981",
-                  border:"none", borderRadius:6, padding:"10px 14px",
-                  color:"#fff", fontWeight:600, fontSize:13,
-                  cursor: (running || (completedCount === 0 && Object.keys(manualState).filter(k => manualState[k]?.status && manualState[k].status !== "NOT_RUN").length === 0)) ? "not-allowed" : "pointer"}}>
-          PDF
         </button>
       </div>
 

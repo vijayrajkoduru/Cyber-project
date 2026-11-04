@@ -24,8 +24,22 @@ deploy() {
     printf "${G}ok${X}\n"; rm -f /tmp/vl_undef_deploy.$$
   fi
   snapshot "$1"
-  docker compose build "$1"
-  docker compose up -d "$1"
+  # Build and ABORT on failure. Previously a failed/no-op build still fell
+  # through to `up -d`, which silently served the OLD image and reported
+  # "deployed" — a stale deploy that looked successful. Never again.
+  if ! docker compose build "$1"; then
+    printf "${R}build FAILED — not deploying (old image left running)${X}\n"; return 1
+  fi
+  # Guard against BuildKit cache-staleness: if the image was not actually
+  # rebuilt just now (image Created older than 5 min), warn loudly — the
+  # running code may not match source. A --no-cache rebuild is the fix.
+  _img="cyber-project-$1:latest"
+  _created=$(docker image inspect "$_img" --format '{{.Created}}' 2>/dev/null | cut -c1-19)
+  if [ -n "$_created" ]; then
+    _age=$(( $(date +%s) - $(date -d "$_created" +%s 2>/dev/null || echo 0) ))
+    [ "$_age" -gt 300 ] 2>/dev/null && printf "${R}WARNING: %s image is %ss old — build may have cache-hit stale source. If code changed, run: docker compose build --no-cache %s${X}\n" "$1" "$_age" "$1"
+  fi
+  docker compose up -d --force-recreate "$1"
   if [ "$1" = "backend" ]; then
     if ! wait_healthy; then printf "${R}unhealthy — reverting${X}\n"; revert "$1"; wait_healthy; return 1; fi
     # Behavioral smoke: exercise the real scan path, not just /api/health.

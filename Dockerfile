@@ -435,6 +435,19 @@ RUN set +e; \
     echo "=== CORE pip import sanity check (build fails if these miss) ===" ; \
     python -c "import impacket, ldap3, scapy.all, pymodbus, openai, anthropic, paramiko, winrm, jwt, pymysql, psycopg2; print('CORE PHASE 2 PIP OK')"
 
+# ── Playwright browser + system deps ───────────────────────────────────
+# playwright (pip) is installed above, but the SPA crawler (tools/webapp/
+# spa_crawler.py) needs the actual Chromium binary AND its system libraries
+# (libatk-bridge, libnss3, …). Without this the crawler fails to launch a
+# browser on every scan, discovers no authenticated endpoints, and every
+# injection scanner (sqli/xss/…) silently skips — making the engine report a
+# false "all clear". Bake the browser into the image so a scan can crawl.
+RUN python -m playwright install --with-deps chromium \
+ && python -c "from playwright.sync_api import sync_playwright; \
+import sys; \
+p=sync_playwright().start(); b=p.chromium.launch(args=['--no-sandbox']); b.close(); p.stop(); \
+print('PLAYWRIGHT CHROMIUM OK')"
+
 # ── TOOLCHAIN REBUILD MARKER ───────────────────────────────────────────
 # 2026-11-04: the host disk filled to 100%, which broke `apt-get update`
 # ("At least one invalid signature was encountered") and silently failed every

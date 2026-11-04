@@ -38,7 +38,7 @@ def _time_get(url, req, timeout):
     return r, time.time() - t0
 
 @router.post("/api/webapp/scan/sqli")
-@vl_turbo()
+@vl_turbo(timeout_s=120)
 @vl_verify()
 def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
@@ -70,6 +70,35 @@ def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
                           "endpoints — append ?id=1 to test, or run the SPA Crawler "
                           "first to discover dynamic endpoints."))
 
+    # DEDUPE-BY-PATH-V1 — a handful of same-path URLs (e.g. DVWA's five
+    # instructions.php?doc=X variants) must not consume all the limited test
+    # slots and crowd out distinct injectable endpoints like
+    # /vulnerabilities/sqli/?id=1. Keep the first URL per unique path.
+    _seen_paths: set = set()
+    _deduped = []
+    for _u, _ps in test_urls:
+        _p = urlparse(_u).path
+        if _p in _seen_paths:
+            continue
+        _seen_paths.add(_p)
+        _deduped.append((_u, _ps))
+    test_urls = _deduped
+
+    # PRIORITIZE-INJECTABLE-V1 — time-based probes are slow (a target that
+    # runs SLEEP() once per matched row can take 20s+ per probe), so with a
+    # fixed wall-clock budget the scanner must test the most likely-injectable
+    # endpoints FIRST or it gets killed before reaching them. Rank URLs whose
+    # path or parameter names look database-backed (id, user, cat, item,
+    # search, query, sqli, …) ahead of the rest.
+    _INJ_HINTS = ("id", "user", "uid", "cat", "item", "product", "order",
+                  "search", "query", "q", "name", "page", "view", "record",
+                  "sql", "select", "report", "news", "article")
+    def _inj_rank(entry):
+        _u, _ps = entry
+        hay = (_u + " " + " ".join(_ps.keys())).lower()
+        return -sum(1 for h in _INJ_HINTS if h in hay)
+    test_urls.sort(key=_inj_rank)
+
     findings, tests, confirmed = [], 0, []
     _, t0 = _time_get(base, req, timeout=20)
     # SPEED-V2 — wall-clock cap. Without this the inner loop can run for
@@ -79,7 +108,7 @@ def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     _wallclock_start = time.time()
     _WALLCLOCK_BUDGET = 60.0
     _bailed = False
-    for test_url, params in test_urls[:8]:
+    for test_url, params in test_urls[:12]:
         if _bailed: break
         url_parsed = urlparse(test_url)
         for key in list(params.keys())[:3]:
