@@ -617,7 +617,7 @@ function LandingPage({onStart, onSignIn}) {
   const TIERS = [
     {name:"Trial", blurb:"Try before you pay", price:"FREE", note:"7 days", highlight:false, cta:"Start Free Trial", onClick:()=>scrollTo("request"),
      feats:["7 days full access","5 scans per day","All 51 tools available","PDF reports included","No credit card required"]},
-    {name:"Pro", blurb:"For professionals", price:"$29", note:"per month", highlight:true, cta:"Subscribe Now", onClick:()=>scrollTo("request"),
+    {name:"Pro", blurb:"For professionals", price:"$199", note:"per month", highlight:true, cta:"Subscribe Now", onClick:()=>scrollTo("request"),
      feats:["All 51 scanners unlocked","Unlimited scans per day","PDF + JSON + CSV reports","Email support","1 user account","5 built-in vulnerable labs","Cancel anytime"]},
     {name:"Enterprise", blurb:"For security teams", price:"Custom", note:"billed annually", highlight:false, cta:"Contact Sales", onClick:()=>{window.location.href="mailto:support@vulnuslab.com?subject=VulnusLab%20Enterprise";},
      feats:["Everything in Pro","Multiple user accounts","Team scan history","Custom wordlists","Priority support","Admin panel access","SLA & invoicing"]},
@@ -879,7 +879,7 @@ function LandingPage({onStart, onSignIn}) {
           <div style={{gridColumn:"1 / -1"}}><label style={label}>Plan *</label>
             <select style={input} value={form.plan} onChange={set("plan")}>
               <option>Trial — 7 Days Free (No payment needed)</option>
-              <option>Pro — $29 / month</option>
+              <option>Pro — $199 / month</option>
               <option>Enterprise — Custom</option>
             </select>
           </div>
