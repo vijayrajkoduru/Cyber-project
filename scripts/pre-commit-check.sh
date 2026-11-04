@@ -70,6 +70,32 @@ for f in $staged; do
     fi
 done
 
+# -- Check 5: Python won't-crash gate (undefined names + syntax) -----
+# Catches the bug class that 500'd /api/scan/login: a name called but
+# defined nowhere (NameError at request time), plus syntax errors.
+py_staged=""
+for f in $staged; do
+    case "$f" in
+        tools/*.py|endpoints/*.py|agents/*.py|main.py) [ -f "$f" ] && py_staged="$py_staged $f" ;;
+    esac
+done
+if [ -n "$py_staged" ]; then
+    for f in $py_staged; do
+        if ! python3 -I -m py_compile "$f" 2>/tmp/vl_pycomp.$$; then
+            echo "BLOCKED: $f (Python syntax error)"; sed 's/^/    /' /tmp/vl_pycomp.$$; fail=1
+        fi
+    done
+    rm -f /tmp/vl_pycomp.$$
+    if [ -f scripts/check_undefined.py ]; then
+        if ! python3 -I scripts/check_undefined.py $py_staged >/tmp/vl_undef.$$ 2>&1; then
+            echo "BLOCKED: undefined name(s) that would crash at runtime:"
+            sed 's/^/    /' /tmp/vl_undef.$$; fail=1
+        fi
+        rm -f /tmp/vl_undef.$$
+    fi
+fi
+
+
 # ── Result ──────────────────────────────────────────────────────────
 if [ $fail -ne 0 ]; then
     echo ""

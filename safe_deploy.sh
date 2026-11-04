@@ -13,11 +13,26 @@ wait_healthy() {
   return 1
 }
 deploy() {
+  # Pre-build static gate: a name called but defined nowhere 500s every
+  # request at runtime (the _resolve_underscore failure). Block the build.
+  if [ "$1" = "backend" ] && [ -f scripts/check_undefined.py ]; then
+    printf "pre-build: undefined-name check ... "
+    if ! python3 -I scripts/check_undefined.py >/tmp/vl_undef_deploy.$$ 2>&1; then
+      printf "${R}FAIL${X}\n"; cat /tmp/vl_undef_deploy.$$; rm -f /tmp/vl_undef_deploy.$$
+      printf "${R}Refusing to build: undefined names would crash at runtime.${X}\n"; return 1
+    fi
+    printf "${G}ok${X}\n"; rm -f /tmp/vl_undef_deploy.$$
+  fi
   snapshot "$1"
   docker compose build "$1"
   docker compose up -d "$1"
   if [ "$1" = "backend" ]; then
-    wait_healthy && { printf "${G}deployed${X}\n"; return; } || { printf "${R}reverting${X}\n"; revert "$1"; wait_healthy; return 1; }
+    if ! wait_healthy; then printf "${R}unhealthy — reverting${X}\n"; revert "$1"; wait_healthy; return 1; fi
+    # Behavioral smoke: exercise the real scan path, not just /api/health.
+    if [ -f scripts/smoke_scan.sh ] && ! bash scripts/smoke_scan.sh; then
+      printf "${R}scan smoke failed — reverting${X}\n"; revert "$1"; wait_healthy; return 1
+    fi
+    printf "${G}deployed${X}\n"; return
   else
     sleep 10
     docker ps | grep -q "vulnuslab_$1.*Up" && printf "${G}deployed${X}\n" || { printf "${R}reverting${X}\n"; revert "$1"; }

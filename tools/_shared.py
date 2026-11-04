@@ -12,6 +12,7 @@ import os
 import re
 import sys
 import time
+import logging
 import uuid
 import random
 import string
