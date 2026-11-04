@@ -528,9 +528,150 @@ const Tagline = ({size=10}) => (
     <div style={{flex:1,height:1,background:"linear-gradient(90deg,#3b82f6,transparent)"}}/>
   </div>
 );
+
+// LANDING-V1 — marketing landing page shown before the auth card. CTAs open
+// the existing Login component (Start free -> Register, Sign in -> Login).
+function LandingPage({onStart, onSignIn}) {
+  const container = {maxWidth:1080, margin:"0 auto", padding:"0 24px"};
+  const btnPrimary = {background:"linear-gradient(135deg,#1e40af,#3b82f6)", color:"#fff", border:"none", borderRadius:8, padding:"13px 26px", fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:0.3};
+  const btnGhost = {background:"transparent", color:"#cbd5e1", border:"1px solid #334155", borderRadius:8, padding:"13px 24px", fontSize:14, fontWeight:600, cursor:"pointer"};
+  const card = {background:"#0f172a", border:"1px solid #1e293b", borderRadius:12, padding:"22px 20px"};
+  const Feature = ({title, body}) => (
+    <div style={card}>
+      <div style={{fontSize:15, fontWeight:800, color:"#f1f5f9", marginBottom:8}}>{title}</div>
+      <div style={{fontSize:13, lineHeight:1.6, color:"#94a3b8"}}>{body}</div>
+    </div>
+  );
+  // LANDING-PRICING — indicative placeholder tiers; edit prices/features freely.
+  const tiers = [
+    {name:"Trial", price:"Free", note:"14 days", cta:"Start free", onClick:onStart, highlight:false,
+     feats:["1 target", "All 60 scanners", "Verified PDF report", "Community support"]},
+    {name:"Professional", price:"$199", note:"per month", cta:"Start free", onClick:onStart, highlight:true,
+     feats:["Unlimited targets", "Authenticated scanning", "Delta re-scans", "Compliance mapping", "Priority support"]},
+    {name:"Enterprise", price:"Custom", note:"contact sales", cta:"Contact sales", onClick:()=>{window.location.href="mailto:support@vulnuslab.com?subject=VulnusLab%20Enterprise";}, highlight:false,
+     feats:["SSO / org accounts", "On-site capture agent", "Custom frameworks", "SLA + dedicated engineer"]},
+  ];
+  const frameworks = ["OWASP Top 10", "PCI DSS 4.0", "HIPAA", "SOC 2", "ISO 27001", "NIST 800-53", "NIST CSF 2.0", "GDPR Art.32", "CIS v8", "CISA KEV"];
+  return (
+    <div style={{minHeight:"100vh", background:"radial-gradient(1200px 600px at 50% -10%, rgba(59,130,246,0.14), transparent), #070b16", color:"#e2e8f0", fontFamily:"Inter,system-ui,-apple-system,sans-serif", overflowY:"auto"}}>
+      {/* Nav */}
+      <div style={{...container, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 24px"}}>
+        <div style={{display:"flex", alignItems:"center", gap:10}}>
+          <img src={LOGO} alt="" style={{width:38, height:38, objectFit:"contain"}}/>
+          <span style={{fontSize:18, fontWeight:900, letterSpacing:3}}><span style={{color:"#f1f5f9"}}>VULNUS</span><span style={{color:"#3b82f6"}}>LAB</span></span>
+        </div>
+        <div style={{display:"flex", gap:12}}>
+          <button onClick={onSignIn} style={btnGhost}>Sign in</button>
+          <button onClick={onStart} style={btnPrimary}>Start free</button>
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div style={{...container, textAlign:"center", padding:"66px 24px 36px"}}>
+        <div style={{display:"inline-block", fontSize:11, letterSpacing:2, textTransform:"uppercase", color:"#60a5fa", border:"1px solid #1e3a8a", borderRadius:999, padding:"5px 14px", marginBottom:22}}>Automated Vulnerability Assessment Platform</div>
+        <h1 style={{fontSize:46, lineHeight:1.08, fontWeight:900, margin:"0 0 18px", letterSpacing:-1}}>Find real vulnerabilities,<br/><span style={{color:"#3b82f6"}}>not false positives.</span></h1>
+        <p style={{fontSize:17, lineHeight:1.6, color:"#94a3b8", maxWidth:640, margin:"0 auto 30px"}}>Authenticated web-application penetration testing with 60 scanners and zero-false-positive confirmation. Every finding is independently triggered and re-verified before it reaches your report.</p>
+        <div style={{display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap"}}>
+          <button onClick={onStart} style={btnPrimary}>Start free</button>
+          <button onClick={onSignIn} style={btnGhost}>Sign in</button>
+        </div>
+        <div style={{marginTop:32}}><Tagline size={9}/></div>
+      </div>
+
+      {/* Stats */}
+      <div style={{...container, display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, padding:"8px 24px 54px"}}>
+        {[["60","scanners per scan"], ["0-FP","confirmed findings"], ["20","compliance frameworks"], ["100%","authenticated coverage"]].map(([n,l],i)=>(
+          <div key={i} style={{textAlign:"center", background:"#0f172a", border:"1px solid #1e293b", borderRadius:12, padding:"18px 10px"}}>
+            <div style={{fontSize:26, fontWeight:900, color:"#3b82f6"}}>{n}</div>
+            <div style={{fontSize:12, color:"#94a3b8", marginTop:4}}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Features */}
+      <div style={{...container, padding:"4px 24px 24px"}}>
+        <h2 style={{fontSize:13, letterSpacing:2, textTransform:"uppercase", color:"#64748b", textAlign:"center", marginBottom:24}}>What you get</h2>
+        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16}}>
+          <Feature title="Authenticated scanning" body="Capture a real session and test the application behind the login, where the exploitable bugs actually live, not just the public pages."/>
+          <Feature title="Zero-FP confirmation" body="Injection, traversal and timing findings are re-triggered and differentially confirmed, so a CRITICAL in your report is a CRITICAL in production."/>
+          <Feature title="OWASP + CVE coverage" body="SQLi, XSS, LFI, command injection, IDOR, SSRF, misconfiguration, headers, secrets and CVE-mapped components in one unified engine."/>
+          <Feature title="Compliance mapping" body="Every finding mapped to OWASP Top 10, PCI DSS 4.0, HIPAA, SOC 2, ISO 27001, NIST 800-53 and GDPR for auditor-ready evidence."/>
+          <Feature title="Verified PDF reports" body="Board-ready reports with risk scoring, remediation SLAs and reproduction steps, exported in one click."/>
+          <Feature title="Delta re-scans" body="Re-run after remediation and see added, closed and unchanged findings by severity to prove your fixes landed."/>
+        </div>
+      </div>
+
+      {/* Pricing */}
+      <div style={{...container, padding:"44px 24px 24px"}}>
+        <h2 style={{fontSize:13, letterSpacing:2, textTransform:"uppercase", color:"#64748b", textAlign:"center", marginBottom:6}}>Pricing</h2>
+        <p style={{fontSize:12, color:"#475569", textAlign:"center", marginBottom:24}}>Start free. Upgrade when you are ready.</p>
+        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, alignItems:"stretch"}}>
+          {tiers.map((t,i)=>(
+            <div key={i} style={{...card, display:"flex", flexDirection:"column", border:t.highlight?"1px solid #3b82f6":"1px solid #1e293b", boxShadow:t.highlight?"0 0 0 1px #3b82f6, 0 10px 30px rgba(59,130,246,0.15)":"none"}}>
+              {t.highlight && <div style={{alignSelf:"flex-start", fontSize:10, fontWeight:800, letterSpacing:1, textTransform:"uppercase", color:"#93c5fd", background:"rgba(59,130,246,0.15)", border:"1px solid #1e3a8a", borderRadius:999, padding:"3px 10px", marginBottom:10}}>Most popular</div>}
+              <div style={{fontSize:14, fontWeight:800, color:"#f1f5f9", letterSpacing:1, textTransform:"uppercase"}}>{t.name}</div>
+              <div style={{display:"flex", alignItems:"baseline", gap:6, margin:"10px 0 2px"}}>
+                <span style={{fontSize:30, fontWeight:900, color:"#fff"}}>{t.price}</span>
+                <span style={{fontSize:12, color:"#64748b"}}>{t.note}</span>
+              </div>
+              <div style={{flex:1, margin:"16px 0"}}>
+                {t.feats.map((f,j)=>(
+                  <div key={j} style={{display:"flex", gap:8, alignItems:"flex-start", fontSize:13, color:"#cbd5e1", marginBottom:9}}>
+                    <span style={{color:"#3b82f6", fontWeight:900}}>+</span><span>{f}</span>
+                  </div>
+                ))}
+              </div>
+              <button onClick={t.onClick} style={t.highlight?btnPrimary:btnGhost}>{t.cta}</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Trust / compliance */}
+      <div style={{...container, textAlign:"center", padding:"44px 24px 20px"}}>
+        <h2 style={{fontSize:13, letterSpacing:2, textTransform:"uppercase", color:"#64748b", marginBottom:18}}>Maps to the frameworks your auditors ask for</h2>
+        <div style={{display:"flex", flexWrap:"wrap", gap:10, justifyContent:"center"}}>
+          {frameworks.map((f,i)=>(
+            <span key={i} style={{fontSize:12, color:"#cbd5e1", background:"#0f172a", border:"1px solid #1e293b", borderRadius:999, padding:"7px 14px"}}>{f}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Final CTA */}
+      <div style={{...container, textAlign:"center", padding:"50px 24px"}}>
+        <div style={{background:"linear-gradient(135deg, rgba(30,64,175,0.35), rgba(15,23,42,0.6))", border:"1px solid #1e3a8a", borderRadius:16, padding:"40px 24px"}}>
+          <h2 style={{fontSize:28, fontWeight:900, margin:"0 0 10px"}}>Ready to scan?</h2>
+          <p style={{fontSize:15, color:"#94a3b8", margin:"0 0 22px"}}>Create an account and run your first authenticated pentest in minutes.</p>
+          <button onClick={onStart} style={{...btnPrimary, padding:"15px 34px", fontSize:15}}>Start free</button>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{borderTop:"1px solid #1e293b", padding:"26px 24px 40px"}}>
+        <div style={{...container, display:"flex", flexWrap:"wrap", gap:12, alignItems:"center", justifyContent:"space-between"}}>
+          <div style={{fontSize:12, color:"#64748b"}}>VulnusLab — for authorized security testing only.</div>
+          <div style={{fontSize:12, color:"#64748b"}}>vulnuslab.com&nbsp;&nbsp;·&nbsp;&nbsp;<span style={{color:"#3b82f6"}}>support@vulnuslab.com</span></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// AuthLanding — toggles between the marketing landing page and the auth card.
+function AuthLanding({onLogin}) {
+  const [view, setView] = useState("landing");   // "landing" | "auth"
+  const [authMode, setAuthMode] = useState("login");
+  if (view === "auth") {
+    return <Login onLogin={onLogin} initialMode={authMode} onBack={()=>setView("landing")}/>;
+  }
+  return <LandingPage
+    onStart={()=>{ setAuthMode("register"); setView("auth"); }}
+    onSignIn={()=>{ setAuthMode("login"); setView("auth"); }}/>;
+}
+
 function Login(props) {
   const onLogin = props.onLogin;
-  const [mode,setMode]   = useState("login"); // "login" | "register"
+  const [mode,setMode]   = useState(props.initialMode || "login"); // "login" | "register"
   const [u,setU]         = useState("");
   const [email,setEmail] = useState("");
   const [p,setP]         = useState("");
@@ -636,6 +777,7 @@ function Login(props) {
         </h1>
         <div style={{marginBottom:28,textAlign:"center"}}><Tagline size={10}/></div>
 
+        {props.onBack && <button onClick={props.onBack} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,letterSpacing:1,marginBottom:16,padding:0,display:"block",marginLeft:"auto",marginRight:"auto"}}>← Back to home</button>}
         {/* Mode tabs */}
         <div style={{display:"flex",gap:0,marginBottom:24,borderRadius:10,overflow:"hidden",border:"1px solid rgba(51,65,85,0.6)"}}>
           {["login","register"].map(m=>(
@@ -23868,7 +24010,7 @@ export default function App() {
   };
 
   if (!token) {
-    return <Login onLogin={handleLogin}/>;
+    return <AuthLanding onLogin={handleLogin}/>;
   }
 
   const isSuperAdmin = role === "superadmin";
