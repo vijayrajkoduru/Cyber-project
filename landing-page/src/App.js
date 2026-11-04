@@ -661,7 +661,7 @@ function Pricing() {
       features: ["7 days full access","5 scans per day","All 51 tools available","PDF reports included","No credit card required"],
       locked: [],
       cta: "Start Free Trial" },
-    { name: "Pro", sub: "For professionals", price: "$29", period: "per month", color: C.blue, popular: true,
+    { name: "Pro", sub: "For professionals", price: "$199", period: "per month", color: C.blue, popular: true,
       features: ["All 51 scanners unlocked","Unlimited scans per day","PDF + JSON + CSV reports","Email support","1 user account","5 built-in vulnerable labs","Cancel anytime"],
       locked: [],
       cta: "Subscribe Now" },
