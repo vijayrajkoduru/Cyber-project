@@ -102,6 +102,78 @@ def _try_lab_bootstrap(target: str, login_url: str,
     return out
 
 
+# LAB-UNHARDEN-V1 — practice labs ship with their deliberate vulnerabilities
+# GATED behind a security level. A fresh DVWA database defaults to the hardened
+# level, so the injection/XSS/access-control scanners test the SECURE code path
+# and find nothing — producing a false "all clear". This step drops the lab to
+# its vulnerable mode AFTER login, on the SAME session, so the captured cookie
+# (returned to every scanner) carries the insecure level. LAB TARGETS ONLY:
+# never called for a customer target — you cannot and must not weaken a real
+# site; there you test it exactly as it is.
+def _make_lab_vulnerable(target: str, login_url: str,
+                         sess: requests.Session) -> dict:
+    """Return {unharden_lab, unharden_attempted, unharden_status}."""
+    full = f"{target} {login_url}".lower()
+    out = {"unharden_lab": None, "unharden_attempted": False,
+           "unharden_status": None}
+    base = target.split("/login")[0].split("/index.php")[0].rstrip("/")
+
+    # DVWA — set security=low via /security.php (CSRF-guarded). Verified flow:
+    # scrape user_token from the page, POST security=low. DVWA then sets both a
+    # session value and a `security` cookie, which the session now carries.
+    if "lab_dvwa" in full or "dvwa" in full:
+        out["unharden_lab"] = "dvwa"
+        try:
+            page = sess.get(base + "/security.php", timeout=8,
+                            verify=False, allow_redirects=True)
+            tok = _scrape_hidden_inputs(page.text or "").get("user_token")
+            data = {"security": "low", "seclev_submit": "Submit"}
+            if tok:
+                data["user_token"] = tok
+            r = sess.post(base + "/security.php", data=data, timeout=8,
+                          verify=False, allow_redirects=True)
+            # Belt-and-suspenders: DVWA also honours a `security` cookie.
+            try:
+                sess.cookies.set("security", "low")
+            except Exception:
+                pass
+            out["unharden_attempted"] = True
+            out["unharden_status"] = r.status_code
+        except Exception as e:
+            out["unharden_status"] = f"error: {type(e).__name__}"
+
+    # bWAPP — set security level to 0 (low) via the settings page.
+    elif "lab_bwapp" in full or "bwapp" in full:
+        out["unharden_lab"] = "bwapp"
+        try:
+            r = sess.post(base + "/security_level_set.php",
+                          data={"security_level": "0", "action": "set"},
+                          timeout=8, verify=False, allow_redirects=True)
+            out["unharden_attempted"] = True
+            out["unharden_status"] = r.status_code
+        except Exception as e:
+            out["unharden_status"] = f"error: {type(e).__name__}"
+
+    # Mutillidae — toggle security to level 0 (insecure). The app stores the
+    # level in a `security_level` cookie; set it directly.
+    elif "lab_mutillidae" in full or "mutillidae" in full:
+        out["unharden_lab"] = "mutillidae"
+        try:
+            try:
+                sess.cookies.set("security_level", "0")
+            except Exception:
+                pass
+            r = sess.get(base + "/index.php?page=home.php",
+                         timeout=8, verify=False, allow_redirects=True)
+            out["unharden_attempted"] = True
+            out["unharden_status"] = r.status_code
+        except Exception as e:
+            out["unharden_status"] = f"error: {type(e).__name__}"
+
+    # Juice Shop / WebGoat have no security level — always vulnerable. No-op.
+    return out
+
+
 # WEBGOAT-AUTOREG-V1 — labs that require self-registration before login.
 _SELF_REGISTER_LABS = [
     {
@@ -416,7 +488,15 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     u_field = req.username_field or _detect_field(all_inputs, _USERNAME_FIELDS) or "username"
     p_field = req.password_field or _detect_field(all_inputs, _PASSWORD_FIELDS) or "password"
 
-    payload = dict(hidden)
+    # SUBMIT-FIELD-V1 — submit a browser-equivalent payload: start from ALL
+    # named form fields (not just hidden), so the form's submit button is
+    # included. Apps like DVWA only run their auth logic when the submit field
+    # is present ($_POST['Login']); omitting it silently re-renders the login
+    # page and every downstream scanner then crawls an UNAUTHENTICATED session
+    # — the exact "false all-clear" this pipeline exists to prevent. Credentials
+    # and caller extras are overlaid last so they win over any default values.
+    payload = dict(all_inputs)
+    payload.update(hidden)
     payload[u_field] = req.username
     payload[p_field] = req.password
     if req.extra_fields:
@@ -443,6 +523,12 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         if spa is not None:
             return {"ok": True, **spa, "fallback": "spa_after_form_unverified"}
 
+    # LAB-UNHARDEN-V1 — if this is a practice lab, drop it to its vulnerable
+    # mode on the live session so the captured cookie carries the insecure
+    # level and the scanners actually exercise the vulnerable code paths.
+    # Lab-only; a no-op for customer targets.
+    _unharden = _make_lab_vulnerable(target, login_url, sess)
+
     cookie_header = "; ".join(f"{c.name}={c.value}" for c in sess.cookies)
 
     return {
@@ -457,6 +543,7 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         "cookie_names": [c.name for c in sess.cookies],
         "bootstrap": _bootstrap,
         "register": _register,
+        "unharden": _unharden,
         "hint": (None if verified else
                  ("Login failed. Diagnostic: "
                   f"bootstrap={_bootstrap.get('lab_detected') or 'none'}/"

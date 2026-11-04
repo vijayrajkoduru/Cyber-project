@@ -325,11 +325,34 @@ async def run_module_streaming(
         # bytes) was killing scans where the slowest tool (gobuster) finished
         # >100s after the second-slowest. Emit a heartbeat event every 15s so
         # the proxy sees data flowing even during long waits.
+        # DISCOVERY-FIRST — scanners like sqli/xss read the SPA crawler's
+        # discovered endpoints from scan_state.json. If every tool fans out at
+        # once, those scanners run BEFORE the crawler has written state and
+        # skip for "no parameters", one scan too early. Run discovery tools to
+        # completion first so the injection scanners see real endpoints in the
+        # SAME scan.
+        _DISCOVERY = {"spa_crawler"}
+        _discovery = [(n, e) for (n, e) in tools if n in _DISCOVERY]
+        _rest = [(n, e) for (n, e) in tools if n not in _DISCOVERY]
+        for _dn, _de in _discovery:
+            try:
+                _tn, _res, _dur = await _dispatch_one(
+                    client, _dn, _de, base_body, sem, headers=internal_headers)
+            except Exception as _e:
+                _tn, _res, _dur = _dn, {"ok": False, "_failed": True,
+                    "error": f"{type(_e).__name__}: {str(_e)[:200]}"}, 0.0
+            results[_tn] = _res
+            timings[_tn] = round(_dur, 2)
+            yield (json.dumps({
+                "event": "tool_complete", "tool": _tn,
+                "duration_sec": round(_dur, 2), "result": _res,
+            }) + "\n").encode("utf-8")
+
         task_objs = [
             asyncio.create_task(_dispatch_one(
                 client, tool_name, endpoint, base_body, sem,
                 headers=internal_headers))
-            for tool_name, endpoint in tools
+            for tool_name, endpoint in _rest
         ]
         pending = set(task_objs)
         while pending:
