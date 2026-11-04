@@ -51,12 +51,22 @@ async def gather(ctx):
     vulns, ports = _parse(res["xml"])
     ctx.source("nmap"); ctx.state["tested"] = 1; ctx.state["partial"] = res["partial"]
     ctx.state["open_ports"] = ports; ctx.state["vulns"] = vulns[:_MAX]
+# NSE scripts that confirm UNAUTHENTICATED remote code execution / backdoors
+# are CRITICAL (not a flat HIGH) — they grant direct system compromise.
+_NSE_CRITICAL = ("backdoor", "shellshock", "cve-2017-7494", "ms17-010",
+                 "cve2017-5638", "cve-2019-0708", "bluekeep", "ms08-067",
+                 "double-pulsar", "distcc")
+
 def _mk(i):
     def rule(s):
         v = s.get("vulns") or []
         if i >= len(v): return None
         x = v[i]
-        return {"name": f"nmap NSE confirmed vulnerability: {x['id']} (port {x['port']})", "severity": "HIGH", "cvss": 8.1, "cwe": "CWE-1395",
+        xid = str(x.get("id", "")).lower()
+        crit = any(k in xid for k in _NSE_CRITICAL)
+        return {"name": f"nmap NSE confirmed vulnerability: {x['id']} (port {x['port']})",
+                "severity": "CRITICAL" if crit else "HIGH", "cvss": 9.8 if crit else 8.1,
+                "cwe": "CWE-1395",
                 "evidence": f"nmap '{x['id']}' reported VULNERABLE on port {x['port']}: {x['output']}",
                 "remediation": "Patch the affected service immediately - confirmed exploitable by the NSE check."}
     return rule

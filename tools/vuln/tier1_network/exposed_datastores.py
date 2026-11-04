@@ -15,6 +15,8 @@ _PROBES = [
     ("elastic", 9200, b"GET / HTTP/1.0\r\nHost: x\r\n\r\n", b"cluster_name"),
     ("couchdb", 5984, b"GET / HTTP/1.0\r\nHost: x\r\n\r\n", b"couchdb"),
     ("mongo", 27017, b"", b""),
+    ("mysql", 3306, b"", b""),
+    ("postgres", 5432, b"", b""),
 ]
 
 
@@ -23,16 +25,20 @@ async def gather(ctx):
 
     async def _p(name, port, payload, marker):
         op, data = await asyncio.to_thread(tcp_probe, host, port, payload, 512, 4)
-        return name, port, op, (bool(marker) and marker in data)
+        return name, port, op, (bool(marker) and marker in data), data
 
     results = await asyncio.gather(*[_p(*p) for p in _PROBES])
     tested = 0
-    for name, port, op, unauth in results:
+    for name, port, op, unauth, data in results:
         tested += 1
         if op:
             ctx.source(f"tcp-{port}")
             ctx.state[f"{name}_open"] = True
             ctx.state[f"{name}_unauth"] = unauth
+            try:
+                ctx.state[f"{name}_banner"] = (data or b"").decode("utf-8", errors="ignore")
+            except Exception:
+                pass
     ctx.state["tested"] = tested
 
 
@@ -86,16 +92,39 @@ def _r_mongo(s):
             "remediation": "Enable authorization; bind to localhost; firewall 27017."}
 
 
+def _r_mysql(s):
+    if not s.get("mysql_open"):
+        return None
+    import re as _re
+    ver = ""
+    m = _re.search(r"[0-9]+\.[0-9]+\.[0-9][\w.-]*", s.get("mysql_banner") or "")
+    if m:
+        ver = f" (version {m.group(0)})"
+    return {"name": f"MySQL exposed to the network (3306){ver}", "severity": "HIGH", "cvss": 7.5,
+            "cwe": "CWE-668", "evidence": "TCP 3306 open; MySQL server greeting received" + (ver or ""),
+            "remediation": ("Bind MySQL to localhost or a private subnet; never expose 3306 to untrusted "
+                            "networks. Enforce strong credentials and require TLS.")}
+
+
+def _r_postgres(s):
+    if not s.get("postgres_open"):
+        return None
+    return {"name": "PostgreSQL exposed to the network (5432)", "severity": "HIGH", "cvss": 7.5,
+            "cwe": "CWE-668", "evidence": "TCP 5432 open",
+            "remediation": ("Bind PostgreSQL to localhost/private subnet; restrict pg_hba.conf; never "
+                            "expose 5432 publicly; require strong auth + TLS.")}
+
+
 def _r_clean(s):
     if (s.get("tested") or 0) < 1:
         return None
-    if any(s.get(f"{n}_open") for n in ("redis", "memcached", "elastic", "couchdb", "mongo")):
+    if any(s.get(f"{n}_open") for n in ("redis", "memcached", "elastic", "couchdb", "mongo", "mysql", "postgres")):
         return None
     return {"name": "No exposed datastores detected", "severity": "POSITIVE",
-            "evidence": "Redis/Memcached/Elasticsearch/CouchDB/MongoDB ports closed or filtered."}
+            "evidence": "Redis/Memcached/Elasticsearch/CouchDB/MongoDB/MySQL/PostgreSQL ports closed or filtered."}
 
 
-FINDING_RULES = [_r_redis, _r_memcached, _r_elastic, _r_couchdb, _r_mongo, _r_clean]
+FINDING_RULES = [_r_redis, _r_memcached, _r_elastic, _r_couchdb, _r_mongo, _r_mysql, _r_postgres, _r_clean]
 INTEL_FIELDS = [("Datastore ports probed", "tested")]
 
 
