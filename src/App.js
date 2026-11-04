@@ -13954,16 +13954,18 @@ function generateUniversalVLReport(opts) {
     doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
     doc.text(`${_realPct}% real probes; ${_scaffoldPct}% scaffolded ([NOT IMPLEMENTED]) - module forge in progress.`, margin + 8, y + 11);
     doc.text("Where probes are implemented, every finding is independently triggered. Scaffolded checks pending forge.", margin + 8, y + 14);
-  } else if ((_sevCount.CRITICAL+_sevCount.HIGH+_sevCount.MEDIUM+_sevCount.LOW) === 0 && _sevCount.POSITIVE === 0 && _sevCount.INFO > 0) {
-    // Info-only result: probes emitted status/environment notices (e.g. "tool
-    // not installed"), not confirmed findings against the target. Claiming
-    // "every data point triggered against the live target" would be false.
+  } else if ((_sevCount.CRITICAL+_sevCount.HIGH+_sevCount.MEDIUM+_sevCount.LOW) === 0 && _sevCount.INFO > 0) {
+    // No confirmed exposure, but some probes emitted status/environment notices
+    // (e.g. "tool not installed", "no input supplied") rather than a real test
+    // of the target. Whether fully info-only or partial (a few POSITIVE +
+    // several INFO), claiming "every data point triggered against the live
+    // target" overstates coverage. Render an honest LIMITED VERIFICATION badge.
     fillR(margin, y, contentW, 16, [255,247,237]);
     fillR(margin, y, 3, 16, [202,138,4]);
     doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(133,79,11);
     doc.text("LIMITED VERIFICATION", margin + 8, y + 6);
     doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
-    doc.text("Probes returned status/environment notices only - no finding was confirmed against the live target.", margin + 8, y + 11);
+    doc.text("Some probes returned status/environment notices rather than a confirmed test of the target.", margin + 8, y + 11);
     doc.text("Absence of findings here is NOT proof of secure posture. Provide required inputs/tools and re-scan.", margin + 8, y + 14);
   } else {
     fillR(margin, y, contentW, 16, LBLUE);
@@ -14000,6 +14002,8 @@ function generateUniversalVLReport(opts) {
     /could not execute/i, /unable to/i, /no.*input/i, /not provided/i,
     /not available/i, /binary not available/i, /\babsent\b/i, /not present/i,
     /not found on/i, /no.*binary/i, /stack.*not installed/i,
+    /not supplied/i, /no .*supplied/i, /was empty/i, /no .*interface/i,
+    /no capture/i, /no monitor/i, /capture_path/i, /no .*adapter/i,
   ];
   const _infoFindings = _allFindings.filter(f =>
     String(f.severity || "INFO").toUpperCase() === "INFO");
@@ -14571,11 +14575,19 @@ function generateUniversalVLReport(opts) {
     // (pdf_industry_standard.md gap 17 - mirrors XBOW reference layout)
     {
       chk(50); y = sHead("Methodology", y);
-      const _intro = `${moduleLabel.replace(/\s+/g,' ')} aligns with the OWASP Top 10, NIST SP 800-115 testing principles, and PTES execution structure. Each scanner systematically probes one or more of the attack classes below. Probes use real network traffic against the live target - no template-only matches.`;
+      // The 8 attack-class cards below describe WEB/API vulnerability classes.
+      // Only render them for web-oriented modules; a wireless / mobile / cloud
+      // report must not claim to test SQLi/XSS/SSRF. Other modules get the
+      // generic intro + their playbook reference (Appendix A) instead.
+      const _showWebClasses = /^(webapp|apisec|api|client_side|auth)/i.test(moduleKey);
+      const _intro = _showWebClasses
+        ? `${moduleLabel.replace(/\s+/g,' ')} aligns with the OWASP Top 10, NIST SP 800-115 testing principles, and PTES execution structure. Each scanner systematically probes one or more of the attack classes below. Probes use real network traffic against the live target - no template-only matches.`
+        : `${moduleLabel.replace(/\s+/g,' ')} aligns with NIST SP 800-115 testing principles and PTES execution structure. Each scanner probes a technique from the ${moduleLabel.replace(/\s+/g,' ')} playbook (see Appendix A). Probes run against the live target - no template-only matches.`;
       const _introLines = doc.splitTextToSize(_ascii(_intro), contentW - 4);
       _introLines.forEach((ln, i) => txt(ln, margin + 2, y + (i * 4), 8, DARK));
       y += _introLines.length * 4 + 3;
-      // 8 attack-class cards rendered in 2 columns x 4 rows
+      // 8 attack-class cards rendered in 2 columns x 4 rows (web/API modules only)
+      if (_showWebClasses) {
       const _methodology = [
         ["Injection", "Probes for SQL, NoSQL, OS command, and LDAP injection by submitting crafted payloads against input fields and API parameters. Detects backend errors, response-time anomalies, and data exfiltration patterns indicative of unsafe input handling."],
         ["Broken Access Control", "Tests authorization enforcement by probing privileged endpoints without credentials, with low-privilege credentials, and via vertical/horizontal path traversal. Flags endpoints that return 200 OK without proper auth-role checks."],
@@ -14607,6 +14619,7 @@ function generateUniversalVLReport(opts) {
           _rt.forEach((ln, li) => txt(ln, margin + _colW + 5, y + 8.5 + (li * 3.4), 7.5, DARK));
         }
         y += _rh + 1.5;
+      }
       }
       y += 2;
     }
@@ -14767,7 +14780,7 @@ function generateUniversalVLReport(opts) {
       // When the scan was insufficient (probes couldn't run), no category can
       // honestly be marked PASS - absence of findings is absence of testing,
       // not proof of a clean posture. Render the whole section as UNKNOWN.
-      const _owaspUnknown = !!_insufficientScan;
+      const _owaspUnknown = !!(_insufficientScan || _partialScan);
       const _grade =
         _owaspUnknown ? "?" :
         _passCats === 10 ? "A" :
@@ -14787,9 +14800,9 @@ function generateUniversalVLReport(opts) {
       doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor.apply(doc, _gradeColor);
       doc.text(_grade, margin+10, y+11);
       doc.setFont("Arial","bold"); doc.setFontSize(12); doc.setTextColor.apply(doc, DARK);
-      doc.text(_owaspUnknown ? "OWASP Top 10 not assessed - scan insufficient" : `${_passCats}/10 OWASP categories passing`, margin+28, y+7);
+      doc.text(_owaspUnknown ? "OWASP Top 10 not fully assessed - limited scan coverage" : `${_passCats}/10 OWASP categories passing`, margin+28, y+7);
       doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc, GRAY);
-      doc.text(_owaspUnknown ? "Probes could not run - no category can be marked clear. Provide required inputs/tools and re-scan." : (_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`), margin+28, y+12);
+      doc.text(_owaspUnknown ? "Probes did not cover all categories - clear status cannot be assigned. Provide required inputs/tools and re-scan." : (_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`), margin+28, y+12);
       y += 19;
       y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
       _OWASP_2021.forEach(([code, name], i) => {
