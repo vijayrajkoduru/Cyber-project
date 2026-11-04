@@ -570,6 +570,28 @@ def safe_request(method: str, url: str, *,
     return None
 
 
+def _clean_underscore_host(url, headers):
+    """UNDERSCORE-HOST-V3 — Apache/Tomcat vhosts reject a Host header that
+    contains "_" (e.g. the Docker service "lab_dvwa") with HTTP 400, so every
+    scanner that hit the hostname directly got a 400 and silently found
+    NOTHING — a false all-clear, and the main reason repeat lab scans returned
+    different results run to run. Send a cleaned Host header (underscore
+    dropped) so the request reaches the target's default vhost. No-op for real
+    customer domains, which never contain an underscore."""
+    try:
+        from urllib.parse import urlparse
+        h = urlparse(url if "://" in url else "http://" + url)
+        if h.hostname and "_" in h.hostname:
+            host = h.hostname.replace("_", "")
+            if h.port:
+                host = f"{host}:{h.port}"
+            headers = dict(headers or {})
+            headers.setdefault("Host", host)
+    except Exception:
+        pass
+    return headers
+
+
 def safe_get(url, **kw):
     _req = kw.get('req')
     if _req is not None:
@@ -584,6 +606,7 @@ def safe_get(url, **kw):
         if _h:
             kw['headers'] = _h
     # AUTH INJECTION END
+    kw['headers'] = _clean_underscore_host(url, kw.get('headers'))
 
     return safe_request("GET", url, **kw)
 
@@ -602,6 +625,7 @@ def safe_post(url, **kw):
         if _h:
             kw['headers'] = _h
     # AUTH INJECTION END
+    kw['headers'] = _clean_underscore_host(url, kw.get('headers'))
 
     return safe_request("POST", url, **kw)
 
