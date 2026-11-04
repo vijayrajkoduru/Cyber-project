@@ -68,6 +68,7 @@ def artifact_roots():
     from pathlib import Path
     roots = [
         writable_base("VL_UPLOAD_DIR", "/uploads") / "mobile_static",
+        writable_base("VL_UPLOAD_DIR", "/uploads") / "wireless_captures",
         Path(tempfile.gettempdir()) / "vl_binary_cache",
         Path("/tmp/vl_uploads"),
     ]
