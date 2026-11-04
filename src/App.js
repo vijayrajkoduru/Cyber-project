@@ -15644,7 +15644,9 @@ function generateUniversalVLReport(opts) {
         if (x.vector) _metaParts.push(x.vector.substring(0, 40));
         if (x.epss) _metaParts.push(`EPSS ${x.epss}`);
         if (x.kev) _metaParts.push("CISA KEV");
-        if (x.port) _metaParts.push(`Asset: ${x.host}:${x.port}`);
+        // ASSET-PORT-DEDUP — x.host may already carry the port (e.g.
+        // "lab_juiceshop:3000"); appending x.port again produced ":3000:3000".
+        if (x.port && !String(x.host||"").includes(":"+x.port)) _metaParts.push(`Asset: ${x.host}:${x.port}`);
         else _metaParts.push(`Asset: ${x.host}`);
         if (f._tool) _metaParts.push(`via ${String(f._tool).replace(/_/g," ")}`);
         const _meta = _metaParts.join("  -  ");

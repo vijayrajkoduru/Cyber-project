@@ -25,7 +25,13 @@ State shape:
 # Service-category buckets — drives "what kind of attack surface" findings
 _DATABASE_PORTS = {1433, 1521, 3306, 5432, 5984, 6379, 7474, 9200, 11211, 27017, 27018}
 _ADMIN_PORTS = {22, 23, 3389, 5900, 5985, 5986, 8291}  # SSH/Telnet/RDP/VNC/WinRM
-_DEVOPS_PORTS = {2375, 2376, 6443, 8080, 9000, 5601, 3000, 9090, 5672, 15672}
+# DEVOPS-FP-V1 — ports 3000/8080/9000 are generic application ports (Node,
+# Rails, React dev servers, Juice Shop, reverse proxies) far more often than
+# an exposed Grafana/Jenkins panel. Flagging them HIGH from the port number
+# alone falsely reports the SCANNED web app's own port as an 'exposed DevOps
+# panel'. Keep only ports whose number is strongly product-specific; a real
+# panel on a generic port must be confirmed by banner/title, not guessed.
+_DEVOPS_PORTS = {2375, 2376, 6443, 5601, 9090, 5672, 15672}
 _FILE_SHARE_PORTS = {21, 139, 445, 2049}  # FTP/NetBIOS/SMB/NFS
 _LEGACY_PROTO_PORTS = {23, 21, 110, 143}  # Telnet/FTP/POP3/IMAP (cleartext)
 
@@ -214,7 +220,7 @@ PORT_CATALOG = {
     2049:  ("NFS",            "HIGH",     "CWE-668"),
     2375:  ("Docker API",     "CRITICAL", "CWE-306"),
     2376:  ("Docker API TLS", "CRITICAL", "CWE-306"),
-    3000:  ("Grafana",        "HIGH",     "CWE-306"),
+    3000:  ("HTTP (app)",     "INFO",     None),  # generic app port; not assumed Grafana (DEVOPS-FP-V1)
     3306:  ("MySQL",          "CRITICAL", "CWE-668"),
     3389:  ("RDP",            "HIGH",     "CWE-200"),
     5432:  ("PostgreSQL",     "CRITICAL", "CWE-668"),
