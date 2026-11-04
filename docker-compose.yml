@@ -80,32 +80,37 @@ services:
     container_name: lab_dvwa
     networks:
     - vulnuslab
+    restart: unless-stopped
   lab_juiceshop:
     image: bkimminich/juice-shop
     container_name: lab_juiceshop
     networks:
     - vulnuslab
+    restart: unless-stopped
   lab_bwapp:
     image: raesene/bwapp
     container_name: lab_bwapp
     networks:
     - vulnuslab
+    restart: unless-stopped
   lab_mutillidae:
     image: citizenstig/nowasp
     container_name: lab_mutillidae
     networks:
     - vulnuslab
+    restart: unless-stopped
   lab_webgoat:
     image: webgoat/webgoat
     container_name: lab_webgoat
     networks:
     - vulnuslab
+    restart: unless-stopped
   lab_metasploitable:
     image: tleemcjr/metasploitable2
     container_name: lab_metasploitable
     networks:
     - vulnuslab
-
+    restart: unless-stopped
   # ── VL-METHOD Password Range ─────────────────────────────────────────
   # Three deterministic targets that exercise all 7 stages of every
   # Password Attacks scanner. All use admin/admin so quick_probe HITS
