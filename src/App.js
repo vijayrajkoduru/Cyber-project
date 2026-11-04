@@ -6536,7 +6536,7 @@ function ManualTestsPanel({moduleKey, moduleLabel, tests}) { // VL-MANUAL-REDESI
         </div>
         <div style={{fontSize:10, color:"#94a3b8", marginBottom:10}}><span style={{color: completedCount===totalCount ? "#22c55e" : "#fbbf24", fontWeight:700}}>{completedCount}/{totalCount}</span> covered · {pct}%</div>
         <div style={{display:"flex", gap:6, alignItems:"center", flexWrap:"wrap"}}>
-          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search title / ref / tool…" style={{flex:"1 1 160px", minWidth:120, background:"#020617", border:"1px solid #334155", borderRadius:6, color:"#cbd5e1", fontSize:11, padding:"6px 10px", outline:"none"}}/>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search title / ref / tool…" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} name="vl-playbook-search" data-form-type="other" aria-autocomplete="none" style={{flex:"1 1 160px", minWidth:120, background:"#020617", border:"1px solid #334155", borderRadius:6, color:"#cbd5e1", fontSize:11, padding:"6px 10px", outline:"none"}}/>
           {[["all","All"],["required","Required"],["not_run","Not Run"],["no-finding","OK"],["LOW","Low"],["MEDIUM","Med"],["HIGH","High"],["na","N/A"]].map(([val,label])=>(
             <button key={val} onClick={()=>setStatusFilter(val)} style={{background: statusFilter===val ? (SEV_COLORS[val] || "#7c3aed") : "transparent", color: statusFilter===val ? "#fff" : (SEV_COLORS[val] || "#94a3b8"), border:`1px solid ${SEV_COLORS[val] || "#475569"}`, borderRadius:4, padding:"4px 9px", fontSize:10, fontWeight:700, cursor:"pointer"}}>{label}</button>
           ))}
@@ -21879,6 +21879,8 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           )}
           <input type="text" placeholder="search tool name..." value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
+            autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+            name="vl-tool-search" data-form-type="other" aria-autocomplete="none"
             style={{background:"#0f172a", border:"1px solid #334155",
                     borderRadius:4, padding:"4px 8px", color:"#cbd5e1", fontSize:11,
                     width:180, outline:"none"}}/>
@@ -22130,6 +22132,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           </div>
           <div style={{display:"flex", gap:10, marginBottom:14, flexWrap:"wrap"}}>
             <input type="text" placeholder="Search tests, tools, refs..." value={manualSearch} onChange={e => setManualSearch(e.target.value)}
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} name="vl-manual-search" data-form-type="other" aria-autocomplete="none"
               style={{flex:1, minWidth:220, background:"#0f172a", border:"1px solid #334155", borderRadius:6, padding:"7px 10px", color:"#cbd5e1", fontSize:12, outline:"none"}}/>
             {[
               {k:"all", label:`All (${allTests.length})`},
@@ -22535,6 +22538,8 @@ function AdminPanel({ token }) {
       {/* Search */}
       <input value={search} onChange={e=>setSearch(e.target.value)}
         placeholder="Search by username or email..."
+        autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+        name="vl-user-search" data-form-type="other" aria-autocomplete="none"
         style={{width:"100%",background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:"10px 16px",color:"#e2e8f0",fontSize:13,outline:"none",marginBottom:16,boxSizing:"border-box"}}/>
 
       {/* Users Table */}
@@ -24143,6 +24148,8 @@ export default function App() {
           {/* Sidebar search */}
           <div style={{padding:"8px 8px 2px"}}>
             <input value={navQuery} onChange={e=>setNavQuery(e.target.value)} placeholder="Search modules..."
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              name="vl-module-search" data-form-type="other" aria-autocomplete="none"
               style={{width:"calc(100% - 16px)",margin:"0 8px",boxSizing:"border-box",background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 10px",color:"#e2e8f0",fontSize:12,outline:"none"}}/>
           </div>
 
