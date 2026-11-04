@@ -35,6 +35,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_parallel, run_module_streaming
 
 router = APIRouter()
@@ -88,7 +89,7 @@ def _resolve(req: MetasploitRunAllRequest, request: Request):
 
 @router.post("/api/metasploit/run_all")
 async def metasploit_run_all(req: MetasploitRunAllRequest, request: Request,
-                              _=Depends(verify_scan_quota)):
+                              _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     # Hard-clamp concurrency to 2 - msfconsole boots are heavy
     # (~600 MB RAM, 30-60s warm-up); > 2 parallel processes will
@@ -111,7 +112,7 @@ async def metasploit_run_all(req: MetasploitRunAllRequest, request: Request,
 
 @router.post("/api/metasploit/run_all_buffered")
 async def metasploit_run_all_buffered(req: MetasploitRunAllRequest, request: Request,
-                                       _=Depends(verify_scan_quota)):
+                                       _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 2, 2))
     return await run_module_parallel(

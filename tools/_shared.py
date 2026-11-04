@@ -332,6 +332,61 @@ def verify_scan_quota(request: Request, payload=Depends(verify_token)):
     return payload
 
 
+# ── Authorization-to-scan gate (SCAN-AUTHZ-V1) ─────────────────────────────
+# Scanning a third party's systems without written permission is illegal, so a
+# paid VAPT service must capture the operator's authorization before each scan
+# of an external target. Internal practice labs (lab_*) and loopback, plus
+# internal orchestrator fan-out, are exempt. The acknowledgment is recorded to
+# the audit trail so there is a durable consent log per (user, target).
+_LAB_TARGET_MARKERS = (
+    "lab_dvwa", "lab_bwapp", "lab_webgoat", "lab_mutillidae", "lab_juiceshop",
+    "lab_pwd_", "127.0.0.1", "localhost", "::1",
+)
+
+
+def _is_lab_target(target: str) -> bool:
+    low = (target or "").lower()
+    return any(m in low for m in _LAB_TARGET_MARKERS)
+
+
+async def verify_scan_authorization(request: Request,
+                                    payload=Depends(verify_token)):
+    """Require an explicit authorization acknowledgment before scanning a
+    non-lab target. Attach alongside verify_scan_quota on scan entry points.
+
+    The request body must carry ``authorization_ack: true`` (and ideally a
+    free-text ``authorization_scope``) for any external target. Lab targets and
+    internal fan-out skip the check. Consent is written to the audit log.
+    """
+    if is_internal_fanout(request):
+        return payload
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    target = str(body.get("target") or body.get("host") or body.get("url") or "")
+    if _is_lab_target(target):
+        return payload
+    if not bool(body.get("authorization_ack")):
+        raise HTTPException(
+            403,
+            "Authorization required. Confirm you own or have written permission "
+            "to test this target before scanning. Scanning systems without "
+            "authorization is illegal.")
+    try:
+        from tools.auth._db import record_audit
+        _ip = request.client.host if request and request.client else None
+        _scope = str(body.get("authorization_scope") or "")[:200]
+        record_audit("scan.authorize", actor_id=payload.get("sub"),
+                     actor_name=payload.get("username"), target=target,
+                     ip=_ip, detail=f"scope={_scope}")
+    except Exception:
+        pass
+    return payload
+
+
 def verify_admin(payload=Depends(verify_token)):
     """Admin-only gate. Use on every /api/admin/* endpoint.
     Raises 403 if the role was not live-verified against the DB, or is not admin."""

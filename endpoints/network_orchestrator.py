@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_streaming
 from tools.network.network_pack import TECHNIQUES
 
@@ -42,7 +43,7 @@ def _all_tools():
 
 @router.post("/api/network/run_all")
 async def network_run_all(req: NetworkRunAllRequest, request: Request,
-                           _=Depends(verify_scan_quota)):
+                           _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     jwt_token = request.headers.get("authorization", "").replace("Bearer ", "") or None
     return StreamingResponse(
         run_module_streaming(target=req.target, tools=_all_tools(),

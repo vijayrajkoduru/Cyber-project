@@ -24,6 +24,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_parallel, run_module_streaming
 
 router = APIRouter()
@@ -76,7 +77,7 @@ def _resolve(req: BofRunAllRequest, request: Request):
 
 @router.post("/api/bof/run_all")
 async def bof_run_all(req: BofRunAllRequest, request: Request,
-                      _=Depends(verify_scan_quota)):
+                      _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 3, 3))
     gen = run_module_streaming(
@@ -96,7 +97,7 @@ async def bof_run_all(req: BofRunAllRequest, request: Request,
 
 @router.post("/api/bof/run_all_buffered")
 async def bof_run_all_buffered(req: BofRunAllRequest, request: Request,
-                                _=Depends(verify_scan_quota)):
+                                _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 3, 3))
     return await run_module_parallel(

@@ -14,7 +14,31 @@ from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
-_LOGIN_PATHS = ["/login","/api/login","/auth/login","/api/auth/login","/signin","/api/signin"]
+_LOGIN_PATHS = ["/login", "/login.php", "/api/login", "/auth/login",
+                "/api/auth/login", "/signin", "/api/signin",
+                "/user/login", "/users/login"]
+
+# Statuses that mean the POST was NOT handled as a credential check: bare
+# redirects, method-not-allowed, not-found, not-implemented. A path that only
+# answers these is not an auth endpoint, so its "no 429" says nothing.
+_NON_AUTH_STATUSES = {301, 302, 303, 307, 308, 404, 405, 501}
+
+
+def _looks_like_credential_handler(resp) -> bool:
+    """Proof that login_url actually processes credentials before we judge its
+    rate limiting. Without this, hammering a path that merely 302-redirects
+    yields "0.00s -> 0.00s, no 429" and gets stamped a false HIGH."""
+    if resp is None:
+        return False
+    if resp.status_code in _NON_AUTH_STATUSES:
+        return False
+    if resp.status_code in (401, 403):
+        return True
+    body = (resp.text or "").lower()[:2000]
+    markers = ("invalid", "incorrect", "failed", "wrong", "password",
+               "username", "login", "credential", "try again", "error",
+               "authenticat")
+    return any(m in body for m in markers)
 
 
 @router.post("/api/webapp/broken_auth")
@@ -45,6 +69,32 @@ async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota
             tests_performed=tests, skipped_reason="No login endpoint discovered",
         )
 
+    # PROOF-V2 — confirm login_url is a real credential handler before judging
+    # its rate limiting. A path that just 302-redirects or 405s on POST is not
+    # an auth endpoint; testing it produces a false "no rate limit" HIGH.
+    try:
+        probe = requests.post(login_url,
+                              data={"username": "vl_probe_user",
+                                    "password": "vl_probe_wrong_pw"},
+                              headers={"User-Agent": "VulnusLab/1.0"},
+                              timeout=6, allow_redirects=False, verify=False)
+        tests += 1
+    except Exception:
+        probe = None
+    if not _looks_like_credential_handler(probe):
+        return standard_response(
+            tool="broken_auth", target=req.target, findings=[],
+            tests_performed=tests,
+            skipped_reason=(
+                f"{login_url} did not respond like a credential handler "
+                f"(POST status {getattr(probe, 'status_code', 'error')}); "
+                "skipped the rate-limit test to avoid a false positive."),
+            raw_data={"broken_auth": {"login_url": login_url,
+                                        "spa_catchall": spa["is_spa"],
+                                        "spa_suppressed_paths": spa_suppressed,
+                                        "probe_status": getattr(probe, "status_code", None)}},
+        )
+
     # Test 1: No rate limit on failed attempts
     # Fire 10 bad login attempts back-to-back. If all return same response (no 429, no lockout), flag.
     statuses = []
@@ -67,7 +117,15 @@ async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota
     avg_first_5 = sum(times[:5]) / 5 if times[:5] else 0
     avg_last_5 = sum(times[5:]) / 5 if times[5:] else 0
     grew = avg_last_5 > avg_first_5 * 1.5  # 50% slowdown suggests rate limiting
-    if not has_429 and not grew:
+    # Guardrails against the "hammering a dead path" false positive:
+    #  - most attempts must actually be processed as auth (200/401/403), and
+    #  - responses must not be near-instant (the 0.00s -> 0.00s fingerprint).
+    auth_hits = sum(1 for s in statuses if s in (200, 401, 403))
+    processed_as_auth = auth_hits >= 7
+    valid_times = [t for t in times if t and t > 0]
+    avg_time = sum(valid_times) / len(valid_times) if valid_times else 0.0
+    not_dead_path = avg_time >= 0.005  # <5ms avg == static/redirect, not real auth
+    if not has_429 and not grew and processed_as_auth and not_dead_path:
         findings.append(wrap_finding(
             f"No rate limit on {login_url} - 10 failed logins accepted without throttle",
             "HIGH",

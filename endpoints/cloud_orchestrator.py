@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_streaming
 from tools.cloud.cloud_pack import T as TECHNIQUES
 
@@ -47,7 +48,7 @@ def _all_tools():
 
 @router.post("/api/cloud/run_all")
 async def cloud_run_all(req: CloudRunAllRequest, request: Request,
-                         _=Depends(verify_scan_quota)):
+                         _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     jwt_token = request.headers.get("authorization", "").replace("Bearer ", "") or None
     extra = {"repo_url": req.repo_url} if req.repo_url else None
     return StreamingResponse(

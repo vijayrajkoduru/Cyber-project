@@ -17,19 +17,25 @@ from tools._shared import verify_scan_quota, _BROWSER_HEADERS
 router = APIRouter()
 
 
-# UNDERSCORE-RESOLVE-V1 — Tomcat (WebGoat) rejects underscore hostnames
-# per RFC 9112. Resolve to IP first so Host header doesn't carry underscore.
-import socket as _socket
-def _resolve_underscore(url: str) -> str:
+# UNDERSCORE-HOST-V2 — Apache (DVWA) and Tomcat (WebGoat) reject a Host
+# header containing "_" (invalid per RFC 9110/9112) with HTTP 400, so every
+# request to a Docker service name like "lab_dvwa" fails before login can
+# even start. Keep the URL hostname intact (Docker DNS resolves it, and lab
+# detection still matches "dvwa"/"mutillidae"/…), but send a cleaned Host
+# header so the target's web server accepts the request.
+def _safe_host_header(url: str) -> Optional[str]:
+    """Return a Host header value with underscores removed, or None when the
+    URL's hostname has no underscore and the default Host is fine."""
     try:
-        from urllib.parse import urlparse as _up
-        pp = _up(url)
+        pp = urlparse(url)
         if pp.hostname and "_" in pp.hostname:
-            ip = _socket.gethostbyname(pp.hostname)
-            return url.replace(pp.hostname, ip)
+            host = pp.hostname.replace("_", "")
+            if pp.port:
+                host = f"{host}:{pp.port}"
+            return host
     except Exception:
         pass
-    return url
+    return None
 
 
 _USERNAME_FIELDS = ("username", "user", "email", "login", "userid",
@@ -64,10 +70,17 @@ def _try_lab_bootstrap(target: str, login_url: str,
             # GET setup page first (some DVWA versions need session init)
             base = target.split("/login")[0].rstrip("/")
             setup_url = base + "/setup.php"
-            sess.get(setup_url, timeout=8, verify=False, allow_redirects=True)
+            setup_page = sess.get(setup_url, timeout=8, verify=False,
+                                  allow_redirects=True)
+            # DVWA-CSRF-V1 — current DVWA guards setup.php with a user_token;
+            # the create_db POST is rejected without it, so a fresh database
+            # never gets built and login then fails. Scrape and include it.
+            data = {"create_db": "Create / Reset Database"}
+            tok = _scrape_hidden_inputs(setup_page.text or "").get("user_token")
+            if tok:
+                data["user_token"] = tok
             # POST the create-db form
-            r = sess.post(setup_url,
-                          data={"create_db": "Create / Reset Database"},
+            r = sess.post(setup_url, data=data,
                           timeout=15, verify=False, allow_redirects=True)
             out["bootstrap_attempted"] = True
             out["bootstrap_status"] = r.status_code
@@ -210,6 +223,9 @@ def _try_spa_login(target: str, username: str, password: str,
     sess.headers["Content-Type"] = "application/json"
     sess.headers["Accept"] = "application/json"
     sess.verify = False
+    _sh = _safe_host_header(target)
+    if _sh:
+        sess.headers["Host"] = _sh
 
     paths = []
     if explicit_path:
@@ -308,11 +324,13 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         if not req.bearer_token:
             raise HTTPException(400, "bearer_token required when auth_type=bearer")
         check_url = _abs(target, req.success_indicator or "/")
+        _hdrs = {**_BROWSER_HEADERS, "Authorization": f"Bearer {req.bearer_token}"}
+        _sh = _safe_host_header(check_url)
+        if _sh:
+            _hdrs["Host"] = _sh
         try:
-            r = requests.get(check_url, headers={
-                **_BROWSER_HEADERS,
-                "Authorization": f"Bearer {req.bearer_token}",
-            }, timeout=8, verify=False, allow_redirects=True)
+            r = requests.get(check_url, headers=_hdrs,
+                             timeout=8, verify=False, allow_redirects=True)
         except Exception as e:
             raise HTTPException(502, f"Verification request failed: {e}")
         verified = (r.status_code < 400) and not _looks_like_login_page(r.text or "")
@@ -329,10 +347,13 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
         import base64
         tok = base64.b64encode(f"{req.username}:{req.password}".encode()).decode()
         check_url = _abs(target, req.success_indicator or "/")
+        _hdrs = {**_BROWSER_HEADERS, "Authorization": f"Basic {tok}"}
+        _sh = _safe_host_header(check_url)
+        if _sh:
+            _hdrs["Host"] = _sh
         try:
-            r = requests.get(check_url, headers={
-                **_BROWSER_HEADERS, "Authorization": f"Basic {tok}",
-            }, timeout=8, verify=False, allow_redirects=True)
+            r = requests.get(check_url, headers=_hdrs,
+                             timeout=8, verify=False, allow_redirects=True)
         except Exception as e:
             raise HTTPException(502, f"Verification request failed: {e}")
         verified = r.status_code < 400
@@ -352,6 +373,13 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     sess = requests.Session()
     sess.headers.update(_BROWSER_HEADERS)
     sess.verify = False
+    # UNDERSCORE-HOST-V2 — send a cleaned Host header when the target is a
+    # Docker service name with "_" (e.g. lab_dvwa) so Apache/Tomcat don't 400.
+    # Set on the session so the bootstrap, self-register, login POST and the
+    # verification GET below all inherit it.
+    _sh = _safe_host_header(login_url)
+    if _sh:
+        sess.headers["Host"] = _sh
 
     # LAB-BOOTSTRAP-V2 — DVWA / Mutillidae need DB-init click before login.
     _bootstrap = _try_lab_bootstrap(target, login_url, sess)

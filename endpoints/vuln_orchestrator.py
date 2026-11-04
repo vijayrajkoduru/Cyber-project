@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, verify_scan_authorization
 from tools._framework.orchestrator import run_module_streaming
 
 router = APIRouter()
@@ -46,7 +46,7 @@ class RunAllRequest(BaseModel):
 
 
 @router.post("/api/vuln/run_all")
-async def vuln_run_all(req: RunAllRequest, request: Request, _=Depends(verify_scan_quota)):
+async def vuln_run_all(req: RunAllRequest, request: Request, _=Depends(verify_scan_quota), __=Depends(verify_scan_authorization)):
     tools = []
     if req.tiers:
         for t in req.tiers:

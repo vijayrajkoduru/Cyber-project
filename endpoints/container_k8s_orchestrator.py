@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_streaming
 from tools.container_k8s.container_k8s_pack import T as TECHNIQUES
 
@@ -52,7 +53,7 @@ def _all_tools():
 
 @router.post("/api/container_k8s/run_all")
 async def container_k8s_run_all(req: ContainerK8sRunAllRequest, request: Request,
-                                  _=Depends(verify_scan_quota)):
+                                  _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     jwt_token = request.headers.get("authorization", "").replace("Bearer ", "") or None
     extra = {}
     for k in ("image_ref", "dockerfile_text", "pod_spec_yaml", "kubeconfig", "repo_url"):

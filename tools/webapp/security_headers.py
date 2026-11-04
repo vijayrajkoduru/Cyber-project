@@ -14,27 +14,26 @@ from tools._vl_core.verify import vl_verify
 router = APIRouter()
 
 def _csp(h):
+    # SEVERITY-V2 — a missing CSP is a defense-in-depth gap, not a direct
+    # data-disclosure flaw: no confidentiality impact on its own. Rated
+    # MEDIUM with a C:N-style score, not HIGH (prior 7.5 was inflated).
     if "content-security-policy" not in {k.lower() for k in h}:
-        return wrap_finding("No Content-Security-Policy header — XSS mitigation absent",
-            "HIGH", cvss="7.5", cwe="CWE-693", owasp="A05:2021",
+        return wrap_finding("No Content-Security-Policy header — XSS mitigation absent (defense-in-depth gap)",
+            "MEDIUM", cvss="5.3", cwe="CWE-693", owasp="A05:2021",
             remediation='Add a CSP, e.g. "default-src \'self\'; script-src \'self\'".',
             evidence_marker="response missing Content-Security-Policy header")
 def _hsts(h, https):
+    # SEVERITY-V2 — missing HSTS enables a downgrade only under an active
+    # MITM; it discloses nothing by itself. MEDIUM, not HIGH (prior 7.4).
     if https and "strict-transport-security" not in {k.lower() for k in h}:
         return wrap_finding("No HSTS on HTTPS — downgrade attacks possible",
-            "HIGH", cvss="7.4", cwe="CWE-319", owasp="A02:2021",
+            "MEDIUM", cvss="5.3", cwe="CWE-319", owasp="A02:2021",
             remediation='Add "Strict-Transport-Security: max-age=31536000; includeSubDomains".',
             evidence_marker="HTTPS site missing Strict-Transport-Security")
-def _xfo(h):
-    hk = {k.lower() for k in h}
-    csp = ""
-    for k, v in h.items():
-        if k.lower() == "content-security-policy": csp = (v or "").lower(); break
-    if "x-frame-options" not in hk and "frame-ancestors" not in csp:
-        return wrap_finding("No X-Frame-Options and no CSP frame-ancestors — clickjacking possible",
-            "HIGH", cvss="6.1", cwe="CWE-1021", owasp="A05:2021",
-            remediation="Add 'X-Frame-Options: DENY' or 'frame-ancestors' in CSP.",
-            evidence_marker="missing X-Frame-Options AND frame-ancestors")
+# DEDUP-V2 — clickjacking (X-Frame-Options / CSP frame-ancestors) is owned by
+# the dedicated clickjacking.py module at a single MEDIUM severity. The old
+# _xfo() check here stamped the same issue a second time at HIGH, so the
+# report showed clickjacking twice at two severities. Removed on purpose.
 def _xcto(h):
     for k, v in h.items():
         if k.lower() == "x-content-type-options":
@@ -85,7 +84,7 @@ def scan_security_headers(req, payload):
             skipped_reason=f"Could not reach {url}")
     https = str(r.url).startswith("https://")
     h = dict(r.headers)
-    checks = [_csp(h), _hsts(h, https), _xfo(h), _xcto(h), _ref(h), _perm(h), _srv(h), _xpb(h)]
+    checks = [_csp(h), _hsts(h, https), _xcto(h), _ref(h), _perm(h), _srv(h), _xpb(h)]
     findings = [c for c in checks if c]
     if not findings:
         findings.append(wrap_finding(
@@ -95,8 +94,8 @@ def scan_security_headers(req, payload):
             evidence_marker=f"{len(checks)} header checks passed"))
     return vuln_response(tool="security_headers", target=req.target,
         findings=findings, tested=len(checks),
-        what_checked="9 critical HTTP security headers (CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By)",
-        tests_summary="9 header checks: CSP, HSTS, XFO, XCTO, Referrer, Permissions, Server, X-Powered-By",
+        what_checked="HTTP security headers (CSP, HSTS, XCTO, Referrer, Permissions, Server, X-Powered-By); clickjacking/X-Frame-Options is covered by the clickjacking module",
+        tests_summary="Header checks: CSP, HSTS, XCTO, Referrer, Permissions, Server, X-Powered-By",
         raw_data={"security_headers": {"is_https": https,
                                           "headers_seen": list(h.keys()),
                                           "spa_catchall": spa["is_spa"]}})

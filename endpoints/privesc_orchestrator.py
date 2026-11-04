@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_parallel, run_module_streaming
 
 router = APIRouter()
@@ -71,7 +72,7 @@ def _resolve(req: PrivescRunAllRequest, request: Request):
 
 @router.post("/api/privesc/run_all")
 async def privesc_run_all(req: PrivescRunAllRequest, request: Request,
-                           _=Depends(verify_scan_quota)):
+                           _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     # Hard-clamp concurrency to 2 (privesc rule: PEASS scripts are heavy).
     concurrency = max(1, min(req.concurrency or 2, 2))
@@ -92,7 +93,7 @@ async def privesc_run_all(req: PrivescRunAllRequest, request: Request,
 
 @router.post("/api/privesc/run_all_buffered")
 async def privesc_run_all_buffered(req: PrivescRunAllRequest, request: Request,
-                                    _=Depends(verify_scan_quota)):
+                                    _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 2, 2))
     return await run_module_parallel(

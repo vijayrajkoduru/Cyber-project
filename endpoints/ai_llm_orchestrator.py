@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_parallel, run_module_streaming
 
 router = APIRouter()
@@ -77,7 +78,7 @@ def _resolve(req: AiLlmRunAllRequest, request: Request):
 
 @router.post("/api/ai_llm/run_all")
 async def ai_llm_run_all(req: AiLlmRunAllRequest, request: Request,
-                          _=Depends(verify_scan_quota)):
+                          _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 2, 4))
     gen = run_module_streaming(target=req.target, tools=tools,
@@ -91,7 +92,7 @@ async def ai_llm_run_all(req: AiLlmRunAllRequest, request: Request,
 
 @router.post("/api/ai_llm/run_all_buffered")
 async def ai_llm_run_all_buffered(req: AiLlmRunAllRequest, request: Request,
-                                     _=Depends(verify_scan_quota)):
+                                     _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 2, 4))
     return await run_module_parallel(target=req.target, tools=tools,
