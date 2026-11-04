@@ -24147,6 +24147,12 @@ export default function App() {
           {/* Dashboard — always free */}
           {/* Sidebar search */}
           <div style={{padding:"8px 8px 2px"}}>
+            {/* Honeypot inputs absorb Chrome's saved-credential autofill so the
+                real search box stays empty. autoComplete="off" alone is ignored
+                by Chrome for fields it treats as a username; these hidden fields
+                (first in DOM order) catch the "ADMIN" username fill instead. */}
+            <input type="text"     name="username" tabIndex={-1} autoComplete="username"         defaultValue="" style={{position:"absolute",left:-9999,top:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}} aria-hidden="true"/>
+            <input type="password" name="password" tabIndex={-1} autoComplete="current-password" defaultValue="" style={{position:"absolute",left:-9999,top:-9999,opacity:0,width:1,height:1,pointerEvents:"none"}} aria-hidden="true"/>
             <input value={navQuery} onChange={e=>setNavQuery(e.target.value)} placeholder="Search modules..."
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               name="vl-module-search" data-form-type="other" aria-autocomplete="none"
