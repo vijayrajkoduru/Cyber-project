@@ -119,6 +119,13 @@ def rule_paramiko_missing(s):
 def rule_positive(s):
     if not s.get("terrapin_ran"):
         return None
+    # NO-BANNER-NO-PASS-V1 — a "passed verification" verdict requires that we
+    # actually read the SSH banner/KEX. An empty banner means the probe never
+    # reached a live SSH service (target down, filtered, or unresolvable), so
+    # emitting POSITIVE here is a false clean — rule_no_banner already reports
+    # the INFO. Without this, a scan of an UNREACHABLE host read as "clean".
+    if not s.get("terrapin_banner"):
+        return None
     if s.get("terrapin_vulnerable"):
         return None
     if s.get("terrapin_has_chacha20") or s.get("terrapin_cbc_etm_combo"):

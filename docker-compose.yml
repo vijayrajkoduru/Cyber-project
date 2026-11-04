@@ -108,6 +108,11 @@ services:
   lab_metasploitable:
     image: tleemcjr/metasploitable2
     container_name: lab_metasploitable
+    # The image CMD ends in `bash`, which exits immediately without a TTY,
+    # killing the container (restart loop, DNS name never stays registered).
+    # tty + stdin_open keep PID1 alive so the vulnerable services stay up.
+    tty: true
+    stdin_open: true
     networks:
     - vulnuslab
     restart: unless-stopped
