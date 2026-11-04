@@ -84,10 +84,17 @@ async def gather(ctx: ScanContext):
                 if m:
                     adapters.append(m.group(1))
     if not adapters and have_btctl:
-        adapters = ["auto-via-dbus"]
+        # Confirm a DBus-managed controller actually exists before proceeding -
+        # otherwise a hardware-less host finds 0 devices and wrongly reports a
+        # POSITIVE "confirmed clean" for a test it never ran.
+        rc_l, list_out, _ = await _exec([BLUETOOTHCTL_BIN, "list"], timeout=5)
+        if rc_l == 0 and "Controller" in (list_out or ""):
+            adapters = ["auto-via-dbus"]
     if not adapters:
         ctx.state["no_bt_adapter"] = True
         ctx.state["bluetooth_classic_pair_audit_total"] = 0
+        ctx.state["skipped_reason"] = ("no Bluetooth adapter present on scanner host - "
+            "Bluetooth Classic audit requires a controller and radio proximity to targets")
         ctx.source("no HCI adapter")
         return
     if target != "auto" and adapters and target not in adapters and "auto-via-dbus" not in adapters:

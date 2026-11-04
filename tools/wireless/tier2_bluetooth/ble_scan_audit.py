@@ -87,11 +87,19 @@ async def gather(ctx: ScanContext):
         ctx.source(f"{target} not in {adapters}")
         return
     if not adapters and have_bluetoothctl:
-        # bluetoothctl can still work via DBus
-        adapters = ["auto-via-dbus"]
+        # No HCI adapter via hciconfig. A DBus-managed controller may still
+        # exist - but confirm it with `bluetoothctl list` before proceeding.
+        # Do NOT assume one: on a hardware-less host (e.g. a cloud scanner) the
+        # scan would otherwise find 0 devices and wrongly report POSITIVE
+        # "confirmed clean" for a test it never actually ran.
+        rc_l, list_out, _ = await _exec([BLUETOOTHCTL_BIN, "list"], timeout=5)
+        if rc_l == 0 and "Controller" in (list_out or ""):
+            adapters = ["auto-via-dbus"]
     if not adapters:
         ctx.state["no_bt_adapter"] = True
         ctx.state["ble_scan_audit_total"] = 0
+        ctx.state["skipped_reason"] = ("no Bluetooth adapter present on scanner host - "
+            "BLE scan requires a Bluetooth controller and radio proximity to targets")
         ctx.source("no HCI adapter")
         return
     ctx.state["adapters"] = adapters
