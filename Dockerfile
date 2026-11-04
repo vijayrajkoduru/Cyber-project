@@ -679,6 +679,17 @@ RUN echo "=== Phase 3 CORE binary sanity check ===" \
 # Total Phase 3 image growth: ~0.36 GB (5 GB -> ~5.4 GB after Phase 3).
 # ═══════════════════════════════════════════════════════════════════════
 
+# ── Dependency pin reassert (starlette) ────────────────────────────────
+# requirements.txt pins fastapi==0.115.0, which needs starlette <0.41. A
+# transitive dep (mcp -> sse-starlette 3.6.0) declares starlette>=0.49.1, so an
+# unpinned resolve pulls starlette 1.10.0 and FastAPI crashes at import with
+# "Router.__init__() got an unexpected keyword argument 'on_startup'". sse-
+# starlette 3.6.0 in fact imports fine against starlette 0.38.6 (runtime-
+# verified), so reassert the FastAPI-compatible starlette here, AFTER every
+# pip layer, as the last build step before the app copy. Cheap, cache-friendly.
+RUN pip install --no-cache-dir 'starlette==0.38.6' \
+ && python -c "import fastapi, starlette; print('fastapi', fastapi.__version__, 'starlette', starlette.__version__)"
+
 # ═══════════════════════════════════════════════════════════════════════
 # APPLICATION CODE — copied LAST so code edits don't bust the toolchain cache.
 # Every layer above (apt/pip/git tool installs) is independent of the app
