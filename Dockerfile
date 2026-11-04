@@ -146,11 +146,10 @@ RUN cd /opt && mkdir -p seclists \
       && du -sh /opt/seclists ) \
     || echo "WARNING: SecLists download failed; brute-force tools will use AI-curated fallback wordlists"
 
-# Application code — preserves the Kali-style tools/ directory structure
-COPY main.py .
-COPY tools/ ./tools/
-COPY endpoints/ ./endpoints/
-COPY profiles/ ./profiles/
+# Application code is COPYed at the END of this Dockerfile (after all tool
+# installs) so that editing tools/ or endpoints/ does NOT invalidate the
+# expensive toolchain layers — code-only rebuilds stay fast. See the COPY
+# block at the bottom of the file.
 
 # .env is mounted at runtime via docker-compose env_file — NEVER baked in.
 EXPOSE 8000
@@ -436,6 +435,30 @@ RUN set +e; \
     echo "=== CORE pip import sanity check (build fails if these miss) ===" ; \
     python -c "import impacket, ldap3, scapy.all, pymodbus, openai, anthropic, paramiko, winrm, jwt, pymysql, psycopg2; print('CORE PHASE 2 PIP OK')"
 
+# ── TOOLCHAIN REBUILD MARKER ───────────────────────────────────────────
+# 2026-11-04: the host disk filled to 100%, which broke `apt-get update`
+# ("At least one invalid signature was encountered") and silently failed every
+# apt/git tool install in the layers below — firmware (binwalk/radare2/qemu),
+# wireless (aircrack-ng/reaver/bluez), password (medusa/ncrack/patator),
+# supply-chain (nodejs/npm) and netexec all went missing from the image.
+# Disk reclaimed; bumping this ARG forces those layers to re-run cleanly.
+# Bump the date again whenever the toolchain needs a fresh rebuild.
+ARG TOOLCHAIN_REBUILD=2026-11-04
+
+# ── mobsfscan (mobile static analyzer) - pip, isolated layer ──
+RUN pip install --no-cache-dir mobsfscan \
+ && which mobsfscan && echo "MOBSFSCAN OK" \
+ || echo "PHASE2_MOBSFSCAN_FAILED"
+
+# ── hashcat - PMKID (-m 22000) offline crack for the wireless handshake_crack
+# analysis endpoint. aircrack-ng (apt loop below) handles .cap/.pcap; hashcat
+# handles PMKID / .22000. Separate layer so it doesn't bust the apt-loop cache.
+RUN apt-get update -q -o Acquire::Retries=3 \
+ && apt-get install -y -q --no-install-recommends hashcat \
+ && apt-get clean && rm -rf /var/lib/apt/lists/* \
+ && which hashcat && echo "HASHCAT OK" \
+ || echo "PHASE2_HASHCAT_FAILED"
+
 # ── netexec (NetExec / nxc) - not on PyPI, install from GitHub ──
 # Provides the `nxc` binary used by AD module netexec_smb_spray probe.
 RUN pip install --no-cache-dir git+https://github.com/Pennyw0rth/NetExec.git \
@@ -453,7 +476,7 @@ RUN set +e ; \
         binwalk radare2 gdb gdb-multiarch qemu-user-static \
         medusa ncrack patator \
         enum4linux \
-        bluez \
+        bluez iw wireless-tools \
         nodejs npm \
         ruby ruby-dev unzip ; do \
         echo "=== apt install $pkg ===" ; \
@@ -655,3 +678,15 @@ RUN echo "=== Phase 3 CORE binary sanity check ===" \
 # Total Phase 2 image growth: ~2.2 GB (5 GB image after Phase 2).
 # Total Phase 3 image growth: ~0.36 GB (5 GB -> ~5.4 GB after Phase 3).
 # ═══════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════
+# APPLICATION CODE — copied LAST so code edits don't bust the toolchain cache.
+# Every layer above (apt/pip/git tool installs) is independent of the app
+# source, so a code-only change now rebuilds just these cheap COPY layers and
+# whatever runs after them, instead of re-downloading the whole toolchain.
+# Preserves the Kali-style tools/ directory structure.
+# ═══════════════════════════════════════════════════════════════════════
+COPY main.py .
+COPY tools/ ./tools/
+COPY endpoints/ ./endpoints/
+COPY profiles/ ./profiles/
