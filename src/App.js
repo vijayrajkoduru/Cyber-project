@@ -24708,7 +24708,7 @@ export default function App() {
               </span>
             </div>
             <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#dc2626,#ea580c)",border:"none",color:"#fff",padding:"7px 18px",borderRadius:6,fontSize:12,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap"}}>
-              {upgrading ? "Loading..." : "Subscribe — $29/mo"}
+              {upgrading ? "Loading..." : "Subscribe — $199/mo"}
             </button>
           </div>
         )}
@@ -24722,7 +24722,7 @@ export default function App() {
               <div style={{fontSize:12,color:"#fecaca",marginTop:2}}>Subscribe to VulnusLab Pro to continue running scans. Your past scans are still accessible.</div>
             </div>
             <button onClick={handleUpgrade} disabled={upgrading} style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",color:"#fff",padding:"9px 22px",borderRadius:6,fontSize:13,fontWeight:800,cursor:upgrading?"wait":"pointer",whiteSpace:"nowrap",boxShadow:"0 0 16px #16a34a55"}}>
-              {upgrading ? "Loading..." : "Subscribe — $29/mo"}
+              {upgrading ? "Loading..." : "Subscribe — $199/mo"}
             </button>
           </div>
         )}
