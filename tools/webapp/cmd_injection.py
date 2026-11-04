@@ -109,14 +109,28 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 new_params = {k: v[0] for k, v in params.items()}
                 new_params[key] = original + inj5
                 url1 = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
-                _, t1 = _time_get(url1, req, timeout=25)
-                if t1 < t0 + 4: continue
-                # Confirm with shorter sleep — timing must scale with N
+                # TIMING-FP-V1 — use the SAME timeout ceiling for both probes.
+                # Previously url1 used 25s and url2 used 15s, so an endpoint
+                # that merely HANGS (not a real sleep) returned t1~=25 > t2~=15
+                # purely because the ceilings differed, faking "timing scaled
+                # with N" and confirming a bogus CRITICAL (e.g. a Node.js
+                # payload on PHP DVWA that can never execute).
+                _, t1 = _time_get(url1, req, timeout=12)
+                d1 = t1 - t0
+                # The injected `sleep 5` must land as ~5s of ADDED delay — not
+                # a timeout/hang. Reject anything that didn't move (<4s) or that
+                # looks like a ceiling hang (>9s, well above a real 5s sleep).
+                if d1 < 4 or d1 > 9: continue
+                # Confirm with a shorter sleep — the delay must SCALE with N.
                 inj2 = tmpl.replace("{N}", "2")
                 new_params[key] = original + inj2
                 url2 = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
-                _, t2 = _time_get(url2, req, timeout=15)
-                if t2 > t0 + 1 and t1 > t2:
+                _, t2 = _time_get(url2, req, timeout=12)
+                d2 = t2 - t0
+                # `sleep 2` must land as ~2s, and the 3s gap between sleep 5 and
+                # sleep 2 must actually appear (d1 - d2 >= 2). A hang gives
+                # d1~=d2 and is rejected here.
+                if (1.0 <= d2 <= 4.0) and (d1 - d2) >= 2.0:
                     sev = str(entry.get("severity", "CRITICAL")).upper()
                     cvss = str(entry.get("cvss", "9.8"))
                     findings.append(wrap_finding(

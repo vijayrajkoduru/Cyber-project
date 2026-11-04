@@ -125,6 +125,22 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
         if _bailed: break
         for key in list(params.keys())[:3]:
             if _bailed: break
+            # BASELINE-DIFF-V1 — fetch the endpoint with a benign value for
+            # THIS param. A marker only confirms LFI if it appears in the
+            # injected response AND is ABSENT from this baseline. That makes
+            # matcher text which is merely part of the app's normal page
+            # (DVWA help text containing "sudo"/"ssh", any "<html>", etc.) or
+            # an over-broad matcher like ".*" unable to confirm — it matches
+            # the baseline too, so it is rejected. Kills the whole class of
+            # content-word false positives (fake Windows-SAM / bash_history
+            # CRITICALs) while preserving real file reads like /etc/passwd,
+            # whose signature (root:.*:0:0) is absent from the baseline page.
+            _bl_params = {k: v[0] for k, v in params.items()}
+            _bl_params[key] = "1"
+            _bl_url = urlunparse(tu_parsed._replace(query=urlencode(_bl_params)))
+            _bl = safe_get(_bl_url, req=req, allow_redirects=True, timeout=12)
+            baseline_body = ((_bl.text or "")[:50000]
+                             if (_bl is not None and _bl.status_code == 200) else None)
             for entry in payload_set:
                 if _time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
                     _bailed = True; break
@@ -134,17 +150,26 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 test_url = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
                 r = safe_get(test_url, req=req, allow_redirects=True, timeout=12)
                 if r is None or r.status_code != 200: continue
-                if _check_marker((r.text or "")[:50000],
-                                  entry["matcher"], entry["category"]):
-                    findings.append(wrap_finding(
-                        f"Path Traversal / LFI in {key!r} — {entry['desc']}",
-                        "CRITICAL", cvss="9.8", cwe="CWE-22", owasp="A01:2021",
-                        remediation="Validate paths against whitelist; reject '..' and absolute paths.",
-                        evidence_marker=(f"param={key} payload={entry['payload']!r} "
-                                         f"matched {entry['matcher'] or 'PHP base64'}")))
-                    confirmed.append({"param": key, "payload": entry["payload"],
-                                      "category": entry["category"]})
-                    break
+                body = (r.text or "")[:50000]
+                if not _check_marker(body, entry["matcher"], entry["category"]):
+                    continue
+                # Conservative zero-FP gate: require a usable baseline that
+                # does NOT already contain the marker. No baseline => do not
+                # confirm (a false "CRITICAL" in a paid report is far costlier
+                # than missing one exotic case).
+                if baseline_body is None or _check_marker(
+                        baseline_body, entry["matcher"], entry["category"]):
+                    continue
+                findings.append(wrap_finding(
+                    f"Path Traversal / LFI in {key!r} — {entry['desc']}",
+                    "CRITICAL", cvss="9.8", cwe="CWE-22", owasp="A01:2021",
+                    remediation="Validate paths against whitelist; reject '..' and absolute paths.",
+                    evidence_marker=(f"param={key} payload={entry['payload']!r} "
+                                     f"matched {entry['matcher'] or 'PHP base64'} "
+                                     f"(absent from baseline)")))
+                confirmed.append({"param": key, "payload": entry["payload"],
+                                  "category": entry["category"]})
+                break
             else:
                 continue
             break
