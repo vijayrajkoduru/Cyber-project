@@ -13954,6 +13954,17 @@ function generateUniversalVLReport(opts) {
     doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
     doc.text(`${_realPct}% real probes; ${_scaffoldPct}% scaffolded ([NOT IMPLEMENTED]) - module forge in progress.`, margin + 8, y + 11);
     doc.text("Where probes are implemented, every finding is independently triggered. Scaffolded checks pending forge.", margin + 8, y + 14);
+  } else if ((_sevCount.CRITICAL+_sevCount.HIGH+_sevCount.MEDIUM+_sevCount.LOW) === 0 && _sevCount.POSITIVE === 0 && _sevCount.INFO > 0) {
+    // Info-only result: probes emitted status/environment notices (e.g. "tool
+    // not installed"), not confirmed findings against the target. Claiming
+    // "every data point triggered against the live target" would be false.
+    fillR(margin, y, contentW, 16, [255,247,237]);
+    fillR(margin, y, 3, 16, [202,138,4]);
+    doc.setFont("Arial","bold"); doc.setFontSize(9); doc.setTextColor(133,79,11);
+    doc.text("LIMITED VERIFICATION", margin + 8, y + 6);
+    doc.setFont("Arial","normal"); doc.setFontSize(7.5); doc.setTextColor(...DARK);
+    doc.text("Probes returned status/environment notices only - no finding was confirmed against the live target.", margin + 8, y + 11);
+    doc.text("Absence of findings here is NOT proof of secure posture. Provide required inputs/tools and re-scan.", margin + 8, y + 14);
   } else {
     fillR(margin, y, contentW, 16, LBLUE);
     fillR(margin, y, 3, 16, BLUE);
@@ -13987,6 +13998,8 @@ function generateUniversalVLReport(opts) {
     /timeout/i, /file.*not.*found/i, /no.*target/i, /import.*failed/i,
     /required.*field.*missing/i, /no.*scannable/i, /missing\b/i,
     /could not execute/i, /unable to/i, /no.*input/i, /not provided/i,
+    /not available/i, /binary not available/i, /\babsent\b/i, /not present/i,
+    /not found on/i, /no.*binary/i, /stack.*not installed/i,
   ];
   const _infoFindings = _allFindings.filter(f =>
     String(f.severity || "INFO").toUpperCase() === "INFO");
@@ -14751,12 +14764,18 @@ function generateUniversalVLReport(opts) {
       });
       const _passCats = Object.values(_owaspMap).filter(arr => arr.length === 0).length;
       const _failCats = 10 - _passCats;
+      // When the scan was insufficient (probes couldn't run), no category can
+      // honestly be marked PASS - absence of findings is absence of testing,
+      // not proof of a clean posture. Render the whole section as UNKNOWN.
+      const _owaspUnknown = !!_insufficientScan;
       const _grade =
+        _owaspUnknown ? "?" :
         _passCats === 10 ? "A" :
         _passCats >= 9  ? "B" :
         _passCats >= 7  ? "C" :
         _passCats >= 5  ? "D" : "F";
       const _gradeColor =
+        _owaspUnknown ? [202,138,4] :
         _grade === "A" ? [15,118,82] :
         _grade === "B" ? [22,163,74] :
         _grade === "C" ? [202,138,4] :
@@ -14768,9 +14787,9 @@ function generateUniversalVLReport(opts) {
       doc.setFont("Arial","bold"); doc.setFontSize(22); doc.setTextColor.apply(doc, _gradeColor);
       doc.text(_grade, margin+10, y+11);
       doc.setFont("Arial","bold"); doc.setFontSize(12); doc.setTextColor.apply(doc, DARK);
-      doc.text(`${_passCats}/10 OWASP categories passing`, margin+28, y+7);
+      doc.text(_owaspUnknown ? "OWASP Top 10 not assessed - scan insufficient" : `${_passCats}/10 OWASP categories passing`, margin+28, y+7);
       doc.setFont("Arial","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc, GRAY);
-      doc.text(_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`, margin+28, y+12);
+      doc.text(_owaspUnknown ? "Probes could not run - no category can be marked clear. Provide required inputs/tools and re-scan." : (_failCats === 0 ? "All 10 clear - strong posture." : `${_failCats} category(ies) failing - prioritize fixes for the failed rows to improve grade.`), margin+28, y+12);
       y += 19;
       y = tHead(["CATEGORY","NAME","STATUS","BREAKDOWN"],[20,82,22,56],y);
       _OWASP_2021.forEach(([code, name], i) => {
@@ -14778,17 +14797,20 @@ function generateUniversalVLReport(opts) {
         const passing = matches.length === 0;
         chk(9);
         fillR(margin, y, contentW, 8, i%2===0 ? LIGHT : WHITE);
-        fillR(margin, y, 1.5, 8, passing ? [15,118,82] : [162,28,28]);
+        fillR(margin, y, 1.5, 8, _owaspUnknown ? [202,138,4] : passing ? [15,118,82] : [162,28,28]);
         doc.setFont("Arial","bold"); doc.setFontSize(8.5); doc.setTextColor.apply(doc, DARK);
         doc.text(code+":2021", margin+4, y+5.5);
         doc.setFont("Arial","normal"); doc.setFontSize(8);
         doc.text(name, margin+24, y+5.5);
-        const stBg = passing ? [220,252,231] : [254,226,226];
-        const stFg = passing ? [15,118,82] : [162,28,28];
+        const stBg = _owaspUnknown ? [254,243,199] : passing ? [220,252,231] : [254,226,226];
+        const stFg = _owaspUnknown ? [133,79,11] : passing ? [15,118,82] : [162,28,28];
         rrect(margin+106, y+1.5, 18, 5, 1, stBg);
         doc.setFont("Arial","bold"); doc.setFontSize(7); doc.setTextColor.apply(doc, stFg);
-        doc.text(passing ? "PASS" : "FAIL", margin+(passing?112:111.5), y+5);
-        if (passing) {
+        doc.text(_owaspUnknown ? "N/A" : passing ? "PASS" : "FAIL", margin+(_owaspUnknown?113:passing?112:111.5), y+5);
+        if (_owaspUnknown) {
+          doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(133,79,11);
+          doc.text("Not assessed - scan insufficient", margin+128, y+5.5);
+        } else if (passing) {
           doc.setFont("Arial","italic"); doc.setFontSize(7.5); doc.setTextColor(15,118,82);
           doc.text("No findings in this category", margin+128, y+5.5);
         } else {
@@ -15036,6 +15058,17 @@ function generateUniversalVLReport(opts) {
     if (!d) return {...p, status:"NOT RUN", detail:"Tool was not invoked"};
     if (d._failed) return {...p, status:"FAILED", detail: String(d.error || "unknown error").substring(0,90)};
     if (d._skipped || d.skipped_reason) return {...p, status:"SKIPPED", detail: String(d.skipped_reason || "skipped").substring(0,90)};
+    // A scanner whose findings are ALL info-level skip markers (e.g. "tool not
+    // installed", "binary not available") did not actually test the target.
+    // Count it as SKIPPED, not DATA, so coverage never claims a probe ran when
+    // it only reported on its own missing prerequisites.
+    const _allSkipInfo = Array.isArray(d.findings) && d.findings.length > 0 &&
+      d.findings.every(f => {
+        if (String(f.severity||"INFO").toUpperCase() !== "INFO") return false;
+        const _t = String(f.evidence||"") + " " + String(f.name||"") + " " + String(f.detail||"");
+        return _SKIP_PATTERNS.some(re => re.test(_t));
+      });
+    if (_allSkipInfo) return {...p, status:"SKIPPED", detail: String((d.findings[0] && (d.findings[0].name || d.findings[0].evidence)) || "probe could not run").substring(0,90)};
     if (p.isEmpty(d)) return {...p, status:"EMPTY", detail:"Ran cleanly - no findings"};
     return {...p, status:"RAN", detail:`${d.findings.length} finding(s)`};
   });
