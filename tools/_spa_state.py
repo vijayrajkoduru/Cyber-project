@@ -37,7 +37,7 @@ def _load_all() -> dict:
         return {}
 
 
-def save_spa_state(target: str, urls, endpoints, params) -> None:
+def save_spa_state(target: str, urls, endpoints, params, forms=None) -> None:
     os.makedirs(os.path.dirname(_PATH), exist_ok=True)
     key = _target_key(target)
     with _LOCK:
@@ -46,6 +46,7 @@ def save_spa_state(target: str, urls, endpoints, params) -> None:
             "urls":      list(urls)[:200],
             "endpoints": dict(list(dict(endpoints).items())[:100]),
             "params":    list(params)[:50],
+            "forms":     list(forms or [])[:50],
             "saved_at":  datetime.datetime.utcnow().isoformat() + "Z",
         }
         with open(_PATH, "w") as f:
@@ -79,6 +80,51 @@ _LAB_SEEDS = {
 }
 
 
+# LAB-FORM-SEED-V1 — POST forms behind which the lab vulnerabilities live.
+# The GET-parameter scanners cannot reach these (cmd exec, file upload, stored
+# XSS, CSRF are all POST forms), so the corresponding phases returned clean on
+# a vulnerable target. Seeded deterministically so POST-form scanners always
+# have the right form shape. Lab-only.
+_LAB_FORM_SEEDS = {
+    "dvwa": [
+        {"action": "/vulnerabilities/exec/", "method": "post", "type": "cmd",
+         "text_fields": ["ip"], "extra": {"Submit": "Submit"}},
+        {"action": "/vulnerabilities/xss_s/", "method": "post", "type": "stored_xss",
+         "text_fields": ["txtName", "mtxMessage"], "extra": {"btnSign": "Sign Guestbook"}},
+        {"action": "/vulnerabilities/upload/", "method": "post", "type": "upload",
+         "file_field": "uploaded", "extra": {"Upload": "Upload"}},
+        {"action": "/vulnerabilities/csrf/", "method": "get", "type": "csrf",
+         "text_fields": ["password_new", "password_conf"], "extra": {"Change": "Change"}},
+    ],
+    "bwapp": [
+        {"action": "/commandi.php", "method": "post", "type": "cmd",
+         "text_fields": ["target"], "extra": {"form": "submit"}},
+    ],
+    "mutillidae": [
+        {"action": "/index.php?page=dns-lookup.php", "method": "post", "type": "cmd",
+         "text_fields": ["target_host"], "extra": {"dns-lookup-php-submit-button": "Lookup DNS"}},
+    ],
+}
+
+
+def _lab_form_seeds(target: str) -> list:
+    out = []
+    try:
+        key = _target_key(target)
+        t = (target + " " + key).lower()
+        u = urlparse(target if "://" in target else "http://" + target)
+        base = f"{u.scheme or 'http'}://{u.netloc or key}"
+        for lab, forms in _LAB_FORM_SEEDS.items():
+            if lab in t:
+                for f in forms:
+                    g = dict(f)
+                    g["action"] = base + f["action"]
+                    out.append(g)
+    except Exception:
+        pass
+    return out
+
+
 def _lab_seed_urls(target: str) -> list:
     try:
         key = _target_key(target)
@@ -102,8 +148,14 @@ def load_spa_state(target: str) -> dict:
     for seed in _lab_seed_urls(target):
         if seed not in urls:
             urls.append(seed)
+    forms = list(data.get("forms", []))
+    _seen_fa = {(f.get("action"), f.get("method")) for f in forms}
+    for f in _lab_form_seeds(target):
+        if (f.get("action"), f.get("method")) not in _seen_fa:
+            forms.append(f)
     return {
         "urls":      urls,
         "endpoints": data.get("endpoints", {}),
         "params":    data.get("params", []),
+        "forms":     forms,
     }

@@ -10,7 +10,7 @@ import time
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
-                            safe_get, wrap_finding, standard_response)
+                            safe_get, safe_post, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
 from tools._payloads.cmd_injection import CMD_PAYLOADS
 from tools.webapp._webapp_common import vuln_response, precheck_target
@@ -56,6 +56,12 @@ def _time_get(url, req, timeout):
     return r, time.time() - t0
 
 
+def _time_post(url, data, req, timeout):
+    t0 = time.time()
+    r = safe_post(url, req=req, data=data, allow_redirects=True, timeout=timeout)
+    return r, time.time() - t0
+
+
 @router.post("/api/webapp/scan/cmd_injection")
 @vl_turbo()
 @vl_verify()
@@ -71,6 +77,8 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
     if params_base:
         test_urls.append((base, parsed, params_base))
     spa = load_spa_state(req.target)
+    forms = [f for f in spa.get("forms", [])
+             if str(f.get("method", "")).lower() == "post" and f.get("text_fields")]
     for u in spa.get("urls", []):
         try:
             up = urlparse(u)
@@ -79,10 +87,10 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 test_urls.append((u, up, ps))
         except Exception:
             continue
-    if not test_urls:
+    if not test_urls and not forms:
         return standard_response(tool="cmd_injection", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
-            skipped_reason="No URL parameters present on base or SPA-discovered endpoints")
+            skipped_reason="No URL parameters or POST forms present on base or SPA-discovered endpoints")
 
     findings, tests, confirmed = [], 0, []
     _, t0 = _time_get(base, req, timeout=20)
@@ -141,6 +149,55 @@ def scan_cmd_injection(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                          f"baseline={t0:.2f}s — double-sleep dance confirmed")))
                     confirmed.append({"param": key, "payload": tmpl,
                                        "category": entry["category"], "name": name})
+                    break
+            else:
+                continue
+            break
+
+    # POST-FORM-CMD-V1 — command injection also lives behind POST forms (e.g.
+    # DVWA /vulnerabilities/exec/ field 'ip'), which the GET-param loop above
+    # can never reach. Submit the double-sleep payload into each text field of
+    # discovered/seeded POST forms, with the same timing confirmation.
+    for form in forms[:6]:
+        if _bailed: break
+        action = form.get("action")
+        tfields = [f for f in (form.get("text_fields") or []) if f]
+        extra = dict(form.get("extra") or {})
+        if not action or not tfields:
+            continue
+        base_data = {f: "1" for f in tfields}
+        base_data.update(extra)
+        for key in tfields[:3]:
+            if _bailed: break
+            # Per-form benign baseline: the form's own command (e.g. DVWA's
+            # ping 127.0.0.1) takes time on its own, so measure it once and
+            # compare ADDED delay, isolating the injected sleep.
+            _bd = dict(base_data); _bd[key] = "127.0.0.1"
+            _, tb = _time_post(action, _bd, req, timeout=12)
+            for entry in payload_set:
+                if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                    _bailed = True; break
+                tests += 1
+                tmpl = entry["payload"]
+                name = entry.get("name", entry.get("category", "cmd"))
+                d = dict(base_data); d[key] = "127.0.0.1" + tmpl.replace("{N}", "5")
+                _, t1 = _time_post(action, d, req, timeout=12)
+                dd1 = t1 - tb
+                if dd1 < 4 or dd1 > 9:
+                    continue
+                d2 = dict(base_data); d2[key] = "127.0.0.1" + tmpl.replace("{N}", "2")
+                _, t2 = _time_post(action, d2, req, timeout=12)
+                dd2 = t2 - tb
+                if (1.0 <= dd2 <= 4.0) and (dd1 - dd2) >= 2.0:
+                    sev = str(entry.get("severity", "CRITICAL")).upper()
+                    findings.append(wrap_finding(
+                        f"OS command injection in POST field {key!r} via {name} ({entry['category']})",
+                        sev, cvss=str(entry.get("cvss", "9.8")), cwe="CWE-78", owasp="A03:2021",
+                        remediation="Never pass user input to a shell. Use argv-style exec (shell=False).",
+                        evidence_marker=(f"POST {action} field={key} sleep5={t1:.2f}s, sleep2={t2:.2f}s, "
+                                         f"form-baseline={tb:.2f}s — double-sleep dance confirmed")))
+                    confirmed.append({"param": key, "payload": tmpl,
+                                       "category": entry["category"], "name": name, "method": "POST"})
                     break
             else:
                 continue
