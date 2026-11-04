@@ -107,6 +107,52 @@ def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
                               "ctype": ctype, "status": r.status_code})
             break  # one finding per endpoint
 
+    # POST-FORM-UPLOAD-V1 — upload forms use their own field name (e.g. DVWA
+    # /vulnerabilities/upload/ field 'uploaded'), which the hardcoded endpoint
+    # list with field "file" never matches. Submit a dangerous file to each
+    # discovered/seeded upload form using its real field name, and confirm the
+    # upload was ACCEPTED (success text or the stored path echoed) rather than
+    # treating any 200 as a hit.
+    for form in [f for f in (spa.get("forms") or []) if f.get("file_field")][:6]:
+        if _bailed: break
+        action = form.get("action")
+        ffield = form.get("file_field")
+        extra = dict(form.get("extra") or {})
+        if not action or not ffield:
+            continue
+        for filename, ctype, content, marker in _PAYLOADS[:4]:
+            if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
+                _bailed = True; break
+            tests += 1
+            try:
+                import requests
+                from tools._shared import make_req_headers, _clean_underscore_host
+                h = make_req_headers(req)
+                h.pop("Content-Type", None)
+                h = _clean_underscore_host(action, h)  # underscore Docker hosts 400 otherwise
+                r = requests.post(action, files={ffield: (filename, content, ctype)},
+                                  data=extra, headers=h, timeout=10, verify=False,
+                                  allow_redirects=False)
+            except Exception:
+                continue
+            if r is None:
+                continue
+            body = (r.text or "").lower()
+            accepted = (r.status_code in (200, 201, 202) and
+                        ("uploaded" in body or "succ" in body or filename.lower() in body))
+            if not accepted:
+                continue
+            findings.append(wrap_finding(
+                f"Dangerous file accepted at POST {action} — {filename} ({ctype})",
+                "HIGH", cvss="8.1", cwe="CWE-434", owasp="A04:2021",
+                remediation=("Validate uploaded file types by content (magic bytes) not extension. "
+                           "Reject SVG/HTML/PHP uploads. Store outside the web root in a path that "
+                           "cannot be served as executable."),
+                evidence_marker=f"POST {action} field={ffield!r} file={filename} accepted ({r.status_code}); marker={marker}"))
+            confirmed.append({"action": action, "field": ffield, "filename": filename,
+                              "ctype": ctype, "status": r.status_code})
+            break  # one finding per form
+
     summary = (f"File Upload: {tests} probes across {len(list(endpoints)[:10])} endpoints "
                f"with {len(_PAYLOADS)} payload types in {time.time() - _wallclock_start:.1f}s")
     if _bailed:
