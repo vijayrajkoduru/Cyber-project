@@ -46,6 +46,8 @@ async def gather(ctx: ScanContext):
     if not shutil.which("reaver") and not os.path.exists(REAVER_BIN):
         ctx.state["reaver_binary_missing"] = True
         ctx.state["wps_pin_audit_total"] = 0
+        ctx.state["skipped_reason"] = ("reaver not installed on scanner host - WPS PIN "
+            "audit requires reaver and a monitor-mode adapter near the target AP")
         ctx.source("reaver missing")
         return
 

@@ -56,6 +56,8 @@ async def gather(ctx: ScanContext):
     if not shutil.which("airodump-ng") and not os.path.exists(AIRODUMP_BIN):
         ctx.state["airodump_binary_missing"] = True
         ctx.state["wpa_handshake_capture_audit_total"] = 0
+        ctx.state["skipped_reason"] = ("airodump-ng not installed on scanner host - WPA "
+            "handshake capture requires the aircrack-ng suite and a monitor-mode adapter")
         ctx.source("airodump-ng missing")
         return
 

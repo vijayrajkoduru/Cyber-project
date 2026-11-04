@@ -67,6 +67,8 @@ async def gather(ctx: ScanContext):
     if not have_bluetoothctl and not have_hcitool:
         ctx.state["bluez_missing"] = True
         ctx.state["ble_scan_audit_total"] = 0
+        ctx.state["skipped_reason"] = ("bluez stack (bluetoothctl/hcitool) not installed on "
+            "scanner host - BLE scan requires bluez and a Bluetooth adapter")
         ctx.source("bluez tools missing")
         return
 

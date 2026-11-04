@@ -69,6 +69,8 @@ async def gather(ctx: ScanContext):
     if not have_btctl and not have_hcitool:
         ctx.state["bluez_missing"] = True
         ctx.state["bluetooth_classic_pair_audit_total"] = 0
+        ctx.state["skipped_reason"] = ("bluez stack (bluetoothctl/hcitool) not installed on "
+            "scanner host - Bluetooth Classic pairing audit requires bluez and a Bluetooth adapter")
         ctx.source("bluez tools missing")
         return
 
