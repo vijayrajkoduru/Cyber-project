@@ -112,6 +112,21 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
         return standard_response(tool="lfi", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
             skipped_reason="No URL parameters present on base or SPA-discovered endpoints")
+    # PRIORITIZE-LFI-ENDPOINTS-V1 — rank URLs whose path/params look like a
+    # file-include sink (page, file, doc, include, path, template, ...) to the
+    # FRONT, so the genuinely vulnerable endpoint is tested within the budget
+    # instead of being buried behind unrelated discovered URLs. Without this,
+    # DVWA's /vulnerabilities/fi/?page= was reached inconsistently (LFI=0 on a
+    # vulnerable target). Mirrors the SQLi scanner's injectable-first ordering.
+    _LFI_HINTS = ("page", "file", "doc", "include", "path", "template", "view",
+                  "dir", "folder", "download", "read", "load", "inc",
+                  "document", "lang", "locale", "pg", "cat", "action")
+    def _lfi_rank(entry):
+        _u, _p, _ps = entry
+        hay = (_u + " " + " ".join(_ps.keys())).lower()
+        return -sum(1 for h in _LFI_HINTS if h in hay)
+    test_urls.sort(key=_lfi_rank)
+
     findings, tests, confirmed = [], 0, []
     # Per-param cap: 60 covers every interesting variant family (Linux + Windows +
     # PHP filter + null-byte + double-encoded + AI-curated system files / logs / configs).
@@ -121,7 +136,7 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
     _wallclock_start = _time.time()
     _WALLCLOCK_BUDGET = 60.0
     _bailed = False
-    for tu_url, tu_parsed, params in test_urls[:8]:
+    for tu_url, tu_parsed, params in test_urls[:12]:
         if _bailed: break
         for key in list(params.keys())[:3]:
             if _bailed: break
