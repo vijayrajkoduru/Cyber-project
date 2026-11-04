@@ -91,6 +91,8 @@ async def gather(ctx: ScanContext):
     if not shutil.which("iw") and not __import__("os").path.exists(IW_BIN):
         ctx.state["iw_binary_missing"] = True
         ctx.state["monitor_mode_capability_audit_total"] = 0
+        ctx.state["skipped_reason"] = ("iw not installed on scanner host - Wi-Fi "
+            "monitor-mode audit requires the iw tool and a wireless adapter")
         ctx.source("iw missing")
         return
 
