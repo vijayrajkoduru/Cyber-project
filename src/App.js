@@ -298,6 +298,50 @@ function _scanRelease() {
 let _onAuthExpired = null;
 export function setAuthExpiredHandler(fn) { _onAuthExpired = fn; }
 
+// SCAN-AUTHZ-V1 — a paid VAPT service must capture the operator's
+// authorization before scanning a third party. The checkbox in the scan panel
+// writes these keys; the backend gate (verify_scan_authorization) rejects a
+// non-lab scan whose body lacks authorization_ack, and logs the consent.
+function _getScanConsent() {
+  try {
+    return {
+      ack: localStorage.getItem("vlScanAuthAck") === "true",
+      scope: localStorage.getItem("vlScanAuthScope") || "",
+    };
+  } catch (_) { return { ack: false, scope: "" }; }
+}
+function _applyScanConsent(body) {
+  try {
+    if (body && typeof body === "object" && body.authorization_ack === undefined) {
+      const c = _getScanConsent();
+      body.authorization_ack = c.ack;
+      if (c.scope) body.authorization_scope = c.scope;
+    }
+  } catch (_) {}
+  return body;
+}
+
+// SCAN-AUTHZ-V1 — operator authorization gate shown in every scan panel. Writes
+// the acknowledgment to localStorage; _applyScanConsent reads it onto each scan
+// request body, and the backend enforces + logs it for non-lab targets.
+function ScanAuthConsent() {
+  const [ack, setAck] = useState(() => { try { return localStorage.getItem("vlScanAuthAck") === "true"; } catch (_) { return false; } });
+  const [scope, setScope] = useState(() => { try { return localStorage.getItem("vlScanAuthScope") || ""; } catch (_) { return ""; } });
+  const write = (v) => { try { localStorage.setItem("vlScanAuthAck", v ? "true" : "false"); } catch (_) {} };
+  const writeScope = (v) => { try { localStorage.setItem("vlScanAuthScope", v); } catch (_) {} };
+  return (
+    <div style={{margin:"10px 0",padding:"9px 11px",background:"#1a1206",border:"1px solid #7c2d12",borderRadius:6}}>
+      <label style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:ack?"#86efac":"#fdba74",lineHeight:1.4}}>
+        <input type="checkbox" checked={ack} onChange={e=>{const v=e.target.checked; setAck(v); write(v);}} style={{marginTop:2}}/>
+        <span><b>Authorization</b> — I own this target or have written permission to test it. Scanning systems without authorization is illegal; this acknowledgment is logged. Practice labs (lab_*) are exempt.</span>
+      </label>
+      {ack && (
+        <input value={scope} onChange={e=>{setScope(e.target.value); writeScope(e.target.value);}} placeholder="Authorization reference (ticket / contract / asset owner) — optional" style={{marginTop:7,width:"100%",background:"#0f172a",border:"1px solid #7c2d12",borderRadius:4,padding:"6px 9px",color:"#e2e8f0",fontFamily:"JetBrains Mono,monospace",fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+      )}
+    </div>
+  );
+}
+
 async function api(path, method, body, token) {
   // API-TIMEOUT-V2-SCOPED — scan endpoints need long timeouts (Nuclei = 13k templates,
   // WPScan enumeration, XSS canary fuzzing). Auth/general endpoints stay tight.
@@ -306,6 +350,7 @@ async function api(path, method, body, token) {
   if (token) headers["Authorization"] = "Bearer " + token;
   const isScan = path.includes("/scan/") || path.includes("/recon/") || path.includes("/cloud/") || path.includes("/mobile/") || path.includes("/auth/mfabypass") || path.includes("/network/");
   const timeoutMs = isScan ? 300000 : 30000;  // 5 min for scans, 30s otherwise
+  if (isScan) _applyScanConsent(body);  // SCAN-AUTHZ-V1 — attach authorization ack
   if (isScan) await _scanAcquire();   // Wait if 6 scans already in flight
   const ctrl = new AbortController();
   _activeAborts.add(ctrl);
@@ -3188,6 +3233,7 @@ function WebAppModule(props) {
       try {
         const headers = {"Content-Type": "application/json"};
         if (token) headers["Authorization"] = "Bearer " + token;
+        _applyScanConsent(body);  // SCAN-AUTHZ-V1
         const res = await fetch(API + "/api/webapp/scan/run_all", {
           method: "POST", headers, body: JSON.stringify(body),
         });
@@ -3669,10 +3715,37 @@ function WebAppModule(props) {
     // exists but is no longer called. Will be deleted once verified in prod.
     // Branding (companyName / reporterName / customLogo) flows through pdfConfig
     // for Universal to surface in the Document Control section.
+    // AUTH-REPORT-V2 — reflect the real session state instead of hardcoding
+    // false. The webapp auto-login (below) stashes authCookie/authBearer and
+    // threads them into every scanner, so a session-captured run must say so.
+    const _webapAuthenticated = !!(authCookie || authBearer);
+    // INCONCLUSIVE-V1 — an unauthenticated scan of a login-gated app only sees
+    // the public surface; injection scanners skip the real app, so a "LOW RISK"
+    // verdict is misleading. Detect a login surface and stamp the report.
+    const _loginSurfaceDetected = (() => {
+      try {
+        const res = allResults || {};
+        for (const k of Object.keys(res)) {
+          const d = res[k]; if (!d) continue;
+          const rd = JSON.stringify(d.raw_data || {}).toLowerCase();
+          if (rd.includes("login_url") || rd.includes("login endpoint") || rd.includes("login page")) return true;
+          for (const f of (d.findings || [])) {
+            const blob = String((f.detail || f.name || "") + " " + (f.evidence || f.evidence_marker || "")).toLowerCase();
+            if (/\blog\s?in\b|sign[- ]?in|authentication required|login form|csrf token|phpsessid/.test(blob)) return true;
+          }
+        }
+      } catch (_) {}
+      return false;
+    })();
+    const _webapInconclusive = !_webapAuthenticated && _loginSurfaceDetected;
     generateUniversalVLReport({
       target,
       allResults: allResults || {},
-      authenticated: false,
+      authenticated: _webapAuthenticated,
+      inconclusive: _webapInconclusive,
+      inconclusiveReason: _webapInconclusive
+        ? "Scan ran unauthenticated against a login-gated application — only the public surface was tested, so authenticated vulnerabilities (injection, access control, etc.) were NOT assessed. Capture a session via Auto-login and re-run for a representative result."
+        : null,
       date: (cfg.date ? cfg.date + " " : "") + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
       pdfConfig: {
         ...(cfg || {}),
@@ -4047,6 +4120,7 @@ function WebAppModule(props) {
               </div>
             )}
           </div>
+          <ScanAuthConsent />
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {/* Hidden honeypot inputs — Chrome fills these FIRST, leaving the
                 real target field alone. Combined with autoComplete="off" +
@@ -9201,6 +9275,9 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     const ev = String(f.evidence_marker||f.evidence||"").toLowerCase();
     const blob = nm + " " + ev;
     const host = String(target || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    // SCHEME-V2 — honor the target's scheme instead of hardcoding https, so
+    // PoCs against an HTTP-only target actually connect.
+    const scheme = /^http:\/\//i.test(String(target || "")) ? "http" : "https";
     const tk = String(toolKey || "");
     let cmd = null;
     if (/dmarc/.test(blob)) cmd = `dig +short TXT _dmarc.${host}`;
@@ -9214,7 +9291,7 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     else if (/whois|registrar|domain age|newly registered/.test(blob)) cmd = `whois ${host} | head -40`;
     else if (/cache snoop/.test(blob)) cmd = `dig +norecurse @<authoritative-ns> example.com`;
     else if (/subdomain|ct logs|certificate transparency/.test(blob)) cmd = `curl -s "https://crt.sh/?q=%25.${host}&output=json" | jq -r '.[].name_value' | sort -u`;
-    else if (/cdn|cloudflare|fastly|akamai/.test(blob)) cmd = `dig +short NS ${host} ; curl -sI https://${host}/ | grep -i "server\\|via\\|cf-ray"`;
+    else if (/cdn|cloudflare|fastly|akamai/.test(blob)) cmd = `dig +short NS ${host} ; curl -sI ${scheme}://${host}/ | grep -i "server\\|via\\|cf-ray"`;
     else if (/asn|ip ownership|aws|google cloud/.test(blob)) cmd = `whois -h whois.cymru.com " -v $(dig +short ${host} | head -1)"`;
     else if (/wayback|archive/.test(blob)) cmd = `curl -s "https://web.archive.org/cdx/search/cdx?url=${host}/*&output=json&limit=20"`;
     else if (/dependency confusion/.test(blob)) cmd = `for p in vulnuslab-internal vulnuslab-utils vulnuslab-common; do npm view $p 2>&1 | head -1; done`;
@@ -9222,13 +9299,13 @@ function generateReconReport({target, allResults, date, authenticated, pdfConfig
     else if (/sherlock|social profile/.test(blob)) cmd = `sherlock <username>`;
     else if (/github|gitlab|bitbucket/.test(blob)) cmd = `curl -s "https://api.github.com/search/code?q=${host}+in:file" -H "Authorization: token \$GH_TOKEN"`;
     else if (/job postings|hiring/.test(blob)) cmd = `curl -s "https://www.google.com/search?q=site:linkedin.com/jobs+${host}"`;
-    else if (/wordpress|wp-content|wp-includes/.test(blob)) cmd = `curl -sI https://${host}/wp-login.php`;
-    else if (/robots|sitemap/.test(blob)) cmd = `curl -s https://${host}/robots.txt ; curl -s https://${host}/sitemap.xml`;
+    else if (/wordpress|wp-content|wp-includes/.test(blob)) cmd = `curl -sI ${scheme}://${host}/wp-login.php`;
+    else if (/robots|sitemap/.test(blob)) cmd = `curl -s ${scheme}://${host}/robots.txt ; curl -s ${scheme}://${host}/sitemap.xml`;
     else if (/tls|ssl|certificate/.test(blob)) cmd = `nmap --script ssl-enum-ciphers,ssl-cert -p 443 ${host}`;
-    else if (/csp|content.security/.test(blob)) cmd = `curl -sI https://${host}/ | grep -i "content-security-policy"`;
-    else if (/hsts/.test(blob)) cmd = `curl -sI https://${host}/ | grep -i "strict-transport-security"`;
-    else if (/cors/.test(blob)) cmd = `curl -H "Origin: https://evil.test" -I https://${host}/`;
-    else if (/banner|server header/.test(blob)) cmd = `curl -sI https://${host}/ | grep -i "server\\|x-powered-by"`;
+    else if (/csp|content.security/.test(blob)) cmd = `curl -sI ${scheme}://${host}/ | grep -i "content-security-policy"`;
+    else if (/hsts/.test(blob)) cmd = `curl -sI ${scheme}://${host}/ | grep -i "strict-transport-security"`;
+    else if (/cors/.test(blob)) cmd = `curl -H "Origin: https://evil.test" -I ${scheme}://${host}/`;
+    else if (/banner|server header/.test(blob)) cmd = `curl -sI ${scheme}://${host}/ | grep -i "server\\|x-powered-by"`;
     else if (/os fingerprint|operating system/.test(blob)) cmd = `nmap -O -Pn ${host}`;
     else if (/anycast/.test(blob)) cmd = `dig +short ${host} ; for resolver in 1.1.1.1 8.8.8.8 9.9.9.9; do dig +short @$resolver ${host}; done`;
     else if (/load balancer|lb/.test(blob)) cmd = `for i in $(seq 1 5); do dig +short ${host}; done`;
@@ -12424,6 +12501,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
       try {
         const headers = {"Content-Type":"application/json"};
         if (token) headers["Authorization"] = "Bearer " + token;
+        _applyScanConsent(body);  // SCAN-AUTHZ-V1
         const res = await fetch(API + "/api/recon/run_all", {
           method: "POST", headers, body: JSON.stringify(body),
         });
@@ -13108,6 +13186,7 @@ function ReconModule({token, onRunningChange, activeSections}) {
             </div>
           )}
         </div>
+        <ScanAuthConsent />
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <input value={target} onChange={e=>setTarget(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&!running&&run()}
@@ -13322,6 +13401,9 @@ function generateUniversalVLReport(opts) {
   const allResultsRaw  = opts.allResults || {};
   const date           = opts.date || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
   const authenticated  = !!opts.authenticated;
+  const inconclusive   = !!opts.inconclusive;
+  const inconclusiveReason = opts.inconclusiveReason ||
+    "Scan ran unauthenticated against a login-gated application — only the public surface was tested, so the result is not representative.";
   const pdfConfig      = opts.pdfConfig || {};
   const moduleKey      = opts.moduleKey      || "module";
   const moduleLabel    = opts.moduleLabel    || "Security Assessment";
@@ -13721,7 +13803,17 @@ function generateUniversalVLReport(opts) {
   // honest about the limited surface examined.
   const _inputsSupplied = ["dockerfile","pod_spec","kubeconfig","repo_url","image"]
     .filter(k => _inputUsed[k]).length;
-  const _scopeFactor = Math.max(0.4, Math.min(1.0, 0.4 + 0.15 * _inputsSupplied));
+  // SCOPE-FACTOR-V2 — the input-coverage weighting only applies to the
+  // Container/K8s module, where supplying more inputs (dockerfile, pod spec,
+  // image, kubeconfig, repo) genuinely widens the surface examined. For
+  // webapp and vuln scans the target URL IS the whole surface, so the old
+  // 0.4 floor silently deflated every such report ~60% (raw 55 MODERATE ->
+  // 22 LOW). Gate it: only container/k8s reports get the factor; else 1.0.
+  const _isContainerK8sScan = Object.keys(r).some(
+    tk => _toolToInputCategory[tk] && r[tk] && !r[tk]._skipped);
+  const _scopeFactor = _isContainerK8sScan
+    ? Math.max(0.4, Math.min(1.0, 0.4 + 0.15 * _inputsSupplied))
+    : 1.0;
   // Worst-severity floor: the cover page must never read LOW/MINIMAL while a
   // CRITICAL or HIGH finding exists (per pdf_industry_standard.md gap 6).
   // Scope-factor reduction can drag the raw score below the band that matches
@@ -13737,8 +13829,9 @@ function generateUniversalVLReport(opts) {
     ? `Scope-adjusted: raw severity score ${_rawRiskScore} x ${_scopeFactor.toFixed(2)} input-coverage factor (${_inputsSupplied}/5 inputs provided)`
     : null;
   const _formulaNote = `Formula: raw = min(70, C*15 + H*8 + M*3 + L*1) + worst-severity cap (${_maxC}); `
-    + `then x scope factor [0.4..1.0 from input coverage]. `
-    + `Inputs counted: ${_inputsSupplied}/5 (dockerfile, pod-spec, kubeconfig, repo, image). `
+    + (_isContainerK8sScan
+        ? `then x scope factor [0.4..1.0 from input coverage]. Inputs counted: ${_inputsSupplied}/5 (dockerfile, pod-spec, kubeconfig, repo, image). `
+        : `no scope factor (the target is the full surface examined). `)
     + `C=${_sevCount.CRITICAL} H=${_sevCount.HIGH} M=${_sevCount.MEDIUM} L=${_sevCount.LOW} -> raw ${_rawRiskScore} -> ${_riskScore}.`;
 
   // Report ID + Content Hash (deterministic per (module, target, date, findings))
@@ -13964,6 +14057,13 @@ function generateUniversalVLReport(opts) {
     _hlTag = "PARTIAL SCAN";
     _hlTitle = `${_testedCount} of ${_totalScannerCount} scanners confirmed clean; ${_untestedCount} require inputs`;
     _hlSubtitle = "Partial coverage - confirmed scanners passed, but most probes need inputs to assess full posture.";
+  } else if (inconclusive) {
+    // INCONCLUSIVE-V1 — unauthenticated scan of a login-gated app: the verdict
+    // must not read as a clean bill of health for the application itself.
+    _hlBg = [255,247,237];  // amber
+    _hlTag = "INCONCLUSIVE";
+    _hlTitle = "Unauthenticated scan - public surface only, NOT representative";
+    _hlSubtitle = "Authenticated vulnerabilities were not assessed. Capture a session via Auto-login and re-run.";
   } else {
     _hlBg = _riskScore>=60?[254,242,242]:_riskScore>=20?[255,247,237]:[240,253,244];
     _hlTag = _riskScore>=60?"FIX THIS WEEK":_riskScore>=20?"REVIEW SOON":"STRONG";
@@ -13978,6 +14078,7 @@ function generateUniversalVLReport(opts) {
   }
   const _hlAccentColor = _insufficientScan ? [202,138,4]
                          : _partialScan ? [234,179,8]  // amber/yellow
+                         : inconclusive ? [234,88,12]  // orange
                          : _riskColor;
   fillR(margin, y, contentW, 24, _hlBg);
   fillR(margin, y, 3, 24, _hlAccentColor);
@@ -14046,11 +14147,13 @@ function generateUniversalVLReport(opts) {
   chk(32);
   y = sHead("Risk Score", y);
   fillR(margin, y, contentW, 20, LIGHT);
-  const _displayScore = _insufficientScan ? "?" : (_partialScan ? `${_riskScore}?` : String(_riskScore));
+  const _displayScore = _insufficientScan ? "?" : inconclusive ? `${_riskScore}?` : (_partialScan ? `${_riskScore}?` : String(_riskScore));
   const _displayLabel = _insufficientScan ? "UNKNOWN (scan insufficient)"
+                        : inconclusive ? "INCONCLUSIVE (public surface only)"
                         : _partialScan ? `${_riskLabel} (partial coverage)`
                         : _riskLabel;
   const _displayColor = _insufficientScan ? [202,138,4]
+                        : inconclusive ? [234,88,12]
                         : _partialScan ? [234,179,8]
                         : _riskColor;
   doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._displayColor);
@@ -15320,30 +15423,37 @@ function generateUniversalVLReport(opts) {
         const ev = String(f.evidence||"").toLowerCase();
         const blob = nm + " " + ev;
         const host = String(x.host || target || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+        // SCHEME-V2 — derive the PoC scheme from the target (then an open-port
+        // hint) instead of hardcoding https. An HTTP-only target (e.g. a lab on
+        // port 80 with 443 closed) was emitting https:// PoCs that can't connect.
+        const _schemeSrc = String(x.host || "").match(/^https?:/i) ? String(x.host) : String(target || "");
+        const scheme = /^http:/i.test(_schemeSrc) ? "http"
+                     : /^https:/i.test(_schemeSrc) ? "https"
+                     : (String(x.port || "") === "80" ? "http" : "https");
         const tool = String(f._tool||"");
         // CVE-driven reproduce
         if (x.cve !== "-") {
           if (/http\/?2|rapid reset/.test(nm))
-            return `curl --http2 -k -I https://${host}/  # ALPN must NOT advertise h2 on patched stack`;
-          return `nuclei -id ${x.cve.toLowerCase()} -u https://${host}/`;
+            return `curl --http2 -k -I ${scheme}://${host}/  # ALPN must NOT advertise h2 on patched stack`;
+          return `nuclei -id ${x.cve.toLowerCase()} -u ${scheme}://${host}/`;
         }
         // Auth-class findings - vertical access, admin endpoint
         if (/privileged endpoint|admin.*without auth|vertical access/.test(blob))
-          return `curl -sI https://${host}/admin/api/users  # expect 401/403; 200 = exposed`;
+          return `curl -sI ${scheme}://${host}/admin/api/users  # expect 401/403; 200 = exposed`;
         if (/admin panel|hidden admin/.test(blob))
-          return `for p in /admin /admin/api /administrator /wp-admin; do printf "%s -> " "$p"; curl -so /dev/null -w "%{http_code}\\n" https://${host}$p; done`;
+          return `for p in /admin /admin/api /administrator /wp-admin; do printf "%s -> " "$p"; curl -so /dev/null -w "%{http_code}\\n" ${scheme}://${host}$p; done`;
         // Cookie hygiene
         if (/cookie|samesite|httponly|jsessionid/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "Set-Cookie"  # check Secure / HttpOnly / SameSite attrs`;
+          return `curl -sI ${scheme}://${host}/ | grep -i "Set-Cookie"  # check Secure / HttpOnly / SameSite attrs`;
         // Auth / OTP / session
         if (/otp|password.send|verification|auth.*disclos/.test(blob))
-          return `curl -X POST https://${host}/auth/password-send-otp -H "Content-Type: application/json" -d '{"phone_number":"+1234567890"}'`;
+          return `curl -X POST ${scheme}://${host}/auth/password-send-otp -H "Content-Type: application/json" -d '{"phone_number":"+1234567890"}'`;
         // Open redirect
         if (/open redirect|redirect.*to|redirectto/.test(blob))
-          return `curl -I "https://${host}/app/authorize?redirectTo=https://example.com@evil.test"`;
+          return `curl -I "${scheme}://${host}/app/authorize?redirectTo=https://example.com@evil.test"`;
         // Hardcoded credentials / exposed secrets
         if (/hardcoded|api.key|secret|credential/.test(blob))
-          return `curl -H "X-API-Key: <leaked-key>" https://${host}/admin/conversions`;
+          return `curl -H "X-API-Key: <leaked-key>" ${scheme}://${host}/admin/conversions`;
         // TLS / SSL
         if (/dh.params|diffie.hellman|weak.*key/.test(blob))
           return `nmap --script ssl-dh-params -p 443 ${host}`;
@@ -15351,18 +15461,18 @@ function generateUniversalVLReport(opts) {
           return `nmap --script ssl-enum-ciphers,ssl-cert -p 443 ${host}`;
         // HTTP headers / CSP / CORS / HSTS
         if (/csp|content.security/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "content-security-policy"`;
+          return `curl -sI ${scheme}://${host}/ | grep -i "content-security-policy"`;
         if (/hsts|strict.transport/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "strict-transport-security"`;
+          return `curl -sI ${scheme}://${host}/ | grep -i "strict-transport-security"`;
         if (/cors|access.control.allow/.test(blob))
-          return `curl -H "Origin: https://evil.test" -I https://${host}/api/  # check Access-Control-Allow-Origin reflection`;
+          return `curl -H "Origin: https://evil.test" -I ${scheme}://${host}/api/  # check Access-Control-Allow-Origin reflection`;
         if (/x.frame|clickjack/.test(blob))
-          return `curl -sI https://${host}/ | grep -i "x-frame-options"`;
+          return `curl -sI ${scheme}://${host}/ | grep -i "x-frame-options"`;
         if (/header|security.header/.test(nm))
-          return `curl -sI https://${host}/ | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer-policy"`;
+          return `curl -sI ${scheme}://${host}/ | grep -iE "strict-transport|content-security|x-frame|x-content-type|referrer-policy"`;
         // Server / version disclosure
         if (/server.*disclos|version.*disclos|banner/.test(blob))
-          return `curl -sI https://${host}/ | grep -iE "server|x-powered-by"`;
+          return `curl -sI ${scheme}://${host}/ | grep -iE "server|x-powered-by"`;
         // DNS / SPF / DMARC
         if (/dns|spf|dmarc|dkim/.test(nm))
           return `dig +short TXT _dmarc.${host} ; dig +short TXT ${host}`;
@@ -15370,22 +15480,22 @@ function generateUniversalVLReport(opts) {
         // /rce/ substring matching "sub-RCE-source integrity" (fix for
         // user-reported regex bug 2026-06-09).
         if (/subresource integrity|\bsri\b/.test(blob))
-          return `curl -s https://${host}/ | grep -oE '<(script|link)[^>]+(src|href)="[^"]+"[^>]*' | grep -v integrity=`;
+          return `curl -s ${scheme}://${host}/ | grep -oE '<(script|link)[^>]+(src|href)="[^"]+"[^>]*' | grep -v integrity=`;
         // Web app injection-class. Use \b on short identifiers (rce, lfi,
         // sri, xxe, xss, sqli) so the regex matches whole words only,
         // never substrings inside longer words like "subresource".
         if (/sql injection|\bsqli\b/.test(blob))
-          return `sqlmap -u "https://${host}/<endpoint>?id=1" --batch --random-agent`;
+          return `sqlmap -u "${scheme}://${host}/<endpoint>?id=1" --batch --random-agent`;
         if (/\bxss\b|cross.site.script/.test(blob))
-          return `curl "https://${host}/<endpoint>?q=<script>alert(1)</script>"`;
+          return `curl "${scheme}://${host}/<endpoint>?q=<script>alert(1)</script>"`;
         if (/\bssrf\b|server.side.request/.test(blob))
-          return `curl "https://${host}/<endpoint>?url=http://169.254.169.254/latest/meta-data/"`;
+          return `curl "${scheme}://${host}/<endpoint>?url=http://169.254.169.254/latest/meta-data/"`;
         if (/\bxxe\b|xml.external/.test(blob))
-          return `curl -X POST -H "Content-Type: application/xml" --data-binary @xxe.xml https://${host}/<endpoint>`;
+          return `curl -X POST -H "Content-Type: application/xml" --data-binary @xxe.xml ${scheme}://${host}/<endpoint>`;
         if (/\blfi\b|local file|directory traversal|path traversal/.test(blob))
-          return `curl "https://${host}/<endpoint>?file=../../../../etc/passwd"`;
+          return `curl "${scheme}://${host}/<endpoint>?file=../../../../etc/passwd"`;
         if (/command injection|\bcmd injection\b|\brce\b/.test(blob))
-          return `curl "https://${host}/<endpoint>?input=;id"`;
+          return `curl "${scheme}://${host}/<endpoint>?input=;id"`;
         if (/\bcsrf\b|cross.site.request/.test(blob))
           return `# Submit a state-changing POST without Origin/Referer headers and observe acceptance`;
         // Network exposure
@@ -15406,17 +15516,17 @@ function generateUniversalVLReport(opts) {
         if (/redis|memcached|elasticsearch|mongodb|couchdb/.test(blob))
           return `nmap --script ${blob.match(/redis|memcached|elasticsearch|mongodb|couchdb/)[0]}* -p 6379,11211,9200,27017,5984 ${host}`;
         if (/graphql/.test(blob))
-          return `curl -X POST -H "Content-Type: application/json" -d '{"query":"{__schema{types{name}}}"}' https://${host}/graphql`;
+          return `curl -X POST -H "Content-Type: application/json" -d '{"query":"{__schema{types{name}}}"}' ${scheme}://${host}/graphql`;
         if (/jwt/.test(blob))
-          return `curl -sI https://${host}/ | grep -iE "authorization|jwt"`;
+          return `curl -sI ${scheme}://${host}/ | grep -iE "authorization|jwt"`;
         if (/swagger|openapi/.test(blob))
-          return `for p in /swagger.json /openapi.json /api-docs /swagger-ui/; do curl -sI https://${host}$p; done`;
+          return `for p in /swagger.json /openapi.json /api-docs /swagger-ui/; do curl -sI ${scheme}://${host}$p; done`;
         if (/kev|cisa/.test(blob))
           return `# Inspect the Server header and cross-check the version against https://www.cisa.gov/known-exploited-vulnerabilities-catalog`;
         if (/epss/.test(blob))
           return `# Look up EPSS at https://api.first.org/data/v1/epss?cve=<CVE-ID>`;
         if (/h2c|smuggling/.test(blob))
-          return `curl -k -H "Upgrade: h2c" -H "HTTP2-Settings:" -H "Connection: Upgrade, HTTP2-Settings" -I https://${host}/`;
+          return `curl -k -H "Upgrade: h2c" -H "HTTP2-Settings:" -H "Connection: Upgrade, HTTP2-Settings" -I ${scheme}://${host}/`;
         // Tool-specific fallback if recognised
         if (tool)
           return `# Re-run the scan: POST /api/${moduleKey}/${tool} { "target": "${host}" }`;
@@ -20956,6 +21066,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           || "container-scan";
       }
       const runBody = {target: _resolvedTarget || "n/a", concurrency: 16};
+      _applyScanConsent(runBody);  // SCAN-AUTHZ-V1
       if (authBearer.trim()) runBody.auth_bearer = authBearer.trim();
       if (authCookie.trim()) runBody.auth_cookie = authCookie.trim();
       // VL-TIER: pass tiers:[ids] when user has scoped scan to subset.
@@ -21002,7 +21113,9 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         let errText = "";
         try { errText = (await r.text()).slice(0, 200); } catch (_) {}
         if (r.status === 401) { try { _onAuthExpired && _onAuthExpired(); } catch (_) {} }
-        throw new Error(`HTTP ${r.status} starting scan: ${errText || r.statusText || "no body"}`);
+        const _startErr = new Error(`HTTP ${r.status} starting scan: ${errText || r.statusText || "no body"}`);
+        _startErr.httpStatus = r.status;
+        throw _startErr;
       }
       if (!r.body) throw new Error("Streaming not supported by browser/proxy — no response.body");
       const reader = r.body.getReader();
@@ -21082,10 +21195,17 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
       // audit #6: don't leave tiles spinning on "queued" after a stream
       // failure — surface the error on every scanner that never reported.
       const _msg = e?.message || String(e);
+      // SCAN-AUTHZ-V1 — a 403 from the authorization gate is not a tool error;
+      // it means the operator hasn't confirmed authorization for this target.
+      // Surface it clearly instead of painting every tool red "ERROR".
+      const _blocked = e?.httpStatus === 403 || /authorization required/i.test(_msg);
+      const _blockedMsg = "Authorization required — tick the “I own this target” box above, then run again. (Practice labs are exempt.)";
       setResults(p => {
         const next = {...p};
         for (const k of Object.keys(next)) {
-          if (next[k] && next[k].status === "queued") next[k] = {...next[k], status:"error", message:_msg};
+          if (next[k] && next[k].status === "queued") next[k] = {...next[k],
+            status: _blocked ? "blocked" : "error",
+            message: _blocked ? _blockedMsg : _msg};
         }
         return next;
       });
@@ -21207,6 +21327,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
             <span>Provide an <b style={{color:"#cbd5e1"}}>image reference</b> below (and optionally a Dockerfile, pod-spec YAML, or repo URL). No network target needed.</span>
           </div>
         )}
+        <ScanAuthConsent />
         <button
           onClick={runAll} disabled={!canRun}
           title={!canRun ? (running ? "Scan in progress" : (_containerMode ? "Fill at least one advanced input (image_ref / Dockerfile / pod YAML / repo URL)" : "Enter a target OR fill at least one advanced input")) : ""}
@@ -21734,6 +21855,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
           .replace(/_/g," ").replace(/\b\w/g, c => c.toUpperCase());
         const statusLabel = (r) => {
           if (!r || !r.status || r.status === "queued") return "QUEUED";
+          if (r.status === "blocked") return "AUTH NEEDED";
           if (r.status === "error") return "ERROR";
           if (r.severity && r.severity !== "INFO" && r.severity !== "POSITIVE") return r.severity;
           if (r.severity === "POSITIVE") return "PASS";
@@ -21741,6 +21863,7 @@ function ModuleAutoPanel({moduleKey, moduleLabel, emoji, color, playbook, token,
         };
         const statusColor = (r) => {
           if (!r || !r.status || r.status === "queued") return "#64748b";
+          if (r.status === "blocked") return "#f59e0b";  // amber — not an error
           if (r.status === "error") return "#ef4444";
           if (r.severity === "POSITIVE") return "#22c55e";
           return sevColor(r.severity);

@@ -23,6 +23,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import (
     run_module_parallel, run_module_streaming,
 )
@@ -93,7 +94,7 @@ def _resolve(req, request: Request):
 
 @router.post("/api/mobile_storage/run_all")
 async def mobile_storage_run_all(req: MobileStorageRunAllRequest, request: Request,
-                                  _=Depends(verify_scan_quota)):
+                                  _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 4, 8))
     gen = run_module_streaming(
@@ -108,7 +109,7 @@ async def mobile_storage_run_all(req: MobileStorageRunAllRequest, request: Reque
 
 @router.post("/api/mobile_storage/run_all_buffered")
 async def mobile_storage_run_all_buffered(req: MobileStorageRunAllRequest, request: Request,
-                                            _=Depends(verify_scan_quota)):
+                                            _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     tools, extra, jwt = _resolve(req, request)
     concurrency = max(1, min(req.concurrency or 4, 8))
     return await run_module_parallel(

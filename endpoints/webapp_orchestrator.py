@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_quota, verify_scan_authorization
 from tools._framework.orchestrator import (
     run_module_parallel, run_module_streaming,
 )
@@ -321,7 +321,8 @@ def _resolve_tools_and_jwt(req: "WebAppRunAllRequest", request: Request):
 @router.post("/api/webapp/scan/run_all")
 async def webapp_run_all(req: "WebAppRunAllRequest",
                           request: Request,
-                          _=Depends(verify_scan_quota)):
+                          _=Depends(verify_scan_quota),
+                          __=Depends(verify_scan_authorization)):
     """Stream per-scanner results as NDJSON. See run_module_streaming for shape.
 
     Each event line:
@@ -362,7 +363,8 @@ async def webapp_run_all(req: "WebAppRunAllRequest",
 @router.post("/api/webapp/scan/run_all_buffered")
 async def webapp_run_all_buffered(req: "WebAppRunAllRequest",
                                     request: Request,
-                                    _=Depends(verify_scan_quota)):
+                                    _=Depends(verify_scan_quota),
+                                    __=Depends(verify_scan_authorization)):
     """Non-streaming version — buffers all 34 results then returns one big JSON.
     Use only when streaming isn't suitable (CLI tools, server-to-server)."""
     tools, extra, jwt_token = _resolve_tools_and_jwt(req, request)
@@ -411,7 +413,7 @@ async def webapp_run_all_tiers_alias():
 @router.post("/api/webapp/run_all")
 async def webapp_run_all_alias(req: "WebAppRunAllRequest",
                                  request: Request,
-                                 _=Depends(verify_scan_quota)):
+                                 _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     return await webapp_run_all(req, request, _)
 
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from tools._shared import verify_scan_quota
+from tools._shared import verify_scan_authorization
 from tools._framework.orchestrator import run_module_streaming
 from tools.apisec.apisec_pack import T as TECHNIQUES
 
@@ -45,7 +46,7 @@ def _all_tools():
 
 @router.post("/api/apisec/run_all")
 async def apisec_run_all(req: ApisecRunAllRequest, request: Request,
-                          _=Depends(verify_scan_quota)):
+                          _=Depends(verify_scan_quota), _vlauthz=Depends(verify_scan_authorization)):
     jwt_token = request.headers.get("authorization", "").replace("Bearer ", "") or None
     extra = {"api_spec_url": req.api_spec_url} if req.api_spec_url else None
     return StreamingResponse(
