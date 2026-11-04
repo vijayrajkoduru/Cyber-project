@@ -532,126 +532,388 @@ const Tagline = ({size=10}) => (
 // LANDING-V1 — marketing landing page shown before the auth card. CTAs open
 // the existing Login component (Start free -> Register, Sign in -> Login).
 function LandingPage({onStart, onSignIn}) {
-  const container = {maxWidth:1080, margin:"0 auto", padding:"0 24px"};
+  // onSignIn -> opens the auth card (login). Start Free Trial -> scrolls to the
+  // Request Access form (accounts are provisioned on request per the 3-step flow).
+  const [faqOpen, setFaqOpen] = React.useState(null);
+  const [demoLines, setDemoLines] = React.useState([]);
+  const [demoRunning, setDemoRunning] = React.useState(false);
+  const [form, setForm] = React.useState({name:"", email:"", phone:"", company:"", plan:"Trial — 7 Days Free", message:""});
+
+  const scrollTo = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({behavior:"smooth", block:"start"}); };
+
+  const DEMO_STEPS = [
+    {t:"WAF Detection — SECURE", k:"ok"},
+    {t:"SSL/TLS Analysis — Grade A", k:"ok"},
+    {t:"Port Scan — 3 ports open (80, 443, 8080)", k:"info"},
+    {t:"XSS Testing — VULNERABLE (CRITICAL)", k:"vuln"},
+    {t:"SQL Injection — VULNERABLE (CRITICAL)", k:"vuln"},
+    {t:"Header Security — 6 findings (HIGH)", k:"high"},
+    {t:"CORS Misconfiguration — HIGH", k:"high"},
+    {t:"CSRF Protection — SECURE", k:"ok"},
+    {t:"-> Generating PDF report...", k:"info"},
+    {t:"DONE — 4 findings (2 CRITICAL) · Risk 72/100 HIGH · PDF Ready", k:"done"},
+  ];
+  const runDemo = () => {
+    if (demoRunning) return;
+    setDemoRunning(true); setDemoLines([]);
+    let i = 0;
+    const tick = () => {
+      i += 1;
+      setDemoLines(DEMO_STEPS.slice(0, i));
+      if (i < DEMO_STEPS.length) { setTimeout(tick, 520); } else { setDemoRunning(false); }
+    };
+    setTimeout(tick, 300);
+  };
+  const lineColor = (k) => ({ok:"#22c55e", info:"#93c5fd", vuln:"#ef4444", high:"#f59e0b", done:"#22c55e"}[k] || "#cbd5e1");
+
+  const submitRequest = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const body = "Name: " + form.name + "%0D%0AEmail: " + form.email + "%0D%0APhone: " + form.phone +
+                 "%0D%0ACompany: " + form.company + "%0D%0APlan: " + form.plan + "%0D%0A%0D%0A" + (form.message || "");
+    window.location.href = "mailto:support@vulnuslab.com?subject=" +
+      encodeURIComponent("VulnusLab Access Request — " + (form.name || "")) + "&body=" + body;
+  };
+
+  const C = {
+    bg:"#070b16", card:"#0f172a", border:"#1e293b", accent:"#3b82f6", text:"#e2e8f0", muted:"#94a3b8",
+  };
+  const container = {maxWidth:1120, margin:"0 auto", padding:"0 24px"};
   const btnPrimary = {background:"linear-gradient(135deg,#1e40af,#3b82f6)", color:"#fff", border:"none", borderRadius:8, padding:"13px 26px", fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:0.3};
   const btnGhost = {background:"transparent", color:"#cbd5e1", border:"1px solid #334155", borderRadius:8, padding:"13px 24px", fontSize:14, fontWeight:600, cursor:"pointer"};
-  const card = {background:"#0f172a", border:"1px solid #1e293b", borderRadius:12, padding:"22px 20px"};
-  const Feature = ({title, body}) => (
-    <div style={card}>
-      <div style={{fontSize:15, fontWeight:800, color:"#f1f5f9", marginBottom:8}}>{title}</div>
-      <div style={{fontSize:13, lineHeight:1.6, color:"#94a3b8"}}>{body}</div>
+  const card = {background:C.card, border:"1px solid "+C.border, borderRadius:12, padding:"22px 20px"};
+  const sectionTitle = (kicker, title) => (
+    <div style={{textAlign:"center", marginBottom:30}}>
+      <div style={{fontSize:12, letterSpacing:2, textTransform:"uppercase", color:C.accent, fontWeight:700, marginBottom:8}}>{kicker}</div>
+      <h2 style={{fontSize:30, fontWeight:900, margin:0, letterSpacing:-0.5}}>{title}</h2>
     </div>
   );
-  // LANDING-PRICING — indicative placeholder tiers; edit prices/features freely.
-  const tiers = [
-    {name:"Trial", price:"Free", note:"14 days", cta:"Start free", onClick:onStart, highlight:false,
-     feats:["1 target", "All 60 scanners", "Verified PDF report", "Community support"]},
-    {name:"Professional", price:"$199", note:"per month", cta:"Start free", onClick:onStart, highlight:true,
-     feats:["Unlimited targets", "Authenticated scanning", "Delta re-scans", "Compliance mapping", "Priority support"]},
-    {name:"Enterprise", price:"Custom", note:"contact sales", cta:"Contact sales", onClick:()=>{window.location.href="mailto:support@vulnuslab.com?subject=VulnusLab%20Enterprise";}, highlight:false,
-     feats:["SSO / org accounts", "On-site capture agent", "Custom frameworks", "SLA + dedicated engineer"]},
+  const input = {width:"100%", background:"#0b1222", border:"1px solid "+C.border, borderRadius:8, padding:"11px 13px", color:C.text, fontSize:13, outline:"none", boxSizing:"border-box"};
+  const label = {display:"block", fontSize:11, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase", marginBottom:6};
+  const set = (k) => (ev) => setForm(f => ({...f, [k]: ev.target.value}));
+
+  const CATEGORIES = [
+    {name:"Reconnaissance", n:11, items:["WAF Detection","Tech Stack","CMS Detection","Port Scan","SSL/TLS","+6 more"]},
+    {name:"Discovery & Fuzzing", n:2, items:["Directory Enum","Web Fuzzing (ffuf)"]},
+    {name:"Injection Attacks", n:7, items:["XSS Testing","SQL Injection","NoSQL","Command Injection","XXE","+2 more"]},
+    {name:"Auth & Session", n:9, items:["Header Security","Cookie Analysis","Hydra BruteForce","JWT Attacks","CSRF","+4 more"]},
+    {name:"File & Path", n:3, items:["LFI / Path Traversal","Remote File Inclusion","File Upload"]},
+    {name:"Network & Protocol", n:10, items:["CORS","SSRF","HTTP Smuggling","Verb Tampering","Clickjacking","+5 more"]},
+    {name:"Modern Web (OSWE)", n:5, items:["Deserialization","Prototype Pollution","GraphQL","Race Condition","PHP Type Juggling"]},
+    {name:"Infrastructure (OSCP)", n:4, items:["SMB Enum","FTP Enum","SMTP User Enum","SNMP Scanner"]},
   ];
-  const frameworks = ["OWASP Top 10", "PCI DSS 4.0", "HIPAA", "SOC 2", "ISO 27001", "NIST 800-53", "NIST CSF 2.0", "GDPR Art.32", "CIS v8", "CISA KEV"];
+  const FEATURES = [
+    {tag:"Real Tools", title:"Real Kali Linux Tools", body:"Not simulated. Every scan runs real penetration testing tools — Nmap, SQLMap, Nikto, Hydra — on our Kali Linux cloud. The same tools used in OSCP and OSWE certifications."},
+    {tag:"Reports", title:"Auto PDF Reports", body:"Professional pentest reports auto-generated after every scan. Includes CVSS scores, CVE references, OWASP mapping and step-by-step remediation guidance."},
+    {tag:"Labs", title:"5 Vulnerable Labs", body:"Practice on DVWA, OWASP WebGoat, Juice Shop, Mutillidae and bWAPP — all running inside the platform. No VM. No downloads. Open and hack."},
+    {tag:"Privacy", title:"Private & Secure", body:"Each user sees only their own scan history. Your targets, findings and reports stay private. JWT authentication with 30-day sessions."},
+    {tag:"Export", title:"JSON & CSV Export", body:"Export results as JSON for tool integration, or CSV for Excel analysis. Share findings with your team in any format."},
+    {tag:"Automation", title:"One Click Full Scan", body:"Select a target, click Start, and all 51 tools run in sequence. No manual command typing. No tool configuration. Results in minutes."},
+  ];
+  const STEPS = [
+    {n:"01", title:"Request Access", body:"Fill the form with your name, email and phone. Choose trial or paid plan. No technical knowledge needed."},
+    {n:"02", title:"Get Credentials", body:"We create your account and email your username and a strong password within 30 minutes."},
+    {n:"03", title:"Login & Scan", body:"Open the dashboard, enter any target URL, select tools, click Start. Get a full PDF report in minutes."},
+  ];
+  const TIERS = [
+    {name:"Trial", blurb:"Try before you pay", price:"FREE", note:"7 days", highlight:false, cta:"Start Free Trial", onClick:()=>scrollTo("request"),
+     feats:["7 days full access","5 scans per day","All 51 tools available","PDF reports included","No credit card required"]},
+    {name:"Pro", blurb:"For professionals", price:"$29", note:"per month", highlight:true, cta:"Subscribe Now", onClick:()=>scrollTo("request"),
+     feats:["All 51 scanners unlocked","Unlimited scans per day","PDF + JSON + CSV reports","Email support","1 user account","5 built-in vulnerable labs","Cancel anytime"]},
+    {name:"Enterprise", blurb:"For security teams", price:"Custom", note:"billed annually", highlight:false, cta:"Contact Sales", onClick:()=>{window.location.href="mailto:support@vulnuslab.com?subject=VulnusLab%20Enterprise";},
+     feats:["Everything in Pro","Multiple user accounts","Team scan history","Custom wordlists","Priority support","Admin panel access","SLA & invoicing"]},
+  ];
+  const TESTI = [
+    {tag:"Pentester", quote:"This dashboard saves me 4-5 hours per engagement. I run the full scan, download the PDF, and send it straight to the client. The findings are accurate and professional.", who:"Rahul S.", role:"Senior Penetration Tester"},
+    {tag:"Student", quote:"Perfect for OSCP prep. Every tool you need is already there. I practiced on DVWA and WebGoat every day and passed my exam on the first attempt.", who:"Priya M.", role:"Security Student & OSCP Certified"},
+    {tag:"Enterprise", quote:"Our security team runs weekly scans on our infrastructure. The OWASP Top 10 coverage and automatic reports give management the confidence they need for compliance.", who:"Arjun K.", role:"IT Security Manager"},
+  ];
+  const FAQ = [
+    {q:"Is this legal to use?", a:"Yes — for authorized testing only. You must have written permission to scan any target. We include 5 built-in vulnerable labs (DVWA, WebGoat, etc.) for safe, legal practice. Never scan targets you do not own or have permission to test."},
+    {q:"Do I need to install anything?", a:"No. Everything runs in your browser against our Kali Linux cloud. No VM, no downloads, no local setup."},
+    {q:"How do I get my credentials after payment?", a:"After you request access, we create your account and email your username and a strong password within 30 minutes."},
+    {q:"Can I try it before paying?", a:"Yes. The 7-day trial gives full access with 5 scans per day and all 51 tools. No credit card required."},
+    {q:"What targets can I scan?", a:"Any target you own or have written authorization to test, plus the 5 built-in vulnerable labs for unrestricted practice."},
+    {q:"What makes this different from free tools?", a:"One dashboard runs all 51 real tools in sequence, correlates the output, confirms findings to remove false positives, and generates an auditor-ready PDF — no manual command typing."},
+    {q:"Is my data private and secure?", a:"Yes. Each user sees only their own scan history. Targets, findings and reports are private, protected by JWT authentication."},
+    {q:"Can I upgrade from trial to Pro?", a:"Yes. Upgrade any time from the dashboard and keep your scan history."},
+  ];
+
+  const navLink = {color:"#cbd5e1", fontSize:13, fontWeight:600, cursor:"pointer", background:"none", border:"none", padding:0};
+
   return (
-    <div style={{minHeight:"100vh", background:"radial-gradient(1200px 600px at 50% -10%, rgba(59,130,246,0.14), transparent), #070b16", color:"#e2e8f0", fontFamily:"Inter,system-ui,-apple-system,sans-serif", overflowY:"auto"}}>
+    <div style={{minHeight:"100vh", background:"radial-gradient(1200px 600px at 50% -8%, rgba(59,130,246,0.14), transparent), "+C.bg, color:C.text, fontFamily:"Inter,system-ui,-apple-system,sans-serif", overflowY:"auto"}}>
       {/* Nav */}
-      <div style={{...container, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 24px"}}>
-        <div style={{display:"flex", alignItems:"center", gap:10}}>
-          <img src={LOGO} alt="" style={{width:38, height:38, objectFit:"contain"}}/>
-          <span style={{fontSize:18, fontWeight:900, letterSpacing:3}}><span style={{color:"#f1f5f9"}}>VULNUS</span><span style={{color:"#3b82f6"}}>LAB</span></span>
-        </div>
-        <div style={{display:"flex", gap:12}}>
-          <button onClick={onSignIn} style={btnGhost}>Sign in</button>
-          <button onClick={onStart} style={btnPrimary}>Start free</button>
+      <div style={{position:"sticky", top:0, zIndex:20, backdropFilter:"blur(8px)", background:"rgba(7,11,22,0.8)", borderBottom:"1px solid "+C.border}}>
+        <div style={{...container, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 24px"}}>
+          <div style={{display:"flex", alignItems:"center", gap:10}}>
+            <img src={LOGO} alt="" style={{width:34, height:34, objectFit:"contain"}}/>
+            <span style={{fontSize:17, fontWeight:900, letterSpacing:3}}><span style={{color:"#f1f5f9"}}>VULNUS</span><span style={{color:C.accent}}>LAB</span></span>
+          </div>
+          <div style={{display:"flex", alignItems:"center", gap:22}}>
+            <button onClick={()=>scrollTo("features")} style={navLink}>Features</button>
+            <button onClick={()=>scrollTo("demo")} style={navLink}>Demo</button>
+            <button onClick={()=>scrollTo("pricing")} style={navLink}>Pricing</button>
+            <button onClick={()=>scrollTo("faq")} style={navLink}>FAQ</button>
+            <button onClick={onSignIn} style={btnGhost}>Sign In</button>
+            <button onClick={()=>scrollTo("request")} style={btnPrimary}>Start Free Trial</button>
+          </div>
         </div>
       </div>
 
       {/* Hero */}
-      <div style={{...container, textAlign:"center", padding:"66px 24px 36px"}}>
-        <div style={{display:"inline-block", fontSize:11, letterSpacing:2, textTransform:"uppercase", color:"#60a5fa", border:"1px solid #1e3a8a", borderRadius:999, padding:"5px 14px", marginBottom:22}}>Automated Vulnerability Assessment Platform</div>
-        <h1 style={{fontSize:46, lineHeight:1.08, fontWeight:900, margin:"0 0 18px", letterSpacing:-1}}>Find real vulnerabilities,<br/><span style={{color:"#3b82f6"}}>not false positives.</span></h1>
-        <p style={{fontSize:17, lineHeight:1.6, color:"#94a3b8", maxWidth:640, margin:"0 auto 30px"}}>Authenticated web-application penetration testing with 60 scanners and zero-false-positive confirmation. Every finding is independently triggered and re-verified before it reaches your report.</p>
-        <div style={{display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap"}}>
-          <button onClick={onStart} style={btnPrimary}>Start free</button>
-          <button onClick={onSignIn} style={btnGhost}>Sign in</button>
+      <div style={{...container, display:"grid", gridTemplateColumns:"1.05fr 0.95fr", gap:36, alignItems:"center", padding:"64px 24px 44px"}}>
+        <div>
+          <div style={{display:"inline-block", fontSize:11, letterSpacing:2, textTransform:"uppercase", color:"#60a5fa", border:"1px solid #1e3a8a", borderRadius:999, padding:"5px 14px", marginBottom:20}}>Professional Penetration Testing Platform</div>
+          <h1 style={{fontSize:46, lineHeight:1.07, fontWeight:900, margin:"0 0 18px", letterSpacing:-1}}>Scan Any Target<br/><span style={{color:C.accent}}>With 51 Real Tools</span></h1>
+          <p style={{fontSize:16, lineHeight:1.6, color:C.muted, maxWidth:520, margin:"0 0 26px"}}>No installation. No setup. Enter a target URL and run all 51 Kali Linux security tools with one click. Get a professional PDF report in minutes.</p>
+          <div style={{display:"flex", gap:14, flexWrap:"wrap"}}>
+            <button onClick={()=>scrollTo("request")} style={btnPrimary}>Start Free — 7 Days</button>
+            <button onClick={()=>scrollTo("demo")} style={btnGhost}>&#9654; Watch Demo</button>
+          </div>
+          <div style={{display:"flex", gap:26, marginTop:30, flexWrap:"wrap"}}>
+            {[["51+","Tools"],["8","Categories"],["100%","Cloud"],["OWASP","Top 10"]].map(([n,l],i)=>(
+              <div key={i}><div style={{fontSize:22, fontWeight:900, color:C.accent}}>{n}</div><div style={{fontSize:11, color:C.muted, letterSpacing:1}}>{l}</div></div>
+            ))}
+          </div>
         </div>
-        <div style={{marginTop:32}}><Tagline size={9}/></div>
+        {/* Hero terminal */}
+        <div style={{background:"#0a1020", border:"1px solid "+C.border, borderRadius:12, overflow:"hidden", boxShadow:"0 20px 60px rgba(0,0,0,0.4)"}}>
+          <div style={{display:"flex", alignItems:"center", gap:8, padding:"10px 14px", borderBottom:"1px solid "+C.border, background:"#0b1222"}}>
+            <span style={{width:11, height:11, borderRadius:"50%", background:"#ef4444"}}/><span style={{width:11, height:11, borderRadius:"50%", background:"#f59e0b"}}/><span style={{width:11, height:11, borderRadius:"50%", background:"#22c55e"}}/>
+            <span style={{marginLeft:8, fontSize:11, color:C.muted, fontFamily:"monospace"}}>VulnusLab — Kali Online</span>
+          </div>
+          <div style={{padding:"16px 16px", fontFamily:"JetBrains Mono,monospace", fontSize:12.5, lineHeight:1.9, minHeight:300}}>
+            <div style={{color:"#64748b"}}>$ scanning http://testphp.vulnweb.com — 51 phases</div>
+            {DEMO_STEPS.map((ln,i)=>(
+              <div key={i} style={{color:lineColor(ln.k)}}>{(ln.k==="vuln"||ln.k==="high")?"[VULN] ":""}{ln.t}</div>
+            ))}
+            <div style={{marginTop:12, display:"flex", gap:10, alignItems:"center"}}>
+              <span style={{fontSize:11, color:C.muted}}>RISK SCORE</span>
+              <span style={{fontSize:14, fontWeight:900, color:"#ef4444"}}>72/100 HIGH</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div style={{...container, display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, padding:"8px 24px 54px"}}>
-        {[["60","scanners per scan"], ["0-FP","confirmed findings"], ["20","compliance frameworks"], ["100%","authenticated coverage"]].map(([n,l],i)=>(
-          <div key={i} style={{textAlign:"center", background:"#0f172a", border:"1px solid #1e293b", borderRadius:12, padding:"18px 10px"}}>
-            <div style={{fontSize:26, fontWeight:900, color:"#3b82f6"}}>{n}</div>
-            <div style={{fontSize:12, color:"#94a3b8", marginTop:4}}>{l}</div>
-          </div>
+      {/* Powered by */}
+      <div style={{...container, textAlign:"center", padding:"6px 24px 40px"}}>
+        <div style={{fontSize:11, letterSpacing:2, textTransform:"uppercase", color:"#475569", marginBottom:14}}>Powered by real tools</div>
+        <div style={{display:"flex", flexWrap:"wrap", gap:10, justifyContent:"center"}}>
+          {["Kali Linux","Nmap","SQLMap","Nikto","Hydra","Metasploit","Gobuster","OWASP"].map((t,i)=>(
+            <span key={i} style={{fontSize:12, color:"#cbd5e1", background:C.card, border:"1px solid "+C.border, borderRadius:8, padding:"7px 14px", fontFamily:"monospace"}}>{t}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats band */}
+      <div style={{...container, display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16, padding:"0 24px 54px"}}>
+        {[["51+","Security Tools"],["8","Attack Categories"],["100%","Cloud Based"],["5","Built-in Labs"]].map(([n,l],i)=>(
+          <div key={i} style={{textAlign:"center", ...card}}><div style={{fontSize:28, fontWeight:900, color:C.accent}}>{n}</div><div style={{fontSize:12, color:C.muted, marginTop:4}}>{l}</div></div>
         ))}
       </div>
 
-      {/* Features */}
-      <div style={{...container, padding:"4px 24px 24px"}}>
-        <h2 style={{fontSize:13, letterSpacing:2, textTransform:"uppercase", color:"#64748b", textAlign:"center", marginBottom:24}}>What you get</h2>
-        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16}}>
-          <Feature title="Authenticated scanning" body="Capture a real session and test the application behind the login, where the exploitable bugs actually live, not just the public pages."/>
-          <Feature title="Zero-FP confirmation" body="Injection, traversal and timing findings are re-triggered and differentially confirmed, so a CRITICAL in your report is a CRITICAL in production."/>
-          <Feature title="OWASP + CVE coverage" body="SQLi, XSS, LFI, command injection, IDOR, SSRF, misconfiguration, headers, secrets and CVE-mapped components in one unified engine."/>
-          <Feature title="Compliance mapping" body="Every finding mapped to OWASP Top 10, PCI DSS 4.0, HIPAA, SOC 2, ISO 27001, NIST 800-53 and GDPR for auditor-ready evidence."/>
-          <Feature title="Verified PDF reports" body="Board-ready reports with risk scoring, remediation SLAs and reproduction steps, exported in one click."/>
-          <Feature title="Delta re-scans" body="Re-run after remediation and see added, closed and unchanged findings by severity to prove your fixes landed."/>
-        </div>
-      </div>
-
-      {/* Pricing */}
-      <div style={{...container, padding:"44px 24px 24px"}}>
-        <h2 style={{fontSize:13, letterSpacing:2, textTransform:"uppercase", color:"#64748b", textAlign:"center", marginBottom:6}}>Pricing</h2>
-        <p style={{fontSize:12, color:"#475569", textAlign:"center", marginBottom:24}}>Start free. Upgrade when you are ready.</p>
-        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, alignItems:"stretch"}}>
-          {tiers.map((t,i)=>(
-            <div key={i} style={{...card, display:"flex", flexDirection:"column", border:t.highlight?"1px solid #3b82f6":"1px solid #1e293b", boxShadow:t.highlight?"0 0 0 1px #3b82f6, 0 10px 30px rgba(59,130,246,0.15)":"none"}}>
-              {t.highlight && <div style={{alignSelf:"flex-start", fontSize:10, fontWeight:800, letterSpacing:1, textTransform:"uppercase", color:"#93c5fd", background:"rgba(59,130,246,0.15)", border:"1px solid #1e3a8a", borderRadius:999, padding:"3px 10px", marginBottom:10}}>Most popular</div>}
-              <div style={{fontSize:14, fontWeight:800, color:"#f1f5f9", letterSpacing:1, textTransform:"uppercase"}}>{t.name}</div>
-              <div style={{display:"flex", alignItems:"baseline", gap:6, margin:"10px 0 2px"}}>
-                <span style={{fontSize:30, fontWeight:900, color:"#fff"}}>{t.price}</span>
-                <span style={{fontSize:12, color:"#64748b"}}>{t.note}</span>
+      {/* Interactive Demo */}
+      <div id="demo" style={{...container, padding:"24px 24px 20px"}}>
+        {sectionTitle("Interactive Demo", "Watch The Real Dashboard")}
+        <p style={{textAlign:"center", color:C.muted, fontSize:14, marginTop:-18, marginBottom:26}}>This is what you see after login. Click Run Demo to watch a live simulation.</p>
+        <div style={{background:"#0a1020", border:"1px solid "+C.border, borderRadius:14, overflow:"hidden"}}>
+          <div style={{display:"flex", minHeight:360}}>
+            {/* sidebar */}
+            <div style={{width:220, borderRight:"1px solid "+C.border, padding:"16px 12px", background:"#0b1222"}}>
+              <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:16}}>
+                <img src={LOGO} alt="" style={{width:24, height:24}}/><span style={{fontSize:13, fontWeight:800, letterSpacing:2}}>VULNUSLAB</span>
               </div>
-              <div style={{flex:1, margin:"16px 0"}}>
-                {t.feats.map((f,j)=>(
-                  <div key={j} style={{display:"flex", gap:8, alignItems:"flex-start", fontSize:13, color:"#cbd5e1", marginBottom:9}}>
-                    <span style={{color:"#3b82f6", fontWeight:900}}>+</span><span>{f}</span>
+              {["Dashboard","Information Gathering","Vulnerability Scanning","Web App Pentesting","Advanced OSINT","Exploitation","Password Attacks"].map((m,i)=>(
+                <div key={i} style={{fontSize:12, color:i===3?"#fff":"#94a3b8", background:i===3?"rgba(59,130,246,0.15)":"transparent", border:i===3?"1px solid #1e3a8a":"1px solid transparent", borderRadius:6, padding:"8px 10px", marginBottom:4}}>{m}</div>
+              ))}
+            </div>
+            {/* main */}
+            <div style={{flex:1, padding:"16px 18px"}}>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:11, color:C.muted}}>Web Application Pentesting</div>
+                  <div style={{fontSize:14, fontFamily:"monospace", color:"#e2e8f0"}}>http://testphp.vulnweb.com</div>
+                </div>
+                <button onClick={runDemo} disabled={demoRunning} style={{...btnPrimary, padding:"9px 18px", opacity:demoRunning?0.6:1, cursor:demoRunning?"not-allowed":"pointer"}}>{demoRunning?"Running...":"▶ Run Demo"}</button>
+              </div>
+              <div style={{display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:14}}>
+                {["WAF Detection","Tech Fingerprint","Port Scanning","SSL/TLS","XSS Testing","SQL Injection","Header Security","CSRF Testing"].map((t,i)=>(
+                  <div key={i} style={{background:C.card, border:"1px solid "+C.border, borderRadius:7, padding:"9px 8px"}}>
+                    <div style={{fontSize:10, color:"#475569", fontWeight:700}}>{String(i+1).padStart(2,"0")}</div>
+                    <div style={{fontSize:11, color:"#cbd5e1", marginTop:2}}>{t}</div>
                   </div>
                 ))}
               </div>
-              <button onClick={t.onClick} style={t.highlight?btnPrimary:btnGhost}>{t.cta}</button>
+              <div style={{background:"#070b16", border:"1px solid "+C.border, borderRadius:8, padding:"12px 14px", fontFamily:"JetBrains Mono,monospace", fontSize:12, minHeight:120}}>
+                <div style={{color:"#64748b", marginBottom:4}}>Terminal</div>
+                {demoLines.length===0 && <div style={{color:"#475569"}}>Click Run Demo &rarr;</div>}
+                {demoLines.map((ln,i)=>(<div key={i} style={{color:lineColor(ln.k), lineHeight:1.8}}>{(ln.k==="vuln"||ln.k==="high")?"[VULN] ":""}{ln.t}</div>))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Features */}
+      <div id="features" style={{...container, padding:"54px 24px 20px"}}>
+        {sectionTitle("Platform Features", "Everything You Need. Nothing You Do Not.")}
+        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16}}>
+          {FEATURES.map((f,i)=>(
+            <div key={i} style={card}>
+              <div style={{fontSize:10, letterSpacing:1, textTransform:"uppercase", color:C.accent, fontWeight:800, marginBottom:8}}>{f.tag}</div>
+              <div style={{fontSize:16, fontWeight:800, color:"#f1f5f9", marginBottom:8}}>{f.title}</div>
+              <div style={{fontSize:13, lineHeight:1.6, color:C.muted}}>{f.body}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Trust / compliance */}
-      <div style={{...container, textAlign:"center", padding:"44px 24px 20px"}}>
-        <h2 style={{fontSize:13, letterSpacing:2, textTransform:"uppercase", color:"#64748b", marginBottom:18}}>Maps to the frameworks your auditors ask for</h2>
-        <div style={{display:"flex", flexWrap:"wrap", gap:10, justifyContent:"center"}}>
-          {frameworks.map((f,i)=>(
-            <span key={i} style={{fontSize:12, color:"#cbd5e1", background:"#0f172a", border:"1px solid #1e293b", borderRadius:999, padding:"7px 14px"}}>{f}</span>
+      {/* 51 Scanners / categories */}
+      <div style={{...container, padding:"54px 24px 20px"}}>
+        {sectionTitle("51 Scanners", "Full OWASP Top 10 Coverage")}
+        <p style={{textAlign:"center", color:C.muted, fontSize:14, marginTop:-18, marginBottom:26}}>8 categories. 51 tools. Everything a pentester needs.</p>
+        <div style={{display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16}}>
+          {CATEGORIES.map((c,i)=>(
+            <div key={i} style={card}>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10}}>
+                <div style={{fontSize:14, fontWeight:800, color:"#f1f5f9"}}>{c.name}</div>
+                <div style={{fontSize:12, fontWeight:900, color:"#fff", background:"linear-gradient(135deg,#1e40af,#3b82f6)", borderRadius:7, padding:"2px 9px"}}>{c.n}</div>
+              </div>
+              {c.items.map((it,j)=>(<div key={j} style={{fontSize:12, color:it.indexOf("more")>=0?"#475569":"#cbd5e1", padding:"3px 0"}}>{it}</div>))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 3 steps */}
+      <div style={{...container, padding:"54px 24px 20px"}}>
+        {sectionTitle("Simple Process", "Start Scanning In 3 Steps")}
+        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16}}>
+          {STEPS.map((st,i)=>(
+            <div key={i} style={card}>
+              <div style={{fontSize:30, fontWeight:900, color:"rgba(59,130,246,0.35)"}}>{st.n}</div>
+              <div style={{fontSize:16, fontWeight:800, color:"#f1f5f9", margin:"6px 0 8px"}}>{st.title}</div>
+              <div style={{fontSize:13, lineHeight:1.6, color:C.muted}}>{st.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pricing */}
+      <div id="pricing" style={{...container, padding:"54px 24px 20px"}}>
+        {sectionTitle("Pricing", "Simple, Honest Pricing")}
+        <p style={{textAlign:"center", color:C.muted, fontSize:14, marginTop:-18, marginBottom:26}}>Start free for 7 days. Upgrade when you see the value.</p>
+        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, alignItems:"stretch"}}>
+          {TIERS.map((t,i)=>(
+            <div key={i} style={{...card, display:"flex", flexDirection:"column", border:t.highlight?"1px solid "+C.accent:"1px solid "+C.border, boxShadow:t.highlight?"0 0 0 1px "+C.accent+", 0 10px 30px rgba(59,130,246,0.15)":"none"}}>
+              {t.highlight && <div style={{alignSelf:"flex-start", fontSize:10, fontWeight:800, letterSpacing:1, textTransform:"uppercase", color:"#93c5fd", background:"rgba(59,130,246,0.15)", border:"1px solid #1e3a8a", borderRadius:999, padding:"3px 10px", marginBottom:10}}>Most Popular</div>}
+              <div style={{fontSize:15, fontWeight:800, color:"#f1f5f9", letterSpacing:1, textTransform:"uppercase"}}>{t.name}</div>
+              <div style={{fontSize:12, color:C.muted, marginTop:2}}>{t.blurb}</div>
+              <div style={{display:"flex", alignItems:"baseline", gap:6, margin:"14px 0 2px"}}>
+                <span style={{fontSize:32, fontWeight:900, color:"#fff"}}>{t.price}</span>
+                <span style={{fontSize:12, color:"#64748b"}}>{t.note}</span>
+              </div>
+              <div style={{flex:1, margin:"16px 0"}}>
+                {t.feats.map((f,j)=>(<div key={j} style={{display:"flex", gap:8, fontSize:13, color:"#cbd5e1", marginBottom:9}}><span style={{color:C.accent, fontWeight:900}}>+</span><span>{f}</span></div>))}
+              </div>
+              <button onClick={t.onClick} style={t.highlight?btnPrimary:btnGhost}>{t.cta}</button>
+            </div>
+          ))}
+        </div>
+        <p style={{textAlign:"center", fontSize:12, color:"#475569", marginTop:18}}>Secure payment by Lemon Squeezy · No credit card for trial · Cancel anytime</p>
+      </div>
+
+      {/* Testimonials */}
+      <div style={{...container, padding:"54px 24px 20px"}}>
+        {sectionTitle("Testimonials", "Loved By Security Professionals")}
+        <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16}}>
+          {TESTI.map((t,i)=>(
+            <div key={i} style={card}>
+              <div style={{fontSize:10, letterSpacing:1, textTransform:"uppercase", color:C.accent, fontWeight:800, marginBottom:10}}>{t.tag}</div>
+              <div style={{fontSize:13.5, lineHeight:1.65, color:"#e2e8f0", marginBottom:16}}>&ldquo;{t.quote}&rdquo;</div>
+              <div style={{display:"flex", alignItems:"center", gap:10}}>
+                <div style={{width:34, height:34, borderRadius:"50%", background:"linear-gradient(135deg,#1e40af,#3b82f6)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, color:"#fff"}}>{t.who[0]}</div>
+                <div><div style={{fontSize:13, fontWeight:700, color:"#f1f5f9"}}>{t.who}</div><div style={{fontSize:11, color:C.muted}}>{t.role}</div></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* FAQ */}
+      <div id="faq" style={{...container, padding:"54px 24px 20px", maxWidth:820}}>
+        {sectionTitle("FAQ", "Got Questions?")}
+        <div style={{display:"flex", flexDirection:"column", gap:10}}>
+          {FAQ.map((f,i)=>(
+            <div key={i} style={{...card, padding:0, overflow:"hidden"}}>
+              <button onClick={()=>setFaqOpen(faqOpen===i?null:i)} style={{width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", background:"none", border:"none", color:"#f1f5f9", fontSize:14, fontWeight:700, cursor:"pointer", padding:"16px 18px", textAlign:"left"}}>
+                <span>{f.q}</span><span style={{color:C.accent, fontSize:18}}>{faqOpen===i?"−":"+"}</span>
+              </button>
+              {faqOpen===i && <div style={{padding:"0 18px 16px", fontSize:13, lineHeight:1.6, color:C.muted}}>{f.a}</div>}
+            </div>
           ))}
         </div>
       </div>
 
       {/* Final CTA */}
-      <div style={{...container, textAlign:"center", padding:"50px 24px"}}>
+      <div style={{...container, textAlign:"center", padding:"54px 24px"}}>
         <div style={{background:"linear-gradient(135deg, rgba(30,64,175,0.35), rgba(15,23,42,0.6))", border:"1px solid #1e3a8a", borderRadius:16, padding:"40px 24px"}}>
-          <h2 style={{fontSize:28, fontWeight:900, margin:"0 0 10px"}}>Ready to scan?</h2>
-          <p style={{fontSize:15, color:"#94a3b8", margin:"0 0 22px"}}>Create an account and run your first authenticated pentest in minutes.</p>
-          <button onClick={onStart} style={{...btnPrimary, padding:"15px 34px", fontSize:15}}>Start free</button>
+          <h2 style={{fontSize:28, fontWeight:900, margin:"0 0 10px"}}>Ready To Start Scanning?</h2>
+          <p style={{fontSize:15, color:C.muted, margin:"0 0 22px"}}>Join security professionals using the platform. 7-day free trial. No credit card. Credentials by email in 30 minutes.</p>
+          <div style={{display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap"}}>
+            <button onClick={()=>scrollTo("request")} style={{...btnPrimary, padding:"15px 34px", fontSize:15}}>Start Free Trial</button>
+            <button onClick={()=>{window.location.href="mailto:support@vulnuslab.com";}} style={{...btnGhost, padding:"15px 30px"}}>Email Us</button>
+          </div>
         </div>
       </div>
 
+      {/* Request Access form */}
+      <div id="request" style={{...container, padding:"10px 24px 30px", maxWidth:720}}>
+        {sectionTitle("Get Access", "Request Your Account")}
+        <p style={{textAlign:"center", color:C.muted, fontSize:14, marginTop:-18, marginBottom:24}}>Fill the form and we will get back to you within 24 hours at support@vulnuslab.com.</p>
+        <form onSubmit={submitRequest} style={{...card, display:"grid", gridTemplateColumns:"1fr 1fr", gap:14}}>
+          <div><label style={label}>Full Name *</label><input style={input} required placeholder="John Smith" value={form.name} onChange={set("name")}/></div>
+          <div><label style={label}>Email *</label><input style={input} required type="email" placeholder="john@company.com" value={form.email} onChange={set("email")}/></div>
+          <div><label style={label}>Phone *</label><input style={input} required placeholder="+91 98765 43210" value={form.phone} onChange={set("phone")}/></div>
+          <div><label style={label}>Company</label><input style={input} placeholder="Optional" value={form.company} onChange={set("company")}/></div>
+          <div style={{gridColumn:"1 / -1"}}><label style={label}>Plan *</label>
+            <select style={input} value={form.plan} onChange={set("plan")}>
+              <option>Trial — 7 Days Free (No payment needed)</option>
+              <option>Pro — $29 / month</option>
+              <option>Enterprise — Custom</option>
+            </select>
+          </div>
+          <div style={{gridColumn:"1 / -1"}}><label style={label}>Message</label><textarea style={{...input, minHeight:84, resize:"vertical"}} placeholder="Tell us your use case (optional)" value={form.message} onChange={set("message")}/></div>
+          <div style={{gridColumn:"1 / -1"}}><button type="submit" style={{...btnPrimary, width:"100%", padding:"14px"}}>Request Access Now</button></div>
+          <div style={{gridColumn:"1 / -1", textAlign:"center", fontSize:12, color:"#475569"}}>Or email directly: <span style={{color:C.accent}}>support@vulnuslab.com</span></div>
+        </form>
+      </div>
+
       {/* Footer */}
-      <div style={{borderTop:"1px solid #1e293b", padding:"26px 24px 40px"}}>
-        <div style={{...container, display:"flex", flexWrap:"wrap", gap:12, alignItems:"center", justifyContent:"space-between"}}>
-          <div style={{fontSize:12, color:"#64748b"}}>VulnusLab — for authorized security testing only.</div>
-          <div style={{fontSize:12, color:"#64748b"}}>vulnuslab.com&nbsp;&nbsp;·&nbsp;&nbsp;<span style={{color:"#3b82f6"}}>support@vulnuslab.com</span></div>
+      <div style={{borderTop:"1px solid "+C.border, padding:"30px 24px 44px"}}>
+        <div style={{...container, display:"grid", gridTemplateColumns:"2fr 1fr 1fr 1fr", gap:24}}>
+          <div>
+            <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:10}}><img src={LOGO} alt="" style={{width:28, height:28}}/><span style={{fontSize:15, fontWeight:900, letterSpacing:2}}>VULNUSLAB</span></div>
+            <div style={{fontSize:12.5, lineHeight:1.6, color:C.muted, maxWidth:300}}>Professional penetration testing platform powered by Kali Linux. 51 real security tools in one cloud dashboard.</div>
+            <div style={{marginTop:14}}><Tagline size={8}/></div>
+          </div>
+          <div>
+            <div style={{fontSize:12, fontWeight:800, color:"#f1f5f9", marginBottom:10}}>Platform</div>
+            {[["Features","features"],["Demo","demo"],["Pricing","pricing"],["FAQ","faq"],["Start Trial","request"]].map(([t,id],i)=>(
+              <button key={i} onClick={()=>scrollTo(id)} style={{display:"block", background:"none", border:"none", color:C.muted, fontSize:12.5, cursor:"pointer", padding:"4px 0", textAlign:"left"}}>{t}</button>
+            ))}
+          </div>
+          <div>
+            <div style={{fontSize:12, fontWeight:800, color:"#f1f5f9", marginBottom:10}}>Contact</div>
+            <div style={{fontSize:12.5, color:C.muted, padding:"4px 0"}}>support@vulnuslab.com</div>
+            <button onClick={()=>scrollTo("request")} style={{background:"none", border:"none", color:C.accent, fontSize:12.5, cursor:"pointer", padding:"4px 0"}}>Get Access &rarr;</button>
+          </div>
+          <div>
+            <div style={{fontSize:12, fontWeight:800, color:"#f1f5f9", marginBottom:10}}>Legal</div>
+            <div style={{fontSize:12.5, color:C.muted, padding:"4px 0"}}>For authorized security testing only.</div>
+          </div>
         </div>
+        <div style={{...container, borderTop:"1px solid "+C.border, marginTop:24, paddingTop:18, fontSize:12, color:"#475569", textAlign:"center"}}>&copy; 2026 VulnusLab. All rights reserved.</div>
       </div>
     </div>
   );
