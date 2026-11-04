@@ -14454,6 +14454,15 @@ function generateUniversalVLReport(opts) {
   const _testedCount = _positiveFindings.length;
   const _untestedCount = _sevCount.INFO;
   const _totalScannerCount = Object.keys(r).length;
+  // NARROW-COVERAGE-V1 — targeted exploit/verification modules test only a few
+  // SPECIFIC CVE/exploit classes. A clean result means "those specific classes
+  // were not present", NOT a broad "STRONG / OWASP 10/10" posture. Framing a
+  // 5-probe CVE-verify pass as STRONG on a vulnerable host is a false all-clear.
+  const _NARROW_VERIFY_MODULES = new Set(["system_exploit","metasploit","bof",
+    "red_team","auth_attacks","persistence","post_exploit","privesc","phishing",
+    "av_evasion","client_side","hybrid_identity","ad"]);
+  const _narrowClean = !_hasRealFindings && !_insufficientScan && !_partialScan
+                       && !inconclusive && _NARROW_VERIFY_MODULES.has(moduleKey);
 
   // ── KEY RISK HEADLINE ──
   chk(28);
@@ -14485,6 +14494,11 @@ function generateUniversalVLReport(opts) {
     _hlTag = "INCONCLUSIVE";
     _hlTitle = "Unauthenticated scan - public surface only, NOT representative";
     _hlSubtitle = "Authenticated vulnerabilities were not assessed. Capture a session via Auto-login and re-run.";
+  } else if (_narrowClean) {
+    _hlBg = [254,249,229];  // amber — limited coverage, not a clean bill
+    _hlTag = "LIMITED COVERAGE";
+    _hlTitle = `Targeted verification only — the specific CVE/exploit classes this module tests were not present on ${target || 'the target'}`;
+    _hlSubtitle = "This is NOT a full assessment and does NOT mean the host is secure. Run the Vulnerability Scanning and Web App modules for broad coverage.";
   } else {
     _hlBg = _riskScore>=60?[254,242,242]:_riskScore>=20?[255,247,237]:[240,253,244];
     _hlTag = _riskScore>=60?"FIX THIS WEEK":_riskScore>=20?"REVIEW SOON":"STRONG";
@@ -14568,14 +14582,15 @@ function generateUniversalVLReport(opts) {
   chk(32);
   y = sHead("Risk Score", y);
   fillR(margin, y, contentW, 20, LIGHT);
-  const _displayScore = _insufficientScan ? "?" : inconclusive ? `${_riskScore}?` : (_partialScan ? `${_riskScore}?` : String(_riskScore));
+  const _displayScore = _insufficientScan ? "?" : inconclusive ? `${_riskScore}?` : ((_partialScan || _narrowClean) ? `${_riskScore}?` : String(_riskScore));
   const _displayLabel = _insufficientScan ? "UNKNOWN (scan insufficient)"
                         : inconclusive ? "INCONCLUSIVE (public surface only)"
                         : _partialScan ? `${_riskLabel} (partial coverage)`
+                        : _narrowClean ? "LIMITED COVERAGE (targeted verification)"
                         : _riskLabel;
   const _displayColor = _insufficientScan ? [202,138,4]
                         : inconclusive ? [234,88,12]
-                        : _partialScan ? [234,179,8]
+                        : (_partialScan || _narrowClean) ? [234,179,8]
                         : _riskColor;
   doc.setFont("Arial","bold"); doc.setFontSize(24); doc.setTextColor(..._displayColor);
   doc.text(_displayScore, margin + 8, y + 15);
@@ -14776,6 +14791,8 @@ function generateUniversalVLReport(opts) {
       _posture = "INSUFFICIENT SCAN - POSTURE UNKNOWN"; _pCol = [202,138,4];
     } else if (_partialScan) {
       _posture = "PARTIAL SCAN - LIMITED COVERAGE"; _pCol = [234,179,8];
+    } else if (_narrowClean) {
+      _posture = "LIMITED COVERAGE - TARGETED VERIFICATION"; _pCol = [234,179,8];
     } else if (_sevCount.CRITICAL>0) {
       _posture = "CRITICAL ATTENTION"; _pCol = [220,38,38];
     } else if (_sevCount.HIGH>2) {
@@ -14851,6 +14868,12 @@ function generateUniversalVLReport(opts) {
           `${moduleLabel.replace(/\s+/g,' ')} of ${target || 'the target'} completed across ${_scannerCount} scanner(s) with ${_totalReal} finding(s) at MEDIUM or LOW severity. The most notable item is "${_topName}". No CRITICAL or HIGH exposures were detected in the vulnerability classes this scan actively exercised. This is not a clean bill of health: the MEDIUM finding(s) below require remediation, and coverage is limited to the classes listed in the Scan Coverage section.`,
           `The MEDIUM/LOW findings are typically hardening opportunities: cookie security flags, server-version disclosure, or missing security headers. Individually they may not be directly exploitable, but together they reduce defense-in-depth against client-side and credential-harvesting attacks, and should be closed per SLA.`,
           `Recommended next steps: address findings per SLA cadence (MEDIUM within 30 days, LOW within 90 days) and continue continuous monitoring. Schedule a re-scan on the cadence indicated in the Conclusion section to detect drift.`
+        );
+      } else if (_narrowClean) {
+        _paragraphs.push(
+          `${moduleLabel.replace(/\s+/g,' ')} is a TARGETED verification module: it probes a small, fixed set of specific CVE/exploit classes (see Scan Coverage). Against ${target || 'the target'} those specific classes were not detected. This is NOT a broad assessment and must NOT be read as a clean bill of health — the host may be severely vulnerable in classes this module does not test.`,
+          `Do not infer OWASP Top 10 coverage or overall posture from this result. For broad coverage run the Vulnerability Scanning module (network/service CVEs, exposed datastores, weak TLS) and the Web Application Pentest module (injection, XSS, access control). A legacy or unpatched host can pass this module while failing those badly.`,
+          `Recommended next step: run the broad-coverage modules against this target, then treat their findings as the authoritative posture. Re-run this verification after remediation to confirm the specific classes stay clear.`
         );
       } else {
         _paragraphs.push(
@@ -15189,7 +15212,7 @@ function generateUniversalVLReport(opts) {
       // When the scan was insufficient (probes couldn't run), no category can
       // honestly be marked PASS - absence of findings is absence of testing,
       // not proof of a clean posture. Render the whole section as UNKNOWN.
-      const _owaspUnknown = !!(_insufficientScan || _partialScan);
+      const _owaspUnknown = !!(_insufficientScan || _partialScan || _narrowClean);
       const _grade =
         _owaspUnknown ? "?" :
         _passCats === 10 ? "A" :
