@@ -23564,6 +23564,8 @@ export default function App() {
   const [username,setUsername] = useState(() => localStorage.getItem("cyberUser") || "");
   const [plan,setPlan]         = useState(() => localStorage.getItem("cyberPlan") || "trial");
   const [active,setActive]     = useState("dashboard");
+  const [navQuery, setNavQuery] = useState("");           // sidebar search filter
+  const [navCollapsed, setNavCollapsed] = useState({});   // collapsed sidebar sections
   useEffect(() => {
     const mod = MODULES.find(m => m.id === active);
     document.title = `VulnusLab — ${mod ? mod.label : "Dashboard"}`;
@@ -23969,7 +23971,13 @@ export default function App() {
         <div style={{flex:1,overflowY:"auto"}}>
 
           {/* Dashboard — always free */}
+          {/* Sidebar search */}
           <div style={{padding:"8px 8px 2px"}}>
+            <input value={navQuery} onChange={e=>setNavQuery(e.target.value)} placeholder="Search modules..."
+              style={{width:"calc(100% - 16px)",margin:"0 8px",boxSizing:"border-box",background:"#0f172a",border:"1px solid #1e293b",borderRadius:6,padding:"8px 10px",color:"#e2e8f0",fontSize:12,outline:"none"}}/>
+          </div>
+
+          <div style={{display:navQuery?"none":"block",padding:"8px 8px 2px"}}>
             <span style={{fontSize:10,color:"#475569",fontWeight:700,letterSpacing:1.5,padding:"0 8px",textTransform:"uppercase"}}>Overview</span>
           </div>
           {MODULES.filter(m=>m.id==="dashboard").map(m=>(
@@ -23985,15 +23993,20 @@ export default function App() {
             // Hide admin-only modules from non-admin users entirely (not just
             // greyed-out). Other restrictions (trial/pro) still render as
             // locked items because we want to upsell trial users.
-            const mods = MODULES.filter(m => m.cat === sec.key)
+            const q = navQuery.trim().toLowerCase();
+            let mods = MODULES.filter(m => m.cat === sec.key)
                                 .filter(m => !(m.admin && !isSuperAdmin));
+            if (q) mods = mods.filter(m => (m.label||"").toLowerCase().includes(q));
             if (!mods.length) return null;
+            const collapsed = !q && navCollapsed[sec.key];
             return (
               <div key={sec.key}>
-                <div style={{padding:"10px 8px 3px"}}>
+                <button onClick={() => { if (!q) setNavCollapsed(s => ({...s, [sec.key]: !s[sec.key]})); }}
+                  style={{width:"calc(100% - 16px)",margin:"10px 8px 3px",background:"transparent",border:"none",cursor:q?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 8px"}}>
                   <span style={{fontSize:10,color:"#64748b",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase"}}>{sec.label}</span>
-                </div>
-                {mods.map(m => {
+                  {!q && <span style={{fontSize:9,color:"#475569",fontWeight:700}}>{collapsed ? "▸" : "▾"}</span>}
+                </button>
+                {!collapsed && mods.map(m => {
                   const locked = !canAccess(m);
                   const isTrial = m.trial && !isPro && !isSuperAdmin;
                   const isActive = active === m.id;
