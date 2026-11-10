@@ -23,7 +23,7 @@ from typing import Optional, List
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from jose import jwt as _jwt
 import requests as _req_lib
 import urllib3
@@ -104,6 +104,79 @@ def is_contained_artifact(target: str) -> bool:
     return False
 
 
+def target_looks_local(target: str, bare_names: bool = False) -> bool:
+    """Heuristic: does this ScanRequest.target refer to the local filesystem?
+
+    Path-shaped strings (absolute, ./ ../ ~ file:, backslash) always count.
+    A string containing '/' (but no URL scheme) counts only if it actually
+    exists relative to the CWD (so CIDRs / "owner/repo" / "host/path" pass).
+    With bare_names=True (categories whose scanners call os.path.isdir /
+    Path(target).is_file() on the raw target) a bare word that exists on disk
+    — e.g. "data" -> /app/data — counts too.
+    """
+    if not target or not isinstance(target, str):
+        return False
+    t = target.strip()
+    if "\x00" in t:
+        return True
+    low = t.lower()
+    if low.startswith("file:"):
+        return True
+    if "://" in t:
+        return False
+    if t.startswith(("/", "\\", "~", ".")):
+        return True
+    try:
+        if "/" in t or "\\" in t or bare_names:
+            return os.path.lexists(t)
+    except (OSError, ValueError):
+        return True
+    return False
+
+
+_IMAGE_REF_RE = None
+_LOCAL_IMAGE_SCHEMES = ("dir:", "file:", "oci-dir:", "oci-archive:",
+                        "docker-archive:", "singularity:", "fs:", "rootfs:",
+                        "sbom:", "tar:", "archive:", "local:")
+
+
+def validate_image_ref(ref: str):
+    """Return None if `ref` is a plausible remote OCI image reference, else an
+    error string. Rejects syft/grype/trivy/osv local-source schemes (dir:,
+    file:, oci-archive: ...) which would read the API host's filesystem, and
+    leading '-' (CLI option injection)."""
+    import re
+    global _IMAGE_REF_RE
+    if _IMAGE_REF_RE is None:
+        _IMAGE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._\-/:@+]{0,254}$")
+    r = (ref or "").strip()
+    if not r:
+        return None
+    if r.lower().startswith(_LOCAL_IMAGE_SCHEMES) or ".." in r:
+        return "image_ref must be a registry image reference (e.g. nginx:1.25), not a local source"
+    if not _IMAGE_REF_RE.match(r):
+        return "image_ref contains invalid characters"
+    return None
+
+
+def validate_repo_url(url: str):
+    """Return None if `url` is a remote git URL safe to hand to `git clone`,
+    else an error string. Blocks local paths / file:// (arbitrary local repo
+    read), ext::/fd:: transports, and leading '-' (git option injection, e.g.
+    --upload-pack=<cmd>)."""
+    import re
+    u = (url or "").strip()
+    if not u:
+        return None
+    if any(c in (url or "") for c in ("\r", "\n", "\x00", "\t")) or " " in u:
+        return "repo_url must not contain whitespace/control characters"
+    if re.match(r"^https?://[A-Za-z0-9.\-]+(:\d+)?/[^\s]*$", u, re.I):
+        return None
+    if re.match(r"^(ssh://)?git@[A-Za-z0-9.\-]+[:/][A-Za-z0-9._/~\-]+$", u):
+        return None
+    return "repo_url must be an https:// or git@host:owner/repo URL"
+
+
 # ── SSRF-safe outbound URL validation (anti-SSRF) ───────────────────
 def is_safe_external_url(url: str):
     """Validate a user-supplied outbound URL (e.g. a webhook target).
@@ -152,6 +225,14 @@ _AUTH_CTX: contextvars.ContextVar = contextvars.ContextVar("auth_ctx", default=N
 _USER_CTX: contextvars.ContextVar = contextvars.ContextVar("user_ctx", default=None)
 
 
+def header_safe(value):
+    """Strip CR, LF and NUL from a value destined for an HTTP header (or a
+    `-H "Name: value"` CLI arg). Prevents header injection / smuggling."""
+    if not isinstance(value, str):
+        return value
+    return value.replace("\r", "").replace("\n", "").replace("\x00", "")
+
+
 class ScanRequest(BaseModel):
     """Standard request shape every tool accepts.
     Tools that need extra fields subclass this in their own file.
@@ -172,6 +253,51 @@ class ScanRequest(BaseModel):
     pod_spec_yaml: Optional[str] = None     # K8s pod / deployment spec YAML
     repo_url: Optional[str] = None          # git repository URL (Supply Chain)
     api_spec_url: Optional[str] = None      # OpenAPI / Swagger spec URL (APISec)
+    # CUSTOMER mode (TARGET-PROFILE-V1). When profile_id is set, the request is
+    # scope/safety-enforced by tools/_core/scope_guard.py (activated in the
+    # main.py middleware, which also verifies the caller owns the profile) and
+    # auth is resolved via tools/_core/session_manager.py. None = LAB/legacy
+    # mode, behaviour unchanged.
+    profile_id: Optional[str] = None
+    auth_role: Optional[str] = None         # which profile auth role to use
+    auth_headers: Optional[dict] = None     # extra auth headers (api key / basic)
+
+    # Header-injection guard (CRLF-V1): these values are spliced into HTTP
+    # headers — including `nuclei -H "Cookie: <v>"` CLI args, where an
+    # embedded CR/LF would smuggle extra headers / break request framing.
+    @field_validator("auth_cookie", "auth_bearer", "api_key", mode="before")
+    @classmethod
+    def _strip_header_ctl(cls, v):
+        return header_safe(v) if isinstance(v, str) else v
+
+    @field_validator("auth_headers", mode="before")
+    @classmethod
+    def _clean_auth_headers(cls, v):
+        return clean_auth_headers(v)
+
+
+_HDR_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~\-]{1,100}$")
+_HDR_FORBIDDEN = {"host", "content-length", "transfer-encoding", "connection"}
+
+
+def clean_auth_headers(v):
+    """Sanitise a user-supplied auth header map: valid names only, CR/LF/NUL
+    stripped from values, hop-by-hop / framing headers dropped, max 20."""
+    if not isinstance(v, dict):
+        return None
+    out = {}
+    for k, val in list(v.items())[:20]:
+        if not isinstance(k, str) or not _HDR_NAME_RE.match(k) or k.lower() in _HDR_FORBIDDEN:
+            continue
+        if val is None:
+            continue
+        out[k] = header_safe(str(val))[:4000]
+    return out or None
+
+
+def _auth_headers_of(req) -> dict:
+    h = getattr(req, "auth_headers", None) if req is not None else None
+    return clean_auth_headers(h) or {}
 
 
 # Short-TTL cache of DB user rows so per-request re-validation doesn't hammer
@@ -202,18 +328,43 @@ def _live_user(sub: str):
     return row
 
 
-def verify_token(creds: HTTPAuthorizationCredentials = Depends(bearer)):
+def _token_from_request(request: Optional[Request],
+                        creds: Optional[HTTPAuthorizationCredentials]) -> str:
+    """SESSION-COOKIE-V1: the JWT comes from the Authorization Bearer header
+    (API clients, internal fan-out) OR the HttpOnly ``vl_session`` cookie
+    (browser). Normally main.py's cookie-auth middleware has already turned a
+    CSRF-checked cookie into a Bearer header; the cookie branch here is the
+    fallback for apps mounted without that middleware, and it enforces the
+    same double-submit CSRF rule for state-changing methods."""
+    from tools.auth._session_cookie import (SESSION_COOKIE, CSRF_COOKIE, CSRF_HEADER,
+                                            csrf_ok, real_bearer)
+    if creds and creds.credentials and real_bearer("Bearer " + creds.credentials):
+        return creds.credentials
+    if request is None:
+        return ""
+    tok = request.cookies.get(SESSION_COOKIE) or ""
+    if not tok:
+        return ""
+    if not csrf_ok(request.method, request.url.path,
+                   request.cookies.get(CSRF_COOKIE), request.headers.get(CSRF_HEADER)):
+        raise HTTPException(403, "CSRF token missing or invalid")
+    return tok
+
+
+def verify_token(request: Request, creds: HTTPAuthorizationCredentials = Depends(bearer)):
     """Decode JWT, then re-validate against the live DB account (audit #4).
 
     Raises 401 if missing/invalid token, if the user no longer exists, or if
     the account is not active. Role/plan/expiry are sourced from the DB row —
     NOT trusted from the (up-to-7-day-old) token — so admin suspend, role
     demotion, and plan changes take effect within _AUTH_CACHE_TTL seconds.
+    Accepts a Bearer header or the vl_session cookie (see _token_from_request).
     """
-    if not creds:
+    raw = _token_from_request(request, creds)
+    if not raw:
         raise HTTPException(401, "Missing Authorization header")
     try:
-        payload = _jwt.decode(creds.credentials, JWT_SECRET, algorithms=["HS256"])
+        payload = _jwt.decode(raw, JWT_SECRET, algorithms=["HS256"])
     except Exception as e:
         raise HTTPException(401, f"Invalid token: {e}")
 
@@ -369,7 +520,39 @@ async def verify_scan_authorization(request: Request,
     if not isinstance(body, dict):
         body = {}
     target = str(body.get("target") or body.get("host") or body.get("url") or "")
-    if _is_lab_target(target):
+    # CUSTOMER mode: a target profile with a signed authorization record that
+    # covers this target IS the consent. Ownership is enforced (profile must
+    # belong to the caller). Out-of-scope targets are refused outright.
+    if body.get("profile_id"):
+        try:
+            from tools._core.target_profile import get_runtime_profile, authorization_status
+            rt = await asyncio.to_thread(get_runtime_profile, str(body.get("profile_id"))[:64],
+                                         payload.get("sub"))
+        except Exception:
+            raise HTTPException(503, "Target profile could not be loaded")
+        if rt is None:
+            raise HTTPException(404, "Target profile not found")
+        if target:
+            in_scope, why = rt.scope.target_in_scope(target)
+            if not in_scope:
+                raise HTTPException(403, f"Target is out of scope for this profile: {why}")
+        ok, why = authorization_status(rt.cfg, target or None)
+        if ok:
+            try:
+                from tools.auth._db import record_audit
+                _ip = request.client.host if request and request.client else None
+                a = rt.cfg.get("authorization") or {}
+                record_audit("scan.authorize.profile", actor_id=payload.get("sub"),
+                             actor_name=payload.get("username"), target=target, ip=_ip,
+                             detail=(f"profile={rt.id} signer={a.get('signer_name')} "
+                                     f"company={a.get('signer_company')} "
+                                     f"signed={a.get('signed_date')}")[:500])
+            except Exception:
+                pass
+            return payload
+        # No (valid) signed record on the profile -> fall through to the
+        # per-scan acknowledgment below (still scope-enforced by the guard).
+    if _is_lab_target(target) and not body.get("profile_id"):
         return payload
     if not bool(body.get("authorization_ack")):
         raise HTTPException(
@@ -387,6 +570,24 @@ async def verify_scan_authorization(request: Request,
     except Exception:
         pass
     return payload
+
+
+def is_destructive_allowed(req=None) -> bool:
+    """CUSTOMER-mode safety: False when the active target profile disallows
+    destructive / state-changing / DoS / brute-force tests. Always True in
+    LAB/legacy mode (no profile). See tools/_core/scope_guard.py."""
+    from tools._core.scope_guard import is_destructive_allowed as _ida
+    return _ida(req)
+
+
+def destructive_skip(req, tool: str):
+    """Return a standard SKIPPED response dict when destructive tests are not
+    allowed for this scan, else None. Usage at the top of a module:
+        skip = destructive_skip(req, "race_condition")
+        if skip: return skip
+    """
+    from tools._core.scope_guard import destructive_skip as _ds
+    return _ds(req, tool)
 
 
 def verify_admin(payload=Depends(verify_token)):
@@ -481,6 +682,7 @@ def make_req_headers(req: Optional[ScanRequest] = None) -> dict:
             h["Cookie"] = auth.auth_cookie
         if getattr(auth, "auth_bearer", None):
             h["Authorization"] = f"Bearer {auth.auth_bearer}"
+        h.update(_auth_headers_of(auth))
     return h
 
 
@@ -502,6 +704,42 @@ class _SafeRedirectSession(_req_lib.Session):
                 del prepared_request.headers["Cookie"]
         except Exception:
             pass
+
+
+# Max bytes buffered from any single scanner HTTP response (HTTP-CAP-V1).
+# A hostile target streaming a multi-GB body would otherwise OOM the worker.
+HTTP_MAX_RESPONSE_BYTES = int(os.getenv("VL_HTTP_MAX_RESPONSE_BYTES", str(10 * 1024 * 1024)))
+
+
+def read_capped(resp, max_bytes: int = None):
+    """Buffer a `stream=True` requests.Response into resp._content, reading at
+    most `max_bytes` (decoded). Afterwards .content/.text/.json() behave as
+    normal. Sets resp.vl_truncated=True if the body was cut off."""
+    cap = HTTP_MAX_RESPONSE_BYTES if max_bytes is None else max_bytes
+    buf = bytearray()
+    truncated = False
+    # Transport errors (ChunkedEncodingError, timeouts) propagate so callers'
+    # retry logic behaves exactly as with a non-streamed request.
+    for chunk in resp.iter_content(chunk_size=65536):
+        if not chunk:
+            continue
+        room = cap - len(buf)
+        if len(chunk) > room:
+            buf.extend(chunk[:max(room, 0)])
+            truncated = True
+            break
+        buf.extend(chunk)
+    resp._content = bytes(buf)
+    resp._content_consumed = True
+    try:
+        resp.vl_truncated = truncated
+    except Exception:
+        pass
+    try:
+        resp.close()
+    except Exception:
+        pass
+    return resp
 
 
 def safe_request(method: str, url: str, *,
@@ -530,9 +768,20 @@ def safe_request(method: str, url: str, *,
         if req is not None:
             if getattr(req, "auth_cookie", None): h.setdefault("Cookie", req.auth_cookie)
             if getattr(req, "auth_bearer", None): h.setdefault("Authorization", f"Bearer {req.auth_bearer}")
+            for k, v in _auth_headers_of(req).items(): h.setdefault(k, v)
         for k, v in _BROWSER_HEADERS.items(): h.setdefault(k, v)
     else:
         h = make_req_headers(req)
+    # SCOPE-GUARD-V1 — CUSTOMER mode only (no-op without an active profile
+    # context): an out-of-scope / out-of-window URL returns None immediately
+    # (recorded as blocked_out_of_scope, not an error) instead of burning
+    # retries. Redirect hops + rate limiting are enforced in the transport hook.
+    try:
+        from tools._core.scope_guard import precheck as _scope_precheck
+        if not _scope_precheck(url):
+            return None
+    except Exception:
+        pass
     for attempt in range(retries + 1):
         effective_timeout = min(60, int(timeout * (1.5 ** attempt)))
         try:
@@ -544,7 +793,8 @@ def safe_request(method: str, url: str, *,
             # Use the redirect-safe session so a Cookie/Authorization header
             # can't leak to a different host across an HTTP redirect.
             with _SafeRedirectSession() as _sess:
-                r = _sess.request(method.upper(), url, **kw)
+                r = _sess.request(method.upper(), url, stream=True, **kw)
+                read_capped(r)
             # 429 — honor Retry-After
             if r.status_code == 429 and attempt < retries:
                 ra = r.headers.get("Retry-After", "")

@@ -4,6 +4,7 @@ import secrets
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, wrap_finding, standard_response
+from tools._shared import destructive_skip
 from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
@@ -35,6 +36,11 @@ except Exception:
 @router.post("/api/webapp/cache_poisoning")
 @vl_verify()
 async def webapp_cache_poisoning(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    # SAFETY-POLICY-V1: CUSTOMER-mode profiles with destructive tests
+    # disabled get a SKIPPED result (LAB mode: always allowed).
+    _vl_skip = destructive_skip(req, "cache_poisoning")
+    if _vl_skip:
+        return _vl_skip
     base = web_url(req.target).rstrip("/")
     findings = []
     tests = 0

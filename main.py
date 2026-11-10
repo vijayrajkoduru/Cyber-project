@@ -22,7 +22,8 @@ init_turbo()  # VL-TURBO: thread pool 256 + HTTP pool 100 + 60s wall-clock cap
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Healing autoloader — wraps importlib with snapshot/restore.
+# Fault-isolating autoloader — quarantines modules that fail to import
+# (never restores files into the source tree; see tools/_core/healing.py).
 # Imported defensively so a bug in healing.py never crashes boot.
 try:
     from tools._core.healing import load_with_healing as _heal_load
@@ -63,47 +64,174 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Anti-LFI guard for binary-analysis scanners ─────────────────────
-# The bof + mobile_static scanners take ScanRequest.target as a filesystem
-# path to an uploaded binary. Without containment, an authenticated user
-# could point them at /app/data/users.db, the JWT secret, /etc/passwd, etc.
-# Enforce once here (covers the orchestrators AND every individual scanner
-# endpoint) instead of in all 60+ scanner modules.
+# ── Anti-LFI guard for local-artifact scanners (LFI-GUARD-V2) ───────
+# Several scanner families take ScanRequest.target as a filesystem path to an
+# uploaded artifact (bof / mobile_* APK+IPA / firmware blobs / supply-chain
+# source dirs). Without containment, an authenticated user could point them at
+# /app/data/users.db, the JWT secret, /etc/passwd, the source tree, etc.
+# Enforced once here (covers the orchestrators AND every individual scanner
+# endpoint) instead of in hundreds of scanner modules.
+#
+#   STRICT   prefixes: target is ALWAYS a file path -> must be contained.
+#   PATH-CAPABLE prefixes: target MAY be a path (or a host/package/label) ->
+#            if it resolves to anything on local disk it must be contained.
+#   everything else: path-shaped targets (/x, ./x, ~, file:) must be
+#            contained; hostnames/URLs/CIDRs pass untouched.
+# repo_url / image_ref are validated everywhere (git option injection,
+# file:// clones, syft/grype `dir:` / `oci-archive:` local sources).
 import json as _json
 import time as _time
 from collections import deque as _deque
 from fastapi.responses import JSONResponse as _JSONResponse
 from tools._shared import is_contained_artifact as _is_contained_artifact
 from tools._shared import is_internal_fanout as _is_internal_fanout
+from tools._shared import target_looks_local as _target_looks_local
+from tools._shared import validate_image_ref as _validate_image_ref
+from tools._shared import validate_repo_url as _validate_repo_url
 
-_ARTIFACT_PREFIXES = ("/api/bof/", "/api/mobile_static/")
+_ARTIFACT_STRICT_PREFIXES = ("/api/bof/", "/api/mobile_static/", "/api/firmware/")
+_ARTIFACT_PATH_CAPABLE_PREFIXES = (
+    "/api/mobile_", "/api/supply_chain/",
+)
 _ARTIFACT_EXEMPT = {"/api/mobile_static/upload"}
+_ARTIFACT_MSG = ("Invalid target: local-artifact scanners only accept files "
+                 "uploaded via /api/mobile_static/upload.")
+
+
+def _artifact_guard_error(path, payload):
+    if not isinstance(payload, dict):
+        return None
+    target = payload.get("target")
+    if isinstance(target, str) and target:
+        if any(path.startswith(p) for p in _ARTIFACT_STRICT_PREFIXES):
+            if not _is_contained_artifact(target):
+                return _ARTIFACT_MSG
+        else:
+            bare = any(path.startswith(p) for p in _ARTIFACT_PATH_CAPABLE_PREFIXES)
+            if _target_looks_local(target, bare_names=bare) and not _is_contained_artifact(target):
+                return _ARTIFACT_MSG
+    for field, check in (("repo_url", _validate_repo_url), ("image_ref", _validate_image_ref)):
+        val = payload.get(field)
+        if isinstance(val, str) and val:
+            err = check(val)
+            if err:
+                return f"Invalid {field}: {err}"
+    return None
+
+
+# ── CUSTOMER mode scope/safety gate (SCOPE-GUARD-V1) ────────────────
+# A JSON scan body carrying `profile_id` is checked here (caller owns the
+# profile, time window, target in scope, destructive policy, per-tool session
+# (re)injection) and a ScanContext is activated for the route so every
+# outbound HTTP request the scanner makes is scope-checked + rate-limited
+# (tools/_core/scope_guard.py). No profile_id -> nothing changes (LAB mode).
+from tools._core import scope_guard as _scope_guard
+_scope_guard.install_transport_guards()
 
 
 @app.middleware("http")
 async def _artifact_path_guard(request, call_next):
     path = request.url.path
-    if (request.method == "POST"
+    ctype = (request.headers.get("content-type") or "").lower()
+    if (request.method in ("POST", "PUT", "PATCH")
+            and path.startswith("/api/")
             and path not in _ARTIFACT_EXEMPT
-            and any(path.startswith(p) for p in _ARTIFACT_PREFIXES)):
+            and (not ctype or "json" in ctype)):
         body = await request.body()
+        scan_ctx = None
         if body:
             try:
-                target = (_json.loads(body) or {}).get("target")
+                payload = _json.loads(body)
             except Exception:
-                target = None
-            if isinstance(target, str) and target and not _is_contained_artifact(target):
-                return _JSONResponse(
-                    status_code=400,
-                    content={"detail": "Invalid target: binary-analysis scanners only "
-                             "accept files uploaded via /api/mobile_static/upload."},
-                )
-        # Re-arm the receive channel so the downstream handler can still read
-        # the body we just consumed (BaseHTTPMiddleware gotcha).
-        async def _receive():
-            return {"type": "http.request", "body": body, "more_body": False}
-        request._receive = _receive
+                payload = None
+            err = _artifact_guard_error(path, payload)
+            if err:
+                return _JSONResponse(status_code=400, content={"detail": err})
+            if (isinstance(payload, dict) and payload.get("profile_id")
+                    and not path.startswith("/api/profiles")):
+                early, scan_ctx, new_body = await _scope_guard.http_gate(request, path, payload)
+                if early is not None:
+                    return early
+                if new_body is not None:
+                    body = new_body
+                    # starlette 0.38 _CachedRequest replays request._body to
+                    # the downstream app, so the cached copy must be replaced.
+                    request._body = body
+        # NOTE: no receive-channel "re-arm" here. Starlette 0.38's
+        # BaseHTTPMiddleware (_CachedRequest) already replays request._body to
+        # the downstream app. Replacing request._receive made the post-body
+        # wait-for-disconnect receive() return another http.request, which
+        # raised "Unexpected message received: http.request" inside
+        # StreamingResponse.listen_for_disconnect and killed every NDJSON
+        # run_all stream after the first chunk (reproduced in an isolated
+        # container, 2026-11-10).
+        if scan_ctx is not None:
+            _tok = _scope_guard.activate(scan_ctx)
+            try:
+                response = await call_next(request)
+            finally:
+                _scope_guard.deactivate(_tok)
+            return await _scope_guard.annotate_response(response, scan_ctx)
     return await call_next(request)
+
+
+# ── Browser session cookie -> Bearer + CSRF (SESSION-COOKIE-V1) ─────
+# The SPA no longer holds the JWT (it was XSS-exfiltratable from
+# localStorage). Browsers authenticate with the HttpOnly `vl_session` cookie;
+# this middleware, for /api/* requests WITHOUT a real Bearer header:
+#   * enforces the double-submit CSRF check (X-CSRF-Token == vl_csrf cookie)
+#     on POST/PUT/PATCH/DELETE (login/register/logout exempt), and
+#   * rewrites the cookie into `Authorization: Bearer <jwt>` so every
+#     downstream consumer — verify_token, the scope guard, and the ~30
+#     orchestrators that forward the caller's Authorization header to their
+#     internal fan-out — works unchanged.
+# Requests that carry a real Bearer header (API keys / CLI / internal
+# fan-out) are passed through untouched and never need a CSRF token.
+# Registered AFTER _artifact_path_guard so it runs OUTSIDE it (the scope gate
+# in that guard resolves the user from the Authorization header).
+from tools.auth import _session_cookie as _sc
+
+
+class _CookieSessionMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or not str(scope.get("path", "")).startswith("/api/"):
+            return await self.app(scope, receive, send)
+        hdrs = scope.get("headers") or []
+        auth_val = None
+        cookie_raw = []
+        csrf_hdr = None
+        for k, v in hdrs:
+            if k == b"authorization":
+                auth_val = v.decode("latin-1")
+            elif k == b"cookie":
+                cookie_raw.append(v.decode("latin-1"))
+            elif k == b"x-csrf-token":
+                csrf_hdr = v.decode("latin-1")
+        # A real Bearer token, or a non-Bearer scheme: leave the request alone.
+        if auth_val is not None and (_sc.real_bearer(auth_val)
+                                     or not auth_val.strip().lower().startswith("bearer")):
+            return await self.app(scope, receive, send)
+        cookies = _sc.parse_cookie_header("; ".join(cookie_raw))
+        sess = cookies.get(_sc.SESSION_COOKIE)
+        if not sess:
+            return await self.app(scope, receive, send)
+        path = scope.get("path", "")
+        if not _sc.csrf_ok(scope.get("method", "GET"), path,
+                           cookies.get(_sc.CSRF_COOKIE), csrf_hdr):
+            resp = _JSONResponse(status_code=403,
+                                 content={"detail": "CSRF token missing or invalid"})
+            return await resp(scope, receive, send)
+        new_hdrs = [(k, v) for (k, v) in hdrs if k != b"authorization"]
+        new_hdrs.append((b"authorization", b"Bearer " + sess.encode("latin-1")))
+        scope = dict(scope)
+        scope["headers"] = new_hdrs
+        return await self.app(scope, receive, send)
+
+
+app.add_middleware(_CookieSessionMiddleware)
 
 
 # ── Security response headers ───────────────────────────────────────

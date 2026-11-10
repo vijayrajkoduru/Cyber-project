@@ -158,6 +158,22 @@ _SCHEMA_DDL = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_orgmem_user ON org_members(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_orgmem_org ON org_members(org_id)",
+    # ── CUSTOMER mode: per-user engagement target profiles (TARGET-PROFILE-V1)
+    # config = non-secret JSON document; secrets_enc = Fernet(VAULT_KEY) token
+    # holding every role's credentials. See tools/_core/target_profile.py.
+    """
+    CREATE TABLE IF NOT EXISTS target_profiles (
+        id           TEXT PRIMARY KEY,
+        owner_id     TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        config       TEXT NOT NULL,
+        secrets_enc  TEXT,
+        openapi_spec TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_tprof_owner ON target_profiles(owner_id)",
 ]
 
 # Org role hierarchy — higher number = more privilege.

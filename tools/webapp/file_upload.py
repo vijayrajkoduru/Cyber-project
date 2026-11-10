@@ -3,6 +3,7 @@ import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._shared import destructive_skip
 from tools._spa_state import load_spa_state
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
@@ -58,6 +59,11 @@ for _p in _AI_EXTRA_UPLOADS:
 @vl_turbo()
 @vl_verify()
 def scan_file_upload(req: ScanRequest, _=Depends(verify_scan_quota)):
+    # SAFETY-POLICY-V1: CUSTOMER-mode profiles with destructive tests
+    # disabled get a SKIPPED result (LAB mode: always allowed).
+    _vl_skip = destructive_skip(req, "file_upload")
+    if _vl_skip:
+        return _vl_skip
     base = web_url(req.target).rstrip("/")
     spa = load_spa_state(req.target)
     endpoints = set(_UPLOAD_PATHS)

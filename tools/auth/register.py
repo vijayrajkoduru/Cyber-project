@@ -8,7 +8,7 @@ import os
 import re
 import uuid
 import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from jose import jwt
 
@@ -37,7 +37,7 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/api/auth/register")
-async def auth_register(req: RegisterRequest):
+async def auth_register(req: RegisterRequest, request: Request, response: Response):
     if not req.username or len(req.username) < 3:
         raise HTTPException(400, "Username must be at least 3 characters")
     if not re.match(r"^[a-zA-Z0-9_.-]+$", req.username):
@@ -103,9 +103,14 @@ async def auth_register(req: RegisterRequest):
     except Exception as exc:
         _log.warning("post-register welcome email/audit failed for %s: %s", user_id, exc)
 
-    return {
+    # SESSION-COOKIE-V1: browser session = HttpOnly cookie (see login.py).
+    from tools.auth._session_cookie import set_session_cookies
+    csrf = set_session_cookies(response, token, request)
+    body = {
         "token":        token,
         "access_token": token,
+        "csrf_token":   csrf,
+        "session":      "cookie",
         "role":         "user",
         "username":     req.username,
         "plan":         "trial",
@@ -120,6 +125,10 @@ async def auth_register(req: RegisterRequest):
         "email":  req.email,
         "status": "active",
     }
+    if (request.headers.get("x-vl-session") or "").lower() == "cookie":
+        body.pop("token", None)
+        body.pop("access_token", None)
+    return body
 
 
 def register(app):

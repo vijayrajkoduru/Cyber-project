@@ -10,7 +10,7 @@ the request line back, which is the actual attack signature.
 import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
-                            safe_request, wrap_finding)
+                            safe_request, wrap_finding, is_destructive_allowed)
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
@@ -79,7 +79,15 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
     get_body_size = len(get_resp.content) if get_resp is not None else -1
     get_status = get_resp.status_code if get_resp is not None else -1
 
+    # SAFETY-POLICY-V1: in CUSTOMER mode with destructive tests disabled, never
+    # send state-changing verbs (PUT/DELETE/PATCH) to the real site; the
+    # read-only probes (TRACE/CONNECT + OPTIONS Allow header) still run.
+    _destructive_ok = is_destructive_allowed(req)
+    _policy_skipped = []
     for method, (detail, sev, cvss) in _DANGEROUS.items():
+        if not _destructive_ok and method in ("PUT", "DELETE", "PATCH"):
+            _policy_skipped.append(method)
+            continue
         if time.time() - _wallclock_start > _WALLCLOCK_BUDGET:
             _bailed = True; break
         try:
@@ -148,6 +156,9 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
         summary += f"; {len(suppressed)} method(s) filtered as non-vulnerable (CDN/redirect/etc.)"
     if _bailed:
         summary += f" — VL-TURBO wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    if _policy_skipped:
+        summary += (f"; NOT tested (profile disallows destructive tests): "
+                    f"{', '.join(_policy_skipped)}")
     return vuln_response(tool="http_methods", target=req.target,
         findings=findings, tested=max(len(tested), 1),
         what_checked="dangerous HTTP methods (TRACE/PUT/DELETE/CONNECT/PATCH)",
@@ -157,5 +168,6 @@ def scan_http_methods(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                     "methods_tested": tested,
                                     "suppressed_fps": suppressed,
                                     "redirect_followed": _redirect_followed,
-                                    "wallclock_bailed": _bailed}})
+                                    "wallclock_bailed": _bailed,
+                                    "policy_skipped_methods": _policy_skipped}})
 def register(app): app.include_router(router)

@@ -78,6 +78,60 @@ _INTERNAL_BASE = os.environ.get("VLFORGE_INTERNAL_BASE", "http://127.0.0.1:8000"
 _PER_TOOL_TIMEOUT = 240.0
 
 
+# ── CUSTOMER mode (TARGET-PROFILE-V1) ────────────────────────────────
+# When the run_all request carried a profile_id, main.py's middleware has
+# already verified ownership, scope, time window and activated a ScanContext.
+# Here — ONCE for every orchestrator — we (a) forward profile_id to each
+# scanner so the per-tool gate scope-enforces it, (b) resolve auth for the
+# chosen role via the session manager and inject it exactly like a manual
+# /api/scan/login would (auth_cookie / auth_bearer / auth_headers), and (c)
+# cap concurrency to the profile's safety.max_concurrency. No profile -> no-op.
+def _current_scan_ctx():
+    try:
+        from tools._core.scope_guard import current
+        return current()
+    except Exception:
+        return None
+
+
+async def _profile_prepare(base_body: dict, concurrency: int, scan_ctx) -> dict:
+    """Mutates base_body. Returns {"concurrency", "info", "error"}."""
+    if scan_ctx is None:
+        return {"concurrency": concurrency, "info": None, "error": None}
+    rt = scan_ctx.rt
+    safety = rt.safety
+    base_body["profile_id"] = rt.id
+    concurrency = max(1, min(concurrency, int(safety.get("max_concurrency") or concurrency)))
+    info = {"profile_id": rt.id, "profile_name": rt.cfg.get("name"),
+            "max_concurrency": concurrency, "max_rps": safety.get("max_rps"),
+            "destructive_allowed": bool(safety.get("destructive_allowed")),
+            "auth": {"authenticated": False}}
+    spec_url = (rt.cfg.get("openapi") or {}).get("source_url")
+    if spec_url and not base_body.get("api_spec_url"):
+        base_body["api_spec_url"] = spec_url
+    role = getattr(scan_ctx, "auth_role", None)
+    mode = getattr(scan_ctx, "auth_mode", None)
+    if base_body.get("auth_role") is None and role:
+        base_body["auth_role"] = role
+    if rt.cfg.get("auth_configs") and mode != "unauthenticated":
+        from tools._core import session_manager as sm
+        try:
+            m = await asyncio.to_thread(sm.get_auth, rt, role)
+        except sm.AuthError as e:
+            return {"concurrency": concurrency, "info": info,
+                    "error": f"Authentication failed for role {role or rt.cfg.get('default_role') or 'default'}: {e}"}
+        except Exception as e:
+            return {"concurrency": concurrency, "info": info,
+                    "error": f"Authentication error: {type(e).__name__}"}
+        if m:
+            base_body.update(sm.material_to_body(m))
+            base_body["auth_role"] = m.get("role")
+            info["auth"] = sm.public_status(m)
+    elif mode == "unauthenticated":
+        base_body["auth_mode"] = "unauthenticated"
+    return {"concurrency": concurrency, "info": info, "error": None}
+
+
 async def _dispatch_one(
     client: httpx.AsyncClient,
     tool_name: str,
@@ -166,6 +220,17 @@ async def run_module_parallel(
     if auth_bearer: base_body["auth_bearer"] = auth_bearer
     if extra_body:  base_body.update(extra_body)
 
+    _prof = await _profile_prepare(base_body, concurrency, _current_scan_ctx())
+    concurrency = _prof["concurrency"]
+    if _prof["error"]:
+        return {"module": module_name, "target": target, "started_at": started_at,
+                "duration_sec": round(time.monotonic() - t0, 2), "concurrency": concurrency,
+                "total_tools": len(tools), "tools": {}, "timing": {},
+                "profile": _prof["info"], "error": _prof["error"], "status": "AUTH_FAILED",
+                "summary": {"ok": 0, "failed": 0, "skipped": len(tools), "total_findings": 0,
+                            "by_severity": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0,
+                                            "INFO": 0, "POSITIVE": 0}}}
+
     # AUTH-FORWARDING-V1 — every tool route has Depends(verify_scan_quota)
     # so internal calls MUST carry the user's JWT or they return 401 (which is
     # what caused 41/41 FAILED on the 08:40 juiceshop scan). Forward exactly
@@ -232,6 +297,7 @@ async def run_module_parallel(
     return {
         "module":       module_name,
         "target":       target,
+        "profile":      _prof["info"],
         "started_at":   started_at,
         "duration_sec": duration,
         "concurrency":  concurrency,
@@ -266,7 +332,16 @@ async def run_module_parallel(
 #   {"event":"scan_started", "module":..., "target":..., "total_tools":...}
 #   {"event":"tool_complete", "tool":..., "duration_sec":..., "result":{...}}
 #   {"event":"scan_complete", "duration_sec":..., "summary":{...}, "timing":{...}}
-async def run_module_streaming(
+def run_module_streaming(*args, **kwargs) -> AsyncIterator[bytes]:
+    """NDJSON-streaming version of run_module_parallel. Yields utf-8 bytes.
+
+    Plain function (not an async generator) so the CUSTOMER-mode ScanContext
+    is captured at CALL time inside the endpoint, independent of which task
+    later iterates the StreamingResponse body."""
+    return _run_module_streaming_impl(*args, _scan_ctx=_current_scan_ctx(), **kwargs)
+
+
+async def _run_module_streaming_impl(
     target: str,
     tools: list[tuple[str, str]],
     module_name: str = "recon",
@@ -275,8 +350,8 @@ async def run_module_streaming(
     auth_bearer: Optional[str] = None,
     extra_body: Optional[dict] = None,
     jwt_token: Optional[str] = None,
+    _scan_ctx=None,
 ) -> AsyncIterator[bytes]:
-    """NDJSON-streaming version of run_module_parallel. Yields utf-8 bytes."""
     started_at = datetime.datetime.utcnow().isoformat() + "Z"
     t0 = time.monotonic()
 
@@ -284,6 +359,12 @@ async def run_module_streaming(
     if auth_cookie: base_body["auth_cookie"] = auth_cookie
     if auth_bearer: base_body["auth_bearer"] = auth_bearer
     if extra_body:  base_body.update(extra_body)
+
+    if _scan_ctx is not None and _current_scan_ctx() is None:
+        from tools._core.scope_guard import activate as _activate
+        _activate(_scan_ctx)
+    _prof = await _profile_prepare(base_body, concurrency, _scan_ctx)
+    concurrency = _prof["concurrency"]
 
     # VL-PRIME marker — exempts fan-out from per-plan quota counting.
     internal_headers: dict = {
@@ -303,7 +384,24 @@ async def run_module_streaming(
         "total_tools": len(tools),
         "tool_names":  [name for name, _ in tools],
     }
+    if _prof["info"] is not None:
+        opening["profile"] = _prof["info"]
     yield (json.dumps(opening) + "\n").encode("utf-8")
+    if _prof["error"]:
+        # Fail closed: an authenticated engagement must not silently run
+        # unauthenticated (that would read as a false all-clear).
+        yield (json.dumps({"event": "scan_error", "error": _prof["error"],
+                           "status": "AUTH_FAILED"}) + "\n").encode("utf-8")
+        yield (json.dumps({
+            "event": "scan_complete", "module": module_name, "target": target,
+            "status": "AUTH_FAILED", "error": _prof["error"],
+            "duration_sec": round(time.monotonic() - t0, 2), "total_tools": len(tools),
+            "timing": {}, "summary": {"ok": 0, "failed": 0, "skipped": len(tools),
+                                      "total_findings": 0,
+                                      "by_severity": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0,
+                                                      "LOW": 0, "INFO": 0, "POSITIVE": 0}},
+        }) + "\n").encode("utf-8")
+        return
 
     limits = httpx.Limits(
         max_keepalive_connections=concurrency * 2,

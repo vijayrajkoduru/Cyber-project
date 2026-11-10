@@ -8,11 +8,12 @@ Returns BOTH:
 import os
 import time
 import datetime
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 from jose import jwt
 
 from tools.auth._db import get_db, verify_password, record_audit
+from tools.auth._session_cookie import set_session_cookies, clear_session_cookies
 
 # Lazy zone init — covers existing users who registered before USERZONE shipped.
 try:
@@ -59,7 +60,7 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/api/auth/login")
-async def auth_login(req: LoginRequest, request: Request):
+async def auth_login(req: LoginRequest, request: Request, response: Response):
     key = _throttle_key(request, req.username)
     if not _login_allowed(key):
         raise HTTPException(429, "Too many login attempts; please wait and try again.")
@@ -122,9 +123,13 @@ async def auth_login(req: LoginRequest, request: Request):
         except Exception as exc:
             _log.warning("zone lazy-init failed for %s: %s", user["id"], exc)
 
-    return {
+    # SESSION-COOKIE-V1: browsers get the JWT only as an HttpOnly cookie.
+    csrf = set_session_cookies(response, token, request)
+    body = {
         "token":        token,
         "access_token": token,
+        "csrf_token":   csrf,
+        "session":      "cookie",
         "role":         user["role"],
         "username":     user["username"],
         "plan":         user["plan"],
@@ -136,6 +141,32 @@ async def auth_login(req: LoginRequest, request: Request):
             "plan":     user["plan"],
         },
     }
+    # The web SPA sends X-VL-Session: cookie — it must never see the raw JWT
+    # (keeps it out of JS reach entirely). API/CLI clients still receive it.
+    if (request.headers.get("x-vl-session") or "").lower() == "cookie":
+        body.pop("token", None)
+        body.pop("access_token", None)
+    return body
+
+
+@router.post("/api/auth/logout")
+async def auth_logout(request: Request, response: Response):
+    """Clear the browser session cookies. Stateless JWTs cannot be revoked
+    server-side here; the cookie is what the browser loses. Idempotent and
+    unauthenticated by design (only ever removes the caller's own cookies)."""
+    clear_session_cookies(response, request)
+    try:
+        from tools._shared import JWT_SECRET as _sec
+        from tools.auth._session_cookie import SESSION_COOKIE
+        from jose import jwt as _j
+        raw = request.cookies.get(SESSION_COOKIE)
+        if raw:
+            p = _j.decode(raw, _sec, algorithms=["HS256"])
+            _ip = request.client.host if request and request.client else None
+            record_audit("auth.logout", actor_id=p.get("sub"), actor_name=p.get("username"), ip=_ip)
+    except Exception:
+        pass
+    return {"ok": True}
 
 
 def register(app):

@@ -455,12 +455,25 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     if _sh:
         sess.headers["Host"] = _sh
 
+    # CUSTOMER mode (request carried a profile_id -> scope context active):
+    # never run the lab-only DB reset / self-registration / un-hardening steps
+    # against a real site, even if its URL happens to contain "dvwa" etc.
+    try:
+        from tools._core.scope_guard import current as _scope_current
+        _customer_mode = _scope_current() is not None
+    except Exception:
+        _customer_mode = False
+
     # LAB-BOOTSTRAP-V2 — DVWA / Mutillidae need DB-init click before login.
-    _bootstrap = _try_lab_bootstrap(target, login_url, sess)
+    _bootstrap = ({"lab_detected": None, "bootstrap_attempted": False,
+                   "bootstrap_status": "skipped (customer mode)"} if _customer_mode
+                  else _try_lab_bootstrap(target, login_url, sess))
 
     # WEBGOAT-AUTOREG-V1 — Juice Shop needs user registration before login.
-    _register = _try_self_register(target, login_url, req.username,
-                                   req.password, sess)
+    _register = ({"register_attempted": False, "register_status": "skipped (customer mode)",
+                  "register_lab": None} if _customer_mode
+                 else _try_self_register(target, login_url, req.username,
+                                         req.password, sess))
 
     # 1. GET login page for hidden fields / CSRF
     try:
@@ -527,7 +540,9 @@ async def scan_login(req: ScanLoginRequest, _=Depends(verify_scan_quota)):
     # mode on the live session so the captured cookie carries the insecure
     # level and the scanners actually exercise the vulnerable code paths.
     # Lab-only; a no-op for customer targets.
-    _unharden = _make_lab_vulnerable(target, login_url, sess)
+    _unharden = ({"unharden_lab": None, "unharden_attempted": False,
+                  "unharden_status": "skipped (customer mode)"} if _customer_mode
+                 else _make_lab_vulnerable(target, login_url, sess))
 
     cookie_header = "; ".join(f"{c.name}={c.value}" for c in sess.cookies)
 

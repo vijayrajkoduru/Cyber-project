@@ -15,6 +15,7 @@ import time
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_request, wrap_finding, standard_response)
+from tools._shared import destructive_skip
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 
@@ -56,6 +57,11 @@ def _request(method, url, params=None, data=None, req=None, timeout=15):
 @vl_turbo()
 @vl_verify()
 def scan_regex_dos_probe(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    # SAFETY-POLICY-V1: CUSTOMER-mode profiles with destructive tests
+    # disabled get a SKIPPED result (LAB mode: always allowed).
+    _vl_skip = destructive_skip(req, "regex_dos_probe")
+    if _vl_skip:
+        return _vl_skip
     base = web_url(req.target).rstrip("/")
     findings = []
     suspicious = []

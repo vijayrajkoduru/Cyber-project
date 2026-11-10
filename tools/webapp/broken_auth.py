@@ -9,6 +9,7 @@ import time
 import requests
 from fastapi import APIRouter, Depends
 from tools._shared import ScanRequest, verify_scan_quota, web_url, safe_get, wrap_finding, standard_response
+from tools._shared import destructive_skip
 from tools._vl_core.spa_canary import detect_spa_catchall_sync, is_same_as_canary
 from tools._vl_core.verify import vl_verify
 
@@ -44,6 +45,11 @@ def _looks_like_credential_handler(resp) -> bool:
 @router.post("/api/webapp/broken_auth")
 @vl_verify()
 async def webapp_broken_auth(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    # SAFETY-POLICY-V1: CUSTOMER-mode profiles with destructive tests
+    # disabled get a SKIPPED result (LAB mode: always allowed).
+    _vl_skip = destructive_skip(req, "broken_auth")
+    if _vl_skip:
+        return _vl_skip
     base = web_url(req.target).rstrip("/")
     spa = detect_spa_catchall_sync(base)
     findings = []

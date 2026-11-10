@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             wrap_finding, standard_response)
+from tools._shared import destructive_skip
 from tools._vl_core.turbo import vl_turbo
 from tools._vl_core.verify import vl_verify
 
@@ -108,6 +109,11 @@ def _send_large_text_frame(sock, size_kb=512):
 @vl_turbo()
 @vl_verify()
 def scan_websocket_message_size_dos(req: ScanRequest, payload=Depends(verify_scan_quota)):
+    # SAFETY-POLICY-V1: CUSTOMER-mode profiles with destructive tests
+    # disabled get a SKIPPED result (LAB mode: always allowed).
+    _vl_skip = destructive_skip(req, "websocket_message_size_dos")
+    if _vl_skip:
+        return _vl_skip
     parsed = urlparse(web_url(req.target))
     host = parsed.hostname or req.target
     is_tls = parsed.scheme == "https"
