@@ -102,6 +102,15 @@ services:
   lab_webgoat:
     image: webgoat/webgoat
     container_name: lab_webgoat
+    # The image's built-in healthcheck calls curl, which the image does not
+    # ship, so the container always reports unhealthy. Probe with bash's
+    # /dev/tcp instead and require a 200 from the actuator endpoint.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /WebGoat/actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     networks:
     - vulnuslab
     restart: unless-stopped
