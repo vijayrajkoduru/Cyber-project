@@ -442,7 +442,12 @@ RUN set +e; \
 # browser on every scan, discovers no authenticated endpoints, and every
 # injection scanner (sqli/xss/…) silently skips — making the engine report a
 # false "all clear". Bake the browser into the image so a scan can crawl.
-RUN python -m playwright install --with-deps chromium \
+# libatomic1: newer playwright releases bundle a Node driver that links
+# libatomic.so.1; without it `playwright install` dies with exit 127 before
+# --with-deps can run (playwright is unpinned above, so this bit on 2026-11-10).
+RUN apt-get update && apt-get install -y -q --no-install-recommends libatomic1 \
+ && rm -rf /var/lib/apt/lists/* \
+ && python -m playwright install --with-deps chromium \
  && python -c "from playwright.sync_api import sync_playwright; \
 import sys; \
 p=sync_playwright().start(); b=p.chromium.launch(args=['--no-sandbox']); b.close(); p.stop(); \
