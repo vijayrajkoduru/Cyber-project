@@ -12,20 +12,59 @@ services:
     - .env
     environment:
     - WORKERS=4
+    # Session cookie Secure flag follows the client scheme (https via edge => Secure).
+    - VL_COOKIE_SECURE=auto
     - DATABASE_URL=postgresql+psycopg2://vluser:${POSTGRES_PASSWORD:-vlpass}@postgres:5432/vulnuslab
+    # nmap only uses its file capabilities (setcap in the Dockerfile) when
+    # told it is privileged; the image runs as non-root uid 10001 (vulnus).
+    - NMAP_PRIVILEGED=1
+    # Raw-socket scanners (nmap -sS/-O, masscan, hping3, naabu, ping) carry
+    # file capabilities instead of running the API as root. A file cap outside
+    # the container's bounding set makes exec fail (EPERM), so both caps must
+    # be granted here. NOTE: `security_opt: [no-new-privileges:true]` is
+    # deliberately NOT set — it makes the kernel ignore file capabilities on
+    # exec, which would break every raw-socket scan for the non-root user.
+    cap_add:
+    - NET_RAW
+    - NET_ADMIN
     depends_on:
       postgres:
         condition: service_healthy
+    # Every writable mount below must be owned by uid/gid 10001 on the host
+    # (the image's `vulnus` user) — see the Dockerfile NONROOT-V1 block.
     volumes:
     - scan_data:/app/data
     - ./data:/data
     - /root/backups:/backups
-    - ./last_known_good:/app/.last_known_good
+    - ./last_known_good:/app/.last_known_good:ro
     - ./tools/_payloads:/app/tools/_payloads:ro
-    # ── Host project mounted read-only so /api/admin/backups can tar
-    #    real host files (main.py, src/, docker-compose.yml, etc.).
-    #    Without this the backup endpoint sees /app (container fs) not the host repo.
-    - ./:/host-project:ro
+    # ── Narrow read-only mounts for /api/admin/backups (tools/admin/backups.py
+    #    tars INCLUDE_PATHS from /host-project). Only those paths are mounted —
+    #    never the whole repo: `./:/host-project` exposed .env (live payment /
+    #    LLM / mail keys), .git history and everything else to the API process.
+    #    Secrets reach the container ONLY via env_file/environment above.
+    #    Keep this list in sync with INCLUDE_PATHS (missing paths are skipped).
+    #    Single-file binds pin the inode: after editing one of these files on
+    #    the host with an editor that replaces the file, recreate the backend.
+    - ./data:/host-project/data:ro
+    - ./main.py:/host-project/main.py:ro
+    - ./tools:/host-project/tools:ro
+    - ./endpoints:/host-project/endpoints:ro
+    - ./profiles:/host-project/profiles:ro
+    - ./requirements.txt:/host-project/requirements.txt:ro
+    - ./src:/host-project/src:ro
+    - ./public:/host-project/public:ro
+    - ./package.json:/host-project/package.json:ro
+    - ./package-lock.json:/host-project/package-lock.json:ro
+    - ./docker-compose.yml:/host-project/docker-compose.yml:ro
+    - ./Dockerfile:/host-project/Dockerfile:ro
+    - ./Dockerfile.frontend:/host-project/Dockerfile.frontend:ro
+    - ./nginx.conf:/host-project/nginx.conf:ro
+    - ./.gitignore:/host-project/.gitignore:ro
+    - ./.dockerignore:/host-project/.dockerignore:ro
+    - ./scripts:/host-project/scripts:ro
+    - ./DAILY.md:/host-project/DAILY.md:ro
+    - ./STANDARDIZATION-SPEC.md:/host-project/STANDARDIZATION-SPEC.md:ro
     networks:
     - vulnuslab
     restart: unless-stopped

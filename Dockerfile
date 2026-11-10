@@ -23,7 +23,23 @@ RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99vl-tolera
 RUN apt-get update -q -o Acquire::Retries=3 \
  && apt-get install -y -q --no-install-recommends \
         curl wget ca-certificates git iputils-ping whois dnsutils \
+        libcap2-bin \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# ── Runtime user (NONROOT-V1) ───────────────────────────────────────
+# The API runs as the unprivileged `vulnus` user (fixed uid/gid so host
+# bind-mounts can be chowned to match — see docker-compose.yml). Created
+# early so tool layers below can drop their per-user caches (nuclei
+# templates, trivy DB) straight into its HOME in the same layer, without a
+# late `chown -R` duplicating hundreds of MB. Raw-socket scanners get file
+# capabilities (setcap) near the end instead of running the API as root.
+ARG VL_UID=10001
+ARG VL_GID=10001
+RUN groupadd -g "${VL_GID}" vulnus \
+ && useradd -u "${VL_UID}" -g "${VL_GID}" -m -d /home/vulnus -s /usr/sbin/nologin vulnus
+# Shared, root-owned, world-readable browser dir so the runtime user can
+# launch the Chromium baked in by `playwright install` below.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 
 # ── §1 APP BINARY (Static Analysis) tooling ─────────────────────────
 # These CLI tools are required by any mobile_static / binary_static scanner.
@@ -129,7 +145,9 @@ RUN apt-get update -q -o Acquire::Retries=3 \
  && chmod +x /usr/local/bin/nuclei \
  && rm -rf /tmp/nuclei* \
  && apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
- && /usr/local/bin/nuclei -update-templates -silent && find /root/nuclei-templates -name "*.yaml" | wc -l
+ && HOME=/home/vulnus /usr/local/bin/nuclei -update-templates -silent \
+ && find /home/vulnus/nuclei-templates -name "*.yaml" | wc -l \
+ && chown -R "${VL_UID}:${VL_GID}" /home/vulnus
 
 
 # ── SecLists — community wordlists for force-browse, brute force, fuzzing ──
@@ -395,7 +413,10 @@ RUN pip install --no-cache-dir schemathesis
 # ── Trivy DB pre-warm (downloads ~600MB CVE database) ───────────────────
 # Done last so the image layer caches separately and DB refreshes don't
 # invalidate scanner-binary layers above.
-RUN /usr/local/bin/trivy image --download-db-only 2>/dev/null \
+# Lands in the runtime user's default cache dir (~/.cache/trivy) and is
+# owned by it, so on-scan DB refreshes can write there.
+RUN ( /usr/local/bin/trivy image --download-db-only --cache-dir /home/vulnus/.cache/trivy 2>/dev/null \
+   && chown -R "${VL_UID}:${VL_GID}" /home/vulnus/.cache ) \
  || echo "WARNING: Trivy DB pre-warm failed (will download on first scan)"
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -479,9 +500,26 @@ RUN apt-get update -q -o Acquire::Retries=3 \
 
 # ── netexec (NetExec / nxc) - not on PyPI, install from GitHub ──
 # Provides the `nxc` binary used by AD module netexec_smb_spray probe.
-RUN pip install --no-cache-dir git+https://github.com/Pennyw0rth/NetExec.git \
- && which nxc && nxc --version | head -1 \
- || echo "PHASE2_NETEXEC_FAILED"
+# NETEXEC-V2: isolated venv + pinned release tag. The old unpinned
+# `pip install git+...NetExec.git` into the main env always failed: NetExec
+# HEAD/v1.5.x depend on `certipy-ad @ git+.../Pennyw0rth/Certipy`, whose
+# metadata now names itself certipy-nxc, so pip rejects it ("No matching
+# distribution found for certipy-ad"). v1.4.0 has no Certipy git dep and
+# installs cleanly on py3.11. The venv also keeps NetExec's impacket/
+# pydantic pins out of the FastAPI env. Fatal on failure — no silent skip.
+# (`nxc --version` exits 1 even on success, so the probe greps its output.)
+ARG NETEXEC_VERSION=v1.4.0
+RUN python -m venv /opt/netexec \
+ && /opt/netexec/bin/pip install --no-cache-dir --upgrade pip \
+ && /opt/netexec/bin/pip install --no-cache-dir \
+        "git+https://github.com/Pennyw0rth/NetExec.git@${NETEXEC_VERSION}" \
+ && ln -sf /opt/netexec/bin/nxc /usr/local/bin/nxc \
+ && ln -sf /opt/netexec/bin/netexec /usr/local/bin/netexec \
+ && mkdir -p /tmp/nxc-probe \
+ && { HOME=/tmp/nxc-probe nxc --version > /tmp/nxc-probe/v.txt 2>&1 || true ; } \
+ && tail -1 /tmp/nxc-probe/v.txt \
+ && grep -q "^${NETEXEC_VERSION#v} " /tmp/nxc-probe/v.txt \
+ && rm -rf /tmp/nxc-probe
 
 # ── APT packages (per-package loop — wpscan is NOT in apt, it's a gem) ──
 # Same trap as pip: `apt-get install A B C` with one missing pkg kills layer.
@@ -663,11 +701,15 @@ RUN ( cd /tmp \
    && /usr/local/bin/go version ) \
  || echo "PHASE3_GO_FAILED (non-fatal)"
 
-# govulncheck — installs into $GOPATH/bin then symlinked into /usr/local/bin
-ENV GOPATH=/root/go
-ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin
-RUN ( /usr/local/bin/go install golang.org/x/vuln/cmd/govulncheck@latest \
-   && ln -sf /root/go/bin/govulncheck /usr/local/bin/govulncheck \
+# govulncheck — installs into a throwaway build GOPATH, then the binary is
+# COPIED (not symlinked) into /usr/local/bin so the non-root runtime user can
+# exec it (/root is mode 0700). Runtime GOPATH is reset to the user's HOME
+# in the runtime-user block at the bottom.
+ENV PATH=$PATH:/usr/local/go/bin
+RUN ( GOPATH=/tmp/gobuild GOCACHE=/tmp/gobuild-cache \
+        /usr/local/bin/go install golang.org/x/vuln/cmd/govulncheck@latest \
+   && install -m 0755 /tmp/gobuild/bin/govulncheck /usr/local/bin/govulncheck \
+   && rm -rf /tmp/gobuild /tmp/gobuild-cache \
    && /usr/local/bin/govulncheck -version | head -1 ) \
  || echo "PHASE3_GOVULNCHECK_FAILED (non-fatal)"
 
@@ -684,9 +726,37 @@ RUN echo "=== Phase 3 CORE binary sanity check ===" \
         fi ; \
     done
 
+# ── Metasploit Framework (optional, ~1.5 GB) ───────────────────────────
+# Official Rapid7 omnibus nightly .deb from apt.metasploit.com — the same repo
+# and key msfupdate/msfinstall configure. The signing key's fingerprint is
+# pinned here and checked BEFORE it is trusted (cross-checked 2026-11-10
+# against the key embedded in rapid7/metasploit-omnibus msfupdate.erb), and
+# apt then verifies the repo's InRelease signature with that key only
+# (signed-by). Build with --build-arg INSTALL_METASPLOIT=0 to skip it.
+# No database is configured: msfconsole/msfvenom run DB-less.
+ARG INSTALL_METASPLOIT=1
+ARG MSF_KEY_FPR=97B32012EA1176F053727A95C048F0B49DEEC457
+RUN if [ "${INSTALL_METASPLOIT}" = "1" ] ; then \
+      set -e \
+   && apt-get update -q -o Acquire::Retries=3 \
+   && apt-get install -y -q --no-install-recommends gnupg \
+   && curl -fsSL --retry 3 https://apt.metasploit.com/metasploit-framework.gpg.key -o /tmp/msf.asc \
+   && got="$(gpg --batch --show-keys --with-colons /tmp/msf.asc | awk -F: '$1=="fpr"{print $10; exit}')" \
+   && if [ "$got" != "${MSF_KEY_FPR}" ] ; then echo "MSF key fingerprint mismatch: $got" ; exit 1 ; fi \
+   && gpg --batch --dearmor -o /usr/share/keyrings/metasploit-framework.gpg /tmp/msf.asc \
+   && rm -f /tmp/msf.asc \
+   && echo "deb [signed-by=/usr/share/keyrings/metasploit-framework.gpg] https://apt.metasploit.com/ lucid main" \
+        > /etc/apt/sources.list.d/metasploit-framework.list \
+   && apt-get update -q -o Acquire::Retries=3 \
+   && apt-get install -y -q --no-install-recommends metasploit-framework \
+   && apt-get clean && rm -rf /var/lib/apt/lists/* \
+   && mkdir -p /tmp/msf-probe \
+ && HOME=/tmp/msf-probe msfconsole -q -v \
+   && rm -rf /tmp/msf-probe ; \
+    else echo "Metasploit skipped (INSTALL_METASPLOIT=${INSTALL_METASPLOIT})" ; fi
+
 # ═══════════════════════════════════════════════════════════════════════
 # DEFERRED (too heavy or hardware-dependent — install when module needs it)
-#   - Metasploit Framework  (~4 GB - apt install metasploit-framework + postgres)
 #   - Ghidra                (~1.5 GB - Java GUI, Ghidra Server only useful)
 #   - Sliver / Mythic       (red-team C2 — bundle when red_team module rebuilds)
 #   - GoPhish / Evilginx2   (need SMTP infra — bundle when phishing rebuilds)
@@ -707,6 +777,36 @@ RUN echo "=== Phase 3 CORE binary sanity check ===" \
 # pip layer, as the last build step before the app copy. Cheap, cache-friendly.
 RUN pip install --no-cache-dir 'starlette==0.38.6' \
  && python -c "import fastapi, starlette; print('fastapi', fastapi.__version__, 'starlette', starlette.__version__)"
+
+# ── Runtime user: writable dirs + raw-socket capabilities (NONROOT-V1) ──
+# Only state dirs are owned by `vulnus`; the app code COPYed below stays
+# root-owned and read-only to the runtime user.
+#   /app/data          scan_data volume (sqlite DBs, scan_state.json)
+#   /data              ./data bind  (per-user zones /data/users)
+#   /backups           /root/backups bind (admin backups, /backups/vault)
+#   /uploads/*         VL_UPLOAD_DIR artifact roots (tools/_shared.py)
+#   /app/vl_prime_data /app/vl_flow_data  writable_base() defaults
+#   /var/log/vulnuslab observability scanner-health.jsonl
+# Raw-socket scanners get file capabilities instead of a root API process.
+# compose must `cap_add: [NET_RAW, NET_ADMIN]` (a file cap outside the
+# container's bounding set makes exec fail with EPERM), and must NOT set
+# no-new-privileges (it suppresses file caps on exec). nmap only uses the
+# caps when told it is privileged, hence NMAP_PRIVILEGED=1.
+RUN mkdir -p /app/data /data /backups \
+        /uploads/mobile_static /uploads/wireless_captures \
+        /app/vl_prime_data /app/vl_flow_data /var/log/vulnuslab \
+        /app/.last_known_good /host-project \
+ && chown -R vulnus:vulnus /app/data /data /backups /uploads \
+        /app/vl_prime_data /app/vl_flow_data /var/log/vulnuslab \
+ && for b in nmap masscan hping3 naabu ping ; do \
+        p="$(command -v "$b")" || { echo "setcap: $b not installed" ; continue ; } ; \
+        setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip "$(readlink -f "$p")" ; \
+        getcap "$(readlink -f "$p")" ; \
+    done
+ENV HOME=/home/vulnus \
+    GOPATH=/home/vulnus/go \
+    NMAP_PRIVILEGED=1
+USER vulnus
 
 # ═══════════════════════════════════════════════════════════════════════
 # APPLICATION CODE — copied LAST so code edits don't bust the toolchain cache.
