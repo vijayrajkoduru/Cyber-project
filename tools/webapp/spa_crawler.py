@@ -44,6 +44,38 @@ from tools._vl_core.verify import vl_verify
 
 router = APIRouter()
 
+from tools.webapp._post_forms import (  # noqa: E402
+    is_csrf_field as _pf_is_csrf,
+    classify_sensitive as _pf_sensitive,
+    INJECTABLE_TYPES as _PF_INJECTABLE,
+)
+
+# FORM-EXTRACT-V2 — every form with its resolved action, method, enctype and
+# every named control (type, current value, checked state). Used both for the
+# GET synthesis (FORM-PARAM-SYNTH-V1) and POST recording (POST-FORM-RECORD-V1).
+_FORM_EXTRACT_JS = """
+els => els.map(f => {
+  const fields = [];
+  for (const el of f.querySelectorAll('input[name],select[name],textarea[name],button[name]')) {
+    const tag = el.tagName.toLowerCase();
+    let type = tag === 'input' ? (el.getAttribute('type') || 'text').toLowerCase()
+             : tag === 'button' ? (el.getAttribute('type') || 'submit').toLowerCase()
+             : tag;
+    fields.push({name: el.name, type: type, tag: tag,
+                 value: el.value == null ? '' : String(el.value),
+                 checked: !!el.checked});
+  }
+  return {
+    action: f.action || location.href,
+    method: (f.method || 'get').toLowerCase(),
+    enctype: (f.enctype || '').toLowerCase(),
+    fields: fields,
+    // Same set FORM-PARAM-SYNTH-V1 always used (button elements excluded).
+    inputs: fields.filter(x => x.tag !== 'button').map(x => x.name).filter(Boolean),
+  };
+})
+"""
+
 
 VULNUSLAB_UA = "VulnusLab/1.0 (+https://vulnuslab.com/scanner)"
 MAX_PAGES = 50
@@ -72,6 +104,23 @@ def _same_origin(url: str, origin: str) -> bool:
 
 def _is_boring(url: str) -> bool:
     return bool(_BORING_EXTENSIONS.search(url))
+
+
+# CRAWL-SAFE-NAV-V1 — never NAVIGATE to links that end the authenticated
+# session or flip server-side state on a plain GET. Following DVWA's
+# /logout.php mid-crawl destroyed the PHPSESSID, so the rest of the crawl AND
+# every downstream scanner (which reuse the same cookie) ran unauthenticated;
+# /security.php?phpids=on switched on DVWA's IDS. They are also not recorded,
+# so GET-param scanners never replay them either.
+_SESSION_KILLER = re.compile(
+    r"(log-?out|sign-?out|log-?off|/signoff|/exit\b|[?&](phpids|logout|action=logout)=|"
+    r"[?&](do|action|cmd)=(delete|remove|reset|destroy)\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_session_killer(url: str) -> bool:
+    return bool(_SESSION_KILLER.search(url or ""))
 
 
 def _looks_like_api(url: str) -> bool:
@@ -137,6 +186,64 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
     queue: List[Tuple[str, int]] = [(target_url, 0)]
     visited: Set[str] = set()
     errors: List[str] = []
+
+    # POST-FORM-RECORD-V1 — structured POST forms for the injection
+    # scanners (see tools/webapp/_post_forms.py for the contract).
+    discovered_forms: List[Dict] = []
+    _form_keys: Set[Tuple[str, Tuple[str, ...]]] = set()
+
+    def _record_post_form(frm: Dict, page_url: str):
+        action = frm.get("action") or page_url
+        if not _same_origin(action, target_origin) or _is_boring(action):
+            return
+        fields, submit = [], {}
+        for fd in frm.get("fields") or []:
+            name, ftype = fd.get("name"), (fd.get("type") or "text").lower()
+            if not name:
+                continue
+            if ftype in ("submit", "image", "button"):
+                # A browser sends only the clicked button. Keep the FIRST
+                # one — never e.g. DVWA guestbook's "Clear Guestbook".
+                if not submit and ftype != "button":
+                    submit[name] = fd.get("value") or ""
+                continue
+            if ftype in ("checkbox", "radio") and not fd.get("checked"):
+                continue
+            fields.append({"name": name, "type": ftype,
+                           "value": fd.get("value") or ""})
+        if not fields and not submit:
+            return
+        key = (action.split("#", 1)[0],
+               tuple(sorted(f["name"] for f in fields)))
+        if key in _form_keys or len(discovered_forms) >= 50:
+            return
+        _form_keys.add(key)
+        csrf = [f["name"] for f in fields if _pf_is_csrf(f["name"], f["type"])]
+        file_field = next((f["name"] for f in fields if f["type"] == "file"), None)
+        text = [f["name"] for f in fields
+                if f["type"] in _PF_INJECTABLE and f["name"] not in csrf]
+        sensitive = _pf_sensitive(action, page_url, fields, submit)
+        entry = {
+            "action": action.split("#", 1)[0],
+            "method": "post",
+            "page": page_url.split("#", 1)[0],
+            "fields": fields,
+            "submit": submit,
+            "csrf_fields": csrf,
+            "enctype": frm.get("enctype") or "",
+            "sensitive": sensitive,
+            "source": "crawler",
+            # Legacy shape for stored_xss / file_upload. Sensitive forms get
+            # no text_fields so legacy consumers never submit into them.
+            "text_fields": [] if sensitive else text,
+            "extra": {**{f["name"]: f["value"] for f in fields
+                         if f["type"] == "hidden"}, **submit},
+        }
+        if file_field and not sensitive:
+            entry["file_field"] = file_field
+        discovered_forms.append(entry)
+        for f in fields:
+            discovered_params.add(f["name"])
 
     async def _record_api(url: str, method: str, params: List[str]):
         if not _same_origin(url, target_origin):
@@ -243,6 +350,8 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
                             continue
                         if _is_boring(nxt):
                             continue
+                        if _is_session_killer(nxt):
+                            continue
                         # Strip fragment for de-dupe but record hash routes as URLs
                         clean = nxt.split("#", 1)[0]
                         if nxt not in visited and len(queue) < MAX_PAGES:
@@ -271,15 +380,12 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
                     # /vulnerabilities/sqli/?id=1&Submit=1).
                     try:
                         forms = await page.eval_on_selector_all(
-                            "form",
-                            "els => els.map(f => ({"
-                            "action: f.action || location.href,"
-                            "method: (f.method || 'get').toLowerCase(),"
-                            "inputs: Array.from(f.querySelectorAll("
-                            "'input[name],select[name],textarea[name]'))"
-                            ".map(i => i.name).filter(Boolean)}))",
+                            "form", _FORM_EXTRACT_JS,
                         )
                         for frm in forms or []:
+                            if frm.get("method") == "post":
+                                _record_post_form(frm, page.url or url)
+                                continue
                             if frm.get("method") != "get":
                                 continue
                             names = [n for n in (frm.get("inputs") or []) if n]
@@ -387,7 +493,8 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
     # Persist for downstream scanners (sqli, xss, lfi, idor, ...)
     try:
         save_spa_state(req.target, sorted(discovered_urls),
-                        api_summary, sorted(discovered_params))
+                        api_summary, sorted(discovered_params),
+                        forms=discovered_forms)
     except Exception:
         pass
 
@@ -400,7 +507,8 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
             f"SPA crawl: {len(visited)} pages visited, "
             f"{len(discovered_urls)} unique URLs, "
             f"{len(discovered_api)} API endpoints, "
-            f"{len(discovered_params)} param names discovered"
+            f"{len(discovered_params)} param names discovered, "
+            f"{len(discovered_forms)} POST forms recorded"
         ),
         raw_data={
             "spa_crawler": {
@@ -409,6 +517,7 @@ async def webapp_spa_crawler(req: ScanRequest, payload=Depends(verify_scan_quota
                 "urls_discovered":    sorted(discovered_urls),
                 "api_endpoints":      api_summary,
                 "param_names":        sorted(discovered_params),
+                "post_forms":         discovered_forms,
                 "errors":             errors,
                 "max_pages_limit":    MAX_PAGES,
                 "max_depth_limit":    MAX_DEPTH,

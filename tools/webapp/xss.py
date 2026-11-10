@@ -9,13 +9,14 @@ Two-stage zero-FP gate:
 
 Payload source: tools/_payloads/xss.py (XSS_PAYLOADS, 265 entries).
 """
-import re, secrets
+import re, secrets, time
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
+from tools.webapp import _post_forms as pf
 from tools._payloads.xss import XSS_PAYLOADS
 from tools.webapp._webapp_common import vuln_response
 from tools._payloads.webapp._loader import load_json
@@ -127,7 +128,8 @@ def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
         if "?" in spa_url and spa_url not in urls:
             urls.append(spa_url)
 
-    if not urls:
+    post_forms = pf.normalized_post_forms(spa, limit=6)
+    if not urls and not post_forms:
         return standard_response(tool="xss", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
             skipped_reason="No URL parameters or form inputs found to test")
@@ -197,13 +199,66 @@ def scan_xss(req: ScanRequest, payload=Depends(verify_scan_quota)):
                                      f"payload {payload_used!r} rendered un-encoded")))
                 confirmed.append({"url": u, "param": key, "context": ctx,
                                    "payload": payload_used})
+    # POST-FORM-INJECT-V1 — reflected (or immediately re-rendered stored) XSS
+    # in POST form fields. Same two-stage zero-FP gate as the GET path: a
+    # benign canary must reflect UNESCAPED in an exploitable context, then a
+    # context-matched library payload must render verbatim. One field at a
+    # time, others at defaults, fresh CSRF token per submission.
+    post_tests, post_forms_tested = 0, []
+    _post_start, _POST_BUDGET = time.time(), 25.0
+    for form in post_forms:
+        if time.time() - _post_start > _POST_BUDGET: break
+        post_forms_tested.append(form["action"])
+        for key in form["injectable"][:5]:
+            if time.time() - _post_start > _POST_BUDGET: break
+            post_tests += 1
+            canary = "v" + secrets.token_hex(6) + "x"
+            r2 = pf.submit(form, req, key, canary, timeout=10)
+            if r2 is None:
+                continue
+            ctx = _reflection_context(canary, r2.text or "")
+            if not ctx:
+                continue
+            samples = _payloads_for_context(ctx) or [
+                {"payload": "<vlxss" + secrets.token_hex(3) + "/>",
+                 "severity": "HIGH", "cvss": 7.5}]
+            hit = None
+            _before = r2.text or ""
+            for p_ in samples:
+                post_tests += 1
+                r3 = pf.submit(form, req, key, p_["payload"], timeout=10)
+                # Count-increase gate: a form that re-renders STORED earlier
+                # submissions (guestbook) may already show this fixed library
+                # payload from a previous run — require THIS submission to add
+                # a new unescaped copy.
+                if (r3 is not None and r3.text and
+                        r3.text.count(p_["payload"]) > _before.count(p_["payload"])):
+                    hit = p_; break
+                if r3 is not None and r3.text:
+                    _before = r3.text
+            if not hit:
+                continue
+            sev = str(hit.get("severity", "HIGH")).upper()
+            findings.append(wrap_finding(
+                f"XSS — POST field {key!r} at {form['action']} renders unescaped in {ctx} context",
+                sev, cvss=str(hit.get("cvss", "7.5")), cwe="CWE-79", owasp="A03:2021",
+                remediation="Context-aware output encoding (HTML/JS/URL). Use auto-escaping templates.",
+                evidence_marker=(f"POST {form['action']} field={key}: canary={canary} reflected in "
+                                 f"{ctx} context; payload {hit['payload']!r} rendered un-encoded")))
+            confirmed.append({"url": form["action"], "param": key, "context": ctx,
+                              "payload": hit["payload"], "method": "POST"})
+            break   # first confirmed field per form
+    tests += post_tests
+
     return vuln_response(tool="xss", target=req.target, findings=findings,
         tested=max(tests, 1),
-        what_checked=f"URL parameters for reflected XSS (canary + {len(_MERGED_XSS)}-entry merged AI+baked-in payload library)",
+        what_checked=f"URL parameters and POST form fields for reflected XSS (canary + {len(_MERGED_XSS)}-entry merged AI+baked-in payload library)",
         tests_summary=(f"Tested {tests} params across {len(urls)} URLs (incl. SPA-discovered) "
+                       f"and {len(post_forms_tested)} POST form(s) "
                        f"with canary + context-matched confirmation "
                        f"({len(_MERGED_XSS)}-entry library: {len(XSS_PAYLOADS)} baked-in + {len(_AI_EXTRA_XSS)} AI-curated)"),
         raw_data={"xss": {"urls_tested": urls, "tests": tests,
+                           "post_forms_tested": post_forms_tested,
                            "confirmed": confirmed,
                            "library_size": len(_MERGED_XSS),
                            "ai_extras_loaded": len(_AI_EXTRA_XSS)}})

@@ -6,6 +6,7 @@ from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._payloads.sqli import SQL_PAYLOADS
 from tools._spa_state import load_spa_state
+from tools.webapp import _post_forms as pf
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
 from tools._vl_core.turbo import vl_turbo
@@ -38,7 +39,7 @@ def _time_get(url, req, timeout):
     return r, time.time() - t0
 
 @router.post("/api/webapp/scan/sqli")
-@vl_turbo(timeout_s=120)
+@vl_turbo(timeout_s=170)   # 60s GET + 40s POST-form phase + in-flight probes (orchestrator cap 240s)
 @vl_verify()
 def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
@@ -55,6 +56,7 @@ def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
     if params_base:
         test_urls.append((base, params_base))
     spa = load_spa_state(req.target)
+    post_forms = pf.normalized_post_forms(spa, limit=6)
     for u in spa.get("urls", []):
         try:
             up = urlparse(u)
@@ -63,7 +65,7 @@ def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 test_urls.append((u, ps))
         except Exception:
             continue
-    if not test_urls:
+    if not test_urls and not post_forms:
         return standard_response(tool="sqli", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
             skipped_reason=("No URL parameters present on base or SPA-discovered "
@@ -136,14 +138,78 @@ def scan_sqli(req: ScanRequest, payload=Depends(verify_scan_quota)):
                     confirmed.append({"url": test_url, "param": key, "db": db,
                                        "t0": t0, "t1": t1, "t2": t2})
                     break
+    # POST-FORM-INJECT-V1 — SQLi behind POST forms (login-less search boxes,
+    # DVWA medium's POST id, ...). One field at a time, other fields at their
+    # defaults, fresh CSRF token fetched before each submission (outside the
+    # timed window). Confirmation is STRICTER than the GET loop because it
+    # adopts TIMING-FP-V1: per-form baseline, SAME timeout ceiling for both
+    # probes, a timeout/hang is rejected, and the SLEEP(5)-SLEEP(2) gap must
+    # actually appear (>=2s) — a merely slow or hanging form cannot confirm.
+    _post_start = time.time()
+    _POST_BUDGET = 40.0
+    _post_bailed = False
+    _POST_TIMEOUT = 20
+    post_forms_tested = []
+    for _fi, form in enumerate(post_forms):
+        if _post_bailed: break
+        # Fair share per form so one slow form (e.g. DVWA exec, ~3s ping per
+        # submit) cannot starve the remaining forms.
+        _left = _POST_BUDGET - (time.time() - _post_start)
+        if _left <= 0:
+            _post_bailed = True; break
+        _form_deadline = time.time() + max(8.0, _left / (len(post_forms) - _fi))
+        action = form["action"]
+        post_forms_tested.append(action)
+        for key in form["injectable"][:3]:
+            if _post_bailed: break
+            _bd = pf.build_data(form, req, key, "1")
+            _tb0 = time.time()
+            pf.post_data(form, _bd, req, timeout=_POST_TIMEOUT)
+            tb = time.time() - _tb0
+            for name, tmpl, db in _PAYLOADS[:24]:
+                if time.time() > _form_deadline:
+                    break
+                if (time.time() - _post_start > _POST_BUDGET or
+                        time.time() - _wallclock_start > 125):  # stay under vl_turbo cap
+                    _post_bailed = True; break
+                tests += 1
+                d = pf.build_data(form, req, key, tmpl.replace("{N}", "5"))
+                _s = time.time(); pf.post_data(form, d, req, timeout=_POST_TIMEOUT)
+                t1 = time.time() - _s
+                dd1 = t1 - tb
+                if dd1 < 4 or t1 >= _POST_TIMEOUT - 0.5:
+                    continue
+                d2 = pf.build_data(form, req, key, tmpl.replace("{N}", "2"))
+                _s = time.time(); pf.post_data(form, d2, req, timeout=_POST_TIMEOUT)
+                t2 = time.time() - _s
+                dd2 = t2 - tb
+                if dd2 >= 1.0 and (t1 - t2) >= 2.0 and t2 < _POST_TIMEOUT - 0.5:
+                    findings.append(wrap_finding(
+                        f"Time-based blind SQLi in POST field {key!r} ({db}) at {action}",
+                        "CRITICAL", cvss="9.8", cwe="CWE-89", owasp="A03:2021",
+                        remediation="Use parameterised queries (prepared statements). Never concatenate user input into SQL.",
+                        evidence_marker=(f"POST {action} field={key} SLEEP(5)={t1:.2f}s, "
+                                         f"SLEEP(2)={t2:.2f}s, form-baseline={tb:.2f}s")))
+                    confirmed.append({"url": action, "param": key, "db": db, "method": "POST",
+                                      "t0": tb, "t1": t1, "t2": t2})
+                    break
+            else:
+                continue
+            break
+
     summary = (f"Time-based SQLi: {tests} payloads tested in "
                f"{time.time() - _wallclock_start:.1f}s, triple-confirmation via SLEEP(5)+SLEEP(2)")
+    summary += f"; {len(post_forms_tested)} POST form(s) tested"
     if _bailed:
         summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s (target too slow for full payload set)"
+    if _post_bailed:
+        summary += f" — POST-form phase bailed at {_POST_BUDGET}s"
     return vuln_response(tool="sqli", target=req.target, findings=findings,
         tested=max(tests, 1),
-        what_checked="URL parameters for time-based SQL injection (triple-confirmation SLEEP)",
+        what_checked="URL parameters and POST form fields for time-based SQL injection (triple-confirmation SLEEP)",
         tests_summary=summary,
         raw_data={"sqli": {"confirmed": confirmed, "baseline_seconds": t0,
-                            "wallclock_bailed": _bailed}})
+                            "post_forms_tested": post_forms_tested,
+                            "wallclock_bailed": _bailed,
+                            "post_wallclock_bailed": _post_bailed}})
 def register(app): app.include_router(router)

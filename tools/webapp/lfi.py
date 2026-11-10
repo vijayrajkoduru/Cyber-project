@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from tools._shared import (ScanRequest, verify_scan_quota, web_url,
                             safe_get, wrap_finding, standard_response)
 from tools._spa_state import load_spa_state
+from tools.webapp import _post_forms as pf
 from tools._payloads.lfi import LFI_PAYLOADS
 from tools.webapp._webapp_common import vuln_response, precheck_target
 from tools._payloads.webapp._loader import load_json
@@ -84,8 +85,21 @@ def _check_marker(body, matcher, category):
         return False
 
 
+def _strip_echo(body, payload):
+    """ECHO-STRIP-V1 — remove the submitted payload (raw + HTML-escaped) from
+    the response before marker matching. A page that merely echoes the input
+    (search box, guestbook) must not confirm because e.g. '.ssh/id_rsa' in the
+    payload satisfies an 'ssh' matcher."""
+    import html as _html
+    if not body or not payload:
+        return body or ""
+    for v in {payload, _html.escape(payload), _html.escape(payload, quote=False)}:
+        body = body.replace(v, "")
+    return body
+
+
 @router.post("/api/webapp/scan/lfi")
-@vl_turbo()
+@vl_turbo(timeout_s=120)   # 60s GET phase + 35s POST-form phase + in-flight probe
 @vl_verify()
 def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
     base = web_url(req.target)
@@ -100,6 +114,7 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
         test_urls.append((base, parsed, params_base))
     # Augment with SPA-discovered URLs
     spa = load_spa_state(req.target)
+    post_forms = pf.normalized_post_forms(spa, limit=6)
     for u in spa.get("urls", []):
         try:
             up = urlparse(u)
@@ -108,10 +123,10 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 test_urls.append((u, up, ps))
         except Exception:
             continue
-    if not test_urls:
+    if not test_urls and not post_forms:
         return standard_response(tool="lfi", target=req.target, findings=[],
             tests_performed=1, vulnerable=False,
-            skipped_reason="No URL parameters present on base or SPA-discovered endpoints")
+            skipped_reason="No URL parameters or POST forms present on base or SPA-discovered endpoints")
     # PRIORITIZE-LFI-ENDPOINTS-V1 — rank URLs whose path/params look like a
     # file-include sink (page, file, doc, include, path, template, ...) to the
     # FRONT, so the genuinely vulnerable endpoint is tested within the budget
@@ -165,7 +180,7 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
                 test_url = urlunparse(tu_parsed._replace(query=urlencode(new_params)))
                 r = safe_get(test_url, req=req, allow_redirects=True, timeout=12)
                 if r is None or r.status_code != 200: continue
-                body = (r.text or "")[:50000]
+                body = _strip_echo((r.text or "")[:50000], entry["payload"])
                 if not _check_marker(body, entry["matcher"], entry["category"]):
                     continue
                 # Conservative zero-FP gate: require a usable baseline that
@@ -188,20 +203,83 @@ def scan_lfi(req: ScanRequest, payload=Depends(verify_scan_quota)):
             else:
                 continue
             break
+    # POST-FORM-INJECT-V1 — file-include sinks behind POST forms. One field at
+    # a time (others at defaults, fresh CSRF token per submission) under the
+    # SAME BASELINE-DIFF-V1 gate: the marker must appear in the injected
+    # response AND be absent from a benign POST of that same field; no usable
+    # baseline => no finding.
+    _post_start = _time.time()
+    _POST_BUDGET = 35.0
+    _post_bailed = False
+    post_forms_tested = []
+    # Rank include-looking fields first (page/file/path/...), like the GET loop.
+    for form in post_forms:
+        if _post_bailed: break
+        action = form["action"]
+        post_forms_tested.append(action)
+        fields = sorted(form["injectable"],
+                        key=lambda n: -sum(1 for h in _LFI_HINTS if h in n.lower()))
+        for key in fields[:3]:
+            if _post_bailed: break
+            _bl = pf.submit(form, req, key, "1", timeout=12)
+            baseline_body = ((_bl.text or "")[:50000]
+                             if (_bl is not None and _bl.status_code == 200) else None)
+            if baseline_body is None:
+                continue   # conservative: never confirm without a baseline
+            for entry in payload_set:
+                if (_time.time() - _post_start > _POST_BUDGET or
+                        _time.time() - _wallclock_start > 90):  # stay under vl_turbo cap
+                    _post_bailed = True; break
+                tests += 1
+                r = pf.submit(form, req, key, entry["payload"], timeout=12)
+                if r is None or r.status_code != 200: continue
+                body = _strip_echo((r.text or "")[:50000], entry["payload"])
+                if not _check_marker(body, entry["matcher"], entry["category"]):
+                    continue
+                if _check_marker(baseline_body, entry["matcher"], entry["category"]):
+                    continue
+                # STORED-ECHO guard (POST only): forms that persist input
+                # (guestbooks, comments) re-render EARLIER payloads, so text
+                # from a previous probe can satisfy this matcher. Re-take the
+                # benign baseline NOW — if the marker is there too, it is
+                # stored echo, not a file read.
+                _bl2 = pf.submit(form, req, key, "1", timeout=12)
+                if _bl2 is None or _bl2.status_code != 200 or _check_marker(
+                        (_bl2.text or "")[:50000], entry["matcher"], entry["category"]):
+                    continue
+                findings.append(wrap_finding(
+                    f"Path Traversal / LFI in POST field {key!r} — {entry['desc']}",
+                    "CRITICAL", cvss="9.8", cwe="CWE-22", owasp="A01:2021",
+                    remediation="Validate paths against whitelist; reject '..' and absolute paths.",
+                    evidence_marker=(f"POST {action} field={key} payload={entry['payload']!r} "
+                                     f"matched {entry['matcher'] or 'PHP base64'} "
+                                     f"(absent from baseline)")))
+                confirmed.append({"param": key, "payload": entry["payload"], "url": action,
+                                  "category": entry["category"], "method": "POST"})
+                break
+            else:
+                continue
+            break
+
     summary = (f"Path traversal: {tests} variants from {len(payload_set)}-entry interleaved set "
                f"(merged: {len(LFI_PAYLOADS)} baked-in + {len(_AI_EXTRA_LFI)} AI-curated) "
                f"in {_time.time() - _wallclock_start:.1f}s")
+    summary += f"; {len(post_forms_tested)} POST form(s) tested"
     if _bailed:
         summary += f" — wall-clock bailed at {_WALLCLOCK_BUDGET}s"
+    if _post_bailed:
+        summary += f" — POST-form phase bailed at {_POST_BUDGET}s"
     return vuln_response(tool="lfi", target=req.target, findings=findings,
         tested=max(tests, 1),
-        what_checked=f"URL parameters for path traversal / LFI (marker-verified, {len(_MERGED_LFI)}-entry merged library covering ~19 categories)",
+        what_checked=f"URL parameters and POST form fields for path traversal / LFI (marker-verified, {len(_MERGED_LFI)}-entry merged library covering ~19 categories)",
         tests_summary=summary,
         raw_data={"lfi": {"confirmed": confirmed,
                            "library_size": len(_PAYLOADS),
                            "merged_size": len(_MERGED_LFI),
                            "ai_extras_loaded": len(_AI_EXTRA_LFI),
-                           "wallclock_bailed": _bailed}})
+                           "post_forms_tested": post_forms_tested,
+                           "wallclock_bailed": _bailed,
+                           "post_wallclock_bailed": _post_bailed}})
 
 
 def register(app):
